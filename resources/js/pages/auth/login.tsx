@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
-import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
@@ -24,10 +23,10 @@ export default function Login({
 }: Props) {
     return (
         <AuthLayout
-            title="Log in to your account"
-            description="Enter your email and password below to log in"
+            title="Bienvenido a PCL - Login"
+            description="Ingresa tu Email y tu contraseña y luego inicia sesion para acceder a tu cuenta."
         >
-            <Head title="Log in" />
+            <Head title="Login" />
 
             <Form
                 {...store.form()}
@@ -38,7 +37,7 @@ export default function Login({
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                                <Label htmlFor="email">Email</Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -54,16 +53,15 @@ export default function Login({
 
                             <div className="grid gap-2">
                                 <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
-                                    {canResetPassword && (
+                                    <Label htmlFor="password">Contraseña</Label>
+                                    {/* {canResetPassword && (
                                         <TextLink
                                             href={request()}
                                             className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            Forgot password?
+                                            tabIndex={5}>
+                                            Olvidaste tu contraseña?
                                         </TextLink>
-                                    )}
+                                    )} */}
                                 </div>
                                 <Input
                                     id="password"
@@ -81,9 +79,8 @@ export default function Login({
                                 <Checkbox
                                     id="remember"
                                     name="remember"
-                                    tabIndex={3}
-                                />
-                                <Label htmlFor="remember">Remember me</Label>
+                                    tabIndex={3}/>
+                                <Label htmlFor="remember">Recordar Contraseña</Label>
                             </div>
 
                             <Button
@@ -91,21 +88,20 @@ export default function Login({
                                 className="mt-4 w-full"
                                 tabIndex={4}
                                 disabled={processing}
-                                data-test="login-button"
-                            >
+                                data-test="login-button">
                                 {processing && <Spinner />}
-                                Log in
+                                Iniciar Sesión
                             </Button>
                         </div>
 
-                        {canRegister && (
+                        {/* {canRegister && (
                             <div className="text-center text-sm text-muted-foreground">
                                 Don't have an account?{' '}
                                 <TextLink href={register()} tabIndex={5}>
                                     Sign up
                                 </TextLink>
                             </div>
-                        )}
+                        )} */}
                     </>
                 )}
             </Form>

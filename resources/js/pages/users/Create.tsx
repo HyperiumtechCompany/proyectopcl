@@ -1,8 +1,8 @@
+import { Head } from '@inertiajs/react';
 import { UserForm } from '@/components/users/UserForm';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type Role } from '@/types/user';
-import { Head } from '@inertiajs/react';
 
 type Props = {
     roles: Role[];

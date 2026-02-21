@@ -1,5 +1,5 @@
-import { type UserPlan, type UserStatus } from '@/types/user';
 import { Crown, Star, Zap, Gift, ShieldOff, Clock } from 'lucide-react';
+import { type UserPlan, type UserStatus } from '@/types/user';
 
 type PlanBadgeProps = {
     plan: UserPlan;

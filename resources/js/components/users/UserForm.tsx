@@ -1,7 +1,9 @@
-import { type Role, type UserExtended, type UserPlan, type UserStatus } from '@/types/user';
 import { useForm } from '@inertiajs/react';
-import { Eye, EyeOff, Upload, User } from 'lucide-react';
+import { Eye, EyeOff, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { useInitials } from '@/hooks/use-initials';
+import { resolveAvatarUrl } from '@/lib/avatar';
+import { type Role, type UserExtended, type UserPlan, type UserStatus } from '@/types/user';
 
 type UserFormProps = {
     user?: UserExtended;
@@ -21,7 +23,8 @@ type UserFormData = {
     status: UserStatus;
     role_id: string;
     avatar: File | null;
-    [key: string]: string | File | null;
+    _method?: 'put' | '';
+    [key: string]: string | File | null | undefined;
 };
 
 const planOptions: { value: UserPlan; label: string; description: string }[] = [
@@ -40,12 +43,13 @@ const statusOptions: { value: UserStatus; label: string }[] = [
 export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const getInitials = useInitials();
     const [avatarPreview, setAvatarPreview] = useState<string | null>(
-        user?.avatar ? `/storage/${user.avatar}` : null,
+        resolveAvatarUrl(user?.avatar) ?? null,
     );
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const { data, setData, post, put, processing, errors } = useForm<UserFormData>({
+    const { data, setData, post, transform, processing, errors } = useForm<UserFormData>({
         name: user?.name ?? '',
         email: user?.email ?? '',
         password: '',
@@ -57,17 +61,28 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
         status: user?.status ?? 'active',
         role_id: user?.roles?.[0]?.id?.toString() ?? '',
         avatar: null,
+        _method: '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (isEdit && user) {
-            (put as (url: string, opts?: object) => void)(`/users/${user.id}`, {
+            transform((formData: UserFormData) => ({
+                ...formData,
+                _method: 'put',
+            }));
+            (post as (url: string, opts?: object) => void)(`/users/${user.id}`, {
                 forceFormData: true,
+                onFinish: () => transform((formData: UserFormData) => formData),
             });
         } else {
+            transform((formData: UserFormData) => {
+                const { _method, ...rest } = formData;
+                return rest;
+            });
             (post as (url: string, opts?: object) => void)('/users', {
                 forceFormData: true,
+                onFinish: () => transform((formData: UserFormData) => formData),
             });
         }
     };
@@ -105,14 +120,16 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
                             className="h-full w-full object-cover"
                         />
                     ) : (
-                        <User className="h-8 w-8 text-muted-foreground/60" />
+                        <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-muted-foreground/80">
+                            {getInitials(data.name || user?.name || 'Usuario')}
+                        </span>
                     )}
                 </div>
                 <div>
                     <button
                         type="button"
                         onClick={() => fileRef.current?.click()}
-                        className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                        className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
                         <Upload className="h-4 w-4" />
                         {avatarPreview ? 'Cambiar foto' : 'Subir foto'}
@@ -291,8 +308,8 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
                         <label
                             key={s.value}
                             className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${data.status === s.value
-                                ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                                : 'border-gray-200 bg-white text-gray-600 hover:bg-muted'
+                                ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900'
+                                : 'border-border bg-background text-muted-foreground hover:bg-muted'
                                 }`}
                         >
                             <input
@@ -314,7 +331,7 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
                 <button
                     type="button"
                     onClick={() => window.history.back()}
-                    className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                    className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
                     Cancelar
                 </button>

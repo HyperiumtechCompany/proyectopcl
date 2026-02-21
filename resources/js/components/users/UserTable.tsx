@@ -1,6 +1,8 @@
-import { type UserExtended } from '@/types/user';
 import { Link } from '@inertiajs/react';
 import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { useInitials } from '@/hooks/use-initials';
+import { resolveAvatarUrl } from '@/lib/avatar';
+import { type UserExtended } from '@/types/user';
 import { PlanBadge } from './PlanBadge';
 import { RoleBadge } from './RoleBadge';
 import { StatusBadge } from './StatusBadge';
@@ -11,6 +13,8 @@ type UserTableProps = {
 };
 
 export function UserTable({ users, onDelete }: UserTableProps) {
+    const getInitials = useInitials();
+
     if (users.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -56,21 +60,21 @@ export function UserTable({ users, onDelete }: UserTableProps) {
                     {users.map((user) => (
                         <tr
                             key={user.id}
-                            className="group transition-colors hover:bg-indigo-500/10"
+                            className="group transition-colors hover:bg-emerald-500/10"
                         >
                             {/* User Info */}
                             <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-linear-to-br from-indigo-400 to-purple-500 shadow-sm">
-                                        {user.avatar ? (
+                                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-linear-to-br from-blue-300 to-blue-500 shadow-sm">
+                                        {resolveAvatarUrl(user.avatar) ? (
                                             <img
-                                                src={`/storage/${user.avatar}`}
+                                                src={resolveAvatarUrl(user.avatar)}
                                                 alt={user.name}
                                                 className="h-full w-full object-cover"
                                             />
                                         ) : (
                                             <span className="flex h-full w-full items-center justify-center text-sm font-bold text-white">
-                                                {user.name.charAt(0).toUpperCase()}
+                                                {getInitials(user.name)}
                                             </span>
                                         )}
                                     </div>

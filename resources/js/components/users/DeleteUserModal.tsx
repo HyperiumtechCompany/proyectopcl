@@ -1,7 +1,9 @@
-import { type UserExtended } from '@/types/user';
 import { router } from '@inertiajs/react';
 import { AlertTriangle, X, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { useInitials } from '@/hooks/use-initials';
+import { resolveAvatarUrl } from '@/lib/avatar';
+import { type UserExtended } from '@/types/user';
 
 type DeleteUserModalProps = {
     user: UserExtended;
@@ -10,6 +12,7 @@ type DeleteUserModalProps = {
 
 export function DeleteUserModal({ user, onClose }: DeleteUserModalProps) {
     const [isDeleting, setIsDeleting] = useState(false);
+    const getInitials = useInitials();
 
     const handleDelete = () => {
         setIsDeleting(true);
@@ -62,15 +65,15 @@ export function DeleteUserModal({ user, onClose }: DeleteUserModalProps) {
                     <div className="mt-4 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-red-200 dark:bg-red-900/60">
-                                {user.avatar ? (
+                                {resolveAvatarUrl(user.avatar) ? (
                                     <img
-                                        src={`/storage/${user.avatar}`}
+                                        src={resolveAvatarUrl(user.avatar)}
                                         alt={user.name}
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
                                     <span className="flex h-full w-full items-center justify-center text-sm font-bold text-red-700">
-                                        {user.name.charAt(0).toUpperCase()}
+                                        {getInitials(user.name)}
                                     </span>
                                 )}
                             </div>

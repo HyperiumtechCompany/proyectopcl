@@ -1,3 +1,6 @@
+import { Head, Link, router } from '@inertiajs/react';
+import { ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
 import { DeleteUserModal } from '@/components/users/DeleteUserModal';
 import { PlanBadge } from '@/components/users/PlanBadge';
 import { RoleBadge } from '@/components/users/RoleBadge';
@@ -6,9 +9,6 @@ import { UserTable } from '@/components/users/UserTable';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { PaginatedData, Role, UserExtended, UserFilters } from '@/types/user';
-import { Head, Link, router } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
 
 type Props = {
     users: PaginatedData<UserExtended>;
@@ -71,7 +71,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                             {users.total !== 1 ? 's' : ''}
                         </p>
                     </div>
-                    <Link href="/users/create" className="flex w-fit items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700">
+                    <Link href="/users/create" className="flex w-fit items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700">
                         <Plus className="h-4 w-4" />
                         Nuevo Usuario
                     </Link>
@@ -87,7 +87,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                             placeholder="Buscar por nombre o email…"
                             value={localSearch}
                             onChange={(e) => handleSearchChange(e.target.value)}
-                            className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-4 text-sm text-foreground focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-4 text-sm text-foreground focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                         />
                     </div>
 
@@ -95,7 +95,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                     <select
                         value={filters.role ?? ''}
                         onChange={(e) => applyFilter('role', e.target.value)}
-                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-indigo-400 focus:outline-none">
+                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-blue-400 focus:outline-none">
                         <option value="">Todos los roles</option>
                         {roles.map((r) => (
                             <option key={r.id} value={r.name}>
@@ -108,7 +108,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                     <select
                         value={filters.plan ?? ''}
                         onChange={(e) => applyFilter('plan', e.target.value)}
-                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-indigo-400 focus:outline-none">
+                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-blue-400 focus:outline-none">
                         <option value="">Todos los planes</option>
                         <option value="free">Free</option>
                         <option value="mensual">Mensual</option>
@@ -120,7 +120,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                     <select
                         value={filters.status ?? ''}
                         onChange={(e) => applyFilter('status', e.target.value)}
-                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-indigo-400 focus:outline-none">
+                        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-blue-400 focus:outline-none">
                         <option value="">Todos los estados</option>
                         <option value="active">Activo</option>
                         <option value="inactive">Inactivo</option>
@@ -175,7 +175,7 @@ export default function UsersIndex({ users, roles, filters }: Props) {
                                         key={i}
                                         href={link.url ?? '#'}
                                         className={`min-w-[36px] rounded-lg px-3 py-1.5 text-center text-sm font-medium transition-colors ${link.active
-                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                            ? 'bg-blue-600 text-white shadow-sm'
                                             : link.url
                                                 ? 'text-muted-foreground hover:bg-muted'
                                                 : 'cursor-not-allowed text-muted-foreground/50'

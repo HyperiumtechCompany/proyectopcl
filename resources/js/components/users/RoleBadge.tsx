@@ -1,5 +1,5 @@
-import { type Role } from '@/types/user';
 import { ShieldCheck } from 'lucide-react';
+import { type Role } from '@/types/user';
 
 type RoleBadgeProps = {
     role: string | Role;

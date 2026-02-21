@@ -1,17 +1,20 @@
+import { Head, Link } from '@inertiajs/react';
+import { ArrowLeft, Calendar, Mail, MapPin, Pencil, Phone, Shield } from 'lucide-react';
 import { PlanBadge } from '@/components/users/PlanBadge';
 import { RoleBadge } from '@/components/users/RoleBadge';
 import { StatusBadge } from '@/components/users/StatusBadge';
+import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import { type BreadcrumbItem } from '@/types';
 import { type UserExtended } from '@/types/user';
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Calendar, Mail, MapPin, Pencil, Phone, Shield } from 'lucide-react';
 
 type Props = {
     user: UserExtended;
 };
 
 export default function UsersShow({ user }: Props) {
+    const getInitials = useInitials();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
         { title: 'Gestión de Personal', href: '/users' },
@@ -62,15 +65,15 @@ export default function UsersShow({ user }: Props) {
                     {/* Avatar & actions */}
                     <div className="-mt-10 flex items-end justify-between px-6 pb-4">
                         <div className="h-20 w-20 overflow-hidden rounded-2xl border-4 border-white bg-linear-to-br from-indigo-400 to-purple-500 shadow-md">
-                            {user.avatar ? (
+                            {resolveAvatarUrl(user.avatar) ? (
                                 <img
-                                    src={`/storage/${user.avatar}`}
+                                    src={resolveAvatarUrl(user.avatar)}
                                     alt={user.name}
                                     className="h-full w-full object-cover"
                                 />
                             ) : (
                                 <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-white">
-                                    {user.name.charAt(0).toUpperCase()}
+                                    {getInitials(user.name)}
                                 </span>
                             )}
                         </div>

@@ -1,5 +1,5 @@
-import { type UserStatus } from '@/types/user';
 import { CheckCircle, XCircle, ShieldOff } from 'lucide-react';
+import { type UserStatus } from '@/types/user';
 
 type StatusBadgeProps = {
     status: UserStatus;
