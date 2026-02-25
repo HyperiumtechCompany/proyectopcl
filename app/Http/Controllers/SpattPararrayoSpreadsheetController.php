@@ -145,8 +145,10 @@ class SpattPararrayoSpreadsheetController extends Controller
             return back()->withErrors(['code' => 'Eres el propietario de esta hoja.']);
         }
 
+        $pivotRole = $user->hasRole('cliente') ? 'viewer' : 'editor';
+
         $spreadsheet->collaborators()->syncWithoutDetaching([
-            $user->id => ['role' => 'editor', 'joined_at' => now()],
+            $user->id => ['role' => $pivotRole, 'joined_at' => now()],
         ]);
 
         return redirect()->route('spatt-pararrayos.show', $spreadsheet->id)

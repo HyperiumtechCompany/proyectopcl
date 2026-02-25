@@ -3,6 +3,7 @@ import { Crown, Zap, Star, Clock, MessageCircle, Check, Eye, EyeOff, LogIn } fro
 import type { FormEventHandler } from 'react';
 import { useState } from 'react';
 import { dashboard } from '@/routes';
+import AppLogoIcon from '@/components/app-logo-icon';
 
 type LoginForm = {
     email: string;
@@ -121,10 +122,9 @@ export default function Welcome() {
                     <div className="mx-auto flex max-w-full items-center justify-between px-12 py-4">
                         {/* Logo */}
                         <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500 shadow-lg shadow-blue-500/30">
-                                <span className="text-lg font-black">P</span>
+                            <div className="flex h-9 w-22 items-center justify-center rounded-xl bg-blue-50 shadow-lg shadow-blue-500/30">
+                                <AppLogoIcon className="size-15 fill-current text-white dark:text-black" />
                             </div>
-                            <span className="text-lg font-bold tracking-tight">PCL</span>
                         </div>
 
                         {/* Nav links */}

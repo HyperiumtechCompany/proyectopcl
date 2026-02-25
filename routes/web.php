@@ -3,6 +3,7 @@
 use App\Http\Controllers\AcCalculationController;
 use App\Http\Controllers\AguaCalculationController;
 use App\Http\Controllers\CaidaTensionController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UserController;
@@ -16,12 +17,12 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-Route::get('dashboard', function () {
-    return Inertia::render('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 // ─── Gestión de Personal / Usuarios ───────────────────────────────────────────
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->group(function () {
     Route::resource('users', UserController::class);
 });
 

@@ -148,8 +148,10 @@ class DesagueCalculationController extends Controller
             return back()->withErrors(['code' => 'Eres el propietario de esta hoja.']);
         }
 
+        $pivotRole = $user->hasRole('cliente') ? 'viewer' : 'editor';
+
         $spreadsheet->collaborators()->syncWithoutDetaching([
-            $user->id => ['role' => 'editor', 'joined_at' => now()],
+            $user->id => ['role' => $pivotRole, 'joined_at' => now()],
         ]);
 
         return redirect()->route('desague-calculation.show', $spreadsheet->id)
