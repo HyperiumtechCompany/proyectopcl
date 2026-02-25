@@ -66,16 +66,17 @@ const RedRiego = ({ initialData, canEdit, editMode, onChange, maximaDemandaData,
     const activeTuberiasRdData = useRef({});
 
     useEffect(() => {
-        if (tuberiasrdData?.tables) {
+        const sourceTables = tuberiasrdData?.tables || tuberiasrdData?.tablas;
+        if (sourceTables) {
             const points = {};
-            Object.entries(tuberiasrdData.tables).forEach(([g, tableObj]) => {
+            Object.entries(sourceTables).forEach(([g, tableObj]) => {
                 if (!tableObj || !tableObj.modules) return;
                 points[g] = [];
                 tableObj.modules.forEach(mod => {
                     if (mod.data) {
                         mod.data.forEach(row => {
                             if (!row.isStatic && row.punto) {
-                                points[g].push({ label: row.punto, value: row.punto, hpiez: row.hpiez });
+                                points[g].push({ label: row.punto, value: row.punto, hpiez: row.hpiez, uh_total: row.uh_total, caudal: row.caudal });
                             }
                         });
                     }
@@ -175,8 +176,14 @@ const RedRiego = ({ initialData, canEdit, editMode, onChange, maximaDemandaData,
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 if (row.isStatic) {
-                    row.uh_total = '';
-                    row.caudal = '';
+                    const pt = activeTuberiasRdData.current[grado]?.find(p => p.value === row.punto);
+                    if (pt) {
+                        row.uh_total = pt.uh_total;
+                        row.caudal = pt.caudal;
+                    } else {
+                        row.uh_total = '';
+                        row.caudal = '';
+                    }
                     continue;
                 }
 
@@ -185,11 +192,13 @@ const RedRiego = ({ initialData, canEdit, editMode, onChange, maximaDemandaData,
                     const prevRow = data[i - 1];
                     if (!prevRow.isStatic) {
                         prevUH = parseFloat(prevRow.uh_total) || 0;
+                    } else if (prevRow.uh_total !== '' && prevRow.uh_total !== undefined && prevRow.punto) {
+                        prevUH = parseFloat(prevRow.uh_total);
                     }
                 }
 
                 const parcial = parseFloat(row.uh_parcial) || 0;
-                const uhTotal = i === 1 ? sumaInicial : (prevUH - parcial);
+                const uhTotal = i === 1 ? prevUH : (prevUH - parcial);
                 row.uh_total = Number(uhTotal.toFixed(3));
                 const flow = getTankFlow(uhTotal);
                 row.caudal = flow > 0 ? Number(flow.toFixed(3)) : 0;
@@ -382,7 +391,7 @@ const RedRiego = ({ initialData, canEdit, editMode, onChange, maximaDemandaData,
                                 let currentPrefix = val;
                                 tableRows.forEach((r, idx) => {
                                     if (idx === 0) {
-                                        r.update({ punto: val, cota: pt.hpiez, rawCota: null });
+                                        r.update({ punto: val, cota: pt.hpiez, rawCota: null, uh_total: pt.uh_total, caudal: pt.caudal });
                                     } else {
                                         const newPunto = `${val}${idx}`;
                                         r.update({
@@ -393,7 +402,7 @@ const RedRiego = ({ initialData, canEdit, editMode, onChange, maximaDemandaData,
                                     }
                                 });
                             } else {
-                                row.update({ punto: val });
+                                row.update({ punto: val, cota: '', rawCota: null, uh_total: '', caudal: '' });
                             }
                             success(val);
                             actualizarResultados();

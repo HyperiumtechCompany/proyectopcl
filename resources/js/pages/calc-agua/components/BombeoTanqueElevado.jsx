@@ -305,14 +305,32 @@ const BombeoTanqueElevado = ({ initialData, canEdit, editMode, onChange, tanqueD
         return parseFloat(Math.max(total, 0).toFixed(2));
     }, [perdidaPorFriccionImpulsion, perdidaPorFriccionSuccion, presionSalida, nivelAguaTanque, nivelFondoCisterna]);
 
+    const hdtRoundedInt = useMemo(() => {
+        return Math.ceil(hdt);
+    }, [hdt]);
+
     const potencia = useMemo(() => {
         if (eficiencia === 0) return 0;
         return (Qimpul * hdt) / (75 * eficiencia);
     }, [Qimpul, hdt, eficiencia]);
 
+    const ceilToHalf = (v) => {
+        return Math.ceil(v * 2) / 2;
+    };
+
+    const potenciaRedondeada = useMemo(() => ceilToHalf(potencia), [potencia]);
+
     const potenciaEstimada = useMemo(() => {
-        return potenciaManual !== null ? parseFloat(potenciaManual) : Math.ceil(potencia);
-    }, [potenciaManual, potencia]);
+        if (potenciaManual !== null && potenciaManual !== '') return parseFloat(potenciaManual);
+        return potenciaRedondeada;
+    }, [potenciaManual, potenciaRedondeada]);
+
+    const potenciaDisplayStr = useMemo(() => {
+        if (Number.isFinite(potenciaEstimada)) {
+            return Number.isInteger(potenciaEstimada) ? potenciaEstimada.toFixed(0) : potenciaEstimada.toFixed(1);
+        }
+        return '';
+    }, [potenciaEstimada]);
 
     // Send updates upwards
     const sendDataUpdate = useCallback(() => {
@@ -765,7 +783,10 @@ const BombeoTanqueElevado = ({ initialData, canEdit, editMode, onChange, tanqueD
                                     ALTURA DINÁMICA TOTAL
                                 </p>
                                 <p className="text-2xl font-bold text-gray-900 mt-1">
-                                    HDT = {hdt.toFixed(2)} m
+                                    HDT = {hdtRoundedInt} m
+                                </p>
+                                <p className="text-sm text-gray-700 mt-1">
+                                    (real: {hdt.toFixed(2)} m)
                                 </p>
                             </div>
                         </div>
@@ -807,13 +828,13 @@ const BombeoTanqueElevado = ({ initialData, canEdit, editMode, onChange, tanqueD
                                 <span>POTENCIA (POT) = {potencia.toFixed(2)} <span className="text-gray-400 mx-2">→</span></span>
                                 <div className="inline-flex items-center bg-yellow-100 px-3 py-1 border border-gray-400 rounded shadow-sm">
                                     <input
-                                        type="number"
-                                        step="0.01"
+                                                type="number"
+                                                step="0.5"
                                         className="bg-yellow-100 w-20 text-right focus:outline-none placeholder-gray-500 disabled:opacity-75"
                                         value={potenciaManual || ''}
                                         disabled={!editMode}
-                                        onChange={(e) => setPotenciaManual(e.target.value)}
-                                        placeholder={Math.ceil(potencia).toFixed(2)}
+                                                onChange={(e) => setPotenciaManual(e.target.value)}
+                                                placeholder={potenciaRedondeada.toFixed(1)}
                                     />
                                     <span className="ml-2 text-gray-700">HP</span>
                                 </div>
@@ -824,7 +845,7 @@ const BombeoTanqueElevado = ({ initialData, canEdit, editMode, onChange, tanqueD
                             <p>
                                 De acuerdo a la existencia en el mercado con los diámetros más similares a la de succión e impulsión requeridos,
                                 se asume la potencia es de {" "}
-                                <strong className="text-green-800 text-base">{potenciaEstimada.toFixed(0)} HP</strong>.
+                                <strong className="text-green-800 text-base">{potenciaDisplayStr} HP</strong>.
                             </p>
                         </div>
                     </div>
