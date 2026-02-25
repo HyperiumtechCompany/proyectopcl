@@ -63,12 +63,14 @@ const generarCurva = d => {
 
 const dCurvas = Object.fromEntries(Object.keys(datosReales).map(d => [d, generarCurva(d)]));
 
-export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
-    const [mode, setMode] = useState(initialMode || 'edit');
-    const isEdit = mode === 'edit';
+export default function RedAlimentacion({ initialData, canEdit, editMode, onChange, cisternaData }) {
+    const isEdit = canEdit && editMode;
+    const data = initialData || {};
     const chartRef = useRef(null), myChart = useRef(null);
 
-    const [volCisterna, setVolCisterna] = useState(data?.volCisterna || 2268);
+    const [volCisterna, setVolCisterna] = useState(data?.volCisterna || 2000);
+    const [volRequerido, setVolRequerido] = useState(data?.volRequerido || 0);
+    const [consumoDiario, setConsumoDiario] = useState(data?.consumoDiario || 0);
     const [tiempoLlenado, setTiempoLlenado] = useState(data?.tiempoLlenado || 10);
     const [nivelTerreno, setNivelTerreno] = useState(data?.nivelTerreno || 0);
     const [presionConn, setPresionConn] = useState(data?.presionConn || 10.00);
@@ -123,16 +125,40 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
 
     useEffect(() => {
         const hd = e => {
-            if (e.detail?.volumencisterna) setVolCisterna(parseFloat(e.detail.volumencisterna) * 1000);
-            if (e.detail?.nivel2 !== undefined) setNivIngCist(parseFloat(e.detail.nivel2));
+            if (e.detail?.volumenCalculado !== undefined) {
+                setVolCisterna(parseFloat(e.detail.volumenCalculado) * 1000);
+            }
+            if (e.detail?.volumenCisterna !== undefined) {
+                setVolRequerido(parseFloat(e.detail.volumenCisterna) * 1000);
+            }
+            if (e.detail?.consumoDiario !== undefined) {
+                setConsumoDiario(parseFloat(e.detail.consumoDiario));
+            }
+            if (e.detail?.n2 !== undefined) setNivIngCist(parseFloat(e.detail.n2));
         };
         document.addEventListener('cisterna-updated', hd);
         return () => document.removeEventListener('cisterna-updated', hd);
     }, []);
 
+    // Also sync from prop if available (handles tab switching)
     useEffect(() => {
-        if (onChange) onChange({ volCisterna, tiempoLlenado, nivelTerreno, presionConn, presionSalida, nivIngCist, diamConn, micro, lTuberia, hfMed, accs, anCarga, modTuberia, diaSel, diaLTub, diaAccs });
-    }, [onChange, volCisterna, tiempoLlenado, nivelTerreno, presionConn, presionSalida, nivIngCist, diamConn, micro, lTuberia, hfMed, accs, anCarga, modTuberia, diaSel, diaLTub, diaAccs]);
+        if (cisternaData?.volumenCalculado) {
+            setVolCisterna(parseFloat(cisternaData.volumenCalculado) * 1000);
+        }
+        if (cisternaData?.volumenCisterna) {
+            setVolRequerido(parseFloat(cisternaData.volumenCisterna) * 1000);
+        }
+        if (cisternaData?.consumoDiario) {
+            setConsumoDiario(parseFloat(cisternaData.consumoDiario));
+        }
+        if (cisternaData?.n2 !== undefined) {
+            setNivIngCist(parseFloat(cisternaData.n2));
+        }
+    }, [cisternaData?.volumenCalculado, cisternaData?.volumenCisterna, cisternaData?.consumoDiario, cisternaData?.n2]);
+
+    useEffect(() => {
+        if (onChange) onChange({ volCisterna, volRequerido, consumoDiario, tiempoLlenado, nivelTerreno, presionConn, presionSalida, nivIngCist, diamConn, micro, lTuberia, hfMed, accs, anCarga, modTuberia, diaSel, diaLTub, diaAccs });
+    }, [onChange, volCisterna, volRequerido, consumoDiario, tiempoLlenado, nivelTerreno, presionConn, presionSalida, nivIngCist, diamConn, micro, lTuberia, hfMed, accs, anCarga, modTuberia, diaSel, diaLTub, diaAccs]);
 
     useEffect(() => { setAccs(prev => prev.map(a => ({ ...a, leq: getLeq(a.tipo, diamConn) }))); }, [diamConn]);
     useEffect(() => { setDiaAccs(prev => prev.map(a => ({ ...a, leq: getLeq(a.tipo, diaSel) }))); }, [diaSel]);
@@ -156,11 +182,11 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
         }
     }, [diamConn, qLlenadoM3h]);
 
-    const RTr = ({ acc, idx, arr, setArr, dmt }) => (
+    const RTr = ({ acc, idx, arr, setArr, dmt, vVal, lPipe, lTotal, sVal, hfVal }) => (
         <tr className="hover:bg-gray-50 transition-all duration-200">
             {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-blue-600 text-center">{qLlenado} L/s</td>}
             {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-center">{dmt}</td>}
-            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-green-600 text-center">{dmt === diamConn ? vel : dVel} m/s</td>}
+            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-green-600 text-center">{vVal} m/s</td>}
             <td className="px-6 py-3">
                 <select disabled={!isEdit} value={acc.tipo} onChange={e => { const n = [...arr]; n[idx].tipo = e.target.value; n[idx].leq = getLeq(e.target.value, dmt); setArr(n); }} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
                     <option value="">Seleccione</option>
@@ -172,10 +198,10 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
             </td>
             <td className="px-6 py-3 text-center">{acc.leq.toFixed(3)}</td>
             <td className="px-6 py-3 text-center font-semibold">{(acc.cantidad * acc.leq).toFixed(3)}</td>
-            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-center">{dmt === diamConn ? lTuberia : diaLTub} m</td>}
-            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-purple-600 text-center">{dmt === diamConn ? lTot : dLTot} m</td>}
-            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-mono text-xs text-center">{dmt === diamConn ? sH : dS}</td>}
-            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-bold text-red-600 text-center">{dmt === diamConn ? hf : dHf} m</td>}
+            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-center">{lPipe} m</td>}
+            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-semibold text-purple-600 text-center">{lTotal} m</td>}
+            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-mono text-xs text-center">{sVal}</td>}
+            {idx === 0 && <td rowSpan={6} className="px-6 py-3 font-bold text-red-600 text-center">{hfVal} m</td>}
         </tr>
     );
 
@@ -191,12 +217,17 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
             </header>
 
             <main className="max-w-full mx-auto px-2 py-4 space-y-6">
-                <div className="bg-white rounded-lg shadow border"><div className="bg-gray-100 px-4 py-3 border-b"><h2 className="font-semibold text-gray-800">3.1. CAUDAL DE ENTRADA</h2></div><div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div><label className="text-sm font-medium text-gray-950">Volumen Cisterna</label><div className="flex"><input disabled value={volCisterna.toFixed(2)} className="flex-1 px-3 py-2 text-gray-950  bg-yellow-100 border-2 border-yellow-300 rounded-md font-medium" /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">L</span></div></div>
-                    <div><label className="text-sm font-medium text-gray-950">Tiempo de Llenado</label><div className="flex"><input disabled={!isEdit} type="number" step="0.1" value={tiempoLlenado} onChange={e => setTiempoLlenado(+e.target.value)} className="text-gray-950 flex-1 px-3 py-2 bg-yellow-100 border-2 border-yellow-300 rounded-md font-medium " /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">hrs</span></div></div>
-                    <div><label className="text-sm font-medium text-gray-950">Q llenado</label><div className="flex"><input disabled value={qLlenado} className="text-gray-950 flex-1 bg-gray-50 border px-3 py-2 rounded-md font-bold" /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">L/s</span></div></div>
-                </div></div>
-
+                <div className="bg-white rounded-lg shadow border">
+                    <div className="bg-gray-100 px-4 py-3 border-b">
+                        <h2 className="font-semibold text-gray-800">3.1. CAUDAL DE ENTRADA</h2>
+                    </div>
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div><label className="text-sm font-medium text-gray-950">Consumo Diario</label><div className="flex"><input disabled value={consumoDiario.toFixed(2)} className="flex-1 px-3 py-2 text-gray-950 bg-gray-50 border rounded-md font-medium" /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">L</span></div></div>
+                        <div><label className="text-sm font-medium text-gray-950">Vol. Cisterna (Real)</label><div className="flex"><input disabled value={volCisterna.toFixed(2)} className="flex-1 px-3 py-2 text-gray-950 bg-yellow-100 border-2 border-yellow-300 rounded-md font-medium" /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">L</span></div></div>
+                        <div><label className="text-sm font-medium text-gray-950">Tiempo de Llenado</label><div className="flex"><input disabled={!isEdit} type="number" step="0.1" value={tiempoLlenado} onChange={e => setTiempoLlenado(+e.target.value)} className="text-gray-950 flex-1 px-3 py-2 bg-yellow-100 border-2 border-yellow-300 rounded-md font-medium " /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">hrs</span></div></div>
+                        <div><label className="text-sm font-medium text-gray-950">Q llenado</label><div className="flex"><input disabled value={qLlenado.toFixed(3)} className="text-gray-950 flex-1 bg-gray-50 border px-3 py-2 rounded-md font-bold" /><span className="bg-gray-100 px-2 py-2 rounded text-gray-950">L/s</span></div></div>
+                    </div>
+                </div>
                 <div className="bg-white rounded-lg shadow border"><div className="bg-gray-100 px-4 py-3 border-b"><h2 className="font-semibold text-gray-800">3.2. CARGA DISPONIBLE</h2></div><div className="p-6 space-y-6">
                     <h3 className="text-center bg-blue-50 py-2 rounded text-gray-950">Datos de la FACTIBILIDAD DE SERVICIO</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -220,7 +251,7 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
 
                     <div className="overflow-x-auto rounded-lg border shadow-sm">
                         <table className="min-w-full divide-y bg-white"><thead className="bg-blue-600 text-white text-sm"><tr><th rowSpan={2} className="px-6 py-3 ">q (L/s)</th><th rowSpan={2} className="px-6 py-3">Diámetro</th><th rowSpan={2} className="px-6 py-3">V (m/s)</th><th colSpan={4} className="px-6 py-3">L accesorios</th><th rowSpan={2} className="px-6 py-3">L tubería</th><th rowSpan={2} className="px-6 py-3">L total</th><th rowSpan={2} className="px-6 py-3">S (m/m)</th><th rowSpan={2} className="px-6 py-3">hf (m)</th></tr><tr className="bg-blue-700"><th className="px-6 py-3">Accesorio</th><th className="px-6 py-3">#</th><th className="px-6 py-3">Leq</th><th className="px-6 py-3">Leq.T</th></tr></thead>
-                            <tbody className="text-sm text-gray-950">{accs.map((a, i) => <RTr key={i} acc={a} idx={i} arr={accs} setArr={setAccs} dmt={diamConn} />)}</tbody>
+                            <tbody className="text-sm text-gray-950">{accs.map((a, i) => <RTr key={i} acc={a} idx={i} arr={accs} setArr={setAccs} dmt={diamConn} vVal={vel} lPipe={lTuberia} lTotal={lTot} sVal={sH} hfVal={hf} />)}</tbody>
                             <tfoot><tr className="bg-gray-50 font-semibold text-gray-950"><td colSpan={6} className="text-right px-6 py-3 text-gray-950">L. EQ TOTAL:</td><td className="px-6 py-3 text-blue-600">{leqT.toFixed(3)}</td><td colSpan={4}></td></tr></tfoot></table>
                     </div>
 
@@ -242,7 +273,7 @@ export default function RedAlimentacion({ data, mode: initialMode, onChange }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-950"><div><label className="font-semibold text-gray-950">Longitud (m)</label><input disabled={!isEdit} type="number" value={diaLTub} onChange={e => setDiaLTub(+e.target.value)} className="w-full px-4 py-2 border rounded-lg" /></div><div><label className="font-semibold">Tuberías</label><select disabled={!isEdit} value={diaSel} onChange={e => setDiaSel(e.target.value)} className="w-full px-4 py-2 bg-blue-50 border rounded-lg">{Object.keys(config.diametros).map(k => <option key={k} value={k}>{k}</option>)}</select></div></div>
                     <div className="overflow-x-auto rounded-lg border shadow-sm">
                         <table className="min-w-full divide-y bg-white"><thead className="bg-blue-600 text-white text-sm"><tr><th rowSpan={2} className="px-6 py-3">q (L/s)</th><th rowSpan={2} className="px-6 py-3">Diámetro</th><th rowSpan={2} className="px-6 py-3">V (m/s)</th><th colSpan={4} className="px-6 py-3">L accesorios</th><th rowSpan={2} className="px-6 py-3">L tubería</th><th rowSpan={2} className="px-6 py-3">L total</th><th rowSpan={2} className="px-6 py-3">S (m/m)</th><th rowSpan={2} className="px-6 py-3">hf (m)</th></tr><tr className="bg-blue-700"><th className="px-6 py-3">Accesorio</th><th className="px-6 py-3">#</th><th className="px-6 py-3">Leq</th><th className="px-6 py-3">Leq.T</th></tr></thead>
-                            <tbody className="text-sm text-gray-950">{diaAccs.map((a, i) => <RTr key={i} acc={a} idx={i} arr={diaAccs} setArr={setDiaAccs} dmt={diaSel} />)}</tbody>
+                            <tbody className="text-sm text-gray-950">{diaAccs.map((a, i) => <RTr key={i} acc={a} idx={i} arr={diaAccs} setArr={setDiaAccs} dmt={diaSel} vVal={dVel} lPipe={diaLTub} lTotal={dLTot} sVal={dS} hfVal={dHf} />)}</tbody>
                             <tfoot><tr className="bg-gray-50 font-semibold"><td colSpan={6} className="text-right px-6 py-3 text-gray-950">L. EQ TOTAL:</td><td className="px-6 py-3 text-blue-600">{dLeqT.toFixed(3)}</td><td colSpan={4}></td></tr></tfoot></table>
                     </div>
                     <div className="flex flex-col lg:flex-row justify-between gap-4">

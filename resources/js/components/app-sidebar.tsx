@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap } from 'lucide-react';
+import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -35,9 +35,14 @@ const mainNavItems: NavItem[] = [
         icon: BookOpen,
     },
     {
-        title: 'Calculo de Agua',
+        title: 'Cálculo de Agua',
         href: '/agua-calculation',
         icon: Droplet,
+    },
+    {
+        title: 'Cálculo de Desagüe',
+        href: '/desague-calculation',
+        icon: Waves,
     },
     {
         title: 'Projects',

@@ -2,20 +2,16 @@ import { router, usePage } from '@inertiajs/react';
 import React, { useCallback, useRef, useState } from 'react';
 import { useRealtimeSync, type RemoteUpdate } from '@/hooks/useRealtimeSync';
 import AppLayout from '@/layouts/app-layout';
-import * as calcAguaRoutes from '@/routes/agua-calculation';
+import * as calcDesagueRoutes from '@/routes/desague-calculation';
 import type { BreadcrumbItem } from '@/types';
 
-import BombeoTanqueElevado from './components/BombeoTanqueElevado';
-import Cisterna from './components/Cisterna';
-import DemandaDiaria from './components/DemandaDiaria';
-import MaximaDemandaSimultanea from './components/MaximaDemandaSimultanea';
-import RedAlimentacion from './components/RedAlimentacion';
-import RedesInteriores from './components/RedesInteriores';
-import RedRiego from './components/RedRiego';
-import Tanque from './components/Tanque';
-import TuberiasRD from './components/TuberiasRD';
+import UdDesague from './components/UdDesague';
+import ColectorDesague from './components/ColectorDesague';
+import CajaRegistroDesague from './components/CajaRegistroDesague';
+import UvDesague from './components/UvDesague';
+import TrampaGrasaDesague from './components/TrampaGrasaDesague';
 
-interface CalcAguaSpreadsheet {
+interface CalcDesagueSpreadsheet {
     id: number;
     name: string;
     project_name?: string;
@@ -34,7 +30,7 @@ interface CalcAguaSpreadsheet {
 }
 
 interface PageProps {
-    spreadsheet: CalcAguaSpreadsheet;
+    spreadsheet: CalcDesagueSpreadsheet;
     auth: { user: { id: number; plan: string; name: string } };
     [key: string]: unknown;
 }
@@ -43,22 +39,18 @@ const SAVE_DEBOUNCE_MS = 2000;
 
 export default function Show() {
     const { spreadsheet, auth } = usePage<PageProps>().props;
-    const [activeTab, setActiveTab] = useState('demandaDiaria');
+    const [activeTab, setActiveTab] = useState('ud');
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [editMode, setEditMode] = useState(false);
     const [dataSheet, setDataSheet] = useState<Record<string, any>>(spreadsheet.data_sheet ?? {});
 
     const tabs = [
-        { id: 'demandaDiaria', name: 'Demanda Diaria', icon: 'fa-water' },
-        { id: 'cisterna', name: 'Cisterna', icon: 'fa-tint' },
-        { id: 'tanque', name: 'Tanque', icon: 'fa-cube' },
-        { id: 'redAlimentacion', name: 'Red Alimentación', icon: 'fa-network-wired' },
-        { id: 'maximademandasimultanea', name: 'Máxima Demanda Simultánea', icon: 'fa-chart-line' },
-        { id: 'bombeoTanqueElevado', name: 'Bombeo Tanque Elevado', icon: 'fa-pump' },
-        { id: 'tuberiasRD', name: 'Tuberías RD', icon: 'fa-pipes' },
-        { id: 'redesInteriores', name: 'Redes Interiores', icon: 'fa-home' },
-        { id: 'redRiego', name: 'Red de Riego', icon: 'fa-seedling' },
+        { id: 'ud', name: 'Unidades de Descarga', icon: 'fa-water' },
+        { id: 'colector', name: 'Colector', icon: 'fa-project-diagram' },
+        { id: 'cajas', name: 'Cajas de Registro', icon: 'fa-box' },
+        { id: 'uv', name: 'Unidades de Ventilación', icon: 'fa-wind' },
+        { id: 'trampa', name: 'Trampa de Grasa', icon: 'fa-filter' },
     ];
 
     const handleRemoteUpdate = useCallback((payload: RemoteUpdate & { data_sheet?: Record<string, any> }) => {
@@ -72,7 +64,7 @@ export default function Show() {
         currentUserId: auth.user.id,
         onRemoteUpdate: handleRemoteUpdate,
         isCollaborative: spreadsheet.is_collaborative,
-        channelPrefix: 'agua-calculation',
+        channelPrefix: 'desague-calculation',
     });
 
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,7 +75,7 @@ export default function Show() {
         saveTimer.current = setTimeout(() => {
             setSaving(true);
             router.patch(
-                calcAguaRoutes.update.url(spreadsheet.id),
+                calcDesagueRoutes.update.url(spreadsheet.id),
                 { data_sheet: newData },
                 {
                     preserveScroll: true,
@@ -109,7 +101,7 @@ export default function Show() {
     }, []);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Cálculo de Agua', href: calcAguaRoutes.index.url() },
+        { title: 'Cálculo de Desagüe', href: calcDesagueRoutes.index.url() },
         { title: spreadsheet.name, href: '#' },
     ];
 
@@ -138,18 +130,15 @@ export default function Show() {
             onChange: (data: any) => handleDataChange(activeTab, data)
         };
 
-        const globalDemandaTotal = dataSheet['demandaDiaria']?.totalCaudal ?? 0;
+        // You can pass global state or calculated data from one tab to another if needed.
+        // const globalTotalUd = dataSheet['ud']?.totalUd ?? 0;
 
         switch (activeTab) {
-            case 'demandaDiaria': return <DemandaDiaria {...props} />;
-            case 'cisterna': return <Cisterna {...props} globalDemandaTotal={globalDemandaTotal} />;
-            case 'tanque': return <Tanque {...props} globalDemandaTotal={globalDemandaTotal} />;
-            case 'redAlimentacion': return <RedAlimentacion {...props} cisternaData={dataSheet['cisterna']} />;
-            case 'maximademandasimultanea': return <MaximaDemandaSimultanea {...props} />;
-            case 'bombeoTanqueElevado': return <BombeoTanqueElevado {...props} tanqueData={dataSheet['tanque']} cisternaData={dataSheet['cisterna']} redAlimentacionData={dataSheet['redAlimentacion']} maximaDemandaData={dataSheet['maximademandasimultanea']} />;
-            case 'tuberiasRD': return <TuberiasRD {...props} maximaDemandaData={dataSheet['maximademandasimultanea']} />;
-            case 'redesInteriores': return <RedesInteriores {...props} maximaDemandaData={dataSheet['maximademandasimultanea']} tuberiasrdData={dataSheet['tuberiasRD']} />;
-            case 'redRiego': return <RedRiego {...props} maximaDemandaData={dataSheet['maximademandasimultanea']} tuberiasrdData={dataSheet['tuberiasRD']} />;
+            case 'ud': return <UdDesague {...props} />;
+            case 'colector': return <ColectorDesague {...props} udData={dataSheet['ud']} />;
+            case 'cajas': return <CajaRegistroDesague {...props} colectorData={dataSheet['colector']} udData={dataSheet['ud']} />;
+            case 'uv': return <UvDesague {...props} udData={dataSheet['ud']} />;
+            case 'trampa': return <TrampaGrasaDesague {...props} />;
             default: return null;
         }
     };
@@ -220,7 +209,7 @@ export default function Show() {
                                 <button
                                     onClick={() => {
                                         if (confirm('¿Habilitar colaboración para esta hoja? Los usuarios con el código podrán editarla.')) {
-                                            router.post(calcAguaRoutes.enableCollab.url(spreadsheet.id), {}, { preserveScroll: true });
+                                            router.post(calcDesagueRoutes.enableCollab.url(spreadsheet.id), {}, { preserveScroll: true });
                                         }
                                     }}
                                     className="ml-1 rounded flex items-center gap-1 bg-indigo-600 px-2 py-0.5 text-xs text-white transition-colors hover:bg-indigo-700"
@@ -238,7 +227,7 @@ export default function Show() {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors flex items-center gap-2 ${activeTab === tab.id
-                                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                ? 'border-cyan-600 text-cyan-600 dark:border-cyan-400 dark:text-cyan-400'
                                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200'
                                 }`}>
                             <i className={`fas ${tab.icon} opacity-70`}></i>
@@ -248,7 +237,7 @@ export default function Show() {
                 </div>
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-800 min-h-screen">
+            <div className="bg-gradient-to-br from-white to-cyan-50/50 dark:from-gray-900 dark:to-gray-800/80 min-h-screen">
                 <div className="transition-opacity duration-300 opacity-100">
                     {renderTabContent()}
                 </div>

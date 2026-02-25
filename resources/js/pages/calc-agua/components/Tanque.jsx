@@ -1,387 +1,550 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-const Tanque = ({ initialData, canEdit, editMode, onChange, globalDemandaTotal }) => {
-    const [consumoDiario, setConsumoDiario] = useState((globalDemandaTotal && globalDemandaTotal > 0) ? globalDemandaTotal : (initialData?.consumoDiario ?? 0));
-    const [largo, setLargo] = useState(initialData?.largo ?? 2.40);
-    const [ancho, setAncho] = useState(initialData?.ancho ?? 1.50);
-    const [alturaUtil, setAlturaUtil] = useState(initialData?.alturaUtil ?? 1.20);
-    const [bordeLibre, setBordeLibre] = useState(initialData?.bordeLibre ?? 0.30);
-    const [nivelagua, setNivelagua] = useState(initialData?.nivelagua ?? 0.50);
-    const [alturaTecho, setAlturaTecho] = useState(initialData?.alturaTecho ?? 0.20);
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+const DEFAULT_DIM = {
+  largo: 4.40,
+  ancho: 2.70,
+  alturaAgua: 1.15,
+  alturaLimpieza: 0.10,
+  bordeLibre: 0.45,
+  alturaTotal: 1.70,
+  htecho: 0.20,
+  hingreso: 0.15,
+  hrebose: 0.10,
+  alturalibre: 0.10,
+  nivelFondoTanque: 14.70,
+  porcentajeReserva: 25,
+};
 
-    const [canvasReady, setCanvasReady] = useState(false);
-    const canvasRef = useRef(null);
-    const containerRef = useRef(null);
+const parseNum = (v, fb = 0) => {
+  if (v === '' || v === null || v === undefined) return fb;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : fb;
+};
+const fmt = (v, d = 2) => Number.isFinite(+v) ? (+v).toFixed(d) : '0.00';
+const sign = (v) => (+v >= 0 ? `+${fmt(v)}` : fmt(v));
+const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-    useEffect(() => {
-        if (globalDemandaTotal !== undefined && globalDemandaTotal > 0) {
-            setConsumoDiario(parseFloat(globalDemandaTotal));
-        }
-    }, [globalDemandaTotal]);
+// ═══════════════════════════════════════════════════════════════════════════════
+// SVG DIAGRAM
+// ═══════════════════════════════════════════════════════════════════════════════
+function TanqueSVG({ dim }) {
+  const d = { ...DEFAULT_DIM, ...dim };
 
-    // Cálculos
-    const volumenTanque = useMemo(() => {
-        return (1 / 3) * (consumoDiario / 1000);
-    }, [consumoDiario]);
+  const nv = useMemo(() => {
+    const fondo = parseNum(d.nivelFondoTanque);
+    const interior_top = fondo + parseNum(d.alturaTotal);
+    const roof_top = interior_top + parseNum(d.htecho);
+    const ingreso = interior_top - parseNum(d.hingreso);
+    const rebose = ingreso - parseNum(d.hrebose);
+    const agua_bot = rebose - parseNum(d.alturaAgua);
+    const salida = fondo + parseNum(d.alturalibre);
+    return { fondo, interior_top, roof_top, ingreso, rebose, agua_bot, salida };
+  }, [d]);
 
-    const volumenTotal = volumenTanque;
+  const VW = 820, VH = 520;
+  const tL = 46, tW = 270;
+  const yTop = 72, yBot = 440;
+  const span = yBot - yTop;
+  const wT = 18, rT = 14;
 
-    const alturaAguaMin = useMemo(() => {
-        if (largo === 0 || ancho === 0) return 0;
-        return volumenTanque / (largo * ancho);
-    }, [volumenTanque, largo, ancho]);
+  const e2y = (e) => yTop + ((nv.roof_top - e) / (nv.roof_top - nv.fondo)) * span;
 
-    const volumenCalculado = useMemo(() => {
-        return largo * ancho * alturaUtil;
-    }, [largo, ancho, alturaUtil]);
+  const yRoof = yTop;
+  const yIntTop = e2y(nv.interior_top);
+  const yIng = e2y(nv.ingreso);
+  const yReb = e2y(nv.rebose);
+  const yAguaBot = e2y(nv.agua_bot);
+  const ySal = e2y(nv.salida);
+  const yFondo = yBot;
 
-    const alturaTotal = useMemo(() => {
-        return parseFloat((parseFloat(alturaUtil) + parseFloat(bordeLibre) + parseFloat(alturaTecho)).toFixed(2));
-    }, [alturaUtil, bordeLibre, alturaTecho]);
+  const iL = tL + wT, iR = tL + tW - wT, iW = iR - iL;
 
-    const calculateTanqueData = useCallback(() => {
-        const round = (num, decimals = 4) => parseFloat(num.toFixed(decimals));
+  const aX = tL + tW + 30;
+  const bW = 32;
+  const lX = aX + bW + 12;
+  const nBW = 130;
+  const nBX = VW - nBW - 6;
 
-        const alturaIngreso = (volumenCalculado <= 12) ? 0.15 : ((volumenCalculado <= 30) ? 0.2 : 0.3);
-        const volumenTanqueReal = (volumenCalculado > 30) ? 0.15 : 0.10;
-
-        const nivel1 = round(parseFloat(nivelagua) - 0.2);
-        const nivel2 = round(nivel1 - parseFloat(alturaTecho));
-        const nivel3 = round(nivel2 - alturaIngreso);
-        const nivel4 = round(nivel3 - volumenTanqueReal);
-        const nivel5 = round(nivel4 - parseFloat(alturaUtil));
-
-        return {
-            alturaIngreso,
-            volumenTanqueReal,
-            nivel1,
-            nivel2,
-            nivel3,
-            nivel4,
-            nivel5
-        };
-    }, [volumenCalculado, nivelagua, alturaTecho, alturaUtil]);
-
-    const sendDataUpdate = useCallback(() => {
-        const data = {
-            consumoDiario,
-            largo,
-            ancho,
-            alturaUtil,
-            bordeLibre,
-            nivelagua,
-            alturaTecho,
-            volumenTanque,
-            volumenCalculado,
-            alturaTotal,
-            ...calculateTanqueData()
-        };
-
-        const event = new CustomEvent('tanque-updated', { detail: data });
-        document.dispatchEvent(event);
-
-        if (onChange) {
-            onChange(data);
-        }
-    }, [consumoDiario, largo, ancho, alturaUtil, bordeLibre, nivelagua, alturaTecho, volumenTanque, volumenCalculado, alturaTotal, calculateTanqueData, onChange]);
-
-    // Disparar update al cambiar valores
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            sendDataUpdate();
-        }, 150);
-        return () => clearTimeout(timeout);
-    }, [sendDataUpdate]);
-
-    // Recibir evento de demanda diaria
-    useEffect(() => {
-        const handleDemandaDiariaUpdate = (event) => {
-            const data = event.detail;
-            setConsumoDiario(parseFloat(data.totalCaudal) || 0);
-        };
-
-        document.addEventListener('demanda-diaria-updated', handleDemandaDiariaUpdate);
-        return () => {
-            document.removeEventListener('demanda-diaria-updated', handleDemandaDiariaUpdate);
-        };
-    }, []);
-
-    // Dibujo del Canvas
-    const drawTanqueNative = useCallback(() => {
-        const canvasElement = canvasRef.current;
-        if (!canvasElement) return;
-
-        const ctx = canvasElement.getContext('2d');
-        const container = containerRef.current;
-        if (!container) return;
-
-        canvasElement.width = container.clientWidth || 650;
-        canvasElement.height = 450;
-
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(0, 0, canvasElement.width, canvasElement.height);
-
-        const marginLeft = 80;
-        const marginRight = 200;
-        const marginTop = 60;
-        const marginBottom = 80;
-        const drawingWidth = canvasElement.width - marginLeft - marginRight;
-        const drawingHeight = canvasElement.height - marginTop - marginBottom;
-
-        const scale = Math.min(drawingWidth / (parseFloat(largo) || 1), drawingHeight / (alturaTotal || 1)) * 0.8;
-        const tanqueWidth = (parseFloat(largo) || 0) * scale;
-        const tanqueHeight = (alturaTotal || 0) * scale;
-        const startX = marginLeft + (drawingWidth - tanqueWidth) / 2;
-        const startY = marginTop + (drawingHeight - tanqueHeight) / 2;
-
-        // Estructura principal
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.fillStyle = '#f1f5f9';
-        ctx.fillRect(startX, startY, tanqueWidth, tanqueHeight);
-        ctx.strokeRect(startX, startY, tanqueWidth, tanqueHeight);
-
-        // Área de agua
-        const alturaAguaEscalada = (parseFloat(alturaUtil) || 0) * scale;
-        const waterY = startY + tanqueHeight - alturaAguaEscalada;
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.6)'; // indigo
-        ctx.fillRect(startX + 2, waterY, tanqueWidth - 4, alturaAguaEscalada - 2);
-
-        // Líneas divisorias
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        const techoY = startY + ((parseFloat(alturaTecho) || 0) * scale);
-
-        ctx.beginPath();
-        ctx.moveTo(startX, waterY);
-        ctx.lineTo(startX + tanqueWidth, waterY);
-        ctx.moveTo(startX, techoY);
-        ctx.lineTo(startX + tanqueWidth, techoY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Etiquetas
-        const fontSize = Math.max(10, Math.min(14, tanqueWidth / 25));
-        ctx.fillStyle = '#374151';
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        ctx.fillText('TECHO', startX + tanqueWidth / 2, startY + ((parseFloat(alturaTecho) || 0) * scale) / 2);
-        ctx.fillText('BORDE LIBRE', startX + tanqueWidth / 2, techoY + ((parseFloat(bordeLibre) || 0) * scale) / 2);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('AGUA', startX + tanqueWidth / 2, waterY + alturaAguaEscalada / 2);
-
-        // Cotas y medidas
-        const measureFontSize = Math.max(9, Math.min(12, canvasElement.width / 60));
-        ctx.fillStyle = '#374151';
-        ctx.font = `${measureFontSize}px Arial`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-
-        const cotaX = startX + tanqueWidth + 25;
-        ctx.fillText(`${parseFloat(alturaTecho)} m`, cotaX, startY + ((parseFloat(alturaTecho) || 0) * scale) / 2);
-        ctx.fillText(`${parseFloat(bordeLibre)} m`, cotaX, techoY + ((parseFloat(bordeLibre) || 0) * scale) / 2);
-        ctx.fillText(`${parseFloat(alturaUtil)} m`, cotaX, waterY + alturaAguaEscalada / 2);
-
-        ctx.textAlign = 'center';
-        ctx.fillText(`${parseFloat(largo)} m`, startX + tanqueWidth / 2, startY + tanqueHeight + 35);
-
-        // Título
-        ctx.font = `bold ${Math.max(12, Math.min(16, canvasElement.width / 50))}px Arial`;
-        ctx.fillText('TANQUE ELEVADO - VISTA FRONTAL', canvasElement.width / 2, 25);
-
-        // Información adicional
-        ctx.font = `${measureFontSize}px Arial`;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#4b5563';
-
-        const infoTexts = [
-            `Vol. Requerido: ${volumenTanque.toFixed(2)} m³`,
-            `Vol. Calculado: ${volumenCalculado.toFixed(2)} m³`,
-            `Ancho: ${ancho} m`
-        ];
-
-        infoTexts.forEach((text, index) => {
-            ctx.fillText(text, 20, 60 + (index * (measureFontSize + 5)));
-        });
-    }, [largo, ancho, alturaUtil, bordeLibre, alturaTecho, alturaTotal, volumenTanque, volumenCalculado]);
-
-    useEffect(() => {
-        let resizeTimeout;
-        const resizeObserver = new ResizeObserver(() => {
-            if (resizeTimeout) clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                if (canvasReady) {
-                    drawTanqueNative();
-                }
-            }, 100);
-        });
-
-        if (containerRef.current) {
-            resizeObserver.observe(containerRef.current);
-        }
-
-        return () => {
-            if (resizeTimeout) clearTimeout(resizeTimeout);
-            resizeObserver.disconnect();
-        };
-    }, [canvasReady, drawTanqueNative]);
-
-    useEffect(() => {
-        setCanvasReady(true);
-        drawTanqueNative();
-    }, [drawTanqueNative]);
-
+  const Bracket = ({ y1, y2, color, label, sub, val }) => {
+    const my = (y1 + y2) / 2;
+    if (Math.abs(y2 - y1) < 6) return null;
     return (
-        <div className="w-full p-4">
-            {/* Header Principal */}
-            <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200/60 rounded-2xl shadow-lg sticky top-12 z-50">
-                <div className="w-full mx-auto px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl shadow-lg">
-                                <i className="fas fa-cube text-white text-lg"></i>
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-800">3. CALCULO DEL ALMACENAMIENTO - TANQUE ELEVADO</h1>
-                                <p className="text-sm text-slate-600">Cálculo de consumo de agua</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <main className="max-w-full px-1 py-2 space-y-2">
-                <div className="p-1">
-                    {/* Input Parameters */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="space-y-6">
-                            <div className="bg-slate-50 rounded-lg p-6">
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">3.1.1. CÁLCULO DE VOLUMEN</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Consumo Diario Total (Lt/día)</label>
-                                        <input type="number" step="0.01" value={consumoDiario || ''}
-                                            className="w-full px-4 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-slate-100"
-                                            readOnly />
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            {(!consumoDiario || consumoDiario === 0) ?
-                                                <span>Ingresa datos en "Cálculo de la Demanda Diaria" (sección 1)</span> :
-                                                <span>Valor recibido de la sección de Demanda Diaria.</span>
-                                            }
-                                        </p>
-                                    </div>
-                                    <div className="bg-indigo-50 p-4 rounded-lg">
-                                        <p className="text-sm text-indigo-800 mb-2">VOL. DE TANQUE ELEVADO = 1/3 x CONSUMO DIARIO TOTAL</p>
-                                        <p className="text-lg font-semibold text-indigo-900">Vol. De Tanque = {(volumenTanque || 0).toFixed(2)} m³</p>
-                                        <p className="text-sm text-slate-600 mt-2">Vol. Total mínimo = {(volumenTotal || 0).toFixed(2)} m³</p>
-                                        <p className="text-sm text-slate-600">Altura de agua mín. = {(alturaAguaMin || 0).toFixed(2)} m</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 rounded-lg p-6">
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Dimensiones del Tanque Elevado</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Largo (L) m</label>
-                                        <input type="number" step="0.01" value={largo} onChange={(e) => setLargo(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Ancho (A) m</label>
-                                        <input type="number" step="0.01" value={ancho} onChange={(e) => setAncho(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Altura Útil (H) m</label>
-                                        <input type="number" step="0.01" value={alturaUtil} onChange={(e) => setAlturaUtil(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Borde Libre (bl) m</label>
-                                        <input type="number" step="0.01" value={bordeLibre} onChange={(e) => setBordeLibre(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Nivel m</label>
-                                        <input type="number" step="0.01" value={nivelagua} onChange={(e) => setNivelagua(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">H. techo (Ht) m</label>
-                                        <input type="number" step="0.01" value={alturaTecho} onChange={(e) => setAlturaTecho(e.target.value)} disabled={!editMode}
-                                            className="w-full px-3 py-2 text-gray-950 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" />
-                                    </div>
-                                </div>
-                                <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                                    <p className="text-lg font-bold text-green-800">VOLUMEN DE TANQUE = {(volumenCalculado || 0).toFixed(2)} m³</p>
-                                    {volumenCalculado < volumenTanque && (
-                                        <p className="text-base font-semibold text-red-600 mt-2">CORREGIR DIMENSIONES</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Graphic Section */}
-                        <div className="space-y-6">
-                            <div className="bg-white border border-slate-200 rounded-lg p-6">
-                                <h3 className="text-lg font-semibold text-slate-800 mb-2">Diagrama de Tanque</h3>
-                                <div className="relative w-full" style={{ height: "450px" }} ref={containerRef}>
-                                    {!canvasReady && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded">
-                                            <div className="text-center">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-                                                <p className="text-sm text-gray-600">Cargando diagrama...</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <canvas ref={canvasRef}
-                                        className="border border-slate-300 rounded w-full h-full"
-                                        style={{ maxWidth: "100%", maxHeight: "450px", display: canvasReady ? 'block' : 'none' }}></canvas>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 rounded-lg p-6">
-                                <h3 className="text-xs font-semibold text-slate-800 mb-4">3.1.2. DIMENSIONES DEL TANQUE ELEVADO</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">ANCHO (A): {ancho} m</span>
-                                        <span className="text-xs">Ancho del Tanque</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">LARGO (L): {largo} m</span>
-                                        <span className="text-xs">Largo del Tanque</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">ALTURA DE AGUA (H): {alturaUtil} m</span>
-                                        <span className="text-xs">Altura de agua del Tanque</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">Borde Libre (bl): {bordeLibre} m</span>
-                                        <span className="text-xs">Altura del Tanque</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">Altura total (HT): {alturaTotal} m</span>
-                                        <span className="text-xs">Altura total del Tanque</span>
-                                    </div>
-                                    <div className="text-sm text-slate-600 mt-4">
-                                        <p><strong>ALTURA DE TUB. REBOSE:</strong> La distancia vertical entre los ejes del tubo de rebose y el máximo nivel de agua será igual al diámetro de aquel y nunca inferior a 0.10 m</p>
-                                        <p><strong>ALTURA DE TUB. DE INGRESO:</strong> La distancia vertical entre los ejes de tubos de rebose y entrada de agua será igual al doble del diámetro del primero y en ningún caso menor de 0.15 m</p>
-                                        <p><strong>ALTURA DE NIVEL DE TECHO:</strong> La distancia vertical entre el techo del depósito y el eje del tubo de entrada de agua, dependerá del diámetro de este, no pudiendo ser menor de 0.20 m</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        </div>
+      <g>
+        <line x1={aX} y1={y1} x2={aX} y2={y2} stroke={color} strokeWidth={2} />
+        <line x1={aX} y1={y1} x2={aX + bW} y2={y1} stroke={color} strokeWidth={2} />
+        <line x1={aX} y1={y2} x2={aX + bW} y2={y2} stroke={color} strokeWidth={2} />
+        <text x={lX} y={my - 7} fontSize={12} fill="#111" fontFamily="'Courier New',monospace">{label} {sub}</text>
+        <text x={lX} y={my + 9} fontSize={13} fontWeight="bold" fill="#111" fontFamily="'Courier New',monospace">= {val} m</text>
+      </g>
     );
+  };
+
+  const NvBox = ({ y, label, red }) => (
+    <g>
+      <line x1={iR + 2} y1={y} x2={nBX - 8} y2={y}
+        stroke={red ? '#c00' : '#999'} strokeWidth={red ? 1.5 : 0.8} strokeDasharray={red ? '0' : '5 3'} />
+      <line x1={nBX - 8} y1={y} x2={nBX} y2={y} stroke={red ? '#c00' : '#555'} strokeWidth={1.5} />
+      <rect x={nBX} y={y - 11} width={nBW} height={22} rx={2}
+        fill={red ? '#fff0f0' : 'white'} stroke={red ? '#c00' : '#999'} strokeWidth={1.5} />
+      <text x={nBX + nBW / 2} y={y + 1} textAnchor="middle" dominantBaseline="middle"
+        fontSize={11} fill={red ? '#c00' : '#222'} fontFamily="'Courier New',monospace" fontWeight={red ? 'bold' : 'normal'}>
+        Nivel = {label} m
+      </text>
+    </g>
+  );
+
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: '100%', height: 'auto', display: 'block' }}
+      xmlns="http://www.w3.org/2000/svg">
+      <rect width={VW} height={VH} fill="white" />
+
+      {/* Top nivel */}
+      <text x={tL} y={yTop - 13} fontSize={13} fill="#111" fontFamily="'Courier New',monospace" fontWeight="bold">
+        Nivel = {sign(nv.roof_top)} m
+      </text>
+
+      {/* Hatching defs */}
+      <defs>
+        <pattern id="hatch" patternUnits="userSpaceOnUse" width={7} height={7} patternTransform="rotate(45)">
+          <line x1={0} y1={0} x2={0} y2={7} stroke="#999" strokeWidth={1} opacity={0.5} />
+        </pattern>
+      </defs>
+
+      {/* Outer walls */}
+      <rect x={tL} y={yRoof} width={tW} height={yFondo - yRoof + rT}
+        fill="#c8c8c0" stroke="#666" strokeWidth={2} rx={3} />
+      <rect x={tL} y={yFondo} width={tW} height={rT} fill="#b8b8b0" stroke="#666" strokeWidth={2} />
+
+      {/* Hatch overlays */}
+      <rect x={tL} y={yRoof} width={wT} height={yFondo - yRoof} fill="url(#hatch)" />
+      <rect x={iR} y={yRoof} width={wT} height={yFondo - yRoof} fill="url(#hatch)" />
+      <rect x={tL} y={yRoof} width={tW} height={yIntTop - yRoof} fill="url(#hatch)" />
+      <rect x={tL} y={yFondo} width={tW} height={rT} fill="url(#hatch)" />
+
+      {/* Inner white */}
+      <rect x={iL} y={yIntTop} width={iW} height={yFondo - yIntTop} fill="white" />
+
+      {/* Borde libre zone */}
+      <rect x={iL} y={yIntTop} width={iW} height={Math.max(yReb - yIntTop, 0)} fill="#f0f0ea" />
+
+      {/* Water zone */}
+      <rect x={iL} y={yReb} width={iW} height={Math.max(yAguaBot - yReb, 0)} fill="#c5e5f8" />
+
+      {/* Limpieza zone */}
+      {(ySal - yAguaBot) > 0 && (
+        <rect x={iL} y={yAguaBot} width={iW} height={Math.max(ySal - yAguaBot, 0)} fill="#f0edcc" opacity={0.7} />
+      )}
+
+      {/* Inner border */}
+      <rect x={iL} y={yIntTop} width={iW} height={yFondo - yIntTop} fill="none" stroke="#888" strokeWidth={1.5} />
+
+      {/* BORDE LIBRE text */}
+      {(yReb - yIntTop) > 28 && (
+        <text x={iL + iW / 2} y={(yIntTop + yReb) / 2}
+          fontSize={20} fontFamily="'Courier New',monospace" fontWeight="bold"
+          fill="#bbb" textAnchor="middle" dominantBaseline="middle"
+          transform={`rotate(-20,${iL + iW / 2},${(yIntTop + yReb) / 2})`}
+          letterSpacing={3} opacity={0.7}>
+          BORDE LIBRE
+        </text>
+      )}
+
+      {/* Dashed level lines */}
+      {[
+        { y: yIng, c: '#cc7744' },
+        { y: yReb, c: '#559944' },
+        { y: yAguaBot, c: '#4488bb' },
+        { y: ySal, c: '#999999' },
+      ].map((l, i) => (
+        <line key={i} x1={iL + 4} y1={l.y} x2={iR - 4} y2={l.y}
+          stroke={l.c} strokeWidth={1.5} strokeDasharray="8 5" />
+      ))}
+
+      {/* Pipes right wall */}
+      {/* Ingreso */}
+      <rect x={iR + 1} y={yIng - 12} width={7} height={24} fill="#cc7744" stroke="#994422" strokeWidth={1} />
+      <rect x={iR - 8} y={yIng - 8} width={20} height={16} fill="#cc7744" stroke="#994422" strokeWidth={1.5} rx={2} />
+      {/* Rebose */}
+      <rect x={iR + 1} y={yReb - 12} width={7} height={24} fill="#559944" stroke="#337722" strokeWidth={1} />
+      <rect x={iR - 8} y={yReb - 8} width={20} height={16} fill="#559944" stroke="#337722" strokeWidth={1.5} rx={2} />
+      {/* Salida */}
+      <rect x={iR + 1} y={ySal - 10} width={7} height={20} fill="#aab0b8" stroke="#7a8088" strokeWidth={1} />
+      <rect x={iR - 8} y={ySal - 7} width={20} height={14} fill="#aab0b8" stroke="#7a8088" strokeWidth={1.5} rx={2} />
+
+      {/* Brackets */}
+      <Bracket y1={yIntTop} y2={yIng} color="#994422" label="H. techo" sub="(Ht)" val={fmt(d.htecho)} />
+      <Bracket y1={yIng} y2={yReb} color="#337722" label="H. ingreso" sub="(Hi)" val={fmt(d.hingreso)} />
+      <Bracket y1={ySal} y2={yFondo} color="#7a8088" label="Altura Libre" sub="(HL)" val={fmt(d.alturalibre)} />
+
+      {/* Altura agua: label in middle of zone */}
+      {(yAguaBot - yReb) > 20 && (
+        <text x={lX} y={(yReb + yAguaBot) / 2} dominantBaseline="middle"
+          fontSize={13} fill="#111" fontFamily="'Courier New',monospace">
+          Altura de agua (Ha) = <tspan fontWeight="bold">{fmt(d.alturaAgua)} m</tspan>
+        </text>
+      )}
+
+      {/* Nivel boxes */}
+      <NvBox y={yIntTop} label={sign(nv.interior_top)} />
+      <NvBox y={yIng} label={sign(nv.ingreso)} />
+      <NvBox y={yReb} label={sign(nv.rebose)} />
+      <NvBox y={ySal} label={sign(nv.salida)} red />
+      <NvBox y={yFondo} label={sign(nv.fondo)} />
+
+      {/* Bottom dim: Largo */}
+      <line x1={iL} y1={yFondo + 32} x2={iR} y2={yFondo + 32} stroke="#333" strokeWidth={1.5} />
+      <line x1={iL} y1={yFondo + 26} x2={iL} y2={yFondo + 38} stroke="#333" strokeWidth={1.5} />
+      <line x1={iR} y1={yFondo + 26} x2={iR} y2={yFondo + 38} stroke="#333" strokeWidth={1.5} />
+      <text x={(iL + iR) / 2} y={yFondo + 50} textAnchor="middle"
+        fontSize={12} fill="#333" fontFamily="'Courier New',monospace">
+        L = {fmt(d.largo)} m
+      </text>
+
+      {/* Left dim: HT */}
+      <line x1={tL - 22} y1={yIntTop} x2={tL - 22} y2={yFondo} stroke="#333" strokeWidth={1.5} />
+      <line x1={tL - 30} y1={yIntTop} x2={tL - 14} y2={yIntTop} stroke="#333" strokeWidth={1.5} />
+      <line x1={tL - 30} y1={yFondo} x2={tL - 14} y2={yFondo} stroke="#333" strokeWidth={1.5} />
+      <text x={tL - 38} y={(yIntTop + yFondo) / 2} textAnchor="middle"
+        transform={`rotate(-90,${tL - 38},${(yIntTop + yFondo) / 2})`}
+        fontSize={12} fill="#333" fontFamily="'Courier New',monospace">
+        HT = {fmt(d.alturaTotal)} m
+      </text>
+    </svg>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DimInput — input field con label y valor
+// ═══════════════════════════════════════════════════════════════════════════════
+function DimInput({ label, name, value, onChange, highlight }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '7px 10px',
+      background: highlight ? '#fffbe6' : 'white',
+      border: `1.5px solid ${highlight ? '#d4a020' : '#d0d0d0'}`,
+      borderRadius: 5, marginBottom: 5,
+      boxShadow: highlight ? '0 0 0 2px #f5e08044' : 'none',
+    }}>
+      <label style={{ fontSize: 12, color: '#222', fontWeight: highlight ? '700' : '500', flex: 1, lineHeight: 1.2 }}>
+        {label}
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <input
+          type="number" step="0.01" name={name} value={value} onChange={onChange}
+          style={{
+            width: 82, padding: '5px 8px', fontSize: 15, fontWeight: 'bold',
+            border: `2px solid ${highlight ? '#d4a020' : '#3a7abf'}`,
+            borderRadius: 4, color: '#000', background: 'white',
+            textAlign: 'right', fontFamily: 'inherit',
+            outline: 'none',
+          }}
+        />
+        <span style={{ fontSize: 12, color: '#666', minWidth: 14 }}>m</span>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════════
+const Tanque = ({ initialData, editMode, onChange, globalDemandaTotal }) => {
+  const [consumoDiario, setConsumoDiario] = useState(
+    globalDemandaTotal || initialData?.consumoDiario || 0
+  );
+  const [dim, setDim] = useState(() => {
+    const s = initialData || {};
+    return {
+      largo: parseNum(s.largo, DEFAULT_DIM.largo),
+      ancho: parseNum(s.ancho, DEFAULT_DIM.ancho),
+      alturaAgua: parseNum(s.alturaAgua ?? s.alturaUtil, DEFAULT_DIM.alturaAgua),
+      alturaLimpieza: parseNum(s.alturaLimpieza, DEFAULT_DIM.alturaLimpieza),
+      bordeLibre: parseNum(s.bordeLibre, DEFAULT_DIM.bordeLibre),
+      alturaTotal: parseNum(s.alturaTotal, DEFAULT_DIM.alturaTotal),
+      htecho: parseNum(s.htecho, DEFAULT_DIM.htecho),
+      hingreso: parseNum(s.hingreso, DEFAULT_DIM.hingreso),
+      hrebose: parseNum(s.hrebose, DEFAULT_DIM.hrebose),
+      alturalibre: parseNum(s.alturalibre, DEFAULT_DIM.alturalibre),
+      nivelFondoTanque: parseNum(s.nivelFondoTanque, DEFAULT_DIM.nivelFondoTanque),
+      porcentajeReserva: parseNum(s.porcentajeReserva, DEFAULT_DIM.porcentajeReserva),
+    };
+  });
+
+  useEffect(() => { if (globalDemandaTotal > 0) setConsumoDiario(parseFloat(globalDemandaTotal)); }, [globalDemandaTotal]);
+
+  useEffect(() => {
+    if (!initialData) return;
+    const s = initialData;
+    setDim({
+      largo: parseNum(s.largo, DEFAULT_DIM.largo),
+      ancho: parseNum(s.ancho, DEFAULT_DIM.ancho),
+      alturaAgua: parseNum(s.alturaAgua ?? s.alturaUtil, DEFAULT_DIM.alturaAgua),
+      alturaLimpieza: parseNum(s.alturaLimpieza, DEFAULT_DIM.alturaLimpieza),
+      bordeLibre: parseNum(s.bordeLibre, DEFAULT_DIM.bordeLibre),
+      alturaTotal: parseNum(s.alturaTotal, DEFAULT_DIM.alturaTotal),
+      htecho: parseNum(s.htecho, DEFAULT_DIM.htecho),
+      hingreso: parseNum(s.hingreso, DEFAULT_DIM.hingreso),
+      hrebose: parseNum(s.hrebose, DEFAULT_DIM.hrebose),
+      alturalibre: parseNum(s.alturalibre, DEFAULT_DIM.alturalibre),
+      nivelFondoTanque: parseNum(s.nivelFondoTanque, DEFAULT_DIM.nivelFondoTanque),
+      porcentajeReserva: parseNum(s.porcentajeReserva, DEFAULT_DIM.porcentajeReserva),
+    });
+  }, [initialData]);
+
+  const handleDim = (e) => {
+    const { name, value } = e.target;
+    setDim(p => ({ ...p, [name]: value === '' ? '' : parseNum(value) }));
+  };
+
+  // ── Calculations ──
+  const ceil1 = (v) => Math.ceil(v * 10) / 10;
+  const volumenTE = useMemo(() => ceil1(((1 / 3) * (parseFloat(consumoDiario) || 0)) / 1000), [consumoDiario]);
+  const hReservaFactor = useMemo(() => 1 + (parseNum(dim.porcentajeReserva) / 100), [dim.porcentajeReserva]);
+  const volumenTotal = useMemo(() => round2(volumenTE * hReservaFactor), [volumenTE, hReservaFactor]);
+  const area = useMemo(() => Math.max(parseNum(dim.largo) * parseNum(dim.ancho), 0.01), [dim.largo, dim.ancho]);
+  const alturaAguaMin = useMemo(() => volumenTotal / area, [volumenTotal, area]);
+  const volumenCalc = useMemo(() => parseNum(dim.largo) * parseNum(dim.ancho) * parseNum(dim.alturaAgua), [dim]);
+  const ok = volumenCalc >= volumenTE;
+
+  const niveles = useMemo(() => {
+    const fondo = parseNum(dim.nivelFondoTanque);
+    const interior_top = fondo + parseNum(dim.alturaTotal);
+    const roof_top = interior_top + parseNum(dim.htecho);
+    const ingreso = interior_top - parseNum(dim.hingreso);
+    const rebose = ingreso - parseNum(dim.hrebose);
+    const agua_bot = rebose - parseNum(dim.alturaAgua);
+    const salida = fondo + parseNum(dim.alturalibre);
+    return [
+      { label: 'Fondo', numero: 1, valor: fondo },
+      { label: 'Salida', numero: 2, valor: salida },
+      { label: 'Agua Bot', numero: 3, valor: agua_bot },
+      { label: 'Rebose', numero: 4, valor: rebose },
+      { label: 'Ingreso', numero: 5, valor: ingreso },
+      { label: 'Top Interior', numero: 6, valor: interior_top },
+      { label: 'Top Roof', numero: 7, valor: roof_top },
+    ];
+  }, [dim]);
+
+  const sendUpdate = useCallback(() => {
+    const data = { consumoDiario, ...dim, volumenTE, volumenTotal, alturaAguaMin, volumenCalc, niveles };
+    document.dispatchEvent(new CustomEvent('tanque-updated', { detail: data }));
+    if (onChange) onChange(data);
+  }, [consumoDiario, dim, volumenTE, volumenTotal, alturaAguaMin, volumenCalc, niveles, onChange]);
+
+  useEffect(() => { const t = setTimeout(sendUpdate, 150); return () => clearTimeout(t); }, [sendUpdate]);
+
+  useEffect(() => {
+    const onD = (e) => setConsumoDiario(parseFloat(e.detail?.totalCaudal || 0));
+    const onR = (e) => {
+      if (e.detail?.config?.altasumfondotanqueelevado !== undefined)
+        setDim(d => ({ ...d, nivelFondoTanque: parseFloat(e.detail.config.altasumfondotanqueelevado || 0) }));
+    };
+    document.addEventListener('demanda-diaria-updated', onD);
+    document.addEventListener('red-alimentacion-updated', onR);
+    return () => {
+      document.removeEventListener('demanda-diaria-updated', onD);
+      document.removeEventListener('red-alimentacion-updated', onR);
+    };
+  }, []);
+
+  const font = "'Times New Roman', Georgia, serif";
+  const mono = "'Courier New', monospace";
+
+  return (
+    <div style={{ fontFamily: font, color: '#111', background: 'white', padding: '20px 24px' }}>
+
+      {/* ══ HEADER ══ */}
+      <div style={{ borderBottom: '3px solid #3a6a3a', paddingBottom: 8, marginBottom: 18 }}>
+        <div style={{ fontSize: 17, fontWeight: 'bold', color: '#1a3a1a' }}>2.2. TANQUE ELEVADO</div>
+      </div>
+
+      {/* ══ 2.2.1 ══ */}
+      <div style={{ background: '#e8eedc', border: '1px solid #a8b890', padding: '6px 12px', marginBottom: 14 }}>
+        <strong style={{ fontSize: 13 }}>2.2.1. CALCULO DE VOLUMEN DEL TANQUE ELEVADO</strong>
+      </div>
+
+      {/* Formula */}
+      <div style={{ border: '1px solid #aaa', textAlign: 'center', padding: '9px', marginBottom: 14, fontWeight: 'bold', fontSize: 13, background: '#fafaf4' }}>
+        VOL. DE TANQUE ELEVADO = 1/3 × CONSUMO DIARIO TOTAL
+      </div>
+
+      {/* Result cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 14, maxWidth: 880 }}>
+        {[
+          { l: 'Consumo Diario', v: `${fmt(consumoDiario)} Lt`, c: '#1a4a7a', bg: '#f8fafc', icon: 'fas fa-tint' },
+          { l: 'Vol. de T.E.', v: `${fmt(volumenTE)} m³`, c: '#2a6a4a', bg: '#edf7f2' },
+          { l: 'Vol. Total + Reserva', v: `${fmt(volumenTotal)} m³`, c: '#2a5a8a', bg: '#edf2f9' },
+          { l: 'Altura de agua mín.', v: `${fmt(alturaAguaMin)} m`, c: '#7a4a1a', bg: '#faf3ea' },
+        ].map(({ l, v, c, bg, icon }) => (
+          <div key={l} style={{ border: `2px solid ${c}`, borderRadius: 6, padding: '10px 14px', textAlign: 'center', background: bg }}>
+            <div style={{ fontSize: 10, color: '#666', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {icon && <i className={`${icon} mr-1 opacity-70`}></i>} {l}
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 'bold', color: c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Consumo readout */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, fontSize: 13 }}>
+        <span style={{ color: '#555' }}>Consumo Diario Total (Lt/día):</span>
+        <input type="number" value={consumoDiario || ''} readOnly
+          style={{ width: 110, padding: '4px 8px', border: '1px solid #bbb', borderRadius: 3, fontSize: 13, color: '#000', background: '#f5f5f2', fontFamily: mono }} />
+        {!consumoDiario && <span style={{ fontSize: 11, color: '#e07030' }}>⚠ Ingresa datos en sección 1</span>}
+      </div>
+
+      {/* Largo/Ancho/Altura + callout */}
+      <p style={{ marginBottom: 10, fontSize: 13 }}>Tanque Elevado de cuyas dimensiones serán:</p>
+      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', marginBottom: 14 }}>
+        <div>
+          {[['Largo (L)', 'largo'], ['Ancho (A)', 'ancho'], ['Altura agua (H)', 'alturaAgua']].map(([l, k]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 140, textAlign: 'right', fontSize: 13, fontFamily: font }}>{l} =</span>
+              <input type="number" step="0.01" name={k} value={dim[k]} onChange={handleDim}
+                style={{ width: 82, padding: '4px 9px', fontSize: 15, fontWeight: 'bold', border: '2px solid #3a7abf', borderRadius: 4, color: '#000', background: 'white', textAlign: 'right', fontFamily: mono }} />
+              <span style={{ fontSize: 13, color: '#444' }}>m</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ border: '2px solid #4a7a4a', borderRadius: 5, padding: '10px 16px', background: '#f4faf4', maxWidth: 210, fontSize: 12, fontWeight: 'bold', color: '#2a5a2a', textAlign: 'center', lineHeight: 1.55 }}>
+          Altura asumida como mínimo para mantenimiento y limpieza de tanque elevado
+        </div>
+      </div>
+
+      {/* VOLUMEN box */}
+      <div style={{ border: '2px solid #888', background: ok ? '#f5f5d8' : '#fff0f0', padding: '10px 20px', textAlign: 'center', fontWeight: 'bold', fontSize: 15, marginBottom: 22 }}>
+        VOLUMEN DE TANQUE ELEVADO = {fmt(volumenCalc)} m³
+        {!ok && <span style={{ color: '#c00', marginLeft: 12, fontSize: 12 }}>⚠ CORREGIR DIMENSIONES (mín. {fmt(volumenTE)} m³)</span>}
+      </div>
+
+      {/* ══ 2.1.2 ══ */}
+      <div style={{ background: '#e8eedc', border: '1px solid #a8b890', padding: '6px 12px', marginBottom: 12 }}>
+        <strong style={{ fontSize: 13 }}>2.1.2. DIMENSIONES DEL TANQUE ELEVADO</strong>
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 18 }}>
+        <tbody>
+          {[
+            ['ANCHO', 'Ancho del Tanque Elevado'],
+            ['LARGO', 'Largo del Tanque Elevado'],
+            ['ALTURA DE AGUA', 'Altura de agua del Tanque Elevado'],
+            ['ALTURA DE TUB. REBOSE', 'La distancia vertical entre los ejes del tubo de rebose y el máximo nivel de agua será igual al diámetro de aquel y nunca inferior a 0,10 m'],
+            ['ALTURA DE TUB. DE INGRESO', 'La distancia vertical entre los ejes de tubos de rebose y entrada de agua será igual al doble del diámetro del primero y en ningún caso menor de 0,15 m'],
+            ['ALTURA DE NIVEL DE TECHO', 'La distancia vertical entre el techo del depósito y el eje del tubo de entrada de agua, dependerá del diámetro de este, no pudiendo ser menor de 0,20 m'],
+          ].map(([k, v]) => (
+            <tr key={k}>
+              <td style={{ border: '1px solid #bbb', padding: '5px 8px', fontWeight: 'bold', width: '28%', background: '#fafaf6', fontSize: 11 }}>{k}</td>
+              <td style={{ border: '1px solid #bbb', padding: '5px 8px', verticalAlign: 'top' }}>{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* ══ DIAGRAM + INPUTS ══ */}
+      <p style={{ marginBottom: 10, fontSize: 13 }}>Tanque elevado cuyas dimensiones serán:</p>
+
+      <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+
+        {/* DIAGRAM */}
+        <div style={{ flex: '1 1 60%', border: '1.5px solid #ccc', borderRadius: 6, padding: '8px', background: 'white', minWidth: 0 }}>
+          <TanqueSVG dim={dim} />
+        </div>
+
+        {/* INPUTS PANEL */}
+        <div style={{ flex: '0 0 290px', background: '#f6f8f4', border: '1.5px solid #c0cca8', borderRadius: 8, padding: '16px' }}>
+
+          <div style={{ fontSize: 14, fontWeight: 'bold', color: '#1a3a1a', marginBottom: 14, borderBottom: '2px solid #a8b890', paddingBottom: 8 }}>
+            📐 Predimensionamiento
+          </div>
+
+          {/* Estado */}
+          <div style={{
+            marginBottom: 14, borderRadius: 6, padding: '10px 12px',
+            background: ok ? '#e8f5e8' : '#feeaea',
+            border: `1.5px solid ${ok ? '#4a8a4a' : '#cc4444'}`,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 'bold', color: ok ? '#2a6a2a' : '#c00', marginBottom: 6 }}>
+              {ok ? '✓ Volumen OK' : '✗ Revisar volumen'}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', fontSize: 11, color: '#333' }}>
+              <span>Requerido:</span> <strong>{fmt(volumenTE)} m³</strong>
+              <span>Reserva ({dim.porcentajeReserva}%):</span> <strong>{fmt(volumenTotal - volumenTE)} m³</strong>
+              <span>Calculado:</span> <strong>{fmt(volumenCalc)} m³</strong>
+              <span>Área base:</span> <strong>{fmt(parseNum(dim.largo) * parseNum(dim.ancho))} m²</strong>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 'bold', color: '#5a7a3a', display: 'block', marginBottom: 4 }}>
+              % Reserva de Volumen
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <input type="range" name="porcentajeReserva" min="0" max="100" step="1"
+                value={dim.porcentajeReserva} onChange={handleDim}
+                style={{ flex: 1 }} />
+              <input type="number" name="porcentajeReserva" value={dim.porcentajeReserva} onChange={handleDim}
+                style={{ width: 50, padding: '2px 4px', fontSize: 13, fontWeight: 'bold', border: '1px solid #c0cca8', borderRadius: 4, textAlign: 'center' }} />
+              <span style={{ fontSize: 12, fontWeight: 'bold' }}>%</span>
+            </div>
+          </div>
+
+          {/* Group 1: Geometría principal */}
+          <div style={{ fontSize: 10, fontWeight: 'bold', color: '#5a7a3a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            ★ Geometría principal
+          </div>
+          <DimInput label="Largo (L)" name="largo" value={dim.largo} onChange={handleDim} highlight />
+          <DimInput label="Ancho (A)" name="ancho" value={dim.ancho} onChange={handleDim} highlight />
+          <DimInput label="Altura Agua (H)" name="alturaAgua" value={dim.alturaAgua} onChange={handleDim} highlight />
+          <DimInput label="Alt. Limpieza" name="alturaLimpieza" value={dim.alturaLimpieza} onChange={handleDim} />
+          <DimInput label="Borde Libre (bl)" name="bordeLibre" value={dim.bordeLibre} onChange={handleDim} />
+          <DimInput label="Altura Total (HT)" name="alturaTotal" value={dim.alturaTotal} onChange={handleDim} />
+
+          {/* Group 2: Niveles y tuberías */}
+          <div style={{ fontSize: 10, fontWeight: 'bold', color: '#5a7a3a', textTransform: 'uppercase', letterSpacing: 1, margin: '12px 0 6px' }}>
+            Nivel y tuberías
+          </div>
+          <DimInput label="Nivel Fondo (m)" name="nivelFondoTanque" value={dim.nivelFondoTanque} onChange={handleDim} />
+          <DimInput label="H. Techo (Ht)" name="htecho" value={dim.htecho} onChange={handleDim} />
+          <DimInput label="H. Ingreso (Hi)" name="hingreso" value={dim.hingreso} onChange={handleDim} />
+          <DimInput label="H. Rebose (Hr)" name="hrebose" value={dim.hrebose} onChange={handleDim} />
+          <DimInput label="Altura Libre (HL)" name="alturalibre" value={dim.alturalibre} onChange={handleDim} />
+
+          <button onClick={() => setDim(DEFAULT_DIM)}
+            style={{ width: '100%', marginTop: 12, padding: '8px', fontSize: 12, background: '#4a5a3a', color: 'white', border: 'none', borderRadius: 5, cursor: 'pointer', letterSpacing: 0.5 }}>
+            ↺ Restablecer valores por defecto
+          </button>
+        </div>
+      </div>
+
+      {/* ══ Bottom summary ══ */}
+      <div style={{ marginTop: 24, fontSize: 13 }}>
+        <p style={{ marginBottom: 10 }}>Tanque Elevado de Concreto de cuyas dimensiones serán:</p>
+        <div style={{ display: 'flex', gap: 60 }}>
+          <div>
+            {[
+              ['Largo (L)', dim.largo],
+              ['Ancho (A)', dim.ancho],
+              ['Altura del Agua (H)', dim.alturaAgua],
+              ['Altura de Limpieza (hl)', dim.alturaLimpieza],
+              ['Borde Libre (bl)', dim.bordeLibre],
+              ['Altura total (HT)', dim.alturaTotal],
+            ].map(([l, v]) => (
+              <div key={l} style={{ display: 'flex', marginBottom: 5 }}>
+                <span style={{ width: 215, textAlign: 'right', paddingRight: 10 }}>{l} =</span>
+                <strong style={{ fontSize: 14, fontFamily: mono }}>{fmt(v)} m</strong>
+              </div>
+            ))}
+          </div>
+          <div style={{ paddingTop: 72, fontSize: 13, color: '#444' }}>
+            Diametro de rebose según el RNE es de 4&quot;
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
 };
 
 export default Tanque;

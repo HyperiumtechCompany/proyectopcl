@@ -168,34 +168,125 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
 
     const buscarCaudalPorUH = (uh) => ({ 1: 0.20, 2: 0.30, 3: 0.50, 4: 0.60, 5: 0.80 }[uh] || 0);
 
-    const getTankFlow = (units) => {
-        const entry = UHData.find(item => item.units === parseFloat(units));
-        // If not exact match, find closest or implement interpolation
-        if (entry) return entry.tankFlow;
-        const higher = UHData.find(item => item.units > units);
-        return higher ? higher.tankFlow : 0;
-    };
+    const getTankFlow = useCallback((units) => {
+        const u = parseFloat(units);
+        if (isNaN(u) || u <= 0) return 0;
 
-    // Recalculations
-    const calculateGradeTotal = grade => tables[grade]?.modules?.reduce((sum, mod) => sum + (mod.totalUD || 0), 0) || 0;
-    const calculateOverallUDTotal = () => selectedGradesList.reduce((sum, grade) => sum + calculateGradeTotal(grade), 0);
-    const calculateExterioresTotal = () => selectedGradesList.reduce((sum, g) => sum + (parseFloat(exterioresData[g]?.uhTotal) || 0), 0);
-    const calculateMDSTotal = () => (getTankFlow(calculateOverallUDTotal()) || 0).toFixed(2);
-    const calculateMDSExterioresTotal = () => (getTankFlow(calculateExterioresTotal()) || 0).toFixed(2);
-    const calculateTotalQMDS = () => (parseFloat(calculateMDSTotal()) + parseFloat(calculateMDSExterioresTotal())).toFixed(2);
+        // Exact match with small tolerance
+        const exact = UHData.find(item => Math.abs(item.units - u) < 0.0001);
+        if (exact) return exact.tankFlow;
+
+        // Find surrounding values for interpolation
+        let lower = null;
+        let higher = null;
+
+        for (const item of UHData) {
+            if (item.units < u) {
+                lower = item;
+            } else if (item.units > u) {
+                higher = item;
+                break;
+            }
+        }
+
+        if (lower && higher) {
+            // Linear interpolation: y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+            return lower.tankFlow + (u - lower.units) * (higher.tankFlow - lower.tankFlow) / (higher.units - lower.units);
+        }
+
+        if (higher) return higher.tankFlow;
+        if (lower) return lower.tankFlow; // Return last known value for values above the table
+        return 0;
+    }, []);
+
+    // Helper functions for dynamic calculations
+    const getRowUDTotal = useCallback((item) => {
+        if (!item?.accessories) return 0;
+        return extractedAccessories.reduce((sum, acc) => {
+            const c = parseFloat(item.accessories[acc.key]?.cantidad) || 0;
+            const u = parseFloat(item.accessories[acc.key]?.uh) || 0;
+            return sum + (c * u);
+        }, 0);
+    }, [extractedAccessories]);
+
+    const getModuleUDTotal = useCallback((mod) => {
+        const detailsUD = (mod?.details || []).reduce((s, d) => s + getRowUDTotal(d), 0);
+        const childrenUD = (mod?.children || []).reduce((s, c) => {
+            const childBase = getRowUDTotal(c);
+            const childDetails = (c.details || []).reduce((ss, gc) => ss + getRowUDTotal(gc), 0);
+            return s + childBase + childDetails;
+        }, 0);
+        return detailsUD + childrenUD;
+    }, [getRowUDTotal]);
+
+    const getGradeUDTotal = useCallback((grade) => {
+        return (tables[grade]?.modules || []).reduce((sum, mod) => sum + getModuleUDTotal(mod), 0);
+    }, [tables, getModuleUDTotal]);
+
+    // Computed totals using derived state to avoid stale data
+    const totalsComputed = useMemo(() => {
+        const gradeTotals = {};
+        selectedGradesList.forEach(grade => {
+            gradeTotals[grade] = getGradeUDTotal(grade);
+        });
+
+        const overallUDTotal = Object.values(gradeTotals).reduce((a, b) => a + b, 0);
+        const exterioresUDTotal = selectedGradesList.reduce((sum, g) => sum + (parseFloat(exterioresData[g]?.uhTotal) || 0), 0);
+
+        const qmdsInterior = getTankFlow(overallUDTotal);
+        const qmdsRiego = getTankFlow(exterioresUDTotal);
+        const qmdsTotal = qmdsInterior + qmdsRiego;
+
+        return {
+            gradeTotals,
+            overallUDTotal,
+            exterioresUDTotal,
+            qmdsInterior,
+            qmdsRiego,
+            qmdsTotal
+        };
+    }, [selectedGradesList, tables, exterioresData, getGradeUDTotal, getTankFlow]);
 
     useEffect(() => {
+        const totals = {
+            sistemasInterior: {
+                maximaDemandaSimultanea: totalsComputed.overallUDTotal,
+                qmds: totalsComputed.qmdsInterior.toFixed(2)
+            },
+            sistemaRiego: {
+                maximaDemandaSimultaneaRiego: totalsComputed.exterioresUDTotal,
+                qmdsRiego: totalsComputed.qmdsRiego.toFixed(2)
+            },
+            qmdsTotal: totalsComputed.qmdsTotal.toFixed(2),
+            totalUDPorGrado: totalsComputed.gradeTotals
+        };
+
+        // Update the table data with current calculations before sending to parent to ensure persistence
+        const updatedTables = JSON.parse(JSON.stringify(tables));
+        Object.keys(updatedTables).forEach(g => {
+            if (updatedTables[g].modules) {
+                updatedTables[g].modules.forEach(mod => {
+                    mod.details.forEach(d => { d.udTotal = getRowUDTotal(d); });
+                    mod.children.forEach(c => {
+                        c.udTotal = getRowUDTotal(c);
+                        c.details.forEach(gc => { gc.udTotal = getRowUDTotal(gc); });
+                    });
+                    mod.totalUD = getModuleUDTotal(mod);
+                });
+            }
+        });
+
+        document.dispatchEvent(new CustomEvent('maxima-demanda-simultanea-updated', {
+            detail: { grades, exterioresData, tables: updatedTables, totals }
+        }));
+
         if (onChange) {
             onChange({
-                grades, tables, anexo02: anexo02Data, exterioresData,
-                totals: {
-                    sistemasInterior: { maximaDemandaSimultanea: calculateOverallUDTotal(), qmds: calculateMDSTotal() },
-                    sistemaRiego: { maximaDemandaSimultaneaRiego: calculateExterioresTotal(), qmdsRiego: calculateMDSExterioresTotal() },
-                    qmdsTotal: calculateTotalQMDS()
-                }
+                grades, tables: updatedTables, anexo02: anexo02Data, exterioresData,
+                totals
             });
         }
-    }, [grades, tables, anexo02Data, exterioresData]);
+    }, [grades, tables, anexo02Data, exterioresData, totalsComputed, getRowUDTotal, getModuleUDTotal]);
 
     const handleGradesChange = (gradeKey) => {
         if (!isEdit) return;
@@ -369,7 +460,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                                         <td className="px-4 py-3"><input disabled={!isEdit} value={mod.name} onChange={e => { const t = { ...tables }; t[grade].modules[modIdx].name = e.target.value; setTables(t); }} className="w-full bg-transparent font-bold border-0 focus:ring-2 focus:ring-blue-300 rounded px-2" /></td>
                                                         <td className="px-4 py-3 border-r border-blue-100"></td><td className="px-4 py-3 border-r border-blue-100 text-blue-700">Módulo Principal</td>
                                                         {extractedAccessories.map(acc => (<React.Fragment key={acc.key}><td className="px-2 py-3 border-r border-blue-100"></td><td className="px-2 py-3 border-r border-blue-200"></td></React.Fragment>))}
-                                                        <td className="px-4 py-3 text-center text-lg bg-blue-100 border-b-2 border-blue-200 text-blue-800">{mod.totalUD?.toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-center text-lg bg-blue-100 border-b-2 border-blue-200 text-blue-800">{getModuleUDTotal(mod).toFixed(2)}</td>
                                                     </tr>
                                                     {mod.details.map((det, detIdx) => (
                                                         <tr key={det.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -388,7 +479,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                                                     <td className="px-2 py-2 border-r border-gray-300"><input disabled={!isEdit} type="number" step="0.1" value={det.accessories[acc.key]?.uh || ''} onChange={e => { const t = { ...tables }; t[grade].modules[modIdx].details[detIdx].accessories[acc.key].uh = +e.target.value; setTables(t); }} className="w-full text-center bg-transparent border border-gray-200 rounded px-1 py-1 text-gray-950 bg-gray-50 focus:border-blue-500" /></td>
                                                                 </React.Fragment>
                                                             ))}
-                                                            <td className="px-4 py-2 text-center font-bold bg-gray-50/50 text-gray-950">{det.udTotal?.toFixed(2)}</td>
+                                                            <td className="px-4 py-2 text-center font-bold bg-gray-50/50 text-gray-950">{getRowUDTotal(det).toFixed(2)}</td>
                                                         </tr>
                                                     ))}
                                                     {mod.children.map((child, childIdx) => (
@@ -409,7 +500,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                                                         <td className="px-2 py-2 border-r border-green-200"><input disabled={!isEdit} type="number" step="0.1" value={child.accessories[acc.key]?.uh || ''} onChange={e => { const t = { ...tables }; t[grade].modules[modIdx].children[childIdx].accessories[acc.key].uh = +e.target.value; setTables(t); }} className="w-full text-center bg-transparent border border-green-200 rounded px-1 py-1 text-green-800 bg-green-100/50 focus:border-green-500" /></td>
                                                                     </React.Fragment>
                                                                 ))}
-                                                                <td className="px-4 py-2 text-center font-bold bg-green-100/60 text-green-800">{child.udTotal?.toFixed(2)}</td>
+                                                                <td className="px-4 py-2 text-center font-bold bg-green-100/60 text-green-800">{getRowUDTotal(child).toFixed(2)}</td>
                                                             </tr>
                                                             {child.details.map((gc, gcIdx) => (
                                                                 <tr key={gc.id} className="border-b border-gray-100 hover:bg-gray-50 bg-white">
@@ -426,7 +517,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                                                             <td className="px-2 py-1.5 border-r border-gray-200"><input disabled={!isEdit} type="number" step="0.1" value={gc.accessories[acc.key]?.uh || ''} onChange={e => { const t = { ...tables }; t[grade].modules[modIdx].children[childIdx].details[gcIdx].accessories[acc.key].uh = +e.target.value; setTables(t); }} className="w-full text-center bg-transparent border border-gray-200 rounded px-1 py-0.5 text-xs text-gray-950 bg-gray-50 focus:border-blue-400" /></td>
                                                                         </React.Fragment>
                                                                     ))}
-                                                                    <td className="px-4 py-1.5 text-center font-semibold text-gray-950 text-sm">{gc.udTotal?.toFixed(2)}</td>
+                                                                    <td className="px-4 py-1.5 text-center font-semibold text-gray-950 text-sm">{getRowUDTotal(gc).toFixed(2)}</td>
                                                                 </tr>
                                                             ))}
                                                         </React.Fragment>
@@ -441,7 +532,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                 </div>
                                 <div className="bg-gray-100 p-4 border-t border-gray-300 text-right font-bold text-gray-950 flex justify-end items-center">
                                     <span className="mr-6 text-sm uppercase text-gray-950 font-semibold tracking-wide">Total U.D. Nivel {grade}</span>
-                                    <span className="text-2xl text-green-700 bg-green-100 px-6 py-2 rounded-xl shadow-inner border border-green-200">{calculateGradeTotal(grade).toFixed(2)}</span>
+                                    <span className="text-2xl text-green-700 bg-green-100 px-6 py-2 rounded-xl shadow-inner border border-green-200">{totalsComputed.gradeTotals[grade].toFixed(2)}</span>
                                 </div>
                             </div>
                         ))}
@@ -514,7 +605,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                     <tfoot className="bg-gray-100 border-t-2 border-gray-300">
                                         <tr>
                                             <td colSpan="5" className="px-6 py-4 text-right font-bold text-gray-950 uppercase tracking-wider text-sm">TOTAL U.H. EXTERIORES</td>
-                                            <td className="px-6 py-4 text-center text-2xl font-extrabold text-teal-800 bg-teal-100 border-l border-teal-200">{calculateExterioresTotal().toFixed(2)}</td>
+                                            <td className="px-6 py-4 text-center text-2xl font-extrabold text-teal-800 bg-teal-100 border-l border-teal-200">{totalsComputed.exterioresUDTotal.toFixed(2)}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -539,7 +630,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                                 <svg className="w-5 h-5 text-white -rotate-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                                             </div>
                                             <h4 className="text-xl font-black text-gray-950 mb-3 tracking-wide">{gradeOptions[grade].name}</h4>
-                                            <div className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600 mb-2">{calculateGradeTotal(grade).toFixed(2)} UD</div>
+                                            <div className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600 mb-2">{totalsComputed.gradeTotals[grade].toFixed(2)} UD</div>
                                             <p className="text-sm font-semibold text-green-700 uppercase tracking-widest bg-green-100 py-1 px-3 rounded-full inline-block">Total Interior</p>
                                         </div>
                                     </div>
@@ -554,12 +645,12 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                         <div className="flex flex-col items-center space-y-4">
                                             <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl px-6 py-6 text-white w-full text-center shadow-lg transform transition-transform hover:scale-105">
                                                 <div className="text-xs font-bold mb-2 text-green-100 uppercase tracking-wider">Suma U.D. Interior</div>
-                                                <div className="text-4xl font-black tracking-tight">{calculateOverallUDTotal().toFixed(2)}</div>
+                                                <div className="text-4xl font-black tracking-tight">{totalsComputed.overallUDTotal.toFixed(2)}</div>
                                             </div>
                                             <svg className="w-8 h-8 text-gray-950 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl px-6 py-6 text-white w-full text-center shadow-lg shadow-orange-500/30 transform transition-transform hover:scale-105">
                                                 <div className="text-xs font-bold mb-2 text-orange-100 uppercase tracking-wider">Q MDS Interior</div>
-                                                <div className="text-4xl font-black tracking-tight">{calculateMDSTotal()} <span className="text-xl font-bold opacity-80">L/s</span></div>
+                                                <div className="text-4xl font-black tracking-tight">{totalsComputed.qmdsInterior.toFixed(2)} <span className="text-xl font-bold opacity-80">L/s</span></div>
                                             </div>
                                         </div>
                                     </div>
@@ -568,12 +659,12 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                         <div className="flex flex-col items-center space-y-4">
                                             <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl px-6 py-6 text-white w-full text-center shadow-lg transform transition-transform hover:scale-105">
                                                 <div className="text-xs font-bold mb-2 text-teal-100 uppercase tracking-wider">Suma U.D. Exterior</div>
-                                                <div className="text-4xl font-black tracking-tight">{calculateExterioresTotal().toFixed(2)}</div>
+                                                <div className="text-4xl font-black tracking-tight">{totalsComputed.exterioresUDTotal.toFixed(2)}</div>
                                             </div>
                                             <svg className="w-8 h-8 text-gray-950 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl px-6 py-6 text-white w-full text-center shadow-lg shadow-blue-500/30 transform transition-transform hover:scale-105">
                                                 <div className="text-xs font-bold mb-2 text-blue-100 uppercase tracking-wider">Q MDS Riego</div>
-                                                <div className="text-4xl font-black tracking-tight">{calculateMDSExterioresTotal()} <span className="text-xl font-bold opacity-80">L/s</span></div>
+                                                <div className="text-4xl font-black tracking-tight">{totalsComputed.qmdsRiego.toFixed(2)} <span className="text-xl font-bold opacity-80">L/s</span></div>
                                             </div>
                                         </div>
                                     </div>
@@ -582,7 +673,7 @@ export default function MaximaDemandaSimultanea({ initialData: data, editMode: i
                                         <div className="w-16 h-1 bg-purple-500 rounded-full mb-6"></div>
                                         <div className="text-sm font-bold text-purple-200 uppercase tracking-widest mb-4">Gran Total</div>
                                         <div className="text-6xl font-black tracking-tighter mb-4 drop-shadow-xl flex items-baseline">
-                                            {calculateTotalQMDS()} <span className="text-2xl ml-2 font-bold text-purple-300">L/s</span>
+                                            {totalsComputed.qmdsTotal.toFixed(2)} <span className="text-2xl ml-2 font-bold text-purple-300">L/s</span>
                                         </div>
                                         <div className="mt-4 px-6 py-2 bg-black/30 backdrop-blur-sm rounded-full text-xs font-semibold text-purple-200 border border-white/10 flex items-center">
                                             <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>

@@ -2,14 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 
-const USO_OPTIONS = [
-    { label: 'DEPOSITO', value: 'DEPOSITO' },
-    { label: 'ALMACEN', value: 'ALMACEN' },
-    { label: 'OFICINA', value: 'OFICINA' },
-    { label: 'CONSULTORIO', value: 'CONSULTORIO' },
-    { label: 'LABORATORIO', value: 'LABORATORIO' },
-    { label: 'COMEDOR', value: 'COMEDOR' },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const USO_OPTIONS = ['DEPOSITO', 'ALMACEN', 'OFICINA', 'CONSULTORIO', 'LABORATORIO', 'COMEDOR'];
 
 const DOTACION_OPTIONS = [
     { label: '0.50 Lt x m2 / dia', value: 0.5 },
@@ -21,639 +16,511 @@ const DOTACION_OPTIONS = [
     { label: '500.00 Lt /dia', value: 500 },
 ];
 
-const DEFAULT_TABLA1 = [
-    { id: 'tabla1_1', ambiente: '(DOCENTES) NIVEL INICIAL', uso: 'DOCENTES', cantidad: 3, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_2', ambiente: '(DOCENTES) NIVEL INICIAL', uso: 'DOCENTES', cantidad: 3, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_3', ambiente: '(DOCENTES) NIVEL PRIMARIA', uso: 'DOCENTES', cantidad: 15, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_4', ambiente: '(ALUMNOS) NIVEL INICIAL', uso: 'ALUMNOS/2 aulas 31 c/u', cantidad: 62, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_5', ambiente: '(ALUMNOS) NIVEL PRIMARIA', uso: 'ALUM./10 aulas 25 c/u +16', cantidad: 266, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_6', ambiente: 'DIRECTOR', uso: 'DIRECTOR', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_7', ambiente: 'GUARDIAN', uso: 'GUARDIAN', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_8', ambiente: 'PER.SERVICIO', uso: 'PER.SERVICIO', cantidad: 2, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_9', ambiente: 'BIBLIOTECARIA', uso: 'BIBLIOTECARIA', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
-    { id: 'tabla1_10', ambiente: 'SECRETARIA', uso: 'SECRETARIA', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
-];
+const DOTACION_MAP = Object.fromEntries(DOTACION_OPTIONS.map((d) => [d.label, d.value]));
+const USO_LIST = Object.fromEntries(USO_OPTIONS.map((u) => [u, u]));
+const DOT_LIST = Object.fromEntries(DOTACION_OPTIONS.map((d) => [d.label, d.label]));
 
-const DEFAULT_TABLA2 = [
-    {
-        id: 'piso_0',
-        modulos: [
-            { id: 'piso0_mod0', ambiente: 'ALMACEN GENERAL', uso: 'ALMACEN', cantidad: 28.91, dotacion: '0.50 Lt x m2 / dia' },
-            { id: 'piso0_mod2', ambiente: 'ALMACEN GENERAL', uso: 'ALMACEN', cantidad: 28.91, dotacion: '0.50 Lt x m2 / dia' },
-            { id: 'piso0_mod3', ambiente: 'DEPOSITO SUM', uso: 'DEPOSITO', cantidad: 30.08, dotacion: '0.50 Lt x m2 / dia' },
-            { id: 'piso0_mod4', ambiente: 'DEPOSITO DE MATERIALES DEPORT.', uso: 'DEPOSITO', cantidad: 16.01, dotacion: '0.50 Lt x m2 / dia' },
-            { id: 'piso0_mod5', ambiente: 'COMEDOR', uso: 'COMEDOR', cantidad: 118.06, dotacion: '40.00 Lt x m2 / dia' },
-            { id: 'piso0_mod6', ambiente: 'BIBLIOTECA /AREA DE LIBROS', uso: 'OFICINA', cantidad: 93.8, dotacion: '6.00 Lt x m2 / dia' },
-        ],
-    },
-    {
-        id: 'piso_1',
-        modulos: [
-            { id: 'piso1_mod0', ambiente: 'MODULO DE CONECTIVIDAD', uso: 'OFICINA', cantidad: 24.53, dotacion: '6.00 Lt x m2 / dia' },
-        ],
-    },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const DEFAULT_TABLA3 = [
-    { id: 'tabla3_1', ambiente: 'JARDINES', uso: 'AREAS VERDES', cantidad: 533.06, dotacion: '2.00 Lt x m2 / dia' },
-    { id: 'tabla3_2', ambiente: 'DEPOSITO', uso: 'DEPOSITOS', cantidad: 137.36, dotacion: '0.50 Lt x m2 / dia' },
-];
+const toNum = (v) => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const round2 = (v) => parseFloat((isFinite(v) ? v : 0).toFixed(2));
+const uid = (prefix = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-const toNumber = (value) => {
-    const n = Number.parseFloat(value);
-    return Number.isFinite(n) ? n : 0;
-};
-
-const round2 = (value) => Number.parseFloat((Number.isFinite(value) ? value : 0).toFixed(2));
-
-const extractDotacionValue = (dotacion) => {
+const dotacionValue = (dotacion) => {
     if (typeof dotacion === 'number') return dotacion;
-    const text = String(dotacion ?? '');
-
-    const option = DOTACION_OPTIONS.find((d) => d.label === text);
-    if (option) return option.value;
-
-    const match = text.match(/(\d+(?:\.\d+)?)/);
-    return match ? toNumber(match[1]) : 0;
+    const s = String(dotacion ?? '');
+    if (s in DOTACION_MAP) return DOTACION_MAP[s];
+    const m = s.match(/(\d+(?:\.\d+)?)/);
+    return m ? toNum(m[1]) : 0;
 };
 
-const calcCaudal = (item) => {
-    const cantidad = toNumber(item.cantidad);
-    const dotacion = String(item.dotacion ?? '');
-    const dotacionValue = extractDotacionValue(dotacion);
+const calcCaudal = ({ cantidad, dotacion }) => {
+    const dv = dotacionValue(dotacion);
+    const str = String(dotacion ?? '');
+    return round2(str.includes('Lt /dia') ? dv : toNum(cantidad) * dv);
+};
 
-    if (dotacion.includes('Lt /dia')) {
-        return round2(dotacionValue);
+const mkRow = (raw, fallbackDotacion, prefix = 'row') => {
+    const base = {
+        id: raw?.id ?? uid(prefix),
+        ambiente: raw?.ambiente ?? 'Nuevo Ambiente',
+        uso: raw?.uso ?? 'Nuevo Uso',
+        cantidad: toNum(raw?.cantidad),
+        dotacion: raw?.dotacion ?? fallbackDotacion,
+    };
+    return { ...base, caudal: calcCaudal(base) };
+};
+
+const mkPiso = (raw, pisoIndex) => ({
+    id: raw?.id ?? uid('piso'),
+    modulos: (Array.isArray(raw?.modulos) ? raw.modulos : []).map((m, mi) =>
+        mkRow(m, '0.50 Lt x m2 / dia', `p${pisoIndex}m${mi}`),
+    ),
+});
+
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_T1 = [
+    { ambiente: '(DOCENTES) NIVEL INICIAL', uso: 'DOCENTES', cantidad: 3, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: '(DOCENTES) NIVEL PRIMARIA', uso: 'DOCENTES', cantidad: 15, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: '(ALUMNOS) NIVEL INICIAL', uso: 'ALUMNOS/2 aulas 31 c/u', cantidad: 62, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: '(ALUMNOS) NIVEL PRIMARIA', uso: 'ALUM./10 aulas 25 c/u +16', cantidad: 266, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: 'DIRECTOR', uso: 'DIRECTOR', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: 'GUARDIAN', uso: 'GUARDIAN', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: 'PER.SERVICIO', uso: 'PER.SERVICIO', cantidad: 2, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: 'BIBLIOTECARIA', uso: 'BIBLIOTECARIA', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
+    { ambiente: 'SECRETARIA', uso: 'SECRETARIA', cantidad: 1, dotacion: '50.00 Lt x per / dia' },
+];
+
+const DEFAULT_T2 = [
+    {
+        modulos: [
+            { ambiente: 'ALMACEN GENERAL', uso: 'ALMACEN', cantidad: 28.91, dotacion: '0.50 Lt x m2 / dia' },
+            { ambiente: 'DEPOSITO SUM', uso: 'DEPOSITO', cantidad: 30.08, dotacion: '0.50 Lt x m2 / dia' },
+            { ambiente: 'DEPOSITO DE MATERIALES DEPORT.', uso: 'DEPOSITO', cantidad: 16.01, dotacion: '0.50 Lt x m2 / dia' },
+            { ambiente: 'COMEDOR', uso: 'COMEDOR', cantidad: 118.06, dotacion: '40.00 Lt x m2 / dia' },
+            { ambiente: 'BIBLIOTECA /AREA DE LIBROS', uso: 'OFICINA', cantidad: 93.8, dotacion: '6.00 Lt x m2 / dia' },
+        ]
+    },
+    {
+        modulos: [
+            { ambiente: 'MODULO DE CONECTIVIDAD', uso: 'OFICINA', cantidad: 24.53, dotacion: '6.00 Lt x m2 / dia' },
+        ]
+    },
+];
+
+const DEFAULT_T3 = [
+    { ambiente: 'JARDINES', uso: 'AREAS VERDES', cantidad: 533.06, dotacion: '2.00 Lt x m2 / dia' },
+    { ambiente: 'DEPOSITO', uso: 'DEPOSITOS', cantidad: 137.36, dotacion: '0.50 Lt x m2 / dia' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const buildColumns = (isEdit, onDelete) => {
+    const cols = [
+        {
+            title: 'AMBIENTE', field: 'ambiente',
+            editor: isEdit ? 'input' : false,
+            headerSort: false, widthGrow: 3,
+            hozAlign: 'left',
+        },
+        {
+            title: 'USO', field: 'uso',
+            editor: isEdit ? 'list' : false,
+            editorParams: isEdit ? { values: USO_LIST, autocomplete: true, listOnEmpty: true, freetext: true } : {},
+            headerSort: false, widthGrow: 2, hozAlign: 'center',
+        },
+        {
+            title: 'CANTIDAD', field: 'cantidad',
+            editor: isEdit ? 'number' : false,
+            editorParams: { min: 0, step: 0.1 },
+            headerSort: false, widthGrow: 1, hozAlign: 'center',
+            formatter: (cell) => {
+                const value = toNum(cell.getValue()).toFixed(2);
+                const dotacion = cell.getRow().getData().dotacion;
+                if (String(dotacion).includes('m2')) return `${value} m2`;
+                if (String(dotacion).includes('per')) return `${value} per`;
+                return value; // For 'Lt /dia' dotation, quantity is just a number
+            },
+        },
+        {
+            title: 'DOTACION', field: 'dotacion',
+            editor: isEdit ? 'list' : false,
+            editorParams: isEdit ? { values: DOT_LIST, autocomplete: true, listOnEmpty: true } : {},
+            headerSort: false, widthGrow: 2, hozAlign: 'center',
+        },
+        {
+            title: 'CAUDAL', field: 'caudal',
+            headerSort: false, widthGrow: 1.5, hozAlign: 'center',
+            cssClass: 'font-semibold text-blue-600',
+            formatter: (cell) => `${toNum(cell.getValue()).toFixed(2)} Lt/dia`,
+            editable: false,
+        },
+    ];
+
+    if (isEdit) {
+        cols.push({
+            title: '', field: '_del', headerSort: false, width: 40, hozAlign: 'center',
+            formatter: () => '<span class="text-red-500 cursor-pointer text-lg">×</span>',
+            cellClick: (_e, cell) => {
+                if (confirm('¿Eliminar esta fila?')) {
+                    onDelete(cell.getData()?.id);
+                }
+            },
+            editable: false,
+        });
     }
-
-    return round2(cantidad * dotacionValue);
-};
-
-const normalizeRow = (row, fallbackDotacion, prefix) => {
-    const normalized = {
-        id: row?.id ?? `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        ambiente: row?.ambiente ?? 'Nuevo Ambiente',
-        uso: row?.uso ?? 'Nuevo Uso',
-        cantidad: toNumber(row?.cantidad),
-        dotacion: row?.dotacion ?? fallbackDotacion,
-    };
-
-    return {
-        ...normalized,
-        caudal: calcCaudal(normalized),
-    };
-};
-
-const normalizeTabla2 = (tabla2) =>
-    (Array.isArray(tabla2) ? tabla2 : []).map((piso, pisoIndex) => ({
-        id: piso?.id ?? `piso_${pisoIndex}_${Date.now()}`,
-        modulos: (Array.isArray(piso?.modulos) ? piso.modulos : []).map((modulo, modIndex) =>
-            normalizeRow(modulo, '0.50 Lt x m2 / dia', `piso${pisoIndex}_mod${modIndex}`),
-        ),
-    }));
-
-const buildState = (initialData) => {
-    const tabla1 = (Array.isArray(initialData?.tabla1) ? initialData.tabla1 : DEFAULT_TABLA1).map((row, idx) =>
-        normalizeRow(row, '50.00 Lt x per / dia', `tabla1_${idx}`),
-    );
-
-    const tabla2 = normalizeTabla2(Array.isArray(initialData?.tabla2) ? initialData.tabla2 : DEFAULT_TABLA2);
-
-    const tabla3 = (Array.isArray(initialData?.tabla3) ? initialData.tabla3 : DEFAULT_TABLA3).map((row, idx) =>
-        normalizeRow(row, '2.00 Lt x m2 / dia', `tabla3_${idx}`),
-    );
-
-    return { tabla1, tabla2, tabla3 };
-};
-
-const calcTotalCaudal = (tabla1, tabla2, tabla3) => {
-    const total1 = tabla1.reduce((sum, item) => sum + toNumber(item.caudal), 0);
-    const total2 = tabla2.reduce(
-        (sum, piso) => sum + piso.modulos.reduce((sub, item) => sub + toNumber(item.caudal), 0),
-        0,
-    );
-    const total3 = tabla3.reduce((sum, item) => sum + toNumber(item.caudal), 0);
-
-    return round2(total1 + total2 + total3);
+    return cols;
 };
 
 const DemandaDiaria = ({ initialData, canEdit, editMode, onChange }) => {
-    const mode = canEdit && editMode ? 'edit' : 'view';
+    const isEdit = !!(canEdit && editMode);
 
-    const initialState = useMemo(() => buildState(initialData), [initialData]);
-    const [tabla1, setTabla1] = useState(initialState.tabla1);
-    const [tabla2, setTabla2] = useState(initialState.tabla2);
-    const [tabla3, setTabla3] = useState(initialState.tabla3);
+    // ── Internal State ──
+    const [tabla1, setTabla1] = useState([]);
+    const [tabla2, setTabla2] = useState([]);
+    const [tabla3, setTabla3] = useState([]);
 
-    const skipOnChangeRef = useRef(true);
-    const idleCallbackRef = useRef(null);
+    // ── Refs ──
+    const tabulatorsRef = useRef({}); // { t1, t3, p0, p1, ... }
+    const tabla1Ref = useRef([]);
+    const tabla2Ref = useRef([]);
+    const tabla3Ref = useRef([]);
+    const isEditRef = useRef(isEdit);
+    const onChangeRef = useRef(onChange);
+    const notifyTimer = useRef(null);
+
+    // Sync refs for event handlers
+    useEffect(() => { tabla1Ref.current = tabla1; }, [tabla1]);
+    useEffect(() => { tabla2Ref.current = tabla2; }, [tabla2]);
+    useEffect(() => { tabla3Ref.current = tabla3; }, [tabla3]);
+    useEffect(() => { isEditRef.current = isEdit; }, [isEdit]);
+    useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
+    // ── Initialization & Remote Sync ──
+    const loadData = useCallback((data) => {
+        const t1 = (Array.isArray(data?.tabla1) ? data.tabla1 : DEFAULT_T1).map((r, i) => mkRow(r, '50.00 Lt x per / dia', `t1_${i}`));
+        const t2 = (Array.isArray(data?.tabla2) ? data.tabla2 : DEFAULT_T2).map((p, i) => mkPiso(p, i));
+        const t3 = (Array.isArray(data?.tabla3) ? data.tabla3 : DEFAULT_T3).map((r, i) => mkRow(r, '2.00 Lt x m2 / dia', `t3_${i}`));
+
+        setTabla1(t1);
+        setTabla2(t2);
+        setTabla3(t3);
+
+        // Update existing tabulators if they exist
+        if (tabulatorsRef.current['t1']) tabulatorsRef.current['t1'].setData(t1);
+        if (tabulatorsRef.current['t3']) tabulatorsRef.current['t3'].setData(t3);
+        t2.forEach((piso, i) => {
+            if (tabulatorsRef.current[`p${i}`]) tabulatorsRef.current[`p${i}`].setData(piso.modulos);
+        });
+    }, []);
 
     useEffect(() => {
-        skipOnChangeRef.current = true;
-        setTabla1(initialState.tabla1);
-        setTabla2(initialState.tabla2);
-        setTabla3(initialState.tabla3);
-    }, [initialState]);
-
-    const totalCaudal = useMemo(() => calcTotalCaudal(tabla1, tabla2, tabla3), [tabla1, tabla2, tabla3]);
-
-    const updateTimeoutRef = useRef(null);
-
-    useEffect(() => {
-        if (!onChange) return;
-        if (skipOnChangeRef.current) {
-            skipOnChangeRef.current = false;
+        if (!initialData) {
+            loadData({});
             return;
         }
 
-        if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
-        if (idleCallbackRef.current && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-            window.cancelIdleCallback(idleCallbackRef.current);
+        // Only sync from props if not in edit mode (to avoid conflicts)
+        if (!isEdit) {
+            loadData(initialData);
         }
-        updateTimeoutRef.current = setTimeout(() => {
-            const payload = { tabla1, tabla2, tabla3, totalCaudal };
+    }, [initialData, isEdit, loadData]);
 
-            // Disparar evento para Cisterna y Tanque
-            if (typeof window !== 'undefined') {
-                const event = new CustomEvent('demanda-diaria-updated', { detail: payload });
-                document.dispatchEvent(event);
-            }
+    const totalCaudal = useMemo(() => {
+        const s1 = tabla1.reduce((s, r) => s + toNum(r.caudal), 0);
+        const s2 = tabla2.reduce((s, p) => s + (p.modulos?.reduce((sm, m) => sm + toNum(m.caudal), 0) || 0), 0);
+        const s3 = tabla3.reduce((s, r) => s + toNum(r.caudal), 0);
+        return round2(s1 + s2 + s3);
+    }, [tabla1, tabla2, tabla3]);
 
-            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-                idleCallbackRef.current = window.requestIdleCallback(() => onChange(payload), { timeout: 500 });
-            } else {
-                onChange(payload);
-            }
-        }, 200);
+    const getLatestTotalCaudal = useCallback(() => {
+        const t1 = tabulatorsRef.current['t1'] ? tabulatorsRef.current['t1'].getData() : tabla1Ref.current;
+        const t2 = tabla2Ref.current; // Modulos are pulled during reduction below
+        const t3 = tabulatorsRef.current['t3'] ? tabulatorsRef.current['t3'].getData() : tabla3Ref.current;
 
-        return () => {
-            if (updateTimeoutRef.current) {
-                clearTimeout(updateTimeoutRef.current);
-            }
-            if (idleCallbackRef.current && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-                window.cancelIdleCallback(idleCallbackRef.current);
-            }
+        const s1 = t1.reduce((s, r) => s + toNum(r.caudal), 0);
+        const s2 = t2.reduce((s, p, i) => {
+            const modulos = tabulatorsRef.current[`p_${p.id}`] ? tabulatorsRef.current[`p_${p.id}`].getData() : p.modulos;
+            return s + (modulos?.reduce((sm, m) => sm + toNum(m.caudal), 0) || 0);
+        }, 0);
+        const s3 = t3.reduce((s, r) => s + toNum(r.caudal), 0);
+        return round2(s1 + s2 + s3);
+    }, []);
+
+    // ── Notify Parent ──
+    const notifyChange = useCallback(() => {
+        if (!onChangeRef.current) return;
+
+        const currentTotal = getLatestTotalCaudal();
+
+        // Collect current data from tabulators if possible, else state
+        const payload = {
+            tabla1: tabulatorsRef.current['t1'] ? tabulatorsRef.current['t1'].getData() : tabla1Ref.current,
+            tabla2: tabla2Ref.current.map((piso, i) => ({
+                ...piso,
+                modulos: tabulatorsRef.current[`p_${piso.id}`] ? tabulatorsRef.current[`p_${piso.id}`].getData() : piso.modulos
+            })),
+            tabla3: tabulatorsRef.current['t3'] ? tabulatorsRef.current['t3'].getData() : tabla3Ref.current,
+            totalCaudal: currentTotal
         };
-    }, [tabla1, tabla2, tabla3, totalCaudal, onChange]);
 
-    const tablePersonalAdminRef = useRef(null);
-    const tablePlantaGeneralRef = useRef(null);
-    const tablesPisosRef = useRef([]);
-    const tableReadyRef = useRef({
-        personal: false,
-        planta: false,
-        pisos: [],
-    });
-    const pendingDataRef = useRef({
-        personal: null,
-        planta: null,
-        pisos: [],
-    });
+        // Dispatch global event for other components (Cisterna, Tanque)
+        document.dispatchEvent(new CustomEvent('demanda-diaria-updated', { detail: payload }));
 
-    const generateId = (prefix = 'item') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        onChangeRef.current(payload);
+    }, [getLatestTotalCaudal]);
 
-    const applyEditToRows = (rows, rowId, field, value) =>
-        rows.map((row) => {
-            if (row.id !== rowId) return row;
-            const updated = { ...row, [field]: value };
-            return { ...updated, caudal: calcCaudal(updated) };
-        });
+    const scheduleNotify = useCallback(() => {
+        if (notifyTimer.current) clearTimeout(notifyTimer.current);
+        notifyTimer.current = setTimeout(notifyChange, 500);
+    }, [notifyChange]);
 
-    const handleCellEdit = useCallback((cell) => {
-        const field = cell.getField();
-        const rowData = cell.getRow().getData();
-        const rowId = rowData.id;
-        const newValue = cell.getValue();
-
-        let handled = false;
-
-        setTabla1((prev) => {
-            if (!prev.some((item) => item.id === rowId)) return prev;
-            handled = true;
-            return applyEditToRows(prev, rowId, field, newValue);
-        });
-
-        if (handled) return;
-
-        setTabla3((prev) => {
-            if (!prev.some((item) => item.id === rowId)) return prev;
-            handled = true;
-            return applyEditToRows(prev, rowId, field, newValue);
-        });
-
-        if (handled) return;
-
-        setTabla2((prev) =>
-            prev.map((piso) => {
-                if (!piso.modulos.some((mod) => mod.id === rowId)) return piso;
-                return {
-                    ...piso,
-                    modulos: applyEditToRows(piso.modulos, rowId, field, newValue),
-                };
-            }),
-        );
-    }, []);
-
-    const handleDeleteRow = useCallback((cell) => {
-        const rowId = cell.getRow().getData().id;
-
-        setTabla1((prev) => prev.filter((item) => item.id !== rowId));
-        setTabla3((prev) => prev.filter((item) => item.id !== rowId));
-        setTabla2((prev) => prev.map((piso) => ({ ...piso, modulos: piso.modulos.filter((m) => m.id !== rowId) })));
-    }, []);
-
-    const getColumns = useCallback(() => {
-        const baseColumns = [
-            {
-                title: 'AMBIENTE',
-                field: 'ambiente',
-                editor: mode === 'edit' ? 'input' : false,
-                headerSort: false,
-                cssClass: 'text-left',
-                cellEdited: mode === 'edit' ? handleCellEdit : undefined,
-            },
-            {
-                title: 'USO',
-                field: 'uso',
-                editor: mode === 'edit' ? 'list' : false,
-                editorParams:
-                    mode === 'edit'
-                        ? {
-                            values: USO_OPTIONS.reduce((acc, item) => {
-                                acc[item.label] = item.label;
-                                return acc;
-                            }, {}),
-                            autocomplete: true,
-                            listOnEmpty: true,
-                            freetext: true,
-                        }
-                        : {},
-                headerSort: false,
-                cssClass: 'text-center',
-                cellEdited: mode === 'edit' ? handleCellEdit : undefined,
-            },
-            {
-                title: 'CANTIDAD',
-                field: 'cantidad',
-                editor: mode === 'edit' ? 'number' : false,
-                headerSort: false,
-                cssClass: 'text-center',
-                formatter: (cell) => `${toNumber(cell.getValue()).toFixed(2)} m2`,
-                cellEdited: mode === 'edit' ? handleCellEdit : undefined,
-            },
-            {
-                title: 'DOTACION',
-                field: 'dotacion',
-                editor: mode === 'edit' ? 'list' : false,
-                editorParams:
-                    mode === 'edit'
-                        ? {
-                            values: DOTACION_OPTIONS.reduce((acc, item) => {
-                                acc[item.label] = item.label;
-                                return acc;
-                            }, {}),
-                            autocomplete: true,
-                            listOnEmpty: true,
-                        }
-                        : {},
-                headerSort: false,
-                cssClass: 'text-center',
-                cellEdited: mode === 'edit' ? handleCellEdit : undefined,
-            },
-            {
-                title: 'CAUDAL',
-                field: 'caudal',
-                headerSort: false,
-                cssClass: 'text-center font-semibold text-blue-600',
-                formatter: (cell) => `${toNumber(cell.getValue()).toFixed(2)} Lt/dia`,
-            },
-        ];
-
-        if (mode === 'edit') {
-            baseColumns.push({
-                title: 'ACCIONES',
-                field: 'actions',
-                headerSort: false,
-                cssClass: 'text-center',
-                width: 90,
-                formatter: () =>
-                    '<button class="delete-btn bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs" title="Eliminar">Eliminar</button>',
-                cellClick: (e, cell) => {
-                    e.stopPropagation();
-                    if (e.target.closest('.delete-btn')) {
-                        handleDeleteRow(cell);
-                    }
-                },
-            });
+    // Initial notification after load
+    useEffect(() => {
+        if (tabla1.length || tabla2.length || tabla3.length) {
+            const t = setTimeout(notifyChange, 1000);
+            return () => clearTimeout(t);
         }
+    }, [tabla1.length, tabla2.length, tabla3.length, notifyChange]);
 
-        return baseColumns;
-    }, [mode, handleCellEdit, handleDeleteRow]);
-
-    const columns = useMemo(() => getColumns(), [getColumns]);
-
-    const safeReplaceData = useCallback((table, data) => {
-        if (!table) return;
-        try {
-            const promise = table.replaceData(data);
-            if (promise && typeof promise.catch === 'function') {
-                promise.catch(() => { });
-            }
-        } catch (_) {
-            // Table may have been destroyed between render cycles.
-        }
-    }, []);
-
-    const createTable = useCallback((elementId, data, onBuilt) => {
+    // ── Tabulator Lifecycle ──
+    const initTable = useCallback((key, elementId, data, onDelete) => {
         const el = document.getElementById(elementId);
-        if (!el) return null;
+        if (!el) return;
 
-        let table = null;
-        table = new Tabulator(el, {
-            data,
+        if (tabulatorsRef.current[key]) {
+            try { tabulatorsRef.current[key].destroy(); } catch (_) { }
+        }
+
+        const table = new Tabulator(el, {
+            data: data,
+            index: 'id',
             layout: 'fitColumns',
-            responsiveLayout: 'hide',
-            pagination: false,
-            columns,
             headerSort: false,
-            virtualDom: true,
-            persistence: false,
-            tableBuilt: () => onBuilt?.(table),
+            columns: buildColumns(isEditRef.current, onDelete),
         });
-        return table;
-    }, [columns]);
 
-    // Rebuild fixed tables only when configuration changes
+        table.on('cellEdited', (cell) => {
+            const row = cell.getRow();
+            const updated = { ...row.getData() };
+            updated.caudal = calcCaudal(updated);
+            row.update({ caudal: updated.caudal });
+
+            // Sync state based on key
+            if (key === 't1') setTabla1(table.getData());
+            else if (key === 't3') setTabla3(table.getData());
+            else if (key.startsWith('p')) {
+                const pIdx = parseInt(key.substring(1));
+                setTabla2(prev => prev.map((p, i) => i === pIdx ? { ...p, modulos: table.getData() } : p));
+            }
+
+            scheduleNotify();
+        });
+
+        tabulatorsRef.current[key] = table;
+    }, [scheduleNotify]);
+
+    // Initialize/Update T1 & T3
     useEffect(() => {
-        tableReadyRef.current.personal = false;
-        tableReadyRef.current.planta = false;
-        tablePersonalAdminRef.current?.destroy();
-        tablePlantaGeneralRef.current?.destroy();
+        if (tabla1.length && !tabulatorsRef.current['t1']) initTable('t1', 'tbl-t1', tabla1, (id) => removeRow('t1', id));
+        if (tabla3.length && !tabulatorsRef.current['t3']) initTable('t3', 'tbl-t3', tabla3, (id) => removeRow('t3', id));
+    }, [tabla1.length, tabla3.length, initTable]);
 
-        tablePersonalAdminRef.current = createTable('table-personal-administrativo', tabla1, (table) => {
-            if (table !== tablePersonalAdminRef.current) return;
-            tableReadyRef.current.personal = true;
-            if (pendingDataRef.current.personal) {
-                safeReplaceData(table, pendingDataRef.current.personal);
-                pendingDataRef.current.personal = null;
+    // Initialize floor tables
+    useEffect(() => {
+        tabla2.forEach((piso) => {
+            const key = `p_${piso.id}`;
+            const elId = `tbl-p-${piso.id}`;
+            if (!tabulatorsRef.current[key]) {
+                initTable(key, elId, piso.modulos, (id) => removeRow(key, id));
             }
         });
-        tablePlantaGeneralRef.current = createTable('table-planta-general', tabla3, (table) => {
-            if (table !== tablePlantaGeneralRef.current) return;
-            tableReadyRef.current.planta = true;
-            if (pendingDataRef.current.planta) {
-                safeReplaceData(table, pendingDataRef.current.planta);
-                pendingDataRef.current.planta = null;
-            }
-        });
+    }, [tabla2, initTable]);
 
-        return () => {
-            tableReadyRef.current.personal = false;
-            tableReadyRef.current.planta = false;
-            tablePersonalAdminRef.current?.destroy();
-            tablePlantaGeneralRef.current?.destroy();
-            tablePersonalAdminRef.current = null;
-            tablePlantaGeneralRef.current = null;
-        };
-    }, [createTable, safeReplaceData]);
-
-    // Update fixed table data without destroying instances
+    // Handle isEdit toggle without destroying
     useEffect(() => {
-        if (tableReadyRef.current.personal && tablePersonalAdminRef.current) {
-            safeReplaceData(tablePersonalAdminRef.current, tabla1);
-            return;
+        Object.keys(tabulatorsRef.current).forEach(key => {
+            const tab = tabulatorsRef.current[key];
+            if (!tab) return;
+            const onDelete = (id) => removeRow(key, id);
+            tab.setColumns(buildColumns(isEdit, onDelete));
+        });
+    }, [isEdit]);
+
+    // ── Mutators ──
+    const addRow = (type) => {
+        if (type === 't1') {
+            const nr = mkRow({}, '50.00 Lt x per / dia', 't1');
+            setTabla1(p => [...p, nr]);
+            if (tabulatorsRef.current['t1']) tabulatorsRef.current['t1'].addRow(nr);
+        } else if (type === 't3') {
+            const nr = mkRow({}, '2.00 Lt x m2 / dia', 't3');
+            setTabla3(p => [...p, nr]);
+            if (tabulatorsRef.current['t3']) tabulatorsRef.current['t3'].addRow(nr);
         }
-        pendingDataRef.current.personal = tabla1;
-    }, [tabla1, safeReplaceData]);
+        scheduleNotify();
+    };
 
-    useEffect(() => {
-        if (tableReadyRef.current.planta && tablePlantaGeneralRef.current) {
-            safeReplaceData(tablePlantaGeneralRef.current, tabla3);
-            return;
+    const removeRow = (key, id) => {
+        if (key === 't1') {
+            setTabla1(p => p.filter(r => r.id !== id));
+            if (tabulatorsRef.current['t1']) tabulatorsRef.current['t1'].deleteRow(id);
+        } else if (key === 't3') {
+            setTabla3(p => p.filter(r => r.id !== id));
+            if (tabulatorsRef.current['t3']) tabulatorsRef.current['t3'].deleteRow(id);
+        } else if (key.startsWith('p_')) {
+            const pisoId = key.substring(2);
+            setTabla2(prev => prev.map((p) => p.id === pisoId ? { ...p, modulos: p.modulos.filter(m => m.id !== id) } : p));
+            if (tabulatorsRef.current[key]) tabulatorsRef.current[key].deleteRow(id);
         }
-        pendingDataRef.current.planta = tabla3;
-    }, [tabla3, safeReplaceData]);
-
-    // Rebuild piso tables only when count or config changes
-    useEffect(() => {
-        tableReadyRef.current.pisos = [];
-        pendingDataRef.current.pisos = [];
-        tablesPisosRef.current.forEach((table) => table?.destroy());
-        tablesPisosRef.current = [];
-
-        tabla2.forEach((piso, pisoIndex) => {
-            tablesPisosRef.current[pisoIndex] = createTable(`table-piso-${pisoIndex}`, piso.modulos, (table) => {
-                if (table !== tablesPisosRef.current[pisoIndex]) return;
-                tableReadyRef.current.pisos[pisoIndex] = true;
-                if (pendingDataRef.current.pisos[pisoIndex]) {
-                    safeReplaceData(table, pendingDataRef.current.pisos[pisoIndex]);
-                    pendingDataRef.current.pisos[pisoIndex] = null;
-                }
-            });
-        });
-
-        return () => {
-            tableReadyRef.current.pisos = [];
-            tablesPisosRef.current.forEach((table) => table?.destroy());
-            tablesPisosRef.current = [];
-        };
-    }, [createTable, tabla2.length, safeReplaceData]);
-
-    // Update piso data without recreating tables
-    useEffect(() => {
-        tabla2.forEach((piso, pisoIndex) => {
-            const table = tablesPisosRef.current[pisoIndex];
-            if (tableReadyRef.current.pisos[pisoIndex] && table) {
-                safeReplaceData(table, piso.modulos);
-                return;
-            }
-            pendingDataRef.current.pisos[pisoIndex] = piso.modulos;
-        });
-    }, [tabla2, safeReplaceData]);
-
-    const addRowTabla1 = () => {
-        const row = normalizeRow(
-            { id: generateId('tabla1'), ambiente: 'Nuevo Ambiente', uso: 'Nuevo Uso', cantidad: 0, dotacion: '50.00 Lt x per / dia' },
-            '50.00 Lt x per / dia',
-            'tabla1',
-        );
-        setTabla1((prev) => [...prev, row]);
+        scheduleNotify();
     };
 
     const addPiso = () => {
-        const pisoIndex = tabla2.length;
-        const firstModulo = normalizeRow(
-            { id: generateId(`piso${pisoIndex}_mod`), ambiente: 'Nuevo Modulo', uso: 'Nuevo Uso', cantidad: 0, dotacion: '0.50 Lt x m2 / dia' },
-            '0.50 Lt x m2 / dia',
-            `piso${pisoIndex}_mod`,
-        );
-
-        setTabla2((prev) => [...prev, { id: generateId('piso'), modulos: [firstModulo] }]);
+        const np = mkPiso({ modulos: [] }, tabla2.length);
+        setTabla2(p => [...p, np]);
+        scheduleNotify();
     };
 
-    const removePiso = (pisoIndex) => {
-        setTabla2((prev) => prev.filter((_, index) => index !== pisoIndex));
+    const removePiso = (pisoId) => {
+        if (confirm('¿Eliminar todo este piso?')) {
+            const key = `p_${pisoId}`;
+            if (tabulatorsRef.current[key]) {
+                tabulatorsRef.current[key].destroy();
+                delete tabulatorsRef.current[key];
+            }
+            setTabla2(p => p.filter((piso) => piso.id !== pisoId));
+            scheduleNotify();
+        }
     };
 
-    const addModulo = (pisoIndex) => {
-        const modulo = normalizeRow(
-            { id: generateId(`piso${pisoIndex}_mod`), ambiente: 'Nuevo Modulo', uso: 'Nuevo Uso', cantidad: 0, dotacion: '0.50 Lt x m2 / dia' },
-            '0.50 Lt x m2 / dia',
-            `piso${pisoIndex}_mod`,
-        );
-
-        setTabla2((prev) =>
-            prev.map((piso, index) => (index === pisoIndex ? { ...piso, modulos: [...piso.modulos, modulo] } : piso)),
-        );
+    const addModulo = (pisoId) => {
+        const nr = mkRow({}, '0.50 Lt x m2 / dia', `p${pisoId}m`);
+        setTabla2(prev => prev.map((p) => p.id === pisoId ? { ...p, modulos: [...p.modulos, nr] } : p));
+        const key = `p_${pisoId}`;
+        if (tabulatorsRef.current[key]) tabulatorsRef.current[key].addRow(nr);
+        scheduleNotify();
     };
 
-    const addRowTabla3 = () => {
-        const row = normalizeRow(
-            { id: generateId('tabla3'), ambiente: 'Nuevo Ambiente', uso: 'Nuevo Uso', cantidad: 0, dotacion: '2.00 Lt x m2 / dia' },
-            '2.00 Lt x m2 / dia',
-            'tabla3',
-        );
-        setTabla3((prev) => [...prev, row]);
-    };
 
+    // Cleanup
+    useEffect(() => () => {
+        if (notifyTimer.current) clearTimeout(notifyTimer.current);
+        Object.values(tabulatorsRef.current).forEach(t => { try { t.destroy(); } catch (_) { } });
+        tabulatorsRef.current = {};
+    }, []);
+
+    // ── Render ──
     return (
-        <div className="w-full p-4">
-            <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200/60 rounded-2xl shadow-lg sticky top-1 z-50">
-                <div className="w-full mx-auto px-2 py-2">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg">
-                                <i className="fas fa-water text-white text-lg"></i>
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-800">1. CALCULO DE LA DEMANDA DIARIA</h1>
-                                <p className="text-sm text-slate-600">Calculo de consumo de agua</p>
-                            </div>
+        <div className="w-full p-4 max-w-7xl mx-auto space-y-6">
+            <header className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden sticky top-1 z-50">
+                <div className="px-6 py-4 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-white dark:from-slate-800/50 dark:to-slate-900">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 dark:shadow-none">
+                            <i className="fas fa-water text-white text-xl"></i>
                         </div>
-
-                        <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${mode === 'edit' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
-                                }`}
-                        >
-                            {mode === 'edit' ? 'Editando' : 'Solo lectura'}
-                        </span>
+                        <div>
+                            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">1. CÁLCULO DE LA DEMANDA DIARIA</h1>
+                            <p className="text-xs text-slate-500 font-medium">Consumo proyectado de agua según RNE</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${isEdit ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                            <span className={`w-2 h-2 rounded-full ${isEdit ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`} />
+                            {isEdit ? 'Modo Edición' : 'Vista de Lectura'}
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <main className="w-full px-2 py-4 space-y-2">
-                <section className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-                        <h2 className="text-xl font-semibold text-white flex items-center">
-                            <i className="fas fa-users mr-2"></i>
-                            ALUMNOS Y PERSONAL ADMINISTRATIVO
-                        </h2>
-                    </div>
-                    <div className="p-2">
-                        <div id="table-personal-administrativo" className="border border-slate-200 rounded-lg overflow-hidden"></div>
-                        {mode === 'edit' && (
-                            <button
-                                onClick={addRowTabla1}
-                                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center"
-                            >
-                                <i className="fas fa-plus mr-2"></i>
-                                Agregar Fila
-                            </button>
-                        )}
-                    </div>
-                </section>
+            <div className="grid grid-cols-1 gap-6">
+                {/* Section 1 */}
+                <Section title="PERSONAL Y ALUMNADO" icon="fas fa-users" color="blue">
+                    <div id="tbl-t1" className="tabulator-custom border-0" />
+                    {isEdit && <AddBtn onClick={() => addRow('t1')} label="Agregar Personal" color="blue" />}
+                </Section>
 
-                <section className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
-                        <h2 className="text-xl font-semibold text-white flex items-center">
-                            <i className="fas fa-building mr-2"></i>
-                            MODULOS PROYECTADOS EN ARQUITECTURA
-                        </h2>
-                    </div>
-                    <div className="p-2">
-                        {mode === 'edit' && (
-                            <div className="mb-4 flex justify-between items-center">
-                                <button
-                                    onClick={addPiso}
-                                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center"
-                                >
-                                    <i className="fas fa-plus mr-2"></i>
-                                    Agregar Piso
-                                </button>
-                            </div>
-                        )}
-
-                        {tabla2.map((piso, pisoIndex) => (
-                            <div key={piso.id} className="mb-6 p-4 border border-slate-200 rounded-lg bg-slate-50">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h5 className="font-semibold text-slate-700 flex items-center">
-                                        <i className="fas fa-layer-group mr-2 text-green-600"></i>
-                                        PISO {pisoIndex + 1}
-                                    </h5>
-                                    {mode === 'edit' && (
-                                        <button
-                                            onClick={() => removePiso(pisoIndex)}
-                                            className="text-red-500 hover:text-red-700 px-3 py-1 rounded transition-colors duration-200 flex items-center"
-                                        >
-                                            <i className="fas fa-trash mr-1"></i>
-                                            Eliminar Piso
+                {/* Section 2 */}
+                <Section title="MÓDULOS DE ARQUITECTURA (PISOS)" icon="fas fa-building" color="green">
+                    <div className="space-y-6">
+                        {tabla2.map((piso, i) => (
+                            <div key={piso.id} className="p-5 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 transition-all hover:shadow-md">
+                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                    <h3 className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600">
+                                            {i + 1}
+                                        </div>
+                                        NIVEL / PISO {i + 1}
+                                    </h3>
+                                    {isEdit && (
+                                        <button onClick={() => removePiso(piso.id)} className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+                                            <i className="fas fa-trash-alt"></i> Eliminar Piso
                                         </button>
                                     )}
                                 </div>
-
-                                <div id={`table-piso-${pisoIndex}`} className="border border-slate-200 rounded-lg overflow-hidden mb-4"></div>
-
-                                {mode === 'edit' && (
-                                    <button
-                                        onClick={() => addModulo(pisoIndex)}
-                                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center"
-                                    >
-                                        <i className="fas fa-plus mr-2"></i>
-                                        Agregar Ambiente
-                                    </button>
-                                )}
+                                <div id={`tbl-p-${piso.id}`} className="tabulator-custom border-0 mb-4" />
+                                {isEdit && <AddBtn onClick={() => addModulo(piso.id)} label="Agregar Ambiente" color="blue" />}
                             </div>
                         ))}
-                    </div>
-                </section>
 
-                <section className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4">
-                        <h2 className="text-xl font-semibold text-white flex items-center">
-                            <i className="fas fa-map mr-2"></i>
-                            PLANTA GENERAL PROYECTADA EN ARQUITECTURA
-                        </h2>
-                    </div>
-                    <div className="p-2">
-                        <div id="table-planta-general" className="border border-slate-200 rounded-lg overflow-hidden"></div>
-                        {mode === 'edit' && (
-                            <button
-                                onClick={addRowTabla3}
-                                className="mt-4 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center"
-                            >
-                                <i className="fas fa-plus mr-2"></i>
-                                Agregar Fila
+                        {isEdit && (
+                            <button onClick={addPiso} className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/30 transition-all flex items-center justify-center gap-2 font-semibold">
+                                <i className="fas fa-plus-circle text-lg"></i> Añadir Nuevo Nivel o Piso
                             </button>
                         )}
                     </div>
-                </section>
+                </Section>
 
-                <section className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl shadow-lg p-6 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="text-lg font-medium mb-2 flex items-center">
-                                <i className="fas fa-tint mr-2"></i>
-                                VOLUMEN DE DEMANDA DIARIA
-                            </div>
-                            <div className="text-4xl font-bold">{totalCaudal.toFixed(2)} Lt/dia</div>
-                        </div>
-                        <div className="text-6xl opacity-20">
-                            <i className="fas fa-water"></i>
-                        </div>
+                {/* Section 3 */}
+                <Section title="PLANTAS GENERALES Y JARDINES" icon="fas fa-leaf" color="purple">
+                    <div id="tbl-t3" className="tabulator-custom border-0" />
+                    {isEdit && <AddBtn onClick={() => addRow('t3')} label="Agregar Planta" color="purple" />}
+                </Section>
+            </div>
+
+            {/* Resume Card */}
+            <div className="bg-slate-900 rounded-2xl shadow-2xl p-8 text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-32 -mt-32 transition-all group-hover:bg-blue-500/20" />
+                <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-2 text-center md:text-left">
+                        <p className="text-blue-400 font-bold text-xs uppercase tracking-[0.2em]">Resultado Final</p>
+                        <h2 className="text-2xl font-light">Volumen de Demanda <span className="font-bold text-white">Diaria Total</span></h2>
                     </div>
-                </section>
-            </main>
+                    <div className="flex flex-col items-center md:items-end">
+                        <div className="text-5xl font-black bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                            {totalCaudal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Litros / Día</div>
+                    </div>
+                </div>
+            </div>
+
+            <style>{`
+                .tabulator-custom { font-family: inherit !important; border-radius: 12px !important; overflow: hidden !important; border: 1px solid #e2e8f0 !important; }
+                .tabulator-custom .tabulator-header { background-color: #f8fafc !important; color: #475569 !important; font-weight: 700 !important; border-bottom: 1px solid #e2e8f0 !important; }
+                .tabulator-custom .tabulator-cell { padding: 12px 8px !important; border-right: 1px solid #f1f5f9 !important; }
+                .tabulator-custom .tabulator-row { background: white !important; transition: background 0.2s; }
+                .tabulator-custom .tabulator-row:hover { background-color: #f1f5f9 !important; }
+                .tabulator-custom .tabulator-row-even { background-color: #fafafa !important; }
+            `}</style>
         </div>
+    );
+};
+
+// ─── Sub-components ───
+
+const Section = ({ title, icon, color, children }) => {
+    const colorClasses = {
+        blue: 'from-blue-600 to-blue-700',
+        green: 'from-emerald-600 to-teal-700',
+        purple: 'from-indigo-600 to-purple-700'
+    };
+
+    return (
+        <section className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className={`bg-gradient-to-r ${colorClasses[color]} px-6 py-4`}>
+                <h2 className="text-lg font-bold text-white flex items-center gap-3">
+                    <i className={`${icon} opacity-80`}></i>
+                    {title}
+                </h2>
+            </div>
+            <div className="p-6">{children}</div>
+        </section>
+    );
+};
+
+const AddBtn = ({ onClick, label, color }) => {
+    const colorClasses = {
+        blue: 'bg-blue-600 hover:bg-blue-700 shadow-blue-200',
+        green: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200',
+        purple: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+    };
+
+    return (
+        <button onClick={onClick} className={`${colorClasses[color]} text-white px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 text-sm font-bold shadow-lg hover:-translate-y-0.5 mt-4`}>
+            <i className="fas fa-plus-circle"></i> {label}
+        </button>
     );
 };
 

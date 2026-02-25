@@ -3,6 +3,7 @@
 use App\Http\Controllers\AcCalculationController;
 use App\Http\Controllers\AguaCalculationController;
 use App\Http\Controllers\CaidaTensionController;
+use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -58,6 +59,18 @@ Route::middleware(['auth', 'verified'])->prefix('agua-calculation')->name('agua-
     Route::patch('/{aguaCalculation}', [AguaCalculationController::class, 'update'])->name('update');
     Route::delete('/{aguaCalculation}', [AguaCalculationController::class, 'destroy'])->name('destroy');
     Route::post('/{aguaCalculation}/enable-collab', [AguaCalculationController::class, 'enableCollaboration'])->name('enable-collab');
+});
+
+// ─── Cálculo de Desagüe ────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('desague-calculation')->name('desague-calculation.')->group(function () {
+    Route::get('/', [DesagueCalculationController::class, 'index'])->name('index');
+    Route::post('/', [DesagueCalculationController::class, 'store'])->name('store');
+    Route::get('/join', fn() => redirect()->route('desague-calculation.index'))->name('join.form');
+    Route::post('/join', [DesagueCalculationController::class, 'join'])->name('join');
+    Route::get('/{desagueCalculation}', [DesagueCalculationController::class, 'show'])->name('show');
+    Route::patch('/{desagueCalculation}', [DesagueCalculationController::class, 'update'])->name('update');
+    Route::delete('/{desagueCalculation}', [DesagueCalculationController::class, 'destroy'])->name('destroy');
+    Route::post('/{desagueCalculation}/enable-collab', [DesagueCalculationController::class, 'enableCollaboration'])->name('enable-collab');
 });
 
 // ─── Cálculo SPAT y Pararrayos ───────────────────────────────────────────────
