@@ -3,6 +3,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useRealtimeSync, type RemoteUpdate } from '@/hooks/useRealtimeSync';
 import AppLayout from '@/layouts/app-layout';
 import { exportTree } from '@/lib/tdTreeManager';
+import { exportCaidaTensionToExcel } from '@/lib/caida-tension-export';
 import * as caidaTensionRoutes from '@/routes/caida-tension';
 import type { BreadcrumbItem } from '@/types';
 import type { ATSRow, CaidaTensionSpreadsheet, SelectionData, TableRowNode, TGRow, TGTableRow } from '@/types/caida-tension';
@@ -137,6 +138,11 @@ export default function Show() {
         URL.revokeObjectURL(url);
     }, [tdTree, spreadsheet.name]);
 
+    // ── Exportar a Excel ──────────────────────────────────────────────────────
+    const handleExportExcel = useCallback(() => {
+        exportCaidaTensionToExcel(tdTree, tgState, selectionData, spreadsheet.name || 'Caida_Tension');
+    }, [tdTree, tgState, selectionData, spreadsheet.name]);
+
     const toggleEdit = useCallback(() => {
         setEditMode((v) => !v);
     }, []);
@@ -148,7 +154,19 @@ export default function Show() {
 
     // ── Botones contextuales según tab ────────────────────────────────────────
     const renderNavActions = () => {
-        if (!spreadsheet.can_edit) return null;
+        if (!spreadsheet.can_edit) {
+            return (
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleExportExcel}
+                        title="Exportar a Excel"
+                        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                        ↓ Excel
+                    </button>
+                </div>
+            );
+        }
         return (
             <div className="flex items-center gap-2">
                 {/* Botón de edición — siempre visible si puede editar */}
@@ -173,14 +191,23 @@ export default function Show() {
                     </button>
                 )}
 
-                {/* Botón Exportar — sólo en tab TD, visual por ahora */}
+                {/* Botón Exportar Excel — en cualquier tab */}
+                <button
+                    onClick={handleExportExcel}
+                    title="Exportar a Excel"
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                    ↓ Excel
+                </button>
+
+                {/* Botón Exportar JSON — sólo en tab TD */}
                 {activeTab === 'td' && (
                     <button
                         onClick={handleExportTD}
                         title="Exportar JSON del árbol de tableros"
                         className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
-                        ↓ Exportar
+                        ↓ JSON
                     </button>
                 )}
             </div>

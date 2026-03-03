@@ -2,6 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import React, { useCallback, useRef, useState } from 'react';
 import { useRealtimeSync, type RemoteUpdate } from '@/hooks/useRealtimeSync';
 import AppLayout from '@/layouts/app-layout';
+import { exportDesagueToExcel } from '@/lib/desague-export';
 import * as calcDesagueRoutes from '@/routes/desague-calculation';
 import type { BreadcrumbItem } from '@/types';
 
@@ -100,23 +101,34 @@ export default function Show() {
         setEditMode((v) => !v);
     }, []);
 
+    const handleExport = () => {
+        exportDesagueToExcel(dataSheet, spreadsheet.name || 'Calculo_Desague');
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Cálculo de Desagüe', href: calcDesagueRoutes.index.url() },
         { title: spreadsheet.name, href: '#' },
     ];
 
     const renderNavActions = () => {
-        if (!spreadsheet.can_edit) return null;
         return (
             <div className="flex items-center gap-2">
+                {spreadsheet.can_edit && (
+                    <button
+                        onClick={toggleEdit}
+                        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${editMode
+                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                            }`}>
+                        <span>{editMode ? '✓' : '✎'}</span>
+                        <span>{editMode ? 'Editando' : 'Editar'}</span>
+                    </button>
+                )}
                 <button
-                    onClick={toggleEdit}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${editMode
-                        ? 'bg-orange-500 text-white hover:bg-orange-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                        }`}>
-                    <span>{editMode ? '✓' : '✎'}</span>
-                    <span>{editMode ? 'Editando' : 'Editar'}</span>
+                    onClick={handleExport}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                    ↓ Excel
                 </button>
             </div>
         );
