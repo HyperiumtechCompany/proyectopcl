@@ -1,25 +1,99 @@
-# Laravel + React Starter Kit
+# PCL - Guía de clonado e instalación
 
-## Introduction
+Aplicación Laravel 12 + React (Inertia) con autenticación, roles/permisos y colaboración en tiempo real con Reverb.
 
-Our React starter kit provides a robust, modern starting point for building Laravel applications with a React frontend using [Inertia](https://inertiajs.com).
+## 1) Requisitos
 
-Inertia allows you to build modern, single-page React applications using classic server-side routing and controllers. This lets you enjoy the frontend power of React combined with the incredible backend productivity of Laravel and lightning-fast Vite compilation.
+- PHP `8.2+`
+- Composer `2+`
+- Node.js `20+`
+- MySQL/MariaDB
+- Extensiones PHP recomendadas para Laravel: `pdo_mysql`, `mbstring`, `openssl`, `fileinfo`, `tokenizer`, `xml`, `ctype`, `json`
 
-This React starter kit utilizes React 19, TypeScript, Tailwind, and the [shadcn/ui](https://ui.shadcn.com) and [radix-ui](https://www.radix-ui.com) component libraries.
+## 2) Clonar el repositorio
 
-## Official Documentation
+```bash
+git clone <URL_DEL_REPOSITORIO> proyectopcl
+cd proyectopcl
+```
 
-Documentation for all Laravel starter kits can be found on the [Laravel website](https://laravel.com/docs/starter-kits).
+## 3) Configurar entorno
 
-## Contributing
+```bash
+cp .env.example .env
+```
 
-Thank you for considering contributing to our starter kit! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Editar `.env` y validar mínimo:
 
-## Code of Conduct
+```env
+APP_URL=http://localhost
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=proyectopcl
+DB_USERNAME=root
+DB_PASSWORD=
 
-## License
+BROADCAST_CONNECTION=reverb
+QUEUE_CONNECTION=database
+```
 
-The Laravel + React starter kit is open-sourced software licensed under the MIT license.
+Crear la base de datos en MySQL antes de migrar (por ejemplo: `proyectopcl`).
+
+## 4) Instalación rápida (recomendada)
+
+Este comando instala dependencias, genera `APP_KEY`, ejecuta migraciones + seeders, crea el symlink de storage y compila frontend:
+
+```bash
+composer run setup
+```
+
+## 5) Levantar el proyecto en desarrollo
+
+En terminal 1:
+
+```bash
+composer run dev
+```
+
+En terminal 2 (WebSocket/Reverb):
+
+```bash
+php artisan reverb:start
+```
+
+Abrir la aplicación en: `http://127.0.0.1:8000`
+
+## 6) Usuarios de prueba (seeders)
+
+Después de `migrate --seed`:
+
+- `root@pcl.com` / `root123`
+- `gerencia@pcl.com` / `gerencia123`
+- `admin@pcl.com` / `admin123`
+- `asistente@pcl.com` / `asistente123`
+- `cliente@pcl.com` / `cliente123`
+
+## 7) Comandos útiles
+
+```bash
+# Reinstalar base de datos con seeders
+php artisan migrate:fresh --seed
+
+# Ejecutar pruebas
+php artisan test
+
+# Formateo/lint PHP
+./vendor/bin/pint
+
+# Frontend en modo desarrollo (solo Vite)
+npm run dev
+```
+
+## 8) Solución rápida de errores comunes
+
+- Error de conexión MySQL: validar `DB_HOST`, `DB_PORT`, `DB_DATABASE`, usuario/clave en `.env`.
+- Error por tablas faltantes (`sessions`, `jobs`, `cache`): ejecutar `php artisan migrate --seed`.
+- Error de clave de app: ejecutar `php artisan key:generate`.
+- Eventos en tiempo real no funcionan: iniciar `php artisan reverb:start`.
