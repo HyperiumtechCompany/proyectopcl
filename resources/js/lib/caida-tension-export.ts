@@ -67,7 +67,7 @@ export async function exportCaidaTensionToExcel(
         const titleTD = wsTD.getCell('A1');
         titleTD.value = 'TABLEROS DE DISTRIBUCIÓN';
         titleTD.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        titleTD.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+        titleTD.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0080' } };
         titleTD.alignment = { horizontal: 'center', vertical: 'middle' };
         wsTD.getRow(1).height = 25;
 
@@ -79,9 +79,11 @@ export async function exportCaidaTensionToExcel(
         headersTD.forEach((header, idx) => {
             const cell = wsTD.getCell(3, idx + 1);
             cell.value = header;
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF366092' } };
+            cell.font = { bold: true, color: { argb: '000000' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'BBBCB8' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
         });
 
         // Datos TD (árbol)
@@ -126,8 +128,7 @@ export async function exportCaidaTensionToExcel(
             { width: 15 },
         ];
 
-        wsTD.views = [{ state: 'frozen', ySplit: 3}];
-
+        // Titulo
         wsTG.mergeCells('A1:I1');
         const titleTG = wsTG.getCell('A1');
         titleTG.value = 'CÁLCULO DE CAÍDA DE TENSIÓN - TABLERO GENERAL';
@@ -135,7 +136,11 @@ export async function exportCaidaTensionToExcel(
         titleTG.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0080' } };
         titleTG.alignment = { horizontal: 'center', vertical: 'middle' };
         wsTG.getRow(1).height = 25;
+        
+        // Encabezado
 
+        wsTD.views = [{ state: 'frozen', ySplit: 3}];
+        
         const headersTG = [
             'N°',
             'DESCRIPCIÓN',
