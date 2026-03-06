@@ -13,10 +13,13 @@ import {
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
+import { useCurrentUrl } from '@/hooks/use-current-url';
 import {
     Sidebar,
     SidebarContent,
     SidebarFooter,
+    SidebarGroup,
+    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
@@ -30,6 +33,7 @@ const ADMIN_ROLES = ['root', 'gerencia', 'administracion'] as const;
 
 export function AppSidebar() {
     const { auth } = usePage<{ auth: Auth }>().props;
+    const { isCurrentUrl } = useCurrentUrl();
     const roles: string[] = auth.roles ?? [];
     const canManageUsers = roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r));
 
@@ -80,6 +84,17 @@ export function AppSidebar() {
         },
     ];
 
+    // items specific to the "metrados" section; additional modules can be added here
+    const metradosNavItems: NavItem[] = [
+        {
+            title: 'Comunicaciones',
+            href: '/metrados/comunicacion',
+            icon: Folder,
+        },
+        // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
+        // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
+    ];
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -96,6 +111,28 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={mainNavItems} />
+
+                {/* metrado section */}
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel asChild>
+                        <Link href="/metrados" prefetch>Metrados</Link>
+                    </SidebarGroupLabel>
+                    <SidebarMenu>
+                        {metradosNavItems.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={isCurrentUrl(item.href)}
+                                    tooltip={{ children: item.title }}>
+                                    <Link href={item.href} prefetch>
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        ))}
+                    </SidebarMenu>
+                </SidebarGroup>
             </SidebarContent>
 
             <SidebarFooter>

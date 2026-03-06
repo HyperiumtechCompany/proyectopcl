@@ -7,6 +7,17 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import { initializeTheme } from './hooks/use-appearance';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
+import $ from 'jquery';
+import 'jquery-mousewheel';
+
+// ── jQuery globals (deben estar antes que Luckysheet) ───────────────────────
+// Luckysheet (cargado como UMD via script tag dinámico en Luckysheet.tsx)
+// accede a window.$ y window.jQuery al inicializarse.
+(window as any).$ = $;
+(window as any).jQuery = $;
+
+// NOTA: El CSS de Luckysheet se inyecta dinámicamente en Luckysheet.tsx
+// junto al script UMD desde public/luckysheet/. No se importa aquí.
 
 // ── Laravel Echo (Reverb via Pusher protocol) ─────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -5,6 +5,8 @@ use App\Http\Controllers\AguaCalculationController;
 use App\Http\Controllers\CaidaTensionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
+use App\Http\Controllers\MetradoComunicacionController;
+use App\Http\Controllers\MetradosController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +50,26 @@ Route::middleware(['auth', 'verified'])->prefix('ac-calculation')->name('ac-calc
     Route::patch('/{acCalculation}', [AcCalculationController::class, 'update'])->name('update');
     Route::delete('/{acCalculation}', [AcCalculationController::class, 'destroy'])->name('destroy');
     Route::post('/{acCalculation}/enable-collab', [AcCalculationController::class, 'enableCollaboration'])->name('enable-collab');
+});
+
+// ─── Metrados (módulos de metrados varios) ────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->group(function () {
+    // ruta raíz del grupo, muestra listado de módulos de metrado
+    Route::get('/', [MetradosController::class, 'index'])->name('index');
+
+    // cada disciplina se define en un sub‑grupo; aquí va Comunicaciones
+    Route::prefix('comunicacion')->name('comunicacion.')->group(function () {
+        Route::get('/', [MetradoComunicacionController::class, 'index'])->name('index');
+        Route::post('/', [MetradoComunicacionController::class, 'store'])->name('store');
+        Route::get('/join', fn() => redirect()->route('metrados.comunicacion.index'))->name('join.form');
+        Route::post('/join', [MetradoComunicacionController::class, 'join'])->name('join');
+        Route::get('/{metradosComunicacion}', [MetradoComunicacionController::class, 'show'])->name('show');
+        Route::patch('/{metradosComunicacion}', [MetradoComunicacionController::class, 'update'])->name('update');
+        Route::delete('/{metradosComunicacion}', [MetradoComunicacionController::class, 'destroy'])->name('destroy');
+        Route::post('/{metradosComunicacion}/enable-collab', [MetradoComunicacionController::class, 'enableCollaboration'])->name('enable-collab');
+    });
+
+    // próximamente: arquitectura, estructuras, sanitarias, eléctricas, gas...
 });
 
 // ─── Cálculo de Agua ────────────────────────────────────────────────────────

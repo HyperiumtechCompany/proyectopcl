@@ -423,7 +423,6 @@ const RedesInteriores = ({ initialData, canEdit, editMode, onChange, maximaDeman
                     input.addEventListener('blur', () => success(input.value));
                     return input;
                 } : false,
-                headerVertical: true,
                 cellEdited: editable ? () => actualizarResultados() : undefined
             },
             { title: 'Cota', field: 'cota', editor: editable ? getFormulaEditor('cota', 'rawCota') : false, formatter: getFormulaFormatter('cota', 'rawCota'), headerVertical: true, width: 65, cellEdited: editable ? () => actualizarResultados() : undefined },
@@ -618,7 +617,7 @@ const RedesInteriores = ({ initialData, canEdit, editMode, onChange, maximaDeman
             <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200/60 shadow-lg sticky top-12 z-50">
                 <div className="max-w-7xl mx-auto px-6 py-4">
                     <div className="flex items-center space-x-4">
-                        <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg">
+                        <div className="flex items-center justify-center w-12 h-12 bg-linear-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg">
                             <i className="fas fa-water text-white text-lg"></i>
                         </div>
                         <div>
@@ -660,7 +659,7 @@ const RedesInteriores = ({ initialData, canEdit, editMode, onChange, maximaDeman
 
                 {Object.entries(tables).filter(([grado]) => grades[grado]).map(([grado, table]) => (
                     <div key={grado} className="bg-white/90 rounded-xl shadow-lg border border-slate-200/60 overflow-hidden">
-                        <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                        <div className="flex items-center justify-between px-5 py-3 bg-linear-to-r from-blue-600 to-blue-700 text-white">
                             <div className="flex items-center space-x-3">
                                 <i className="fas fa-layer-group"></i>
                                 <span className="text-lg font-semibold capitalize">{grado}</span>
