@@ -3,6 +3,7 @@
 use App\Http\Controllers\AcCalculationController;
 use App\Http\Controllers\AguaCalculationController;
 use App\Http\Controllers\CaidaTensionController;
+use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\MetradoComunicacionController;
@@ -106,6 +107,33 @@ Route::middleware(['auth', 'verified'])->prefix('spatt-pararrayos')->name('spatt
     Route::patch('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'update'])->name('update');
     Route::delete('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'destroy'])->name('destroy');
     Route::post('/{spattPararrayo}/enable-collab', [SpattPararrayoSpreadsheetController::class, 'enableCollaboration'])->name('enable-collab');
+});
+
+use App\Http\Controllers\UbigeoController;
+
+// ─── Proyectos de Costos ─────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->group(function () {
+    Route::get('/', [CostoProjectController::class, 'index'])->name('index');
+    Route::get('/create', [CostoProjectController::class, 'create'])->name('create');
+    Route::post('/', [CostoProjectController::class, 'store'])->name('store');
+    Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
+    Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
+
+    // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
+    Route::middleware([\App\Http\Middleware\SetCostosDatabase::class])
+        ->prefix('/{costoProject}/module')
+        ->name('module.')
+        ->group(function () {
+            Route::get('/{moduleType}', [\App\Http\Controllers\CostoModuleController::class, 'show'])->name('show');
+            Route::patch('/{moduleType}', [\App\Http\Controllers\CostoModuleController::class, 'update'])->name('update');
+        });
+});
+
+// ─── API Ubigeo (cascada departamento → provincia → distrito) ────────────────
+Route::middleware(['auth'])->prefix('api/ubigeo')->name('ubigeo.')->group(function () {
+    Route::get('/departamentos', [UbigeoController::class, 'departamentos'])->name('departamentos');
+    Route::get('/provincias/{departamento}', [UbigeoController::class, 'provincias'])->name('provincias');
+    Route::get('/distritos/{provincia}', [UbigeoController::class, 'distritos'])->name('distritos');
 });
 
 require __DIR__ . '/settings.php';

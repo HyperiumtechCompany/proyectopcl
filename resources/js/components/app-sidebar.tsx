@@ -115,7 +115,7 @@ export function AppSidebar() {
                 {/* metrado section */}
                 <SidebarGroup className="px-2 py-0">
                     <SidebarGroupLabel asChild>
-                        <Link href="/metrados" prefetch>Metrados</Link>
+                        <Link href="/costos" prefetch>Costos</Link>
                     </SidebarGroupLabel>
                     <SidebarMenu>
                         {metradosNavItems.map((item) => (
