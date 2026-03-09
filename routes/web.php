@@ -69,6 +69,18 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
         Route::post('/{metradosComunicacion}/enable-collab', [MetradoComunicacionController::class, 'enableCollaboration'])->name('enable-collab');
     });
 
+
+    // Estructura (nuevo)
+    Route::prefix('estructura')->name('estructura.')->group(function () {
+        Route::get('/', [App\Http\Controllers\MetradoEstructuraController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\MetradoEstructuraController::class, 'store'])->name('store');
+        Route::get('/join', fn() => redirect()->route('metrados.estructura.index'))->name('join.form'); // O puedes crear una vista join si existe
+        Route::post('/join', [App\Http\Controllers\MetradoEstructuraController::class, 'join'])->name('join');
+        Route::get('/{metradosEstructura}', [App\Http\Controllers\MetradoEstructuraController::class, 'show'])->name('show');
+        Route::patch('/{metradosEstructura}', [App\Http\Controllers\MetradoEstructuraController::class, 'update'])->name('update');
+        Route::delete('/{metradosEstructura}', [App\Http\Controllers\MetradoEstructuraController::class, 'destroy'])->name('destroy');
+        Route::post('/{metradosEstructura}/enable-collab', [App\Http\Controllers\MetradoEstructuraController::class, 'enableCollaboration'])->name('enable-collab');
+    });
     // próximamente: arquitectura, estructuras, sanitarias, eléctricas, gas...
 });
 

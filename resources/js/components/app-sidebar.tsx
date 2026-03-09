@@ -91,8 +91,13 @@ export function AppSidebar() {
             href: '/metrados/comunicacion',
             icon: Folder,
         },
-        // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
-        // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
+        
+    
+        {
+        title: 'Estructura',
+        href: '/metrados/estructura',
+        icon: Folder, // o el ícono que corresponda, podrías importar otro como "HardHat" o "Building"
+    },
     ];
 
     return (
