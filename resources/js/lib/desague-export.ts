@@ -1,8 +1,4 @@
 import ExcelJS from 'exceljs';
-import { IceCreamIcon } from 'lucide-react';
-import { generateKeyPairSync } from 'node:crypto';
-import { globalAgent } from 'node:http';
-import { fromTheme } from 'tailwind-merge';
 
 interface DesagueData {
     ud?: any;
@@ -10,19 +6,19 @@ interface DesagueData {
     cajas?: any;
     uv?: any;
     trampa?: any;
-    sumatoria?: any; 
+    sumatoria?: any;
 }
 
 const COLORS = {
-    TITLE_BG: 'FF4F4F4F',    
-    TITLE_TEXT: 'FFFFFFFF',   
-    HEADER_BG: 'FF6D6D6D',     
-    HEADER_TEXT: 'FFFFFFFF',   
-    TOTAL_BG: 'FFD9D9D9',     
-    TOTAL_TEXT: 'FF000000',    
-    BORDER: 'FFA0A0A0',        
-    YELLOW: 'FFFFC000',        
-    GREEN: 'FF8BC34A',        
+    TITLE_BG: 'FF4F4F4F',
+    TITLE_TEXT: 'FFFFFFFF',
+    HEADER_BG: 'FF6D6D6D',
+    HEADER_TEXT: 'FFFFFFFF',
+    TOTAL_BG: 'FFD9D9D9',
+    TOTAL_TEXT: 'FF000000',
+    BORDER: 'FFA0A0A0',
+    YELLOW: 'FFFFC000',
+    GREEN: 'FF8BC34A',
 };
 
 // Funciones auxiliares
@@ -104,540 +100,446 @@ function applyRowStyle(row: ExcelJS.Row, colCount: number, integerCols: number[]
 export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileName: string = 'Calculo_Desague') {
     try {
         const workbook = new ExcelJS.Workbook();
-       // ========== HOJA 1: UNIDADES DE DESCARGA — TABLA 1 COMPLETA ==========
-const wsUD = workbook.addWorksheet('Unidades de Descarga');
-wsUD.columns = [
-    { width: 3  }, // Col 1 — espaciador
-    { width: 25 }, // Col 2 — Aparato Sanitario
-    { width: 40 }, // Col 3 — TIPO
-    { width: 10 }, // Col 4 — Total
-    { width: 10 }, // Col 5
-    { width: 10 }, // Col 6
-    { width: 10 }, // Col 7
-    { width: 10 }, // Col 8
-    { width: 10 }, // Col 9
-    { width: 8  }, // Col 10
-];
 
-const AMAR  = 'FFFFFF99';
-const VERD  = 'FFD9E8C4';
-const VERDE = 'FF92D050';
-const AZUL1 = 'FFE8F0FB';
-const AZUL2 = 'FFDCE6F1';
-const BORDH = 'FF999933';
-const BORD  = 'FFA0A0A0';
-const NEGRO = 'FF000000';
-const ROJO  = 'FFCC0000';
-const BLANC = 'FFFFFFFF';
+        // ========== HOJA 1: UNIDADES DE DESCARGA ==========
+        const wsUD = workbook.addWorksheet('Unidades de Descarga');
+        wsUD.columns = [
+            { width: 3  }, { width: 25 }, { width: 40 }, { width: 10 },
+            { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+            { width: 10 }, { width: 8  },
+        ];
 
-const bT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: BORDH } };
-const bM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: BORDH } };
-const bD = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: BORD  } };
+        const AMAR  = 'FFFFFF99'; const VERD  = 'FFD9E8C4'; const VERDE = 'FF92D050';
+        const AZUL1 = 'FFE8F0FB'; const AZUL2 = 'FFDCE6F1'; const BORDH = 'FF999933';
+        const BORD  = 'FFA0A0A0'; const NEGRO = 'FF000000'; const ROJO  = 'FFCC0000';
+        const BLANC = 'FFFFFFFF';
+        const bT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: BORDH } };
+        const bM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: BORDH } };
+        const bD = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: BORD  } };
 
-function udFill(r: number, argb: string, h = 17) {
-    wsUD.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLANC } };
-    for (let c = 2; c <= 10; c++)
-        wsUD.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
-    wsUD.getRow(r).height = h;
-}
+        function udFill(r: number, argb: string, h = 17) {
+            wsUD.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLANC } };
+            for (let c = 2; c <= 10; c++)
+                wsUD.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+            wsUD.getRow(r).height = h;
+        }
 
-// ── Fila 1: Barra verde solo hasta col 4 ─────────────────────────────────────
-udFill(1, BLANC, 22);
-for (let c = 2; c <= 4; c++) {
-    const cell = wsUD.getCell(1, c);
-    cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
-    cell.border = { top: bM, left: c === 2 ? bM : undefined, bottom: bM, right: c === 4 ? bM : undefined };
-}
-wsUD.getCell(1, 2).value     = 'ANEXO 07.  CALCULO DE LAS UNIDADES DE DESCARGA';
-wsUD.getCell(1, 2).font      = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
-wsUD.getCell(1, 2).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        // ── Leer datos del frontend ───────────────────────────────────────────
+        // FIX: los datos de UD están en dataSheet.ud (no en dataSheet directamente)
+        const udData = dataSheet.ud ?? dataSheet;
+        const anexoRows: any[]                      = Array.isArray(udData.anexo)  ? udData.anexo  : [];
+        const gradesActive: Record<string, boolean> = udData.grades || {};
+        const tablesData: Record<string, any>       = udData.tables || {};
 
-// ── Fila 2: separador ────────────────────────────────────────────────────────
-udFill(2, BLANC, 8);
+        // Columnas fijas en orden (igual que frontend PREFERRED_ORDER)
+        const COLS_KEYS   = ['inodoro', 'urinario', 'lavatorio', 'ducha', 'lavadero', 'sumidero'];
+        const COLS_LABELS = ['Inodoro', 'Urinario', 'Lavatorio', 'Ducha', 'Lavadero', 'SUMIDERO'];
+        const DEFAULT_MULTS: Record<string, number> = {
+            inodoro: 4, urinario: 4, lavatorio: 2, ducha: 4, lavadero: 3, sumidero: 2
+        };
 
-// ── Fila 3: "ANEXO N° 06" amarillo cols 2-4 ──────────────────────────────────
-udFill(3, BLANC, 20);
-for (let c = 2; c <= 4; c++) {
-    const cell = wsUD.getCell(3, c);
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.border    = { top: bM, left: c === 2 ? bM : bT, bottom: bT, right: c === 4 ? bM : bT };
-}
-wsUD.getCell(3, 2).value     = 'ANEXO N° 06';
-wsUD.getCell(3, 2).font      = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
-wsUD.getCell(3, 2).alignment = { horizontal: 'center', vertical: 'middle' };
-
-// ── Fila 4: encabezados ───────────────────────────────────────────────────────
-udFill(4, BLANC, 20);
-['Aparato Sanitario', 'TIPO', 'Total'].forEach((txt, i) => {
-    const cell     = wsUD.getCell(4, i + 2);
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.value     = txt;
-    cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical: 'middle' };
-    cell.border    = { top: bT, left: i === 0 ? bM : bT, bottom: bM, right: i === 2 ? bM : bT };
-});
-
-// ── Datos tabla 1 ─────────────────────────────────────────────────────────────
-const udDataRaw = dataSheet['ud'];
-const udData = (udDataRaw && Object.keys(udDataRaw).length > 0) ? udDataRaw : {
-    'inodoro_1':  { description: 'Inodoro',                 tipo: 'Con Tanque - Descarga reducida',                 total: 2 },
-    'inodoro_2':  { description: 'Inodoro',                 tipo: 'Con Tanque',                                     total: 4 },
-    'inodoro_3':  { description: 'Inodoro',                 tipo: 'C/ Válvula semiautomática y automática',         total: 8 },
-    'inodoro_4':  { description: 'Inodoro',                 tipo: 'C/ Válvula semiaut. y autom.  descarga reducida',total: 4 },
-    'lavatorio':  { description: 'Lavatorio',               tipo: 'Corriente',                                      total: 2 },
-    'lavadero':   { description: 'Lavadero',                tipo: 'Cocina, ropa',                                   total: 2 },
-    'lavadero_t': { description: 'Lavadero con triturador', tipo: '-',                                              total: 3 },
-    'ducha':      { description: 'Ducha',                   tipo: '-',                                              total: 3 },
-    'tina':       { description: 'Tina',                    tipo: '-',                                              total: 3 },
-    'urinario_1': { description: 'Urinario',                tipo: 'Con Tanque',                                     total: 4 },
-    'urinario_2': { description: 'Urinario',                tipo: 'C/ Válvula semiautomática y automática',         total: 8 },
-    'urinario_3': { description: 'Urinario',                tipo: 'C/ Válvula semiaut. y autom.  descarga reducida',total: 4 },
-    'urinario_4': { description: 'Urinario',                tipo: 'Múltiple',                                       total: 4 },
-    'bebedero':   { description: 'Bebedero',                tipo: 'Simple',                                         total: 2 },
-    'sumidero':   { description: 'Sumidero',                tipo: 'Simple',                                         total: 2 },
-};
-
-let row = 5;
-
-Object.entries(udData).forEach(([key, value]: [string, any]) => {
-    const v: any = typeof value === 'object' ? value : {};
-    udFill(row, BLANC, 17);
-
-    for (let c = 2; c <= 4; c++) {
-        const cell = wsUD.getCell(row, c);
-        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLANC } };
-        cell.border    = { top: bD, left: c === 2 ? bM : bD, bottom: bD, right: c === 4 ? bM : bD };
-        cell.alignment = { horizontal: c <= 3 ? 'left' : 'center', vertical: 'middle' };
-        cell.font      = { size: 10, name: 'Arial', color: { argb: NEGRO } };
-    }
-
-    wsUD.getCell(row, 2).value  = v.description ?? key;
-    wsUD.getCell(row, 3).value  = v.tipo ?? v.notes ?? '';
-    wsUD.getCell(row, 4).value  = v.total ?? v.udPerUnit ?? 0;
-    wsUD.getCell(row, 4).numFmt = '0';
-    row++;
-});
-
-// ── Separador entre tabla 1 y tabla 2 ────────────────────────────────────────
-udFill(row, BLANC, 8); row++;
-udFill(row, BLANC, 8); row++; 
-        
-
-// ══════════════════════════════════════════════════════════════════════════════
-// TABLA 2 — SUMATORIA PRIMARIA
-// ══════════════════════════════════════════════════════════════════════════════
-const aparatos: { nombre: string; ud: number }[] = dataSheet['udConfig'] ?? [
-    { nombre: 'Inodoro',   ud: 4 },
-    { nombre: 'Urinario',  ud: 4 },
-    { nombre: 'Lavatorio', ud: 2 },
-    { nombre: 'Ducha',     ud: 4 },
-    { nombre: 'Lavadero',  ud: 3 },
-    { nombre: 'SUMIDERO',  ud: 2 },
-];
-
-// Cols: 2=NIVEL, 3=DESC, 4-9=aparatos, 10=U.D
-const [rA, rB, rC] = [row, row + 1, row + 2];
-
-// Fila A
-udFill(rA, BLANC, 20);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rA, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: (c >= 4 && c <= 9) ? VERD : AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    if (c === 2)  { cell.value = 'NIVEL';       cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bM, bottom: undefined, right: bT }; }
-    else if (c === 3)  { cell.value = 'DESCRIPCION'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bT }; }
-    else if (c === 4)  { cell.value = 'SUMATORIA DE GASTOS POR ACCESORIOS - PRIMARIA'; cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }; cell.border = { top: bM, left: bM, bottom: bT, right: undefined }; }
-    else if (c >= 5 && c <= 8) { cell.border = { top: bM, left: undefined, bottom: bT, right: undefined }; }
-    else if (c === 9)  { cell.border = { top: bM, left: undefined, bottom: bT, right: bT }; }
-    else if (c === 10) { cell.value = 'U.D'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bM }; }
-}
-
-// Fila B
-udFill(rB, AMAR, 16);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rB, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    if (c === 2)       cell.border = { top: undefined, left: bM, bottom: undefined, right: bT };
-    else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: undefined, right: bT };
-    else if (c === 10) cell.border = { top: undefined, left: bT, bottom: undefined, right: bM };
-    else if (c === 4)  { cell.value = aparatos[0].nombre; cell.border = { top: bT, left: bM, bottom: bT, right: bT }; }
-    else if (c === 9)  { cell.value = aparatos[5].nombre; cell.border = { top: bT, left: bT, bottom: bT, right: bT }; }
-    else               { cell.value = aparatos[c-4].nombre; cell.border = { top: bT, left: bT, bottom: bT, right: bT }; }
-}
-
-// Fila C
-udFill(rC, AMAR, 16);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rC, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    if (c === 2)       cell.border = { top: undefined, left: bM, bottom: bM, right: bT };
-    else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: bM, right: bT };
-    else if (c === 10) cell.border = { top: undefined, left: bT, bottom: bM, right: bM };
-    else if (c === 4)  { cell.value = `${aparatos[0].ud} U.D.`; cell.border = { top: bT, left: bM, bottom: bM, right: bT }; }
-    else if (c === 9)  { cell.value = `${aparatos[5].ud} U.D.`; cell.border = { top: bT, left: bT, bottom: bM, right: bT }; }
-    else               { cell.value = `${aparatos[c-4].ud} U.D.`; cell.border = { top: bT, left: bT, bottom: bM, right: bT }; }
-}
-row += 3;
-
-const sumatoriaData: any[] = dataSheet['sumatoria'] ?? [
-    { nivel: 'MODULO I', isModulo: true },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'DUCHA+VESTIDOR MUJERES',   lavatorio: 2, sumidero: 1, ud: 10 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'DUCHA+VESTIDOR VARONES',   lavatorio: 2, sumidero: 1, ud: 10 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'DUCHA+VESTIDOR DISCAP.',   lavatorio: 1, sumidero: 2, ud: 8  },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'DEPOSITO MAT. DEPORT.',    ud: 0 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'DEPOSITO DE SUM.',         ud: 0 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'MAESTRANZA+ALM. GRAL.',    ud: 0 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'CTO. TABLEROS',            ud: 0 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'CTO. ELECTRICO',           ud: 0 },
-    { nivel: 'MODULO II', isModulo: true },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'SUM/COMEDOR',              ud: 0 },
-    { nivel: 'SEGUNDO NIVEL', descripcion: 'MODULO DE CONECTIVIDAD',   ud: 0 },
-    { nivel: 'SEGUNDO NIVEL', descripcion: 'AIP',                      ud: 0 },
-    { nivel: 'MODULO III', isModulo: true },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'BIBLIOTECA',               ud: 0 },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'ALMACEN DE LIBROS',        ud: 0 },
-    { nivel: 'SEGUNDO NIVEL', descripcion: 'TALLER CREATIVO/ARTE',     lavatorio: 2, sumidero: 1, ud: 8 },
-    { nivel: 'SEGUNDO NIVEL', descripcion: 'AREA GUARDADO/EXP. TRAB.', ud: 0 },
-    { nivel: 'MODULO V', isModulo: true },
-    { nivel: 'PRIMER NIVEL',  descripcion: 'AULA PRIMARIA',            ud: 0 },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'MODULO VI', isModulo: true},
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'MODULO VII', isModulo: true},
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'MODULO VIII', isModulo: true},
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'MODULO IX', isModulo: true},
-    { nivel: 'PRIMER NIVEL', descripcion: '', },
-    { nivel: 'PRIMER NIVE', descripcion: '', },
-    { nivel: 'PRIMER NIVEL', descripcion: '', },
-    { nivel: 'PRIMER NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'TERCER NIVEL', descripcion: '', },
-    { nivel: 'MODEL X', isModulo: true},
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: 'SEGUNDO NIVEL', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: 'PRIMER NIVEL', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-    { nivel: '', descripcion: '', },
-
-
-
-
-
-
-
-];
-
-const t2Start = row;
-sumatoriaData.forEach((item: any, idx: number) => {
-    const isModulo = item.isModulo ?? false;
-    const bg = isModulo ? BLANC : (idx % 2 === 0 ? AZUL1 : AZUL2);
-    udFill(row, bg, 17);
-    for (let c = 2; c <= 10; c++) {
-        const cell = wsUD.getCell(row, c);
-        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        cell.font      = { bold: isModulo, size: 10, name: 'Arial', color: { argb: isModulo ? ROJO : NEGRO } };
-        cell.alignment = { horizontal: c <= 3 ? 'left' : 'center', vertical: 'middle' };
-        cell.border    = { top: bD, left: c === 2 ? bM : bD, bottom: bD, right: c === 10 ? bM : bD };
-    }
-    wsUD.getCell(row, 2).value = item.nivel       ?? '';
-    wsUD.getCell(row, 3).value = item.descripcion ?? '';
-    if (!isModulo) {
-        [item.inodoro, item.urinario, item.lavatorio, item.ducha, item.lavadero, item.sumidero]
-            .forEach((v, i) => {
-                const cell = wsUD.getCell(row, 4 + i);
-                cell.value = (v !== null && v !== undefined && v !== '') ? v : null;
-                if (typeof v === 'number') cell.numFmt = '0';
+        // Aplanar árbol de módulos a filas planas para excel
+        function flattenGrade(gradeData: any): any[] {
+            const mults: Record<string, number> = { ...DEFAULT_MULTS, ...(gradeData.multipliers || {}) };
+            const rows: any[] = [];
+            (gradeData.modules || []).forEach((mod: any) => {
+                rows.push({ isModulo: true, nivel: mod.name ?? '' });
+                const pushDetail = (d: any, nivelLabel: string) => {
+                    const row: any = { nivel: nivelLabel, descripcion: d.desc ?? '' };
+                    let ud = 0;
+                    COLS_KEYS.forEach(col => {
+                        const q = parseFloat(String(d.qty?.[col] ?? '')) || 0;
+                        if (q > 0) { row[col] = q; ud += q * (mults[col] ?? 0); }
+                    });
+                    row.ud = ud > 0 ? ud : null;
+                    rows.push(row);
+                };
+                (mod.details  || []).forEach((d: any)  => pushDetail(d, d.nivel ?? ''));
+                (mod.children || []).forEach((ch: any) => {
+                    rows.push({ nivel: ch.nivel ?? '', descripcion: ch.desc ?? '' });
+                    (ch.details || []).forEach((gd: any) => pushDetail(gd, ''));
+                });
             });
-        const ud = item.ud ?? null;
-        wsUD.getCell(row, 10).value = ud;
-        if (typeof ud === 'number') wsUD.getCell(row, 10).numFmt = '0';
-    }
-    row++;
-});
+            return rows;
+        }
 
-// Total tabla 2 — SUM automático en todas las cols numéricas
-const rowTotalT2 = row;
-udFill(row, 'FFFFCC00', 22);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(row, c);
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-    cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.border    = { top: bM, left: c === 2 ? bM : bT, bottom: bM, right: c === 10 ? bM : bT };
-    if (c === 2) cell.value = 'TOTAL';
-    if (c === 3) cell.value = 'TOTAL';
-    if (c >= 4) {
-        const col = ['D','E','F','G','H','I','J'][c - 4];
-        cell.value  = { formula: `SUM(${col}${t2Start}:${col}${row - 1})` };
-        cell.numFmt = '0';
-    }
-}
-row++;
+        // Niveles activos en orden
+        const GRADE_ORDER: { key: string; label: string }[] = [
+            { key: 'inicial',    label: 'INICIAL'    },
+            { key: 'primaria',   label: 'PRIMARIA'   },
+            { key: 'secundaria', label: 'SECUNDARIA' },
+        ].filter(g => gradesActive[g.key]);
 
-// ── Separador entre tabla 2 y tabla 3 ────────────────────────────────────────
-for (let i = 0; i < 5; i++) { udFill(row, BLANC, 8); row++; }
+        // ══════════════════════════════════════════════════════════════════════
+        // TABLA ANEXO-06 — siempre se exporta
+        // ══════════════════════════════════════════════════════════════════════
+        udFill(1, BLANC, 22);
+        for (let c = 2; c <= 4; c++) {
+            wsUD.getCell(1, c).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+            wsUD.getCell(1, c).border = { top: bM, left: c === 2 ? bM : undefined, bottom: bM, right: c === 4 ? bM : undefined };
+        }
+        wsUD.getCell(1, 2).value     = 'ANEXO 07.  CALCULO DE LAS UNIDADES DE DESCARGA';
+        wsUD.getCell(1, 2).font      = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
+        wsUD.getCell(1, 2).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// TABLA 3 — SUMATORIA INICIAL
-// ══════════════════════════════════════════════════════════════════════════════
-const aparatosT3: { nombre: string; ud: number }[] = dataSheet['udConfigInicial'] ?? [
-    { nombre: 'Inodoro',   ud: 4 },
-    { nombre: 'Urinario',  ud: 4 },
-    { nombre: 'Lavatorio', ud: 2 },
-    { nombre: 'Ducha',     ud: 4 },
-    { nombre: 'Lavadero',  ud: 3 },
-    { nombre: 'SUMIDERO',  ud: 2 },
-];
+        udFill(2, BLANC, 8);
 
-const [rA3, rB3, rC3] = [row, row + 1, row + 2];
+        udFill(3, BLANC, 20);
+        for (let c = 2; c <= 4; c++) {
+            wsUD.getCell(3, c).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
+            wsUD.getCell(3, c).border = { top: bM, left: c === 2 ? bM : bT, bottom: bT, right: c === 4 ? bM : bT };
+        }
+        wsUD.getCell(3, 2).value     = 'ANEXO N° 06';
+        wsUD.getCell(3, 2).font      = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
+        wsUD.getCell(3, 2).alignment = { horizontal: 'center', vertical: 'middle' };
 
-// Fila A
-udFill(rA3, BLANC, 20);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rA3, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: (c >= 4 && c <= 9) ? VERD : AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    if (c === 2)  { cell.value = 'NIVEL';       cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bM, bottom: undefined, right: bT }; }
-    else if (c === 3)  { cell.value = 'DESCRIPCION'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bT }; }
-    else if (c === 4)  { cell.value = 'SUMATORIA DE GASTOS POR ACCESORIOS - INICIAL'; cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }; cell.border = { top: bM, left: bM, bottom: bT, right: undefined }; }
-    else if (c >= 5 && c <= 8) { cell.border = { top: bM, left: undefined, bottom: bT, right: undefined }; }
-    else if (c === 9)  { cell.border = { top: bM, left: undefined, bottom: bT, right: bT }; }
-    else if (c === 10) { cell.value = 'U.D'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bM }; }
-}
-
-// Fila B
-udFill(rB3, AMAR, 16);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rB3, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    if (c === 2)       cell.border = { top: undefined, left: bM, bottom: undefined, right: bT };
-    else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: undefined, right: bT };
-    else if (c === 10) cell.border = { top: undefined, left: bT, bottom: undefined, right: bM };
-    else if (c === 4)  { cell.value = aparatosT3[0].nombre; cell.border = { top: bT, left: bM, bottom: bT, right: bT }; }
-    else if (c === 9)  { cell.value = aparatosT3[5].nombre; cell.border = { top: bT, left: bT, bottom: bT, right: bT }; }
-    else               { cell.value = aparatosT3[c-4].nombre; cell.border = { top: bT, left: bT, bottom: bT, right: bT }; }
-}
-
-// Fila C
-udFill(rC3, AMAR, 16);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(rC3, c);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
-    cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    if (c === 2)       cell.border = { top: undefined, left: bM, bottom: bM, right: bT };
-    else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: bM, right: bT };
-    else if (c === 10) cell.border = { top: undefined, left: bT, bottom: bM, right: bM };
-    else if (c === 4)  { cell.value = `${aparatosT3[0].ud} U.D.`; cell.border = { top: bT, left: bM, bottom: bM, right: bT }; }
-    else if (c === 9)  { cell.value = `${aparatosT3[5].ud} U.D.`; cell.border = { top: bT, left: bT, bottom: bM, right: bT }; }
-    else               { cell.value = `${aparatosT3[c-4].ud} U.D.`; cell.border = { top: bT, left: bT, bottom: bM, right: bT }; }
-}
-row += 3;
-
-const sumatoriaInicial: any[] = dataSheet['sumatoriaInicial'] ?? [
-    { nivel: 'MODULO IX', isModulo: true },
-    { nivel: 'PRIMER NIVEL', descripcion: 'AULA INICIAL 01',                                                    ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DEPOSITO AULA 01',                                                   ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'ALMACEN GENERAL',                                                    ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SS.HH. NIÑOS',    inodoro: 2, urinario: 2, lavatorio: 2, sumidero: 2, ud: 24 },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SS.HH. NIÑAS',    inodoro: 2,              lavatorio: 2, sumidero: 2, ud: 16 },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SS.HH. DISCAPACITADOS', inodoro: 1, urinario: 1, lavatorio: 1, sumidero: 1, ud: 12 },
-    { nivel: 'PRIMER NIVEL', descripcion: 'AULA INICIAL 02',                                                    ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'AULA INICIAL 03',                                                    ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DEPOSITO AULA 02',                                                   ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DEPOSITO AULA 03',                                                   ud: 0  },
-    { nivel: 'MODULO X', isModulo: true },
-    { nivel: 'PRIMER NIVEL', descripcion: 'CUARTO DE LIMPIEZA',                             sumidero: 4,        ud: 8  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DEP. COMBUSTIBLE',                                                   ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DESPENSA',                                                           ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'DEP. SUM.',                                                          ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'RECEP. E INSP. ALIMENTOS',       lavadero: 1, sumidero: 1,           ud: 5  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'COCINA',                          lavadero: 2, sumidero: 1,          ud: 8  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SUM/COMEDOR/PSICOM.',                                                 ud: 0  },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SS.HH DOCENTES MIXTO', inodoro: 1, urinario: 1, lavatorio: 1, sumidero: 1, ud: 12 },
-    { nivel: 'PRIMER NIVEL', descripcion: 'SS.HH DISCAPACITADOS',  inodoro: 1, urinario: 1, lavatorio: 1, sumidero: 1, ud: 12 },
-    { nivel: 'MODULO XI', isModulo: true },
-];
-
-const t3Start = row;
-sumatoriaInicial.forEach((item: any, idx: number) => {
-    const isModulo = item.isModulo ?? false;
-    const bg = isModulo ? BLANC : (idx % 2 === 0 ? AZUL1 : AZUL2);
-    udFill(row, bg, 17);
-    for (let c = 2; c <= 10; c++) {
-        const cell = wsUD.getCell(row, c);
-        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-        cell.font      = { bold: isModulo, size: 10, name: 'Arial', color: { argb: isModulo ? ROJO : NEGRO } };
-        cell.alignment = { horizontal: c <= 3 ? 'left' : 'center', vertical: 'middle' };
-        cell.border    = { top: bD, left: c === 2 ? bM : bD, bottom: bD, right: c === 10 ? bM : bD };
-    }
-    wsUD.getCell(row, 2).value = item.nivel       ?? '';
-    wsUD.getCell(row, 3).value = item.descripcion ?? '';
-    if (!isModulo) {
-        [item.inodoro, item.urinario, item.lavatorio, item.ducha, item.lavadero, item.sumidero]
-            .forEach((v, i) => {
-                const cell = wsUD.getCell(row, 4 + i);
-                cell.value = (v !== null && v !== undefined && v !== '') ? v : null;
-                if (typeof v === 'number') cell.numFmt = '0';
-            });
-        const ud = item.ud ?? null;
-        wsUD.getCell(row, 10).value = ud;
-        if (typeof ud === 'number') wsUD.getCell(row, 10).numFmt = '0';
-    }
-    row++;
-});
-
-// Total tabla 3 — SUM automático
-const rowTotalT3 = row;
-udFill(row, 'FFFFCC00', 22);
-for (let c = 2; c <= 10; c++) {
-    const cell = wsUD.getCell(row, c);
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-    cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.border    = { top: bM, left: c === 2 ? bM : bT, bottom: bM, right: c === 10 ? bM : bT };
-    if (c === 2) cell.value = 'TOTAL';
-    if (c === 3) cell.value = 'TOTAL';
-    if (c >= 4) {
-        const col = ['D','E','F','G','H','I','J'][c - 4];
-        cell.value  = { formula: `SUM(${col}${t3Start}:${col}${row - 1})` };
-        cell.numFmt = '0';
-    }
-}
-row++;
-
-// ── Separador antes de resúmenes finales ──────────────────────────────────────
-for (let i = 0; i < 5; i++) { udFill(row, BLANC, 8); row++; }
-
-// ── Resumen PRIMARIA ──────────────────────────────────────────────────────────
-udFill(row, 'FFFFCC00', 24);
-
-// Merge cols 2-8 solo para el label (no se lee de vuelta = sin riesgo null)
-wsUD.mergeCells(row, 2, row, 8);
-const cellPrimLabel = wsUD.getCell(row, 2);
-cellPrimLabel.value     = 'UNIDADES DE DESCARGA TOTAL - PRIMARIA =';
-cellPrimLabel.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
-cellPrimLabel.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-cellPrimLabel.alignment = { horizontal: 'center', vertical: 'middle' };
-cellPrimLabel.border    = { top: bM, left: bM, bottom: bM, right: bM };
-
-// Col 9: separador visual
-wsUD.getCell(row, 9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-wsUD.getCell(row, 9).border = { top: bM, bottom: bM };
-
-// Col 10: valor con borde cerrado
-const cellPrimVal = wsUD.getCell(row, 10);
-cellPrimVal.value  = { formula: `SUM(J${t2Start}:J${rowTotalT2 - 1})` };
-cellPrimVal.numFmt = '0';
-cellPrimVal.font   = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
-cellPrimVal.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-cellPrimVal.alignment = { horizontal: 'center', vertical: 'middle' };
-cellPrimVal.border = { top: bM, left: bM, bottom: bM, right: bM };
-wsUD.getRow(row).height = 24;
-row++;
-
-// ── Separador ─────────────────────────────────────────────────────────────────
-for (let i = 0; i < 3; i++) { udFill(row, BLANC, 8); row++; }
-
-// ── Resumen INICIAL ───────────────────────────────────────────────────────────
-udFill(row, 'FFFFCC00', 24);
-
-wsUD.mergeCells(row, 2, row, 8);
-const cellInicLabel = wsUD.getCell(row, 2);
-cellInicLabel.value     = 'UNIDADES DE DESCARGA TOTAL - INICIAL =';
-cellInicLabel.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
-cellInicLabel.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-cellInicLabel.alignment = { horizontal: 'center', vertical: 'middle' };
-cellInicLabel.border    = { top: bM, left: bM, bottom: bM, right: bM };
-
-wsUD.getCell(row, 9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-wsUD.getCell(row, 9).border = { top: bM, bottom: bM };
-
-const cellInicVal = wsUD.getCell(row, 10);
-cellInicVal.value  = { formula: `SUM(J${t3Start}:J${rowTotalT3 - 1})` };
-cellInicVal.numFmt = '0';
-cellInicVal.font   = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
-cellInicVal.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
-cellInicVal.alignment = { horizontal: 'center', vertical: 'middle' };
-cellInicVal.border = { top: bM, left: bM, bottom: bM, right: bM };
-wsUD.getRow(row).height = 24;
-row++;
-
-// ── Filas finales vacías ──────────────────────────────────────────────────────
-for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
-
-        
-
-
-        // ========== HOJA 2: COLECTOR ==========
-        const wsColector = workbook.addWorksheet('Colector');
-        wsColector.columns = [ { width: 30 }, { width: 20 }, { width: 15 }, { width: 40 } ];
-        paintTitle(wsColector, 4, 'DISEÑO DEL COLECTOR');
-        paintHeaders(wsColector, ['PARÁMETRO', 'VALOR', 'UNIDAD', 'DESCRIPCIÓN']);
-        const colectorData = dataSheet['colector'] || {};
-        let rowColector = 4;
-        Object.entries(colectorData).forEach(([key, value]: [string, any]) => {
-            if (!value) return;
-            const row = wsColector.getRow(rowColector);
-            row.getCell(1).value = key;
-            const valor = value.valor ?? '';
-            row.getCell(2).value = valor;
-            row.getCell(3).value = value.unidad ?? '';
-            row.getCell(4).value = value.descripcion ?? '';
-            applyRowStyle(row, 4, [2]);
-            if (typeof valor === 'number') row.getCell(2).numFmt = '0';
-            rowColector++;
+        udFill(4, BLANC, 20);
+        ['Aparato Sanitario', 'TIPO', 'Total'].forEach((txt, i) => {
+            const cell     = wsUD.getCell(4, i + 2);
+            cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
+            cell.value     = txt;
+            cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
+            cell.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical: 'middle' };
+            cell.border    = { top: bT, left: i === 0 ? bM : bT, bottom: bM, right: i === 2 ? bM : bT };
         });
 
+        let row = 5;
+        (anexoRows.length > 0 ? anexoRows : [
+            { aparato: 'Inodoro',                 tipo: 'Con Tanque - Descarga reducida',                ud: 2 },
+            { aparato: 'Inodoro',                 tipo: 'Con Tanque',                                    ud: 4 },
+            { aparato: 'Inodoro',                 tipo: 'C/ Válvula semiautomática y automática',         ud: 8 },
+            { aparato: 'Inodoro',                 tipo: 'C/ Válvula semiaut. desc. reducida',             ud: 4 },
+            { aparato: 'Lavatorio',               tipo: 'Corriente',                                      ud: 2 },
+            { aparato: 'Lavadero',                tipo: 'Cocina, ropa',                                   ud: 2 },
+            { aparato: 'Lavadero con triturador', tipo: '-',                                              ud: 3 },
+            { aparato: 'Ducha',                   tipo: '-',                                              ud: 3 },
+            { aparato: 'Tina',                    tipo: '-',                                              ud: 3 },
+            { aparato: 'Urinario',                tipo: 'Con Tanque',                                     ud: 4 },
+            { aparato: 'Urinario',                tipo: 'C/ Válvula semiautomática y automática',         ud: 8 },
+            { aparato: 'Urinario',                tipo: 'C/ Válvula semiaut. desc. reducida',             ud: 4 },
+            { aparato: 'Urinario',                tipo: 'Múltiple',                                       ud: 4 },
+            { aparato: 'Bebedero',                tipo: 'Simple',                                         ud: 2 },
+            { aparato: 'Sumidero',                tipo: 'Simple',                                         ud: 2 },
+        ]).forEach((v: any) => {
+            udFill(row, BLANC, 17);
+            for (let c = 2; c <= 4; c++) {
+                const cell = wsUD.getCell(row, c);
+                cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLANC } };
+                cell.border    = { top: bD, left: c === 2 ? bM : bD, bottom: bD, right: c === 4 ? bM : bD };
+                cell.alignment = { horizontal: c <= 3 ? 'left' : 'center', vertical: 'middle' };
+                cell.font      = { size: 10, name: 'Arial', color: { argb: NEGRO } };
+            }
+            wsUD.getCell(row, 2).value  = v.aparato ?? v.description ?? '';
+            wsUD.getCell(row, 3).value  = v.tipo    ?? v.notes ?? '';
+            wsUD.getCell(row, 4).value  = v.ud      ?? v.total ?? 0;
+            wsUD.getCell(row, 4).numFmt = '0';
+            row++;
+        });
+
+        // ── Fila TOTAL Anexo-06 ───────────────────────────────────────────────
+        udFill(row, 'FFFFCC00', 22);
+        for (let c = 2; c <= 4; c++) {
+            const cell = wsUD.getCell(row, c);
+            cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
+            cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
+            cell.border    = { top: bM, left: c === 2 ? bM : bT, bottom: bM, right: c === 4 ? bM : bT };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+        wsUD.getCell(row, 2).value     = 'TOTAL ANEXO N° 06 =';
+        wsUD.getCell(row, 2).alignment = { horizontal: 'right', vertical: 'middle' };
+        wsUD.getCell(row, 3).value     = '';
+        const anexoStartRow = 5;
+        wsUD.getCell(row, 4).value  = { formula: `SUM(D${anexoStartRow}:D${row - 1})` };
+        wsUD.getCell(row, 4).numFmt = '0';
+        row++;
+
+        udFill(row, BLANC, 8); row++;
+        udFill(row, BLANC, 8); row++;
+
+        // ══════════════════════════════════════════════════════════════════════
+        // TABLAS POR NIVEL ACTIVO
+        // ══════════════════════════════════════════════════════════════════════
+        const resumenRefs: { label: string; tStart: number; rowTotal: number }[] = [];
+
+        GRADE_ORDER.forEach(({ key, label }) => {
+            const gradeData = tablesData[key] || { modules: [], multipliers: {} };
+            const mults: Record<string, number> = { ...DEFAULT_MULTS, ...(gradeData.multipliers || {}) };
+            const filas = flattenGrade(gradeData);
+
+            const aparatosHdr = COLS_KEYS.map((k, i) => ({ nombre: COLS_LABELS[i], ud: mults[k] ?? DEFAULT_MULTS[k] }));
+
+            // ── 3 filas encabezado ────────────────────────────────────────────
+            const [rA, rB, rC] = [row, row + 1, row + 2];
+
+            udFill(rA, BLANC, 20);
+            for (let c = 2; c <= 10; c++) {
+                const cell = wsUD.getCell(rA, c);
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: (c >= 4 && c <= 9) ? VERD : AMAR } };
+                cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
+                if      (c === 2)  { cell.value = 'NIVEL';       cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bM, bottom: undefined, right: bT }; }
+                else if (c === 3)  { cell.value = 'DESCRIPCION'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bT }; }
+                else if (c === 4)  { cell.value = `SUMATORIA DE GASTOS POR ACCESORIOS - ${label}`; cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }; cell.border = { top: bM, left: bM, bottom: bT, right: undefined }; }
+                else if (c >= 5 && c <= 8) { cell.border = { top: bM, left: undefined, bottom: bT, right: undefined }; }
+                else if (c === 9)  { cell.border = { top: bM, left: undefined, bottom: bT, right: bT }; }
+                else if (c === 10) { cell.value = 'U.D'; cell.alignment = { horizontal: 'center', vertical: 'middle' }; cell.border = { top: bM, left: bT, bottom: undefined, right: bM }; }
+            }
+
+            udFill(rB, AMAR, 16);
+            for (let c = 2; c <= 10; c++) {
+                const cell = wsUD.getCell(rB, c);
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
+                cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                if      (c === 2)  cell.border = { top: undefined, left: bM, bottom: undefined, right: bT };
+                else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: undefined, right: bT };
+                else if (c === 10) cell.border = { top: undefined, left: bT, bottom: undefined, right: bM };
+                else { cell.value = aparatosHdr[c - 4].nombre; cell.border = { top: bT, left: c === 4 ? bM : bT, bottom: bT, right: bT }; }
+            }
+
+            udFill(rC, AMAR, 16);
+            for (let c = 2; c <= 10; c++) {
+                const cell = wsUD.getCell(rC, c);
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMAR } };
+                cell.font = { bold: true, size: 9, name: 'Arial', color: { argb: NEGRO } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                if      (c === 2)  cell.border = { top: undefined, left: bM, bottom: bM, right: bT };
+                else if (c === 3)  cell.border = { top: undefined, left: bT, bottom: bM, right: bT };
+                else if (c === 10) cell.border = { top: undefined, left: bT, bottom: bM, right: bM };
+                else { cell.value = `${aparatosHdr[c - 4].ud} U.D.`; cell.border = { top: bT, left: c === 4 ? bM : bT, bottom: bM, right: bT }; }
+            }
+            row += 3;
+
+            // ── Filas de datos ────────────────────────────────────────────────
+            const tStart = row;
+            filas.forEach((item: any, idx: number) => {
+                const isModulo = item.isModulo ?? false;
+                const bg = isModulo ? BLANC : (idx % 2 === 0 ? AZUL1 : AZUL2);
+                udFill(row, bg, 17);
+                for (let c = 2; c <= 10; c++) {
+                    const cell = wsUD.getCell(row, c);
+                    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+                    cell.font      = { bold: isModulo, size: 10, name: 'Arial', color: { argb: isModulo ? ROJO : NEGRO } };
+                    cell.alignment = { horizontal: c <= 3 ? 'left' : 'center', vertical: 'middle' };
+                    cell.border    = { top: bD, left: c === 2 ? bM : bD, bottom: bD, right: c === 10 ? bM : bD };
+                }
+                wsUD.getCell(row, 2).value = item.nivel       ?? '';
+                wsUD.getCell(row, 3).value = item.descripcion ?? '';
+                if (!isModulo) {
+                    COLS_KEYS.forEach((col, i) => {
+                        const cell = wsUD.getCell(row, 4 + i);
+                        const v = item[col];
+                        cell.value = (v !== null && v !== undefined && v !== '') ? v : null;
+                        if (typeof v === 'number') cell.numFmt = '0';
+                    });
+                    const ud = item.ud ?? null;
+                    wsUD.getCell(row, 10).value = ud;
+                    if (typeof ud === 'number') wsUD.getCell(row, 10).numFmt = '0';
+                }
+                row++;
+            });
+
+            // ── Fila TOTAL ────────────────────────────────────────────────────
+            const rowTotal = row;
+            udFill(row, 'FFFFCC00', 22);
+            for (let c = 2; c <= 10; c++) {
+                const cell = wsUD.getCell(row, c);
+                cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
+                cell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border    = { top: bM, left: c === 2 ? bM : bT, bottom: bM, right: c === 10 ? bM : bT };
+                if (c === 2) cell.value = 'TOTAL';
+                if (c === 3) cell.value = 'TOTAL';
+                if (c >= 4) {
+                    const col = ['D', 'E', 'F', 'G', 'H', 'I', 'J'][c - 4];
+                    cell.value  = { formula: `SUM(${col}${tStart}:${col}${row - 1})` };
+                    cell.numFmt = '0';
+                }
+            }
+            row++;
+
+            resumenRefs.push({ label, tStart, rowTotal });
+            for (let i = 0; i < 5; i++) { udFill(row, BLANC, 8); row++; }
+        });
+
+        // ══════════════════════════════════════════════════════════════════════
+        // RESÚMENES FINALES — uno por nivel activo
+        // ══════════════════════════════════════════════════════════════════════
+        resumenRefs.forEach(({ label, tStart, rowTotal }) => {
+            udFill(row, 'FFFFCC00', 24);
+            wsUD.mergeCells(row, 2, row, 8);
+            const labelCell = wsUD.getCell(row, 2);
+            labelCell.value     = `UNIDADES DE DESCARGA TOTAL - ${label} =`;
+            labelCell.font      = { bold: true, size: 10, name: 'Arial', color: { argb: NEGRO } };
+            labelCell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
+            labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            labelCell.border    = { top: bM, left: bM, bottom: bM, right: bM };
+
+            wsUD.getCell(row, 9).fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
+            wsUD.getCell(row, 9).border = { top: bM, bottom: bM };
+
+            const valCell = wsUD.getCell(row, 10);
+            valCell.value     = { formula: `SUM(J${tStart}:J${rowTotal - 1})` };
+            valCell.numFmt    = '0';
+            valCell.font      = { bold: true, size: 11, name: 'Arial', color: { argb: NEGRO } };
+            valCell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
+            valCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            valCell.border    = { top: bM, left: bM, bottom: bM, right: bM };
+            wsUD.getRow(row).height = 24;
+            row++;
+
+            for (let i = 0; i < 2; i++) { udFill(row, BLANC, 8); row++; }
+        });
+
+        for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
+
+         // ========== HOJA 2: COLECTOR ==========
+        const wsCol = workbook.addWorksheet('Colector');
+        wsCol.columns = [
+            { width: 20 }, { width: 10 }, { width: 7  }, { width: 10 }, { width: 10 },
+            { width: 12 }, { width: 12 }, { width: 12 }, { width: 8  }, { width: 28 },
+            { width: 12 }, { width: 12 }, { width: 12 }, { width: 8  }, { width: 28 },
+        ];
+
+        const CC = 15;
+        const cbT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
+        const cbM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF999933' } };
+        const COL_BG_G   = 'FFF2F2F2';
+        const COL_BG_V   = 'FF92D050';
+        const COL_BG_CR1 = 'FFD4EDDA';
+        const COL_BG_CR2 = 'FFD0E8FF';
+        const COL_BG_DAT = 'FFFFFFFF';
+        const COL_BG_ALT = 'FFE8F0FB';
+        const COL_BG_TOT = 'FFFFCC00';
+        const COL_BG_HDR: Record<string, string> = {
+            inicial: 'FF1B5E20', primaria: 'FF0D47A1', secundaria: 'FF4A148C',
+        };
+
+        function colCell(r: number, c: number, val: any, opts: {
+            bold?: boolean; size?: number; bg?: string; color?: string;
+            halign?: ExcelJS.Alignment['horizontal']; numFmt?: string; wrapText?: boolean;
+        } = {}) {
+            const cell = wsCol.getCell(r, c);
+            cell.value = val ?? null;
+            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial', color: { argb: opts.color ?? 'FF000000' } };
+            if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
+            cell.alignment = { horizontal: opts.halign ?? 'center', vertical: 'middle', wrapText: opts.wrapText ?? false };
+            cell.border = { top: cbT, left: cbT, bottom: cbT, right: cbT };
+            if (opts.numFmt) cell.numFmt = opts.numFmt;
+        }
+
+        function colFillRow(r: number, bg: string, h = 17) {
+            for (let c = 1; c <= CC; c++)
+                wsCol.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            wsCol.getRow(r).height = h;
+        }
+
+        function fmtCF(val: number): string {
+            if (val === 0) return '+0.00 m';
+            return val > 0 ? `+${val.toFixed(2)} m` : `- ${Math.abs(val).toFixed(2)} m`;
+        }
+
+        const colectorRaw: Record<string, any[]> = dataSheet['colector'] || {};
+        const colGrades = [
+            { key: 'inicial',    label: 'INICIAL'    },
+            { key: 'primaria',   label: 'PRIMARIA'   },
+            { key: 'secundaria', label: 'SECUNDARIA' },
+        ].filter(g => gradesActive[g.key]);
+
+        let cr = 1;
+
+        // Título general
+        colFillRow(cr, COL_BG_V, 24);
+        wsCol.mergeCells(cr, 1, cr, CC);
+        const colTitulo = wsCol.getCell(cr, 1);
+        colTitulo.value = 'ANEXO 08. DISEÑO DE COLECTORES';
+        colTitulo.font  = { bold: true, size: 12, name: 'Arial', color: { argb: 'FF000000' } };
+        colTitulo.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_BG_V } };
+        colTitulo.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        colTitulo.border = { top: cbM, left: cbM, bottom: cbM, right: cbM };
+        wsCol.getRow(cr).height = 24;
+        cr++;
+
+        colGrades.forEach(({ key, label }) => {
+            const colRows: any[] = Array.isArray(colectorRaw[key]) ? colectorRaw[key] : [];
+
+            // Separador
+            colFillRow(cr, 'FFFFFFFF', 6); cr++;
+
+            // Encabezado del grado
+            colFillRow(cr, COL_BG_HDR[key], 22);
+            wsCol.mergeCells(cr, 1, cr, CC);
+            const grHdr = wsCol.getCell(cr, 1);
+            grHdr.value = `ANEXO 08. COLECTORES — ${label}`;
+            grHdr.font  = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } };
+            grHdr.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_BG_HDR[key] } };
+            grHdr.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            grHdr.border = { top: cbM, left: cbM, bottom: cbM, right: cbM };
+            cr++;
+
+            // Cabecera fila A
+            colFillRow(cr, COL_BG_G, 18);
+            ['TRAMO', 'LONGITUD (m)', 'UD', 'DIAMETRO', 'PENDIENTE'].forEach((txt, i) => {
+                colCell(cr, i + 1, txt, { bold: true, size: 9, bg: COL_BG_G });
+            });
+            wsCol.mergeCells(cr, 6, cr, 10);
+            colCell(cr, 6,  `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_BG_CR1 });
+            wsCol.mergeCells(cr, 11, cr, 15);
+            colCell(cr, 11, `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_BG_CR2 });
+            cr++;
+
+            // Cabecera fila B
+            colFillRow(cr, COL_BG_G, 16);
+            for (let c = 1; c <= 5; c++) colCell(cr, c, '', { bg: COL_BG_G });
+            ['N°', 'CT (m)', 'CF/CLL (m)', 'H (m)', 'DIMENSIONES'].forEach((txt, i) => {
+                colCell(cr, 6  + i, txt, { bold: true, size: 9, bg: COL_BG_CR1 });
+            });
+            ['N°', 'CT (m)', 'CF/CLL (m)', 'H (m)', 'DIMENSIONES'].forEach((txt, i) => {
+                colCell(cr, 11 + i, txt, { bold: true, size: 9, bg: COL_BG_CR2 });
+            });
+            cr++;
+
+            // Filas de datos
+            const dataStart = cr;
+            if (colRows.length === 0) {
+                colFillRow(cr, COL_BG_DAT, 17);
+                for (let c = 1; c <= CC; c++) colCell(cr, c, '', { bg: COL_BG_DAT });
+                cr++;
+            } else {
+                colRows.forEach((r: any, idx: number) => {
+                    const isStatic = r.isStatic ?? false;
+                    const bg = isStatic ? 'FFFFF3CD' : (idx % 2 === 0 ? COL_BG_DAT : COL_BG_ALT);
+                    colFillRow(cr, bg, 17);
+                    const cr1Num = `${r.cr1_num ?? ''} ${r.cr1_nval ?? ''}`.trim();
+                    const cr2Num = `${r.cr2_num ?? ''} ${r.cr2_nval ?? ''}`.trim();
+                    colCell(cr, 1,  r.tramo     ?? '', { bg, halign: 'left' });
+                    colCell(cr, 2,  r.longitud  ?? 0,  { bg, numFmt: '0.00' });
+                    colCell(cr, 3,  r.ud        ?? 0,  { bg, numFmt: '0' });
+                    colCell(cr, 4,  r.diametro  ?? '', { bg });
+                    colCell(cr, 5,  r.pendiente ?? '', { bg });
+                    colCell(cr, 6,  cr1Num,             { bg });
+                    colCell(cr, 7,  fmtCF(r.cr1_ct ?? 0), { bg });
+                    colCell(cr, 8,  fmtCF(r.cr1_cf ?? 0), { bg });
+                    colCell(cr, 9,  r.cr1_h  ?? 0,     { bg, numFmt: '0.00' });
+                    colCell(cr, 10, r.cr1_dim ?? '',    { bg, halign: 'left', wrapText: true });
+                    colCell(cr, 11, cr2Num,             { bg });
+                    colCell(cr, 12, fmtCF(r.cr2_ct ?? 0), { bg });
+                    colCell(cr, 13, fmtCF(r.cr2_cf ?? 0), { bg });
+                    colCell(cr, 14, r.cr2_h  ?? 0,     { bg, numFmt: '0.00' });
+                    colCell(cr, 15, r.cr2_dim ?? '',    { bg, halign: 'left', wrapText: true });
+                    cr++;
+                });
+            }
+
+            // Fila TOTAL
+            colFillRow(cr, COL_BG_TOT, 20);
+            wsCol.mergeCells(cr, 1, cr, 2);
+            colCell(cr, 1, `TOTAL ${label}`, { bold: true, size: 10, bg: COL_BG_TOT, halign: 'right' });
+            colCell(cr, 3, colRows.length > 0
+                ? { formula: `SUM(C${dataStart}:C${cr - 1})` } : 0,
+                { bold: true, bg: COL_BG_TOT, numFmt: '0' });
+            for (let c = 4; c <= CC; c++) colCell(cr, c, null, { bg: COL_BG_TOT });
+            cr++;
+        });
         // ========== HOJA 3: CAJAS DE REGISTRO ==========
         const wsCajas = workbook.addWorksheet('Cajas de Registro');
         wsCajas.columns = [ { width: 10 }, { width: 18 }, { width: 15 }, { width: 15 }, { width: 30 } ];
@@ -646,13 +548,13 @@ for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
         const cajasData = dataSheet['cajas'] || [];
         let rowCajas = 4;
         (Array.isArray(cajasData) ? cajasData : []).forEach((caja: any, idx: number) => {
-            const row = wsCajas.getRow(rowCajas);
-            row.getCell(1).value = idx + 1;
-            row.getCell(2).value = caja.profundidad || '';
-            row.getCell(3).value = caja.diametro || '';
-            row.getCell(4).value = caja.pendiente || '';
-            row.getCell(5).value = caja.materiales || '';
-            applyRowStyle(row, 5, [2, 3, 4]);
+            const r = wsCajas.getRow(rowCajas);
+            r.getCell(1).value = idx + 1;
+            r.getCell(2).value = caja.profundidad || '';
+            r.getCell(3).value = caja.diametro    || '';
+            r.getCell(4).value = caja.pendiente   || '';
+            r.getCell(5).value = caja.materiales  || '';
+            applyRowStyle(r, 5, [2, 3, 4]);
             rowCajas++;
         });
 
@@ -665,12 +567,12 @@ for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
         let rowUV = 4;
         Object.entries(uvData).forEach(([key, value]: [string, any]) => {
             if (!value) return;
-            const row = wsUV.getRow(rowUV);
-            row.getCell(1).value = key;
-            row.getCell(2).value = value.diametro || '';
-            row.getCell(3).value = value.cantidad || 0;
-            row.getCell(4).value = value.ubicacion || '';
-            applyRowStyle(row, 4, [2, 3]);
+            const r = wsUV.getRow(rowUV);
+            r.getCell(1).value = key;
+            r.getCell(2).value = value.diametro  || '';
+            r.getCell(3).value = value.cantidad  || 0;
+            r.getCell(4).value = value.ubicacion || '';
+            applyRowStyle(r, 4, [2, 3]);
             rowUV++;
         });
 
@@ -683,8 +585,8 @@ for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
         let rowTrampa = 4;
         Object.entries(trampaData).forEach(([key, value]: [string, any]) => {
             if (value === null || value === undefined) return;
-            const row = wsTrampa.getRow(rowTrampa);
-            row.getCell(1).value = key;
+            const r = wsTrampa.getRow(rowTrampa);
+            r.getCell(1).value = key;
             let valor: any;
             let unidad = '';
             if (typeof value === 'object') {
@@ -693,10 +595,10 @@ for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
             } else {
                 valor = value;
             }
-            row.getCell(2).value = valor;
-            row.getCell(3).value = unidad;
-            applyRowStyle(row, 3, [2]);
-            if (typeof valor === 'number') row.getCell(2).numFmt = '0';
+            r.getCell(2).value = valor;
+            r.getCell(3).value = unidad;
+            applyRowStyle(r, 3, [2]);
+            if (typeof valor === 'number') r.getCell(2).numFmt = '0';
             rowTrampa++;
         });
 
