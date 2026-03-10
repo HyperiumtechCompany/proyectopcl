@@ -124,8 +124,7 @@ export async function exportCaidaTensionToExcel(
             cell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
-                fgColor: { argb: 'FFD9D9D9' }
-            };
+                fgColor: {argb: 'B2FFFF'}};
 
             cell.alignment = {
                 horizontal: 'center',
