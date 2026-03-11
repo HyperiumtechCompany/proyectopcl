@@ -237,7 +237,6 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
         });
 
         // ── Fila TOTAL Anexo-06 ───────────────────────────────────────────────
-        udFill(row, 'FFFFCC00', 22);
         for (let c = 2; c <= 4; c++) {
             const cell = wsUD.getCell(row, c);
             cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCC00' } };
@@ -392,45 +391,70 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
 
         for (let i = 0; i < 4; i++) { udFill(row, BLANC, 10); row++; }
 
-         // ========== HOJA 2: COLECTOR ==========
+
+        // ========== HOJA 2: COLECTOR ==========
         const wsCol = workbook.addWorksheet('Colector');
         wsCol.columns = [
-            { width: 20 }, { width: 10 }, { width: 7  }, { width: 10 }, { width: 10 },
-            { width: 12 }, { width: 12 }, { width: 12 }, { width: 8  }, { width: 28 },
-            { width: 12 }, { width: 12 }, { width: 12 }, { width: 8  }, { width: 28 },
+            { width: 3  }, // 1 spacer
+            { width: 20 }, // 2 TRAMO
+            { width: 10 }, // 3 LONGITUD
+            { width: 7  }, // 4 UD
+            { width: 10 }, // 5 DIAMETRO
+            { width: 10 }, // 6 PENDIENTE
+            { width: 14 }, // 7 CR1 N°
+            { width: 12 }, // 8 CR1 CT
+            { width: 12 }, // 9 CR1 CF
+            { width: 8  }, // 10 CR1 H
+            { width: 28 }, // 11 CR1 DIMENSIONES
+            { width: 14 }, // 12 CR2 N°
+            { width: 12 }, // 13 CR2 CT
+            { width: 12 }, // 14 CR2 CF
+            { width: 8  }, // 15 CR2 H
+            { width: 28 }, // 16 CR2 DIMENSIONES
         ];
 
-        const CC = 15;
+        const CC  = 16; // total columnas
+        const CC2 = 2;  // columna inicio (B)
         const cbT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
         const cbM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF999933' } };
-        const COL_BG_G   = 'FFF2F2F2';
-        const COL_BG_V   = 'FF92D050';
-        const COL_BG_CR1 = 'FFD4EDDA';
-        const COL_BG_CR2 = 'FFD0E8FF';
-        const COL_BG_DAT = 'FFFFFFFF';
-        const COL_BG_ALT = 'FFE8F0FB';
-        const COL_BG_TOT = 'FFFFCC00';
-        const COL_BG_HDR: Record<string, string> = {
+        const COL_BLANC = 'FFFFFFFF';
+        const COL_VERDE = 'FF92D050';
+        const COL_AMAR  = 'FFFFFF99'; // amarillo encabezados
+        const COL_CR1   = 'FFD4EDDA'; // verde claro CR1
+        const COL_CR2   = 'FFD0E8FF'; // azul claro CR2
+        const COL_DAT   = 'FFFFFFFF';
+        const COL_ALT   = 'FFE8F0FB';
+        const COL_TOT   = 'FFFFCC00';
+        const COL_NEGRO = 'FF000000';
+        const COL_HDR: Record<string, string> = {
             inicial: 'FF1B5E20', primaria: 'FF0D47A1', secundaria: 'FF4A148C',
         };
 
+        function colFillRow(r: number, bg: string, h = 17) {
+            // col 1 siempre blanco (spacer)
+            wsCol.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_BLANC } };
+            for (let c = CC2; c <= CC; c++)
+                wsCol.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+            wsCol.getRow(r).height = h;
+        }
+
         function colCell(r: number, c: number, val: any, opts: {
-            bold?: boolean; size?: number; bg?: string; color?: string;
+            bold?: boolean; size?: number; bg?: string;
             halign?: ExcelJS.Alignment['horizontal']; numFmt?: string; wrapText?: boolean;
+            bord?: 'T' | 'M';
         } = {}) {
             const cell = wsCol.getCell(r, c);
             cell.value = val ?? null;
-            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial', color: { argb: opts.color ?? 'FF000000' } };
+            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial', color: { argb: COL_NEGRO } };
             if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
             cell.alignment = { horizontal: opts.halign ?? 'center', vertical: 'middle', wrapText: opts.wrapText ?? false };
-            cell.border = { top: cbT, left: cbT, bottom: cbT, right: cbT };
+            const b = opts.bord === 'M' ? cbM : cbT;
+            cell.border = {
+                top: b, bottom: b,
+                left:  c === CC2 ? cbM : cbT,
+                right: c === CC  ? cbM : cbT,
+            };
             if (opts.numFmt) cell.numFmt = opts.numFmt;
-        }
-
-        function colFillRow(r: number, bg: string, h = 17) {
-            for (let c = 1; c <= CC; c++)
-                wsCol.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
-            wsCol.getRow(r).height = h;
         }
 
         function fmtCF(val: number): string {
@@ -447,134 +471,556 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
 
         let cr = 1;
 
-        // Título general
-        colFillRow(cr, COL_BG_V, 24);
-        wsCol.mergeCells(cr, 1, cr, CC);
-        const colTitulo = wsCol.getCell(cr, 1);
+        // ── Título general ────────────────────────────────────────────────────
+        colFillRow(cr, COL_VERDE, 24);
+        wsCol.mergeCells(cr, CC2, cr, CC);
+        const colTitulo = wsCol.getCell(cr, CC2);
         colTitulo.value = 'ANEXO 08. DISEÑO DE COLECTORES';
-        colTitulo.font  = { bold: true, size: 12, name: 'Arial', color: { argb: 'FF000000' } };
-        colTitulo.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_BG_V } };
+        colTitulo.font  = { bold: true, size: 12, name: 'Arial', color: { argb: COL_NEGRO } };
+        colTitulo.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_VERDE } };
         colTitulo.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
         colTitulo.border = { top: cbM, left: cbM, bottom: cbM, right: cbM };
-        wsCol.getRow(cr).height = 24;
         cr++;
 
         colGrades.forEach(({ key, label }) => {
             const colRows: any[] = Array.isArray(colectorRaw[key]) ? colectorRaw[key] : [];
 
-            // Separador
-            colFillRow(cr, 'FFFFFFFF', 6); cr++;
+            // Separador entre tablas
+            colFillRow(cr, COL_BLANC, 8); cr++;
 
-            // Encabezado del grado
-            colFillRow(cr, COL_BG_HDR[key], 22);
-            wsCol.mergeCells(cr, 1, cr, CC);
-            const grHdr = wsCol.getCell(cr, 1);
+            // ── Encabezado del grado ──────────────────────────────────────────
+            colFillRow(cr, COL_HDR[key], 22);
+            wsCol.mergeCells(cr, CC2, cr, CC);
+            const grHdr = wsCol.getCell(cr, CC2);
             grHdr.value = `ANEXO 08. COLECTORES — ${label}`;
             grHdr.font  = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } };
-            grHdr.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_BG_HDR[key] } };
+            grHdr.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_HDR[key] } };
             grHdr.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
             grHdr.border = { top: cbM, left: cbM, bottom: cbM, right: cbM };
             cr++;
 
-            // Cabecera fila A
-            colFillRow(cr, COL_BG_G, 18);
+            // ── Cabecera fila A: grupos ───────────────────────────────────────
+            colFillRow(cr, COL_AMAR, 18);
+            // cols B-F: encabezados generales en amarillo
             ['TRAMO', 'LONGITUD (m)', 'UD', 'DIAMETRO', 'PENDIENTE'].forEach((txt, i) => {
-                colCell(cr, i + 1, txt, { bold: true, size: 9, bg: COL_BG_G });
+                colCell(cr, CC2 + i, txt, { bold: true, size: 9, bg: COL_AMAR, bord: 'M' });
             });
-            wsCol.mergeCells(cr, 6, cr, 10);
-            colCell(cr, 6,  `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_BG_CR1 });
-            wsCol.mergeCells(cr, 11, cr, 15);
-            colCell(cr, 11, `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_BG_CR2 });
+            // CR1: cols 7-11
+            wsCol.mergeCells(cr, 7, cr, 11);
+            colCell(cr, 7, `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_CR1, bord: 'M' });
+            // CR2: cols 12-16
+            wsCol.mergeCells(cr, 12, cr, 16);
+            colCell(cr, 12, `CAJA REGISTRO (${label})`, { bold: true, size: 9, bg: COL_CR2, bord: 'M' });
             cr++;
 
-            // Cabecera fila B
-            colFillRow(cr, COL_BG_G, 16);
-            for (let c = 1; c <= 5; c++) colCell(cr, c, '', { bg: COL_BG_G });
+            // ── Cabecera fila B: sub-columnas ─────────────────────────────────
+            colFillRow(cr, COL_AMAR, 16);
+            // cols B-F vacías (continuación del rowspan simulado)
+            for (let c = CC2; c <= 6; c++) colCell(cr, c, '', { bg: COL_AMAR });
+            // CR1 sub-cols
             ['N°', 'CT (m)', 'CF/CLL (m)', 'H (m)', 'DIMENSIONES'].forEach((txt, i) => {
-                colCell(cr, 6  + i, txt, { bold: true, size: 9, bg: COL_BG_CR1 });
+                colCell(cr, 7  + i, txt, { bold: true, size: 9, bg: COL_CR1 });
             });
+            // CR2 sub-cols
             ['N°', 'CT (m)', 'CF/CLL (m)', 'H (m)', 'DIMENSIONES'].forEach((txt, i) => {
-                colCell(cr, 11 + i, txt, { bold: true, size: 9, bg: COL_BG_CR2 });
+                colCell(cr, 12 + i, txt, { bold: true, size: 9, bg: COL_CR2 });
             });
             cr++;
 
-            // Filas de datos
+            // ── Filas de datos ────────────────────────────────────────────────
             const dataStart = cr;
             if (colRows.length === 0) {
-                colFillRow(cr, COL_BG_DAT, 17);
-                for (let c = 1; c <= CC; c++) colCell(cr, c, '', { bg: COL_BG_DAT });
+                colFillRow(cr, COL_DAT, 17);
+                for (let c = CC2; c <= CC; c++) colCell(cr, c, '', { bg: COL_DAT });
                 cr++;
             } else {
                 colRows.forEach((r: any, idx: number) => {
                     const isStatic = r.isStatic ?? false;
-                    const bg = isStatic ? 'FFFFF3CD' : (idx % 2 === 0 ? COL_BG_DAT : COL_BG_ALT);
+                    const bg = isStatic ? 'FFFFF3CD' : (idx % 2 === 0 ? COL_DAT : COL_ALT);
                     colFillRow(cr, bg, 17);
                     const cr1Num = `${r.cr1_num ?? ''} ${r.cr1_nval ?? ''}`.trim();
                     const cr2Num = `${r.cr2_num ?? ''} ${r.cr2_nval ?? ''}`.trim();
-                    colCell(cr, 1,  r.tramo     ?? '', { bg, halign: 'left' });
-                    colCell(cr, 2,  r.longitud  ?? 0,  { bg, numFmt: '0.00' });
-                    colCell(cr, 3,  r.ud        ?? 0,  { bg, numFmt: '0' });
-                    colCell(cr, 4,  r.diametro  ?? '', { bg });
-                    colCell(cr, 5,  r.pendiente ?? '', { bg });
-                    colCell(cr, 6,  cr1Num,             { bg });
-                    colCell(cr, 7,  fmtCF(r.cr1_ct ?? 0), { bg });
-                    colCell(cr, 8,  fmtCF(r.cr1_cf ?? 0), { bg });
-                    colCell(cr, 9,  r.cr1_h  ?? 0,     { bg, numFmt: '0.00' });
-                    colCell(cr, 10, r.cr1_dim ?? '',    { bg, halign: 'left', wrapText: true });
-                    colCell(cr, 11, cr2Num,             { bg });
-                    colCell(cr, 12, fmtCF(r.cr2_ct ?? 0), { bg });
-                    colCell(cr, 13, fmtCF(r.cr2_cf ?? 0), { bg });
-                    colCell(cr, 14, r.cr2_h  ?? 0,     { bg, numFmt: '0.00' });
-                    colCell(cr, 15, r.cr2_dim ?? '',    { bg, halign: 'left', wrapText: true });
+                    colCell(cr, 2,  r.tramo     ?? '', { bg, halign: 'left' });
+                    colCell(cr, 3,  r.longitud  ?? 0,  { bg, numFmt: '0.00' });
+                    colCell(cr, 4,  r.ud        ?? 0,  { bg, numFmt: '0' });
+                    colCell(cr, 5,  r.diametro  ?? '', { bg });
+                    colCell(cr, 6,  r.pendiente ?? '', { bg });
+                    colCell(cr, 7,  cr1Num,               { bg });
+                    colCell(cr, 8,  fmtCF(r.cr1_ct ?? 0), { bg });
+                    colCell(cr, 9,  fmtCF(r.cr1_cf ?? 0), { bg });
+                    colCell(cr, 10, r.cr1_h  ?? 0,        { bg, numFmt: '0.00' });
+                    colCell(cr, 11, r.cr1_dim ?? '',       { bg, halign: 'left', wrapText: true });
+                    colCell(cr, 12, cr2Num,               { bg });
+                    colCell(cr, 13, fmtCF(r.cr2_ct ?? 0), { bg });
+                    colCell(cr, 14, fmtCF(r.cr2_cf ?? 0), { bg });
+                    colCell(cr, 15, r.cr2_h  ?? 0,        { bg, numFmt: '0.00' });
+                    colCell(cr, 16, r.cr2_dim ?? '',       { bg, halign: 'left', wrapText: true });
                     cr++;
                 });
             }
 
-            // Fila TOTAL
-            colFillRow(cr, COL_BG_TOT, 20);
-            wsCol.mergeCells(cr, 1, cr, 2);
-            colCell(cr, 1, `TOTAL ${label}`, { bold: true, size: 10, bg: COL_BG_TOT, halign: 'right' });
-            colCell(cr, 3, colRows.length > 0
-                ? { formula: `SUM(C${dataStart}:C${cr - 1})` } : 0,
-                { bold: true, bg: COL_BG_TOT, numFmt: '0' });
-            for (let c = 4; c <= CC; c++) colCell(cr, c, null, { bg: COL_BG_TOT });
+            // ── Fila TOTAL ────────────────────────────────────────────────────
+            colFillRow(cr, COL_TOT, 20);
+            wsCol.mergeCells(cr, CC2, cr, 3);
+            colCell(cr, CC2, `TOTAL ${label}`, { bold: true, size: 10, bg: COL_TOT, halign: 'right', bord: 'M' });
+            colCell(cr, 4, colRows.length > 0
+                ? { formula: `SUM(D${dataStart}:D${cr - 1})` } : 0,
+                { bold: true, bg: COL_TOT, numFmt: '0', bord: 'M' });
+            for (let c = 5; c <= CC; c++) colCell(cr, c, null, { bg: COL_TOT, bord: 'M' });
             cr++;
         });
-        // ========== HOJA 3: CAJAS DE REGISTRO ==========
+
+
+                // ========== HOJA 3: CAJAS DE REGISTRO ==========
         const wsCajas = workbook.addWorksheet('Cajas de Registro');
-        wsCajas.columns = [ { width: 10 }, { width: 18 }, { width: 15 }, { width: 15 }, { width: 30 } ];
-        paintTitle(wsCajas, 5, 'CAJAS DE REGISTRO');
-        paintHeaders(wsCajas, ['N°', 'PROFUNDIDAD (m)', 'DIÁMETRO (mm)', 'PENDIENTE (%)', 'MATERIALES']);
-        const cajasData = dataSheet['cajas'] || [];
-        let rowCajas = 4;
-        (Array.isArray(cajasData) ? cajasData : []).forEach((caja: any, idx: number) => {
-            const r = wsCajas.getRow(rowCajas);
-            r.getCell(1).value = idx + 1;
-            r.getCell(2).value = caja.profundidad || '';
-            r.getCell(3).value = caja.diametro    || '';
-            r.getCell(4).value = caja.pendiente   || '';
-            r.getCell(5).value = caja.materiales  || '';
-            applyRowStyle(r, 5, [2, 3, 4]);
-            rowCajas++;
+        wsCajas.columns = [
+            { width: 3  }, // 1 spacer
+            { width: 22 }, // 2 N° / label
+            { width: 10 }, // 3 TRAMO value
+            { width: 10 }, // 4 CT
+            { width: 10 }, // 5 CF
+            { width: 8  }, // 6 H
+            { width: 30 }, // 7 DIMENSIONES
+        ];
+
+        const CJ = 7;
+        const cjT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
+        const cjM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF999933' } };
+        const CJ_BLANC = 'FFFFFFFF';
+        const CJ_VERDE = 'FF92D050';
+        const CJ_AMAR  = 'FFFFFF99';
+        const CJ_ALT   = 'FFE8F0FB';
+        const CJ_STAT  = 'FFF5F5DC'; // beige filas estáticas
+        const CJ_TOT   = 'FFFFCC00';
+        const CJ_NEGRO = 'FF000000';
+        const CJ_HDR: Record<string, string> = {
+            inicial: 'FF1B5E20', primaria: 'FF0D47A1', secundaria: 'FF4A148C',
+        };
+
+        // Filas estáticas fijas (igual que getStaticRows del frontend)
+        function getCajasStaticRows() {
+            return [
+                { tramocajalabel: 'B.z',                  tramocajavalue: '18',  ctcaja:  0.00, cfcaja: -1.40, hcaja: 1.40, dimensionescaja: 'D=1.20m',                      isStatic: true },
+                { tramocajalabel: 'CAJA DE REGISTRO FINAL', tramocajavalue: '',  ctcaja: -0.35, cfcaja: -1.50, hcaja: 1.15, dimensionescaja: '0.60m x 0.60m (24" x 24")',     isStatic: true },
+                { tramocajalabel: 'CONC.',                 tramocajavalue: '',   ctcaja: -0.10, cfcaja: -0.30, hcaja: 0.20, dimensionescaja: '0.50m x 0.80m x 0.50m',         isStatic: true },
+            ];
+        }
+
+        // Transformar colector → cajas (igual que transformColectorData del frontend)
+        function transformColectorToCajas(gradeRows: any[]): any[] {
+            return gradeRows
+                .filter((r: any) => !r.isStatic)
+                .map((item: any, idx: number) => ({
+                    tramocajalabel:   item.cr1_num  ?? 'C.R.',
+                    tramocajavalue:   item.cr1_nval !== undefined ? String(item.cr1_nval) : String(idx + 1),
+                    ctcaja:           parseFloat(item.cr1_ct)  || 0,
+                    cfcaja:           parseFloat(item.cr1_cf)  || 0,
+                    hcaja:            parseFloat(item.cr1_h)   || 0,
+                    dimensionescaja:  item.cr1_dim ?? '',
+                    isStatic:         false,
+                }));
+        }
+
+        // Resumen de tipos (igual que generateResumenData del frontend)
+        function buildResumen(allRows: any[]): { desc: string; tipo: string; cantidad: number }[] {
+            const summary = [
+                { desc: 'CAJA DE REGISTRO', tipo: '0.25m x 0.50m (10" x 20")', cantidad: 0 },
+                { desc: 'CAJA DE REGISTRO', tipo: '0.30m x 0.60m (12" x 24")', cantidad: 0 },
+                { desc: 'CAJA DE REGISTRO', tipo: '0.45m x 0.60m (18" x 24")', cantidad: 0 },
+                { desc: 'CAJA DE REGISTRO', tipo: '0.60m x 0.60m (24" x 24")', cantidad: 0 },
+                { desc: 'BUZON',            tipo: 'D=1.20m',                    cantidad: 0 },
+                { desc: 'FINAL',            tipo: '0.60m x 0.60m (24" x 24")', cantidad: 0 },
+                { desc: 'CONC.',            tipo: '0.50m x 0.80m x 0.50m',     cantidad: 0 },
+            ];
+            const validDims = summary.slice(0, 4).map(s => s.tipo);
+            allRows.forEach((row: any) => {
+                const dim   = (row.dimensionescaja || '').trim();
+                const label = (row.tramocajalabel  || '').trim();
+                if (!dim) return;
+                if (dim === 'D=1.20m') {
+                    const r = summary.find(s => s.desc === 'BUZON'); if (r) r.cantidad++;
+                } else if (dim === '0.50m x 0.80m x 0.50m') {
+                    const r = summary.find(s => s.desc === 'CONC.'); if (r) r.cantidad++;
+                } else if (dim === '0.60m x 0.60m (24" x 24")' && (label.includes('FINAL'))) {
+                    const r = summary.find(s => s.desc === 'FINAL'); if (r) r.cantidad++;
+                } else if (validDims.includes(dim)) {
+                    const r = summary.find(s => s.desc === 'CAJA DE REGISTRO' && s.tipo === dim);
+                    if (r) r.cantidad++;
+                }
+            });
+            return summary;
+        }
+
+        function cjFill(r: number, argb: string, h = 17) {
+            wsCajas.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CJ_BLANC } };
+            for (let c = 2; c <= CJ; c++)
+                wsCajas.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+            wsCajas.getRow(r).height = h;
+        }
+
+        function cjCell(r: number, c: number, val: any, opts: {
+            bold?: boolean; size?: number; bg?: string;
+            halign?: ExcelJS.Alignment['horizontal']; numFmt?: string; border?: 'T' | 'M';
+        } = {}) {
+            const cell = wsCajas.getCell(r, c);
+            cell.value = val ?? null;
+            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial', color: { argb: CJ_NEGRO } };
+            if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
+            cell.alignment = { horizontal: opts.halign ?? 'center', vertical: 'middle', wrapText: c === CJ };
+            const b = opts.border === 'M' ? cjM : cjT;
+            cell.border = {
+                top: b, bottom: b,
+                left:  c === 2 ? (opts.border === 'M' ? cjM : cjT) : cjT,
+                right: c === CJ ? (opts.border === 'M' ? cjM : cjT) : cjT,
+            };
+            if (opts.numFmt) cell.numFmt = opts.numFmt;
+        }
+
+        const cajasRaw: Record<string, any[]> = dataSheet['colector'] || {};
+        // Si ya existe dataSheet.cajas usamos eso (tiene CT/CF editados por usuario)
+        const cajasEdited: Record<string, any[]> = dataSheet['cajas'] || {};
+
+        const cajGrades = [
+            { key: 'inicial',    label: 'INICIAL'    },
+            { key: 'primaria',   label: 'PRIMARIA'   },
+            { key: 'secundaria', label: 'SECUNDARIA' },
+        ].filter(g => gradesActive[g.key]);
+
+        let cjr = 1;
+
+        // Título general
+        cjFill(cjr, CJ_VERDE, 24);
+        wsCajas.mergeCells(cjr, 2, cjr, CJ);
+        const cajTitulo = wsCajas.getCell(cjr, 2);
+        cajTitulo.value = 'ANEXO 09. CAJAS DE REGISTRO';
+        cajTitulo.font  = { bold: true, size: 12, name: 'Arial', color: { argb: CJ_NEGRO } };
+        cajTitulo.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: CJ_VERDE } };
+        cajTitulo.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        cajTitulo.border = { top: cjM, left: cjM, bottom: cjM, right: cjM };
+        cjr++;
+
+        cajGrades.forEach(({ key, label }) => {
+            // Datos dinámicos: preferir cajas editadas, sino derivar del colector
+            const editedRows: any[] = Array.isArray(cajasEdited[key]) ? cajasEdited[key] : [];
+            const colectorRows: any[] = Array.isArray(cajasRaw[key]) ? cajasRaw[key] : [];
+            const dynamicRows = editedRows.length > 0
+                ? editedRows.filter((r: any) => !r.isStatic)
+                : transformColectorToCajas(colectorRows);
+            const staticRows  = getCajasStaticRows();
+            const allRows     = [...dynamicRows, ...staticRows];
+
+            // Separador
+            cjFill(cjr, CJ_BLANC, 6); cjr++;
+
+            // Encabezado grado
+            cjFill(cjr, CJ_HDR[key], 22);
+            wsCajas.mergeCells(cjr, 2, cjr, CJ);
+            const grHdr = wsCajas.getCell(cjr, 2);
+            grHdr.value = `ANEXO 09. CAJAS DE REGISTRO — ${label}`;
+            grHdr.font  = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } };
+            grHdr.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: CJ_HDR[key] } };
+            grHdr.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            grHdr.border = { top: cjM, left: cjM, bottom: cjM, right: cjM };
+            cjr++;
+
+            // Cabecera columnas
+            cjFill(cjr, CJ_AMAR, 18);
+            ['N°', 'TRAMO', 'CT (m)', 'CF (m)', 'H (m)', 'DIMENSIONES'].forEach((txt, i) => {
+                cjCell(cjr, i + 2, txt, { bold: true, size: 9, bg: CJ_AMAR, border: 'M' });
+            });
+            cjr++;
+
+            // Filas de datos
+            allRows.forEach((row: any, idx: number) => {
+                const isStatic = row.isStatic ?? false;
+                const bg = isStatic ? CJ_STAT : (idx % 2 === 0 ? CJ_BLANC : CJ_ALT);
+                cjFill(cjr, bg, 17);
+                cjCell(cjr, 2, row.tramocajalabel  ?? '',   { bg, halign: 'left'   });
+                cjCell(cjr, 3, row.tramocajavalue  ?? '',   { bg });
+                cjCell(cjr, 4, row.ctcaja          ?? 0,    { bg, numFmt: '0.00'   });
+                cjCell(cjr, 5, row.cfcaja          ?? 0,    { bg, numFmt: '0.00'   });
+                cjCell(cjr, 6, row.hcaja           ?? 0,    { bg, numFmt: '0.00'   });
+                cjCell(cjr, 7, row.dimensionescaja ?? '',   { bg, halign: 'left'   });
+                cjr++;
+            });
+
+            // ── Resumen de tipos ──────────────────────────────────────────────
+            // Separador antes del resumen
+            cjFill(cjr, CJ_BLANC, 6); cjr++;
+
+            const resumen = buildResumen(allRows);
+            const totalCajas = resumen.reduce((s, r) => s + r.cantidad, 0);
+
+            // Título resumen
+            cjFill(cjr, 'FFF2F2F2', 16);
+            wsCajas.mergeCells(cjr, 2, cjr, CJ);
+            const resHdr = wsCajas.getCell(cjr, 2);
+            resHdr.value = 'RESUMEN — TIPOS DE CAJAS DE REGISTRO';
+            resHdr.font  = { bold: true, size: 9, name: 'Arial', color: { argb: CJ_NEGRO } };
+            resHdr.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+            resHdr.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            resHdr.border = { top: cjM, left: cjM, bottom: cjM, right: cjM };
+            cjr++;
+
+            // Cabecera resumen (cols 2-4: TIPO | DIMENSIONES | N°)
+            cjFill(cjr, CJ_AMAR, 16);
+            ['TIPO DE CAJA', 'DIMENSIONES', 'N°'].forEach((txt, i) => {
+                // TIPO ocupa cols 2-4, DIMENSIONES ocupa cols 5-6, N° ocupa col 7
+                const colMap = [2, 5, 7];
+                cjCell(cjr, colMap[i], txt, { bold: true, size: 9, bg: CJ_AMAR, border: 'M',
+                    halign: i < 2 ? 'left' : 'center' });
+            });
+            // Merge TIPO cols 2-4 y DIMENSIONES cols 5-6
+            wsCajas.mergeCells(cjr, 2, cjr, 4);
+            wsCajas.mergeCells(cjr, 5, cjr, 6);
+            cjr++;
+
+            resumen.forEach((item, idx) => {
+                const bg = idx % 2 === 0 ? CJ_BLANC : CJ_ALT;
+                cjFill(cjr, bg, 17);
+                wsCajas.mergeCells(cjr, 2, cjr, 4);
+                wsCajas.mergeCells(cjr, 5, cjr, 6);
+                cjCell(cjr, 2, item.desc,      { bg, halign: 'left' });
+                cjCell(cjr, 5, item.tipo,      { bg, halign: 'left' });
+                cjCell(cjr, 7, item.cantidad,  { bg, numFmt: '0' });
+                cjr++;
+            });
+
+            // Fila TOTAL resumen
+            cjFill(cjr, CJ_TOT, 18);
+            wsCajas.mergeCells(cjr, 2, cjr, 6);
+            cjCell(cjr, 2, 'TOTAL', { bold: true, bg: CJ_TOT, halign: 'right', border: 'M' });
+            cjCell(cjr, 7, totalCajas, { bold: true, bg: CJ_TOT, numFmt: '0', border: 'M' });
+            cjr++;
+
+            // Separador final del grado
+            cjFill(cjr, CJ_BLANC, 8); cjr++;
         });
+
+        
 
         // ========== HOJA 4: UNIDADES DE VENTILACIÓN ==========
         const wsUV = workbook.addWorksheet('Ventilación');
-        wsUV.columns = [ { width: 30 }, { width: 18 }, { width: 15 }, { width: 25 } ];
-        paintTitle(wsUV, 4, 'UNIDADES DE VENTILACIÓN');
-        paintHeaders(wsUV, ['DESCRIPCIÓN', 'DIÁMETRO (mm)', 'CANTIDAD', 'UBICACIÓN']);
-        const uvData = dataSheet['uv'] || {};
-        let rowUV = 4;
-        Object.entries(uvData).forEach(([key, value]: [string, any]) => {
-            if (!value) return;
-            const r = wsUV.getRow(rowUV);
-            r.getCell(1).value = key;
-            r.getCell(2).value = value.diametro  || '';
-            r.getCell(3).value = value.cantidad  || 0;
-            r.getCell(4).value = value.ubicacion || '';
-            applyRowStyle(r, 4, [2, 3]);
-            rowUV++;
+        wsUV.columns = [
+            {width: 3 }, // 1 spacer
+            {width: 28}, // 2 NIVEL
+            {width: 32}, // 3 DESCRIPCION
+            {width: 10}, // 4 INODORO
+            {width: 10}, // 5 URINARIO
+            {width: 10}, // 6 LAVATORIO
+            {width: 10}, // 7 DUCHA
+            {width: 10}, // 8 LAVADERO
+            {width: 10}, // 9 SUMIDERO
+            {width: 10}, // 10 TOTAL UD
+            {width: 10}, // 11 Ø VENT.
+        ];
+
+        const UV  = 11;
+        const uvT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
+        const uvM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF999933' } };
+        const UV_BLANC = 'FFFFFFFF';
+        const UV_VERDE = 'FF92D050';
+        const UV_AMAR  = 'FFFFFF99';
+        const UV_ALT   = 'FFE8F0FB';
+        const UV_MOD   = 'FFEEF2FF'; // fondo módulo (lila muy suave)
+        const UV_TOT   = 'FFFFCC00';
+        const UV_NEGRO = 'FF000000';
+        const UV_ROJO  = 'FFCC0000';
+        const UV_HDR: Record<string, string> = {
+            inicial: 'FF1B5E20', primaria: 'FF0D47A1', secundaria: 'FF4A148C',
+        };
+        const ACC_KEYS   = ['inodoro','urinario','lavatorio','ducha','lavadero','sumidero'];
+        const ACC_LABELS = ['INODORO','URINARIO','LAVATORIO','DUCHA','LAVADERO','SUMIDERO'];
+        const DEFAULT_MULTS_UV: Record<string,number> = {
+            inodoro:4, urinario:4, lavatorio:2, ducha:4, lavadero:3, sumidero:2
+        };
+
+        function uvFill(r: number, argb: string, h = 17) {
+            wsUV.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: UV_BLANC } };
+            for (let c = 2; c <= UV; c++)
+                wsUV.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+            wsUV.getRow(r).height = h;
+        }
+
+        function uvCell(r: number, c: number, val: any, opts: {
+            bold?: boolean; size?: number; bg?: string; color?: string;
+            halign?: ExcelJS.Alignment['horizontal']; numFmt?: string; border?: 'T'|'M';
+        } = {}) {
+            const cell = wsUV.getCell(r, c);
+            cell.value = val ?? null;
+            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial',
+                           color: { argb: opts.color ?? UV_NEGRO } };
+            if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
+            cell.alignment = { horizontal: opts.halign ?? 'center', vertical: 'middle', wrapText: false };
+            const b = opts.border === 'M' ? uvM : uvT;
+            cell.border = { top: b, bottom: b, left: c === 2 ? b : uvT, right: c === UV ? b : uvT };
+            if (opts.numFmt) cell.numFmt = opts.numFmt;
+        }
+
+        // Aplanar arbol de nodos UV para exportar
+        function flattenUvRows(rows: any[], depth = 0): { row: any; depth: number}[] {
+            const out: { row: any; depth: number }[] = [];
+            (rows || []).forEach((r: any) => {
+                out.push({ row: r, depth });
+                if (r._childrean?.length) out.push(...flattenUvRows(r._children, depth + 1));
+            });
+            return out; 
+        }
+
+        const uvRaw     = dataSheet['uv'] || {};
+        const dimRows:  any[] = Array.isArray(uvRaw.dimensionRows) ? uvRaw.dimensionRows : [];
+        const uvGrades: Record<string, any[]> = uvRaw.gradeData || {};
+
+        const uvActiveGrades = [
+            { key: 'inicial',    label: 'INICIAL'    },
+            { key: 'primaria',   label: 'PRIMARIA'   },
+            { key: 'secundaria', label: 'SECUNDARIA' },
+        ].filter(g => gradesActive[g.key]);
+
+        let uvr = 1;
+
+        // ── Título general
+        uvFill(uvr, UV_VERDE, 24);
+        wsUV.mergeCells(uvr, 2, uvr, UV);
+        const uvTit = wsUV.getCell(uvr, 2);
+        uvTit.value = 'ANEXO 10. CÁLCULO DE LAS VENTILACIONES';
+        uvTit.font = {bold: true, size: 12, name: 'Arial', color: { argb: UV_NEGRO }};
+        uvTit.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: UV_VERDE }};
+        uvTit.alignment = {horizontal: 'left', vertical: 'middle', indent: 1};
+        uvTit.border = {top: uvM, left: uvM, bottom: uvM, right: uvM };
+        uvr++;
+
+        // Separador
+        uvFill(uvr, UV_BLANC, 6); uvr++;
+
+        // Tabla de dimensiones
+        //Encabezado tabla dimensiones
+        uvFill(uvr, UV_AMAR, 18);
+        wsUV.mergeCells(uvr, 2, uvr, UV);
+        const dimTit = wsUV.getCell(uvr, 2);
+        dimTit.value = 'DIMENSIONES DE LOS TUBOS DE VENTILACIÓN';
+        dimTit.font  = { bold: true, size: 10, name: 'Arial', color: { argb: UV_NEGRO } };
+        dimTit.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: UV_AMAR } };
+        dimTit.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        dimTit.border = { top: uvM, left: uvM, bottom: uvM, right: uvM };
+        uvr++;
+
+        // Cabecera columnas dimensionales
+        uvFill(uvr, UV_AMAR, 16);
+        ['DIÁMETRO DESAGÜE', 'TIPO', '2"', '3"', '4"'].forEach((txt, i) => {
+            uvCell(uvr, i + 2, txt, { bold: true, size: 9, bg: UV_AMAR, border: 'M',
+                halign: i < 2 ? 'left' : 'center' });
         });
+        // Rellenar cols 7-11 vacías con fondo amarillo
+        for (let c = 7; c <= UV; c++) uvCell(uvr, c, null, { bg: UV_AMAR, border: 'M' });
+        uvr++;
+
+        if (dimRows.length === 0) {
+            uvFill(uvr, UV_BLANC, 17);
+            for (let c = 2; c <= UV; c++) uvCell(uvr, c, '', { bg: UV_BLANC });
+            uvr++;
+        } else {
+            dimRows.forEach((dr: any, idx: number) => {
+                const bg = idx % 2 === 0 ? UV_BLANC : UV_ALT;
+                uvFill(uvr, bg, 17);
+                uvCell(uvr, 2, dr.diametro ?? '', { bg, halign: 'left' });
+                uvCell(uvr, 3, dr.tipo     ?? '', { bg, halign: 'left' });
+                uvCell(uvr, 4, dr.size2    ?? '', { bg });
+                uvCell(uvr, 5, dr.size3    ?? '', { bg });
+                uvCell(uvr, 6, dr.size4    ?? '', { bg });
+                for (let c = 7; c <= UV; c++) uvCell(uvr, c, null, { bg });
+                uvr++;
+            });
+        }
+
+        // Tablas por grado
+        uvActiveGrades.forEach(({ key, label }) => {
+            const gradeRows: any[] = Array.isArray(uvGrades[key]) ? uvGrades[key] : [];
+            const flat = flattenUvRows(gradeRows);
+
+            // Separador entre grados
+            uvFill(uvr, UV_BLANC, 6); uvr++;
+
+            // Encabezado grado
+            uvFill(uvr, UV_HDR[key], 22);
+            wsUV.mergeCells(uvr, 2, uvr, UV);
+            const grH = wsUV.getCell(uvr, 2);
+            grH.value = `APARATOS VENTILADOS — ${label}`;
+            grH.font  = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } };
+            grH.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: UV_HDR[key] } };
+            grH.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            grH.border = { top: uvM, left: uvM, bottom: uvM, right: uvM };
+            uvr++;
+
+            // Cabecera columnas
+            uvFill(uvr, UV_AMAR, 18);
+            ['NIVEL', 'DESCRIPCIÓN', ...ACC_LABELS, 'TOTAL UD', 'Ø VENT.'].forEach((txt, i) => {
+                uvCell(uvr, i + 2, txt, { bold: true, size: 9, bg: UV_AMAR, border: 'M',
+                    halign: i < 2 ? 'left' : 'center' });
+            });
+            uvr++;
+
+            const dataStart = uvr;
+            if (flat.length === 0) {
+                uvFill(uvr, UV_BLANC, 17);
+                for (let c = 2; c <= UV; c++) uvCell(uvr, c, '', { bg: UV_BLANC });
+                uvr++;
+            } else {
+                flat.forEach(({ row, depth }: { row: any; depth: number }, idx: number) => {
+                    const isMod = row.tipo === 'module';
+                    const bg = isMod ? UV_MOD : (idx % 2 === 0 ? UV_BLANC : UV_ALT);
+                    uvFill(uvr, bg, isMod ? 18 : 17);
+
+                    // Columna 2 NIVEL con indentificado por profundidad
+                    const nivelCell = wsUV.getCell(uvr, 2);
+                    nivelCell.value = row.nivel ?? '';
+                    nivelCell.font  = { bold: isMod, size: 9, name: 'Arial',
+                                       color: { argb: isMod ? UV_ROJO : UV_NEGRO } };
+                    nivelCell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+                    nivelCell.alignment = { horizontal: 'left', vertical: 'middle',
+                                           indent: depth * 2 };
+                    nivelCell.border = { top: uvT, bottom: uvT, left: uvM, right: uvT };
+
+                    // Col 3 DESCRIPCIÓN
+                    uvCell(uvr, 3, row.descripcion ?? '', { bg, halign: 'left' });
+
+                    // Cols 4-9 accesorios — solo en no-módulo
+                    ACC_KEYS.forEach((key, i) => {
+                        const val = isMod ? null : (parseFloat(row[`acc_${key}`]) || null);
+                        uvCell(uvr, 4 + i, val, { bg, numFmt: val !== null ? '0' : undefined });
+                    });
+
+
+                    // Col 10 Total UD
+                    const totalUD = parseFloat(row.totalUD) || null;
+                    uvCell(uvr, 10, totalUD, { bg, bold: true,
+                        color: totalUD ? 'FF1D4ED8' : UV_NEGRO,
+                        numFmt: totalUD !== null ? '0.00' : undefined });
+
+                    // Col 11 Ø Ventilación
+                    uvCell(uvr, 11, row.diametroVentilacion ?? '', { bg,
+                        color: 'FF0F766E', bold: !!row.diametroVentilacion });
+
+                    uvr++;
+                });
+            }
+
+             // Fila TOTAL del grado
+            uvFill(uvr, UV_TOT, 20);
+            wsUV.mergeCells(uvr, 2, uvr, 9);
+            uvCell(uvr, 2, `TOTAL UD — ${label}`, { bold: true, size: 10, bg: UV_TOT,
+                halign: 'right', border: 'M' });
+            // SUM de col J (totalUD) sobre todas las filas de datos
+            uvCell(uvr, 10,
+                flat.length > 0 ? { formula: `SUM(J${dataStart}:J${uvr - 1})` } : 0,
+                { bold: true, bg: UV_TOT, numFmt: '0.00', border: 'M' });
+            uvCell(uvr, 11, null, { bg: UV_TOT, border: 'M' });
+            uvr++;
+        });
+
+        // Separador final
+        uvFill(uvr, UV_BLANC, 6); uvr++;
+
 
         // ========== HOJA 5: TRAMPA DE GRASA ==========
         const wsTrampa = workbook.addWorksheet('Trampa de Grasa');
@@ -601,6 +1047,7 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
             if (typeof valor === 'number') r.getCell(2).numFmt = '0';
             rowTrampa++;
         });
+
 
         // ========== GENERAR ARCHIVO ==========
         const buffer = await workbook.xlsx.writeBuffer();
