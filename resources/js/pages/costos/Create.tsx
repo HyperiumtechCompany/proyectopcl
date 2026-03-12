@@ -12,16 +12,19 @@ const MODULE_LABELS: Record<string, string> = {
     metrado_comunicaciones: 'Comunicaciones', metrado_gas: 'Gas',
     crono_general: 'Cronograma General', crono_valorizado: 'Cronograma Valorizado',
     crono_materiales: 'Cronograma Materiales',
+    presupuesto: 'Presupuesto',
+    // Legacy modules (hidden from UI but kept for compatibility)
     presupuesto_gg: 'Gastos Generales', presupuesto_insumos: 'Insumos',
     presupuesto_remuneraciones: 'Remuneraciones', presupuesto_acus: 'ACUs',
-    presupuesto_indice: 'Índice', etts: 'ETTs',
+    presupuesto_indice: 'Índice', 
+    etts: 'ETTs',
 };
 
 const MODULE_GROUPS = [
-    { label: 'Metrados', prefix: 'metrado_' },
-    { label: 'Cronogramas', prefix: 'crono_' },
-    { label: 'Presupuesto', prefix: 'presupuesto_' },
-    { label: 'ETTs', prefix: 'etts' },
+    { label: 'Metrados', prefix: 'metrado_', exact: false },
+    { label: 'Cronogramas', prefix: 'crono_', exact: false },
+    { label: 'Presupuesto', prefix: 'presupuesto', exact: true },
+    { label: 'ETTs', prefix: 'etts', exact: true },
 ];
 
 export default function Create() {
@@ -202,7 +205,20 @@ export default function Create() {
                         <p className="text-sm text-gray-500 dark:text-gray-400">Elige los módulos que utilizará este proyecto.</p>
 
                         {MODULE_GROUPS.map(g => {
-                            const items = moduleTypes.filter(m => m.startsWith(g.prefix));
+                            // Filter modules based on prefix and exact match flag
+                            let items: string[];
+                            
+                            if (g.exact) {
+                                // Exact match: only show if module name equals prefix exactly
+                                items = moduleTypes.filter(m => m === g.prefix);
+                            } else {
+                                // Prefix match: show all modules that start with prefix
+                                items = moduleTypes.filter(m => m.startsWith(g.prefix));
+                            }
+                            
+                            // Skip if no items
+                            if (items.length === 0) return null;
+                            
                             return (
                                 <div key={g.label} className="rounded-md border border-gray-200 p-4 dark:border-gray-700">
                                     <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{g.label}</h3>

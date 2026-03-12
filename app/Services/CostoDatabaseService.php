@@ -109,4 +109,62 @@ class CostoDatabaseService
 
         return count($result) > 0;
     }
+
+    /**
+     * Create the presupuesto module tables in the tenant database.
+     *
+     * This method runs the specific migration for the unified presupuesto module,
+     * creating all six tables: presupuesto_general, presupuesto_acus,
+     * presupuesto_gastos_generales, presupuesto_insumos, presupuesto_remuneraciones,
+     * and presupuesto_indices.
+     *
+     * @param string $databaseName The tenant database name
+     * @return void
+     */
+    public function createPresupuestoTables(string $databaseName): void
+    {
+        $this->setTenantConnection($databaseName);
+
+        // Verify connection works before running migrations
+        DB::connection('costos_tenant')->getPdo();
+
+        // Run the specific presupuesto migration
+        Artisan::call('migrate', [
+            '--database' => 'costos_tenant',
+            '--path' => 'database/migrations/costos_tenant/2026_03_07_000001_create_presupuesto_unificado_tables.php',
+            '--force' => true,
+        ]);
+
+        Log::info("CostoDatabaseService: Created presupuesto tables on [{$databaseName}]", [
+            'output' => Artisan::output(),
+        ]);
+
+        // Auto-seed the insumos catalog (clases + productos)
+        $this->seedInsumosCatalog($databaseName);
+    }
+
+    /**
+     * Seed the insumos catalog (clases and productos) in the tenant database.
+     * Called automatically after creating presupuesto tables.
+     */
+    public function seedInsumosCatalog(string $databaseName): void
+    {
+        $this->setTenantConnection($databaseName);
+
+        try {
+            Artisan::call('db:seed', [
+                '--class' => 'Database\\Seeders\\InsumoProductoSeeder',
+                '--force' => true,
+            ]);
+
+            Log::info("CostoDatabaseService: Seeded insumos catalog on [{$databaseName}]", [
+                'output' => Artisan::output(),
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("CostoDatabaseService: Failed to seed insumos on [{$databaseName}]", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 }

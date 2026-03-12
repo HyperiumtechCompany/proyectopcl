@@ -1,30 +1,11 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import {
-    BookOpen,
-    CloudCogIcon,
-    Droplet,
-    Folder,
-    LayoutGrid,
-    Users,
-    Zap,
-    Waves,
-} from 'lucide-react';
+import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { useCurrentUrl } from '@/hooks/use-current-url';
-import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarGroup,
-    SidebarGroupLabel,
-    SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import type { NavItem, Auth } from '@/types';
 import AppLogo from './app-logo';
@@ -77,18 +58,13 @@ export function AppSidebar() {
             href: '/desague-calculation',
             icon: Waves,
         },
-        {
-            title: 'Proyectos',
-            href: '#',
-            icon: Folder,
-        },
     ];
 
     // items specific to the "metrados" section; additional modules can be added here
     const metradosNavItems: NavItem[] = [
         {
-            title: 'Comunicaciones',
-            href: '/metrados/comunicacion',
+            title: 'Costos',
+            href: '/costos',
             icon: Folder,
         },
         // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },

@@ -20,9 +20,12 @@ const MODULE_LABELS: Record<string, string> = {
     metrado_comunicaciones: 'Comunicaciones', metrado_gas: 'Gas',
     crono_general: 'Cronograma General', crono_valorizado: 'Cronograma Valorizado',
     crono_materiales: 'Cronograma Materiales',
+    presupuesto: 'Presupuesto',
+    // Legacy modules (for compatibility)
     presupuesto_gg: 'Gastos Generales', presupuesto_insumos: 'Insumos',
     presupuesto_remuneraciones: 'Remuneraciones', presupuesto_acus: 'ACUs',
-    presupuesto_indice: 'Índice', etts: 'ETTs',
+    presupuesto_indice: 'Índice', 
+    etts: 'ETTs',
 };
 
 const MODULE_ICONS: Record<string, string> = {
@@ -96,12 +99,19 @@ export default function Show() {
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <h2 className="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Módulos Habilitados</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {project.modules.map(m => (
-                            <Link key={m} href={`/costos/${project.id}/module/${m}`} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer">
-                                <span className="text-lg">{getIcon(m)}</span>
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{MODULE_LABELS[m] || m}</span>
-                            </Link>
-                        ))}
+                        {project.modules.map(m => {
+                            // Special handling for unified presupuesto module
+                            const href = m === 'presupuesto' 
+                                ? `/costos/proyectos/${project.id}/presupuesto`
+                                : `/costos/${project.id}/module/${m}`;
+                            
+                            return (
+                                <Link key={m} href={href} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer">
+                                    <span className="text-lg">{getIcon(m)}</span>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{MODULE_LABELS[m] || m}</span>
+                                </Link>
+                            );
+                        })}
                     </div>
                     <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">Los módulos se activarán conforme se implementen en fases posteriores.</p>
                 </div>

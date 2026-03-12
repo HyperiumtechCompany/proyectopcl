@@ -18,7 +18,8 @@ class SetCostosDatabase
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $project = $request->route('costoProject');
+        // Support both route parameter names used in costos routes.
+        $project = $request->route('costoProject') ?? $request->route('project');
 
         if (! $project instanceof CostoProject) {
             $project = CostoProject::findOrFail($project);

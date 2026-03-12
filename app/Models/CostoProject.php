@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CostoProject extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'user_id',
         'nombre',
@@ -49,14 +51,16 @@ class CostoProject extends Model
         'crono_general',
         'crono_valorizado',
         'crono_materiales',
-        // Presupuesto
+        // Presupuesto Unificado (nuevo)
+        'presupuesto',
+        // ETTs
+        'etts',
+        // Presupuesto Legacy (mantener para compatibilidad)
         'presupuesto_gg',
         'presupuesto_insumos',
         'presupuesto_remuneraciones',
         'presupuesto_acus',
         'presupuesto_indice',
-        // ETTs
-        'etts',
     ];
 
     // ─── Relations ───────────────────────────────────────────────────────────────
@@ -93,4 +97,35 @@ class CostoProject extends Model
     {
         return $this->modules()->where('module_type', $moduleType)->where('enabled', true)->exists();
     }
+
+    /**
+     * Check if the project uses the unified presupuesto module.
+     */
+    public function hasUnifiedPresupuesto(): bool
+    {
+        return $this->hasModule('presupuesto');
+    }
+
+    /**
+     * Check if the project uses any legacy presupuesto modules.
+     */
+    public function hasLegacyPresupuesto(): bool
+    {
+        $legacyModules = [
+            'presupuesto_gg',
+            'presupuesto_insumos',
+            'presupuesto_remuneraciones',
+            'presupuesto_acus',
+            'presupuesto_indice',
+        ];
+
+        foreach ($legacyModules as $module) {
+            if ($this->hasModule($module)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 }
