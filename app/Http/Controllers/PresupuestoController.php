@@ -1,0 +1,1109 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\CostoProject;
+use App\Services\CostoDatabaseService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class PresupuestoController extends Controller
+{
+    /**
+     * Cache por-request de existencia de columnas en DB tenant.
+     *
+     * @var array<string, bool>
+     */
+    private array $tenantColumnCache = [];
+
+    /**
+     * Mapping: subsection → tenant table name
+     */
+    private const SUBSECTION_TABLE_MAP = [
+        'general' => 'presupuesto_general',
+        'acus' => 'presupuesto_acus',
+        'gastos_generales' => 'presupuesto_gastos_generales',
+        'insumos' => 'presupuesto_insumos',
+        'remuneraciones' => 'presupuesto_remuneraciones',
+        'indices' => 'presupuesto_indices',
+    ];
+
+    /**
+     * Labels for each subsection
+     */
+    private const SUBSECTION_LABELS = [
+        'general' => 'Presupuesto General',
+        'acus' => 'Análisis de Costos Unitarios',
+        'gastos_generales' => 'Gastos Generales',
+        'insumos' => 'Insumos',
+        'remuneraciones' => 'Remuneraciones',
+        'indices' => 'Fórmula Polinómica',
+    ];
+
+    public function __construct(
+        protected CostoDatabaseService $dbService
+    ) {}
+
+    /**
+     * Muestra la vista principal del módulo presupuesto
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/{subsection?}
+     */
+    public function index(CostoProject $project, string $subsection = 'general'): Response
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $this->validateSubsection($subsection);
+
+        $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
+
+        // Read rows from the tenant DB
+        $rows = $this->getOrderedRows($tableName)
+            ->map(fn($row) => (array)$row)
+            ->toArray();
+
+        return Inertia::render('costos/presupuesto/Index', [
+            'project' => [
+                'id' => $project->id,
+                'nombre' => $project->nombre,
+            ],
+            'subsection' => $subsection,
+            'subsectionLabel' => self::SUBSECTION_LABELS[$subsection],
+            'tableName' => $tableName,
+            'rows' => $rows,
+            'availableSubsections' => $this->getAvailableSubsections(),
+            'availableMetrados' => $this->getAvailableMetrados($project),
+        ]);
+    }
+
+    /**
+     * Obtiene datos de una sub-sección específica
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/{subsection}/data
+     */
+    public function show(CostoProject $project, string $subsection): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $this->validateSubsection($subsection);
+
+        $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
+
+        $rows = $this->getOrderedRows($tableName)
+            ->map(fn($row) => (array)$row)
+            ->toArray();
+
+        return response()->json([
+            'success' => true,
+            'subsection' => $subsection,
+            'rows' => $rows,
+        ]);
+    }
+
+    /**
+     * Actualiza datos de una sub-sección
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/{subsection}
+     */
+    public function update(
+        CostoProject $project,
+        string $subsection,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $this->validateSubsection($subsection);
+
+        $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
+        $rows = $request->input('rows', []);
+
+        // Validate input data based on subsection type
+        $validationErrors = $this->validateRowsForSubsection($subsection, $rows);
+        if (!empty($validationErrors)) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validationErrors,
+            ], 422);
+        }
+
+        $connection = DB::connection('costos_tenant');
+        $connection->beginTransaction();
+
+        try {
+            // Strategy: clear + re-insert (simple for spreadsheet-like data)
+            // Avoid TRUNCATE because it performs an implicit commit in MySQL,
+            // which would end the transaction and break rollback handling.
+            $connection->table($tableName)->delete();
+
+            foreach ($rows as $index => $row) {
+                // Clean and prepare row data
+                $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index);
+
+                $connection->table($tableName)->insert($cleanedRow);
+            }
+
+            $connection->commit();
+
+            // Fetch updated data to return
+            $updatedRows = $this->getOrderedRows($tableName)
+                ->map(fn($row) => (array)$row)
+                ->toArray();
+
+            return response()->json([
+                'success' => true,
+                'count' => count($rows),
+                'rows' => $updatedRows,
+            ]);
+        } catch (\Exception $e) {
+            if ($connection->transactionLevel() > 0) {
+                $connection->rollBack();
+            }
+            Log::error("Error saving presupuesto data", [
+                'subsection' => $subsection,
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Importa estructura de partidas desde metrado
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/import-metrado
+     */
+    public function importFromMetrado(
+        CostoProject $project,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        // Validate request
+        $validated = $request->validate([
+            'metrado_type' => 'required|string|in:metrado_arquitectura,metrado_estructura,metrado_sanitarias,metrado_electricas,metrado_comunicaciones,metrado_gas',
+        ]);
+
+        $metradoType = $validated['metrado_type'];
+
+        // Validate that the requested metrado module is enabled
+        if (!$project->hasModule($metradoType)) {
+            return response()->json([
+                'success' => false,
+                'message' => "El módulo {$metradoType} no está habilitado en este proyecto.",
+            ], 422);
+        }
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            // Query the metrado table for partida structure
+            $metradoQuery = DB::connection('costos_tenant')
+                ->table($metradoType)
+                ->select('partida', 'descripcion', 'unidad', 'total')
+                ->whereNotNull('partida')
+                ->where('partida', '!=', '');
+            if ($this->hasTenantColumn($metradoType, 'item_order')) {
+                $metradoQuery->orderBy('item_order');
+            }
+            if ($this->hasTenantColumn($metradoType, 'id')) {
+                $metradoQuery->orderBy('id');
+            }
+            $metradoRows = $metradoQuery->get();
+
+            $createdCount = 0;
+            $updatedCount = 0;
+
+            foreach ($metradoRows as $metradoRow) {
+                // Check if partida already exists in presupuesto_general
+                $existingPartida = DB::connection('costos_tenant')
+                    ->table('presupuesto_general')
+                    ->where('partida', $metradoRow->partida)
+                    ->first();
+
+                if ($existingPartida) {
+                    // Update only metrado field, preserve prices
+                    DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->where('partida', $metradoRow->partida)
+                        ->update([
+                            'metrado' => $metradoRow->total,
+                            'metrado_source' => $metradoType,
+                            'updated_at' => now(),
+                        ]);
+                    $updatedCount++;
+                } else {
+                    // Create new partida
+                    $insertData = [
+                        'partida' => $metradoRow->partida,
+                        'descripcion' => $metradoRow->descripcion ?? '',
+                        'unidad' => $metradoRow->unidad ?? '',
+                        'metrado' => $metradoRow->total,
+                        'precio_unitario' => 0,
+                        'metrado_source' => $metradoType,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    if ($this->hasTenantColumn('presupuesto_general', 'item_order')) {
+                        $insertData['item_order'] = 0;
+                    }
+
+                    DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->insert($insertData);
+                    $createdCount++;
+                }
+            }
+
+            DB::connection('costos_tenant')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Importación completada exitosamente',
+                'summary' => [
+                    'created' => $createdCount,
+                    'updated' => $updatedCount,
+                    'total' => $createdCount + $updatedCount,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error("Error importing metrado", [
+                'metrado_type' => $metradoType,
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al importar metrado: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Calcula o recalcula un ACU específico
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/acus/calculate
+     */
+    public function calculateACU(
+        CostoProject $project,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        // Ensure tenant schema has required ACU columns (for legacy tenant DBs)
+        $this->ensureAcuSchema();
+
+        // Validate request data
+        $validated = $request->validate([
+            'id' => 'nullable|integer',
+            'partida' => 'required|string|max:50',
+            'descripcion' => 'required|string',
+            'unidad' => 'required|string|max:20',
+            'rendimiento' => 'required|numeric|min:0.0001',
+            'mano_de_obra' => 'nullable|array',
+            'mano_de_obra.*.descripcion' => 'required|string',
+            'mano_de_obra.*.unidad' => 'required|string|max:20',
+            'mano_de_obra.*.cantidad' => 'required|numeric|min:0',
+            'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
+            'materiales' => 'nullable|array',
+            'materiales.*.descripcion' => 'required|string',
+            'materiales.*.unidad' => 'required|string|max:20',
+            'materiales.*.cantidad' => 'required|numeric|min:0',
+            'materiales.*.precio_unitario' => 'required|numeric|min:0',
+            'materiales.*.factor_desperdicio' => 'nullable|numeric|min:1',
+            'equipos' => 'nullable|array',
+            'equipos.*.descripcion' => 'required|string',
+            'equipos.*.unidad' => 'required|string|max:20',
+            'equipos.*.cantidad' => 'required|numeric|min:0',
+            'equipos.*.precio_hora' => 'required|numeric|min:0',
+        ]);
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            $rendimiento = $validated['rendimiento'];
+
+            // Calculate mano de obra costs
+            $manoDeObra = $validated['mano_de_obra'] ?? [];
+            $costoManoObra = 0;
+            foreach ($manoDeObra as &$componente) {
+                // Formula: (cantidad * precio_unitario) / rendimiento
+                $parcial = ($componente['cantidad'] * $componente['precio_unitario']) / $rendimiento;
+                $componente['parcial'] = round($parcial, 2);
+                $costoManoObra += $componente['parcial'];
+            }
+            $costoManoObra = round($costoManoObra, 2);
+
+            // Calculate materiales costs
+            $materiales = $validated['materiales'] ?? [];
+            $costoMateriales = 0;
+            foreach ($materiales as &$componente) {
+                // Formula: cantidad * precio_unitario * factor_desperdicio
+                $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
+                $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
+                $componente['parcial'] = round($parcial, 2);
+                $costoMateriales += $componente['parcial'];
+            }
+            $costoMateriales = round($costoMateriales, 2);
+
+            // Calculate equipos costs
+            $equipos = $validated['equipos'] ?? [];
+            $costoEquipos = 0;
+            foreach ($equipos as &$componente) {
+                // Formula: (cantidad * precio_hora) / rendimiento
+                $parcial = ($componente['cantidad'] * $componente['precio_hora']) / $rendimiento;
+                $componente['parcial'] = round($parcial, 2);
+                $costoEquipos += $componente['parcial'];
+            }
+            $costoEquipos = round($costoEquipos, 2);
+
+            // Prepare data for database
+            $acuData = [
+                'partida' => $validated['partida'],
+                'descripcion' => $validated['descripcion'],
+                'unidad' => $validated['unidad'],
+                'rendimiento' => $rendimiento,
+                'mano_de_obra' => !empty($manoDeObra) ? json_encode($manoDeObra) : null,
+                'costo_mano_obra' => $costoManoObra,
+                'materiales' => !empty($materiales) ? json_encode($materiales) : null,
+                'costo_materiales' => $costoMateriales,
+                'equipos' => !empty($equipos) ? json_encode($equipos) : null,
+                'costo_equipos' => $costoEquipos,
+                'updated_at' => now(),
+            ];
+
+            // Update or insert ACU
+            if (!empty($validated['id'])) {
+                // Update existing ACU
+                DB::connection('costos_tenant')
+                    ->table('presupuesto_acus')
+                    ->where('id', $validated['id'])
+                    ->update($acuData);
+
+                $acuId = $validated['id'];
+            } else {
+                // Insert new ACU
+                $acuData['created_at'] = now();
+                if ($this->hasTenantColumn('presupuesto_acus', 'item_order')) {
+                    $acuData['item_order'] = 0;
+                }
+
+                $acuId = DB::connection('costos_tenant')
+                    ->table('presupuesto_acus')
+                    ->insertGetId($acuData);
+            }
+
+            // Fetch the complete ACU with calculated total
+            $calculatedAcu = DB::connection('costos_tenant')
+                ->table('presupuesto_acus')
+                ->where('id', $acuId)
+                ->first();
+
+            // Decode JSON fields for response
+            $acuArray = (array)$calculatedAcu;
+            $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
+            $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
+            $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
+
+            DB::connection('costos_tenant')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'ACU calculado exitosamente',
+                'acu' => $acuArray,
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error("Error calculating ACU", [
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al calcular ACU: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta presupuesto a formato Excel/PDF
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/export
+     */
+    public function deleteRow(
+        CostoProject $project,
+        string $subsection,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $this->validateSubsection($subsection);
+
+        $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
+        $rowIndex = $request->input('row_index');
+
+        if (!is_numeric($rowIndex) || $rowIndex < 0) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Índice de fila inválido',
+            ], 400);
+        }
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            // Get all rows ordered
+            $rows = $this->getOrderedRows($tableName)->toArray();
+
+            // Check if the row exists
+            if ($rowIndex >= count($rows)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'La fila no existe',
+                ], 404);
+            }
+
+            $rowToDelete = (object)$rows[$rowIndex];
+            $rowId = $rowToDelete->id ?? null;
+
+            if (!$rowId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No se pudo obtener el ID de la fila',
+                ], 400);
+            }
+
+            // Delete the row
+            DB::connection('costos_tenant')
+                ->table($tableName)
+                ->where('id', $rowId)
+                ->delete();
+
+            // Reorder remaining rows if the table has item_order column
+            if ($this->hasTenantColumn($tableName, 'item_order')) {
+                $remainingRows = $this->getOrderedRows($tableName)->values()->all();
+                foreach ($remainingRows as $index => $row) {
+                    DB::connection('costos_tenant')
+                        ->table($tableName)
+                        ->where('id', $row->id)
+                        ->update(['item_order' => $index]);
+                }
+            }
+
+            DB::connection('costos_tenant')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Fila eliminada correctamente',
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error("Error deleting row from {$tableName}", [
+                'project' => $project->id,
+                'row_index' => $rowIndex,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al eliminar la fila: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta presupuesto a formato Excel/PDF
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/export
+     */
+    public function export(CostoProject $project, Request $request): Response
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        // TODO: Implement export logic
+        // This will be implemented in a future task
+
+        abort(501, 'Exportación no implementada aún');
+    }
+
+    /**
+     * Get available subsections with labels
+     */
+    private function getAvailableSubsections(): array
+    {
+        return collect(self::SUBSECTION_LABELS)
+            ->map(fn($label, $key) => [
+                'key' => $key,
+                'label' => $label,
+            ])
+            ->values()
+            ->toArray();
+    }
+
+    /**
+     * Get available metrados for import
+     */
+    private function getAvailableMetrados(CostoProject $project): array
+    {
+        $metradoTypes = [
+            'metrado_arquitectura' => 'Arquitectura',
+            'metrado_estructura' => 'Estructura',
+            'metrado_sanitarias' => 'Sanitarias',
+            'metrado_electricas' => 'Eléctricas',
+            'metrado_comunicaciones' => 'Comunicaciones',
+            'metrado_gas' => 'Gas',
+        ];
+
+        $availableMetrados = [];
+
+        foreach ($metradoTypes as $type => $label) {
+            if ($project->hasModule($type)) {
+                // Count rows in the metrado table
+                $rowCount = DB::connection('costos_tenant')
+                    ->table($type)
+                    ->count();
+
+                $availableMetrados[] = [
+                    'type' => $type,
+                    'label' => $label,
+                    'rowCount' => $rowCount,
+                ];
+            }
+        }
+
+        return $availableMetrados;
+    }
+
+    /**
+     * Verificar que el usuario actual es dueño del proyecto
+     */
+    private function authorizeProject(CostoProject $project): void
+    {
+        if ($project->user_id !== Auth::id()) {
+            abort(403, 'No tienes acceso a este proyecto.');
+        }
+    }
+
+    /**
+     * Validar que el módulo presupuesto esté habilitado
+     */
+    private function validateModuleEnabled(CostoProject $project): void
+    {
+        $enabled = $project->enabledModules()->where('module_type', 'presupuesto')->exists();
+        if (!$enabled) {
+            abort(403, 'El módulo de presupuesto no está habilitado para este proyecto.');
+        }
+    }
+
+    /**
+     * Validar que la sub-sección existe
+     */
+    private function validateSubsection(string $subsection): void
+    {
+        if (!array_key_exists($subsection, self::SUBSECTION_TABLE_MAP)) {
+            abort(404, "Sub-sección '{$subsection}' no existe.");
+        }
+    }
+
+    /**
+     * Validate rows data based on subsection type
+     */
+    private function validateRowsForSubsection(string $subsection, array $rows): array
+    {
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            $rowErrors = match ($subsection) {
+                'general' => $this->validateGeneralRow($row, $index),
+                'acus' => $this->validateAcusRow($row, $index),
+                'gastos_generales' => $this->validateGastosGeneralesRow($row, $index),
+                'insumos' => $this->validateInsumosRow($row, $index),
+                'remuneraciones' => $this->validateRemuneracionesRow($row, $index),
+                'indices' => $this->validateIndicesRow($row, $index),
+                default => [],
+            };
+
+            if (!empty($rowErrors)) {
+                $errors["row_{$index}"] = $rowErrors;
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Determine si una fila de presupuesto general es un título/subtítulo
+     */
+    private function isGeneralTitle(array $row): bool
+    {
+        return !isset($row['unidad']) || trim((string)$row['unidad']) === '';
+    }
+
+    /**
+     * Validate presupuesto_general row
+     */
+    private function validateGeneralRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['partida'])) {
+            $errors[] = 'El campo partida es requerido';
+        } elseif (strlen($row['partida']) > 50) {
+            $errors[] = 'El campo partida no puede exceder 50 caracteres';
+        }
+
+        if (empty($row['descripcion'])) {
+            $errors[] = 'El campo descripción es requerido';
+        }
+
+        if (!$this->isGeneralTitle($row)) {
+            if (!isset($row['unidad']) || trim((string)$row['unidad']) === '') {
+                $errors[] = 'El campo unidad es requerido';
+            } elseif (strlen((string)$row['unidad']) > 20) {
+                $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+            }
+        } elseif (isset($row['unidad']) && strlen((string)$row['unidad']) > 20) {
+            $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+        }
+
+        if (isset($row['metrado']) && !is_numeric($row['metrado'])) {
+            $errors[] = 'El campo metrado debe ser numérico';
+        }
+
+        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
+            $errors[] = 'El campo precio_unitario debe ser numérico';
+        }
+
+        if (isset($row['metrado_source']) && strlen($row['metrado_source']) > 50) {
+            $errors[] = 'El campo metrado_source no puede exceder 50 caracteres';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate presupuesto_acus row
+     */
+    private function validateAcusRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['partida'])) {
+            $errors[] = 'El campo partida es requerido';
+        } elseif (strlen($row['partida']) > 50) {
+            $errors[] = 'El campo partida no puede exceder 50 caracteres';
+        }
+
+        if (empty($row['descripcion'])) {
+            $errors[] = 'El campo descripción es requerido';
+        }
+
+        if (empty($row['unidad'])) {
+            $errors[] = 'El campo unidad es requerido';
+        } elseif (strlen($row['unidad']) > 20) {
+            $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+        }
+
+        if (isset($row['rendimiento'])) {
+            if (!is_numeric($row['rendimiento'])) {
+                $errors[] = 'El campo rendimiento debe ser numérico';
+            } elseif ($row['rendimiento'] <= 0) {
+                $errors[] = 'El campo rendimiento debe ser mayor que cero';
+            }
+        }
+
+        // Validate JSON fields if present
+        if (isset($row['mano_de_obra']) && !is_array($row['mano_de_obra']) && !is_null($row['mano_de_obra'])) {
+            $errors[] = 'El campo mano_de_obra debe ser un array';
+        }
+
+        if (isset($row['materiales']) && !is_array($row['materiales']) && !is_null($row['materiales'])) {
+            $errors[] = 'El campo materiales debe ser un array';
+        }
+
+        if (isset($row['equipos']) && !is_array($row['equipos']) && !is_null($row['equipos'])) {
+            $errors[] = 'El campo equipos debe ser un array';
+        }
+
+        if (isset($row['costo_mano_obra']) && !is_numeric($row['costo_mano_obra'])) {
+            $errors[] = 'El campo costo_mano_obra debe ser numérico';
+        }
+
+        if (isset($row['costo_materiales']) && !is_numeric($row['costo_materiales'])) {
+            $errors[] = 'El campo costo_materiales debe ser numérico';
+        }
+
+        if (isset($row['costo_equipos']) && !is_numeric($row['costo_equipos'])) {
+            $errors[] = 'El campo costo_equipos debe ser numérico';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate presupuesto_gastos_generales row
+     */
+    private function validateGastosGeneralesRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['codigo'])) {
+            $errors[] = 'El campo código es requerido';
+        } elseif (strlen($row['codigo']) > 50) {
+            $errors[] = 'El campo código no puede exceder 50 caracteres';
+        }
+
+        if (empty($row['descripcion'])) {
+            $errors[] = 'El campo descripción es requerido';
+        }
+
+        if (empty($row['unidad'])) {
+            $errors[] = 'El campo unidad es requerido';
+        } elseif (strlen($row['unidad']) > 20) {
+            $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+        }
+
+        if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+            $errors[] = 'El campo cantidad debe ser numérico';
+        }
+
+        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
+            $errors[] = 'El campo precio_unitario debe ser numérico';
+        }
+
+        if (isset($row['categoria']) && strlen($row['categoria']) > 50) {
+            $errors[] = 'El campo categoría no puede exceder 50 caracteres';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate presupuesto_insumos row
+     */
+    private function validateInsumosRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['codigo'])) {
+            $errors[] = 'El campo código es requerido';
+        } elseif (strlen($row['codigo']) > 50) {
+            $errors[] = 'El campo código no puede exceder 50 caracteres';
+        }
+
+        if (empty($row['descripcion'])) {
+            $errors[] = 'El campo descripción es requerido';
+        }
+
+        if (empty($row['unidad'])) {
+            $errors[] = 'El campo unidad es requerido';
+        } elseif (strlen($row['unidad']) > 20) {
+            $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+        }
+
+        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
+            $errors[] = 'El campo precio_unitario debe ser numérico';
+        }
+
+        if (empty($row['tipo'])) {
+            $errors[] = 'El campo tipo es requerido';
+        } elseif (!in_array($row['tipo'], ['material', 'mano_obra', 'equipo'])) {
+            $errors[] = 'El campo tipo debe ser: material, mano_obra o equipo';
+        }
+
+        if (isset($row['categoria']) && strlen($row['categoria']) > 50) {
+            $errors[] = 'El campo categoría no puede exceder 50 caracteres';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate presupuesto_remuneraciones row
+     */
+    private function validateRemuneracionesRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['cargo'])) {
+            $errors[] = 'El campo cargo es requerido';
+        } elseif (strlen($row['cargo']) > 100) {
+            $errors[] = 'El campo cargo no puede exceder 100 caracteres';
+        }
+
+        if (isset($row['categoria']) && strlen($row['categoria']) > 50) {
+            $errors[] = 'El campo categoría no puede exceder 50 caracteres';
+        }
+
+        if (isset($row['sueldo_basico']) && !is_numeric($row['sueldo_basico'])) {
+            $errors[] = 'El campo sueldo_basico debe ser numérico';
+        }
+
+        if (isset($row['bonificaciones']) && !is_numeric($row['bonificaciones'])) {
+            $errors[] = 'El campo bonificaciones debe ser numérico';
+        }
+
+        if (isset($row['beneficios_sociales']) && !is_numeric($row['beneficios_sociales'])) {
+            $errors[] = 'El campo beneficios_sociales debe ser numérico';
+        }
+
+        if (isset($row['meses'])) {
+            if (!is_numeric($row['meses'])) {
+                $errors[] = 'El campo meses debe ser numérico';
+            } elseif ($row['meses'] < 1) {
+                $errors[] = 'El campo meses debe ser al menos 1';
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate presupuesto_indices row
+     */
+    private function validateIndicesRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['simbolo'])) {
+            $errors[] = 'El campo símbolo es requerido';
+        } elseif (strlen($row['simbolo']) > 10) {
+            $errors[] = 'El campo símbolo no puede exceder 10 caracteres';
+        }
+
+        if (empty($row['descripcion'])) {
+            $errors[] = 'El campo descripción es requerido';
+        }
+
+        if (isset($row['coeficiente']) && !is_numeric($row['coeficiente'])) {
+            $errors[] = 'El campo coeficiente debe ser numérico';
+        }
+
+        if (isset($row['indice_base'])) {
+            if (!is_numeric($row['indice_base'])) {
+                $errors[] = 'El campo indice_base debe ser numérico';
+            } elseif ($row['indice_base'] == 0) {
+                $errors[] = 'El campo indice_base no puede ser cero (división por cero)';
+            }
+        }
+
+        if (isset($row['indice_actual']) && !is_numeric($row['indice_actual'])) {
+            $errors[] = 'El campo indice_actual debe ser numérico';
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Prepare row data for insertion based on subsection type
+     */
+    private function prepareRowForSubsection(string $subsection, array $row, int $index): array
+    {
+        // Set item order solo si la tabla lo soporta (tenants legacy pueden no tener la columna)
+        $tableName = self::SUBSECTION_TABLE_MAP[$subsection] ?? null;
+        if ($tableName && $this->hasTenantColumn($tableName, 'item_order')) {
+            $row['item_order'] = $index;
+        } else {
+            unset($row['item_order']);
+        }
+
+        // Remove auto-increment id
+        unset($row['id']);
+
+        // Remove calculated columns (they are generated by the database)
+        switch ($subsection) {
+            case 'general':
+                unset($row['parcial']);
+                break;
+            case 'acus':
+                unset($row['costo_unitario_total']);
+                break;
+            case 'gastos_generales':
+                unset($row['parcial']);
+                break;
+            case 'remuneraciones':
+                unset($row['total_mensual'], $row['total_proyecto']);
+                break;
+            case 'indices':
+                unset($row['monomio']);
+                break;
+        }
+
+        // Convert JSON fields to JSON strings for ACUs
+        if ($subsection === 'acus') {
+            if (isset($row['mano_de_obra']) && is_array($row['mano_de_obra'])) {
+                $row['mano_de_obra'] = json_encode($row['mano_de_obra']);
+            }
+            if (isset($row['materiales']) && is_array($row['materiales'])) {
+                $row['materiales'] = json_encode($row['materiales']);
+            }
+            if (isset($row['equipos']) && is_array($row['equipos'])) {
+                $row['equipos'] = json_encode($row['equipos']);
+            }
+        }
+
+        // Set default values based on subsection
+        $row = $this->setDefaultValues($subsection, $row);
+
+        // Ensure timestamps
+        $now = now();
+        $row['created_at'] = $row['created_at'] ?? $now;
+        $row['updated_at'] = $now;
+
+        return $row;
+    }
+
+    /**
+     * Set default values for fields based on subsection type
+     */
+    private function setDefaultValues(string $subsection, array $row): array
+    {
+        return match ($subsection) {
+            'general' => [
+                'unidad' => $row['unidad'] ?? '',  // CRITICAL: Prevent "Column 'unidad' cannot be null" error
+                'metrado' => $row['metrado'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'metrado_source' => $row['metrado_source'] ?? null,
+            ] + $row,
+            'acus' => [
+                'rendimiento' => $row['rendimiento'] ?? 1,
+                'mano_de_obra' => $row['mano_de_obra'] ?? null,
+                'materiales' => $row['materiales'] ?? null,
+                'equipos' => $row['equipos'] ?? null,
+                'costo_mano_obra' => $row['costo_mano_obra'] ?? 0,
+                'costo_materiales' => $row['costo_materiales'] ?? 0,
+                'costo_equipos' => $row['costo_equipos'] ?? 0,
+            ] + $row,
+            'gastos_generales' => [
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'categoria' => $row['categoria'] ?? null,
+            ] + $row,
+            'insumos' => [
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'categoria' => $row['categoria'] ?? null,
+            ] + $row,
+            'remuneraciones' => [
+                'categoria' => $row['categoria'] ?? null,
+                'sueldo_basico' => $row['sueldo_basico'] ?? 0,
+                'bonificaciones' => $row['bonificaciones'] ?? 0,
+                'beneficios_sociales' => $row['beneficios_sociales'] ?? 0,
+                'meses' => $row['meses'] ?? 1,
+            ] + $row,
+            'indices' => [
+                'coeficiente' => $row['coeficiente'] ?? 0,
+                'indice_base' => $row['indice_base'] ?? 100,
+                'indice_actual' => $row['indice_actual'] ?? 100,
+                'fecha_indice_base' => $row['fecha_indice_base'] ?? null,
+                'fecha_indice_actual' => $row['fecha_indice_actual'] ?? null,
+            ] + $row,
+            default => $row,
+        };
+    }
+
+    /**
+     * Retorna filas ordenadas con fallback según columnas reales de la tabla.
+     */
+    private function getOrderedRows(string $tableName)
+    {
+        $query = DB::connection('costos_tenant')->table($tableName);
+
+        if ($this->hasTenantColumn($tableName, 'item_order')) {
+            $query->orderBy('item_order');
+        }
+        if ($this->hasTenantColumn($tableName, 'id')) {
+            $query->orderBy('id');
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Verifica existencia de columna en DB tenant con cache por request.
+     */
+    private function hasTenantColumn(string $tableName, string $column): bool
+    {
+        $key = "{$tableName}.{$column}";
+        if (!array_key_exists($key, $this->tenantColumnCache)) {
+            $this->tenantColumnCache[$key] = Schema::connection('costos_tenant')
+                ->hasColumn($tableName, $column);
+        }
+
+        return $this->tenantColumnCache[$key];
+    }
+
+    /**
+     * Ensure required columns exist for presupuesto_acus in legacy tenant DBs.
+     */
+    private function ensureAcuSchema(): void
+    {
+        $schema = Schema::connection('costos_tenant');
+        if (!$schema->hasTable('presupuesto_acus')) {
+            return;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'mano_de_obra')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->json('mano_de_obra')->nullable()
+                    ->comment('Array of labor components');
+            });
+            $this->tenantColumnCache['presupuesto_acus.mano_de_obra'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_mano_obra')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_mano_obra', 15, 4)->default(0);
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_mano_obra'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'materiales')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->json('materiales')->nullable()
+                    ->comment('Array of material components');
+            });
+            $this->tenantColumnCache['presupuesto_acus.materiales'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_materiales')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_materiales', 15, 4)->default(0);
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_materiales'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'equipos')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->json('equipos')->nullable()
+                    ->comment('Array of equipment components');
+            });
+            $this->tenantColumnCache['presupuesto_acus.equipos'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_equipos')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_equipos', 15, 4)->default(0);
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_equipos'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_unitario_total', 15, 4)
+                    ->storedAs('costo_mano_obra + costo_materiales + costo_equipos')
+                    ->comment('Calculated: sum of all component costs');
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_unitario_total'] = true;
+        }
+    }
+}

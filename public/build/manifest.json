@@ -59,7 +59,8 @@
     "file": "assets/button-Khovcbek.js",
     "name": "button",
     "imports": [
-      "resources/js/app.tsx"
+      "resources/js/app.tsx",
+      "_index-B2ua6avU.js"
     ]
   },
   "_caida-tension-BzKMekSD.js": {
@@ -353,9 +354,9 @@
     "file": "assets/app-CwPFUFuQ.css",
     "src": "resources/css/app.css",
     "isEntry": true,
-    "name": "app",
-    "names": [
-      "app.css"
+    "isDynamicEntry": true,
+    "css": [
+      "assets/app-DadccWyC.css"
     ]
   },
   "resources/js/app.tsx": {
@@ -363,6 +364,9 @@
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
+    "imports": [
+      "resources/css/app.css"
+    ],
     "dynamicImports": [
       "resources/js/pages/AcCalculation/Index.tsx",
       "resources/js/pages/AcCalculation/Show.tsx",
@@ -386,6 +390,21 @@
       "resources/js/pages/calc-desague/components/TrampaGrasaDesague.tsx",
       "resources/js/pages/calc-desague/components/UdDesague.tsx",
       "resources/js/pages/calc-desague/components/UvDesague.tsx",
+      "resources/js/pages/costos/Create.tsx",
+      "resources/js/pages/costos/Index.tsx",
+      "resources/js/pages/costos/Show.tsx",
+      "resources/js/pages/costos/metrados/Index.tsx",
+      "resources/js/pages/costos/metrados/lib/tablaprin.tsx",
+      "resources/js/pages/costos/metrados/metrado_comunicacion/Index.tsx",
+      "resources/js/pages/costos/metrados/metrado_comunicacion/Show.tsx",
+      "resources/css/app.css",
+      "resources/js/pages/costos/modules/ModuleView.tsx",
+      "resources/js/pages/costos/presupuesto/Index.tsx",
+      "resources/js/pages/costos/presupuesto/components/AcuPanel.tsx",
+      "_BudgetTree-mpaK9Cgb.js",
+      "resources/js/pages/costos/presupuesto/components/PartidaSearchModal.tsx",
+      "resources/js/pages/costos/presupuesto/components/PresupuestoToolbar.tsx",
+      "resources/js/pages/costos/presupuesto/components/SubsectionNav.tsx",
       "resources/js/pages/dashboard.tsx",
       "resources/js/pages/settings/appearance.tsx",
       "resources/js/pages/settings/password.tsx",
