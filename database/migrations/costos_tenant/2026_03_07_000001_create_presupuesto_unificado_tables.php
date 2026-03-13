@@ -69,10 +69,27 @@ return new class extends Migration
             $table->json('equipos')->nullable()
                 ->comment('Array of equipment components');
             $table->decimal('costo_equipos', 15, 4)->default(0);
+<<<<<<< HEAD
             
             // Calculated column: total = sum of all costs
             $table->decimal('costo_unitario_total', 15, 4)
                 ->storedAs('costo_mano_obra + costo_materiales + costo_equipos')
+=======
+
+            // Sub-contratos (JSON array)
+            $table->json('subcontratos')->nullable()
+                ->comment('Array of subcontract components');
+            $table->decimal('costo_subcontratos', 15, 4)->default(0);
+
+            // Sub-partidas (JSON array)
+            $table->json('subpartidas')->nullable()
+                ->comment('Array of subpartidas components');
+            $table->decimal('costo_subpartidas', 15, 4)->default(0);
+            
+            // Calculated column: total = sum of all costs
+            $table->decimal('costo_unitario_total', 15, 4)
+                ->storedAs('costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas')
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 ->comment('Calculated: sum of all component costs');
             
             $table->integer('item_order')->default(0);

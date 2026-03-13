@@ -77,6 +77,10 @@ class CostoProjectController extends Controller
             'centro_poblado' => 'nullable|string|max:255',
             'modules' => 'required|array|min:1',
             'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
+<<<<<<< HEAD
+=======
+            'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         ]);
 
         $dbName = CostoProject::generateDatabaseName(Auth::id());
@@ -103,17 +107,50 @@ class CostoProjectController extends Controller
             ]);
 
             // 2. Crear registros de módulos seleccionados
+<<<<<<< HEAD
             foreach ($validated['modules'] as $moduleType) {
+=======
+            $cantidadModulos = $validated['sanitarias_cantidad_modulos'] ?? 1;
+
+            foreach ($validated['modules'] as $moduleType) {
+                $moduleConfig = null;
+
+                // Store sanitarias-specific config
+                if ($moduleType === 'metrado_sanitarias') {
+                    $moduleConfig = ['cantidad_modulos' => $cantidadModulos];
+                }
+
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 CostoProjectModule::create([
                     'costo_project_id' => $project->id,
                     'module_type' => $moduleType,
                     'enabled' => true,
+<<<<<<< HEAD
+=======
+                    'config' => $moduleConfig,
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 ]);
             }
 
             // 3. Crear la BD aislada y ejecutar migraciones tenant
             $this->dbService->createDatabase($project);
 
+<<<<<<< HEAD
+=======
+            // 4. Initialize sanitarias config in tenant DB if module is enabled
+            if (in_array('metrado_sanitarias', $validated['modules'])) {
+                $this->dbService->setTenantConnection($dbName);
+                DB::connection('costos_tenant')
+                    ->table('metrado_sanitarias_config')
+                    ->insert([
+                        'cantidad_modulos' => $cantidadModulos,
+                        'nombre_proyecto'  => $validated['nombre'],
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+            }
+
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             return redirect()->route('costos.show', $project)
                 ->with('success', 'Proyecto de costos creado exitosamente.');
         } catch (\Exception $e) {

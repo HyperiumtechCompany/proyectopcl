@@ -13,12 +13,20 @@ class CostoProjectModule extends Model
         'costo_project_id',
         'module_type',
         'enabled',
+<<<<<<< HEAD
+=======
+        'config',
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     ];
 
     protected function casts(): array
     {
         return [
             'enabled' => 'boolean',
+<<<<<<< HEAD
+=======
+            'config'  => 'array',
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         ];
     }
 

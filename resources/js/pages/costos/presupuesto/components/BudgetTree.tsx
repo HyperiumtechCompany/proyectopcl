@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useMemo, useState, useEffect } from 'react';
 import {
     useReactTable,
@@ -8,6 +9,20 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useBudgetStore, BudgetItemRow } from '../stores/budgetStore';
+=======
+import type {
+    ColumnDef} from '@tanstack/react-table';
+import {
+    useReactTable,
+    getCoreRowModel,
+    flexRender
+} from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { ChevronRight, ChevronDown } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { BudgetItemRow } from '../stores/budgetStore';
+import { useBudgetStore } from '../stores/budgetStore';
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 const fmt = (n: number, d = 2) =>
     n?.toLocaleString('es-PE', {

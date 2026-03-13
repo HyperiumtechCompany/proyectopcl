@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Loader2 } from 'lucide-react';
+=======
+import { Search, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 import type { ACU, PresupuestoRow } from '@/types/presupuestos';
 
 // Un mock simple para emular el catálogo central con plantillas de ACU

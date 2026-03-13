@@ -2,8 +2,8 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { Crown, Zap, Star, Clock, MessageCircle, Check, Eye, EyeOff, LogIn } from 'lucide-react';
 import type { FormEventHandler } from 'react';
 import { useState } from 'react';
-import { dashboard } from '@/routes';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { dashboard } from '@/routes';
 
 type LoginForm = {
     email: string;

@@ -101,9 +101,20 @@ export default function Show() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {project.modules.map(m => {
                             // Special handling for unified presupuesto module
+<<<<<<< HEAD
                             const href = m === 'presupuesto' 
                                 ? `/costos/proyectos/${project.id}/presupuesto`
                                 : `/costos/${project.id}/module/${m}`;
+=======
+                            let href: string;
+                            if (m === 'presupuesto') {
+                                href = `/costos/proyectos/${project.id}/presupuesto`;
+                            } else if (m === 'metrado_sanitarias') {
+                                href = `/costos/${project.id}/metrado-sanitarias`;
+                            } else {
+                                href = `/costos/${project.id}/module/${m}`;
+                            }
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                             
                             return (
                                 <Link key={m} href={href} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer">
