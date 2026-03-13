@@ -6,11 +6,11 @@ import { exportDesagueToExcel } from '@/lib/desague-export';
 import * as calcDesagueRoutes from '@/routes/desague-calculation';
 import type { BreadcrumbItem } from '@/types';
 
-import UdDesague from './components/UdDesague';
-import ColectorDesague from './components/ColectorDesague';
 import CajaRegistroDesague from './components/CajaRegistroDesague';
-import UvDesague from './components/UvDesague';
+import ColectorDesague from './components/ColectorDesague';
 import TrampaGrasaDesague from './components/TrampaGrasaDesague';
+import UdDesague from './components/UdDesague';
+import UvDesague from './components/UvDesague';
 
 interface CalcDesagueSpreadsheet {
     id: number;

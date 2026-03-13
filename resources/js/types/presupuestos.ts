@@ -16,6 +16,7 @@ export interface ACUComponente {
     descripcion: string;
     unidad: string;
     cantidad: number;
+    recursos?: number;
     precio_unitario: number;
     factor_desperdicio?: number;
     precio_hora?: number;
@@ -31,9 +32,13 @@ export interface ACU {
     mano_de_obra: ACUComponente[];
     materiales: ACUComponente[];
     equipos: ACUComponente[];
+    subcontratos?: ACUComponente[];
+    subpartidas?: ACUComponente[];
     costo_mano_obra: number;
     costo_materiales: number;
     costo_equipos: number;
+    costo_subcontratos?: number;
+    costo_subpartidas?: number;
     costo_unitario_total: number;
     item_order: number;
 }
@@ -139,6 +144,7 @@ export interface ACUComponenteRow {
     descripcion: string;
     unidad?: string | null;
     cantidad?: number | null;
+    recursos?: number | null;
     precio_unitario?: number | null;
     precio_hora?: number | null;
     factor_desperdicio?: number | null;
@@ -154,10 +160,14 @@ export interface ACURowSummary {
     costo_mano_obra: number;
     costo_materiales: number;
     costo_equipos: number;
+    costo_subcontratos: number;
+    costo_subpartidas: number;
     costo_unitario_total: number;
     mano_de_obra: ACUComponenteRow[];
     materiales: ACUComponenteRow[];
     equipos: ACUComponenteRow[];
+    subcontratos: ACUComponenteRow[];
+    subpartidas: ACUComponenteRow[];
 }
 
 export const SUBSECTION_COLUMNS: Record<PresupuestoSubsection, ColumnDef[]> = {

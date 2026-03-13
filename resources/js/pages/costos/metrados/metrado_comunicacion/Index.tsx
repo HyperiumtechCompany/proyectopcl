@@ -1,10 +1,10 @@
 import { router, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
+import metradoRoutes from '@/routes/metrados';
+import * as comunicacionRoutes from '@/routes/metrados/comunicacion';
 import type { BreadcrumbItem } from '@/types';
 import type { MetradoComunicacionSpreadsheetSummary } from '@/types/metrado-comunicacion';
-import * as comunicacionRoutes from '@/routes/metrados/comunicacion';
-import metradoRoutes from '@/routes/metrados';
 
 interface PageProps {
     spreadsheets: MetradoComunicacionSpreadsheetSummary[];
