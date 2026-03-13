@@ -1,350 +1,335 @@
-/**
- * Show.tsx — Metrado Comunicación
- *
- * Estructura basada en caida-tension/Show.tsx, adaptada para Luckysheet.
- *
- * FUNCIONALIDADES:
- * - Header con nombre, proyecto, botón Editar, indicador de autoguardado
- * - Código de colaboración (copiar al portapapeles)
- * - Botón habilitar colaboración (plan mensual/anual/lifetime)
- * - Avatares de colaboradores activos
- * - Indicador en tiempo real de quién está editando (via useRealtimeSync)
- * - Autoguardado con debounce 2s al editar celdas
- * - Exportar hoja a JSON (descarga directa)
- * - Luckysheet cargado via UMD desde public/ (ver Luckysheet.tsx)
- */
+import { router, usePage } from '@inertiajs/react'
+import React, { useState, useEffect, useRef } from 'react'
+import AppLayout from '@/layouts/app-layout'
+import type { BreadcrumbItem } from '@/types'
+import Luckysheet from '@/components/costos/tablas/Luckysheet'
 
-import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useRef, useState } from 'react';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem } from '@/types';
-import type { MetradoComunicacionSpreadsheet } from '@/types/metrado-comunicacion';
-import * as comunicacionRoutes from '@/routes/metrados/comunicacion';
-import metradoRoutes from '@/routes/metrados';
-import Luckysheet from '@/components/costos/tablas/Luckysheet';
-
-// ── Tipos ─────────────────────────────────────────────────────────────────────
-
-interface PageProps {
-    spreadsheet: MetradoComunicacionSpreadsheet;
-    auth: { user: { id: number; plan: string; name: string } };
-    [key: string]: unknown;
+interface PageProps{
+ spreadsheet:{
+  id:number
+  name:string
+  sheet_data:any[][]
+ }
+ [key:string]:any
 }
 
-// ── Constantes ────────────────────────────────────────────────────────────────
+const COLS={
+ ITEM:0,
+ DES:1,
+ UND:2,
+ ELEM:3,
+ L:4,
+ ANC:5,
+ ALT:6,
+ NVEC:7,
+ LON:8,
+ AREA:9,
+ VOL:10,
+ KG:11,
+ UNDC:12,
+ TOTAL:13
+}
 
-/** Milisegundos a esperar desde la última edición antes de guardar. */
-const SAVE_DEBOUNCE_MS = 2000;
+const HEADERS=[
+'ITEM','DESCRIPCIÓN','Und','Elem','Largo','Ancho','Alto','N° Vec',
+'Lon.','Área','Vol.','Kg','UndC','Total'
+]
 
-// ── Componente ────────────────────────────────────────────────────────────────
+/* CALCULO FILA */
+const calculateRow = (row:any[]) => {
+ const r=[...row]
+ const unidad=(r[COLS.UND]||'').toLowerCase().trim()
+ const num=(i:number)=>{
+  const v=parseFloat(r[i])
+  return isNaN(v)?0:v
+ }
 
-export default function Show() {
-    const { spreadsheet, auth } = usePage<PageProps>().props;
+ const elem=num(COLS.ELEM)
+ const l=num(COLS.L)
+ const anc=num(COLS.ANC)
+ const alt=num(COLS.ALT)
+ const n=num(COLS.NVEC)||1
 
-    // ── Estado ────────────────────────────────────────────────────────────────
-    const [saving, setSaving] = useState(false);
-    const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    /**
-     * editMode en Luckysheet funciona al revés que en caiada-tension:
-     * true  = hoja en modo normal (editable) — estado por defecto
-     * false = hoja bloqueada (sólo lectura) — el usuario la bloqueó intencionalmente
-     *
-     * Esto evita el problema de que el usuario tenga que recordar
-     * hacer clic en "Editar" antes de poder escribir en una celda.
-     */
-    const [editMode, setEditMode] = useState(true);
+ let lon=0, area=0, vol=0, kg=0, undc=0
+ const densidad=7850
 
-    /**
-     * `sheetData` es el estado local de la hoja Luckysheet.
-     * Se inicializa con el valor del servidor. Puede ser null (hoja nueva).
-     */
-    const [sheetData, setSheetData] = useState<any[]>(
-        Array.isArray(spreadsheet.sheet_data) ? spreadsheet.sheet_data : []
-    );
+ switch(unidad){
+  case 'ml': case 'm':
+   lon=(l+anc+alt)*elem*n
+   undc=lon
+   break
+  case 'm2':
+   area=l*anc*elem*n
+   undc=area
+   break
+  case 'm3':
+   vol=l*anc*alt*elem*n
+   undc=vol
+   break
+  case 'kg':
+   vol=l*anc*alt*elem*n
+   kg=vol*densidad
+   undc=kg
+   break
+  case 'und':
+   undc=elem*n
+   break
+ }
 
-    const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+ r[COLS.LON]=lon?lon.toFixed(2):''
+ r[COLS.AREA]=area?area.toFixed(2):''
+ r[COLS.VOL]=vol?vol.toFixed(2):''
+ r[COLS.KG]=kg?kg.toFixed(2):''
+ r[COLS.UNDC]=undc?undc.toFixed(2):''
+ r[COLS.TOTAL]=undc?undc.toFixed(2):''
 
-    // ── Autoguardado con debounce ─────────────────────────────────────────────
+ return r
+}
 
-    /**
-     * scheduleSave — Programa un guardado automático 2s después de la última edición.
-     * Si el usuario sigue editando, el timer se reinicia.
-     * Solo guarda si `can_edit` es true.
-     */
-    const scheduleSave = useCallback(
-        (data: any[]) => {
-            if (!spreadsheet.can_edit) return;
-            if (saveTimer.current) clearTimeout(saveTimer.current);
+/* NUMERACION AUTOMATICA */
+const applyAutoNumbering=(rows:any[][])=>{
+ let cap=''
+ let index=0
 
-            saveTimer.current = setTimeout(() => {
-                setSaving(true);
-                router.patch(
-                    comunicacionRoutes.update.url(spreadsheet.id),
-                    { sheet_data: data },
-                    {
-                        preserveScroll: true,
-                        onFinish: () => {
-                            setSaving(false);
-                            setLastSaved(new Date());
-                        },
-                    },
-                );
-            }, SAVE_DEBOUNCE_MS);
-        },
-        [spreadsheet.can_edit, spreadsheet.id],
-    );
+ return rows.map(row=>{
+  const r=[...row]
+  // Detecta si es un capítulo (ej. "01", "02")
+  if(r[COLS.ITEM] && /^\d{2}$/.test(r[COLS.ITEM])){
+   cap=r[COLS.ITEM]
+   index=0
+  }else if(cap && r[COLS.DES]){
+   index++
+   r[COLS.ITEM]=`${cap}.${String(index).padStart(2,'0')}`
+  }
+  return r
+ })
+}
 
-    /**
-     * handleDataChange — Invocado por el componente Luckysheet cuando el usuario
-     * edita una celda. Actualiza el estado y programa el guardado.
-     */
-    const handleDataChange = useCallback(
-        (sheets: any[]) => {
-            setSheetData(sheets);
-            scheduleSave(sheets);
-        },
-        [scheduleSave],
-    );
+/* CONVERTIR A LUCKYSHEET */
+const toLuckysheetData=(rows:any[][])=>{
+ const celldata:any[]=[]
 
-    // ── Colaboración en tiempo real ───────────────────────────────────────────
+ // Headers
+ HEADERS.forEach((h,c)=>{
+  celldata.push({
+   r:0, c,
+   v:{ v:h, m:h, bl:1, ht:1, vt:1, bg:"#e5e7eb", ff:"Arial", fs:10 }
+  })
+ })
 
-    /**
-     * Cuando otro colaborador guarda, recibimos su versión completa y
-     * reemplazamos el estado local. No podemos actualizar Luckysheet
-     * reactivamente (no soporta re-init), así que en el futuro esto
-     * podría usar la API imperativa ls.setRangeValue().
-     * Por ahora solo hacemos referencia sin forzar recarga.
-     */
-    const handleRemoteUpdate = useCallback((payload: any) => {
-        if (payload.sheet_data) {
-            setSheetData(payload.sheet_data);
-        }
-    }, []);
+ // Data
+ rows.forEach((row,r)=>{
+  row.forEach((value,c)=>{
+   if(value!=='' && value!==undefined){
+    const text=String(value)
+    const subtotal=text.includes("SUBTOTAL")
+    const total=text.includes("TOTAL GENERAL")
+    const isChapter = /^\d{2}$/.test(text) && c === COLS.ITEM
 
-    const { lastEditorName } = useRealtimeSync({
-        spreadsheetId: spreadsheet.id,
-        currentUserId: auth.user.id,
-        onRemoteUpdate: handleRemoteUpdate,
-        isCollaborative: spreadsheet.is_collaborative,
-        channelPrefix: 'metrado-comunicacion.',
-    });
+    celldata.push({
+     r:r+1, c,
+     v:{
+      v:value, m:text,
+      ht:1,
+      bl: subtotal||total||isChapter ? 1 : 0,
+      bg: subtotal?"#f3f4f6" : total?"#fde68a" : isChapter ? "#dbeafe" : undefined,
+      ff:"Arial", fs: isChapter ? 11 : 10,
+      cl: isChapter ? 1 : 0 
+     }
+    })
+   }
+  })
+ })
 
-    // ── Exportar JSON ─────────────────────────────────────────────────────────
+ return [{
+  name:'Metrado Comunicaciones',
+  celldata,
+  // CONFIGURACIÓN DE COLUMNAS (Anchos)
+  columnlen:{
+   0:60, 1:250, 2:50, 3:50, 4:70, 5:70, 6:70, 7:70,
+   8:80, 9:80, 10:80, 11:80, 12:80, 13:100
+  },
+  column: 14, 
+  row: 100 // Límite de filas 
+ }]
+}
 
-    const handleExportJson = useCallback(() => {
-        const json = JSON.stringify(sheetData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${spreadsheet.name ?? 'metrado'}-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [sheetData, spreadsheet.name]);
+export default function Show(){
+ const { spreadsheet } = usePage<PageProps>().props
+ const [sheetData,setSheetData]=useState<any[]>([])
+ const calculatingRef=useRef(false)
 
-    // ── Toggle modo edición ───────────────────────────────────────────────────
+ useEffect(()=>{
+  const initial=spreadsheet.sheet_data?.length
+  ? spreadsheet.sheet_data
+  :[
+   ['01','CABLEADO','','','','','','','','','','','',''],
+   ['','Cable UTP','ml','1','22','2','15','18','','','','','',''],
+   ['','Cable Fibra','ml','','10','1','10','10','','','','','',''],
+   ['02','CANALIZACIÓN','','','','','','','','','','','',''],
+   ['','Tubo PVC','ml','1','30','1','10','10','','','','','',''],
+   ['','Canaleta met','ml','1','15','1','10','10','','','','','','']
+  ]
 
-    const toggleEdit = useCallback(() => setEditMode((v) => !v), []);
+  const numbered=applyAutoNumbering(initial)
+  setSheetData(toLuckysheetData(numbered))
+ },[])
 
-    // ── Breadcrumbs ───────────────────────────────────────────────────────────
+ // --- FUNCIONES DE LOS BOTONES ---
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Metrados', href: metradoRoutes.index.url() },
-        { title: 'Comunicaciones', href: comunicacionRoutes.index.url() },
-        { title: spreadsheet.name || 'Sin nombre', href: '#' },
-    ];
+ const handleAddChapter = () => {
+    const ls:any = (window as any).luckysheet;
+    if(!ls) return;
 
-    // ── Barra de acciones superior ────────────────────────────────────────────
+    const lastRow = ls.getLastRow();
+    const newRowIndex = lastRow + 1;
+    
+    // Generar nuevo número de capítulo
+    let newChapterNum = "03";
+    // Lógica simple para encontrar el último capítulo y sumar 1
+    // (En producción podrías buscar en el estado real)
+    
+    ls.insertRow(newRowIndex, 1);
+    ls.setCellValue(newRowIndex, COLS.ITEM, newChapterNum);
+    ls.setCellValue(newRowIndex, COLS.DES, "NUEVO CAPÍTULO");
+    
+    // Estilo para que parezca cabecera
+    ls.setCellFormat(newRowIndex, COLS.ITEM, { bg: "#dbeafe", cl: 1 });
+    ls.setCellFormat(newRowIndex, COLS.DES, { bg: "#dbeafe", cl: 1 });
+ }
 
-    const renderNavActions = () => {
-        if (!spreadsheet.can_edit) {
-            return (
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleExportJson}
-                        title="Exportar JSON"
-                        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                    >
-                        ↓ JSON
-                    </button>
-                </div>
-            );
-        }
+ const handleAddItem = () => {
+    const ls:any = (window as any).luckysheet;
+    if(!ls) return;
 
-        return (
-            <div className="flex items-center gap-2">
-                {/*
-                 * Botón de bloqueo:
-                 * - editMode=true (por defecto): hoja editable.
-                 *   Clic → bloquea la hoja (protege contra edición accidental)
-                 * - editMode=false: hoja bloqueada.
-                 *   Clic → desbloquea.
-                 *
-                 * UX: a diferencia de caída-de-tensión donde las tablas
-                 * son complejas y necesitan modo edición explícito, una
-                 * hoja de cálculo debe poder editarse directamente.
-                 */}
-                <button
-                    onClick={toggleEdit}
-                    title={editMode ? 'Bloquear hoja (solo lectura)' : 'Desbloquear hoja (edición)'}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${editMode
-                            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-700 dark:hover:bg-emerald-900/50'
-                            : 'bg-red-50 text-red-700 ring-1 ring-red-300 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-700 dark:hover:bg-red-900/50'
-                        }`}
-                >
-                    <span className="text-[13px]">{editMode ? '🔓' : '🔒'}</span>
-                    <span>{editMode ? 'Editable' : 'Bloqueado'}</span>
-                </button>
+    const lastRow = ls.getLastRow();
+    const newRowIndex = lastRow + 1;
 
-                {/* Exportar JSON — descarga el contenido actual de la hoja */}
-                <button
-                    onClick={handleExportJson}
-                    title="Exportar JSON de la hoja"
-                    className="flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                    <span>↓</span> JSON
-                </button>
-            </div>
-        );
-    };
+    ls.insertRow(newRowIndex, 1);
+    
+    // Valores por defecto para un ítem nuevo
+    ls.setCellValue(newRowIndex, COLS.UND, "ml");
+    ls.setCellValue(newRowIndex, COLS.ELEM, "1");
+    ls.setCellValue(newRowIndex, COLS.NVEC, "1");
+    ls.setCellValue(newRowIndex, COLS.DES, "Nuevo Ítem");
+ }
 
-    // ── Render ────────────────────────────────────────────────────────────────
+ // --- FIN FUNCIONES BOTONES ---
 
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            {/* ── Header ──────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                {/* Izquierda: nombre + proyecto */}
-                <div className="min-w-0 flex-1">
-                    <h1 className="truncate text-sm font-bold text-gray-800 dark:text-gray-100">
-                        {spreadsheet.name}
-                    </h1>
-                    {spreadsheet.project_name && (
-                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                            {spreadsheet.project_name}
-                        </p>
-                    )}
-                </div>
+ const calculateRowRealtime=(rowIndex:number)=>{
+  const ls:any=(window as any).luckysheet
+  if(!ls) return
+  const sheets=ls.getAllSheets()
+  if(!sheets?.[0]?.celldata) return
+  const celldata=sheets[0].celldata
+  const row:any[]=[]
 
-                {/* Derecha: acciones + autoguardado + colaboración */}
-                <div className="ml-4 flex shrink-0 items-center gap-3">
-                    {renderNavActions()}
+  celldata.forEach((cell:any)=>{
+   if(cell.r===rowIndex){
+    row[cell.c]=cell.v?.v??''
+   }
+  })
 
-                    {spreadsheet.can_edit && (
-                        <div className="h-5 w-px bg-gray-200 dark:bg-gray-700" />
-                    )}
+  const result=calculateRow(row)
+  const cols=[COLS.LON, COLS.AREA, COLS.VOL, COLS.KG, COLS.UNDC, COLS.TOTAL]
 
-                    {/* Estado de guardado automático */}
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        {saving && (
-                            <span className="flex items-center gap-1">
-                                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-400" />
-                                Guardando…
-                            </span>
-                        )}
-                        {!saving && lastSaved && (
-                            <span className="flex items-center gap-1">
-                                <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400" />
-                                {lastSaved.toLocaleTimeString('es-ES', {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                })}
-                            </span>
-                        )}
+  cols.forEach(c=>{
+   if(result[c]!==row[c]){
+    ls.setCellValue(rowIndex,c,result[c])
+   }
+  })
+ }
 
-                        {/* Indicador: otro colaborador está editando */}
-                        {lastEditorName && (
-                            <span className="ml-2 flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
-                                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                                📡 {lastEditorName} editando…
-                            </span>
-                        )}
+ const recalcTotals = () => {
+  const ls:any=(window as any).luckysheet
+  if(!ls) return
+  const sheets=ls.getAllSheets()
+  if(!sheets?.length) return
+  const celldata=sheets[0].celldata
+  const rows:any[]=[]
 
-                        {/* Avatares de colaboradores */}
-                        {spreadsheet.is_collaborative && spreadsheet.collaborators.length > 0 && (
-                            <div className="ml-1 flex -space-x-1.5">
-                                {spreadsheet.collaborators.slice(0, 4).map((c) => (
-                                    <div
-                                        key={c.id}
-                                        title={`${c.name} (${c.role})`}
-                                        className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-indigo-500 text-xs font-bold text-white dark:border-gray-900"
-                                    >
-                                        {c.name.charAt(0).toUpperCase()}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+  celldata.forEach((cell:any)=>{
+   if(cell.r===0) return
+   const r=cell.r-1
+   const c=cell.c
+   if(!rows[r]) rows[r]=[]
+   rows[r][c]=cell.v?.v ?? ''
+  })
 
-                        {/* Código de colaboración — copiar al portapapeles */}
-                        {spreadsheet.is_owner && spreadsheet.is_collaborative && spreadsheet.collab_code && (
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(spreadsheet.collab_code!);
-                                    alert('Código de colaboración copiado al portapapeles.');
-                                }}
-                                title="Copiar código de colaboración"
-                                className="ml-1 flex items-center gap-1 rounded bg-indigo-100 pl-1.5 pr-2 py-0.5 font-mono text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-300 dark:hover:bg-indigo-500/40"
-                            >
-                                <span className="text-[10px]">👥</span> Cód: {spreadsheet.collab_code}
-                            </button>
-                        )}
+  const cleanRows=rows.filter(r=>{
+   const d=String(r?.[COLS.DES]||'')
+   return !d.includes('SUBTOTAL') && !d.includes('TOTAL GENERAL')
+  })
 
-                        {/* Habilitar colaboración — solo owner con plan de pago */}
-                        {spreadsheet.is_owner &&
-                            !spreadsheet.is_collaborative &&
-                            ['mensual', 'anual', 'lifetime'].includes(auth.user.plan) && (
-                                <button
-                                    onClick={() => {
-                                        if (
-                                            confirm(
-                                                '¿Habilitar colaboración para esta hoja? Los usuarios con el código podrán editarla.',
-                                            )
-                                        ) {
-                                            router.post(
-                                                comunicacionRoutes.enableCollab.url(spreadsheet.id),
-                                                {},
-                                                { preserveScroll: true },
-                                            );
-                                        }
-                                    }}
-                                    className="ml-1 flex items-center gap-1 rounded bg-indigo-600 px-2 py-0.5 text-xs text-white transition-colors hover:bg-indigo-700"
-                                >
-                                    <span className="text-[10px]">👥</span> Habilitar Colaboración
-                                </button>
-                            )}
-                    </div>
-                </div>
-            </div>
+  const recalculated=cleanRows.map(r=>calculateRow(r))
+  const numbered=applyAutoNumbering(recalculated)
+  setSheetData(toLuckysheetData(numbered))
+ }
 
-            {/* ── Hoja de cálculo Luckysheet ─────────────────────────────────── */}
-            {/*
-             * Luckysheet se carga como UMD desde public/luckysheet/luckysheet.umd.js
-             * El componente muestra un spinner mientras carga, y un mensaje de error
-             * con instrucciones si el archivo no fue copiado a public/.
-             *
-             * canEdit = spreadsheet.can_edit (permiso del servidor).
-             * NO se vincula a editMode: Luckysheet 2.x no respeta allowEdit
-             * de forma consistente, y es mejor dejar al usuario editar
-             * libremente si tiene permisos. El botón "Bloquear" en el header
-             * es un indicador visual, no un mecanismo de bloqueo real en LS 2.x.
-             *
-             * onDataChange: dispara el autoguardado con debounce de 2s cada
-             * vez que el usuario confirma un valor en una celda.
-             */}
-            <div className="flex-1">
-                <Luckysheet
-                    data={sheetData}
-                    onDataChange={handleDataChange}
-                    canEdit={spreadsheet.can_edit}
-                    height="calc(100vh - 120px)"
-                    options={{
-                        title: spreadsheet.name ?? 'Metrado',
-                    }}
-                />
-            </div>
-        </AppLayout>
-    );
+ const handleCellUpdated=(r:number)=>{
+  if(calculatingRef.current) return
+  calculatingRef.current=true
+  setTimeout(()=>{
+   calculateRowRealtime(r)
+   setTimeout(()=>{
+    recalcTotals()
+    calculatingRef.current=false
+   },200)
+  },30)
+ }
+
+ const breadcrumbs:BreadcrumbItem[]=[
+  {title:'Metrados',href:'#'},
+  {title:'Comunicaciones',href:'#'},
+  {title:spreadsheet.name,href:'#'}
+ ]
+
+ return(
+  <AppLayout breadcrumbs={breadcrumbs}>
+   <div className="flex h-[calc(100vh-64px)] flex-col">
+
+    <div className="border-b bg-white px-4 py-2 flex justify-between items-center">
+     <h1 className="text-sm font-bold">{spreadsheet.name}</h1>
+    </div>
+
+    {/* --- BARRA DE HERRAMIENTAS PERSONALIZADA --- */}
+    <div className="bg-gray-50 border-b px-4 py-2 flex gap-2 items-center h-12">
+        <button 
+            onClick={handleAddChapter}
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+        >
+            <span>📁</span> Agregar Capítulo
+        </button>
+        
+        <button 
+            onClick={handleAddItem}
+            className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded transition-colors"
+        >
+            <span>📄</span> Agregar Ítem
+        </button>
+
+        <div className="h-4 w-px bg-gray-300 mx-2"></div>
+    </div>
+    {/* --------------------------------------------- */}
+
+    <div className="flex-1 overflow-hidden relative">
+     <Luckysheet
+        data={sheetData}
+        height="100%"
+        options={{
+            showinfobar: false,
+            showstatisticBar: true,
+            toolbar: false, 
+            hook:{
+                cellUpdated:(r:number)=>{
+                    handleCellUpdated(r)
+                }
+            }
+        }}
+     />
+    </div>
+
+   </div>
+  </AppLayout>
+ )
 }

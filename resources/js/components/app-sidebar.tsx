@@ -91,6 +91,14 @@ export function AppSidebar() {
             href: '/metrados/comunicacion',
             icon: Folder,
         },
+        
+        {
+            title: 'Electricas',
+            href: '/metrados/electrica',
+            icon: Folder,
+        },
+
+        
         // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
         // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
     ];

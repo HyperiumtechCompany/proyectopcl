@@ -6,6 +6,7 @@ use App\Http\Controllers\CaidaTensionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\MetradoComunicacionController;
+use App\Http\Controllers\MetradoElectricasController;
 use App\Http\Controllers\MetradosController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UserController;
@@ -57,7 +58,7 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
     // ruta raíz del grupo, muestra listado de módulos de metrado
     Route::get('/', [MetradosController::class, 'index'])->name('index');
 
-    // cada disciplina se define en un sub‑grupo; aquí va Comunicaciones
+    
     Route::prefix('comunicacion')->name('comunicacion.')->group(function () {
         Route::get('/', [MetradoComunicacionController::class, 'index'])->name('index');
         Route::post('/', [MetradoComunicacionController::class, 'store'])->name('store');
@@ -67,6 +68,17 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
         Route::patch('/{metradosComunicacion}', [MetradoComunicacionController::class, 'update'])->name('update');
         Route::delete('/{metradosComunicacion}', [MetradoComunicacionController::class, 'destroy'])->name('destroy');
         Route::post('/{metradosComunicacion}/enable-collab', [MetradoComunicacionController::class, 'enableCollaboration'])->name('enable-collab');
+    });
+
+    Route::prefix('electrica')->name('electricas.')->group(function () {
+        Route::get('/', [MetradoElectricasController::class, 'index'])->name('index');
+        Route::post('/', [MetradoElectricasController::class, 'store'])->name('store');
+        Route::get('/join', fn() => redirect()->route('metrados.electricas.index'))->name('join.form');
+        Route::post('/join', [MetradoElectricasController::class, 'join'])->name('join');
+        Route::get('/{metradosElectricas}', [MetradoElectricasController::class, 'show'])->name('show');
+        Route::patch('/{metradosElectricas}', [MetradoElectricasController::class, 'update'])->name('update');
+        Route::delete('/{metradosElectricas}', [MetradoElectricasController::class, 'destroy'])->name('destroy');
+        Route::post('/{metradosElectricas}/enable-collab', [MetradoElectricasController::class, 'enableCollaboration'])->name('enable-collab');
     });
 
     // próximamente: arquitectura, estructuras, sanitarias, eléctricas, gas...
