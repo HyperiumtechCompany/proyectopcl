@@ -1,8 +1,8 @@
 import { Link } from '@inertiajs/react';
 import React from 'react';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem } from '@/types';
 import metradoRoutes from '@/routes/metrados';
+import type { BreadcrumbItem } from '@/types';
 
 export default function Index() {
     const breadcrumbs: BreadcrumbItem[] = [

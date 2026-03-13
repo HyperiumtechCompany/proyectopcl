@@ -1,4 +1,4 @@
-import { PresupuestoRow } from '@/types/presupuestos';
+import type { PresupuestoRow } from '@/types/presupuestos';
 
 interface PresupuestoCalculations {
     calculateParcial: (metrado: number, precioUnitario: number) => number;

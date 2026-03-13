@@ -1,13 +1,15 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import type {
+    ColumnDef} from '@tanstack/react-table';
 import {
     useReactTable,
     getCoreRowModel,
-    flexRender,
-    ColumnDef,
+    flexRender
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import { useBudgetStore, BudgetItemRow } from '../stores/budgetStore';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { BudgetItemRow } from '../stores/budgetStore';
+import { useBudgetStore } from '../stores/budgetStore';
 
 const fmt = (n: number, d = 2) =>
     n?.toLocaleString('es-PE', {

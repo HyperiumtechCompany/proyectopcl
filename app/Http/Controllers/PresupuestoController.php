@@ -313,6 +313,7 @@ class PresupuestoController extends Controller
             'mano_de_obra.*.descripcion' => 'required|string',
             'mano_de_obra.*.unidad' => 'required|string|max:20',
             'mano_de_obra.*.cantidad' => 'required|numeric|min:0',
+            'mano_de_obra.*.recursos' => 'nullable|numeric|min:0',
             'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
             'materiales' => 'nullable|array',
             'materiales.*.descripcion' => 'required|string',
@@ -324,7 +325,18 @@ class PresupuestoController extends Controller
             'equipos.*.descripcion' => 'required|string',
             'equipos.*.unidad' => 'required|string|max:20',
             'equipos.*.cantidad' => 'required|numeric|min:0',
+            'equipos.*.recursos' => 'nullable|numeric|min:0',
             'equipos.*.precio_hora' => 'required|numeric|min:0',
+            'subcontratos' => 'nullable|array',
+            'subcontratos.*.descripcion' => 'required|string',
+            'subcontratos.*.unidad' => 'required|string|max:20',
+            'subcontratos.*.cantidad' => 'required|numeric|min:0',
+            'subcontratos.*.precio_unitario' => 'required|numeric|min:0',
+            'subpartidas' => 'nullable|array',
+            'subpartidas.*.descripcion' => 'required|string',
+            'subpartidas.*.unidad' => 'required|string|max:20',
+            'subpartidas.*.cantidad' => 'required|numeric|min:0',
+            'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
         ]);
 
         DB::connection('costos_tenant')->beginTransaction();
@@ -336,8 +348,8 @@ class PresupuestoController extends Controller
             $manoDeObra = $validated['mano_de_obra'] ?? [];
             $costoManoObra = 0;
             foreach ($manoDeObra as &$componente) {
-                // Formula: (cantidad * precio_unitario) / rendimiento
-                $parcial = ($componente['cantidad'] * $componente['precio_unitario']) / $rendimiento;
+                // Formula: cantidad * precio_unitario
+                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 2);
                 $costoManoObra += $componente['parcial'];
             }
@@ -359,12 +371,47 @@ class PresupuestoController extends Controller
             $equipos = $validated['equipos'] ?? [];
             $costoEquipos = 0;
             foreach ($equipos as &$componente) {
-                // Formula: (cantidad * precio_hora) / rendimiento
-                $parcial = ($componente['cantidad'] * $componente['precio_hora']) / $rendimiento;
-                $componente['parcial'] = round($parcial, 2);
+                $descripcion = strtolower((string)($componente['descripcion'] ?? ''));
+                $isHerramientas = str_contains($descripcion, 'herramienta');
+
+                if ($isHerramientas) {
+                    // Herramientas: porcentaje de mano de obra
+                    $precioBase = $costoManoObra;
+                    $porcentaje = $componente['cantidad'] ?? 0;
+                    $parcial = $precioBase * ($porcentaje / 100);
+                    $componente['precio_hora'] = $precioBase;
+                    $componente['parcial'] = round($parcial, 2);
+                } else {
+                    // Formula: cantidad * precio_hora
+                    $parcial = $componente['cantidad'] * $componente['precio_hora'];
+                    $componente['parcial'] = round($parcial, 2);
+                }
+
                 $costoEquipos += $componente['parcial'];
             }
             $costoEquipos = round($costoEquipos, 2);
+
+            // Calculate subcontratos costs
+            $subcontratos = $validated['subcontratos'] ?? [];
+            $costoSubcontratos = 0;
+            foreach ($subcontratos as &$componente) {
+                // Formula: cantidad * precio_unitario
+                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
+                $componente['parcial'] = round($parcial, 2);
+                $costoSubcontratos += $componente['parcial'];
+            }
+            $costoSubcontratos = round($costoSubcontratos, 2);
+
+            // Calculate subpartidas costs
+            $subpartidas = $validated['subpartidas'] ?? [];
+            $costoSubpartidas = 0;
+            foreach ($subpartidas as &$componente) {
+                // Formula: cantidad * precio_unitario
+                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
+                $componente['parcial'] = round($parcial, 2);
+                $costoSubpartidas += $componente['parcial'];
+            }
+            $costoSubpartidas = round($costoSubpartidas, 2);
 
             // Prepare data for database
             $acuData = [
@@ -378,6 +425,10 @@ class PresupuestoController extends Controller
                 'costo_materiales' => $costoMateriales,
                 'equipos' => !empty($equipos) ? json_encode($equipos) : null,
                 'costo_equipos' => $costoEquipos,
+                'subcontratos' => !empty($subcontratos) ? json_encode($subcontratos) : null,
+                'costo_subcontratos' => $costoSubcontratos,
+                'subpartidas' => !empty($subpartidas) ? json_encode($subpartidas) : null,
+                'costo_subpartidas' => $costoSubpartidas,
                 'updated_at' => now(),
             ];
 
@@ -413,6 +464,8 @@ class PresupuestoController extends Controller
             $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
             $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
             $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
+            $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
+            $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
 
             DB::connection('costos_tenant')->commit();
 
@@ -638,6 +691,14 @@ class PresupuestoController extends Controller
             }
         }
 
+        if (isset($row['costo_subcontratos']) && !is_numeric($row['costo_subcontratos'])) {
+            $errors[] = 'El campo costo_subcontratos debe ser numÃ©rico';
+        }
+
+        if (isset($row['costo_subpartidas']) && !is_numeric($row['costo_subpartidas'])) {
+            $errors[] = 'El campo costo_subpartidas debe ser numÃ©rico';
+        }
+
         return $errors;
     }
 
@@ -733,6 +794,14 @@ class PresupuestoController extends Controller
 
         if (isset($row['equipos']) && !is_array($row['equipos']) && !is_null($row['equipos'])) {
             $errors[] = 'El campo equipos debe ser un array';
+        }
+
+        if (isset($row['subcontratos']) && !is_array($row['subcontratos']) && !is_null($row['subcontratos'])) {
+            $errors[] = 'El campo subcontratos debe ser un array';
+        }
+
+        if (isset($row['subpartidas']) && !is_array($row['subpartidas']) && !is_null($row['subpartidas'])) {
+            $errors[] = 'El campo subpartidas debe ser un array';
         }
 
         if (isset($row['costo_mano_obra']) && !is_numeric($row['costo_mano_obra'])) {
@@ -1097,13 +1166,53 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.costo_equipos'] = true;
         }
 
+        if (!$schema->hasColumn('presupuesto_acus', 'subcontratos')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->json('subcontratos')->nullable()
+                    ->comment('Array of subcontract components');
+            });
+            $this->tenantColumnCache['presupuesto_acus.subcontratos'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_subcontratos')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_subcontratos', 15, 4)->default(0);
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_subcontratos'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'subpartidas')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->json('subpartidas')->nullable()
+                    ->comment('Array of subpartidas components');
+            });
+            $this->tenantColumnCache['presupuesto_acus.subpartidas'] = true;
+        }
+
+        if (!$schema->hasColumn('presupuesto_acus', 'costo_subpartidas')) {
+            $schema->table('presupuesto_acus', function (Blueprint $table) {
+                $table->decimal('costo_subpartidas', 15, 4)->default(0);
+            });
+            $this->tenantColumnCache['presupuesto_acus.costo_subpartidas'] = true;
+        }
+
         if (!$schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_unitario_total', 15, 4)
-                    ->storedAs('costo_mano_obra + costo_materiales + costo_equipos')
+                    ->storedAs('costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas')
                     ->comment('Calculated: sum of all component costs');
             });
             $this->tenantColumnCache['presupuesto_acus.costo_unitario_total'] = true;
+        } else {
+            try {
+                DB::connection('costos_tenant')->statement(
+                    "ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,4) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED"
+                );
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo actualizar la fórmula de costo_unitario_total', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 }
