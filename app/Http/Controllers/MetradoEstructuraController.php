@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-// use App\Events\EstructuraSpreadsheetUpdated; // Opcional, si creas el evento después
 use App\Models\MetradoEstructuraSpreadsheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,6 +28,7 @@ class MetradoEstructuraController extends Controller
                 'owner'             => $s->owner,
                 'updated_at'        => $s->updated_at->format('d/m/Y H:i'),
                 'is_owner'          => $s->user_id === Auth::id(),
+                'summary'           => $s->summary, // ← Ahora incluye el resumen
             ]);
 
         return Inertia::render('costos/metrados/metrado_estructura/index', [
@@ -46,6 +46,9 @@ class MetradoEstructuraController extends Controller
             'structural_system' => 'nullable|string|max:100',
         ]);
 
+        // ← OBTENER PLANTILLA SEGÚN SISTEMA ESTRUCTURAL
+        $initialData = $this->getTemplateData($validated['structural_system'] ?? null);
+
         $sheet = MetradoEstructuraSpreadsheet::create([
             'user_id'           => Auth::id(),
             'name'              => $validated['name'],
@@ -53,7 +56,7 @@ class MetradoEstructuraController extends Controller
             'project_location'  => $validated['project_location'] ?? null,
             'building_type'     => $validated['building_type'] ?? null,
             'structural_system' => $validated['structural_system'] ?? null,
-            'sheet_data'        => null,
+            'sheet_data'        => $initialData, // ← USA LA PLANTILLA EN VEZ DE NULL
         ]);
 
         return redirect()->route('metrados.estructura.show', $sheet->id);
@@ -107,13 +110,6 @@ class MetradoEstructuraController extends Controller
         ]);
 
         $metradosEstructura->update($validated);
-
-        // Si tienes un evento para estructura, descomenta y ajusta
-        // broadcast(new EstructuraSpreadsheetUpdated(
-        //     spreadsheet: $metradosEstructura->fresh(),
-        //     updatedBy: Auth::id(),
-        //     updatedByName: Auth::user()->name,
-        // ))->toOthers();
 
         return back()->with('success', 'Metrado guardado correctamente.');
     }
@@ -191,5 +187,92 @@ class MetradoEstructuraController extends Controller
         if (! in_array($plan, ['mensual', 'anual', 'lifetime'])) {
             abort(403, 'El trabajo colaborativo requiere un plan de pago.');
         }
+    }
+
+    /**
+     * ← NUEVO MÉTODO: Obtener plantilla según sistema estructural
+     * Formato: [ITEM, DESCRIPCION, UNID, ELEM_SIMIL, LARGO, ANCHO, ALTO, N_VECES, LON, AREA, VOL, KG, UNID_METRADO, TOTAL]
+     */
+    private function getTemplateData(?string $structuralSystem): array
+    {
+        // PLANTILLA: APORTICADO
+        if ($structuralSystem === 'aporticado') {
+            return [
+                ['01', 'CIMENTACIÓN', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01', 'ZAPATAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01.01', 'Zapata Z1', 'm3', '4', '1.20', '1.20', '0.60', '1', '', '', '', '', '', ''],
+                ['01.01.02', 'Zapata Z2', 'm3', '6', '1.00', '1.00', '0.50', '1', '', '', '', '', '', ''],
+                ['02', 'COLUMNAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['02.01', 'Columnas Nivel 1', 'm3', '8', '0.30', '0.30', '3.00', '1', '', '', '', '', '', ''],
+                ['02.02', 'Columnas Nivel 2', 'm3', '8', '0.30', '0.30', '3.00', '1', '', '', '', '', '', ''],
+                ['03', 'VIGAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['03.01', 'Viga Principal V1', 'm3', '4', '0.30', '0.40', '5.00', '1', '', '', '', '', '', ''],
+                ['03.02', 'Viga Secundaria V2', 'm3', '6', '0.25', '0.35', '4.00', '1', '', '', '', '', '', ''],
+                ['04', 'LOSAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['04.01', 'Losa Aligerada h=20cm', 'm2', '1', '0', '0', '0.20', '1', '', '', '', '', '', ''],
+            ];
+        }
+
+        // PLANTILLA: MUROS ESTRUCTURALES
+        if ($structuralSystem === 'muros') {
+            return [
+                ['01', 'CIMENTACIÓN', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01', 'Zapatas Corridas', 'm3', '1', '0.60', '0.80', '0.50', '1', '', '', '', '', '', ''],
+                ['02', 'MUROS ESTRUCTURALES', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['02.01', 'Muro E-1 (Sótano)', 'm3', '2', '0.25', '3.50', '2.80', '1', '', '', '', '', '', ''],
+                ['02.02', 'Muro E-2 (PB)', 'm3', '2', '0.20', '3.00', '2.80', '1', '', '', '', '', '', ''],
+                ['03', 'PLACAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['03.01', 'Placa P-1', 'm3', '4', '0.20', '2.00', '2.80', '1', '', '', '', '', '', ''],
+            ];
+        }
+
+        // PLANTILLA: DUAL
+        if ($structuralSystem === 'dual') {
+            return [
+                ['01', 'CIMENTACIÓN', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01', 'Zapatas', 'm3', '6', '1.00', '1.00', '0.60', '1', '', '', '', '', '', ''],
+                ['02', 'COLUMNAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['02.01', 'Columnas C1', 'm3', '8', '0.35', '0.35', '3.00', '1', '', '', '', '', '', ''],
+                ['03', 'MUROS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['03.01', 'Muro Estructural', 'm3', '2', '0.20', '3.00', '2.80', '1', '', '', '', '', '', ''],
+                ['04', 'VIGAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['04.01', 'Viga V1', 'm3', '4', '0.30', '0.40', '5.00', '1', '', '', '', '', '', ''],
+            ];
+        }
+
+        // PLANTILLA: ALBAÑILERÍA CONFINADA
+        if ($structuralSystem === 'albañileria') {
+            return [
+                ['01', 'CIMENTACIÓN', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01', 'Zapatas Corridas', 'm3', '1', '0.60', '0.80', '0.50', '1', '', '', '', '', '', ''],
+                ['02', 'MUROS DE ALBAÑILERÍA', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['02.01', 'Muro A-1 (Ladrillo)', 'm2', '4', '0.15', '3.00', '2.80', '1', '', '', '', '', '', ''],
+                ['03', 'COLUMNAS DE CONFINAMIENTO', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['03.01', 'Columna C1', 'm3', '8', '0.15', '0.25', '2.80', '1', '', '', '', '', '', ''],
+                ['04', 'VIGAS DE CORONA', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['04.01', 'Viga de Corona', 'm3', '4', '0.15', '0.30', '3.00', '1', '', '', '', '', '', ''],
+            ];
+        }
+
+        // PLANTILLA: METÁLICO
+        if ($structuralSystem === 'metalico') {
+            return [
+                ['01', 'CIMENTACIÓN', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['01.01', 'Zapatas', 'm3', '4', '1.00', '1.00', '0.50', '1', '', '', '', '', '', ''],
+                ['02', 'COLUMNAS METÁLICAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['02.01', 'Columna HEB 200', 'kg', '8', '0', '0', '3.00', '1', '', '', '', '', '', ''],
+                ['02.02', 'Columna HEB 240', 'kg', '4', '0', '0', '3.00', '1', '', '', '', '', '', ''],
+                ['03', 'VIGAS METÁLICAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['03.01', 'Viga IPE 300', 'kg', '6', '0', '0', '5.00', '1', '', '', '', '', '', ''],
+                ['04', 'CORREAS', '', '', '', '', '', '', '', '', '', '', '', ''],
+                ['04.01', 'Correa PNL 150', 'kg', '20', '0', '0', '5.00', '1', '', '', '', '', '', ''],
+            ];
+        }
+
+        // POR DEFECTO: HOJA VACÍA (solo headers)
+        return [
+            ['01', 'ITEM INICIAL', '', '', '', '', '', '', '', '', '', '', '', ''],
+            ['01.01', 'Descripción del elemento', 'm3', '1', '0', '0', '0', '1', '', '', '', '', '', ''],
+        ];
     }
 }

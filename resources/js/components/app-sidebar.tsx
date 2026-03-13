@@ -98,6 +98,11 @@ export function AppSidebar() {
         href: '/metrados/estructura',
         icon: Folder, // o el ícono que corresponda, podrías importar otro como "HardHat" o "Building"
     },
+     {
+            title: 'Gas',
+            href: '/metrados/gas',
+            icon: Folder,
+        },
     ];
 
     return (

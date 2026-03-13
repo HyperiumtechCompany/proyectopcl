@@ -81,7 +81,19 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
         Route::delete('/{metradosEstructura}', [App\Http\Controllers\MetradoEstructuraController::class, 'destroy'])->name('destroy');
         Route::post('/{metradosEstructura}/enable-collab', [App\Http\Controllers\MetradoEstructuraController::class, 'enableCollaboration'])->name('enable-collab');
     });
-    // próximamente: arquitectura, estructuras, sanitarias, eléctricas, gas...
+   // En tu archivo de rutas (probablemente routes/web.php o routes/metrados.php)
+
+// Gas
+Route::prefix('gas')->name('gas.')->group(function () {
+    Route::get('/', [App\Http\Controllers\MetradoGasController::class, 'index'])->name('index');
+    Route::post('/', [App\Http\Controllers\MetradoGasController::class, 'store'])->name('store');
+    Route::get('/join', fn() => redirect()->route('metrados.gas.index'))->name('join.form');
+    Route::post('/join', [App\Http\Controllers\MetradoGasController::class, 'join'])->name('join');
+    Route::get('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'show'])->name('show');
+    Route::patch('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'update'])->name('update');
+    Route::delete('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'destroy'])->name('destroy');
+    Route::post('/{metradosGas}/enable-collab', [App\Http\Controllers\MetradoGasController::class, 'enableCollaboration'])->name('enable-collab');
+});
 });
 
 // ─── Cálculo de Agua ────────────────────────────────────────────────────────

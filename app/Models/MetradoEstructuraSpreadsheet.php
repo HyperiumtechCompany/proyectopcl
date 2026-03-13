@@ -29,6 +29,10 @@ class MetradoEstructuraSpreadsheet extends Model
         'is_collaborative' => 'boolean',
     ];
 
+    protected $appends = [
+        'summary',
+    ];
+
     // Relación con el propietario
     public function owner()
     {
@@ -78,5 +82,55 @@ class MetradoEstructuraSpreadsheet extends Model
             ->first();
 
         return $collab && $collab->pivot->role === 'editor';
+    }
+
+    /**
+     * Accessor: Calcular resumen automático desde sheet_data
+     * Se usa en el frontend: sheet.summary.concrete, sheet.summary.steel, etc.
+     */
+    public function getSummaryAttribute(): array
+    {
+        $data = $this->sheet_data;
+        
+        // Si no hay datos, retornar ceros
+        if (!is_array($data) || empty($data)) {
+            return [
+                'concrete' => 0,
+                'steel' => 0,
+                'formwork' => 0,
+                'columns' => 0,
+            ];
+        }
+        
+        $concrete = 0;
+        $steel = 0;
+        $formwork = 0;
+        $columns = 0;
+        
+        // Recorrer filas de datos (saltar headers: filas 0, 1, 2)
+        // Cada fila: [ITEM, DESCRIPCION, UNID, ELEM, LARGO, ANCHO, ALTO, N_VECES, LON, AREA, VOL, KG, UNID_METRADO, TOTAL]
+        foreach (array_slice($data, 3) as $row) {
+            $unidad = strtolower(trim($row[2] ?? '')); // Columna UNID (índice 2)
+            $vol = floatval($row[10] ?? 0);            // Columna VOL (índice 10)
+            $kg = floatval($row[11] ?? 0);             // Columna KG (índice 11)
+            $area = floatval($row[9] ?? 0);            // Columna AREA (índice 9)
+            $elem = floatval($row[12] ?? 0);           // Columna UNID_METRADO (índice 12)
+            
+            if ($unidad === 'm3') {
+                $concrete += $vol;
+                $steel += $kg;
+            } elseif ($unidad === 'm2') {
+                $formwork += $area;
+            } elseif ($unidad === 'und') {
+                $columns += $elem;
+            }
+        }
+        
+        return [
+            'concrete' => round($concrete, 2),
+            'steel' => round($steel, 0),
+            'formwork' => round($formwork, 1),
+            'columns' => round($columns, 0),
+        ];
     }
 }
