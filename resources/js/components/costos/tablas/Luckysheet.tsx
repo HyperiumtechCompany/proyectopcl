@@ -120,10 +120,22 @@ interface LuckysheetProps {
      * una celda. Usa esto para actualizar el estado del padre y programar el guardado.
      */
     onDataChange?: (sheets: any[]) => void;
+    /**
+     * Llamado cuando el usuario selecciona una celda.
+     * Recibe: fila, columna, y datos de la fila completa
+     */
+    onCellSelect?: (row: number, col: number, rowData: Record<string, any>) => void;
+    /**
+     * Llamado cuando el usuario solicita eliminar una fila.
+     * Recibe: número de fila
+     */
+    onDeleteRow?: (rowIndex: number) => void;
     /** Alto del contenedor. Default: '600px' */
     height?: string;
     /** Si false, Luckysheet mostrará la hoja en modo lectura (sin edición). */
     canEdit?: boolean;
+    /** Columnas para determinar claves de datos */
+    columns?: Array<{ key: string; label: string }>;
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -132,8 +144,11 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
     data,
     options = {},
     onDataChange,
-    height = '600px',
+    onCellSelect,
+    onDeleteRow,
+    height = '640px',
     canEdit = true,
+    columns = [],
 }) => {
     // ID estable del contenedor (no usar useId() — genera ':' que Luckysheet no soporta como selector)
     const containerIdRef = useRef<string>(
@@ -144,6 +159,7 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
     const [scriptState, setScriptState] = useState<ScriptState>(_scriptState);
     const isInitialized = useRef(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const selectionCleanupRef = useRef<null | (() => void)>(null);
 
     // ── Paso 1: Cargar el script UMD y CSS ────────────────────────────────────
     useEffect(() => {
@@ -257,6 +273,48 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                 }, 0);
             };
 
+            const readCellValue = (sheet: any, row: number, col: number) => {
+                const cell = sheet?.data?.[row]?.[col];
+                if (cell && cell.v !== undefined) {
+                    if (typeof cell.v === 'object' && cell.v !== null && 'v' in cell.v) {
+                        return (cell.v as any).v ?? '';
+                    }
+                    return cell.v ?? '';
+                }
+                const cellObj = sheet?.celldata?.find(
+                    (cd: any) => cd.r === row && cd.c === col,
+                );
+                return cellObj?.v?.v ?? '';
+            };
+
+            const notifySelection = (forcedRow?: number, forcedCol?: number) => {
+                if (!onCellSelect) return;
+                try {
+                    const sheets = ls.getAllSheets();
+                    const sheet = sheets?.[0];
+                    if (!sheet) return;
+
+                    let row = forcedRow;
+                    let col = forcedCol;
+                    if (row === undefined || col === undefined) {
+                        const range = ls.getRange?.();
+                        if (!range || range.length === 0) return;
+                        row = range[0]?.row?.[0];
+                        col = range[0]?.column?.[0];
+                    }
+
+                    if (row === undefined || row <= 0 || col === undefined) return;
+
+                    const rowData: Record<string, any> = {};
+                    columns.forEach((column, idx) => {
+                        rowData[column.key] = readCellValue(sheet, row as number, idx);
+                    });
+                    onCellSelect(row as number, col as number, rowData);
+                } catch (e) {
+                    console.warn('[Luckysheet] Error notificando selección de celda:', e);
+                }
+            };
+
             try {
                 ls.create({
                     container: containerId,
@@ -279,6 +337,12 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                      */
                     afterChange: (r: number, c: number, v: any) => {
                         captureSheetsData();
+
+                        // Notificar la selección de celda
+                        if (onCellSelect) {
+                            notifySelection(r, c);
+                        }
+
                         options?.afterChange?.(r, c, v);
                     },
 
@@ -291,6 +355,22 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                         options?.updated?.(operate);
                     },
                 });
+
+                const containerEl = document.getElementById(containerId);
+                if (containerEl) {
+                    const handleSelectionEvent = () => {
+                        if (!onCellSelect) return;
+                        setTimeout(() => {
+                            notifySelection();
+                        }, 0);
+                    };
+                    containerEl.addEventListener('mouseup', handleSelectionEvent);
+                    containerEl.addEventListener('keyup', handleSelectionEvent);
+                    selectionCleanupRef.current = () => {
+                        containerEl.removeEventListener('mouseup', handleSelectionEvent);
+                        containerEl.removeEventListener('keyup', handleSelectionEvent);
+                    };
+                }
             } catch (err) {
                 console.error('[Luckysheet] Error en luckysheet.create():', err);
             }
@@ -298,6 +378,10 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
 
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
+            if (selectionCleanupRef.current) {
+                selectionCleanupRef.current();
+                selectionCleanupRef.current = null;
+            }
             isInitialized.current = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,8 +435,9 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                 // CRÍTICO: Sin un fondo explícito, el tema oscuro de la app
                 // puede hacer que el grid de Luckysheet sea invisible (texto blanco
                 // sobre fondo blanco o viceversa). Luckysheet maneja su propio tema.
-                background: '#fffff',
+                background: '#ffffff',
             }}
+            className="luckysheet-container"
         />
     );
 };
