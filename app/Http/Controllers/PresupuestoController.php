@@ -204,17 +204,28 @@ class PresupuestoController extends Controller
         DB::connection('costos_tenant')->beginTransaction();
 
         try {
-            // Query the metrado table for partida structure
-            $metradoQuery = DB::connection('costos_tenant')
-                ->table($metradoType)
-                ->select('partida', 'descripcion', 'unidad', 'total')
-                ->whereNotNull('partida')
-                ->where('partida', '!=', '');
-            if ($this->hasTenantColumn($metradoType, 'item_order')) {
-                $metradoQuery->orderBy('item_order');
-            }
-            if ($this->hasTenantColumn($metradoType, 'id')) {
-                $metradoQuery->orderBy('id');
+            // Special handling for sanitarias: read from resumen table
+            if ($metradoType === 'metrado_sanitarias') {
+                $metradoQuery = DB::connection('costos_tenant')
+                    ->table('metrado_sanitarias_resumen')
+                    ->select('partida', 'descripcion', 'unidad', 'total_general as total')
+                    ->whereNotNull('partida')
+                    ->where('partida', '!=', '')
+                    ->orderBy('item_order')
+                    ->orderBy('id');
+            } else {
+                // Query the metrado table for partida structure
+                $metradoQuery = DB::connection('costos_tenant')
+                    ->table($metradoType)
+                    ->select('partida', 'descripcion', 'unidad', 'total')
+                    ->whereNotNull('partida')
+                    ->where('partida', '!=', '');
+                if ($this->hasTenantColumn($metradoType, 'item_order')) {
+                    $metradoQuery->orderBy('item_order');
+                }
+                if ($this->hasTenantColumn($metradoType, 'id')) {
+                    $metradoQuery->orderBy('id');
+                }
             }
             $metradoRows = $metradoQuery->get();
 

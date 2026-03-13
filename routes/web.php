@@ -7,6 +7,7 @@ use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\MetradoComunicacionController;
+use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradosController;
 use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\PresupuestoController;
@@ -149,6 +150,24 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
+        });
+
+    // ─── Metrado Sanitarias Modular (con middleware de BD dinámica) ────
+    Route::middleware([\App\Http\Middleware\SetCostosDatabase::class])
+        ->prefix('/{costoProject}/metrado-sanitarias')
+        ->name('metrado-sanitarias.')
+        ->group(function () {
+            Route::get('/', [MetradoSanitariasController::class, 'index'])->name('index');
+            Route::get('/config', [MetradoSanitariasController::class, 'getConfig'])->name('config.show');
+            Route::patch('/config', [MetradoSanitariasController::class, 'updateConfig'])->name('config.update');
+            Route::get('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'getModulo'])->name('modulo.show');
+            Route::patch('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'updateModulo'])->name('modulo.update');
+            Route::get('/exterior', [MetradoSanitariasController::class, 'getExterior'])->name('exterior.show');
+            Route::patch('/exterior', [MetradoSanitariasController::class, 'updateExterior'])->name('exterior.update');
+            Route::get('/cisterna', [MetradoSanitariasController::class, 'getCisterna'])->name('cisterna.show');
+            Route::patch('/cisterna', [MetradoSanitariasController::class, 'updateCisterna'])->name('cisterna.update');
+            Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
+            Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
         });
 });
 

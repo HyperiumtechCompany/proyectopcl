@@ -92,6 +92,11 @@ class CostoModuleController extends Controller
         $this->validateModuleType($moduleType);
         $this->validateModuleEnabled($costoProject, $moduleType);
 
+        // Sanitarias has a specialized controller with modular structure
+        if ($moduleType === 'metrado_sanitarias') {
+            return redirect()->route('costos.metrado-sanitarias.index', ['costoProject' => $costoProject->id]);
+        }
+
         $tableName = self::MODULE_TABLE_MAP[$moduleType];
 
         // Read rows from the tenant DB
