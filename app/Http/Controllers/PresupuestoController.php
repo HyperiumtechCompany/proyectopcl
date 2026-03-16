@@ -204,19 +204,6 @@ class PresupuestoController extends Controller
         DB::connection('costos_tenant')->beginTransaction();
 
         try {
-<<<<<<< HEAD
-            // Query the metrado table for partida structure
-            $metradoQuery = DB::connection('costos_tenant')
-                ->table($metradoType)
-                ->select('partida', 'descripcion', 'unidad', 'total')
-                ->whereNotNull('partida')
-                ->where('partida', '!=', '');
-            if ($this->hasTenantColumn($metradoType, 'item_order')) {
-                $metradoQuery->orderBy('item_order');
-            }
-            if ($this->hasTenantColumn($metradoType, 'id')) {
-                $metradoQuery->orderBy('id');
-=======
             // Special handling for sanitarias: read from resumen table
             if ($metradoType === 'metrado_sanitarias') {
                 $metradoQuery = DB::connection('costos_tenant')
@@ -239,7 +226,6 @@ class PresupuestoController extends Controller
                 if ($this->hasTenantColumn($metradoType, 'id')) {
                     $metradoQuery->orderBy('id');
                 }
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             }
             $metradoRows = $metradoQuery->get();
 
@@ -338,10 +324,7 @@ class PresupuestoController extends Controller
             'mano_de_obra.*.descripcion' => 'required|string',
             'mano_de_obra.*.unidad' => 'required|string|max:20',
             'mano_de_obra.*.cantidad' => 'required|numeric|min:0',
-<<<<<<< HEAD
-=======
             'mano_de_obra.*.recursos' => 'nullable|numeric|min:0',
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
             'materiales' => 'nullable|array',
             'materiales.*.descripcion' => 'required|string',
@@ -353,9 +336,6 @@ class PresupuestoController extends Controller
             'equipos.*.descripcion' => 'required|string',
             'equipos.*.unidad' => 'required|string|max:20',
             'equipos.*.cantidad' => 'required|numeric|min:0',
-<<<<<<< HEAD
-            'equipos.*.precio_hora' => 'required|numeric|min:0',
-=======
             'equipos.*.recursos' => 'nullable|numeric|min:0',
             'equipos.*.precio_hora' => 'required|numeric|min:0',
             'subcontratos' => 'nullable|array',
@@ -368,7 +348,6 @@ class PresupuestoController extends Controller
             'subpartidas.*.unidad' => 'required|string|max:20',
             'subpartidas.*.cantidad' => 'required|numeric|min:0',
             'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         ]);
 
         DB::connection('costos_tenant')->beginTransaction();
@@ -380,13 +359,8 @@ class PresupuestoController extends Controller
             $manoDeObra = $validated['mano_de_obra'] ?? [];
             $costoManoObra = 0;
             foreach ($manoDeObra as &$componente) {
-<<<<<<< HEAD
-                // Formula: (cantidad * precio_unitario) / rendimiento
-                $parcial = ($componente['cantidad'] * $componente['precio_unitario']) / $rendimiento;
-=======
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 $componente['parcial'] = round($parcial, 2);
                 $costoManoObra += $componente['parcial'];
             }
@@ -408,11 +382,6 @@ class PresupuestoController extends Controller
             $equipos = $validated['equipos'] ?? [];
             $costoEquipos = 0;
             foreach ($equipos as &$componente) {
-<<<<<<< HEAD
-                // Formula: (cantidad * precio_hora) / rendimiento
-                $parcial = ($componente['cantidad'] * $componente['precio_hora']) / $rendimiento;
-                $componente['parcial'] = round($parcial, 2);
-=======
                 $descripcion = strtolower((string)($componente['descripcion'] ?? ''));
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
@@ -429,13 +398,10 @@ class PresupuestoController extends Controller
                     $componente['parcial'] = round($parcial, 2);
                 }
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 $costoEquipos += $componente['parcial'];
             }
             $costoEquipos = round($costoEquipos, 2);
 
-<<<<<<< HEAD
-=======
             // Calculate subcontratos costs
             $subcontratos = $validated['subcontratos'] ?? [];
             $costoSubcontratos = 0;
@@ -458,7 +424,6 @@ class PresupuestoController extends Controller
             }
             $costoSubpartidas = round($costoSubpartidas, 2);
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             // Prepare data for database
             $acuData = [
                 'partida' => $validated['partida'],
@@ -471,13 +436,10 @@ class PresupuestoController extends Controller
                 'costo_materiales' => $costoMateriales,
                 'equipos' => !empty($equipos) ? json_encode($equipos) : null,
                 'costo_equipos' => $costoEquipos,
-<<<<<<< HEAD
-=======
                 'subcontratos' => !empty($subcontratos) ? json_encode($subcontratos) : null,
                 'costo_subcontratos' => $costoSubcontratos,
                 'subpartidas' => !empty($subpartidas) ? json_encode($subpartidas) : null,
                 'costo_subpartidas' => $costoSubpartidas,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 'updated_at' => now(),
             ];
 
@@ -513,11 +475,8 @@ class PresupuestoController extends Controller
             $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
             $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
             $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
-<<<<<<< HEAD
-=======
             $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
             $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
             DB::connection('costos_tenant')->commit();
 
@@ -743,8 +702,6 @@ class PresupuestoController extends Controller
             }
         }
 
-<<<<<<< HEAD
-=======
         if (isset($row['costo_subcontratos']) && !is_numeric($row['costo_subcontratos'])) {
             $errors[] = 'El campo costo_subcontratos debe ser numÃ©rico';
         }
@@ -753,7 +710,6 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo costo_subpartidas debe ser numÃ©rico';
         }
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         return $errors;
     }
 
@@ -851,8 +807,6 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo equipos debe ser un array';
         }
 
-<<<<<<< HEAD
-=======
         if (isset($row['subcontratos']) && !is_array($row['subcontratos']) && !is_null($row['subcontratos'])) {
             $errors[] = 'El campo subcontratos debe ser un array';
         }
@@ -861,7 +815,6 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo subpartidas debe ser un array';
         }
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         if (isset($row['costo_mano_obra']) && !is_numeric($row['costo_mano_obra'])) {
             $errors[] = 'El campo costo_mano_obra debe ser numérico';
         }
@@ -1224,15 +1177,6 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.costo_equipos'] = true;
         }
 
-<<<<<<< HEAD
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
-            $schema->table('presupuesto_acus', function (Blueprint $table) {
-                $table->decimal('costo_unitario_total', 15, 4)
-                    ->storedAs('costo_mano_obra + costo_materiales + costo_equipos')
-                    ->comment('Calculated: sum of all component costs');
-            });
-            $this->tenantColumnCache['presupuesto_acus.costo_unitario_total'] = true;
-=======
         if (!$schema->hasColumn('presupuesto_acus', 'subcontratos')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('subcontratos')->nullable()
@@ -1280,7 +1224,6 @@ class PresupuestoController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         }
     }
 }

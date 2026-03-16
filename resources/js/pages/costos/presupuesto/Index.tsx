@@ -5,19 +5,11 @@ import { Panel, Group, Separator } from 'react-resizable-panels';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { PresupuestoSubsection } from '@/types/presupuestos';
-<<<<<<< HEAD
-import { useBudgetStore } from './stores/budgetStore';
-import { BudgetTree } from './components/BudgetTree';
-import { AcuPanel } from './components/AcuPanel';
-import { SubsectionNav } from './components/SubsectionNav';
-import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
-=======
 import { AcuPanel } from './components/AcuPanel';
 import { BudgetTree } from './components/BudgetTree';
 import { SubsectionNav } from './components/SubsectionNav';
 import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
 import { useBudgetStore } from './stores/budgetStore';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 interface PageProps {
     project: {
@@ -40,13 +32,6 @@ export default function Index() {
 
     const initialize = useBudgetStore((state) => state.initialize);
     const selectedId = useBudgetStore((state) => state.selectedId);
-<<<<<<< HEAD
-
-    // We only initialize when rows or subsection changes
-    useEffect(() => {
-        initialize(rows || []);
-    }, [rows, subsection, initialize]);
-=======
     const [generalRows, setGeneralRows] = useState<any[] | null>(null);
     const [generalLoading, setGeneralLoading] = useState(false);
 
@@ -78,7 +63,6 @@ export default function Index() {
     useEffect(() => {
         initialize(effectiveRows);
     }, [effectiveRows, subsection, initialize]);
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
     const addNode = useBudgetStore((state) => state.addNode);
     const deleteRow = useBudgetStore((state) => state.deleteRow);
@@ -103,10 +87,6 @@ export default function Index() {
         setIsSaving(true);
         try {
             const rawRows = useBudgetStore.getState().rows;
-<<<<<<< HEAD
-            const currentRows = rawRows.map(row => {
-                const { _level, _parentId, _expanded, _hasChildren, _index, ...cleanRow } = row as any;
-=======
             const currentRows = rawRows.map((row) => {
                 const {
                     _level,
@@ -116,7 +96,6 @@ export default function Index() {
                     _index,
                     ...cleanRow
                 } = row as any;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 return cleanRow;
             });
 
@@ -125,11 +104,6 @@ export default function Index() {
                 `/costos/proyectos/${project.id}/presupuesto/general`,
                 { rows: currentRows },
             );
-<<<<<<< HEAD
-            
-=======
-
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             setDirty(false);
             setLastSavedTime(new Date());
         } catch (error) {
@@ -165,11 +139,7 @@ export default function Index() {
     // Derive live description/unit from the budget tree for the selected partida
     const selectedPartidaData = useMemo(() => {
         if (!selectedId) return null;
-<<<<<<< HEAD
-        const row = storeRows.find(r => r.partida === selectedId);
-=======
         const row = storeRows.find((r) => r.partida === selectedId);
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         if (!row) return null;
         return { descripcion: row.descripcion, unidad: row.unidad };
     }, [selectedId, storeRows]);
@@ -220,15 +190,9 @@ export default function Index() {
                 </div>
 
                 <div className="flex-1 overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl">
-<<<<<<< HEAD
-                    {subsection === 'general' ? (
-                        <Group orientation="horizontal">
-                            <Panel defaultSize={55} minSize={30}>
-=======
                     {subsection === 'general' || subsection === 'acus' ? (
                         <Group orientation="horizontal">
                             <Panel defaultSize={45} minSize={28}>
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                 <div className="flex h-full flex-col">
                                     <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-3 py-2">
                                         <h2 className="flex items-center gap-2 text-sm font-semibold tracking-widest text-slate-200 uppercase">
@@ -237,16 +201,6 @@ export default function Index() {
                                         </h2>
                                         <div className="flex items-center gap-3">
                                             <div className="flex flex-col items-end justify-center">
-<<<<<<< HEAD
-                                                <span className="text-[10px] text-slate-400 font-medium tracking-wide">
-                                                    {isSaving ? 'Guardando en la nube...' : (isDirty ? 'Cambios sin guardar' : 'Presupuesto actualizado')}
-                                                </span>
-                                                {lastSavedTime && !isDirty && !isSaving && (
-                                                    <span className="text-[9px] text-slate-500/80">
-                                                        Último guardado: {lastSavedTime.toLocaleTimeString()}
-                                                    </span>
-                                                )}
-=======
                                                 <span className="text-[10px] font-medium tracking-wide text-slate-400">
                                                     {isSaving
                                                         ? 'Guardando en la nube...'
@@ -262,7 +216,6 @@ export default function Index() {
                                                             {lastSavedTime.toLocaleTimeString()}
                                                         </span>
                                                     )}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                             </div>
                                             <button
                                                 className={`rounded px-3 py-1 text-xs text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
@@ -271,13 +224,9 @@ export default function Index() {
                                             >
                                                 {isSaving
                                                     ? 'Guardando...'
-<<<<<<< HEAD
-                                                    : (isDirty ? 'Guardar Cambios' : 'Guardado')}
-=======
                                                     : isDirty
                                                       ? 'Guardar Cambios'
                                                       : 'Guardado'}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                             </button>
                                             <button
                                                 className="rounded bg-sky-600 px-3 py-1 text-xs text-white transition-colors hover:bg-sky-500"
@@ -290,18 +239,6 @@ export default function Index() {
                                         </div>
                                     </div>
                                     <div className="relative flex-1 overflow-hidden">
-<<<<<<< HEAD
-                                        <BudgetTree
-                                            onContextMenu={(e, item) => {
-                                                e.preventDefault();
-                                                setContextMenu({
-                                                    x: e.clientX,
-                                                    y: e.clientY,
-                                                    partidaId: item.partida,
-                                                });
-                                            }}
-                                        />
-=======
                                         {generalLoading ? (
                                             <div className="flex h-full items-center justify-center text-sm text-slate-400">
                                                 Cargando partidas...
@@ -318,18 +255,13 @@ export default function Index() {
                                                 }}
                                             />
                                         )}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                     </div>
                                 </div>
                             </Panel>
 
                             <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
 
-<<<<<<< HEAD
-                            <Panel defaultSize={35} minSize={25}>
-=======
                             <Panel defaultSize={50} minSize={30}>
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                 <AcuPanel
                                     acuLoading={acuLoading}
                                     acuRows={acuRows}

@@ -4,377 +4,497 @@ import AppLayout from '@/layouts/app-layout'
 import type { BreadcrumbItem } from '@/types'
 import Luckysheet from '@/components/costos/tablas/Luckysheet'
 
-declare global{
- interface Window{
-  luckysheet:any
- }
+declare global {
+  interface Window {
+    luckysheet: any
+  }
 }
 
-interface PageProps{
- spreadsheet:{
-  id:number
-  name:string
-  sheet_data:any[][]
- }
-    [key:string]:any
+interface PageProps {
+  spreadsheet: {
+    id: number
+    name: string
+    sheet_data: any[][]
+  }
+  [key: string]: any
 }
 
-const COLS={
- ITEM:0,
- DES:1,
- UND:2,
- ELEM:3,
- L:4,
- ANC:5,
- ALT:6,
- NVEC:7,
- LON:8,
- AREA:9,
- VOL:10,
- KG:11,
- UNDC:12,
- TOTAL:13
+/* COLUMNAS */
+
+const COLS = {
+  ITEM: 0,
+  DES: 1,
+  UND: 2,
+  ELEM: 3,
+  L: 4,
+  ANC: 5,
+  ALT: 6,
+  NVEC: 7,
+  LON: 8,
+  AREA: 9,
+  VOL: 10,
+  KG: 11,
+  UNDC: 12,
+  TOTAL: 13,
+  OBS: 14
 }
 
-const HEADERS=[
-'ITEM','DESCRIPCIÓN','Und','Elem','Largo','Ancho','Alto','N° Vec',
-'Lon.','Área','Vol.','Kg','UndC','Total'
+const HEADERS = [
+  'ITEM','DESCRIPCIÓN','Und','Elem','Largo','Ancho','Alto','N° Vec',
+  'Lon.','Área','Vol.','Kg','UndC','Total','Observaciones'
 ]
 
-/* CALCULO */
+const UNIDADES = ["ml","m","m2","m3","kg","und"]
 
-const calculateRow=(row:any[])=>{
+/* ================= CALCULO ================= */
 
- const r=[...row]
+const calculateRow = (row:any[])=>{
+  const r=[...row]
 
- const unidad=(r[COLS.UND]||'').toLowerCase()
+  const unidad=(r[COLS.UND]||'').toLowerCase()
 
- const num=(i:number)=>{
-  const v=parseFloat(r[i])
-  return isNaN(v)?0:v
- }
+  const num=(i:number)=>{
+    const v=parseFloat(r[i])
+    return isNaN(v)?0:v
+  }
 
- const elem=num(COLS.ELEM)
- const l=num(COLS.L)
- const anc=num(COLS.ANC)
- const alt=num(COLS.ALT)
- const n=num(COLS.NVEC)||1
+  const elem=num(COLS.ELEM)
+  const l=num(COLS.L)
+  const anc=num(COLS.ANC)
+  const alt=num(COLS.ALT)
+  const n=num(COLS.NVEC)||1
 
- let lon=0
- let area=0
- let vol=0
- let kg=0
- let undc=0
+  let lon=0,area=0,vol=0,kg=0,undc=0
+  const densidad=7850
 
- const densidad=7850
+  switch(unidad){
 
- switch(unidad){
+    case 'ml':
+    case 'm':
+      lon=l*elem*n
+      undc=lon
+    break
 
-  case 'ml':
-  case 'm':
-   lon=(l+anc+alt)*elem*n
-   undc=lon
-   break
+    case 'm2':
+      area=l*anc*elem*n
+      undc=area
+    break
 
-  case 'm2':
-   area=l*anc*elem*n
-   undc=area
-   break
+    case 'm3':
+      vol=l*anc*alt*elem*n
+      undc=vol
+    break
 
-  case 'm3':
-   vol=l*anc*alt*elem*n
-   undc=vol
-   break
+    case 'kg':
+      vol=l*anc*alt*elem*n
+      kg=vol*densidad
+      undc=kg
+    break
 
-  case 'kg':
-   vol=l*anc*alt*elem*n
-   kg=vol*densidad
-   undc=kg
-   break
+    case 'und':
+      undc=elem*n
+    break
+  }
 
-  case 'und':
-   undc=elem*n
-   break
- }
+  r[COLS.LON]=lon?lon.toFixed(2):''
+  r[COLS.AREA]=area?area.toFixed(2):''
+  r[COLS.VOL]=vol?vol.toFixed(2):''
+  r[COLS.KG]=kg?kg.toFixed(2):''
+  r[COLS.UNDC]=undc?undc.toFixed(2):''
+  r[COLS.TOTAL]=undc?undc.toFixed(2):''
 
- r[COLS.LON]=lon?lon.toFixed(2):''
- r[COLS.AREA]=area?area.toFixed(2):''
- r[COLS.VOL]=vol?vol.toFixed(2):''
- r[COLS.KG]=kg?kg.toFixed(2):''
- r[COLS.UNDC]=undc?undc.toFixed(2):''
- r[COLS.TOTAL]=undc?undc.toFixed(2):''
-
- return r
+  return r
 }
 
+/* ================= RESUMEN ================= */
 
-/* CONVERTIR A LUCKYSHEET */
+interface ResumenItem{
+  item:string
+  desc?:string
+  und?:string
+  total:number
+}
 
-const toLuckysheetData=(rows:any[][])=>{
+const generateResumenData = ():ResumenItem[]=>{
 
- const celldata:any[]=[]
+  const ls = window.luckysheet
+  if(!ls) return []
 
- HEADERS.forEach((h,c)=>{
+  const files = ls.getLuckysheetfile()
+  const sheet = files[0]
 
-  celldata.push({
-   r:0,
-   c,
-   v:{
-    v:h,
-    m:h,
-    bl:1,
-    ht:1,
-    vt:1,
-    bg:"#e5e7eb"
-   }
+  const rows = sheet.data?.length || 0
+
+  const map:Record<string,ResumenItem>={}
+
+  for(let r=1;r<rows;r++){
+
+    let item:any = ls.getCellValue(r,COLS.ITEM) ?? ''
+    let desc:any = ls.getCellValue(r,COLS.DES) ?? ''
+    let und:any = ls.getCellValue(r,COLS.UND) ?? ''
+    let undc:any = ls.getCellValue(r,COLS.UNDC) ?? ''
+
+    if(!item) continue
+
+    if(item && typeof item==='object') item=item.v ?? item.m ?? ''
+    if(desc && typeof desc==='object') desc=desc.v ?? desc.m ?? ''
+    if(und && typeof und==='object') und=und.v ?? und.m ?? ''
+
+    if(undc && typeof undc === 'object')
+      undc = undc.v ?? 0
+
+    undc = parseFloat(undc) || 0
+
+    const parts=String(item).split('.')
+
+    if(parts.length===1){
+
+      map[item] ??= {item,desc:desc || "",und:und || "",total:0}
+
+    }
+
+    if(parts.length===2){
+
+      map[item] ??= {item,desc,total:0}
+
+    }
+
+    if(parts.length===3){
+
+      const titulo=parts[0]
+      const subtitulo=parts[0]+"."+parts[1]
+
+      map[titulo] ??= {item:titulo,desc:'',total:0}
+      map[subtitulo] ??= {item:subtitulo,desc:'',und,total:0}
+
+      map[titulo].total+=undc
+      map[subtitulo].total+=undc
+      map[subtitulo].und=und
+
+    }
+
+  }
+
+  return Object.values(map)
+}
+
+/* ================= HOJA RESUMEN ================= */
+
+const updateResumenSheet = ()=>{
+
+  const ls = window.luckysheet
+  if(!ls) return
+
+  const resumen = generateResumenData()
+
+  const files = ls.getLuckysheetfile()
+
+  const index = files.findIndex((s:any)=>s.name==="Resumen")
+
+  if(index === -1) return
+
+  ls.setSheetActive(index)
+
+  /* limpiar */
+
+  for(let r=1;r<200;r++){
+    for(let c=0;c<4;c++){
+      ls.setCellValue(r,c,"")
+    }
+  }
+
+  /* insertar resumen */
+
+  resumen.forEach((r,i)=>{
+
+    const row=i+1
+
+    ls.setCellValue(row,0,r.item || "")
+    ls.setCellValue(row,1,r.desc || "")
+    ls.setCellValue(row,2,r.und || "")
+    ls.setCellValue(row,3,r.total || 0)
+
   })
 
- })
+}
 
- rows.forEach((row,r)=>{
+/* ================= NUMERACION ================= */
 
-  row.forEach((value,c)=>{
+const getHierarchy=(ls:any)=>{
 
-   if(value!=='' && value!==undefined){
+  const rows=ls.getSheet()?.data?.length||0
 
+  let titulo=0,subtitulo=0,partida=0
+
+  for(let i=1;i<rows;i++){
+
+    let item:any=ls.getCellValue(i,COLS.ITEM)
+
+    if(!item) continue
+
+    if(typeof item==='object') item=item?.v??item?.m
+
+    const parts=String(item).split('.')
+
+    if(parts.length===1){titulo=parseInt(parts[0]);subtitulo=0;partida=0}
+    if(parts.length===2){titulo=parseInt(parts[0]);subtitulo=parseInt(parts[1]);partida=0}
+    if(parts.length===3){titulo=parseInt(parts[0]);subtitulo=parseInt(parts[1]);partida=parseInt(parts[2])}
+
+  }
+
+  return{titulo,subtitulo,partida}
+}
+
+const getCurrentRow=()=>{
+  const ls=window.luckysheet
+  const range=ls.getRange()
+  if(!range?.[0]?.row) return 1
+  return range[0].row[0]+1
+}
+
+/* ================= DATA ================= */
+
+const toLuckysheetData = (rows:any[][])=>{
+
+  const celldata:any[]=[]
+
+  HEADERS.forEach((h,c)=>{
     celldata.push({
-     r:r+1,
-     c,
-     v:{
-      v:value,
-      m:String(value)
-     }
+      r:0,
+      c,
+      v:{v:h,m:h,bl:1}
     })
-
-   }
-
   })
 
- })
+  rows.forEach((row,r)=>{
+    row.forEach((value,c)=>{
 
- return [{
+      if(value!==''){
 
-  name:'Metrado Eléctricas',
-  celldata,
+        const cell:any={
+          r:r+1,
+          c,
+          v:{v:value,m:String(value)}
+        }
 
-  columnlen:{
-   0:60,1:250,2:50,3:50,4:70,5:70,6:70,7:70,
-   8:80,9:80,10:80,11:80,12:80,13:100
-  },
+        if(c===COLS.UND){
+          cell.v={
+            ...cell.v,
+            type:'dropdown',
+            value1:UNIDADES.join(',')
+          }
+        }
 
-  column:14,
-  row:200
+        celldata.push(cell)
 
- }]
+      }
+
+    })
+  })
+
+  return [
+
+    /* SHEET 1 METRADO */
+
+    {
+      name:'Metrado Eléctricas',
+      celldata,
+      column:15,
+      row:200
+    },
+
+    /* SHEET 2 RESUMEN */
+
+    {
+      name:'Resumen',
+      celldata:[
+        {r:0,c:0,v:{v:'ITEM',m:'ITEM',bl:1}},
+        {r:0,c:1,v:{v:'DESCRIPCIÓN',m:'DESCRIPCIÓN',bl:1}},
+        {r:0,c:2,v:{v:'UND',m:'UND',bl:1}},
+        {r:0,c:3,v:{v:'TOTAL',m:'TOTAL',bl:1}},
+      ],
+      column:4,
+      row:200
+    }
+
+  ]
+
 }
+
+
+/* ================= COMPONENTE ================= */
 
 export default function Show(){
 
- const { spreadsheet } = usePage<PageProps>().props
+  const{spreadsheet}=usePage<PageProps>().props
+  const[sheetData,setSheetData]=useState<any[]>([])
+  const calculatingRef=useRef(false)
 
- const [sheetData,setSheetData]=useState<any[]>([])
+  useEffect(()=>{
 
- const calculatingRef=useRef(false)
+    const initial=spreadsheet.sheet_data?.length
+    ?spreadsheet.sheet_data
+    :[
+      ['01','INSTALACIONES ELÉCTRICAS','','','','','','','','','','','',''],
+      ['01.01','ALUMBRADO','','','','','','','','','','','',''],
+      ['01.01.01','Cableado iluminación','ml','1','20','','','1','','','','','','']
+    ]
 
- useEffect(()=>{
+    setSheetData(toLuckysheetData(initial))
 
-  const initial=spreadsheet.sheet_data?.length
+  },[spreadsheet.sheet_data])
 
-  ? spreadsheet.sheet_data
+  const calculateRowRealtime = (rowIndex:number)=>{
 
-  :[
+    const ls = window.luckysheet
+    if(!ls) return
 
-['01','INSTALACIONES ELÉCTRICAS','','','','','','','','','','','',''],
-['','ALUMBRADO','','','','','','','','','','','',''],
-['','','ml','1','20','1','10','10','','','','','','']
+    const row:any[] = []
 
-]
+    for(let c=0;c<=COLS.TOTAL;c++){
+      row[c] = ls.getCellValue(rowIndex,c) || ''
+    }
 
-  setSheetData(toLuckysheetData(initial))
+    const result = calculateRow(row)
 
- },[])
+    const cols=[COLS.LON,COLS.AREA,COLS.VOL,COLS.KG,COLS.UNDC,COLS.TOTAL]
 
+    cols.forEach(col=>{
+      ls.setCellValue(rowIndex,col,result[col])
+    })
 
-/* BOTON TITULO */
-
-const addTitulo=()=>{
-
- const ls=window.luckysheet
- if(!ls) return
-
- const row=ls.getSheet().data.length
-
- ls.insertRow(row)
-
- const titulo=String(row+1).padStart(2,'0')
-
- ls.setCellValue(row,COLS.ITEM,titulo)
- ls.setCellValue(row,COLS.DES,"NUEVO TITULO")
-
- for(let c=0;c<HEADERS.length;c++){
-  ls.setCellFormat(row,c,{
-   bg:"#bfdbfe",
-   bl:1,
-   fs:12
-  })
- }
-
-}
-
-
-/* BOTON SUBTITULO */
-
-const addSubtitulo=()=>{
-
- const ls=window.luckysheet
- if(!ls) return
-
- const row=ls.getSheet().data.length
-
- ls.insertRow(row)
-
- ls.setCellValue(row,COLS.DES,"NUEVO SUBTITULO")
-
- for(let c=0;c<HEADERS.length;c++){
-  ls.setCellFormat(row,c,{
-   bg:"#dcfce7",
-   bl:1
-  })
- }
-
-}
-
-
-/* BOTON PARTIDA */
-
-const addPartida=()=>{
-
- const ls=window.luckysheet
- if(!ls) return
-
- const row=ls.getSheet().data.length
-
- ls.insertRow(row)
-
- ls.setCellValue(row,COLS.DES,"Nueva partida eléctrica")
- ls.setCellValue(row,COLS.UND,"ml")
- ls.setCellValue(row,COLS.ELEM,"1")
- ls.setCellValue(row,COLS.NVEC,"1")
-
-}
-
-
-/* CALCULO AUTOMATICO */
-
-const calculateRowRealtime=(rowIndex:number)=>{
-
- const ls=window.luckysheet
- if(!ls) return
-
- const sheets=ls.getAllSheets()
-
- const celldata=sheets[0].celldata
-
- const row:any[]=[]
-
- celldata.forEach((cell:any)=>{
-
-  if(cell.r===rowIndex){
-   row[cell.c]=cell.v?.v??''
   }
 
- })
+  const handleCellUpdated=(r:number)=>{
 
- const result=calculateRow(row)
+    if(calculatingRef.current) return
 
- const cols=[COLS.LON,COLS.AREA,COLS.VOL,COLS.KG,COLS.UNDC,COLS.TOTAL]
+    calculatingRef.current=true
 
- cols.forEach(c=>{
-  if(result[c]!==row[c]){
-   ls.setCellValue(rowIndex,c,result[c])
+    setTimeout(()=>{
+      calculateRowRealtime(r)
+      calculatingRef.current=false
+    },50)
   }
- })
 
-}
+  /* BOTONES */
 
-const handleCellUpdated=(r:number)=>{
+  const addTitulo=()=>{
+    const ls=window.luckysheet
+    const row=getCurrentRow()
+    const{titulo}=getHierarchy(ls)
 
- if(calculatingRef.current) return
+    const nuevo=String(titulo+1).padStart(2,'0')
 
- calculatingRef.current=true
+    ls.insertRow(row,1)
+    ls.setCellValue(row,COLS.ITEM,nuevo)
+    ls.setCellValue(row,COLS.DES,'Nuevo Título')
+  }
 
- setTimeout(()=>{
-  calculateRowRealtime(r)
-  calculatingRef.current=false
- },50)
+  const addSubtitulo=()=>{
+    const ls=window.luckysheet
+    const row=getCurrentRow()
 
-}
+    const{titulo,subtitulo}=getHierarchy(ls)
 
-const breadcrumbs:BreadcrumbItem[]=[
- {title:'Metrados',href:'#'},
- {title:'Eléctricas',href:'#'},
- {title:spreadsheet.name,href:'#'}
-]
+    const nuevo = `${String(titulo).padStart(2,'0')}.${String(subtitulo+1).padStart(2,'0')}`
 
-return(
+    ls.insertRow(row,1)
+    ls.setCellValue(row,COLS.ITEM,nuevo)
+    ls.setCellValue(row,COLS.DES,'Nuevo Subtítulo')
+  }
 
-<AppLayout breadcrumbs={breadcrumbs}>
+  const addPartida=()=>{
+    const ls=window.luckysheet
+    const row=getCurrentRow()
 
-<div className="flex h-[calc(100vh-64px)] flex-col">
+    const{titulo,subtitulo,partida}=getHierarchy(ls)
 
-<div className="border-b bg-white px-4 py-2 flex justify-between items-center">
-<h1 className="text-sm font-bold">{spreadsheet.name}</h1>
-</div>
+    const nuevo= `${String(titulo).padStart(2,'0')}.${String(subtitulo).padStart(2,'0')}.${String(partida+1).padStart(2,'0')}`
 
-{/* BOTONES */}
+    ls.insertRow(row,1)
 
-<div className="bg-gray-50 border-b px-4 py-2 flex gap-2">
+    ls.setCellValue(row,COLS.ITEM,nuevo)
+    ls.setCellValue(row,COLS.DES,'Nueva partida')
+    ls.setCellValue(row,COLS.UND,'ml')
+    ls.setCellValue(row,COLS.ELEM,'1')
+    ls.setCellValue(row,COLS.NVEC,'1')
+  }
 
-<button
-onClick={addTitulo}
-className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
->
-➕ Título
-</button>
+  const generarResumen=()=>{
+    updateResumenSheet()
+  }
 
-<button
-onClick={addSubtitulo}
-className="px-3 py-1 bg-green-600 text-white rounded text-xs"
->
-➕ Subtítulo
-</button>
+  const irResumen = ()=>{
 
-<button
-onClick={addPartida}
-className="px-3 py-1 bg-gray-300 rounded text-xs"
->
-➕ Partida
-</button>
+    updateResumenSheet()
 
-</div>
+    const ls = window.luckysheet
+    const files = ls.getLuckysheetfile()
 
-<div className="flex-1 overflow-hidden">
+    const index = files.findIndex((s:any)=>s.name==="Resumen")
 
-<Luckysheet
-data={sheetData}
-height="100%"
-options={{
-showinfobar:false,
-showstatisticBar:true,
-toolbar:false,
-hook:{
-cellUpdated:(r:number)=>{
-handleCellUpdated(r)
-}
-}
-}}
-/>
+    if(index !== -1){
+      ls.setSheetActive(index)
+    }
 
-</div>
+  }
 
-</div>
+  const breadcrumbs:BreadcrumbItem[]=[
+    {title:'Metrados',href:'#'},
+    {title:'Eléctricas',href:'#'},
+    {title:spreadsheet.name,href:'#'}
+  ]
 
-</AppLayout>
+  return(
 
-)
+    <AppLayout breadcrumbs={breadcrumbs}>
+
+      <div className="flex h-[calc(100vh-64px)] flex-col">
+
+        <div className="border-b bg-white px-4 py-2 flex justify-between items-center">
+          <h1 className="text-sm font-bold">{spreadsheet.name}</h1>
+        </div>
+
+        <div className="bg-gray-50 border-b px-4 py-2 flex gap-2">
+
+          <button onClick={addTitulo} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">
+            + Título
+          </button>
+
+          <button onClick={addSubtitulo} className="px-3 py-1 bg-green-600 text-white rounded text-xs">
+            + Subtítulo
+          </button>
+
+          <button onClick={addPartida} className="px-3 py-1 bg-red-600 text-white rounded text-xs">
+            + Partida
+          </button>
+
+          <button onClick={generarResumen} className="px-3 py-1 bg-purple-600 text-white rounded text-xs">
+            📊 Actualizar Resumen
+          </button>
+
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+
+          <Luckysheet
+            data={sheetData}
+            height="100%"
+            options={{
+              showinfobar:false,
+              showstatisticBar:true,
+              toolbar:false,
+              hook:{
+                cellUpdated:handleCellUpdated
+              }
+            }}
+          />
+
+        </div>
+
+      </div>
+
+    </AppLayout>
+  )
 }

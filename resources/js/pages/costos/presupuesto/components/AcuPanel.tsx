@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-import React, { useState, useEffect, useRef } from 'react';
-=======
 import axios from 'axios';
 import { Command } from 'cmdk';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 import {
     ChevronRight,
     ChevronDown,
@@ -11,29 +7,20 @@ import {
     Users,
     Package,
     Wrench,
-<<<<<<< HEAD
-=======
     Briefcase,
     Layers,
     Pencil,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     Search,
     X,
     Plus,
     Loader2,
 } from 'lucide-react';
-<<<<<<< HEAD
-import { Command } from 'cmdk';
-import axios from 'axios';
-import type { ACUComponenteRow, ACURowSummary, InsumoProducto } from '@/types/presupuestos';
-=======
 import React, { useState, useEffect, useRef } from 'react';
 import type {
     ACUComponenteRow,
     ACURowSummary,
     InsumoProducto,
 } from '@/types/presupuestos';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 const fmt = (n: number | undefined | null, d = 2) =>
     (n ?? 0).toLocaleString('es-PE', {
@@ -41,8 +28,6 @@ const fmt = (n: number | undefined | null, d = 2) =>
         maximumFractionDigits: d,
     });
 
-<<<<<<< HEAD
-=======
 const fmtCantidad = (n: number | undefined | null) => {
     const value = Number(n ?? 0);
     const rounded = Math.round(value);
@@ -53,33 +38,24 @@ const fmtCantidad = (n: number | undefined | null) => {
     });
 };
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 const sectionIcon = {
     mano_de_obra: Users,
     materiales: Package,
     equipos: Wrench,
-<<<<<<< HEAD
-=======
     subcontratos: Briefcase,
     subpartidas: Layers,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 };
 const sectionColor = {
     mano_de_obra: 'text-blue-400',
     materiales: 'text-emerald-400',
     equipos: 'text-amber-400',
-<<<<<<< HEAD
-=======
     subcontratos: 'text-violet-400',
     subpartidas: 'text-cyan-400',
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 };
 const sectionLabel = {
     mano_de_obra: 'MANO DE OBRA',
     materiales: 'MATERIALES',
     equipos: 'EQUIPOS',
-<<<<<<< HEAD
-=======
     subcontratos: 'SUB-CONTRATOS',
     subpartidas: 'SUB-PARTIDAS',
 };
@@ -113,7 +89,6 @@ const computeRecursosFromCantidadBase = (
         return (cantidad * safeRend) / hoursPerDay;
     }
     return cantidad * safeRend;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 };
 
 function ResourceSearchDialog({
@@ -134,9 +109,6 @@ function ResourceSearchDialog({
     const [loading, setLoading] = useState(false);
     const [seeding, setSeeding] = useState(false);
     const [catalogEmpty, setCatalogEmpty] = useState(false);
-<<<<<<< HEAD
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-=======
     const [refreshSeed, setRefreshSeed] = useState(0);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -161,7 +133,6 @@ function ResourceSearchDialog({
             | 'materiales'
             | 'equipos',
     });
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
     // Fetch products from API with debounce
     useEffect(() => {
@@ -176,14 +147,10 @@ function ResourceSearchDialog({
                 if (query.trim()) params.q = query.trim();
                 if (targetType) params.tipo = targetType;
 
-<<<<<<< HEAD
-                const response = await axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/search`, { params });
-=======
                 const response = await axios.get(
                     `/costos/proyectos/${projectId}/presupuesto/insumos/search`,
                     { params },
                 );
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 if (response.data?.success) {
                     const prods = response.data.productos || [];
                     setResults(prods);
@@ -206,11 +173,7 @@ function ResourceSearchDialog({
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-<<<<<<< HEAD
-    }, [query, open, targetType, projectId]);
-=======
     }, [query, open, targetType, projectId, refreshSeed]);
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
     // Reset on close
     useEffect(() => {
@@ -221,12 +184,6 @@ function ResourceSearchDialog({
         }
     }, [open]);
 
-<<<<<<< HEAD
-    const handleSeedCatalog = async () => {
-        setSeeding(true);
-        try {
-            const response = await axios.post(`/costos/proyectos/${projectId}/presupuesto/insumos/seed`);
-=======
     useEffect(() => {
         if (!editorOpen) return;
         if (clases.length > 0 || clasesLoading) return;
@@ -299,7 +256,6 @@ function ResourceSearchDialog({
             const response = await axios.post(
                 `/costos/proyectos/${projectId}/presupuesto/insumos/seed`,
             );
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             if (response.data?.success) {
                 setCatalogEmpty(false);
                 // Re-trigger search to load newly seeded data
@@ -310,14 +266,10 @@ function ResourceSearchDialog({
                     try {
                         const params: Record<string, string> = {};
                         if (targetType) params.tipo = targetType;
-<<<<<<< HEAD
-                        const res = await axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/search`, { params });
-=======
                         const res = await axios.get(
                             `/costos/proyectos/${projectId}/presupuesto/insumos/search`,
                             { params },
                         );
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                         if (res.data?.success) {
                             setResults(res.data.productos || []);
                         }
@@ -331,8 +283,6 @@ function ResourceSearchDialog({
         }
     };
 
-<<<<<<< HEAD
-=======
     const handleSaveInsumo = async () => {
         if (editorSaving) return;
         setEditorSaving(true);
@@ -378,7 +328,6 @@ function ResourceSearchDialog({
         }
     };
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     if (!open) return null;
 
     return (
@@ -414,15 +363,12 @@ function ResourceSearchDialog({
                             />
                         )}
                         <button
-<<<<<<< HEAD
-=======
                             className="mr-2 rounded-md bg-emerald-600/90 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-500"
                             onClick={openCreate}
                         >
                             + Nuevo
                         </button>
                         <button
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                             className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
                             onClick={() => onOpenChange(false)}
                         >
@@ -434,10 +380,6 @@ function ResourceSearchDialog({
                             <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-slate-500">
                                 {catalogEmpty && !query.trim() ? (
                                     <>
-<<<<<<< HEAD
-                                        <Package size={32} className="opacity-30" />
-                                        <p>El catálogo de insumos está vacío.</p>
-=======
                                         <Package
                                             size={32}
                                             className="opacity-30"
@@ -445,7 +387,6 @@ function ResourceSearchDialog({
                                         <p>
                                             El catálogo de insumos está vacío.
                                         </p>
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                         <button
                                             onClick={handleSeedCatalog}
                                             disabled={seeding}
@@ -456,12 +397,8 @@ function ResourceSearchDialog({
                                                 : '📦 Inicializar Catálogo Base (64 insumos)'}
                                         </button>
                                         <p className="text-[11px] text-slate-600">
-<<<<<<< HEAD
-                                            Carga mano de obra, materiales y equipos de construcción
-=======
                                             Carga mano de obra, materiales y
                                             equipos de construcción
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                         </p>
                                     </>
                                 ) : query.trim() ? (
@@ -502,8 +439,6 @@ function ResourceSearchDialog({
                                     <span className="text-[10px] text-slate-500">
                                         {r.unidad}
                                     </span>
-<<<<<<< HEAD
-=======
                                     <button
                                         className="mt-1 inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
                                         onClick={(e) => {
@@ -514,15 +449,12 @@ function ResourceSearchDialog({
                                         <Pencil size={10} />
                                         Editar
                                     </button>
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                 </div>
                             </Command.Item>
                         ))}
                     </Command.List>
                 </Command>
             </div>
-<<<<<<< HEAD
-=======
 
             {editorOpen && (
                 <div
@@ -714,7 +646,6 @@ function ResourceSearchDialog({
                     </div>
                 </div>
             )}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         </div>
     );
 }
@@ -779,8 +710,6 @@ function EditableAcuCell({
     );
 }
 
-<<<<<<< HEAD
-=======
 function EditableTextCell({
     value,
     onUpdate,
@@ -850,37 +779,18 @@ function EditableTextCell({
     );
 }
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 function AcuSection({
     type,
     items,
     subtotal,
     rendimiento,
-<<<<<<< HEAD
-=======
     perDay,
     hoursPerDay,
     manoObraTotal,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     onAddClick,
     onUpdateItem,
     onDeleteItem,
 }: {
-<<<<<<< HEAD
-    type: 'mano_de_obra' | 'materiales' | 'equipos';
-    items: ACUComponenteRow[];
-    subtotal: number;
-    rendimiento: number;
-    onAddClick: (type: 'mano_de_obra' | 'materiales' | 'equipos') => void;
-    onUpdateItem: (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-        index: number,
-        field: string,
-        value: number,
-    ) => void;
-    onDeleteItem: (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-=======
     type:
         | 'mano_de_obra'
         | 'materiales'
@@ -919,7 +829,6 @@ function AcuSection({
             | 'equipos'
             | 'subcontratos'
             | 'subpartidas',
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         index: number,
     ) => void;
 }) {
@@ -927,10 +836,7 @@ function AcuSection({
     const Icon = sectionIcon[type];
     const color = sectionColor[type];
     const label = sectionLabel[type];
-<<<<<<< HEAD
-=======
     const isCrewType = type === 'mano_de_obra' || type === 'equipos';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
     return (
         <div className="border-b border-slate-700">
@@ -953,57 +859,6 @@ function AcuSection({
             </div>
 
             {expanded && (
-<<<<<<< HEAD
-                <table className="w-full text-xs">
-                    <tbody>
-                        {items.map((item, idx) => (
-                            <tr
-                                key={`${type}-${idx}`}
-                                className="group border-b border-slate-700/50 hover:bg-slate-700/40"
-                            >
-                                <td
-                                    className="w-28 cursor-pointer py-1 pr-2 pl-8 font-mono text-[10px] text-slate-500 transition-colors group-hover:text-red-400"
-                                    title="Eliminar recurso"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDeleteItem(type, idx);
-                                    }}
-                                >
-                                    {item.codigo || 'X'}
-                                </td>
-                                <td className="min-w-0 px-2 py-1 text-slate-200">
-                                    <span className="block max-w-xs truncate">
-                                        {item.descripcion}
-                                    </span>
-                                </td>
-                                <td className="w-10 px-2 py-1 text-center text-slate-400">
-                                    {item.unidad}
-                                </td>
-                                <td className="w-16 px-2 py-1 text-right text-slate-300">
-                                    <EditableAcuCell
-                                        value={item.cantidad ?? 0}
-                                        onUpdate={(v) =>
-                                            onUpdateItem(
-                                                type,
-                                                idx,
-                                                'cantidad',
-                                                v,
-                                            )
-                                        }
-                                    />
-                                </td>
-                                <td className="w-16 px-2 py-1 text-right text-slate-300">
-                                    {rendimiento
-                                        ? (
-                                              (item.cantidad || 0) / rendimiento
-                                          ).toFixed(4)
-                                        : '-'}
-                                </td>
-                                <td className="w-14 px-2 py-1 text-right text-slate-300">
-                                    {type === 'materiales' ? (
-                                        <EditableAcuCell
-                                            value={item.factor_desperdicio ?? 1}
-=======
                 <table className="w-full table-fixed text-xs">
                     <tbody>
                         {items.map((item, idx) => {
@@ -1047,50 +902,15 @@ function AcuSection({
                                     <td className="min-w-0 px-2 py-1 text-slate-200">
                                         <EditableTextCell
                                             value={item.descripcion || ''}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                             onUpdate={(v) =>
                                                 onUpdateItem(
                                                     type,
                                                     idx,
-<<<<<<< HEAD
-                                                    'factor_desperdicio',
-=======
                                                     'descripcion',
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                                                     v,
                                                 )
                                             }
                                         />
-<<<<<<< HEAD
-                                    ) : (
-                                        '-'
-                                    )}
-                                </td>
-                                <td className="w-20 px-2 py-1 text-right text-slate-300">
-                                    <EditableAcuCell
-                                        value={
-                                            type === 'equipos'
-                                                ? (item.precio_hora ?? 0)
-                                                : (item.precio_unitario ?? 0)
-                                        }
-                                        onUpdate={(v) =>
-                                            onUpdateItem(
-                                                type,
-                                                idx,
-                                                type === 'equipos'
-                                                    ? 'precio_hora'
-                                                    : 'precio_unitario',
-                                                v,
-                                            )
-                                        }
-                                    />
-                                </td>
-                                <td className="w-20 px-2 py-1 pr-3 text-right font-semibold text-slate-100">
-                                    {fmt(item.parcial, 2)}
-                                </td>
-                            </tr>
-                        ))}
-=======
                                     </td>
                                     <td className="w-12 px-2 py-1 text-center text-slate-400">
                                         <EditableTextCell
@@ -1194,7 +1014,6 @@ function AcuSection({
                                 </tr>
                             );
                         })}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                         {items.length === 0 && (
                             <tr>
                                 <td
@@ -1252,14 +1071,6 @@ export function AcuPanel({
     acuRows,
     projectId,
 }: AcuPanelProps) {
-<<<<<<< HEAD
-    const [rendimiento, setRendimiento] = useState(1);
-    const [perDay, setPerDay] = useState(true);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const [searchTargetType, setSearchTargetType] = useState<
-        'mano_de_obra' | 'materiales' | 'equipos' | null
-    >(null);
-=======
     type SectionType =
         | 'mano_de_obra'
         | 'materiales'
@@ -1275,7 +1086,6 @@ export function AcuPanel({
     const [searchTargetType, setSearchTargetType] = useState<SearchType | null>(
         null,
     );
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
     useEffect(() => {
         if (selectedAcu) {
@@ -1283,11 +1093,6 @@ export function AcuPanel({
         }
     }, [selectedAcu]);
 
-<<<<<<< HEAD
-    const handleAddResourceClick = (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-    ) => {
-=======
     const computeCantidadFromRecursos = (
         recursos: number,
         nextPerDay = perDay,
@@ -1396,7 +1201,6 @@ export function AcuPanel({
             return;
         }
 
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         setSearchTargetType(type);
         setSearchOpen(true);
     };
@@ -1404,13 +1208,6 @@ export function AcuPanel({
     const handleResourceSelected = async (resource: any) => {
         if (!selectedAcu || !onSaveAcu || !searchTargetType) return;
 
-<<<<<<< HEAD
-        const newComponent = {
-            codigo: resource.codigo,
-            descripcion: resource.descripcion,
-            unidad: resource.unidad,
-            cantidad: 1,
-=======
         const isCrewType =
             searchTargetType === 'mano_de_obra' ||
             searchTargetType === 'equipos';
@@ -1425,7 +1222,6 @@ export function AcuPanel({
             unidad: resource.unidad,
             cantidad,
             recursos,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             precio_unitario: resource.tipo === 'equipos' ? 0 : resource.precio,
             precio_hora: resource.tipo === 'equipos' ? resource.precio : 0,
             factor_desperdicio: resource.tipo === 'materiales' ? 1.05 : 1,
@@ -1445,32 +1241,15 @@ export function AcuPanel({
     };
 
     const handleUpdateItem = async (
-<<<<<<< HEAD
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-        index: number,
-        field: string,
-        value: number,
-=======
         type: SectionType,
         index: number,
         field: string,
         value: string | number,
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     ) => {
         if (!selectedAcu || !onSaveAcu) return;
         const arr = [
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
         ];
-<<<<<<< HEAD
-        arr[index] = { ...arr[index], [field]: value };
-        await onSaveAcu({ ...selectedAcu, [type]: arr });
-    };
-
-    const handleDeleteItem = async (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-        index: number,
-    ) => {
-=======
         const currentItem = arr[index] || {};
         const isEquipos = type === 'equipos';
         const isHerramientas = isEquipos && isHerramientasRow(currentItem);
@@ -1503,7 +1282,6 @@ export function AcuPanel({
     };
 
     const handleDeleteItem = async (type: SectionType, index: number) => {
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         if (!selectedAcu || !onSaveAcu) return;
         const arr = [
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
@@ -1514,10 +1292,6 @@ export function AcuPanel({
 
     const handleUpdateRendimiento = async (newRendimiento: number) => {
         if (!selectedAcu || !onSaveAcu) return;
-<<<<<<< HEAD
-        setRendimiento(newRendimiento);
-        await onSaveAcu({ ...selectedAcu, rendimiento: newRendimiento });
-=======
         const safeRend = Number(newRendimiento);
         if (!safeRend || safeRend <= 0) return;
         setRendimiento(safeRend);
@@ -1613,7 +1387,6 @@ export function AcuPanel({
         };
 
         await onSaveAcu(updated);
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     };
 
     if (acuLoading) {
@@ -1684,11 +1457,7 @@ export function AcuPanel({
             </div>
 
             {/* Rendimiento bar */}
-<<<<<<< HEAD
-            <div className="flex items-center gap-3 border-b border-slate-700 bg-slate-800/50 px-3 py-2">
-=======
             <div className="flex flex-wrap items-center gap-3 border-b border-slate-700 bg-slate-800/50 px-3 py-2">
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 <span className="text-xs text-slate-400">Rendimiento:</span>
                 <div className="flex items-center gap-1">
                     <input
@@ -1712,21 +1481,13 @@ export function AcuPanel({
                 </div>
                 <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-600">
                     <button
-<<<<<<< HEAD
-                        onClick={() => setPerDay(true)}
-=======
                         onClick={() => handleTogglePerDay(true)}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                         className={`px-2 py-0.5 text-xs transition-colors ${perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         Por día
                     </button>
                     <button
-<<<<<<< HEAD
-                        onClick={() => setPerDay(false)}
-=======
                         onClick={() => handleTogglePerDay(false)}
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                         className={`px-2 py-0.5 text-xs transition-colors ${!perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         Hora
@@ -1737,85 +1498,15 @@ export function AcuPanel({
                 </span>
                 <input
                     type="number"
-<<<<<<< HEAD
-                    defaultValue={8}
-=======
                     value={hoursPerDay}
                     onChange={(e) => setHoursPerDay(Number(e.target.value))}
                     onBlur={(e) =>
                         handleHoursPerDayChange(Number(e.target.value))
                     }
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                     className="w-12 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
             </div>
 
-<<<<<<< HEAD
-            {/* Column headers */}
-            <div
-                className="grid border-b border-slate-700 bg-slate-800/30 text-[10px] font-medium tracking-wider text-slate-500 uppercase"
-                style={{
-                    gridTemplateColumns:
-                        '7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem',
-                }}
-            >
-                <div className="px-3 py-1.5">Cod. Insumo</div>
-                <div className="px-2 py-1.5">Descripción</div>
-                <div className="px-2 py-1.5 text-center">Und.</div>
-                <div className="px-2 py-1.5 text-right">Cuadr.</div>
-                <div className="px-2 py-1.5 text-right">Recur.</div>
-                <div className="px-2 py-1.5 text-right">%D.</div>
-                <div className="px-2 py-1.5 text-right">Precio</div>
-                <div className="px-2 py-1.5 pr-3 text-right">Total</div>
-            </div>
-
-            {/* Sections */}
-            <div className="scrollbar-thin relative flex-1 overflow-auto border-l border-slate-700 bg-slate-900">
-                <AcuSection
-                    type="mano_de_obra"
-                    items={selectedAcu.mano_de_obra || []}
-                    subtotal={selectedAcu.costo_mano_obra || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-                <AcuSection
-                    type="materiales"
-                    items={selectedAcu.materiales || []}
-                    subtotal={selectedAcu.costo_materiales || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-                <AcuSection
-                    type="equipos"
-                    items={selectedAcu.equipos || []}
-                    subtotal={selectedAcu.costo_equipos || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-
-                {/* Empty sections */}
-                {(['SUB-CONTRATOS', 'SUB-PARTIDAS'] as const).map((label) => (
-                    <div
-                        key={label}
-                        className="flex items-center justify-between border-b border-slate-700 bg-slate-800/40 px-3 py-1.5"
-                    >
-                        <span className="text-xs font-semibold text-slate-500">
-                            {label}
-                        </span>
-                        <span className="text-xs font-bold text-slate-600">
-                            0.00
-                        </span>
-                    </div>
-                ))}
-            </div>
-
-=======
             <div className="flex-1 overflow-hidden">
                 <div className="flex h-full flex-col overflow-hidden">
                     <div className="flex items-center justify-between border-b border-slate-700/80 bg-slate-800/30 px-3 py-2">
@@ -1921,7 +1612,6 @@ export function AcuPanel({
                     </div>
                 </div>
             </div>
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             <div className="flex shrink-0 items-center justify-between border-t-2 border-sky-600/50 bg-slate-800 px-4 py-2.5">
                 <span className="text-sm font-bold tracking-wide text-slate-300">
                     TOTAL ACU.

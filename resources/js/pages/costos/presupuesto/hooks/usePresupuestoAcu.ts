@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-=======
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useState } from 'react';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
 
 interface UsePresupuestoAcuProps {
@@ -55,20 +50,14 @@ export function usePresupuestoAcu({
                 costo_mano_obra: Number(row.costo_mano_obra ?? 0),
                 costo_materiales: Number(row.costo_materiales ?? 0),
                 costo_equipos: Number(row.costo_equipos ?? 0),
-<<<<<<< HEAD
-=======
                 costo_subcontratos: Number(row.costo_subcontratos ?? 0),
                 costo_subpartidas: Number(row.costo_subpartidas ?? 0),
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
                 costo_unitario_total: Number(row.costo_unitario_total ?? 0),
                 mano_de_obra: parseJsonArrayField(row.mano_de_obra),
                 materiales: parseJsonArrayField(row.materiales),
                 equipos: parseJsonArrayField(row.equipos),
-<<<<<<< HEAD
-=======
                 subcontratos: parseJsonArrayField(row.subcontratos),
                 subpartidas: parseJsonArrayField(row.subpartidas),
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             }));
         },
         [parseJsonArrayField],
@@ -100,12 +89,6 @@ export function usePresupuestoAcu({
             costo_mano_obra: 0,
             costo_materiales: 0,
             costo_equipos: 0,
-<<<<<<< HEAD
-            costo_unitario_total: 0,
-            mano_de_obra: [],
-            materiales: [],
-            equipos: []
-=======
             costo_subcontratos: 0,
             costo_subpartidas: 0,
             costo_unitario_total: 0,
@@ -114,7 +97,6 @@ export function usePresupuestoAcu({
             equipos: [],
             subcontratos: [],
             subpartidas: [],
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         } as ACURowSummary;
     }, [acuRows, selectedPartidaCode, selectedPartidaData]);
 
@@ -141,11 +123,8 @@ export function usePresupuestoAcu({
             mano_de_obra: matchingAcu.mano_de_obra || [],
             materiales: matchingAcu.materiales || [],
             equipos: matchingAcu.equipos || [],
-<<<<<<< HEAD
-=======
             subcontratos: (matchingAcu as any).subcontratos || [],
             subpartidas: (matchingAcu as any).subpartidas || [],
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
         };
 
         try {
@@ -171,11 +150,7 @@ export function usePresupuestoAcu({
     }, [selectedCell, subsection, lastSaved, autoCalculateACU]);
 
     useEffect(() => {
-<<<<<<< HEAD
-        if (subsection !== 'general') {
-=======
         if (subsection !== 'general' && subsection !== 'acus') {
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             setAcuRows([]);
             setAcuError(null);
             setAcuLoading(false);
@@ -214,13 +189,6 @@ export function usePresupuestoAcu({
         return () => controller.abort();
     }, [mapAcuRows, projectId, subsection]);
 
-<<<<<<< HEAD
-    const saveAcu = useCallback(async (acuData: Record<string, any>) => {
-        try {
-            const response = await axios.post(
-                `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
-                acuData
-=======
     const normalizeNumber = (value: unknown, fallback = 0): number => {
         const num = Number(value);
         if (!Number.isFinite(num) || num < 0) {
@@ -306,7 +274,6 @@ export function usePresupuestoAcu({
             const response = await axios.post(
                 `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
                 payload
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
             );
             
             const data = response.data;

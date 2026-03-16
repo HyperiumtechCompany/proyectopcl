@@ -7,11 +7,8 @@ use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\MetradoComunicacionController;
-<<<<<<< HEAD
 use App\Http\Controllers\MetradoElectricasController;
-=======
 use App\Http\Controllers\MetradoSanitariasController;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 use App\Http\Controllers\MetradosController;
 use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\PresupuestoController;
@@ -166,8 +163,6 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
         });
-<<<<<<< HEAD
-=======
 
     // ─── Metrado Sanitarias Modular (con middleware de BD dinámica) ────
     Route::middleware([\App\Http\Middleware\SetCostosDatabase::class])
@@ -186,7 +181,6 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
         });
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 });
 
 // ─── API Ubigeo (cascada departamento → provincia → distrito) ────────────────

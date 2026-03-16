@@ -149,6 +149,7 @@ export interface ColumnDef {
 export type RendimientoModo = 'dia' | 'hora' | 'global';
 
 export interface ACUComponenteRow {
+    recursos: null;
     codigo?: string | null;
     descripcion: string;
     unidad?: string | null;

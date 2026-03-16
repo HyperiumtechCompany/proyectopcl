@@ -6,10 +6,6 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
-<<<<<<< HEAD
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-=======
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 import { dashboard } from '@/routes';
 import type { NavItem, Auth } from '@/types';
 import AppLogo from './app-logo';
@@ -77,7 +73,12 @@ export function AppSidebar() {
             href: '/metrados/electrica',
             icon: Folder,
         },
-
+        
+        {
+            title: 'Comunicaciones',
+            href: '/metrados/comunicacion',
+            icon: Folder,
+        }
         
         // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
         // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
