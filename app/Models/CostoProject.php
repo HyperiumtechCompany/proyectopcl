@@ -51,16 +51,10 @@ class CostoProject extends Model
         'crono_general',
         'crono_valorizado',
         'crono_materiales',
-        // Presupuesto Unificado (nuevo)
+        // Presupuesto Unificado (incluye: general, ACUs, GG, remuneraciones, insumos, índices)
         'presupuesto',
-        // ETTs
+        // Especificaciones Técnicas
         'etts',
-        // Presupuesto Legacy (mantener para compatibilidad)
-        'presupuesto_gg',
-        'presupuesto_insumos',
-        'presupuesto_remuneraciones',
-        'presupuesto_acus',
-        'presupuesto_indice',
     ];
 
     // ─── Relations ───────────────────────────────────────────────────────────────
@@ -104,28 +98,6 @@ class CostoProject extends Model
     public function hasUnifiedPresupuesto(): bool
     {
         return $this->hasModule('presupuesto');
-    }
-
-    /**
-     * Check if the project uses any legacy presupuesto modules.
-     */
-    public function hasLegacyPresupuesto(): bool
-    {
-        $legacyModules = [
-            'presupuesto_gg',
-            'presupuesto_insumos',
-            'presupuesto_remuneraciones',
-            'presupuesto_acus',
-            'presupuesto_indice',
-        ];
-
-        foreach ($legacyModules as $module) {
-            if ($this->hasModule($module)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
 }

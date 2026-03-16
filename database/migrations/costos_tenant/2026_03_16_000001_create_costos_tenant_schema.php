@@ -1,0 +1,893 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * COSTOS TENANT — ESQUEMA UNIFICADO v2
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Migración única que crea TODAS las tablas del tenant de costos en el
+ * orden correcto de dependencias:
+ *
+ *   0. project_meta              — metadatos del proyecto
+ *   1. presupuestos              — tabla maestra (padre de todo)
+ *   2. Metrados (6 especialidades) — vinculados a presupuestos
+ *   3. Cronogramas (3 tipos)     — vinculados a presupuestos
+ *   4. Especificaciones Técnicas — vinculados a presupuestos
+ *   5. Presupuesto General       — partidas WBS
+ *   6. GG Fijos + desagregados   — fianzas, pólizas
+ *   7. GG Variables              — gastos variables
+ *   8. Presupuesto Remuneraciones
+ *   9. GG Supervisión
+ *  10. GG Control Concurrente
+ *  11. GG Consolidado            — caché de totales
+ *  12. Presupuesto ACUs
+ *  13. Presupuesto Insumos
+ *  14. Presupuesto Índices (fórmula polinómica)
+ *  15. Catálogos Insumos (clases + productos)
+ *  16. Metrado Sanitarias Modular (config, módulos, exterior, cisterna, resumen)
+ *
+ * Reemplaza las migraciones antiguas:
+ *   - 2026_03_06_000001_create_project_meta_table.php
+ *   - 2026_03_06_000002_create_costos_module_tables.php
+ *   - 2026_03_07_000001_create_presupuesto_unificado_tables.php
+ *   - 2026_03_13_000001_create_metrado_sanitarias_modular_tables.php
+ *   - 2026_03_13_174330_add_node_type_and_titulo_to_metrado_sanitarias_tables.php
+ */
+return new class extends Migration
+{
+    protected $connection = 'costos_tenant';
+
+    public function up(): void
+    {
+        // ══════════════════════════════════════════════════════════════════════
+        // 0. PROJECT META — metadatos redundantes para acceso rápido
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('project_meta')) {
+            Schema::connection($this->connection)->create('project_meta', function (Blueprint $table) {
+                $table->id();
+                $table->string('key');
+                $table->text('value')->nullable();
+                $table->timestamps();
+                $table->unique('key');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 1. PRESUPUESTOS — TABLA MAESTRA (padre de todo el sistema)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuestos')) {
+            Schema::create('presupuestos', function (Blueprint $table) {
+                $table->id();
+                $table->string('nombre');
+                $table->text('descripcion')->nullable();
+                $table->string('moneda', 20)->default('SOLES');
+                $table->date('fecha')->nullable();
+                $table->string('ubicacion')->nullable();
+                $table->string('cliente')->nullable();
+                $table->decimal('costo_directo', 15, 4)->default(0);
+                $table->decimal('gastos_generales', 15, 4)->default(0);
+                $table->decimal('utilidad', 15, 4)->default(0);
+                $table->decimal('igv_porcentaje', 5, 2)->default(18.00);
+                $table->decimal('total_presupuesto', 15, 4)->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 2. METRADOS — 6 especialidades, todas vinculadas a presupuestos
+        //    Cada tabla tiene la misma estructura base + presupuesto_id
+        // ══════════════════════════════════════════════════════════════════════
+        $metradoTables = [
+            'metrado_arquitectura',
+            'metrado_estructura',
+            'metrado_sanitarias',
+            'metrado_electricas',
+            'metrado_comunicaciones',
+            'metrado_gas',
+        ];
+
+        foreach ($metradoTables as $tableName) {
+            if (!Schema::connection($this->connection)->hasTable($tableName)) {
+                Schema::create($tableName, function (Blueprint $table) {
+                    $table->id();
+                    $table->unsignedBigInteger('presupuesto_id')->nullable();
+                    $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                    $table->integer('item_order')->default(0);
+                    $table->string('partida', 50)->nullable();
+                    $table->text('descripcion')->nullable();
+                    $table->string('unidad', 20)->nullable();
+                    $table->decimal('elsim', 12, 4)->default(0);
+                    $table->decimal('largo', 12, 4)->default(0);
+                    $table->decimal('ancho', 12, 4)->default(0);
+                    $table->decimal('alto', 12, 4)->default(0);
+                    $table->decimal('nveces', 12, 4)->default(0);
+                    $table->decimal('lon', 12, 4)->default(0);
+                    $table->decimal('area', 12, 4)->default(0);
+                    $table->decimal('vol', 12, 4)->default(0);
+                    $table->decimal('kg', 12, 4)->default(0);
+                    $table->decimal('und', 14, 4)->default(0);
+                    $table->decimal('total', 14, 4)->default(0);
+                    $table->text('observacion')->nullable();
+                    $table->unsignedBigInteger('parent_id')->nullable();
+                    $table->integer('nivel')->default(0);
+                    $table->timestamps();
+
+                    $table->index('presupuesto_id');
+                });
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 3. CRONOGRAMAS — 3 tipos, vinculados a presupuestos
+        // ══════════════════════════════════════════════════════════════════════
+
+        // 3a. Cronograma General (tipo Gantt)
+        if (!Schema::connection($this->connection)->hasTable('cronograma_general')) {
+            Schema::create('cronograma_general', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                $table->integer('item_order')->default(0);
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->integer('duracion_dias')->default(0);
+                $table->date('fecha_inicio')->nullable();
+                $table->date('fecha_fin')->nullable();
+                $table->decimal('avance', 8, 4)->default(0);
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->json('predecesoras')->nullable();
+                $table->timestamps();
+
+                $table->index('presupuesto_id');
+            });
+        }
+
+        // 3b. Cronograma Valorizado (distribución mensual del presupuesto)
+        if (!Schema::connection($this->connection)->hasTable('cronograma_valorizado')) {
+            Schema::create('cronograma_valorizado', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                $table->integer('item_order')->default(0);
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->decimal('presupuesto_total', 14, 4)->default(0);
+                $table->json('distribucion_mensual')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id');
+            });
+        }
+
+        // 3c. Cronograma de Materiales (adquisición de materiales por mes)
+        if (!Schema::connection($this->connection)->hasTable('cronograma_materiales')) {
+            Schema::create('cronograma_materiales', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                $table->integer('item_order')->default(0);
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('cantidad_total', 14, 4)->default(0);
+                $table->decimal('precio_unitario', 14, 4)->default(0);
+                $table->decimal('presupuesto_total', 14, 4)->default(0);
+                $table->json('distribucion_mensual')->nullable();
+                $table->timestamps();
+
+                $table->index('presupuesto_id');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 4. ESPECIFICACIONES TÉCNICAS — vinculadas a presupuestos
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('especificaciones_tecnicas')) {
+            Schema::create('especificaciones_tecnicas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                $table->integer('item_order')->default(0);
+                $table->string('partida', 50)->nullable();
+                $table->text('titulo')->nullable();
+                $table->longText('descripcion')->nullable();
+                $table->longText('materiales')->nullable();
+                $table->longText('procedimiento')->nullable();
+                $table->longText('medicion')->nullable();
+                $table->longText('forma_pago')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->string('especialidad', 30)->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 5. PRESUPUESTO GENERAL — partidas WBS
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuesto_general')) {
+            Schema::create('presupuesto_general', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->string('partida', 50);
+                $table->text('descripcion');
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('metrado', 15, 4)->default(0);
+                $table->decimal('precio_unitario', 15, 4)->default(0);
+                $table->decimal('parcial', 15, 4)->storedAs('metrado * precio_unitario')
+                    ->comment('metrado × precio_unitario');
+
+                $table->string('metrado_source', 50)->nullable();
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id', 'idx_pg_presupuesto');
+                $table->index('partida',        'idx_pg_partida');
+                $table->index('item_order',     'idx_pg_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 6. GG FIJOS — árbol principal (seccion → grupo → detalle)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_fijos')) {
+            Schema::create('gg_fijos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign('parent_id')->references('id')->on('gg_fijos')->nullOnDelete();
+                $table->enum('tipo_fila', ['seccion', 'grupo', 'detalle'])->default('detalle')
+                    ->comment('seccion=nivel1, grupo=nivel2, detalle=fila editable');
+
+                $table->enum('tipo_calculo', [
+                    'manual',
+                    'fianza_fiel_cumplimiento',
+                    'fianza_adelanto_efectivo',
+                    'fianza_adelanto_materiales',
+                    'poliza_car',
+                    'poliza_sctr',
+                    'poliza_essalud_vida',
+                    'sencico',
+                    'itf',
+                ])->default('manual')->comment('Tipo de tabla desagregada vinculada');
+
+                $table->string('item_codigo', 20)->nullable();
+                $table->text('descripcion');
+                $table->string('unidad', 20)->nullable();
+
+                $table->decimal('cantidad',       15, 4)->default(0);
+                $table->decimal('costo_unitario', 15, 4)->default(0);
+                $table->decimal('parcial',        15, 4)->storedAs('cantidad * costo_unitario')
+                    ->comment('cantidad × costo_unitario');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id', 'idx_ggf_presupuesto');
+                $table->index('parent_id',      'idx_ggf_parent');
+                $table->index('tipo_calculo',   'idx_ggf_tipo');
+                $table->index('item_order',     'idx_ggf_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 6a. GG FIJOS DESAGREGADO — FIANZAS
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_fijos_fianzas')) {
+            Schema::create('gg_fijos_fianzas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('gg_fijos_id')->nullable();
+                $table->foreign('gg_fijos_id')->references('id')->on('gg_fijos')->nullOnDelete();
+
+                $table->enum('tipo_fianza', [
+                    'fiel_cumplimiento',
+                    'adelanto_efectivo',
+                    'adelanto_materiales',
+                ])->comment('Tipo de fianza que aplica');
+
+                $table->text('descripcion');
+
+                $table->decimal('base_calculo',          15, 4)->default(0)
+                    ->comment('Monto del contrato (sub-total sin IGV)');
+                $table->decimal('garantia_porcentaje',    5, 2)->default(10.00)
+                    ->comment('% de garantía exigida');
+                $table->decimal('tea_porcentaje',         8, 6)->default(0)
+                    ->comment('TEA % anual');
+                $table->decimal('tea_360_dias',          10, 8)->storedAs('tea_porcentaje / 360')
+                    ->comment('TEA diaria = TEA% / 360');
+
+                $table->unsignedSmallInteger('duracion_obra_dias')->nullable()
+                    ->comment('Duración de la obra en días');
+                $table->unsignedSmallInteger('duracion_liquidacion_dias')->nullable()
+                    ->comment('Plazo de liquidación en días');
+
+                $table->decimal('factor_porcentaje',  5, 2)->nullable()
+                    ->comment('Factor del tramo');
+                $table->decimal('avance_porcentaje',  5, 2)->nullable()
+                    ->comment('% de avance comprometido');
+                $table->unsignedSmallInteger('renovacion_dias')->nullable()
+                    ->comment('Días de renovación c/3 meses');
+
+                $table->decimal('garantia_fc_sin_igv', 15, 4)->default(0)
+                    ->comment('Garantía FC calculada sin IGV — actualizado por service');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_fianza_presupuesto');
+                $table->index('gg_fijos_id',    'idx_fianza_gg_fijos');
+                $table->index('tipo_fianza',    'idx_fianza_tipo');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 6b. GG FIJOS DESAGREGADO — PÓLIZAS DE SEGUROS
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_fijos_polizas')) {
+            Schema::create('gg_fijos_polizas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('gg_fijos_id')->nullable();
+                $table->foreign('gg_fijos_id')->references('id')->on('gg_fijos')->nullOnDelete();
+
+                $table->enum('tipo_poliza', [
+                    'car',
+                    'sctr_salud',
+                    'sctr_pension',
+                    'essalud_vida',
+                    'sencico',
+                    'itf',
+                ])->comment('Tipo de póliza/tributo');
+
+                $table->text('descripcion');
+
+                $table->decimal('base_calculo',   15, 4)->default(0)
+                    ->comment('Monto sobre el que se aplica la tasa');
+                $table->decimal('tea_porcentaje', 8, 6)->default(0)
+                    ->comment('Tasa % aplicable');
+                $table->decimal('tea_360_dias', 10, 8)->storedAs('tea_porcentaje / 360')
+                    ->comment('Tasa diaria = tea% / 360');
+                $table->unsignedSmallInteger('duracion_dias')->default(0)
+                    ->comment('Vigencia en días');
+
+                $table->decimal('poliza_sin_igv', 15, 4)->default(0)
+                    ->comment('Monto póliza/tributo sin IGV — actualizado por service');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_poliza_presupuesto');
+                $table->index('gg_fijos_id',    'idx_poliza_gg_fijos');
+                $table->index('tipo_poliza',    'idx_poliza_tipo');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 7. GG VARIABLES — árbol con vínculo opcional a remuneraciones
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_variables')) {
+            Schema::create('gg_variables', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign('parent_id')->references('id')->on('gg_variables')->nullOnDelete();
+                $table->enum('tipo_fila', ['seccion', 'grupo', 'detalle'])->default('detalle');
+                $table->string('item_codigo', 20)->nullable();
+                $table->text('descripcion');
+                $table->string('unidad', 20)->nullable();
+
+                $table->decimal('cantidad_descripcion', 15, 4)->default(0)
+                    ->comment('Cantidad del insumo/recurso');
+                $table->decimal('cantidad_tiempo',      15, 4)->default(0)
+                    ->comment('N° de meses o períodos');
+                $table->decimal('participacion',         5, 2)->default(100.00)
+                    ->comment('% participación en el proyecto');
+                $table->decimal('precio',               15, 4)->default(0)
+                    ->comment('Precio unitario');
+
+                $table->decimal('parcial', 15, 4)->storedAs('
+                    cantidad_descripcion * cantidad_tiempo * (participacion / 100) * precio
+                ')->comment('cant_desc × cant_tiempo × part% × precio');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id',  'idx_ggv_presupuesto');
+                $table->index('parent_id',       'idx_ggv_parent');
+                $table->index('item_order',      'idx_ggv_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 8. PRESUPUESTO REMUNERACIONES (Detalle de GG Variables)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuesto_remuneraciones')) {
+            Schema::create('presupuesto_remuneraciones', function (Blueprint $table) {
+                $table->id();
+
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('gg_variable_id')->nullable();
+                $table->foreign('gg_variable_id')->references('id')->on('gg_variables')->nullOnDelete();
+
+                $table->string('cargo', 100);
+                $table->string('categoria', 50)->nullable()->comment('Profesional | Técnico | Auxiliar');
+
+                $table->decimal('participacion', 5, 2)->default(100.00);
+                $table->decimal('cantidad',      15, 4)->default(1);
+                $table->decimal('meses',         15, 4)->default(1);
+
+                $table->decimal('sueldo_basico',       15, 2)->default(0);
+                $table->decimal('asignacion_familiar', 15, 2)->default(0);
+                $table->decimal('snp',                 15, 2)->default(0);
+                $table->decimal('essalud',             15, 2)->default(0);
+                $table->decimal('cts',                 15, 2)->default(0);
+                $table->decimal('vacaciones',          15, 2)->default(0);
+                $table->decimal('gratificacion',       15, 2)->default(0);
+
+                $table->decimal('total_mensual_unitario', 15, 4)->storedAs('
+                    sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion
+                ');
+
+                $table->decimal('total_proyecto', 15, 4)->storedAs('
+                    (sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion)
+                    * cantidad * meses * (participacion / 100)
+                ');
+
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id', 'idx_rem_presupuesto');
+                $table->index('gg_variable_id', 'idx_rem_ggv');
+                $table->index('categoria',      'idx_rem_categoria');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 9. GG SUPERVISIÓN
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_supervision')) {
+            Schema::create('gg_supervision', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign('parent_id')->references('id')->on('gg_supervision')->nullOnDelete();
+                $table->enum('tipo_fila', ['etapa', 'seccion', 'detalle'])->default('detalle')
+                    ->comment('etapa=I Supervisión / II Recepción, seccion=A/B/C, detalle=fila');
+
+                $table->string('item_codigo', 20)->nullable()
+                    ->comment('Ej: I, I.A, I.A.1');
+                $table->text('concepto');
+                $table->string('unidad', 20)->nullable();
+
+                $table->decimal('cantidad', 15, 4)->default(0);
+                $table->decimal('meses',    15, 4)->default(0)->comment('Tiempo en meses');
+                $table->decimal('importe',  15, 4)->default(0)->comment('Precio/importe unitario');
+
+                $table->decimal('subtotal', 15, 4)->storedAs('cantidad * meses * importe')
+                    ->comment('cantidad × meses × importe');
+
+                $table->decimal('total_seccion', 15, 4)->default(0)
+                    ->comment('SUM(subtotal hijos) — actualizado por GgSupervisionService');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id', 'idx_ggsup_presupuesto');
+                $table->index('parent_id',      'idx_ggsup_parent');
+                $table->index('item_order',     'idx_ggsup_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 10. GG CONTROL CONCURRENTE
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_control_concurrente')) {
+            Schema::create('gg_control_concurrente', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign('parent_id')->references('id')->on('gg_control_concurrente')->nullOnDelete();
+                $table->enum('tipo_fila', ['seccion', 'detalle'])->default('detalle');
+
+                $table->string('item_codigo', 20)->nullable();
+                $table->text('descripcion');
+                $table->string('unidad', 20)->nullable();
+
+                $table->decimal('cantidad_descripcion', 15, 4)->default(0)
+                    ->comment('Cantidad del concepto');
+                $table->decimal('cantidad_tiempo',      15, 4)->default(0)
+                    ->comment('Período/meses');
+                $table->decimal('participacion',         5, 2)->default(100.00)
+                    ->comment('% participación');
+                $table->decimal('precio_unitario',      15, 4)->default(0)
+                    ->comment('Precio unitario');
+
+                $table->decimal('sub_total', 15, 4)->storedAs('
+                    cantidad_descripcion * cantidad_tiempo * (participacion / 100) * precio_unitario
+                ')->comment('cant_desc × cant_tiempo × part% × precio');
+
+                $table->decimal('total_seccion', 15, 4)->default(0)
+                    ->comment('SUM(sub_total hijos) — actualizado por service');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_ggcc_presupuesto');
+                $table->index('parent_id',      'idx_ggcc_parent');
+                $table->index('item_order',     'idx_ggcc_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 11. GG CONSOLIDADO — caché de totales + resumen
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('gg_consolidado')) {
+            Schema::create('gg_consolidado', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->unique();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                // Totales fuente
+                $table->decimal('total_costo_directo',       15, 4)->default(0);
+                $table->decimal('total_gg_fijos',            15, 4)->default(0);
+                $table->decimal('total_gg_variables',        15, 4)->default(0);
+                $table->decimal('total_supervision',         15, 4)->default(0);
+                $table->decimal('total_control_concurrente', 15, 4)->default(0);
+
+                // Componentes I–VI
+                $table->decimal('comp_i_costo_directo',            15, 4)->default(0);
+                $table->decimal('comp_i_porcentaje',                6, 4)->default(0);
+                $table->decimal('comp_ii_gastos_generales',        15, 4)->default(0);
+                $table->decimal('comp_ii_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_iii_utilidad',               15, 4)->default(0);
+                $table->decimal('comp_iii_porcentaje',              6, 4)->default(0);
+                $table->decimal('comp_iv_subtotal_sin_igv',        15, 4)->default(0);
+                $table->decimal('comp_iv_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_v_igv',                      15, 4)->default(0);
+                $table->decimal('comp_v_porcentaje',                6, 4)->default(18.00);
+                $table->decimal('comp_vi_valor_con_igv',           15, 4)->default(0);
+                $table->decimal('comp_vi_porcentaje',               6, 4)->default(0);
+
+                // Totales finales
+                $table->decimal('total_presupuesto_obra',          15, 4)->default(0);
+                $table->decimal('total_con_igv',                   15, 4)->default(0);
+                $table->decimal('total_inversion_obra',            15, 4)->default(0);
+
+                // Conversión a letras
+                $table->string('total_letras', 500)->nullable();
+                $table->string('total_inversion_obra_letras', 500)->nullable();
+
+                // Indicadores
+                $table->decimal('porcentaje_gg_sobre_cd',          6, 4)->default(0);
+                $table->decimal('porcentaje_supervision_sobre_cd', 6, 4)->default(0);
+
+                $table->timestamp('calculado_at')->nullable();
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_ggcon_presupuesto');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 12. PRESUPUESTO ACUs (Análisis de Costos Unitarios)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuesto_acus')) {
+            Schema::create('presupuesto_acus', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->string('partida', 50);
+                $table->text('descripcion');
+                $table->string('unidad', 20);
+                $table->decimal('rendimiento', 10, 4)->default(1);
+
+                $table->json('mano_de_obra')->nullable();
+                $table->decimal('costo_mano_obra',    15, 4)->default(0);
+                $table->json('materiales')->nullable();
+                $table->decimal('costo_materiales',   15, 4)->default(0);
+                $table->json('equipos')->nullable();
+                $table->decimal('costo_equipos',      15, 4)->default(0);
+                $table->json('subcontratos')->nullable();
+                $table->decimal('costo_subcontratos', 15, 4)->default(0);
+                $table->json('subpartidas')->nullable();
+                $table->decimal('costo_subpartidas',  15, 4)->default(0);
+
+                $table->decimal('costo_unitario_total', 15, 4)->storedAs('
+                    costo_mano_obra + costo_materiales + costo_equipos
+                    + costo_subcontratos + costo_subpartidas
+                ');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_acu_presupuesto');
+                $table->index('partida',        'idx_acu_partida');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 13. PRESUPUESTO INSUMOS (catálogo por proyecto)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuesto_insumos')) {
+            Schema::create('presupuesto_insumos', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo', 50)->unique();
+                $table->text('descripcion');
+                $table->string('unidad', 20);
+                $table->decimal('precio_unitario', 15, 4)->default(0);
+                $table->string('tipo', 20)->comment('material | mano_obra | equipo');
+                $table->string('categoria', 50)->nullable();
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('codigo', 'idx_ins_codigo');
+                $table->index('tipo',   'idx_ins_tipo');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 14. PRESUPUESTO ÍNDICES (fórmula polinómica)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('presupuesto_indices')) {
+            Schema::create('presupuesto_indices', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->string('simbolo', 10)->comment('M, MO, EQ, GG');
+                $table->text('descripcion');
+                $table->decimal('coeficiente',   10, 6)->default(0);
+                $table->decimal('indice_base',   15, 4)->default(100);
+                $table->decimal('indice_actual', 15, 4)->default(100);
+                $table->decimal('monomio',       10, 6)
+                    ->storedAs('coeficiente * (indice_actual / indice_base)');
+                $table->date('fecha_indice_base')->nullable();
+                $table->date('fecha_indice_actual')->nullable();
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('presupuesto_id', 'idx_idx_presupuesto');
+                $table->index('simbolo',        'idx_idx_simbolo');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 15. CATÁLOGOS GLOBALES DE INSUMOS (sin presupuesto_id)
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('insumo_clases')) {
+            Schema::create('insumo_clases', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo', 20)->unique();
+                $table->string('descripcion', 255);
+                $table->timestamps();
+
+                $table->index('codigo', 'idx_ic_codigo');
+            });
+        }
+
+        if (!Schema::connection($this->connection)->hasTable('insumo_productos')) {
+            Schema::create('insumo_productos', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo_producto', 50)->unique();
+                $table->text('descripcion');
+                $table->text('especificaciones')->nullable();
+                $table->string('unidad', 20);
+                $table->decimal('costo_unitario_lista', 15, 4)->default(0);
+                $table->decimal('costo_unitario',       15, 4)->default(0);
+                $table->decimal('costo_flete',          15, 4)->default(0);
+                $table->date('fecha_lista')->nullable();
+                $table->unsignedBigInteger('insumo_clase_id');
+                $table->foreign('insumo_clase_id')->references('id')->on('insumo_clases')->cascadeOnDelete();
+                $table->string('tipo', 20)->comment('mano_de_obra | materiales | equipos');
+                $table->boolean('estado')->default(true);
+                $table->timestamps();
+
+                $table->index('codigo_producto', 'idx_ip_codigo');
+                $table->index('tipo',            'idx_ip_tipo');
+                $table->index('insumo_clase_id', 'idx_ip_clase');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 16. METRADO SANITARIAS MODULAR
+        // ══════════════════════════════════════════════════════════════════════
+
+        // 16a. Configuración del módulo sanitarias
+        if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_config')) {
+            Schema::create('metrado_sanitarias_config', function (Blueprint $table) {
+                $table->id();
+                $table->integer('cantidad_modulos')->default(1);
+                $table->string('nombre_proyecto', 255)->nullable();
+                $table->timestamps();
+            });
+        }
+
+        // 16b. Módulos dinámicos (N hojas con misma estructura)
+        if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_modulos')) {
+            Schema::create('metrado_sanitarias_modulos', function (Blueprint $table) {
+                $table->id();
+                $table->integer('modulo_numero')->default(1);
+                $table->string('modulo_nombre', 100)->nullable();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('elsim', 12, 4)->default(0);
+                $table->decimal('largo', 12, 4)->default(0);
+                $table->decimal('ancho', 12, 4)->default(0);
+                $table->decimal('alto', 12, 4)->default(0);
+                $table->decimal('nveces', 12, 4)->default(0);
+                $table->decimal('lon', 12, 4)->default(0);
+                $table->decimal('area', 12, 4)->default(0);
+                $table->decimal('vol', 12, 4)->default(0);
+                $table->decimal('kg', 12, 4)->default(0);
+                $table->decimal('und', 14, 4)->default(0);
+                $table->decimal('total', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+
+                $table->index(['modulo_numero', 'item_order']);
+            });
+        }
+
+        // 16c. Red Exterior
+        if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_exterior')) {
+            Schema::create('metrado_sanitarias_exterior', function (Blueprint $table) {
+                $table->id();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('elsim', 12, 4)->default(0);
+                $table->decimal('largo', 12, 4)->default(0);
+                $table->decimal('ancho', 12, 4)->default(0);
+                $table->decimal('alto', 12, 4)->default(0);
+                $table->decimal('nveces', 12, 4)->default(0);
+                $table->decimal('lon', 12, 4)->default(0);
+                $table->decimal('area', 12, 4)->default(0);
+                $table->decimal('vol', 12, 4)->default(0);
+                $table->decimal('kg', 12, 4)->default(0);
+                $table->decimal('und', 14, 4)->default(0);
+                $table->decimal('total', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+            });
+        }
+
+        // 16d. Cisterna / Tanque Elevado
+        if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_cisterna')) {
+            Schema::create('metrado_sanitarias_cisterna', function (Blueprint $table) {
+                $table->id();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('elsim', 12, 4)->default(0);
+                $table->decimal('largo', 12, 4)->default(0);
+                $table->decimal('ancho', 12, 4)->default(0);
+                $table->decimal('alto', 12, 4)->default(0);
+                $table->decimal('nveces', 12, 4)->default(0);
+                $table->decimal('lon', 12, 4)->default(0);
+                $table->decimal('area', 12, 4)->default(0);
+                $table->decimal('vol', 12, 4)->default(0);
+                $table->decimal('kg', 12, 4)->default(0);
+                $table->decimal('und', 14, 4)->default(0);
+                $table->decimal('total', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+            });
+        }
+
+        // 16e. Resumen Consolidado
+        if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_resumen')) {
+            Schema::create('metrado_sanitarias_resumen', function (Blueprint $table) {
+                $table->id();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('total_modulos', 14, 4)->default(0);
+                $table->decimal('total_exterior', 14, 4)->default(0);
+                $table->decimal('total_cisterna', 14, 4)->default(0);
+                $table->decimal('total_general', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        // Orden inverso estricto respetando todas las FKs
+        Schema::dropIfExists('metrado_sanitarias_resumen');
+        Schema::dropIfExists('metrado_sanitarias_cisterna');
+        Schema::dropIfExists('metrado_sanitarias_exterior');
+        Schema::dropIfExists('metrado_sanitarias_modulos');
+        Schema::dropIfExists('metrado_sanitarias_config');
+
+        Schema::dropIfExists('insumo_productos');
+        Schema::dropIfExists('insumo_clases');
+        Schema::dropIfExists('presupuesto_indices');
+        Schema::dropIfExists('presupuesto_insumos');
+        Schema::dropIfExists('presupuesto_acus');
+
+        Schema::dropIfExists('gg_consolidado');
+        Schema::dropIfExists('gg_control_concurrente');
+        Schema::dropIfExists('gg_supervision');
+        Schema::dropIfExists('presupuesto_remuneraciones');
+        Schema::dropIfExists('gg_variables');
+        Schema::dropIfExists('gg_fijos_polizas');
+        Schema::dropIfExists('gg_fijos_fianzas');
+        Schema::dropIfExists('gg_fijos');
+
+        Schema::dropIfExists('presupuesto_general');
+
+        Schema::dropIfExists('especificaciones_tecnicas');
+        Schema::dropIfExists('cronograma_materiales');
+        Schema::dropIfExists('cronograma_valorizado');
+        Schema::dropIfExists('cronograma_general');
+
+        Schema::dropIfExists('metrado_gas');
+        Schema::dropIfExists('metrado_comunicaciones');
+        Schema::dropIfExists('metrado_electricas');
+        Schema::dropIfExists('metrado_sanitarias');
+        Schema::dropIfExists('metrado_estructura');
+        Schema::dropIfExists('metrado_arquitectura');
+
+        Schema::dropIfExists('presupuestos');
+        Schema::connection('costos_tenant')->dropIfExists('project_meta');
+    }
+};

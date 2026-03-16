@@ -1,9 +1,8 @@
-import type {
-    ColumnDef} from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
     useReactTable,
     getCoreRowModel,
-    flexRender
+    flexRender,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown } from 'lucide-react';
@@ -263,7 +262,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({
                                 <span className="w-[14px] shrink-0" />
                             )}
 
-                            {isTitle ? ( 
+                            {isTitle ? (
                                 <span className="flex min-w-0 shrink items-center text-xs font-semibold tracking-wide text-sky-300">
                                     <span className="mr-1 shrink-0">
                                         {item.partida} -
