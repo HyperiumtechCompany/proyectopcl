@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Luckysheet.tsx — Wrapper React para la hoja de cálculo Luckysheet
  *
  * ── POR QUÉ CARGA DINÁMICA Y NO ESM IMPORT ──────────────────────────────────
