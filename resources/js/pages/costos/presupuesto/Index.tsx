@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { router, usePage, Head } from '@inertiajs/react';
 import axios from 'axios';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
@@ -9,7 +9,21 @@ import { AcuPanel } from './components/AcuPanel';
 import { BudgetTree } from './components/BudgetTree';
 import { SubsectionNav } from './components/SubsectionNav';
 import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
+import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
+import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
 import { useBudgetStore } from './stores/budgetStore';
+import { RemuneracionesPanel } from './components/RemuneracionesPanel';
+import { GastosGeneralesPanel } from './components/GastosGeneralesPanel';
+import { 
+    Building2, 
+    Calculator, 
+    Wallet, 
+    Users, 
+    Settings2, 
+    LayoutDashboard, 
+    FileDown,
+    Search
+} from 'lucide-react';
 
 interface PageProps {
     project: {
@@ -173,24 +187,118 @@ export default function Index() {
         return result;
     };
 
-    const handleSubsectionChange = (newSubsection: string) => {
-        router.get(
-            `/costos/proyectos/${project.id}/presupuesto/${newSubsection}`,
-        );
+    const {
+        remuneracionesRows,
+        remuneracionesLoading,
+        saveRemuneracion,
+    } = usePresupuestoRemuneraciones({
+        projectId: project.id,
+        subsection,
+    });
+
+    const {
+        gastosGeneralesRows,
+        gastosGeneralesLoading,
+        saveGastoGeneral,
+    } = usePresupuestoGastosGenerales({
+        projectId: project.id,
+        subsection,
+    });
+
+    const handleSaveRemuneracion = async (data: any) => {
+        return await saveRemuneracion(data);
+    };
+
+    const handleSaveGastoGeneral = async (data: any) => {
+        return await saveGastoGeneral(data);
+    };
+
+    // --- Navigation Groups ---
+    const mainTabs = [
+        { key: 'general', label: 'P. General', icon: Building2 },
+        { key: 'acus', label: 'ACUs', icon: Calculator },
+        { 
+            key: 'gg_group', 
+            label: 'Gastos Gen.', 
+            icon: Wallet,
+            subTabs: [
+                { key: 'consolidado', label: 'Consolidado' },
+                { key: 'gastos_generales', label: 'G.G. Variables' },
+                { key: 'gastos_fijos', label: 'G.G. Fijos' },
+                { key: 'supervision', label: 'Supervisión' },
+                { key: 'control_concurrente', label: 'Control Concurrente' },
+            ]
+        },
+        { key: 'remuneraciones', label: 'Remuneraciones', icon: Users },
+        { key: 'insumos', label: 'Insumos', icon: Settings2 },
+    ];
+
+    const isGGSubsection = ['consolidado', 'gastos_generales', 'gastos_fijos', 'supervision', 'control_concurrente'].includes(subsection);
+    const activeMainTab = isGGSubsection ? 'gg_group' : (subsection === 'indices' ? 'insumos' : subsection);
+
+    const handleMainTabChange = (key: string) => {
+        if (key === 'gg_group') {
+            router.get(`/costos/proyectos/${project.id}/presupuesto/consolidado`);
+        } else {
+            router.get(`/costos/proyectos/${project.id}/presupuesto/${key}`);
+        }
+    };
+
+    const handleSubTabChange = (key: string) => {
+        router.get(`/costos/proyectos/${project.id}/presupuesto/${key}`);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="flex h-[calc(100vh-80px)] flex-col space-y-2 pb-4">
-                <div className="mb-2 shrink-0">
-                    <SubsectionNav
-                        availableSubsections={availableSubsections}
-                        currentSubsection={subsection}
-                        onSubsectionChange={handleSubsectionChange}
-                    />
+            <Head title={`Presupuesto - ${project.nombre}`} />
+            
+            <div className="flex h-[calc(100vh-120px)] flex-col gap-3 p-2">
+                {/* --- Root Menu --- */}
+                <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-slate-900 border border-slate-700/50 p-1 shadow-inner">
+                    {mainTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        const isActive = activeMainTab === tab.key;
+                        return (
+                            <button
+                                key={tab.key}
+                                onClick={() => handleMainTabChange(tab.key)}
+                                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[10px] font-bold transition-all uppercase tracking-wider ${
+                                    isActive
+                                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95'
+                                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                }`}
+                            >
+                                <Icon className={`h-3.5 w-3.5 ${isActive ? 'animate-pulse' : ''}`} />
+                                <span className="whitespace-nowrap">{tab.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
 
-                <div className="flex-1 overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl">
+                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                    {/* --- Sub-Tabs Secondary Layer --- */}
+                    {isGGSubsection && (
+                        <div className="flex items-center gap-8 px-6 py-2.5 bg-slate-800/40 border-b border-slate-700/50 backdrop-blur-sm">
+                            {mainTabs.find(t => t.key === 'gg_group')?.subTabs?.map((sub) => (
+                                <button
+                                    key={sub.key}
+                                    onClick={() => handleSubTabChange(sub.key)}
+                                    className={`relative text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+                                        subsection === sub.key
+                                            ? 'text-amber-400'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    {sub.label}
+                                    {subsection === sub.key && (
+                                        <span className="absolute -bottom-[10px] left-0 right-0 h-0.5 bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex flex-1 flex-col overflow-hidden">
                     {subsection === 'general' || subsection === 'acus' ? (
                         <Group orientation="horizontal">
                             <Panel defaultSize={45} minSize={28}>
@@ -272,21 +380,59 @@ export default function Index() {
                                 />
                             </Panel>
                         </Group>
-                    ) : (
-                        <div className="flex h-full flex-col">
-                            <div className="border-b border-slate-700 bg-slate-800 px-3 py-2">
-                                <h2 className="text-sm font-semibold tracking-widest text-slate-200 uppercase">
-                                    {subsectionLabel}
-                                </h2>
+                    ) : subsection === 'remuneraciones' ? (
+                        <RemuneracionesPanel
+                            loading={remuneracionesLoading}
+                            rows={remuneracionesRows}
+                            onSaveRemuneracion={handleSaveRemuneracion}
+                            projectId={project.id}
+                        />
+                    ) : subsection === 'gastos_generales' || subsection === 'gastos_fijos' || subsection === 'supervision' || subsection === 'control_concurrente' ? (
+                        <GastosGeneralesPanel
+                            loading={gastosGeneralesLoading}
+                            rows={gastosGeneralesRows}
+                            onSaveGastoGeneral={handleSaveGastoGeneral}
+                            projectId={project.id}
+                        />
+                    ) : subsection === 'consolidado' ? (
+                        <div className="flex h-full flex-col overflow-hidden bg-slate-900">
+                             <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
+                                <div>
+                                    <p className="mb-2 text-lg font-semibold text-slate-200">
+                                        Módulo de {subsectionLabel}
+                                    </p>
+                                    <p className="text-sm">
+                                        Esta sección utiliza la tabla unificada para gestionar el presupuesto del proyecto.
+                                    </p>
+                                    <div className="mt-8 rounded-lg border border-slate-700 bg-slate-800 p-8">
+                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-sky-500">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.67 2.67 0 1113.5 17.25l-5.83-5.83m5.83 5.83l5.83 5.83M13.5 17.25l-5.83-5.83M8.58 11.42l-5.83 5.83A2.67 2.67 0 116.5 13.5l5.83-5.83m-5.83 5.83L12.33 18m-5.83-5.83l-5.83-5.83" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm italic text-slate-500">
+                                            Integración con base de datos unificada [{subsection}] habilitada.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex-1 p-4 text-slate-400">
-                                This section ({subsection}) is pending migration
-                                to the new grid system.
+                        </div>
+                    ) : (
+                        <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
+                            <div>
+                                <p className="mb-2 text-lg">
+                                    Sección en desarrollo
+                                </p>
+                                <p className="text-sm">
+                                    La sección de {subsectionLabel} está
+                                    pendiente de desarrollo.
+                                </p>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+        </div>
 
             {/* Context Menu overlay */}
             {contextMenu && (
