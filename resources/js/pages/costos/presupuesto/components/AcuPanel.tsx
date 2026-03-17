@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { Command } from 'cmdk';
 import {
     ChevronRight,
     ChevronDown,
@@ -6,14 +7,20 @@ import {
     Users,
     Package,
     Wrench,
+    Briefcase,
+    Layers,
+    Pencil,
     Search,
     X,
     Plus,
     Loader2,
 } from 'lucide-react';
-import { Command } from 'cmdk';
-import axios from 'axios';
-import type { ACUComponenteRow, ACURowSummary, InsumoProducto } from '@/types/presupuestos';
+import React, { useState, useEffect, useRef } from 'react';
+import type {
+    ACUComponenteRow,
+    ACURowSummary,
+    InsumoProducto,
+} from '@/types/presupuestos';
 
 const fmt = (n: number | undefined | null, d = 2) =>
     (n ?? 0).toLocaleString('es-PE', {
@@ -21,20 +28,67 @@ const fmt = (n: number | undefined | null, d = 2) =>
         maximumFractionDigits: d,
     });
 
+const fmtCantidad = (n: number | undefined | null) => {
+    const value = Number(n ?? 0);
+    const rounded = Math.round(value);
+    const isInt = Math.abs(value - rounded) < 1e-9;
+    return value.toLocaleString('es-PE', {
+        minimumFractionDigits: isInt ? 0 : 3,
+        maximumFractionDigits: isInt ? 0 : 3,
+    });
+};
+
 const sectionIcon = {
     mano_de_obra: Users,
     materiales: Package,
     equipos: Wrench,
+    subcontratos: Briefcase,
+    subpartidas: Layers,
 };
 const sectionColor = {
     mano_de_obra: 'text-blue-400',
     materiales: 'text-emerald-400',
     equipos: 'text-amber-400',
+    subcontratos: 'text-violet-400',
+    subpartidas: 'text-cyan-400',
 };
 const sectionLabel = {
     mano_de_obra: 'MANO DE OBRA',
     materiales: 'MATERIALES',
     equipos: 'EQUIPOS',
+    subcontratos: 'SUB-CONTRATOS',
+    subpartidas: 'SUB-PARTIDAS',
+};
+
+const ACU_GRID_TEMPLATE = '7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem';
+
+const isHerramientasRow = (item: ACUComponenteRow) =>
+    (item.descripcion || '').toLowerCase().includes('herramienta');
+
+const computeCantidadFromRecursosBase = (
+    recursos: number,
+    perDay: boolean,
+    hoursPerDay: number,
+    rendimiento: number,
+) => {
+    const safeRend = rendimiento || 1;
+    if (perDay) {
+        return (recursos * hoursPerDay) / safeRend;
+    }
+    return recursos / safeRend;
+};
+
+const computeRecursosFromCantidadBase = (
+    cantidad: number,
+    perDay: boolean,
+    hoursPerDay: number,
+    rendimiento: number,
+) => {
+    const safeRend = rendimiento || 1;
+    if (perDay) {
+        return (cantidad * safeRend) / hoursPerDay;
+    }
+    return cantidad * safeRend;
 };
 
 function ResourceSearchDialog({
@@ -55,7 +109,30 @@ function ResourceSearchDialog({
     const [loading, setLoading] = useState(false);
     const [seeding, setSeeding] = useState(false);
     const [catalogEmpty, setCatalogEmpty] = useState(false);
+    const [refreshSeed, setRefreshSeed] = useState(0);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create');
+    const [editorSaving, setEditorSaving] = useState(false);
+    const [clases, setClases] = useState<
+        Array<{ id: number; codigo: string; descripcion: string }>
+    >([]);
+    const [clasesLoading, setClasesLoading] = useState(false);
+    const [editorForm, setEditorForm] = useState({
+        id: null as number | null,
+        codigo_producto: '',
+        descripcion: '',
+        especificaciones: '',
+        unidad: '',
+        costo_unitario_lista: 0,
+        costo_unitario: 0,
+        costo_flete: 0,
+        insumo_clase_id: '',
+        tipo: (targetType ?? 'materiales') as
+            | 'mano_de_obra'
+            | 'materiales'
+            | 'equipos',
+    });
 
     // Fetch products from API with debounce
     useEffect(() => {
@@ -70,7 +147,10 @@ function ResourceSearchDialog({
                 if (query.trim()) params.q = query.trim();
                 if (targetType) params.tipo = targetType;
 
-                const response = await axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/search`, { params });
+                const response = await axios.get(
+                    `/costos/proyectos/${projectId}/presupuesto/insumos/search`,
+                    { params },
+                );
                 if (response.data?.success) {
                     const prods = response.data.productos || [];
                     setResults(prods);
@@ -93,7 +173,7 @@ function ResourceSearchDialog({
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [query, open, targetType, projectId]);
+    }, [query, open, targetType, projectId, refreshSeed]);
 
     // Reset on close
     useEffect(() => {
@@ -104,10 +184,78 @@ function ResourceSearchDialog({
         }
     }, [open]);
 
+    useEffect(() => {
+        if (!editorOpen) return;
+        if (clases.length > 0 || clasesLoading) return;
+
+        setClasesLoading(true);
+        axios
+            .get(`/costos/proyectos/${projectId}/presupuesto/insumos/clases`)
+            .then((res) => {
+                if (res.data?.success) {
+                    setClases(res.data.clases || []);
+                }
+            })
+            .catch(() => {
+                setClases([]);
+            })
+            .finally(() => setClasesLoading(false));
+    }, [editorOpen, clases.length, clasesLoading, projectId]);
+
+    useEffect(() => {
+        if (!editorOpen) return;
+        setEditorForm((prev) => ({
+            ...prev,
+            tipo: (targetType ?? prev.tipo) as
+                | 'mano_de_obra'
+                | 'materiales'
+                | 'equipos',
+        }));
+    }, [targetType, editorOpen]);
+
+    const openCreate = () => {
+        setEditorMode('create');
+        setEditorForm({
+            id: null,
+            codigo_producto: '',
+            descripcion: '',
+            especificaciones: '',
+            unidad: '',
+            costo_unitario_lista: 0,
+            costo_unitario: 0,
+            costo_flete: 0,
+            insumo_clase_id: '',
+            tipo: (targetType ?? 'materiales') as
+                | 'mano_de_obra'
+                | 'materiales'
+                | 'equipos',
+        });
+        setEditorOpen(true);
+    };
+
+    const openEdit = (item: InsumoProducto) => {
+        setEditorMode('edit');
+        setEditorForm({
+            id: item.id,
+            codigo_producto: item.codigo,
+            descripcion: item.descripcion,
+            especificaciones: item.especificaciones || '',
+            unidad: item.unidad,
+            costo_unitario_lista: item.costo_unitario_lista ?? 0,
+            costo_unitario: item.precio ?? 0,
+            costo_flete: item.costo_flete ?? 0,
+            insumo_clase_id: item.clase?.id?.toString() || '',
+            tipo: item.tipo,
+        });
+        setEditorOpen(true);
+    };
+
     const handleSeedCatalog = async () => {
         setSeeding(true);
         try {
-            const response = await axios.post(`/costos/proyectos/${projectId}/presupuesto/insumos/seed`);
+            const response = await axios.post(
+                `/costos/proyectos/${projectId}/presupuesto/insumos/seed`,
+            );
             if (response.data?.success) {
                 setCatalogEmpty(false);
                 // Re-trigger search to load newly seeded data
@@ -118,7 +266,10 @@ function ResourceSearchDialog({
                     try {
                         const params: Record<string, string> = {};
                         if (targetType) params.tipo = targetType;
-                        const res = await axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/search`, { params });
+                        const res = await axios.get(
+                            `/costos/proyectos/${projectId}/presupuesto/insumos/search`,
+                            { params },
+                        );
                         if (res.data?.success) {
                             setResults(res.data.productos || []);
                         }
@@ -129,6 +280,51 @@ function ResourceSearchDialog({
             console.warn('Error seeding catalog:', err);
         } finally {
             setSeeding(false);
+        }
+    };
+
+    const handleSaveInsumo = async () => {
+        if (editorSaving) return;
+        setEditorSaving(true);
+        try {
+            if (!editorForm.insumo_clase_id) {
+                alert('Seleccione una clase de insumo.');
+                setEditorSaving(false);
+                return;
+            }
+            const payload = {
+                codigo_producto: editorForm.codigo_producto.trim(),
+                descripcion: editorForm.descripcion.trim(),
+                especificaciones: editorForm.especificaciones?.trim() || null,
+                unidad: editorForm.unidad.trim(),
+                costo_unitario_lista: Number(
+                    editorForm.costo_unitario_lista || 0,
+                ),
+                costo_unitario: Number(editorForm.costo_unitario || 0),
+                costo_flete: Number(editorForm.costo_flete || 0),
+                insumo_clase_id: Number(editorForm.insumo_clase_id),
+                tipo: editorForm.tipo,
+            };
+
+            if (editorMode === 'create') {
+                await axios.post(
+                    `/costos/proyectos/${projectId}/presupuesto/insumos`,
+                    payload,
+                );
+            } else if (editorForm.id) {
+                await axios.put(
+                    `/costos/proyectos/${projectId}/presupuesto/insumos/${editorForm.id}`,
+                    payload,
+                );
+            }
+
+            setEditorOpen(false);
+            setRefreshSeed((v) => v + 1);
+        } catch (err) {
+            console.warn('Error saving insumo:', err);
+            alert('No se pudo guardar el insumo. Verifique los campos.');
+        } finally {
+            setEditorSaving(false);
         }
     };
 
@@ -167,6 +363,12 @@ function ResourceSearchDialog({
                             />
                         )}
                         <button
+                            className="mr-2 rounded-md bg-emerald-600/90 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-500"
+                            onClick={openCreate}
+                        >
+                            + Nuevo
+                        </button>
+                        <button
                             className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
                             onClick={() => onOpenChange(false)}
                         >
@@ -178,8 +380,13 @@ function ResourceSearchDialog({
                             <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-slate-500">
                                 {catalogEmpty && !query.trim() ? (
                                     <>
-                                        <Package size={32} className="opacity-30" />
-                                        <p>El catálogo de insumos está vacío.</p>
+                                        <Package
+                                            size={32}
+                                            className="opacity-30"
+                                        />
+                                        <p>
+                                            El catálogo de insumos está vacío.
+                                        </p>
                                         <button
                                             onClick={handleSeedCatalog}
                                             disabled={seeding}
@@ -190,7 +397,8 @@ function ResourceSearchDialog({
                                                 : '📦 Inicializar Catálogo Base (64 insumos)'}
                                         </button>
                                         <p className="text-[11px] text-slate-600">
-                                            Carga mano de obra, materiales y equipos de construcción
+                                            Carga mano de obra, materiales y
+                                            equipos de construcción
                                         </p>
                                     </>
                                 ) : query.trim() ? (
@@ -231,12 +439,213 @@ function ResourceSearchDialog({
                                     <span className="text-[10px] text-slate-500">
                                         {r.unidad}
                                     </span>
+                                    <button
+                                        className="mt-1 inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openEdit(r);
+                                        }}
+                                    >
+                                        <Pencil size={10} />
+                                        Editar
+                                    </button>
                                 </div>
                             </Command.Item>
                         ))}
                     </Command.List>
                 </Command>
             </div>
+
+            {editorOpen && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
+                    onClick={() => setEditorOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-4 text-slate-200 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="mb-3 flex items-center justify-between">
+                            <h3 className="text-sm font-semibold tracking-wide">
+                                {editorMode === 'create'
+                                    ? 'Nuevo Insumo'
+                                    : 'Editar Insumo'}
+                            </h3>
+                            <button
+                                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                                onClick={() => setEditorOpen(false)}
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Código
+                                <input
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.codigo_producto}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            codigo_producto: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Unidad
+                                <input
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.unidad}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            unidad: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-2 flex flex-col gap-1">
+                                Descripción
+                                <input
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.descripcion}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            descripcion: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-2 flex flex-col gap-1">
+                                Especificaciones
+                                <input
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.especificaciones}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            especificaciones: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Tipo
+                                <select
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.tipo}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            tipo: e.target.value as
+                                                | 'mano_de_obra'
+                                                | 'materiales'
+                                                | 'equipos',
+                                        }))
+                                    }
+                                >
+                                    <option value="mano_de_obra">
+                                        Mano de obra
+                                    </option>
+                                    <option value="materiales">
+                                        Materiales
+                                    </option>
+                                    <option value="equipos">Equipos</option>
+                                </select>
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Clase
+                                <select
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.insumo_clase_id}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            insumo_clase_id: e.target.value,
+                                        }))
+                                    }
+                                >
+                                    <option value="">
+                                        {clasesLoading
+                                            ? 'Cargando...'
+                                            : 'Seleccione'}
+                                    </option>
+                                    {clases.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.codigo} - {c.descripcion}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Precio Lista
+                                <input
+                                    type="number"
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.costo_unitario_lista}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            costo_unitario_lista: Number(
+                                                e.target.value,
+                                            ),
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Precio
+                                <input
+                                    type="number"
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.costo_unitario}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            costo_unitario: Number(
+                                                e.target.value,
+                                            ),
+                                        }))
+                                    }
+                                />
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Flete
+                                <input
+                                    type="number"
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.costo_flete}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            costo_flete: Number(e.target.value),
+                                        }))
+                                    }
+                                />
+                            </label>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                            <button
+                                className="rounded bg-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-600"
+                                onClick={() => setEditorOpen(false)}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="rounded bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
+                                onClick={handleSaveInsumo}
+                                disabled={editorSaving}
+                            >
+                                {editorSaving ? 'Guardando...' : 'Guardar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -301,28 +710,125 @@ function EditableAcuCell({
     );
 }
 
+function EditableTextCell({
+    value,
+    onUpdate,
+    className,
+}: {
+    value: string;
+    onUpdate: (val: string) => void;
+    className?: string;
+}) {
+    const [val, setVal] = useState(value ?? '');
+    const [isEditing, setIsEditing] = useState(false);
+
+    useEffect(() => {
+        setVal(value ?? '');
+    }, [value]);
+
+    if (isEditing) {
+        return (
+            <input
+                autoFocus
+                className={`w-full min-w-[80px] rounded border border-sky-500 bg-slate-800 px-1 text-left text-xs text-white outline-none ${className || ''}`}
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={() => {
+                    const trimmed = val.trim();
+                    if (!trimmed) {
+                        setVal(value ?? '');
+                        setIsEditing(false);
+                        return;
+                    }
+                    setIsEditing(false);
+                    onUpdate(trimmed);
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        const trimmed = val.trim();
+                        if (!trimmed) {
+                            setVal(value ?? '');
+                            setIsEditing(false);
+                            return;
+                        }
+                        setIsEditing(false);
+                        onUpdate(trimmed);
+                    }
+                    if (e.key === 'Escape') {
+                        setIsEditing(false);
+                        setVal(value ?? '');
+                    }
+                }}
+            />
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            className={`w-full text-left text-slate-200 hover:text-sky-300 ${className || ''}`}
+            onClick={(e) => {
+                e.stopPropagation();
+                setIsEditing(true);
+            }}
+        >
+            {value || '-'}
+        </button>
+    );
+}
+
 function AcuSection({
     type,
     items,
     subtotal,
     rendimiento,
+    perDay,
+    hoursPerDay,
+    manoObraTotal,
     onAddClick,
     onUpdateItem,
     onDeleteItem,
 }: {
-    type: 'mano_de_obra' | 'materiales' | 'equipos';
+    type:
+        | 'mano_de_obra'
+        | 'materiales'
+        | 'equipos'
+        | 'subcontratos'
+        | 'subpartidas';
     items: ACUComponenteRow[];
     subtotal: number;
     rendimiento: number;
-    onAddClick: (type: 'mano_de_obra' | 'materiales' | 'equipos') => void;
+    perDay: boolean;
+    hoursPerDay: number;
+    manoObraTotal: number;
+    onAddClick: (
+        type:
+            | 'mano_de_obra'
+            | 'materiales'
+            | 'equipos'
+            | 'subcontratos'
+            | 'subpartidas',
+    ) => void;
     onUpdateItem: (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
+        type:
+            | 'mano_de_obra'
+            | 'materiales'
+            | 'equipos'
+            | 'subcontratos'
+            | 'subpartidas',
         index: number,
         field: string,
-        value: number,
+        value: string | number,
     ) => void;
     onDeleteItem: (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
+        type:
+            | 'mano_de_obra'
+            | 'materiales'
+            | 'equipos'
+            | 'subcontratos'
+            | 'subpartidas',
         index: number,
     ) => void;
 }) {
@@ -330,6 +836,7 @@ function AcuSection({
     const Icon = sectionIcon[type];
     const color = sectionColor[type];
     const label = sectionLabel[type];
+    const isCrewType = type === 'mano_de_obra' || type === 'equipos';
 
     return (
         <div className="border-b border-slate-700">
@@ -352,92 +859,161 @@ function AcuSection({
             </div>
 
             {expanded && (
-                <table className="w-full text-xs">
+                <table className="w-full table-fixed text-xs">
                     <tbody>
-                        {items.map((item, idx) => (
-                            <tr
-                                key={`${type}-${idx}`}
-                                className="group border-b border-slate-700/50 hover:bg-slate-700/40"
-                            >
-                                <td
-                                    className="w-28 cursor-pointer py-1 pr-2 pl-8 font-mono text-[10px] text-slate-500 transition-colors group-hover:text-red-400"
-                                    title="Eliminar recurso"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDeleteItem(type, idx);
-                                    }}
+                        {items.map((item, idx) => {
+                            const recursosValue =
+                                item.recursos !== null &&
+                                item.recursos !== undefined
+                                    ? Number(item.recursos) || 0
+                                    : computeRecursosFromCantidadBase(
+                                          item.cantidad ?? 0,
+                                          perDay,
+                                          hoursPerDay,
+                                          rendimiento,
+                                      );
+                            const isHerramientas =
+                                type === 'equipos' && isHerramientasRow(item);
+                            const cantidadDisplay =
+                                isCrewType && !isHerramientas
+                                    ? computeCantidadFromRecursosBase(
+                                          recursosValue,
+                                          perDay,
+                                          hoursPerDay,
+                                          rendimiento,
+                                      )
+                                    : (item.cantidad ?? 0);
+
+                            return (
+                                <tr
+                                    key={`${type}-${idx}`}
+                                    className="group border-b border-slate-700/50 hover:bg-slate-700/40"
                                 >
-                                    {item.codigo || 'X'}
-                                </td>
-                                <td className="min-w-0 px-2 py-1 text-slate-200">
-                                    <span className="block max-w-xs truncate">
-                                        {item.descripcion}
-                                    </span>
-                                </td>
-                                <td className="w-10 px-2 py-1 text-center text-slate-400">
-                                    {item.unidad}
-                                </td>
-                                <td className="w-16 px-2 py-1 text-right text-slate-300">
-                                    <EditableAcuCell
-                                        value={item.cantidad ?? 0}
-                                        onUpdate={(v) =>
-                                            onUpdateItem(
-                                                type,
-                                                idx,
-                                                'cantidad',
-                                                v,
-                                            )
-                                        }
-                                    />
-                                </td>
-                                <td className="w-16 px-2 py-1 text-right text-slate-300">
-                                    {rendimiento
-                                        ? (
-                                              (item.cantidad || 0) / rendimiento
-                                          ).toFixed(4)
-                                        : '-'}
-                                </td>
-                                <td className="w-14 px-2 py-1 text-right text-slate-300">
-                                    {type === 'materiales' ? (
-                                        <EditableAcuCell
-                                            value={item.factor_desperdicio ?? 1}
+                                    <td
+                                        className="w-28 cursor-pointer py-1 pr-2 pl-8 font-mono text-[10px] text-slate-500 transition-colors group-hover:text-red-400"
+                                        title="Eliminar recurso"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDeleteItem(type, idx);
+                                        }}
+                                    >
+                                        {item.codigo || 'X'}
+                                    </td>
+                                    <td className="min-w-0 px-2 py-1 text-slate-200">
+                                        <EditableTextCell
+                                            value={item.descripcion || ''}
                                             onUpdate={(v) =>
                                                 onUpdateItem(
                                                     type,
                                                     idx,
-                                                    'factor_desperdicio',
+                                                    'descripcion',
                                                     v,
                                                 )
                                             }
                                         />
-                                    ) : (
-                                        '-'
-                                    )}
-                                </td>
-                                <td className="w-20 px-2 py-1 text-right text-slate-300">
-                                    <EditableAcuCell
-                                        value={
-                                            type === 'equipos'
-                                                ? (item.precio_hora ?? 0)
-                                                : (item.precio_unitario ?? 0)
-                                        }
-                                        onUpdate={(v) =>
-                                            onUpdateItem(
-                                                type,
-                                                idx,
-                                                type === 'equipos'
-                                                    ? 'precio_hora'
-                                                    : 'precio_unitario',
-                                                v,
-                                            )
-                                        }
-                                    />
-                                </td>
-                                <td className="w-20 px-2 py-1 pr-3 text-right font-semibold text-slate-100">
-                                    {fmt(item.parcial, 2)}
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="w-12 px-2 py-1 text-center text-slate-400">
+                                        <EditableTextCell
+                                            value={item.unidad || ''}
+                                            onUpdate={(v) =>
+                                                onUpdateItem(
+                                                    type,
+                                                    idx,
+                                                    'unidad',
+                                                    v,
+                                                )
+                                            }
+                                            className="text-center"
+                                        />
+                                    </td>
+                                    <td className="w-16 px-2 py-1 text-right text-slate-300">
+                                        {isCrewType && !isHerramientas ? (
+                                            <EditableAcuCell
+                                                value={recursosValue}
+                                                onUpdate={(v) =>
+                                                    onUpdateItem(
+                                                        type,
+                                                        idx,
+                                                        'recursos',
+                                                        v,
+                                                    )
+                                                }
+                                            />
+                                        ) : (
+                                            '-'
+                                        )}
+                                    </td>
+                                    <td className="w-16 px-2 py-1 text-right text-slate-300">
+                                        {isCrewType && !isHerramientas ? (
+                                            <span className="font-mono text-xs text-slate-200">
+                                                {fmtCantidad(cantidadDisplay)}
+                                            </span>
+                                        ) : (
+                                            <EditableAcuCell
+                                                value={item.cantidad ?? 0}
+                                                onUpdate={(v) =>
+                                                    onUpdateItem(
+                                                        type,
+                                                        idx,
+                                                        'cantidad',
+                                                        v,
+                                                    )
+                                                }
+                                            />
+                                        )}
+                                    </td>
+                                    <td className="w-14 px-2 py-1 text-right text-slate-300">
+                                        {type === 'materiales' ? (
+                                            <EditableAcuCell
+                                                value={
+                                                    item.factor_desperdicio ?? 1
+                                                }
+                                                onUpdate={(v) =>
+                                                    onUpdateItem(
+                                                        type,
+                                                        idx,
+                                                        'factor_desperdicio',
+                                                        v,
+                                                    )
+                                                }
+                                            />
+                                        ) : (
+                                            '-'
+                                        )}
+                                    </td>
+                                    <td className="w-20 px-2 py-1 text-right text-slate-300">
+                                        {isHerramientas ? (
+                                            <span className="font-mono text-xs text-slate-200">
+                                                {fmt(manoObraTotal || 0, 2)}
+                                            </span>
+                                        ) : (
+                                            <EditableAcuCell
+                                                value={
+                                                    type === 'equipos'
+                                                        ? (item.precio_hora ??
+                                                          0)
+                                                        : (item.precio_unitario ??
+                                                          0)
+                                                }
+                                                onUpdate={(v) =>
+                                                    onUpdateItem(
+                                                        type,
+                                                        idx,
+                                                        type === 'equipos'
+                                                            ? 'precio_hora'
+                                                            : 'precio_unitario',
+                                                        v,
+                                                    )
+                                                }
+                                            />
+                                        )}
+                                    </td>
+                                    <td className="w-20 px-2 py-1 pr-3 text-right font-semibold text-slate-100">
+                                        {fmt(item.parcial, 2)}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {items.length === 0 && (
                             <tr>
                                 <td
@@ -495,12 +1071,21 @@ export function AcuPanel({
     acuRows,
     projectId,
 }: AcuPanelProps) {
+    type SectionType =
+        | 'mano_de_obra'
+        | 'materiales'
+        | 'equipos'
+        | 'subcontratos'
+        | 'subpartidas';
+    type SearchType = 'mano_de_obra' | 'materiales' | 'equipos';
+
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
+    const [hoursPerDay, setHoursPerDay] = useState(8);
     const [searchOpen, setSearchOpen] = useState(false);
-    const [searchTargetType, setSearchTargetType] = useState<
-        'mano_de_obra' | 'materiales' | 'equipos' | null
-    >(null);
+    const [searchTargetType, setSearchTargetType] = useState<SearchType | null>(
+        null,
+    );
 
     useEffect(() => {
         if (selectedAcu) {
@@ -508,9 +1093,114 @@ export function AcuPanel({
         }
     }, [selectedAcu]);
 
-    const handleAddResourceClick = (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-    ) => {
+    const computeCantidadFromRecursos = (
+        recursos: number,
+        nextPerDay = perDay,
+        nextHoursPerDay = hoursPerDay,
+        nextRendimiento = rendimiento,
+    ) =>
+        computeCantidadFromRecursosBase(
+            recursos,
+            nextPerDay,
+            nextHoursPerDay,
+            nextRendimiento,
+        );
+
+    const computeRecursosFromCantidad = (
+        cantidad: number,
+        nextPerDay = perDay,
+        nextHoursPerDay = hoursPerDay,
+        nextRendimiento = rendimiento,
+    ) =>
+        computeRecursosFromCantidadBase(
+            cantidad,
+            nextPerDay,
+            nextHoursPerDay,
+            nextRendimiento,
+        );
+
+    const normalizeCrewItems = (
+        items: ACUComponenteRow[],
+        nextPerDay = perDay,
+        nextHoursPerDay = hoursPerDay,
+        nextRendimiento = rendimiento,
+    ) =>
+        items.map((item) => {
+            if (isHerramientasRow(item)) {
+                return item;
+            }
+            const recursos = Number(item.recursos ?? 0) || 0;
+            const cantidad = computeCantidadFromRecursos(
+                recursos,
+                nextPerDay,
+                nextHoursPerDay,
+                nextRendimiento,
+            );
+
+            return { ...item, recursos, cantidad };
+        });
+
+    const ensureHerramientasPrecio = (
+        items: ACUComponenteRow[],
+        manoObraTotal: number,
+    ) =>
+        items.map((item) =>
+            isHerramientasRow(item)
+                ? { ...item, precio_hora: manoObraTotal }
+                : item,
+        );
+
+    const recalcCrewForModeChange = (
+        items: ACUComponenteRow[],
+        fromPerDay: boolean,
+        fromHoursPerDay: number,
+        fromRendimiento: number,
+        toPerDay: boolean,
+        toHoursPerDay: number,
+        toRendimiento: number,
+    ) =>
+        items.map((item) => {
+            if (isHerramientasRow(item)) {
+                return item;
+            }
+            const recursos = Number(item.recursos ?? 0) || 0;
+            const cantidad = computeCantidadFromRecursosBase(
+                recursos,
+                toPerDay,
+                toHoursPerDay,
+                toRendimiento,
+            );
+            return { ...item, recursos: Number(recursos) || 0, cantidad };
+        });
+
+    const handleAddResourceClick = (type: SectionType) => {
+        if (!selectedAcu || !onSaveAcu) return;
+
+        if (type === 'subcontratos' || type === 'subpartidas') {
+            const label =
+                type === 'subcontratos'
+                    ? 'Nuevo subcontrato'
+                    : 'Nueva subpartida';
+            const newComponent = {
+                codigo: null,
+                descripcion: label,
+                unidad: 'und',
+                cantidad: 1,
+                precio_unitario: 0,
+                factor_desperdicio: 1,
+            };
+            const updatedAcuData = {
+                ...selectedAcu,
+                [type]: [
+                    ...((selectedAcu[type as keyof ACURowSummary] as any[]) ||
+                        []),
+                    newComponent,
+                ],
+            };
+            void onSaveAcu(updatedAcuData);
+            return;
+        }
+
         setSearchTargetType(type);
         setSearchOpen(true);
     };
@@ -518,11 +1208,20 @@ export function AcuPanel({
     const handleResourceSelected = async (resource: any) => {
         if (!selectedAcu || !onSaveAcu || !searchTargetType) return;
 
+        const isCrewType =
+            searchTargetType === 'mano_de_obra' ||
+            searchTargetType === 'equipos';
+        const recursos = isCrewType ? 1 : undefined;
+        const cantidad = isCrewType
+            ? computeCantidadFromRecursos(recursos ?? 0)
+            : 1;
+
         const newComponent = {
-            codigo: resource.codigo,
+            codigo: resource.codigo_producto,
             descripcion: resource.descripcion,
             unidad: resource.unidad,
-            cantidad: 1,
+            cantidad,
+            recursos,
             precio_unitario: resource.tipo === 'equipos' ? 0 : resource.precio,
             precio_hora: resource.tipo === 'equipos' ? resource.precio : 0,
             factor_desperdicio: resource.tipo === 'materiales' ? 1.05 : 1,
@@ -542,23 +1241,47 @@ export function AcuPanel({
     };
 
     const handleUpdateItem = async (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
+        type: SectionType,
         index: number,
         field: string,
-        value: number,
+        value: string | number,
     ) => {
         if (!selectedAcu || !onSaveAcu) return;
         const arr = [
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
         ];
-        arr[index] = { ...arr[index], [field]: value };
+        const currentItem = arr[index] || {};
+        const isEquipos = type === 'equipos';
+        const isHerramientas = isEquipos && isHerramientasRow(currentItem);
+
+        if (
+            field === 'recursos' &&
+            (type === 'mano_de_obra' || type === 'equipos')
+        ) {
+            const recursos = Number(value) || 0;
+            const cantidad = computeCantidadFromRecursos(recursos);
+            arr[index] = { ...currentItem, recursos, cantidad };
+        } else if (isHerramientas && field === 'cantidad') {
+            const porcentaje = Number(value) || 0;
+            arr[index] = {
+                ...currentItem,
+                cantidad: porcentaje,
+                precio_hora: selectedAcu.costo_mano_obra || 0,
+            };
+        } else {
+            arr[index] = { ...currentItem, [field]: value };
+        }
+
+        if (isHerramientas) {
+            arr[index] = {
+                ...arr[index],
+                precio_hora: selectedAcu.costo_mano_obra || 0,
+            };
+        }
         await onSaveAcu({ ...selectedAcu, [type]: arr });
     };
 
-    const handleDeleteItem = async (
-        type: 'mano_de_obra' | 'materiales' | 'equipos',
-        index: number,
-    ) => {
+    const handleDeleteItem = async (type: SectionType, index: number) => {
         if (!selectedAcu || !onSaveAcu) return;
         const arr = [
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
@@ -569,8 +1292,101 @@ export function AcuPanel({
 
     const handleUpdateRendimiento = async (newRendimiento: number) => {
         if (!selectedAcu || !onSaveAcu) return;
-        setRendimiento(newRendimiento);
-        await onSaveAcu({ ...selectedAcu, rendimiento: newRendimiento });
+        const safeRend = Number(newRendimiento);
+        if (!safeRend || safeRend <= 0) return;
+        setRendimiento(safeRend);
+        const updated = {
+            ...selectedAcu,
+            rendimiento: safeRend,
+            mano_de_obra: recalcCrewForModeChange(
+                selectedAcu.mano_de_obra || [],
+                perDay,
+                hoursPerDay,
+                rendimiento,
+                perDay,
+                hoursPerDay,
+                safeRend,
+            ),
+            equipos: ensureHerramientasPrecio(
+                recalcCrewForModeChange(
+                    selectedAcu.equipos || [],
+                    perDay,
+                    hoursPerDay,
+                    rendimiento,
+                    perDay,
+                    hoursPerDay,
+                    safeRend,
+                ),
+                selectedAcu.costo_mano_obra || 0,
+            ),
+        };
+        await onSaveAcu(updated);
+    };
+
+    const handleTogglePerDay = async (nextPerDay: boolean) => {
+        setPerDay(nextPerDay);
+        if (!selectedAcu || !onSaveAcu) return;
+
+        const updated = {
+            ...selectedAcu,
+            mano_de_obra: recalcCrewForModeChange(
+                selectedAcu.mano_de_obra || [],
+                perDay,
+                hoursPerDay,
+                rendimiento,
+                nextPerDay,
+                hoursPerDay,
+                rendimiento,
+            ),
+            equipos: ensureHerramientasPrecio(
+                recalcCrewForModeChange(
+                    selectedAcu.equipos || [],
+                    perDay,
+                    hoursPerDay,
+                    rendimiento,
+                    nextPerDay,
+                    hoursPerDay,
+                    rendimiento,
+                ),
+                selectedAcu.costo_mano_obra || 0,
+            ),
+        };
+
+        await onSaveAcu(updated);
+    };
+
+    const handleHoursPerDayChange = async (nextHoursPerDay: number) => {
+        const safeHours = Number(nextHoursPerDay);
+        if (!safeHours || safeHours <= 0) return;
+        setHoursPerDay(safeHours);
+        if (!selectedAcu || !onSaveAcu) return;
+
+        const updated = {
+            ...selectedAcu,
+            mano_de_obra: recalcCrewForModeChange(
+                selectedAcu.mano_de_obra || [],
+                perDay,
+                hoursPerDay,
+                rendimiento,
+                perDay,
+                safeHours,
+                rendimiento,
+            ),
+            equipos: ensureHerramientasPrecio(
+                recalcCrewForModeChange(
+                    selectedAcu.equipos || [],
+                    perDay,
+                    hoursPerDay,
+                    rendimiento,
+                    perDay,
+                    safeHours,
+                    rendimiento,
+                ),
+                selectedAcu.costo_mano_obra || 0,
+            ),
+        };
+
+        await onSaveAcu(updated);
     };
 
     if (acuLoading) {
@@ -641,7 +1457,7 @@ export function AcuPanel({
             </div>
 
             {/* Rendimiento bar */}
-            <div className="flex items-center gap-3 border-b border-slate-700 bg-slate-800/50 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-700 bg-slate-800/50 px-3 py-2">
                 <span className="text-xs text-slate-400">Rendimiento:</span>
                 <div className="flex items-center gap-1">
                     <input
@@ -665,13 +1481,13 @@ export function AcuPanel({
                 </div>
                 <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-600">
                     <button
-                        onClick={() => setPerDay(true)}
+                        onClick={() => handleTogglePerDay(true)}
                         className={`px-2 py-0.5 text-xs transition-colors ${perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         Por día
                     </button>
                     <button
-                        onClick={() => setPerDay(false)}
+                        onClick={() => handleTogglePerDay(false)}
                         className={`px-2 py-0.5 text-xs transition-colors ${!perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         Hora
@@ -682,75 +1498,120 @@ export function AcuPanel({
                 </span>
                 <input
                     type="number"
-                    defaultValue={8}
+                    value={hoursPerDay}
+                    onChange={(e) => setHoursPerDay(Number(e.target.value))}
+                    onBlur={(e) =>
+                        handleHoursPerDayChange(Number(e.target.value))
+                    }
                     className="w-12 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
             </div>
 
-            {/* Column headers */}
-            <div
-                className="grid border-b border-slate-700 bg-slate-800/30 text-[10px] font-medium tracking-wider text-slate-500 uppercase"
-                style={{
-                    gridTemplateColumns:
-                        '7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem',
-                }}
-            >
-                <div className="px-3 py-1.5">Cod. Insumo</div>
-                <div className="px-2 py-1.5">Descripción</div>
-                <div className="px-2 py-1.5 text-center">Und.</div>
-                <div className="px-2 py-1.5 text-right">Cuadr.</div>
-                <div className="px-2 py-1.5 text-right">Recur.</div>
-                <div className="px-2 py-1.5 text-right">%D.</div>
-                <div className="px-2 py-1.5 text-right">Precio</div>
-                <div className="px-2 py-1.5 pr-3 text-right">Total</div>
-            </div>
-
-            {/* Sections */}
-            <div className="scrollbar-thin relative flex-1 overflow-auto border-l border-slate-700 bg-slate-900">
-                <AcuSection
-                    type="mano_de_obra"
-                    items={selectedAcu.mano_de_obra || []}
-                    subtotal={selectedAcu.costo_mano_obra || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-                <AcuSection
-                    type="materiales"
-                    items={selectedAcu.materiales || []}
-                    subtotal={selectedAcu.costo_materiales || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-                <AcuSection
-                    type="equipos"
-                    items={selectedAcu.equipos || []}
-                    subtotal={selectedAcu.costo_equipos || 0}
-                    rendimiento={rendimiento}
-                    onAddClick={handleAddResourceClick}
-                    onUpdateItem={handleUpdateItem}
-                    onDeleteItem={handleDeleteItem}
-                />
-
-                {/* Empty sections */}
-                {(['SUB-CONTRATOS', 'SUB-PARTIDAS'] as const).map((label) => (
-                    <div
-                        key={label}
-                        className="flex items-center justify-between border-b border-slate-700 bg-slate-800/40 px-3 py-1.5"
-                    >
-                        <span className="text-xs font-semibold text-slate-500">
-                            {label}
+            <div className="flex-1 overflow-hidden">
+                <div className="flex h-full flex-col overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-slate-700/80 bg-slate-800/30 px-3 py-2">
+                        <span className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
+                            Detalle de Recursos
                         </span>
-                        <span className="text-xs font-bold text-slate-600">
-                            0.00
+                        <span className="text-[10px] text-slate-500">
+                            Modo: {perDay ? 'Por dia' : 'Por hora'}
                         </span>
                     </div>
-                ))}
-            </div>
+                    <table className="w-full table-fixed border-b border-slate-700 bg-slate-800/30 text-[10px] font-medium tracking-wider text-slate-500 uppercase">
+                        <thead>
+                            <tr>
+                                <th className="w-28 px-3 py-1.5 text-left">
+                                    Cod. Insumo
+                                </th>
+                                <th className="px-2 py-1.5 text-left">
+                                    Descripción
+                                </th>
+                                <th className="w-12 px-2 py-1.5 text-center">
+                                    Und.
+                                </th>
+                                <th className="w-16 px-2 py-1.5 text-right">
+                                    Recur.
+                                </th>
+                                <th className="w-16 px-2 py-1.5 text-right">
+                                    Cant.
+                                </th>
+                                <th className="w-14 px-2 py-1.5 text-right">
+                                    %D.
+                                </th>
+                                <th className="w-20 px-2 py-1.5 text-right">
+                                    Precio
+                                </th>
+                                <th className="w-20 px-2 py-1.5 pr-3 text-right">
+                                    Total
+                                </th>
+                            </tr>
+                        </thead>
+                    </table>
 
+                    <div className="scrollbar-thin flex-1 overflow-y-auto border-l border-slate-700 bg-slate-900">
+                        <AcuSection
+                            type="mano_de_obra"
+                            items={selectedAcu.mano_de_obra || []}
+                            subtotal={selectedAcu.costo_mano_obra || 0}
+                            rendimiento={rendimiento}
+                            perDay={perDay}
+                            hoursPerDay={hoursPerDay}
+                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            onAddClick={handleAddResourceClick}
+                            onUpdateItem={handleUpdateItem}
+                            onDeleteItem={handleDeleteItem}
+                        />
+                        <AcuSection
+                            type="materiales"
+                            items={selectedAcu.materiales || []}
+                            subtotal={selectedAcu.costo_materiales || 0}
+                            rendimiento={rendimiento}
+                            perDay={perDay}
+                            hoursPerDay={hoursPerDay}
+                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            onAddClick={handleAddResourceClick}
+                            onUpdateItem={handleUpdateItem}
+                            onDeleteItem={handleDeleteItem}
+                        />
+                        <AcuSection
+                            type="equipos"
+                            items={selectedAcu.equipos || []}
+                            subtotal={selectedAcu.costo_equipos || 0}
+                            rendimiento={rendimiento}
+                            perDay={perDay}
+                            hoursPerDay={hoursPerDay}
+                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            onAddClick={handleAddResourceClick}
+                            onUpdateItem={handleUpdateItem}
+                            onDeleteItem={handleDeleteItem}
+                        />
+                        <AcuSection
+                            type="subcontratos"
+                            items={selectedAcu.subcontratos || []}
+                            subtotal={selectedAcu.costo_subcontratos || 0}
+                            rendimiento={rendimiento}
+                            perDay={perDay}
+                            hoursPerDay={hoursPerDay}
+                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            onAddClick={handleAddResourceClick}
+                            onUpdateItem={handleUpdateItem}
+                            onDeleteItem={handleDeleteItem}
+                        />
+                        <AcuSection
+                            type="subpartidas"
+                            items={selectedAcu.subpartidas || []}
+                            subtotal={selectedAcu.costo_subpartidas || 0}
+                            rendimiento={rendimiento}
+                            perDay={perDay}
+                            hoursPerDay={hoursPerDay}
+                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            onAddClick={handleAddResourceClick}
+                            onUpdateItem={handleUpdateItem}
+                            onDeleteItem={handleDeleteItem}
+                        />
+                    </div>
+                </div>
+            </div>
             <div className="flex shrink-0 items-center justify-between border-t-2 border-sky-600/50 bg-slate-800 px-4 py-2.5">
                 <span className="text-sm font-bold tracking-wide text-slate-300">
                     TOTAL ACU.

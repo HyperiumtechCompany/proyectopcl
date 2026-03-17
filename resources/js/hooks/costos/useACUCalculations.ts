@@ -1,4 +1,5 @@
-import { ACU, ACUComponente } from '@/types/presupuestos';
+import type { ACU} from '@/types/presupuestos';
+import { ACUComponente } from '@/types/presupuestos';
 
 interface ACUCalculations {
     calculateManoDeObra: (

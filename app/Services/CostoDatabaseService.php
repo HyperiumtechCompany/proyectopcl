@@ -12,6 +12,13 @@ class CostoDatabaseService
 {
     /**
      * Create a new MySQL database for a costos project and run tenant migrations.
+     *
+     * Flow:
+     *  1. CREATE DATABASE
+     *  2. Configure costos_tenant connection
+     *  3. Run all tenant migrations (single unified file)
+     *  4. Auto-create default presupuesto record
+     *  5. Auto-seed insumos catalog
      */
     public function createDatabase(CostoProject $project): void
     {
@@ -30,6 +37,14 @@ class CostoDatabaseService
         // 2. Configure the tenant connection and run migrations
         $this->setTenantConnection($dbName);
         $this->runTenantMigrations($dbName);
+
+        // 3. Auto-create default presupuesto record
+        $presupuestoId = $this->createDefaultPresupuesto($dbName, $project->nombre);
+
+        Log::info("CostoDatabaseService: Created default presupuesto [{$presupuestoId}] on [{$dbName}]");
+
+        // 4. Auto-seed the insumos catalog
+        $this->seedInsumosCatalog($dbName);
     }
 
     /**
@@ -111,36 +126,47 @@ class CostoDatabaseService
     }
 
     /**
-     * Create the presupuesto module tables in the tenant database.
+     * Create the default presupuesto record in the tenant database.
      *
-     * This method runs the specific migration for the unified presupuesto module,
-     * creating all six tables: presupuesto_general, presupuesto_acus,
-     * presupuesto_gastos_generales, presupuesto_insumos, presupuesto_remuneraciones,
-     * and presupuesto_indices.
+     * This is auto-called when a project is created. All metrados, cronogramas,
+     * and ETTs can optionally link to this presupuesto via presupuesto_id.
      *
      * @param string $databaseName The tenant database name
-     * @return void
+     * @param string $projectName  The project name (used as presupuesto name)
+     * @return int The ID of the created presupuesto
      */
-    public function createPresupuestoTables(string $databaseName): void
+    public function createDefaultPresupuesto(string $databaseName, string $projectName): int
     {
         $this->setTenantConnection($databaseName);
 
-        // Verify connection works before running migrations
-        DB::connection('costos_tenant')->getPdo();
+        return DB::connection('costos_tenant')
+            ->table('presupuestos')
+            ->insertGetId([
+                'nombre'      => $projectName,
+                'descripcion' => 'Presupuesto principal del proyecto',
+                'moneda'      => 'SOLES',
+                'fecha'       => now()->toDateString(),
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+    }
 
-        // Run the specific presupuesto migration
-        Artisan::call('migrate', [
-            '--database' => 'costos_tenant',
-            '--path' => 'database/migrations/costos_tenant/2026_03_07_000001_create_presupuesto_unificado_tables.php',
-            '--force' => true,
-        ]);
+    /**
+     * Get the default (first) presupuesto ID from the tenant database.
+     *
+     * @param string $databaseName The tenant database name
+     * @return int|null
+     */
+    public function getDefaultPresupuestoId(string $databaseName): ?int
+    {
+        $this->setTenantConnection($databaseName);
 
-        Log::info("CostoDatabaseService: Created presupuesto tables on [{$databaseName}]", [
-            'output' => Artisan::output(),
-        ]);
+        $row = DB::connection('costos_tenant')
+            ->table('presupuestos')
+            ->orderBy('id')
+            ->first(['id']);
 
-        // Auto-seed the insumos catalog (clases + productos)
-        $this->seedInsumosCatalog($databaseName);
+        return $row?->id;
     }
 
     /**
@@ -166,5 +192,4 @@ class CostoDatabaseService
             ]);
         }
     }
-
 }
