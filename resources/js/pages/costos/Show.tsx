@@ -106,6 +106,8 @@ export default function Show() {
                                 href = `/costos/proyectos/${project.id}/presupuesto`;
                             } else if (m === 'metrado_sanitarias') {
                                 href = `/costos/${project.id}/metrado-sanitarias`;
+                            } else if (m === 'metrado_estructura') {
+                                href = `/costos/${project.id}/metrado-estructuras`;
                             } else {
                                 href = `/costos/${project.id}/module/${m}`;
                             }
