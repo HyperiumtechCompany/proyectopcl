@@ -86,6 +86,8 @@ interface SupervisionGGDetalleState {
     updateCell: (sectionIdx: number, rowIdx: number, field: keyof SupervisionGGDetalleRow, value: any) => void;
     addRow: (sectionIdx: number) => void;
     removeRow: (sectionIdx: number, rowIdx: number) => void;
+    addSection: () => void;
+    removeSection: (sectionIdx: number) => void;
     calculateTree: () => void;
 }
 
@@ -102,12 +104,18 @@ function calcSectionTotal(section: SupervisionGGDetalleRow): number {
 function flattenToDbRows(sections: SupervisionGGDetalleRow[]): any[] {
     const out: any[] = [];
     let order = 0;
+    
+    // For new rows, we use temporary IDs to maintain parent-child relationships
+    let tempIdCounter = -1;
+
     for (const section of sections) {
+        const sectionId = section.id || tempIdCounter--;
+        
         out.push({
-            id: section.id ?? null,
+            id: sectionId,
             parent_id: null,
             tipo_fila: 'seccion',
-            item_codigo: section.item_codigo,
+            item_codigo: section.item_codigo || '',
             concepto: section.concepto,
             unidad: section.unidad || null,
             cantidad: 0,
@@ -116,13 +124,13 @@ function flattenToDbRows(sections: SupervisionGGDetalleRow[]): any[] {
             total_seccion: section.total_seccion,
             item_order: order++,
         });
-        const sectionTempId = section.id ?? -out.length; // Use negative index as client-side temp id
+
         for (const child of (section.hijos || [])) {
             out.push({
-                id: child.id ?? null,
-                parent_id: section.id ?? null,  // will be remapped by server if null
+                id: child.id || tempIdCounter--,
+                parent_id: sectionId,
                 tipo_fila: 'detalle',
-                item_codigo: child.item_codigo,
+                item_codigo: child.item_codigo || '',
                 concepto: child.concepto,
                 unidad: child.unidad || null,
                 cantidad: child.cantidad,
@@ -157,16 +165,16 @@ function buildTreeFromDbRows(dbRows: any[]): SupervisionGGDetalleRow[] {
             hijos: [],
         };
         byId.set(r.id, row);
-        if (!r.parent_id) {
-            sections.push(row);
-        }
     }
 
     for (const r of dbRows) {
-        if (r.parent_id && byId.has(r.parent_id) && byId.has(r.id)) {
+        const row = byId.get(r.id)!;
+        if (!r.parent_id) {
+            sections.push(row);
+        } else if (byId.has(r.parent_id)) {
             const parent = byId.get(r.parent_id)!;
             if (!parent.hijos) parent.hijos = [];
-            parent.hijos.push(byId.get(r.id)!);
+            parent.hijos.push(row);
         }
     }
 
@@ -180,7 +188,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
     loading: false,
     isSaving: false,
     projectId: null,
-    totalGlobal: 46263.97,
+    totalGlobal: 0,
 
     setProjectId: (id) => set({ projectId: id }),
 
@@ -194,9 +202,8 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                     const sections = buildTreeFromDbRows(rows);
                     set({ sections, totalGlobal: res.data.total ?? 0, loading: false });
                 } else {
-                    // No data yet - use initial rows and calculate total
-                    const total = initialDetalleRows.reduce((s, sec) => s + sec.total_seccion, 0);
-                    set({ sections: initialDetalleRows, totalGlobal: Number(total.toFixed(2)), loading: false });
+                    set({ sections: initialDetalleRows, loading: false });
+                    get().calculateTree();
                 }
             } else {
                 set({ loading: false });
@@ -238,19 +245,49 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
             produce((state: SupervisionGGDetalleState) => {
                 const section = state.sections[sectionIdx];
                 if (!section) return;
-                const row = section.hijos?.[rowIdx];
-                if (!row) return;
-                (row as any)[field] = value;
-                // Recalculate subtotal for editable fields
-                if (['cantidad', 'meses', 'importe'].includes(field as string)) {
-                    row.subtotal = calcSubtotal(row);
+
+                if (rowIdx === -1) {
+                    (section as any)[field] = value;
+                } else {
+                    const row = section.hijos?.[rowIdx];
+                    if (!row) return;
+                    (row as any)[field] = value;
+                    if (['cantidad', 'meses', 'importe'].includes(field as string)) {
+                        row.subtotal = calcSubtotal(row);
+                    }
                 }
-                // Recalculate section total
+
                 section.total_seccion = calcSectionTotal(section);
-                // Recalculate global total
-                state.totalGlobal = Number(
-                    state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2)
-                );
+                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
+            })
+        );
+    },
+
+    addSection: () => {
+        set(
+            produce((state: SupervisionGGDetalleState) => {
+                state.sections.push({
+                    id: null,
+                    tipo_fila: 'seccion',
+                    item_codigo: '',
+                    concepto: 'Nueva Sección',
+                    unidad: '',
+                    cantidad: 0,
+                    meses: 0,
+                    importe: 0,
+                    subtotal: 0,
+                    total_seccion: 0,
+                    hijos: [],
+                });
+            })
+        );
+    },
+
+    removeSection: (sectionIdx) => {
+        set(
+            produce((state: SupervisionGGDetalleState) => {
+                state.sections.splice(sectionIdx, 1);
+                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
             })
         );
     },
@@ -261,9 +298,9 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                 const section = state.sections[sectionIdx];
                 if (!section) return;
                 if (!section.hijos) section.hijos = [];
-                const newRow: SupervisionGGDetalleRow = {
+                section.hijos.push({
                     id: null,
-                    parent_id: section.id ?? null,
+                    parent_id: section.id,
                     tipo_fila: 'detalle',
                     item_codigo: '',
                     concepto: 'Nueva partida',
@@ -273,12 +310,9 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                     importe: 0,
                     subtotal: 0,
                     total_seccion: 0,
-                };
-                section.hijos.push(newRow);
+                });
                 section.total_seccion = calcSectionTotal(section);
-                state.totalGlobal = Number(
-                    state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2)
-                );
+                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
             })
         );
     },
@@ -290,9 +324,7 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
                 if (!section?.hijos) return;
                 section.hijos.splice(rowIdx, 1);
                 section.total_seccion = calcSectionTotal(section);
-                state.totalGlobal = Number(
-                    state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2)
-                );
+                state.totalGlobal = Number(state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2));
             })
         );
     },
@@ -300,15 +332,17 @@ export const useSupervisionGGDetalleStore = create<SupervisionGGDetalleState>((s
     calculateTree: () => {
         set(
             produce((state: SupervisionGGDetalleState) => {
+                let grandTotal = 0;
                 for (const section of state.sections) {
+                    let sectionSum = 0;
                     for (const row of (section.hijos || [])) {
                         row.subtotal = calcSubtotal(row);
+                        sectionSum += row.subtotal;
                     }
-                    section.total_seccion = calcSectionTotal(section);
+                    section.total_seccion = Number(sectionSum.toFixed(2));
+                    grandTotal += section.total_seccion;
                 }
-                state.totalGlobal = Number(
-                    state.sections.reduce((s, sec) => s + sec.total_seccion, 0).toFixed(2)
-                );
+                state.totalGlobal = Number(grandTotal.toFixed(2));
             })
         );
     },

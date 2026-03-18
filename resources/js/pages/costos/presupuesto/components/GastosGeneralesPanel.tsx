@@ -70,7 +70,7 @@ export function GastosGeneralesPanel({
                                     <input
                                         type="text"
                                         className="w-full border-none bg-transparent p-2 text-slate-300 focus:bg-slate-800 focus:ring-1 focus:ring-amber-500/50 rounded transition-all"
-                                        value={row.descripcion}
+                                        value={row.descripcion ?? ''}
                                         onChange={(e) => updateCell(index, 'descripcion', e.target.value)}
                                         placeholder="Descripción del gasto..."
                                     />
@@ -79,7 +79,7 @@ export function GastosGeneralesPanel({
                                     <input
                                         type="text"
                                         className="w-full border-none bg-transparent p-2 text-center text-slate-400 focus:bg-slate-800 focus:ring-1 focus:ring-amber-500/50 rounded transition-all"
-                                        value={row.unidad}
+                                        value={row.unidad ?? ''}
                                         onChange={(e) => updateCell(index, 'unidad', e.target.value)}
                                     />
                                 </td>
@@ -87,7 +87,7 @@ export function GastosGeneralesPanel({
                                     <input
                                         type="number"
                                         className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:bg-slate-800 focus:ring-1 focus:ring-amber-500/50 rounded transition-all"
-                                        value={row.cantidad}
+                                        value={row.cantidad ?? ''}
                                         onChange={(e) => updateCell(index, 'cantidad', parseFloat(e.target.value) || 0)}
                                     />
                                 </td>
@@ -95,7 +95,7 @@ export function GastosGeneralesPanel({
                                     <input
                                         type="number"
                                         className="w-full border-none bg-transparent p-2 text-right font-mono text-amber-400/80 focus:bg-slate-800 focus:ring-1 focus:ring-amber-500/50 rounded transition-all"
-                                        value={row.precio_unitario}
+                                        value={row.precio_unitario ?? ''}
                                         onChange={(e) => updateCell(index, 'precio_unitario', parseFloat(e.target.value) || 0)}
                                     />
                                 </td>

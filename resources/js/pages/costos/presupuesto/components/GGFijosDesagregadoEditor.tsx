@@ -326,18 +326,18 @@ export function GGFijosDesagregadoEditor({
                                 <td className="p-2 min-w-[100px]">
                                     <input
                                         type="text"
-                                        value={row.descripcion}
+                                        value={row.descripcion ?? ''}
                                         onChange={e => updateRow(index, 'descripcion', e.target.value)}
                                         className="w-full bg-transparent border-none p-1 text-xs focus:bg-slate-800 rounded focus:outline-none"
                                     />
                                 </td>
                                 <td className="p-2 text-right font-mono text-slate-500 selection:bg-sky-500/30">
-                                    {fmt(row.base_calculo)}
+                                    {fmt(row.base_calculo ?? 0)}
                                 </td>
                                 <td className="p-2">
                                     <input
                                         type="number"
-                                        value={row.tea_porcentaje}
+                                        value={row.tea_porcentaje ?? ''}
                                         onChange={e => updateRow(index, 'tea_porcentaje', parseFloat(e.target.value) || 0)}
                                         className="w-full bg-slate-950 border border-slate-700/50 rounded px-2 py-1 text-right text-amber-500 font-bold focus:border-sky-500/50 focus:outline-none"
                                         step="0.01"
@@ -345,14 +345,14 @@ export function GGFijosDesagregadoEditor({
                                 </td>
                                 {!isSimple && (
                                     <td className="p-2 text-right font-mono text-slate-500 text-[10px]">
-                                        {((row.tea_porcentaje / 100) / 360 * 100).toFixed(6)}%
+                                        {(((row.tea_porcentaje ?? 0) / 100) / 360 * 100).toFixed(6)}%
                                     </td>
                                 )}
                                 {(isFielCump || isCar || isSctr) ? (
                                     <td className="p-2">
                                         <input
                                             type="number"
-                                            value={isFielCump ? row.duracion_obra_dias : row.duracion_dias}
+                                            value={isFielCump ? (row.duracion_obra_dias ?? '') : (row.duracion_dias ?? '')}
                                             onChange={e => {
                                                 if (isFielCump) updateRow(index, 'duracion_obra_dias', parseInt(e.target.value) || 0);
                                                 else updateRow(index, 'duracion_dias', parseInt(e.target.value) || 0);
@@ -365,7 +365,7 @@ export function GGFijosDesagregadoEditor({
                                     <td className="p-2">
                                         <input
                                             type="number"
-                                            value={row.duracion_liquidacion_dias}
+                                            value={row.duracion_liquidacion_dias ?? ''}
                                             onChange={e => updateRow(index, 'duracion_liquidacion_dias', parseInt(e.target.value) || 0)}
                                             className="w-full bg-slate-950 border border-slate-700/50 rounded px-2 py-1 text-right text-indigo-400 focus:border-sky-500/50 focus:outline-none"
                                         />
@@ -373,9 +373,9 @@ export function GGFijosDesagregadoEditor({
                                 )}
                                 {isAdelanto && (
                                     <>
-                                        <td className="p-2"><input type="number" value={row.factor_porcentaje} onChange={e => updateRow(index, 'factor_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
-                                        <td className="p-2"><input type="number" value={row.avance_porcentaje} onChange={e => updateRow(index, 'avance_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
-                                        <td className="p-2"><input type="number" value={row.renovacion_dias} onChange={e => updateRow(index, 'renovacion_dias', parseInt(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-2"><input type="number" value={row.factor_porcentaje ?? ''} onChange={e => updateRow(index, 'factor_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-2"><input type="number" value={row.avance_porcentaje ?? ''} onChange={e => updateRow(index, 'avance_porcentaje', parseFloat(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
+                                        <td className="p-2"><input type="number" value={row.renovacion_dias ?? ''} onChange={e => updateRow(index, 'renovacion_dias', parseInt(e.target.value) || 0)} className="w-full bg-slate-950 border border-slate-700/50 rounded px-1 py-1 text-right focus:border-sky-500/50 focus:outline-none" /></td>
                                     </>
                                 )}
                                 <td className="p-2 text-right font-mono font-bold text-sky-400 bg-sky-500/5">

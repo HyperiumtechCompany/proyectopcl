@@ -203,7 +203,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                     <td className={`p-1 ${getIndent(node)}`}>
                                         <input
                                             type="text"
-                                            value={node.item_codigo}
+                                            value={node.item_codigo ?? ''}
                                             onChange={e => updateNode(index, 'item_codigo', e.target.value)}
                                             className={`w-full border-none bg-transparent p-1 font-mono text-[11px] ${getTextColor(node)} focus:bg-slate-700/50 focus:outline-none rounded`}
                                             placeholder={node.tipo_fila === 'seccion' ? '02.01.00' : ''}
@@ -218,7 +218,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                             )}
                                             <input
                                                 type="text"
-                                                value={node.descripcion}
+                                                value={node.descripcion ?? ''}
                                                 onChange={e => updateNode(index, 'descripcion', e.target.value)}
                                                 readOnly={node._fromRemuneraciones}
                                                 className={`w-full border-none bg-transparent p-1.5 ${getTextColor(node)} ${node.tipo_fila !== 'detalle' || node._fromRemuneraciones ? 'font-semibold text-[11px] tracking-wide uppercase' : 'text-[11px]'} focus:bg-slate-700/50 focus:outline-none rounded ${node._fromRemuneraciones ? 'cursor-default' : ''}`}
@@ -231,14 +231,14 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                         {node.tipo_fila === 'detalle' ? (
                                             <input
                                                 type="text"
-                                                value={node.unidad}
+                                                value={node.unidad ?? ''}
                                                 onChange={e => updateNode(index, 'unidad', e.target.value)}
                                                 readOnly={node._fromRemuneraciones}
                                                 className="w-full border-none bg-transparent p-1 text-center text-slate-400 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
                                             />
                                         ) : node.tipo_fila === 'grupo' && node._fromRemuneraciones && node.descripcion.includes('Beneficios') ? (
                                             <div className="text-center text-sky-400 font-bold text-[10px]">
-                                                {node.cantidad_tiempo.toFixed(2)}%
+                                                {(node.cantidad_tiempo ?? 0).toFixed(2)}%
                                             </div>
                                         ) : null}
                                     </td>
@@ -248,7 +248,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                         {node.tipo_fila === 'detalle' && (
                                             <input
                                                 type="number"
-                                                value={node.cantidad_descripcion}
+                                                value={node.cantidad_descripcion ?? ''}
                                                 onChange={e => updateNode(index, 'cantidad_descripcion', parseFloat(e.target.value) || 0)}
                                                 readOnly={node._fromRemuneraciones}
                                                 className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
@@ -261,7 +261,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                         {node.tipo_fila === 'detalle' && (
                                             <input
                                                 type="number"
-                                                value={node.cantidad_tiempo}
+                                                value={node.cantidad_tiempo ?? ''}
                                                 onChange={e => updateNode(index, 'cantidad_tiempo', parseFloat(e.target.value) || 0)}
                                                 readOnly={node._fromRemuneraciones}
                                                 className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
@@ -275,7 +275,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                             <div className="flex items-center">
                                                 <input
                                                     type="number"
-                                                    value={node.participacion}
+                                                    value={node.participacion ?? ''}
                                                     onChange={e => updateNode(index, 'participacion', parseFloat(e.target.value) || 0)}
                                                     readOnly={node._fromRemuneraciones}
                                                     className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
@@ -290,7 +290,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                                         {node.tipo_fila === 'detalle' && (
                                             <input
                                                 type="number"
-                                                value={node.precio}
+                                                value={node.precio ?? ''}
                                                 onChange={e => updateNode(index, 'precio', parseFloat(e.target.value) || 0)}
                                                 readOnly={node._fromRemuneraciones}
                                                 className={`w-full border-none bg-transparent p-1 text-right font-mono focus:bg-slate-700/50 focus:outline-none rounded text-[11px] ${node._fromRemuneraciones ? 'text-emerald-400/80' : 'text-amber-400/80'}`}

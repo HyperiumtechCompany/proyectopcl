@@ -145,7 +145,7 @@ export function RemuneracionesPanel({
                                         <input
                                             type="number"
                                             className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
-                                            value={row.participacion}
+                                            value={row.participacion ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
@@ -161,7 +161,7 @@ export function RemuneracionesPanel({
                                         <input
                                             type="number"
                                             className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
-                                            value={row.cantidad}
+                                            value={row.cantidad ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
@@ -205,7 +205,7 @@ export function RemuneracionesPanel({
                                     <td className="p-1">
                                         <select
                                             className="w-full border-none bg-transparent p-1 text-[10px] text-slate-400 focus:outline-none focus:bg-slate-700/30"
-                                            value={row.categoria}
+                                            value={row.categoria ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
@@ -225,7 +225,7 @@ export function RemuneracionesPanel({
                                         <input
                                             type="number"
                                             className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
-                                            value={row.meses}
+                                            value={row.meses ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
@@ -241,7 +241,7 @@ export function RemuneracionesPanel({
                                         <input
                                             type="number"
                                             className="w-full border-none bg-transparent p-2 text-right font-mono text-emerald-400 focus:outline-none focus:bg-slate-700/30"
-                                            value={row.sueldo_basico}
+                                            value={row.sueldo_basico ?? ''}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
