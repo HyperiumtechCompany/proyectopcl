@@ -171,7 +171,6 @@ export default function Show() {
   const generarResumen = () => {
     const ls = window.luckysheet;
 
-    // PASO 1: El "Seguro" de actualización. Cerramos cualquier edición activa.
     ls.exitEditMode();
 
     const allSheets = ls.getAllSheets();
@@ -182,7 +181,7 @@ export default function Show() {
 
     const dataPrincipal = ls.getSheetData(sheetMetrado.index);
 
-    // Reiniciamos siempre para que cada clic sea un resumen fresco
+    //reinicia el resumen 
     const resumenData = [];
     let sumaTotalGeneral = 0;
     let currentTitulo = null;
@@ -231,7 +230,6 @@ export default function Show() {
 
     setTimeout(() => {
       const rIdx = sheetResumen.index;
-
       // Limpiamos el área para que no se "congelen" datos viejos
       for (let i = 0; i < 100; i++) {
         for (let j = 0; j < 5; j++) ls.setCellValue(i, j, null, { sheetIndex: rIdx });
