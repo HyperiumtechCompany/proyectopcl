@@ -164,7 +164,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                         )}
                                         <input
                                             type="text"
-                                            value={node.item_codigo}
+                                            value={node.item_codigo ?? ''}
                                             onChange={e => updateNode(index, 'item_codigo', e.target.value)}
                                             className={`w-full border-none bg-transparent p-1 font-mono text-[11px] ${getTextColor(node)} focus:bg-slate-700/50 focus:outline-none rounded`}
                                             placeholder="01.01.00"
@@ -176,7 +176,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                 <td className="p-1">
                                     <input
                                         type="text"
-                                        value={node.descripcion}
+                                        value={node.descripcion ?? ''}
                                         onChange={e => updateNode(index, 'descripcion', e.target.value)}
                                         className={`w-full border-none bg-transparent p-1.5 ${getTextColor(node)} ${node.tipo_fila !== 'detalle' ? 'font-semibold uppercase text-[11px] tracking-wide' : 'text-[11px]'} focus:bg-slate-700/50 focus:outline-none rounded`}
                                         placeholder={node.tipo_fila === 'seccion' ? 'Nombre de sección...' : node.tipo_fila === 'grupo' ? 'Nombre de grupo...' : 'Descripción del ítem...'}
@@ -188,7 +188,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                     {node.tipo_fila === 'detalle' ? (
                                         <input
                                             type="text"
-                                            value={node.unidad}
+                                            value={node.unidad ?? ''}
                                             onChange={e => updateNode(index, 'unidad', e.target.value)}
                                             className="w-full border-none bg-transparent p-1 text-center text-slate-400 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
                                         />
@@ -200,7 +200,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                     {node.tipo_fila === 'detalle' ? (
                                         <input
                                             type="number"
-                                            value={node.cantidad}
+                                            value={node.cantidad ?? ''}
                                             onChange={e => updateNode(index, 'cantidad', parseFloat(e.target.value) || 0)}
                                             className="w-full border-none bg-transparent p-1 text-right font-mono text-slate-300 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
                                         />
@@ -212,7 +212,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                                     {node.tipo_fila === 'detalle' ? (
                                         <input
                                             type="number"
-                                            value={node.costo_unitario}
+                                            value={node.costo_unitario ?? ''}
                                             onChange={e => updateNode(index, 'costo_unitario', parseFloat(e.target.value) || 0)}
                                             className="w-full border-none bg-transparent p-1 text-right font-mono text-sky-400/80 focus:bg-slate-700/50 focus:outline-none rounded text-[11px]"
                                         />

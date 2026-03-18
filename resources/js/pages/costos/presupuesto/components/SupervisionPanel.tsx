@@ -86,7 +86,7 @@ const SupervisionRowComponent: React.FC<RowProps> = ({ row, depth, path, onOpenG
                     {!isSection && !isCalculation && !isCaptura && depth > 1 && (
                         <input
                             type="text"
-                            value={row.unidad}
+                            value={row.unidad ?? ''}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateCell([...path], 'unidad', e.target.value)}
                             className="w-16 bg-transparent border-none text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
@@ -97,7 +97,7 @@ const SupervisionRowComponent: React.FC<RowProps> = ({ row, depth, path, onOpenG
                     {row.tipo === 'partida' && (
                         <input
                             type="number"
-                            value={row.cantidad}
+                            value={row.cantidad ?? ''}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateCell([...path], 'cantidad', parseFloat(e.target.value) || 0)}
                             className="w-16 bg-transparent border-none text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
@@ -108,7 +108,7 @@ const SupervisionRowComponent: React.FC<RowProps> = ({ row, depth, path, onOpenG
                     {row.tipo === 'partida' && (
                         <input
                             type="number"
-                            value={row.meses}
+                            value={row.meses ?? ''}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateCell([...path], 'meses', parseFloat(e.target.value) || 0)}
                             className="w-16 bg-transparent border-none text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
@@ -119,7 +119,7 @@ const SupervisionRowComponent: React.FC<RowProps> = ({ row, depth, path, onOpenG
                     {row.tipo === 'partida' && (
                         <input
                             type="number"
-                            value={row.precio}
+                            value={row.precio ?? ''}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => updateCell([...path], 'precio', parseFloat(e.target.value) || 0)}
                             className="w-24 bg-transparent border-none text-[10px] text-right text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 mr-4"
@@ -169,8 +169,8 @@ export function SupervisionPanel({ projectId, onSaveSupervision }: SupervisionPa
     const setGastosGeneralesFromDetalle = useSupervisionStore((s) => s.setGastosGeneralesFromDetalle);
 
     // GG Detalle store for initial total loading
-    const detalleTotal = useSupervisionGGDetalleStore((s) => s.totalGlobal);
-    const loadDetalle = useSupervisionGGDetalleStore((s) => s.loadFromDatabase);
+    const detalleTotal = useSupervisionGGDetalleStore((s: any) => s.totalGlobal);
+    const loadDetalle = useSupervisionGGDetalleStore((s: any) => s.loadFromDatabase);
 
     const [ggModalOpen, setGgModalOpen] = React.useState(false);
 

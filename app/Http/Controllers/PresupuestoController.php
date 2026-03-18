@@ -748,6 +748,63 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Obtiene los totales de GG Fijos global para sincronizar con el store de GG Fijos.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/gastos-fijos-global/totals
+     */
+    public function getGGFijosTotals(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $totals = [];
+
+        // Get totals from gg_fijos_fianzas
+        $fianzaTotals = $connection->table('gg_fijos_fianzas')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->select('tipo_fianza', DB::raw('SUM(garantia_fc_sin_igv) as total'))
+            ->groupBy('tipo_fianza')
+            ->get();
+
+        foreach ($fianzaTotals as $row) {
+            $key = 'fianza_' . $row->tipo_fianza;
+            $totals[$key] = (float) $row->total;
+        }
+
+        // Get totals from gg_fijos_polizas
+        $polizaTotals = $connection->table('gg_fijos_polizas')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->select('tipo_poliza', DB::raw('SUM(poliza_sin_igv) as total'))
+            ->groupBy('tipo_poliza')
+            ->get();
+
+        foreach ($polizaTotals as $row) {
+            $tipo = $row->tipo_poliza;
+            $rowTotal = (float) $row->total;
+
+            if (in_array($tipo, ['sctr_salud', 'sctr_pension'], true)) {
+                $totals['poliza_sctr'] = ($totals['poliza_sctr'] ?? 0) + $rowTotal;
+                continue;
+            }
+
+            if (in_array($tipo, ['sencico', 'itf'], true)) {
+                $totals[$tipo] = ($totals[$tipo] ?? 0) + $rowTotal;
+                continue;
+            }
+
+            $key = 'poliza_' . $tipo;
+            $totals[$key] = ($totals[$key] ?? 0) + $rowTotal;
+        }
+
+        return response()->json([
+            'success' => true,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
      * Obtiene los parámetros globales del proyecto desde el tenant DB.
      * Ruta: GET /costos/proyectos/{project}/presupuesto/params
      */

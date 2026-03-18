@@ -10,6 +10,44 @@ interface UseGGFijosProps {
 
 export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
     const { nodes, loading, setNodes, setLoading, setDirty } = useGGFijosStore();
+    const normalizeText = (value: string) =>
+        (value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+    const ensureEnsayoCompresionRow = (rows: GGFijoNode[]) => {
+        const ensayoKey = 'ensayo de compresion de testigos';
+        const polizaKey = 'poliza de seguros c.a.r';
+
+        const hasEnsayo = rows.some(r => normalizeText(r.descripcion || '').includes(ensayoKey));
+        if (hasEnsayo) return { rows, injected: false };
+
+        const polizaIndex = rows.findIndex(r => normalizeText(r.descripcion || '').includes(polizaKey));
+        const segurosSeccion = rows.find(
+            r => r.tipo_fila === 'seccion' && normalizeText(r.descripcion || '').includes('seguros')
+        );
+        const parentId = polizaIndex >= 0 ? rows[polizaIndex]?.parent_id ?? segurosSeccion?.id ?? null : segurosSeccion?.id ?? null;
+
+        const newRow: GGFijoNode = {
+            tipo_fila: 'detalle',
+            tipo_calculo: 'manual',
+            item_codigo: '',
+            descripcion: '- Ensayo de compresion de testigos',
+            unidad: 'und',
+            cantidad: 25,
+            costo_unitario: 44,
+            parcial: 0,
+            parent_id: parentId ?? null,
+            item_order: 0,
+        };
+
+        const insertAt = polizaIndex >= 0 ? polizaIndex + 1 : rows.length;
+        const next = [...rows];
+        next.splice(insertAt, 0, newRow);
+        next.forEach((r, i) => { (r as any).item_order = i; });
+        return { rows: next, injected: true };
+    };
 
     // Cargar datos cuando es 'gastos_fijos' o cuando está en 'gastos_generales' (se muestran ambos paneles)
     const isActive = subsection === 'gastos_fijos' || subsection === 'gastos_generales';
@@ -24,7 +62,11 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
                     `/costos/proyectos/${projectId}/presupuesto/gastos_fijos/data`
                 );
                 if (response.data?.success) {
-                    setNodes(response.data.rows || []);
+                    const result = ensureEnsayoCompresionRow(response.data.rows || []);
+                    setNodes(result.rows);
+                    if (result.injected) {
+                        setDirty(true);
+                    }
                 } else {
                     setNodes([]);
                 }
