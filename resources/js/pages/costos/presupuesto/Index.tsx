@@ -463,7 +463,7 @@ export default function Index() {
                                 projectId={project.id}
                             />
                         ) : subsection === 'supervision' ? (
-                            <SupervisionPanel />
+                            <SupervisionPanel projectId={project.id} />
                         ) : subsection === 'consolidado' ? (
                             <div className="flex h-full flex-col overflow-hidden bg-slate-900">
                                 <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">

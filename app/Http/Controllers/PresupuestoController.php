@@ -1016,6 +1016,7 @@ class PresupuestoController extends Controller
                 'insumos' => $this->validateInsumosRow($row, $index),
                 'remuneraciones' => $this->validateRemuneracionesRow($row, $index),
                 'indices' => $this->validateIndicesRow($row, $index),
+                'supervision' => $this->validateSupervisionRow($row, $index),
                 default => [],
             };
 
@@ -1324,6 +1325,36 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Validate gg_supervision row
+     */
+    private function validateSupervisionRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['item_codigo'])) {
+            $errors[] = 'El campo código de ítem es requerido';
+        }
+
+        if (empty($row['concepto'])) {
+            $errors[] = 'El campo concepto es requerido';
+        }
+
+        if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+            $errors[] = 'El campo cantidad debe ser numérico';
+        }
+
+        if (isset($row['meses']) && !is_numeric($row['meses'])) {
+            $errors[] = 'El campo meses debe ser numérico';
+        }
+
+        if (isset($row['importe']) && !is_numeric($row['importe'])) {
+            $errors[] = 'El campo importe debe ser numérico';
+        }
+
+        return $errors;
+    }
+
+    /**
      * Prepare row data for insertion based on subsection type
      */
     private function prepareRowForSubsection(string $subsection, array $row, int $index, CostoProject $project, ?int $tenantPresupuestoId = null): array
@@ -1463,6 +1494,16 @@ class PresupuestoController extends Controller
                 'indice_actual' => $row['indice_actual'] ?? 100,
                 'fecha_indice_base' => $row['fecha_indice_base'] ?? null,
                 'fecha_indice_actual' => $row['fecha_indice_actual'] ?? null,
+            ] + $row,
+            'supervision' => [ // gg_supervision table
+                'tipo_fila' => $row['tipo_fila'] ?? 'detalle',
+                'item_codigo' => $row['item_codigo'] ?? null,
+                'concepto' => $row['concepto'] ?? '',
+                'unidad' => $row['unidad'] ?? null,
+                'cantidad' => $row['cantidad'] ?? 0,
+                'meses' => $row['meses'] ?? 0,
+                'importe' => $row['importe'] ?? 0,
+                'parent_id' => $row['parent_id'] ?? null,
             ] + $row,
             default => $row,
         };
@@ -1659,5 +1700,157 @@ class PresupuestoController extends Controller
         }
 
         Log::info("PresupuestoController: Sync costo_directo [{$totalCostoDirecto}] for budget [{$tenantPresupuestoId}]");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SUPERVISIÓN — DETALLE GASTOS GENERALES (Sección IV)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Obtiene todas las filas del detalle de Gastos Generales de Supervisión.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/supervision-gg-detalle
+     */
+    public function getSupervisionGGDetalle(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+            return response()->json(['success' => true, 'rows' => [], 'total' => 0]);
+        }
+
+        $rows = DB::connection('costos_tenant')
+            ->table('supervision_gg_detalle')
+            ->orderBy('item_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn($r) => (array)$r)
+            ->toArray();
+
+        // Calculate global total as SUM of total_seccion for root sections
+        $total = DB::connection('costos_tenant')
+            ->table('supervision_gg_detalle')
+            ->whereNull('parent_id')
+            ->where('tipo_fila', 'seccion')
+            ->sum('total_seccion');
+
+        return response()->json([
+            'success' => true,
+            'rows'    => $rows,
+            'total'   => round((float)$total, 2),
+        ]);
+    }
+
+    /**
+     * Guarda/actualiza el detalle de Gastos Generales de Supervisión.
+     * Estrategia: clear + re-insert con remapeo de parent_id.
+     * Devuelve el total calculado para actualizar la Sección IV automáticamente.
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/supervision-gg-detalle
+     */
+    public function saveSupervisionGGDetalle(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+            return response()->json(['success' => false, 'error' => 'Tabla no existe. Ejecute las migraciones.'], 500);
+        }
+
+        $rows = $request->input('rows', []);
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $connection->beginTransaction();
+        try {
+            // Clear all rows for this presupuesto
+            $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->delete();
+
+            $idMapping   = [];
+            $sectionTotals = []; // parentId (new) => sum of subtotals
+
+            foreach ($rows as $index => $row) {
+                $oldId = $row['id'] ?? null;
+
+                // Prepare clean row
+                $cleanRow = [
+                    'presupuesto_id' => $tenantPresupuestoId,
+                    'parent_id'      => null,
+                    'tipo_fila'      => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
+                    'item_codigo'    => substr((string)($row['item_codigo'] ?? ''), 0, 20) ?: null,
+                    'concepto'       => $row['concepto'] ?? '',
+                    'unidad'         => substr((string)($row['unidad'] ?? ''), 0, 20) ?: null,
+                    'cantidad'       => is_numeric($row['cantidad'] ?? null) ? (float)$row['cantidad'] : 0,
+                    'meses'          => is_numeric($row['meses'] ?? null)    ? (float)$row['meses']    : 0,
+                    'importe'        => is_numeric($row['importe'] ?? null)  ? (float)$row['importe']  : 0,
+                    'total_seccion'  => 0, // will be updated after all children inserted
+                    'item_order'     => $index,
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
+                ];
+
+                // Remap parent_id
+                $originalParentId = $row['parent_id'] ?? null;
+                if (!is_null($originalParentId) && isset($idMapping[$originalParentId])) {
+                    $cleanRow['parent_id'] = $idMapping[$originalParentId];
+                }
+
+                $newId = $connection->table('supervision_gg_detalle')->insertGetId($cleanRow);
+
+                if ($oldId) {
+                    $idMapping[$oldId] = $newId;
+                }
+            }
+
+            // Recalculate total_seccion for each section row
+            // (sum the stored subtotal of its direct children)
+            $sectionRows = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->where('tipo_fila', 'seccion')
+                ->get();
+
+            foreach ($sectionRows as $section) {
+                $sectionTotal = $connection->table('supervision_gg_detalle')
+                    ->where('parent_id', $section->id)
+                    ->where('tipo_fila', 'detalle')
+                    ->sum('subtotal');
+
+                $connection->table('supervision_gg_detalle')
+                    ->where('id', $section->id)
+                    ->update(['total_seccion' => round((float)$sectionTotal, 4)]);
+            }
+
+            // Global total = SUM of root section totals
+            $grandTotal = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->whereNull('parent_id')
+                ->where('tipo_fila', 'seccion')
+                ->sum('total_seccion');
+
+            $connection->commit();
+
+            // Return updated rows
+            $updatedRows = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->orderBy('item_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn($r) => (array)$r)
+                ->toArray();
+
+            return response()->json([
+                'success' => true,
+                'rows'    => $updatedRows,
+                'total'   => round((float)$grandTotal, 2),
+            ]);
+        } catch (\Exception $e) {
+            $connection->rollBack();
+            Log::error('Error saving supervision_gg_detalle', [
+                'project' => $project->id,
+                'error'   => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 }
