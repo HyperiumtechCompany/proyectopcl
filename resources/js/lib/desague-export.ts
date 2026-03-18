@@ -1022,31 +1022,308 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
         uvFill(uvr, UV_BLANC, 6); uvr++;
 
 
-        // ========== HOJA 5: TRAMPA DE GRASA ==========
+
+         // HOJA 5: TRAMPA DE GRASA
         const wsTrampa = workbook.addWorksheet('Trampa de Grasa');
-        wsTrampa.columns = [ { width: 30 }, { width: 20 }, { width: 15 } ];
-        paintTitle(wsTrampa, 3, 'TRAMPA DE GRASA');
-        paintHeaders(wsTrampa, ['PARÁMETRO', 'VALOR', 'UNIDAD']);
-        const trampaData = dataSheet['trampa'] || {};
-        let rowTrampa = 4;
-        Object.entries(trampaData).forEach(([key, value]: [string, any]) => {
-            if (value === null || value === undefined) return;
-            const r = wsTrampa.getRow(rowTrampa);
-            r.getCell(1).value = key;
-            let valor: any;
-            let unidad = '';
-            if (typeof value === 'object') {
-                valor = value.valor ?? '';
-                unidad = value.unidad ?? '';
-            } else {
-                valor = value;
-            }
-            r.getCell(2).value = valor;
-            r.getCell(3).value = unidad;
-            applyRowStyle(r, 3, [2]);
-            if (typeof valor === 'number') r.getCell(2).numFmt = '0';
-            rowTrampa++;
+        wsTrampa.columns = [
+            { width: 3  }, 
+            { width: 38 }, 
+            { width: 18 }, 
+            { width: 12 }, 
+            { width: 10 }, 
+            { width: 12 }, 
+        ];
+
+        const TG  = 6;
+        const tgT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
+        const tgM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF999933' } };
+        const TG_BLANC = 'FFFFFFFF';
+        const TG_VERDE = 'FF92D050';
+        const TG_AMAR  = 'FFFFFF99';
+        const TG_ALT   = 'FFE8F0FB';
+        const TG_TOT   = 'FFFFCC00';
+        const TG_NEGRO = 'FF000000';
+        const TG_EDIT  = 'FFE8F4FF'; 
+
+        function tgFill(r: number, argb: string, h = 17) {
+            wsTrampa.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TG_BLANC } };
+            for (let c = 2; c <= TG; c++)
+                wsTrampa.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+            wsTrampa.getRow(r).height = h;
+        }
+
+        function tgCell(r: number, c: number, val: any, opts: {
+            bold?: boolean; size?: number; bg?: string; color?: string;
+            halign?: ExcelJS.Alignment['horizontal']; numFmt?: string;
+            border?: 'T' | 'M'; span?: [number, number];
+        } = {}) {
+            const cell = wsTrampa.getCell(r, c);
+            cell.value = val ?? null;
+            cell.font  = { bold: opts.bold ?? false, size: opts.size ?? 9, name: 'Arial',
+                           color: { argb: opts.color ?? TG_NEGRO } };
+            if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
+            cell.alignment = { horizontal: opts.halign ?? 'left', vertical: 'middle', wrapText: c === 2 };
+            const b = opts.border === 'M' ? tgM : tgT;
+            cell.border = { top: b, bottom: b, left: c === 2 ? b : tgT, right: c === TG ? b : tgT };
+            if (opts.numFmt) cell.numFmt = opts.numFmt;
+        }
+
+        function tgSectionHeader(r: number, title: string, headerBg: string) {
+            tgFill(r, headerBg, 20);
+            wsTrampa.mergeCells(r, 2, r, TG);
+            const cell = wsTrampa.getCell(r, 2);
+            cell.value = title;
+            cell.font  = { bold: true, size: 10, name: 'Arial', color: { argb: 'FFFFFFFF' } };
+            cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerBg } };
+            cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            cell.border = { top: tgM, left: tgM, bottom: tgM, right: tgM };
+        }
+
+        function tgColHeader(r: number, labels: string[], bgCols?: string[]) {
+            tgFill(r, TG_AMAR, 18);
+            labels.forEach((txt, i) => {
+                const bg = bgCols?.[i] ?? TG_AMAR;
+                tgCell(r, i + 2, txt, { bold: true, size: 9, bg, border: 'M',
+                    halign: i === 0 ? 'left' : 'center' });
+            });
+        }
+
+        function tgSep(r: number) {
+            tgFill(r, TG_BLANC, 6);
+        }
+
+        const trampaRaw     = dataSheet['trampa'] || {};
+        const tgAparatos:   any[] = Array.isArray(trampaRaw.aparatos)          ? trampaRaw.aparatos          : [];
+        const tgCaracts:    any[] = Array.isArray(trampaRaw.caracteristicas)    ? trampaRaw.caracteristicas   : [];
+        const tgParams:     any[] = Array.isArray(trampaRaw.parametrosFinal)    ? trampaRaw.parametrosFinal   : [];
+        const tgMedidas:    any[] = Array.isArray(trampaRaw.medidas)            ? trampaRaw.medidas           : [];
+        const tgComentario: string = trampaRaw.comentario ?? '';
+
+        let tr = 1;
+
+        // ── Título general
+        tgFill(tr, TG_VERDE, 24);
+        wsTrampa.mergeCells(tr, 2, tr, TG);
+        const tgTit = wsTrampa.getCell(tr, 2);
+        tgTit.value = 'ANEXO 11. TRAMPA DE GRASA';
+        tgTit.font = {bold: true, size: 12, name: 'Arial', color: { argb: TG_NEGRO }};
+        tgTit.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TG_VERDE }};
+        tgTit.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        tgTit.border = { top: tgM, left: tgM, bottom: tgM, right: tgM };
+        tr++;
+
+        // SESION 1: APARATOS
+        tgSep(tr); tr++;
+        tgSectionHeader(tr, '1. UNIDADES DE GASTOS DE APARATOS SANITARIOS', 'FFED6C02'); tr++;
+        tgColHeader(tr, ['APARATO', 'CANTIDAD', 'TIPO', 'UG', 'TOTAL UG']); tr++;
+
+        const tgAparStart = tr;
+        if (tgAparatos.length === 0) {
+            tgFill(tr, TG_BLANC, 17);
+            for (let c = 2; c <= TG; c++) tgCell(tr, c, '', { bg: TG_BLANC });
+            tr++;
+        } else {
+            tgAparatos.forEach((ap: any, idx: number) => {
+                const bg = idx % 2 === 0 ? TG_BLANC : TG_ALT;
+                tgFill(tr, bg, 17);
+                tgCell(tr, 2, ap.aparato   ?? '', { bg, halign: 'left' });
+                tgCell(tr, 3, ap.cantidad  ?? 0,  { bg, halign: 'center', numFmt: '0' });
+                tgCell(tr, 4, ap.tipo      ?? '', { bg, halign: 'left' });
+                tgCell(tr, 5, ap.ug        ?? 0,  { bg, halign: 'center', numFmt: '0' });
+                tgCell(tr, 6, ap.totalUG   ?? 0,  { bg, halign: 'center', bold: true,
+                    color: 'FFB45309', numFmt: '0.00' });
+                tr++;
+            });
+        }
+
+        // Fila TOTAL UG
+        tgFill(tr, TG_TOT, 20);
+        wsTrampa.mergeCells(tr, 2, tr, 5);
+        tgCell(tr, 2, 'TOTAL =', { bold: true, size: 10, bg:TG_TOT, halign: 'right', border: 'M' });
+        tgCell(tr, 6,
+            tgAparatos.length > 0
+                ? { formula: `SUM(F${tgAparStart}:F${tr - 1})` }
+                : 0,
+            { bold: true, bg: TG_TOT, halign: 'center', numFmt: '0.00', border: 'M' });
+        tr++;
+        tr++;
+
+        // SESION 2: CARACTERÍSTICAS
+        tgSep(tr); tr++;
+        tgSectionHeader(tr, '2. CARACTERÍSTICAS DE LA TRAMPA DE GRASA', 'FF0F766E'); tr++;
+        tgColHeader(tr, ['CARACTERÍSTICA', 'VALOR / DESCRIPCIÓN', '', '', '']); tr++;
+
+        if (tgCaracts.length === 0) {
+            tgFill(tr, TG_BLANC, 17);
+            for (let c = 2; c <= TG; c++) tgCell(tr, c, '', { bg: TG_BLANC });
+            tr++;
+        } else {
+            tgCaracts.forEach((ca: any, idx: number) => {
+                const bg = idx % 2 === 0 ? TG_BLANC : TG_ALT;
+                tgFill(tr, bg, 18);
+                tgCell(tr, 2, ca.caracteristica ?? '', { bg, halign: 'left', bold: true });
+                // Valor ocupa cols 3-6 merged
+                wsTrampa.mergeCells(tr, 3, tr, TG);
+                tgCell(tr, 3, ca.valor ?? '', { bg, halign: 'left' });
+                // Rellenar fondo de celdas mergeadas
+                for (let c = 4; c <= TG; c++) {
+                    wsTrampa.getCell(tr, c).fill = { type: 'pattern', pattern: 'solid',
+                        fgColor: { argb: bg } };
+                }
+                tr++;
+            });
+        }
+        tr++;
+        // ── SECCIÓN 3: Parámetros de diseño ───────────────────────────────────
+        tgSep(tr); tr++;
+        tgSectionHeader(tr, '3. CÁLCULO FINAL — PARÁMETROS DE DISEÑO', 'FF3730A3'); tr++;
+        tgColHeader(tr, ['PARÁMETRO', 'VALOR', 'UNIDAD', '', '']); tr++;
+
+        if (tgParams.length === 0) {
+            tgFill(tr, TG_BLANC, 17);
+            for (let c = 2; c <= TG; c++) tgCell(tr, c, '', { bg: TG_BLANC });
+            tr++;
+        } else {
+            tgParams.forEach((p: any, idx: number) => {
+                const isEditable = p.editable ?? false;
+                const bg = isEditable ? TG_EDIT : (idx % 2 === 0 ? TG_BLANC : TG_ALT);
+                tgFill(tr, bg, 17);
+                tgCell(tr, 2, p.parametro ?? '', { bg, halign: 'left',
+                    color: isEditable ? 'FF1D4ED8' : TG_NEGRO });
+                const val = typeof p.calculos === 'number'
+                    ? parseFloat(p.calculos.toFixed(3))
+                    : parseFloat(String(p.calculos)) || p.calculos;
+                tgCell(tr, 3, val ?? '', { bg, halign: 'center', bold: true,
+                    color: isEditable ? 'FF1D4ED8' : TG_NEGRO,
+                    numFmt: typeof val === 'number' ? '0.000' : undefined });
+                tgCell(tr, 4, p.unidad ?? '', { bg, halign: 'center' });
+                tgCell(tr, 5, null, { bg });
+                tgCell(tr, 6, null, { bg });
+                tr++;
+            });
+        }
+        tr++;
+
+         // ── SECCIÓN 4: Medidas finales ────────────────────────────────────────
+        tgSep(tr); tr++;
+        tgSectionHeader(tr, '4. MEDIDAS FINALES Y VERIFICACIÓN', 'FF15803D'); tr++;
+        tgColHeader(tr, ['MEDIDA', 'VALOR', 'UNIDAD', '', '']); tr++;
+
+        tgMedidas.forEach((m: any, idx: number) => {
+            const bg = idx % 2 === 0 ? TG_BLANC : TG_ALT;
+            tgFill(tr, bg, 17);
+            tgCell(tr, 2, m.medida ?? '', { bg, halign: 'left', bold: true,
+                color: 'FF15803D' });
+            tgCell(tr, 3, m.valor  ?? 0,  { bg, halign: 'center', bold: true,
+                color: 'FF15803D', numFmt: '0.00' });
+            tgCell(tr, 4, m.unidad ?? '', { bg, halign: 'center' });
+            tgCell(tr, 5, null, { bg });
+            tgCell(tr, 6, null, { bg });
+            tr++;
         });
+        tr++;
+
+        // ── Verificación de volumen ───────────────────────────────────────────
+        tgSep(tr); tr++;
+
+        const tgVolUtil = tgParams.find((p: any) =>
+            String(p.parametro).includes('VOLUMEN UTIL CALCULADO (m³)'));
+        const tgVolReq  = tgParams.find((p: any) =>
+            String(p.parametro).includes('VOLUMEN REQUERIDO'));
+        const tgVu  = parseFloat(tgVolUtil?.calculos ?? 0);
+        const tgVr  = parseFloat(tgVolReq?.calculos  ?? 0);
+        const tgCumple = tgVu >= tgVr;
+
+        const verificBg = tgCumple ? 'FFD1FAE5' : 'FFFEE2E2';
+        tgFill(tr, verificBg, 22);
+        wsTrampa.mergeCells(tr, 2, tr, 4);
+        tgCell(tr, 2,
+            `V útil = ${tgVu.toFixed(3)} m³   /   V requerido = ${tgVr.toFixed(4)} m³`,
+            { bg: verificBg, halign: 'left', bold: true,
+              color: tgCumple ? 'FF15803D' : 'FF991B1B' });
+        wsTrampa.mergeCells(tr, 5, tr, TG);
+        tgCell(tr, 5, tgCumple ? '✔ CUMPLE' : '✘ NO CUMPLE',
+            { bg: verificBg, halign: 'center', bold: true, size: 11,
+              color: tgCumple ? 'FF15803D' : 'FF991B1B', border: 'M' });
+        for (let c = 3; c <= 4; c++) {
+            wsTrampa.getCell(tr, c).fill = { type: 'pattern', pattern: 'solid',
+                fgColor: { argb: verificBg } };
+            wsTrampa.getCell(tr, c).border = { top: tgM, bottom: tgM };
+        }
+        tr++;
+
+        // ── Resumen ───────────────────────────────────────────────────────────
+        tgSep(tr); tr++;
+
+        tgFill(tr, 'FFDBEAFE', 16);
+        wsTrampa.mergeCells(tr, 2, tr, TG);
+        const resLbl = wsTrampa.getCell(tr, 2);
+        resLbl.value = 'RESUMEN';
+        resLbl.font  = { bold: true, size: 9, name: 'Arial', color: { argb: 'FF1E40AF' } };
+        resLbl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+        resLbl.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        resLbl.border = { top: tgM, left: tgM, bottom: tgM, right: tgM };
+        tr++;
+
+        const findParam = (keyword: string) =>
+            tgParams.find((p: any) => String(p.parametro).includes(keyword));
+
+        const tgUGTotal   = tgAparatos.reduce((s: number, a: any) => s + (Number(a.totalUG) || 0), 0);
+        const tgCaudal    = parseFloat(findParam('CAUDAL DE DISEÑO')?.calculos ?? 0);
+        const tgVolLts    = parseFloat(findParam('VOLUMEN UTIL CALCULADO (lts)')?.calculos ?? 0);
+        const tgProfTotal = parseFloat(findParam('PROFUNDIDAD (CON BORDE LIBRE)')?.calculos ?? 0);
+
+        const resumenRows = [
+            { label: 'UG Total',          valor: tgUGTotal,   fmt: '0',     unidad: ''    },
+            { label: 'Caudal diseño Q',   valor: tgCaudal,    fmt: '0.000', unidad: 'lps' },
+            { label: 'V útil calculado',  valor: tgVolLts,    fmt: '0',     unidad: 'lts' },
+            { label: 'Profundidad total', valor: tgProfTotal, fmt: '0.00',  unidad: 'm'   },
+        ];
+
+        resumenRows.forEach((item, idx) => {
+            const bg = idx % 2 === 0 ? 'FFEFF6FF' : 'FFDBEAFE';
+            tgFill(tr, bg, 17);
+            wsTrampa.mergeCells(tr, 2, tr, 4);
+            tgCell(tr, 2, item.label, { bg, halign: 'left', color: 'FF374151' });
+            for (let c = 3; c <= 4; c++) {
+                wsTrampa.getCell(tr, c).fill = { type: 'pattern', pattern: 'solid',
+                    fgColor: { argb: bg } };
+                wsTrampa.getCell(tr, c).border = { top: tgT, bottom: tgT };
+            }
+            tgCell(tr, 5, item.valor,  { bg, halign: 'center', bold: true,
+                color: 'FF1D4ED8', numFmt: item.fmt });
+            tgCell(tr, 6, item.unidad, { bg, halign: 'center', color: 'FF6B7280' });
+            tr++;
+        });
+
+        // ── Comentario ────────────────────────────────────────────────────────
+        if (tgComentario) {
+            tgSep(tr); tr++;
+
+            tgFill(tr, 'FFF8FAFC', 14);
+            wsTrampa.mergeCells(tr, 2, tr, TG);
+            const comLbl = wsTrampa.getCell(tr, 2);
+            comLbl.value = 'COMENTARIO:';
+            comLbl.font  = { bold: true, size: 9, name: 'Arial', color: { argb: TG_NEGRO } };
+            comLbl.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+            comLbl.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            comLbl.border = { top: tgT, left: tgM, bottom: tgT, right: tgM };
+            tr++;
+
+            const lines  = tgComentario.split('\n');
+            const linesH = Math.max(30, lines.length * 15);
+            tgFill(tr, TG_BLANC, linesH);
+            wsTrampa.mergeCells(tr, 2, tr, TG);
+            const comCell = wsTrampa.getCell(tr, 2);
+            comCell.value = tgComentario;
+            comCell.font  = { size: 9, name: 'Arial', color: { argb: TG_NEGRO } };
+            comCell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: TG_BLANC } };
+            comCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+            comCell.border = { top: tgT, left: tgM, bottom: tgM, right: tgM };
+            tr++;
+        }
+
+        tgSep(tr); tr++;
 
 
         // ========== GENERAR ARCHIVO ==========
@@ -1068,3 +1345,4 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
         alert('Error al exportar Excel: ' + error.message);
     }
 }
+

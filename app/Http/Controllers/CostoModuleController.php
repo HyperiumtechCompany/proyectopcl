@@ -16,22 +16,18 @@ class CostoModuleController extends Controller
      * Mapping: moduleType → tenant table name(s)
      */
     private const MODULE_TABLE_MAP = [
-        'metrado_arquitectura'  => 'metrado_arquitectura',
-        'metrado_estructura'    => 'metrado_estructura',
-        'metrado_sanitarias'    => 'metrado_sanitarias',
-        'metrado_electricas'    => 'metrado_electricas',
+        'metrado_arquitectura'   => 'metrado_arquitectura',
+        'metrado_estructura'     => 'metrado_estructura',
+        'metrado_sanitarias'     => 'metrado_sanitarias',
+        'metrado_electricas'     => 'metrado_electricas',
         'metrado_comunicaciones' => 'metrado_comunicaciones',
-        'metrado_gas'           => 'metrado_gas',
-        'presupuesto_acus'      => 'presupuesto_acus',
-        'presupuesto_gg'        => 'presupuesto_gastos_generales',
-        'presupuesto_insumos'   => 'presupuesto_insumos',
-        'presupuesto_remuneraciones' => 'presupuesto_remuneraciones',
-        'presupuesto_indice'    => 'presupuesto_indices',
-        'crono_general'         => 'cronograma_general',
-        'crono_valorizado'      => 'cronograma_valorizado',
-        'crono_materiales'      => 'cronograma_materiales',
-        'etts'                  => 'especificaciones_tecnicas',
+        'metrado_gas'            => 'metrado_gas',
+        'crono_general'          => 'cronograma_general',
+        'crono_valorizado'       => 'cronograma_valorizado',
+        'crono_materiales'       => 'cronograma_materiales',
+        'etts'                   => 'especificaciones_tecnicas',
     ];
+
 
     /**
      * Columns per module table (for frontend column definitions).
@@ -61,21 +57,16 @@ class CostoModuleController extends Controller
     ];
 
     private const MODULE_LABELS = [
-        'metrado_arquitectura'  => 'Metrado Arquitectura',
-        'metrado_estructura'    => 'Metrado Estructura',
-        'metrado_sanitarias'    => 'Metrado Sanitarias',
-        'metrado_electricas'    => 'Metrado Eléctricas',
+        'metrado_arquitectura'   => 'Metrado Arquitectura',
+        'metrado_estructura'     => 'Metrado Estructura',
+        'metrado_sanitarias'     => 'Metrado Sanitarias',
+        'metrado_electricas'     => 'Metrado Eléctricas',
         'metrado_comunicaciones' => 'Metrado Comunicaciones',
-        'metrado_gas'           => 'Metrado Gas',
-        'presupuesto_acus'      => 'ACUs',
-        'presupuesto_gg'        => 'Gastos Generales',
-        'presupuesto_insumos'   => 'Insumos',
-        'presupuesto_remuneraciones' => 'Remuneraciones',
-        'presupuesto_indice'    => 'Fórmula Polinómica',
-        'crono_general'         => 'Cronograma General',
-        'crono_valorizado'      => 'Cronograma Valorizado',
-        'crono_materiales'      => 'Cronograma Materiales',
-        'etts'                  => 'Especificaciones Técnicas',
+        'metrado_gas'            => 'Metrado Gas',
+        'crono_general'          => 'Cronograma General',
+        'crono_valorizado'       => 'Cronograma Valorizado',
+        'crono_materiales'       => 'Cronograma Materiales',
+        'etts'                   => 'Especificaciones Técnicas',
     ];
 
     public function __construct(

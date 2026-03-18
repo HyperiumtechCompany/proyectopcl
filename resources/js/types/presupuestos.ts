@@ -68,15 +68,22 @@ export interface Insumo {
 
 export interface Remuneracion {
     id?: number;
+    presupuesto_id: number;
+    gg_variable_id: number | null;
     cargo: string;
     categoria?: string;
-    sueldo_basico: number;
-    bonificaciones: number;
-    beneficios_sociales: number;
-    total_mensual: number;
+    participacion: number;
+    cantidad: number;
     meses: number;
+    sueldo_basico: number;
+    asignacion_familiar: number;
+    snp: number;
+    essalud: number;
+    cts: number;
+    vacaciones: number;
+    gratificacion: number;
+    total_mensual_unitario: number;
     total_proyecto: number;
-    item_order: number;
 }
 
 export interface IndicePolinomico {
@@ -122,10 +129,16 @@ export interface InsumoProducto {
 export type PresupuestoSubsection =
     | 'general'
     | 'acus'
+    | 'consolidado'
     | 'gastos_generales'
-    | 'insumos'
+    | 'gastos_fijos'
+    | 'supervision'
+    | 'control_concurrente'
     | 'remuneraciones'
-    | 'indices';
+    | 'insumos'
+    | 'indices'
+    | 'materiales'
+    | 'equipos';
 
 export type ColumnType = 'string' | 'number' | 'date' | 'json';
 
@@ -170,209 +183,209 @@ export interface ACURowSummary {
     subpartidas: ACUComponenteRow[];
 }
 
-export const SUBSECTION_COLUMNS: Record<PresupuestoSubsection, ColumnDef[]> = {
-    general: [
-        { key: 'partida', label: 'Partida', width: 100, type: 'string' },
-        {
-            key: 'descripcion',
-            label: 'Descripcion',
-            width: 250,
-            type: 'string',
-        },
-        { key: 'unidad', label: 'Und.', width: 70, type: 'string' },
-        { key: 'metrado', label: 'Cantidad', width: 100, type: 'number' },
-        {   
-            key: 'precio_unitario',
-            label: 'Precio',
-            width: 120,
-            type: 'number',
-        },
-        {
-            key: 'parcial',
-            label: 'Total',
-            width: 130,
-            type: 'number',
-            readonly: true,
-        },
-    ],
-    acus: [
-        { key: 'partida', label: 'Partida', width: 110, type: 'string' },
-        {
-            key: 'descripcion',
-            label: 'Descripcion',
-            width: 320,
-            type: 'string',
-        },
-        { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
-        {
-            key: 'rendimiento',
-            label: 'Rendimiento',
-            width: 110,
-            type: 'number',
-        },
-        {
-            key: 'costo_mano_obra',
-            label: 'Costo Mano Obra',
-            width: 150,
-            type: 'number',
-        },
-        {
-            key: 'costo_materiales',
-            label: 'Costo Materiales',
-            width: 140,
-            type: 'number',
-        },
-        {
-            key: 'costo_equipos',
-            label: 'Costo Equipos',
-            width: 130,
-            type: 'number',
-        },
-        {
-            key: 'costo_unitario_total',
-            label: 'CU Total',
-            width: 120,
-            type: 'number',
-            readonly: true,
-        },
-        {
-            key: 'mano_de_obra',
-            label: 'Mano de Obra (JSON)',
-            width: 260,
-            type: 'json',
-        },
-        {
-            key: 'materiales',
-            label: 'Materiales (JSON)',
-            width: 260,
-            type: 'json',
-        },
-        { key: 'equipos', label: 'Equipos (JSON)', width: 260, type: 'json' },
-    ],
-    gastos_generales: [
-        { key: 'codigo', label: 'Codigo', width: 110, type: 'string' },
-        {
-            key: 'descripcion',
-            label: 'Descripcion',
-            width: 360,
-            type: 'string',
-        },
-        { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
-        { key: 'cantidad', label: 'Cantidad', width: 110, type: 'number' },
-        {
-            key: 'precio_unitario',
-            label: 'Precio Unitario',
-            width: 130,
-            type: 'number',
-        },
-        {
-            key: 'parcial',
-            label: 'Parcial',
-            width: 130,
-            type: 'number',
-            readonly: true,
-        },
-        { key: 'categoria', label: 'Categoria', width: 140, type: 'string' },
-    ],
-    insumos: [
-        { key: 'codigo', label: 'Codigo', width: 110, type: 'string' },
-        {
-            key: 'descripcion',
-            label: 'Descripcion',
-            width: 360,
-            type: 'string',
-        },
-        { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
-        {
-            key: 'precio_unitario',
-            label: 'Precio Unitario',
-            width: 130,
-            type: 'number',
-        },
-        { key: 'tipo', label: 'Tipo', width: 120, type: 'string' },
-        { key: 'categoria', label: 'Categoria', width: 140, type: 'string' },
-    ],
-    remuneraciones: [
-        { key: 'cargo', label: 'Cargo', width: 220, type: 'string' },
-        { key: 'categoria', label: 'Categoria', width: 130, type: 'string' },
-        {
-            key: 'sueldo_basico',
-            label: 'Sueldo Basico',
-            width: 130,
-            type: 'number',
-        },
-        {
-            key: 'bonificaciones',
-            label: 'Bonificaciones',
-            width: 130,
-            type: 'number',
-        },
-        {
-            key: 'beneficios_sociales',
-            label: 'Beneficios Sociales',
-            width: 150,
-            type: 'number',
-        },
-        {
-            key: 'total_mensual',
-            label: 'Total Mensual',
-            width: 130,
-            type: 'number',
-            readonly: true,
-        },
-        { key: 'meses', label: 'Meses', width: 90, type: 'number' },
-        {
-            key: 'total_proyecto',
-            label: 'Total Proyecto',
-            width: 130,
-            type: 'number',
-            readonly: true,
-        },
-    ],
-    indices: [
-        { key: 'simbolo', label: 'Simbolo', width: 90, type: 'string' },
-        {
-            key: 'descripcion',
-            label: 'Descripcion',
-            width: 320,
-            type: 'string',
-        },
-        {
-            key: 'coeficiente',
-            label: 'Coeficiente',
-            width: 110,
-            type: 'number',
-        },
-        {
-            key: 'indice_base',
-            label: 'Indice Base',
-            width: 120,
-            type: 'number',
-        },
-        {
-            key: 'indice_actual',
-            label: 'Indice Actual',
-            width: 120,
-            type: 'number',
-        },
-        {
-            key: 'monomio',
-            label: 'Monomio',
-            width: 110,
-            type: 'number',
-            readonly: true,
-        },
-        {
-            key: 'fecha_indice_base',
-            label: 'Fecha Base',
-            width: 120,
-            type: 'date',
-        },
-        {
-            key: 'fecha_indice_actual',
-            label: 'Fecha Actual',
-            width: 120,
-            type: 'date',
-        },
-    ],
-};
+// export const SUBSECTION_COLUMNS: Record<PresupuestoSubsection, ColumnDef[]> = {
+//     general: [
+//         { key: 'partida', label: 'Partida', width: 100, type: 'string' },
+//         {
+//             key: 'descripcion',
+//             label: 'Descripcion',
+//             width: 250,
+//             type: 'string',
+//         },
+//         { key: 'unidad', label: 'Und.', width: 70, type: 'string' },
+//         { key: 'metrado', label: 'Cantidad', width: 100, type: 'number' },
+//         {
+//             key: 'precio_unitario',
+//             label: 'Precio',
+//             width: 120,
+//             type: 'number',
+//         },
+//         {
+//             key: 'parcial',
+//             label: 'Total',
+//             width: 130,
+//             type: 'number',
+//             readonly: true,
+//         },
+//     ],
+//     acus: [
+//         { key: 'partida', label: 'Partida', width: 110, type: 'string' },
+//         {
+//             key: 'descripcion',
+//             label: 'Descripcion',
+//             width: 320,
+//             type: 'string',
+//         },
+//         { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
+//         {
+//             key: 'rendimiento',
+//             label: 'Rendimiento',
+//             width: 110,
+//             type: 'number',
+//         },
+//         {
+//             key: 'costo_mano_obra',
+//             label: 'Costo Mano Obra',
+//             width: 150,
+//             type: 'number',
+//         },
+//         {
+//             key: 'costo_materiales',
+//             label: 'Costo Materiales',
+//             width: 140,
+//             type: 'number',
+//         },
+//         {
+//             key: 'costo_equipos',
+//             label: 'Costo Equipos',
+//             width: 130,
+//             type: 'number',
+//         },
+//         {
+//             key: 'costo_unitario_total',
+//             label: 'CU Total',
+//             width: 120,
+//             type: 'number',
+//             readonly: true,
+//         },
+//         {
+//             key: 'mano_de_obra',
+//             label: 'Mano de Obra (JSON)',
+//             width: 260,
+//             type: 'json',
+//         },
+//         {
+//             key: 'materiales',
+//             label: 'Materiales (JSON)',
+//             width: 260,
+//             type: 'json',
+//         },
+//         { key: 'equipos', label: 'Equipos (JSON)', width: 260, type: 'json' },
+//     ],
+//     gastos_generales: [
+//         { key: 'codigo', label: 'Codigo', width: 110, type: 'string' },
+//         {
+//             key: 'descripcion',
+//             label: 'Descripcion',
+//             width: 360,
+//             type: 'string',
+//         },
+//         { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
+//         { key: 'cantidad', label: 'Cantidad', width: 110, type: 'number' },
+//         {
+//             key: 'precio_unitario',
+//             label: 'Precio Unitario',
+//             width: 130,
+//             type: 'number',
+//         },
+//         {
+//             key: 'parcial',
+//             label: 'Parcial',
+//             width: 130,
+//             type: 'number',
+//             readonly: true,
+//         },
+//         { key: 'categoria', label: 'Categoria', width: 140, type: 'string' },
+//     ],
+//     insumos: [
+//         { key: 'codigo', label: 'Codigo', width: 110, type: 'string' },
+//         {
+//             key: 'descripcion',
+//             label: 'Descripcion',
+//             width: 360,
+//             type: 'string',
+//         },
+//         { key: 'unidad', label: 'Unidad', width: 90, type: 'string' },
+//         {
+//             key: 'precio_unitario',
+//             label: 'Precio Unitario',
+//             width: 130,
+//             type: 'number',
+//         },
+//         { key: 'tipo', label: 'Tipo', width: 120, type: 'string' },
+//         { key: 'categoria', label: 'Categoria', width: 140, type: 'string' },
+//     ],
+//     remuneraciones: [
+//         { key: 'cargo', label: 'Cargo', width: 220, type: 'string' },
+//         { key: 'categoria', label: 'Categoria', width: 130, type: 'string' },
+//         {
+//             key: 'sueldo_basico',
+//             label: 'Sueldo Basico',
+//             width: 130,
+//             type: 'number',
+//         },
+//         {
+//             key: 'bonificaciones',
+//             label: 'Bonificaciones',
+//             width: 130,
+//             type: 'number',
+//         },
+//         {
+//             key: 'beneficios_sociales',
+//             label: 'Beneficios Sociales',
+//             width: 150,
+//             type: 'number',
+//         },
+//         {
+//             key: 'total_mensual',
+//             label: 'Total Mensual',
+//             width: 130,
+//             type: 'number',
+//             readonly: true,
+//         },
+//         { key: 'meses', label: 'Meses', width: 90, type: 'number' },
+//         {
+//             key: 'total_proyecto',
+//             label: 'Total Proyecto',
+//             width: 130,
+//             type: 'number',
+//             readonly: true,
+//         },
+//     ],
+//     indices: [
+//         { key: 'simbolo', label: 'Simbolo', width: 90, type: 'string' },
+//         {
+//             key: 'descripcion',
+//             label: 'Descripcion',
+//             width: 320,
+//             type: 'string',
+//         },
+//         {
+//             key: 'coeficiente',
+//             label: 'Coeficiente',
+//             width: 110,
+//             type: 'number',
+//         },
+//         {
+//             key: 'indice_base',
+//             label: 'Indice Base',
+//             width: 120,
+//             type: 'number',
+//         },
+//         {
+//             key: 'indice_actual',
+//             label: 'Indice Actual',
+//             width: 120,
+//             type: 'number',
+//         },
+//         {
+//             key: 'monomio',
+//             label: 'Monomio',
+//             width: 110,
+//             type: 'number',
+//             readonly: true,
+//         },
+//         {
+//             key: 'fecha_indice_base',
+//             label: 'Fecha Base',
+//             width: 120,
+//             type: 'date',
+//         },
+//         {
+//             key: 'fecha_indice_actual',
+//             label: 'Fecha Actual',
+//             width: 120,
+//             type: 'date',
+//         },
+//     ],
+// };

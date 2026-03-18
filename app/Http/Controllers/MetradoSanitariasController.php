@@ -247,8 +247,8 @@ class MetradoSanitariasController extends Controller
             foreach ($rows as $index => $row) {
                 $connection->table(self::TABLE_RESUMEN)->insert([
                     'item_order'  => $index,
-                    // 'node_type'   => $row['node_type'] ?? 'partida',
-                    // 'titulo'      => $row['titulo'] ?? null,
+                    'node_type'   => $this->normalizeNodeType($row['node_type'] ?? 'partida'),
+                    'titulo'      => $row['titulo'] ?? null,
                     'partida'     => $row['partida'] ?? null,
                     'descripcion' => $row['descripcion'] ?? null,
                     'unidad'      => $row['unidad'] ?? null,
@@ -398,8 +398,8 @@ class MetradoSanitariasController extends Controller
     {
         return [
             'item_order'  => $index,
-            // 'node_type'   => $row['node_type'] ?? 'partida',
-            // 'titulo'      => $row['titulo'] ?? null,
+            'node_type'   => $this->normalizeNodeType($row['node_type'] ?? 'partida'),
+            'titulo'      => $row['titulo'] ?? null,
             'partida'     => $row['partida'] ?? null,
             'descripcion' => $row['descripcion'] ?? null,
             'unidad'      => $row['unidad'] ?? null,
@@ -426,6 +426,18 @@ class MetradoSanitariasController extends Controller
     private function toDecimal(mixed $value): float
     {
         return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    private function normalizeNodeType(mixed $value): string
+    {
+        $raw = strtolower(trim((string) $value));
+        if ($raw === 'titulo') {
+            return 'titulo';
+        }
+        if ($raw === 'subtitulo') {
+            return 'subtitulo';
+        }
+        return 'partida';
     }
 
     private function authorizeProject(CostoProject $project): void

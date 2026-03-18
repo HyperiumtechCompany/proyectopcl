@@ -29,9 +29,13 @@ class PresupuestoController extends Controller
     private const SUBSECTION_TABLE_MAP = [
         'general' => 'presupuesto_general',
         'acus' => 'presupuesto_acus',
-        'gastos_generales' => 'presupuesto_gastos_generales',
-        'insumos' => 'presupuesto_insumos',
+        'consolidado' => 'gg_consolidado',
+        'gastos_generales' => 'gg_variables',
+        'gastos_fijos' => 'gg_fijos',
+        'supervision' => 'gg_supervision',
+        'control_concurrente' => 'gg_control_concurrente',
         'remuneraciones' => 'presupuesto_remuneraciones',
+        'insumos' => 'presupuesto_insumos',
         'indices' => 'presupuesto_indices',
     ];
 
@@ -40,10 +44,14 @@ class PresupuestoController extends Controller
      */
     private const SUBSECTION_LABELS = [
         'general' => 'Presupuesto General',
-        'acus' => 'Análisis de Costos Unitarios',
+        'acus' => 'ACUs',
+        'consolidado' => 'Consolidado',
         'gastos_generales' => 'Gastos Generales',
-        'insumos' => 'Insumos',
+        'gastos_fijos' => 'Gastos Fijos',
+        'supervision' => 'Supervisión',
+        'control_concurrente' => 'Control Concurrente',
         'remuneraciones' => 'Remuneraciones',
+        'insumos' => 'Insumos',
         'indices' => 'Fórmula Polinómica',
     ];
 
@@ -131,6 +139,7 @@ class PresupuestoController extends Controller
         }
 
         $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
         $connection->beginTransaction();
 
         try {
@@ -141,9 +150,29 @@ class PresupuestoController extends Controller
 
             foreach ($rows as $index => $row) {
                 // Clean and prepare row data
-                $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index);
+                $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index, $project, $tenantPresupuestoId);
 
                 $connection->table($tableName)->insert($cleanedRow);
+
+                // Sincronización automática con GG Variables
+                if ($subsection === 'remuneraciones' && !empty($cleanedRow['gg_variable_id'])) {
+                    $totalUnitario = ($cleanedRow['sueldo_basico'] ?? 0) +
+                        ($cleanedRow['asignacion_familiar'] ?? 0) +
+                        ($cleanedRow['snp'] ?? 0) +
+                        ($cleanedRow['essalud'] ?? 0) +
+                        ($cleanedRow['cts'] ?? 0) +
+                        ($cleanedRow['vacaciones'] ?? 0) +
+                        ($cleanedRow['gratificacion'] ?? 0);
+
+                    $connection->table('gg_variables')
+                        ->where('id', $cleanedRow['gg_variable_id'])
+                        ->update([
+                            'precio' => $totalUnitario,
+                            'cantidad_descripcion' => $cleanedRow['cantidad'] ?? 1,
+                            'cantidad_tiempo' => $cleanedRow['meses'] ?? 1,
+                            'participacion' => $cleanedRow['participacion'] ?? 100,
+                        ]);
+                }
             }
 
             $connection->commit();
@@ -250,9 +279,10 @@ class PresupuestoController extends Controller
                             'updated_at' => now(),
                         ]);
                     $updatedCount++;
-                } else {
                     // Create new partida
+                    $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
                     $insertData = [
+                        'presupuesto_id' => $tenantPresupuestoId,
                         'partida' => $metradoRow->partida,
                         'descripcion' => $metradoRow->descripcion ?? '',
                         'unidad' => $metradoRow->unidad ?? '',
@@ -425,7 +455,9 @@ class PresupuestoController extends Controller
             $costoSubpartidas = round($costoSubpartidas, 2);
 
             // Prepare data for database
+            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
             $acuData = [
+                'presupuesto_id' => $tenantPresupuestoId,
                 'partida' => $validated['partida'],
                 'descripcion' => $validated['descripcion'],
                 'unidad' => $validated['unidad'],
@@ -987,8 +1019,9 @@ class PresupuestoController extends Controller
     /**
      * Prepare row data for insertion based on subsection type
      */
-    private function prepareRowForSubsection(string $subsection, array $row, int $index): array
+    private function prepareRowForSubsection(string $subsection, array $row, int $index, CostoProject $project, ?int $tenantPresupuestoId = null): array
     {
+        $projectId = $project->id;
         // Set item order solo si la tabla lo soporta (tenants legacy pueden no tener la columna)
         $tableName = self::SUBSECTION_TABLE_MAP[$subsection] ?? null;
         if ($tableName && $this->hasTenantColumn($tableName, 'item_order')) {
@@ -997,8 +1030,9 @@ class PresupuestoController extends Controller
             unset($row['item_order']);
         }
 
-        // Remove auto-increment id
-        unset($row['id']);
+        // Remove auto-increment id and force project context
+        unset($row['id'], $row['project_id']);
+        $row['presupuesto_id'] = $tenantPresupuestoId ?? $projectId;
 
         // Remove calculated columns (they are generated by the database)
         switch ($subsection) {
@@ -1074,11 +1108,20 @@ class PresupuestoController extends Controller
                 'categoria' => $row['categoria'] ?? null,
             ] + $row,
             'remuneraciones' => [
+                'presupuesto_id' => $row['presupuesto_id'] ?? null,
+                'gg_variable_id' => $row['gg_variable_id'] ?? null,
+                'cargo' => $row['cargo'] ?? 'Nuevo Cargo',
                 'categoria' => $row['categoria'] ?? null,
-                'sueldo_basico' => $row['sueldo_basico'] ?? 0,
-                'bonificaciones' => $row['bonificaciones'] ?? 0,
-                'beneficios_sociales' => $row['beneficios_sociales'] ?? 0,
+                'participacion' => $row['participacion'] ?? 100,
+                'cantidad' => $row['cantidad'] ?? 1,
                 'meses' => $row['meses'] ?? 1,
+                'sueldo_basico' => $row['sueldo_basico'] ?? 0,
+                'asignacion_familiar' => $row['asignacion_familiar'] ?? 0,
+                'snp' => $row['snp'] ?? 0,
+                'essalud' => $row['essalud'] ?? 0,
+                'cts' => $row['cts'] ?? 0,
+                'vacaciones' => $row['vacaciones'] ?? 0,
+                'gratificacion' => $row['gratificacion'] ?? 0,
             ] + $row,
             'indices' => [
                 'coeficiente' => $row['coeficiente'] ?? 0,
@@ -1096,13 +1139,20 @@ class PresupuestoController extends Controller
      */
     private function getOrderedRows(string $tableName)
     {
-        $query = DB::connection('costos_tenant')->table($tableName);
+        $connection = DB::connection('costos_tenant');
+        $query = $connection->table($tableName);
+
+        if ($tableName === 'presupuesto_remuneraciones') {
+            $query->leftJoin('gg_variables', 'presupuesto_remuneraciones.gg_variable_id', '=', 'gg_variables.id')
+                  ->select('presupuesto_remuneraciones.*', 'gg_variables.descripcion as cargo_gg');
+        }
 
         if ($this->hasTenantColumn($tableName, 'item_order')) {
-            $query->orderBy('item_order');
+            $query->orderBy("$tableName.item_order");
         }
+        
         if ($this->hasTenantColumn($tableName, 'id')) {
-            $query->orderBy('id');
+            $query->orderBy("$tableName.id");
         }
 
         return $query->get();
