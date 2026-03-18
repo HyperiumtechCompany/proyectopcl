@@ -87,13 +87,21 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
     });
    // En tu archivo de rutas (probablemente routes/web.php o routes/metrados.php)
 
-// Gas
+// ... dentro del middleware auth y el prefix 'metrados' ...
+
+// Gas (Configuración Profesional)
 Route::prefix('gas')->name('gas.')->group(function () {
+    // Listado principal de proyectos de gas
     Route::get('/', [App\Http\Controllers\MetradoGasController::class, 'index'])->name('index');
+    
+    // El Editor (Donde está tu GasIndex.tsx)
+    // Usamos {metradosGas} para que coincida con el modelo en el controlador
+    Route::get('/proyecto/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'show'])->name('show');
+    
+    // Acciones de gestión
     Route::post('/', [App\Http\Controllers\MetradoGasController::class, 'store'])->name('store');
     Route::get('/join', fn() => redirect()->route('metrados.gas.index'))->name('join.form');
     Route::post('/join', [App\Http\Controllers\MetradoGasController::class, 'join'])->name('join');
-    Route::get('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'show'])->name('show');
     Route::patch('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'update'])->name('update');
     Route::delete('/{metradosGas}', [App\Http\Controllers\MetradoGasController::class, 'destroy'])->name('destroy');
     Route::post('/{metradosGas}/enable-collab', [App\Http\Controllers\MetradoGasController::class, 'enableCollaboration'])->name('enable-collab');
