@@ -1,10 +1,11 @@
 // components/RemuneracionesPanel.tsx
 import React from 'react';
-import { Loader2, Plus, Trash2, Save, UserCheck } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, RefreshCw, Clock } from 'lucide-react';
 import {
     useRemuneracionesStore,
     RemuneracionRow,
 } from '../stores/remuneracionesStore';
+import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 interface RemuneracionesPanelProps {
     loading: boolean;
@@ -26,7 +27,11 @@ export function RemuneracionesPanel({
         calculateTotal,
         getSummary,
         isDirty,
+        setMesesAll,
     } = useRemuneracionesStore();
+
+    const duracionMeses = useProjectParamsStore(s => s.getDuracionMeses());
+    const rmvValue = useProjectParamsStore(s => s.getRmv());
 
     if (loading) {
         return (
@@ -56,7 +61,15 @@ export function RemuneracionesPanel({
                         Cálculo detallado de beneficios y leyes sociales
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-center px-4 py-1 border-x border-slate-700/50">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 text-sky-400" /> Tiempo Proyecto
+                        </span>
+                        <span className="font-mono text-sm font-black text-sky-400">
+                            {duracionMeses} Meses
+                        </span>
+                    </div>
                     <div className="flex flex-col items-end">
                         <span className="text-[10px] font-semibold text-slate-500 uppercase">
                             Total Proyecto
@@ -95,7 +108,7 @@ export function RemuneracionesPanel({
                                     Precio Unit.
                                 </th>
                                 <th className="w-24 border-b border-slate-700 p-3 text-right text-slate-500 italic">
-                                    SNP (3%)
+                                    SNP (13%)
                                 </th>
                                 <th className="w-24 border-b border-slate-700 p-3 text-right">
                                     Asig. Fam
@@ -115,7 +128,7 @@ export function RemuneracionesPanel({
                                 <th className="w-28 border-b border-slate-700 bg-emerald-950/20 p-3 text-right text-emerald-400">
                                     Mensual Unit.
                                 </th>
-                                <th className="w-32 border-b border-slate-700 bg-slate-800 p-3 text-right">
+                                <th className="w-32 border-b border-slate-700 bg-slate-800 p-3 text-right opacity-20 transition-opacity hover:opacity-100 cursor-help" title="Columna en modo 'dormido' temporalmente">
                                     Total Proyecto
                                 </th>
                                 <th className="w-10 border-b border-slate-700 p-3"></th>
@@ -131,15 +144,13 @@ export function RemuneracionesPanel({
                                     <td className="p-0">
                                         <input
                                             type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300"
+                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.participacion}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
                                                     'participacion',
-                                                    parseFloat(
-                                                        e.target.value,
-                                                    ) || 0,
+                                                    parseFloat(e.target.value) || 0,
                                                 )
                                             }
                                         />
@@ -149,15 +160,13 @@ export function RemuneracionesPanel({
                                     <td className="p-0">
                                         <input
                                             type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300"
+                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.cantidad}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
                                                     'cantidad',
-                                                    parseFloat(
-                                                        e.target.value,
-                                                    ) || 0,
+                                                    parseFloat(e.target.value) || 0,
                                                 )
                                             }
                                         />
@@ -168,7 +177,7 @@ export function RemuneracionesPanel({
                                         <div className="flex flex-col">
                                             <input
                                                 type="text"
-                                                className="w-full border-none bg-transparent p-0 font-semibold text-slate-300"
+                                                className="w-full border-none bg-transparent p-0 font-semibold text-slate-300 focus:outline-none focus:bg-slate-700/30 rounded"
                                                 value={
                                                     (row as any).cargo_gg ||
                                                     row.cargo
@@ -195,7 +204,7 @@ export function RemuneracionesPanel({
                                     {/* Categoría */}
                                     <td className="p-1">
                                         <select
-                                            className="w-full border-none bg-transparent p-1 text-[10px] text-slate-400"
+                                            className="w-full border-none bg-transparent p-1 text-[10px] text-slate-400 focus:outline-none focus:bg-slate-700/30"
                                             value={row.categoria}
                                             onChange={(e) =>
                                                 updateCell(
@@ -205,15 +214,9 @@ export function RemuneracionesPanel({
                                                 )
                                             }
                                         >
-                                            <option value="Profesional">
-                                                Profesional
-                                            </option>
-                                            <option value="Técnico">
-                                                Técnico
-                                            </option>
-                                            <option value="Auxiliar">
-                                                Auxiliar
-                                            </option>
+                                            <option value="Profesional">Profesional</option>
+                                            <option value="Técnico">Técnico</option>
+                                            <option value="Auxiliar">Auxiliar</option>
                                         </select>
                                     </td>
 
@@ -221,15 +224,13 @@ export function RemuneracionesPanel({
                                     <td className="p-0">
                                         <input
                                             type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300"
+                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-slate-300 focus:outline-none focus:bg-slate-700/30"
                                             value={row.meses}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
                                                     'meses',
-                                                    parseFloat(
-                                                        e.target.value,
-                                                    ) || 0,
+                                                    parseFloat(e.target.value) || 0,
                                                 )
                                             }
                                         />
@@ -239,48 +240,45 @@ export function RemuneracionesPanel({
                                     <td className="bg-emerald-950/5 p-0">
                                         <input
                                             type="number"
-                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-emerald-400"
+                                            className="w-full border-none bg-transparent p-2 text-right font-mono text-emerald-400 focus:outline-none focus:bg-slate-700/30"
                                             value={row.sueldo_basico}
                                             onChange={(e) =>
                                                 updateCell(
                                                     index,
                                                     'sueldo_basico',
-                                                    parseFloat(
-                                                        e.target.value,
-                                                    ) || 0,
+                                                    parseFloat(e.target.value) || 0,
                                                 )
                                             }
                                         />
                                     </td>
 
-                                    {/* SNP */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.snp.toFixed(2)}
+                                        {(Number(row.snp) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Asignación Familiar */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.asignacion_familiar.toFixed(2)}
+                                        {(Number(row.asignacion_familiar) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Essalud */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.essalud.toFixed(2)}
+                                        {(Number(row.essalud) || 0).toFixed(2)}
                                     </td>
 
                                     {/* CTS */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.cts.toFixed(2)}
+                                        {(Number(row.cts) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Vacaciones */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.vacaciones.toFixed(2)}
+                                        {(Number(row.vacaciones) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Gratificación */}
                                     <td className="bg-slate-900/30 p-2 text-right font-mono text-slate-500">
-                                        {row.gratificacion.toFixed(2)}
+                                        {(Number(row.gratificacion) || 0).toFixed(2)}
                                     </td>
 
                                     {/* Mensual Unitario */}
@@ -291,7 +289,7 @@ export function RemuneracionesPanel({
                                     </td>
 
                                     {/* Total Proyecto */}
-                                    <td className="bg-slate-800 p-2 text-right font-mono font-bold text-white">
+                                    <td className="bg-slate-800 p-2 text-right font-mono font-bold text-slate-600 opacity-20 transition-opacity group-hover:opacity-40">
                                         {new Intl.NumberFormat('es-PE', {
                                             minimumFractionDigits: 2,
                                         }).format(row.total_proyecto)}
@@ -369,7 +367,7 @@ export function RemuneracionesPanel({
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.gratif)}
                                 </td>
                                 <td className="bg-emerald-950/30 border-l border-emerald-500/20"></td>
-                                <td className="p-2 text-right font-mono text-emerald-400 bg-slate-700/80 ring-1 ring-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                                <td className="p-2 text-right font-mono text-slate-600 opacity-20 bg-slate-700/80">
                                     {new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(projectTotal.total)}
                                 </td>
                                 <td></td>
@@ -387,8 +385,15 @@ export function RemuneracionesPanel({
                     >
                         <Plus className="h-3.5 w-3.5" /> Añadir Personal
                     </button>
+                    <button
+                        onClick={() => setMesesAll(duracionMeses)}
+                        className="flex items-center gap-2 rounded-lg bg-sky-900/40 px-4 py-2 text-[10px] font-bold text-sky-300 transition-all hover:bg-sky-900/60 border border-sky-800/40"
+                        title="Sincronizar todos los meses al tiempo de proyecto"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" /> Sincronizar Meses
+                    </button>
                     <div className="flex items-center gap-2 text-[10px] text-slate-500 italic">
-                        * Los cálculos se basan en fórmulas legales vigentes.
+                        * Cálculos basados en RMV {rmvValue} (Sincronizado)
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -407,7 +412,7 @@ export function RemuneracionesPanel({
                         onClick={() => onSaveRemuneracion(rows)}
                         disabled={!isDirty || loading}
                     >
-                        <Save className="h-4 w-4" />
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         {loading
                             ? 'Guardando...'
                             : 'Guardar y Sincronizar con GG'}

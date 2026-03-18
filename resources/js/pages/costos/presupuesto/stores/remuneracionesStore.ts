@@ -29,6 +29,7 @@ interface RemuneracionesState {
         mensual: any;
         total: any;
     };
+    setMesesAll: (meses: number) => void;
 }
 
 export const useRemuneracionesStore = create<RemuneracionesState>(
@@ -161,24 +162,19 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
 
             // 1. Mensual row sums (Sum of row columns)
             const m_pu = rows.reduce(
-                (acc, r) =>
-                    acc +
-                    (Number(r.sueldo_basico) *
-                        Number(r.cantidad) *
-                        Number(r.participacion)) /
-                        100,
+                (acc, r) => acc + (Number(r.sueldo_basico) || 0),
                 0,
             );
             const m_af = rows.reduce(
-                (acc, r) => acc + Number(r.asignacion_familiar),
+                (acc, r) => acc + (Number(r.asignacion_familiar) || 0),
                 0,
             );
             const m_gratif = rows.reduce(
-                (acc, r) => acc + Number(r.gratificacion),
+                (acc, r) => acc + (Number(r.gratificacion) || 0),
                 0,
             );
             const m_vac = rows.reduce(
-                (acc, r) => acc + Number(r.vacaciones),
+                (acc, r) => acc + (Number(r.vacaciones) || 0),
                 0,
             );
 
@@ -188,34 +184,29 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
             const m_cts = (m_pu + m_af + m_gratif) * 0.083333;
             const m_total = m_pu + m_af + m_essalud + m_gratif + m_vac + m_cts;
 
-            // 2. Total Project row sums (SumaProducto: Column * Meses)
+            // 2. Total Project row sums (SumaProducto: meses * sueldo_basico)
             const t_pu = rows.reduce(
                 (acc, r) =>
-                    acc +
-                    (Number(r.sueldo_basico) *
-                        Number(r.cantidad) *
-                        Number(r.participacion) *
-                        Number(r.meses)) /
-                        100,
+                    acc + (Number(r.sueldo_basico) || 0) * (Number(r.meses) || 0),
                 0,
             );
             const t_af = rows.reduce(
                 (acc, r) =>
-                    acc + Number(r.asignacion_familiar) * Number(r.meses),
+                    acc + (Number(r.asignacion_familiar) || 0) * (Number(r.meses) || 0),
                 0,
             );
             const t_gratif = rows.reduce(
-                (acc, r) => acc + Number(r.gratificacion) * Number(r.meses),
+                (acc, r) => (acc + (Number(r.gratificacion) || 0) * (Number(r.meses) || 0)),
                 0,
             );
             const t_vac = rows.reduce(
-                (acc, r) => acc + Number(r.vacaciones) * Number(r.meses),
+                (acc, r) => (acc + (Number(r.vacaciones) || 0) * (Number(r.meses) || 0)),
                 0,
             );
 
             // Total Project row calculated formulas
             const t_snp = (t_pu + t_af) * 0.13;
-            const t_essalud = t_pu * 0.09;
+            const t_essalud = t_pu * 0.09; 
             const t_cts = (t_pu + t_af + t_gratif) * 0.083333;
             const t_total = t_pu + t_af + t_essalud + t_gratif + t_vac + t_cts;
 
@@ -246,6 +237,16 @@ export const useRemuneracionesStore = create<RemuneracionesState>(
         calculateTotal: () => {
             const { getSummary } = get();
             return getSummary().total.total;
+        },
+
+        setMesesAll: (meses) => {
+            set(produce((state: RemuneracionesState) => {
+                state.rows.forEach(row => {
+                    row.meses = meses;
+                    row.total_proyecto = Number((row.total_mensual_unitario * meses).toFixed(2));
+                });
+                state.isDirty = true;
+            }));
         },
     }),
 );

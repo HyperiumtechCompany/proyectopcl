@@ -6,22 +6,28 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * COSTOS TENANT — ESQUEMA UNIFICADO v2
+ * COSTOS TENANT — ESQUEMA UNIFICADO v3
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * Migración única que crea TODAS las tablas del tenant de costos en el
  * orden correcto de dependencias:
  *
- *   0. project_meta              — metadatos del proyecto
+ *   0. project_params            — parámetros globales centralizados
  *   1. presupuestos              — tabla maestra (padre de todo)
- *   2. Metrados (6 especialidades) — vinculados a presupuestos
+ *   2. Metrados (6 especialidades) — hojas de metrado vinculadas a presupuestos
+ *   2b. Resúmenes de Metrados    — tablas de resumen (item, descripcion, und, parcial, total)
+ *       · metrado_arquitectura_resumen
+ *       · metrado_estructura_resumen
+ *       · metrado_electricas_resumen
+ *       · metrado_comunicaciones_resumen
+ *       · metrado_gas_resumen
  *   3. Cronogramas (3 tipos)     — vinculados a presupuestos
  *   4. Especificaciones Técnicas — vinculados a presupuestos
  *   5. Presupuesto General       — partidas WBS
  *   6. GG Fijos + desagregados   — fianzas, pólizas
  *   7. GG Variables              — gastos variables
  *   8. Presupuesto Remuneraciones
- *   9. GG Supervisión
+ *   9. GG Supervisión + detalle GG
  *  10. GG Control Concurrente
  *  11. GG Consolidado            — caché de totales
  *  12. Presupuesto ACUs
@@ -29,6 +35,7 @@ use Illuminate\Support\Facades\Schema;
  *  14. Presupuesto Índices (fórmula polinómica)
  *  15. Catálogos Insumos (clases + productos)
  *  16. Metrado Sanitarias Modular (config, módulos, exterior, cisterna, resumen)
+ *  17. Metrado Estructuras Modular (config, metrado, resumen)
  *
  * Reemplaza las migraciones antiguas:
  *   - 2026_03_06_000001_create_project_meta_table.php
@@ -36,6 +43,7 @@ use Illuminate\Support\Facades\Schema;
  *   - 2026_03_07_000001_create_presupuesto_unificado_tables.php
  *   - 2026_03_13_000001_create_metrado_sanitarias_modular_tables.php
  *   - 2026_03_13_174330_add_node_type_and_titulo_to_metrado_sanitarias_tables.php
+ *   - 2026_03_18_000001_create_metrado_estructuras_tables.php
  */
 return new class extends Migration
 {
@@ -44,15 +52,46 @@ return new class extends Migration
     public function up(): void
     {
         // ══════════════════════════════════════════════════════════════════════
-        // 0. PROJECT META — metadatos redundantes para acceso rápido
+        // 0. PROJECT PARAMS — parámetros globales centralizados
+        //    Fuente única de verdad para todos los módulos del tenant.
+        //    Sincronizado automáticamente desde costo_projects (BD principal).
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('project_meta')) {
-            Schema::connection($this->connection)->create('project_meta', function (Blueprint $table) {
+        if (!Schema::connection($this->connection)->hasTable('project_params')) {
+            Schema::connection($this->connection)->create('project_params', function (Blueprint $table) {
                 $table->id();
-                $table->string('key');
-                $table->text('value')->nullable();
+
+                // ── Datos Generales (sync desde costo_projects) ──
+                $table->string('nombre');
+                $table->string('uei')->nullable();
+                $table->string('unidad_ejecutora')->nullable();
+                $table->string('codigo_snip')->nullable();
+                $table->string('codigo_cui')->nullable();
+                $table->string('codigo_local')->nullable();
+
+                // ── Fechas y Duración (auto-calculados) ──
+                $table->date('fecha_inicio')->nullable();
+                $table->date('fecha_fin')->nullable();
+                $table->unsignedSmallInteger('duracion_dias')->default(0)
+                    ->comment('Auto: DATEDIFF(fecha_fin, fecha_inicio)');
+                $table->decimal('duracion_meses', 8, 2)->default(0)
+                    ->comment('Auto: duracion_dias / 30');
+
+                // ── Ubicación (nombres resueltos) ──
+                $table->string('departamento')->nullable();
+                $table->string('provincia')->nullable();
+                $table->string('distrito')->nullable();
+                $table->string('centro_poblado')->nullable();
+
+                // ── Parámetros Financieros Globales ──
+                $table->decimal('costo_directo', 15, 4)->default(0)
+                    ->comment('Sync desde SUM(presupuesto_general.parcial) de raíces');
+                $table->decimal('utilidad_porcentaje', 5, 2)->default(10.00);
+                $table->decimal('igv_porcentaje', 5, 2)->default(18.00);
+                $table->decimal('jornada_laboral_horas', 4, 2)->default(8.00);
+                $table->decimal('rmv', 10, 2)->default(1025.00)
+                    ->comment('Remuneración Mínima Vital vigente');
+
                 $table->timestamps();
-                $table->unique('key');
             });
         }
 
@@ -119,6 +158,62 @@ return new class extends Migration
                     $table->timestamps();
 
                     $table->index('presupuesto_id');
+                });
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 2b. RESÚMENES DE METRADOS — item, descripcion, und, parcial, total
+        //     Una tabla por especialidad (arquitectura, estructura, electricas,
+        //     comunicaciones, gas). Sanitarias tiene su propio módulo (#16).
+        // ══════════════════════════════════════════════════════════════════════
+        $resumenMetradoTables = [
+            'metrado_arquitectura_resumen',
+            'metrado_estructura_resumen',
+            'metrado_electricas_resumen',
+            'metrado_comunicaciones_resumen',
+            'metrado_gas_resumen',
+        ];
+
+        foreach ($resumenMetradoTables as $resumenTable) {
+            if (!Schema::connection($this->connection)->hasTable($resumenTable)) {
+                Schema::connection($this->connection)->create($resumenTable, function (Blueprint $table) {
+                    $table->id();
+                    $table->unsignedBigInteger('presupuesto_id')->nullable();
+                    $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
+
+                    // Numeración / código de ítem (ej: 01, 01.01, 01.01.01)
+                    $table->string('item', 30)->nullable()
+                        ->comment('Código de ítem (p.ej. 01, 01.01)');
+
+                    $table->string('node_type', 20)->default('partida')
+                        ->comment('titulo | partida — para agrupar encabezados');
+                    $table->string('titulo', 255)->nullable()
+                        ->comment('Texto del encabezado cuando node_type=titulo');
+                    $table->text('descripcion')->nullable()
+                        ->comment('Descripción de la partida');
+
+                    $table->string('und', 20)->nullable()
+                        ->comment('Unidad de medida (m2, m3, kg, gl, etc.)');
+
+                    // Parcial = cantidad de una sub-fila (sin FK cruzada)
+                    $table->decimal('parcial', 14, 4)->default(0)
+                        ->comment('Metrado parcial de esta fila');
+
+                    // Total = suma de parciales hijos, o valor directo en hoja
+                    $table->decimal('total', 14, 4)->default(0)
+                        ->comment('Total acumulado de la partida/título');
+
+                    $table->text('observacion')->nullable();
+                    $table->unsignedBigInteger('parent_id')->nullable()
+                        ->comment('FK self-referencing para jerarquía');
+                    $table->integer('nivel')->default(0);
+                    $table->integer('item_order')->default(0);
+                    $table->timestamps();
+
+                    $table->index('presupuesto_id');
+                    $table->index('parent_id');
+                    $table->index('item_order');
                 });
             }
         }
@@ -456,11 +551,11 @@ return new class extends Migration
                 $table->decimal('gratificacion',       15, 2)->default(0);
 
                 $table->decimal('total_mensual_unitario', 15, 4)->storedAs('
-                    sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion
+                    sueldo_basico + asignacion_familiar + essalud + cts + vacaciones + gratificacion
                 ');
 
                 $table->decimal('total_proyecto', 15, 4)->storedAs('
-                    (sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion)
+                    (sueldo_basico + asignacion_familiar + essalud + cts + vacaciones + gratificacion)
                     * cantidad * meses * (participacion / 100)
                 ');
 
@@ -509,6 +604,48 @@ return new class extends Migration
                 $table->index('presupuesto_id', 'idx_ggsup_presupuesto');
                 $table->index('parent_id',      'idx_ggsup_parent');
                 $table->index('item_order',     'idx_ggsup_order');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 9b. SUPERVISIÓN — DETALLE GASTOS GENERALES (Sección IV)
+        //     Árbol: seccion (A/B/C) → detalle (filas editables)
+        //     El total global alimenta el campo IV del presupuesto supervisión.
+        // ══════════════════════════════════════════════════════════════════════
+        if (!Schema::connection($this->connection)->hasTable('supervision_gg_detalle')) {
+            Schema::connection($this->connection)->create('supervision_gg_detalle', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('presupuesto_id');
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
+
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->foreign('parent_id')->references('id')->on('supervision_gg_detalle')->nullOnDelete();
+
+                $table->enum('tipo_fila', ['seccion', 'detalle'])->default('detalle')
+                    ->comment('seccion=A/B/C header, detalle=fila editable');
+
+                $table->string('item_codigo', 20)->nullable()
+                    ->comment('Ej: A, B, C, A.1, B.2');
+                $table->text('concepto');
+                $table->string('unidad', 20)->nullable();
+
+                $table->decimal('cantidad', 15, 4)->default(0);
+                $table->decimal('meses',    15, 4)->default(0)->comment('Tiempo en meses');
+                $table->decimal('importe',  15, 4)->default(0)->comment('Importe unitario S/.');
+
+                $table->decimal('subtotal', 15, 4)->storedAs('cantidad * meses * importe')
+                    ->comment('cantidad × meses × importe');
+
+                $table->decimal('total_seccion', 15, 4)->default(0)
+                    ->comment('SUM(subtotal de hijos detalle) — actualizado al guardar');
+
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+                $table->softDeletes();
+
+                $table->index('presupuesto_id', 'idx_sgd_presupuesto');
+                $table->index('parent_id',      'idx_sgd_parent');
+                $table->index('item_order',     'idx_sgd_order');
             });
         }
 
@@ -847,47 +984,135 @@ return new class extends Migration
                 $table->timestamps();
             });
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 17. METRADO ESTRUCTURAS MODULAR
+        //     (Antes en 2026_03_18_000001_create_metrado_estructuras_tables.php)
+        // ══════════════════════════════════════════════════════════════════════
+
+        // 17a. Configuración del módulo estructuras
+        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_config')) {
+            Schema::connection($this->connection)->create('metrado_estructuras_config', function (Blueprint $table) {
+                $table->id();
+                $table->integer('cantidad_modulos')->default(1);
+                $table->string('nombre_proyecto', 255)->nullable();
+                $table->timestamps();
+            });
+        }
+
+        // 17b. Hoja principal de metrado estructuras
+        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_metrado')) {
+            Schema::connection($this->connection)->create('metrado_estructuras_metrado', function (Blueprint $table) {
+                $table->id();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('elsim', 12, 4)->default(0);
+                $table->decimal('largo', 12, 4)->default(0);
+                $table->decimal('ancho', 12, 4)->default(0);
+                $table->decimal('alto', 12, 4)->default(0);
+                $table->decimal('nveces', 12, 4)->default(0);
+                $table->decimal('lon', 12, 4)->default(0);
+                $table->decimal('area', 12, 4)->default(0);
+                $table->decimal('vol', 12, 4)->default(0);
+                $table->decimal('kg', 12, 4)->default(0);
+                $table->decimal('und', 14, 4)->default(0);
+                $table->decimal('total', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+
+                $table->index(['item_order']);
+            });
+        }
+
+        // 17c. Resumen Consolidado de Estructuras
+        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_resumen')) {
+            Schema::connection($this->connection)->create('metrado_estructuras_resumen', function (Blueprint $table) {
+                $table->id();
+                $table->integer('item_order')->default(0);
+                $table->string('node_type', 20)->default('partida');
+                $table->string('titulo', 255)->nullable();
+                $table->string('partida', 50)->nullable();
+                $table->text('descripcion')->nullable();
+                $table->string('unidad', 20)->nullable();
+                $table->decimal('total', 14, 4)->default(0);
+                $table->text('observacion')->nullable();
+                $table->unsignedBigInteger('parent_id')->nullable();
+                $table->integer('nivel')->default(0);
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void
     {
         // Orden inverso estricto respetando todas las FKs
-        Schema::dropIfExists('metrado_sanitarias_resumen');
-        Schema::dropIfExists('metrado_sanitarias_cisterna');
-        Schema::dropIfExists('metrado_sanitarias_exterior');
-        Schema::dropIfExists('metrado_sanitarias_modulos');
-        Schema::dropIfExists('metrado_sanitarias_config');
 
-        Schema::dropIfExists('insumo_productos');
-        Schema::dropIfExists('insumo_clases');
-        Schema::dropIfExists('presupuesto_indices');
-        Schema::dropIfExists('presupuesto_insumos');
-        Schema::dropIfExists('presupuesto_acus');
+        // 17. Metrado Estructuras Modular
+        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_metrado');
+        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_config');
 
-        Schema::dropIfExists('gg_consolidado');
-        Schema::dropIfExists('gg_control_concurrente');
-        Schema::dropIfExists('gg_supervision');
-        Schema::dropIfExists('presupuesto_remuneraciones');
-        Schema::dropIfExists('gg_variables');
-        Schema::dropIfExists('gg_fijos_polizas');
-        Schema::dropIfExists('gg_fijos_fianzas');
-        Schema::dropIfExists('gg_fijos');
+        // 16. Metrado Sanitarias Modular
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_cisterna');
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_exterior');
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_modulos');
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_config');
 
-        Schema::dropIfExists('presupuesto_general');
+        // 15. Catálogos Insumos
+        Schema::connection($this->connection)->dropIfExists('insumo_productos');
+        Schema::connection($this->connection)->dropIfExists('insumo_clases');
 
-        Schema::dropIfExists('especificaciones_tecnicas');
-        Schema::dropIfExists('cronograma_materiales');
-        Schema::dropIfExists('cronograma_valorizado');
-        Schema::dropIfExists('cronograma_general');
+        // 14–12. Índices, Insumos, ACUs
+        Schema::connection($this->connection)->dropIfExists('presupuesto_indices');
+        Schema::connection($this->connection)->dropIfExists('presupuesto_insumos');
+        Schema::connection($this->connection)->dropIfExists('presupuesto_acus');
 
-        Schema::dropIfExists('metrado_gas');
-        Schema::dropIfExists('metrado_comunicaciones');
-        Schema::dropIfExists('metrado_electricas');
-        Schema::dropIfExists('metrado_sanitarias');
-        Schema::dropIfExists('metrado_estructura');
-        Schema::dropIfExists('metrado_arquitectura');
+        // 11–9. GG Consolidado, Control Concurrente, Supervisión
+        Schema::connection($this->connection)->dropIfExists('gg_consolidado');
+        Schema::connection($this->connection)->dropIfExists('gg_control_concurrente');
+        Schema::connection($this->connection)->dropIfExists('supervision_gg_detalle');
+        Schema::connection($this->connection)->dropIfExists('gg_supervision');
 
-        Schema::dropIfExists('presupuestos');
-        Schema::connection('costos_tenant')->dropIfExists('project_meta');
+        // 8–6. Remuneraciones, GG Variables, GG Fijos
+        Schema::connection($this->connection)->dropIfExists('presupuesto_remuneraciones');
+        Schema::connection($this->connection)->dropIfExists('gg_variables');
+        Schema::connection($this->connection)->dropIfExists('gg_fijos_polizas');
+        Schema::connection($this->connection)->dropIfExists('gg_fijos_fianzas');
+        Schema::connection($this->connection)->dropIfExists('gg_fijos');
+
+        // 5. Presupuesto General
+        Schema::connection($this->connection)->dropIfExists('presupuesto_general');
+
+        // 4–3. Especificaciones y Cronogramas
+        Schema::connection($this->connection)->dropIfExists('especificaciones_tecnicas');
+        Schema::connection($this->connection)->dropIfExists('cronograma_materiales');
+        Schema::connection($this->connection)->dropIfExists('cronograma_valorizado');
+        Schema::connection($this->connection)->dropIfExists('cronograma_general');
+
+        // 2b. Resúmenes de Metrados
+        Schema::connection($this->connection)->dropIfExists('metrado_gas_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_comunicaciones_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_electricas_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_estructura_resumen');
+        Schema::connection($this->connection)->dropIfExists('metrado_arquitectura_resumen');
+
+        // 2. Metrados principales
+        Schema::connection($this->connection)->dropIfExists('metrado_gas');
+        Schema::connection($this->connection)->dropIfExists('metrado_comunicaciones');
+        Schema::connection($this->connection)->dropIfExists('metrado_electricas');
+        Schema::connection($this->connection)->dropIfExists('metrado_sanitarias');
+        Schema::connection($this->connection)->dropIfExists('metrado_estructura');
+        Schema::connection($this->connection)->dropIfExists('metrado_arquitectura');
+
+        // 1–0. Presupuestos y parámetros
+        Schema::connection($this->connection)->dropIfExists('presupuestos');
+        Schema::connection($this->connection)->dropIfExists('project_params');
     }
 };
