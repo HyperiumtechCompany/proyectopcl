@@ -5,18 +5,16 @@ import Luckysheet from '@/components/costos/tablas/Luckysheet'
 
 declare global { interface Window { luckysheet: any } }
 
-// CORRECCIÓN: TOTAL es columna N (Índice 13)
 const COLS = { ITEM: 0, DES: 1, UND: 2, ELEM: 3, L: 4, ANC: 5, ALT: 6, NVEC: 7, TOTAL: 13 };
 const HEADERS = ['ITEM', 'DESCRIPCIÓN', 'Und', 'Elem', 'Largo', 'Ancho', 'Alto', 'N° Vec', 'Lon.', 'Área', 'Vol.', 'Kg', 'UndC', 'Total', 'Observaciones'];
 
 export default function Show() {
-  const { spreadsheet } = usePage<any>().props;
-  const calculatingRef = useRef(false);
 
+  const { spreadsheet } = usePage<any>().props;
   const initialCellData = HEADERS.map((h, c) => ({
     r: 0, c, v: { v: h, bl: 1, bg: '#f3f4f6', ht: 0, vt: 0 }
   }));
-
+  // --- 1. FUNCIONES DE LÓGICA ---
   const ejecutarCalculo = (r: number) => {
     const ls = window.luckysheet;
     const getV = (col: number) => {
@@ -44,9 +42,75 @@ export default function Show() {
     }
 
     if (resultado > 0) {
-      ls.setCellValue(r, COLS.TOTAL, resultado.toFixed(2));
+      ls.setCellValue(r, COLS.TOTAL, resultado.toFixed(2), { order: 0 });
     } else {
-      ls.setCellValue(r, COLS.TOTAL, '');
+      ls.setCellValue(r, COLS.TOTAL, '', { order: 0 });
+    }
+  };
+
+  const actualizarNumeracionJerarquica = () => {
+    const ls = window.luckysheet;
+    const data = ls.getSheetData(0);
+
+    let contadorTitulo = 0;
+    let contadorSubtitulo = 0;
+
+    data.forEach((row, r) => {
+      if (r === 0 || !row) return;
+
+      const descCell = row[COLS.DES];
+      const undVal = ls.getCellValue(r, COLS.UND);
+      const desc = String(descCell?.v || "").trim();
+      const und = String(undVal?.v || undVal || "").trim();
+
+      if (!desc) {
+        ls.setCellValue(r, COLS.ITEM, null);
+        return;
+      }
+
+      const color = descCell?.fc;
+      const esTitulo = color === "#ff0000";
+      const esSubtitulo = color === "#0000ff";
+      const esPartida = !!und;
+
+      if (esTitulo) {
+        contadorTitulo++;
+        contadorSubtitulo = 0;
+
+        ls.setCellValue(r, COLS.ITEM, `${contadorTitulo}`, { order: 0 });
+        return;
+      }
+      if (esSubtitulo) {
+
+        if (contadorTitulo === 0) {
+          ls.setCellValue(r, COLS.ITEM, null);
+          return;
+        }
+
+        contadorSubtitulo++;
+
+        const numero = `${contadorTitulo}.${String(contadorSubtitulo).padStart(2, '0')}`;
+        ls.setCellValue(r, COLS.ITEM, numero, { order: 0 });
+        return;
+      }
+
+      if (esPartida) {
+        ls.setCellValue(r, COLS.ITEM, null, { order: 0 });
+      }
+    });
+  };
+  const aplicarUnidadEnBloque = (rowIdx: number, nuevaUnidad: string) => {
+    const ls = window.luckysheet;
+    const data = ls.getSheetData(0);
+
+    for (let i = rowIdx + 1; i < data.length; i++) {
+      const itemVal = ls.getCellValue(i, COLS.ITEM, { sheetIndex: 0 });
+      const itemStr = String(itemVal?.v || itemVal || "");
+
+      if (itemStr && !itemStr.includes('.')) break;
+
+      ls.setCellValue(i, COLS.UND, nuevaUnidad, { order: 0 });
+      ejecutarCalculo(i);
     }
   };
 
@@ -74,6 +138,7 @@ export default function Show() {
 
   const insertAction = (type: 'T' | 'S' | 'P') => {
     const ls = window.luckysheet;
+    const sheetIdx = 0;
     const selection = ls.getRange()[0];
     const r = selection ? selection.row[0] : 1;
     const nextItem = getNextItem(type);
@@ -82,141 +147,245 @@ export default function Show() {
 
     setTimeout(() => {
       try {
+        // Usamos { order: 0 } en cada setCellValue para que no se pierda
         if (type === 'T') {
-          ls.setCellValue(r, COLS.ITEM, nextItem);
-          ls.setCellValue(r, COLS.DES, 'NUEVO TÍTULO');
-          ls.setCellFormat(r, COLS.DES, "fc", "#ff0000");
-          ls.setCellFormat(r, COLS.DES, "bl", 1);
+          ls.setCellValue(r, COLS.ITEM, nextItem, { order: 0 });
+          ls.setCellValue(r, COLS.DES, 'NUEVO TÍTULO', { order: 0 });
+          ls.setCellFormat(r, COLS.DES, "fc", "#ff0000", { order: 0 });
+          ls.setCellFormat(r, COLS.DES, "bl", 1, { order: 0 });
         } else if (type === 'S') {
-          ls.setCellValue(r, COLS.ITEM, nextItem);
-          ls.setCellValue(r, COLS.DES, 'Nuevo Subtítulo');
-          ls.setCellFormat(r, COLS.DES, "fc", "#0000ff");
-          ls.setCellFormat(r, COLS.DES, "bl", 1);
+          ls.setCellValue(r, COLS.ITEM, nextItem, { order: 0 });
+          ls.setCellValue(r, COLS.DES, 'Nuevo Subtítulo', { order: 0 });
+          ls.setCellFormat(r, COLS.DES, "fc", "#0000ff", { order: 0 });
+          ls.setCellFormat(r, COLS.DES, "bl", 1, { order: 0 });
         } else {
-          ls.setCellValue(r, COLS.DES, 'Nueva Partida');
-          ls.setCellValue(r, COLS.UND, 'und');
+          ls.setCellValue(r, COLS.DES, 'Nueva Partida', { order: 0 });
+          ls.setCellValue(r, COLS.UND, 'und', { order: 0 });
         }
       } catch (e) {
-        console.warn("Reintentando aplicar formato...");
+        console.error("Error aplicando formato al título:", e);
       }
     }, 150);
   };
 
   const generarResumen = () => {
     const ls = window.luckysheet;
+
+    // PASO 1: El "Seguro" de actualización. Cerramos cualquier edición activa.
+    ls.exitEditMode();
+
     const allSheets = ls.getAllSheets();
+    const sheetMetrado = allSheets.find(s => s.name === 'Metrado');
+    const sheetResumen = allSheets.find(s => s.name === 'RESUMEN');
 
-    const sheetPrincipal = allSheets.find(s => s.name === 'Metrado Gas');
-    let sheetResumen = allSheets.find(s => s.name === 'Resumen');
+    if (!sheetMetrado || !sheetResumen) return;
 
-    if (!sheetPrincipal) return;
+    const dataPrincipal = ls.getSheetData(sheetMetrado.index);
 
-    if (!sheetResumen) {
-      ls.setSheetAdd({ name: 'Resumen' });
-      return;
-    }
-
-    const pIdx = sheetPrincipal.index;
-    const rOrder = sheetResumen.order;
-    // RECOLECCIÓN DE DATOS (LECTURA)
-    const dataPrincipal = ls.getSheetData();
+    // Reiniciamos siempre para que cada clic sea un resumen fresco
     const resumenData = [];
     let sumaTotalGeneral = 0;
+    let currentTitulo = null;
+    let currentSubtitulo = null;
 
+    // PASO 2: Procesamiento con lectura de valor calculado (.v)
     dataPrincipal.forEach((row, r) => {
-      if (r === 0) return;
+      if (r === 0 || !row) return;
 
-      const itemVal = ls.getCellValue(r, COLS.ITEM, { sheetIndex: pIdx });
-      const itemStr = String(itemVal?.v || itemVal || "");
+      const itemVal = ls.getCellValue(r, COLS.ITEM, { sheetIndex: sheetMetrado.index });
+      const descCell = ls.getCellValue(r, COLS.DES, { sheetIndex: sheetMetrado.index });
+      const totalCell = ls.getCellValue(r, COLS.TOTAL, { sheetIndex: sheetMetrado.index });
+      const undVal = ls.getCellValue(r, COLS.UND, { sheetIndex: sheetMetrado.index });
 
-      if (itemStr && itemStr.split('.').length <= 2) {
-        const desc = ls.getCellValue(r, COLS.DES, { sheetIndex: pIdx })?.v || "";
-        const und = ls.getCellValue(r, COLS.UND, { sheetIndex: pIdx })?.v || "";
-        const totalVal = ls.getCellValue(r, COLS.TOTAL, { sheetIndex: pIdx })?.v || 0;
-        const total = parseFloat(totalVal) || 0;
+      const itemStr = String(itemVal?.v || itemVal || "").trim();
+      const descStr = String(descCell?.v || descCell || "").trim();
+      const undStr = String(undVal?.v || undVal || "").trim();
 
-        resumenData.push([itemStr, desc, und, total]);
+      // Priorizamos .v para que si cambias un dato, el resumen jale el nuevo total
+      const total = parseFloat(totalCell?.v ?? totalCell ?? 0) || 0;
 
-        if (itemStr.includes('.')) {
-          sumaTotalGeneral += total;
-        }
+      if (!descStr || descStr === "null" || descStr === "") return;
+
+      const esTitulo = itemStr && !itemStr.includes('.');
+      const esSubtitulo = itemStr && itemStr.includes('.');
+      const esPartida = !itemStr && undStr !== "";
+
+      if (esTitulo) {
+        currentTitulo = { item: itemStr, desc: descStr, total: 0, color: '#ff0000' };
+        resumenData.push(currentTitulo);
+        currentSubtitulo = null;
+      }
+      else if (esSubtitulo) {
+        currentSubtitulo = { item: itemStr, desc: descStr, total: 0, color: '#0000ff' };
+        resumenData.push(currentSubtitulo);
+      }
+      else if (esPartida) {
+        if (currentSubtitulo) currentSubtitulo.total += total;
+        if (currentTitulo) currentTitulo.total += total;
+        sumaTotalGeneral += total;
       }
     });
 
+    // PASO 3: Renderizado con limpieza previa
     ls.setSheetActive(sheetResumen.index);
-    // ESCRITURA CON PROTECCIÓN DE ÍNDICE (order: rIdx)
+
     setTimeout(() => {
-      // Limpieza manual de 4 columnas
-      for (let i = 0; i <= 100; i++) {
-        for (let j = 0; j <= 3; j++) {
-          ls.setCellValue(i, j, null, { order: rOrder });
-        }
+      const rIdx = sheetResumen.index;
+
+      // Limpiamos el área para que no se "congelen" datos viejos
+      for (let i = 0; i < 100; i++) {
+        for (let j = 0; j < 5; j++) ls.setCellValue(i, j, null, { sheetIndex: rIdx });
       }
 
-      // --- Encabezados del Resumen ---
-const headers = ["ITEM", "DESCRIPCIÓN", "UND", "TOTAL"];
-headers.forEach((h, i) => {
-    ls.setCellValue(0, i, h, rOrder);      // escribir valor directamente
-    ls.setCellFormat(0, i, "bl", 1, rOrder); // aplicar negrita
-});
+      const headers = ["ITEM", "DESCRIPCIÓN", "TOTAL"];
+      headers.forEach((h, i) => {
+        const col = (i === 2) ? 3 : i;
+        ls.setCellValue(0, col, h, { sheetIndex: rIdx });
+        ls.setCellFormat(0, col, "bl", 1, { sheetIndex: rIdx });
+      });
 
-// --- Datos del Resumen ---
-resumenData.forEach((rowData, i) => {
-    const rowIdx = i + 1;
-    ls.setCellValue(rowIdx, 0, rowData[0], rOrder);
-    ls.setCellValue(rowIdx, 1, rowData[1], rOrder);
-    ls.setCellValue(rowIdx, 2, rowData[2], rOrder);
-    ls.setCellValue(rowIdx, 3, rowData[3], rOrder);
+      resumenData.forEach((data, i) => {
+        const row = i + 1;
+        ls.setCellValue(row, 0, data.item, { sheetIndex: rIdx });
+        ls.setCellValue(row, 1, data.desc, { sheetIndex: rIdx });
+        ls.setCellValue(row, 3, data.total.toFixed(2), { sheetIndex: rIdx });
 
-    // si es Título o Subtítulo (no tiene punto) lo ponemos en negrita
-    if (!String(rowData[0]).includes('.')) {
-        [0, 1, 2, 3].forEach(c => ls.setCellFormat(rowIdx, c, "bl", 1, rOrder));
-    }
-});
+        [0, 1, 3].forEach(c => {
+          ls.setCellFormat(row, c, "bl", 1, { sheetIndex: rIdx });
+          ls.setCellFormat(row, c, "fc", data.color, { sheetIndex: rIdx });
+        });
+      });
 
-// --- Total General ---
-const filaFinal = resumenData.length + 2;
-ls.setCellValue(filaFinal, 1, "TOTAL GENERAL", rOrder);
-ls.setCellValue(filaFinal, 3, sumaTotalGeneral.toFixed(2), rOrder);
-ls.setCellFormat(filaFinal, 1, "bl", 1, rOrder);
-ls.setCellFormat(filaFinal, 3, "bl", 1, rOrder);
+      const fFinal = resumenData.length + 2;
+      ls.setCellValue(fFinal, 1, "TOTAL GENERAL", { sheetIndex: rIdx });
+      ls.setCellValue(fFinal, 3, sumaTotalGeneral.toFixed(2), { sheetIndex: rIdx });
+      [1, 3].forEach(c => ls.setCellFormat(fFinal, c, "bl", 1, { sheetIndex: rIdx }));
 
-// --- Ajuste de ancho de columna ---
-ls.setColumnWidth({ "1": 400 }, { sheetIndex: sheetResumen.index });
-    }, 200);
-  }
+      ls.refresh();
+    }, 150); // Bajamos a 150ms para que sea más rápido
+  };
+  // --- 2. DISEÑO DEL COMPONENTE ---
   return (
     <AppLayout breadcrumbs={[{ title: 'Metrados', href: '#' }, { title: spreadsheet.name, href: '#' }]}>
       <div className="flex h-[calc(100vh-64px)] flex-col bg-white">
+        {/* --- TUS BOTONES ORIGINALES --- */}
         <div className="p-2 flex gap-2 justify-end border-b shadow-sm">
-          <button onClick={() => insertAction('T')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700">+ Título</button>
-          <button onClick={() => insertAction('S')} className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700">+ Subtítulo</button>
-          <button onClick={() => insertAction('P')} className="bg-red-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-red-700">+ Partida</button>
-          <button onClick={generarResumen} className="bg-purple-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-purple-700">📊 Ver Resumen</button>
+          <button
+            onClick={() => insertAction('T')}
+            className="bg-blue-600 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            + Título
+          </button>
+          <button
+            onClick={() => insertAction('S')}
+            className="bg-green-600 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
+          >
+            + Subtítulo
+          </button>
+          <button
+            onClick={() => insertAction('P')}
+            className="bg-red-600 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-700 transition-colors"
+          >
+            + Partida
+          </button>
+          <button
+            onClick={generarResumen}
+            className="bg-purple-600 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+          >
+            📊 Ver Resumen
+          </button>
         </div>
 
+        {/* --- CONTENEDOR DE LUCKYSHEET --- */}
         <div className="flex-1 overflow-hidden">
           <Luckysheet
             data={[
               {
-                name: 'Metrado Gas',
+                name: 'Metrado',
                 celldata: initialCellData,
-                column: 15, row: 100, status: 1
+                column: 15,
+                row: 100,
+                status: 1,
+                index: 0
               },
-              { name: 'Resumen', column: 5, row: 100 }
+              {
+                name: 'RESUMEN',
+                column: 5,
+                row: 100,
+                index: 1
+              }
             ]}
             options={{
               showinfobar: false,
+              showsheetbar: true,
+              lang: 'es',
               hook: {
-                cellUpdated: (r, c) => {
-                  // Activa el cálculo automático al modificar dimensiones o unidad
-                  if (c >= COLS.UND && c <= COLS.NVEC) {
+                cellUpdated: (r, c, oldValue, newValue) => {
+                  if (c === COLS.DES) {
+                    const textoActual = newValue?.v || "";
+
+                    // Si borraste el texto y diste Enter (o dejaste la celda vacía)
+                    if (textoActual.trim() === "") {
+
+                      window.luckysheet.setCellValue(r, COLS.ITEM, null);
+                      window.luckysheet.setCellValue(r, COLS.TOTAL, null);
+                    }
+
+                    actualizarNumeracionJerarquica();
+                  }
+                  // Cálculos normales de las partidas
+                  if (c >= COLS.ELEM && c <= COLS.NVEC) {
                     ejecutarCalculo(r);
+                  }
+                  // Cambio de unidades
+                  if (c === COLS.UND) {
+                    const itemVal = window.luckysheet.getCellValue(r, COLS.ITEM);
+                    const itemStr = String(itemVal?.v || itemVal || "");
+                    const nuevaUnidad = newValue?.v || newValue;
+                    if (itemStr && !itemStr.includes('.')) {
+                      aplicarUnidadEnBloque(r, nuevaUnidad);
+                    } else {
+                      ejecutarCalculo(r);
+                    }
                   }
                 }
               }
             }}
           />
+        </div>
+
+        {/* --- TUS BOTONES DE PIE DE PÁGINA --- */}
+        <div className="p-2 border-t bg-gray-50 flex items-center gap-2">
+          <button className="px-4 py-1 border rounded bg-white hover:bg-gray-100 text-sm">
+            Añadir
+          </button>
+          <input type="text" className="w-16 border rounded px-2 py-1 text-sm" placeholder="100" />
+          <span className="text-xs text-gray-500">(más filas al final)</span>
+
+          {/* NUEVO BOTÓN SEGURO PARA VOLVER A METRADO */}
+          <button
+            onClick={() => {
+              const ls = window.luckysheet;
+              // 1. Obligamos a cerrar cualquier edición para que no "arrastre" errores visuales
+              ls.exitEditMode();
+              // 2. Volvemos a la hoja principal
+              ls.setSheetActive(0);
+              // 3. Pequeña espera para que Luckysheet redibuje la tabla completa
+              setTimeout(() => {
+                ls.refresh();
+              }, 150);
+            }}
+            className="ml-4 px-4 py-1 border rounded bg-blue-600 text-white hover:bg-blue-700 text-sm font-bold shadow-sm"
+          >
+            ⬅ Volver a Metrado
+          </button>
+
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="ml-auto px-4 py-1 border rounded bg-white hover:bg-gray-100 text-sm"
+          >
+            Volver arriba
+          </button>
         </div>
       </div>
     </AppLayout>
