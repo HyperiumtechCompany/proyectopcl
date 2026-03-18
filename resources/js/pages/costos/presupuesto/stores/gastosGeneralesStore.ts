@@ -26,12 +26,39 @@ interface GastosGeneralesState {
     calculateTotal: () => number;
 }
 
+const toNumber = (value: unknown, fallback = 0): number => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+};
+
+const toText = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    return String(value);
+};
+
+const normalizeRow = (row: GastoGeneralRow): GastoGeneralRow => {
+    const cantidad = toNumber(row.cantidad);
+    const precioUnitario = toNumber(row.precio_unitario);
+    const parcialRaw = toNumber(row.parcial, NaN);
+    const parcial = Number.isFinite(parcialRaw) ? parcialRaw : cantidad * precioUnitario;
+
+    return {
+        ...row,
+        partida: toText(row.partida),
+        descripcion: toText(row.descripcion),
+        unidad: toText(row.unidad),
+        cantidad,
+        precio_unitario: precioUnitario,
+        parcial,
+    };
+};
+
 export const useGastosGeneralesStore = create<GastosGeneralesState>((set, get) => ({
     rows: [],
     loading: false,
     isDirty: false,
 
-    setRows: (rows) => set({ rows, isDirty: false }),
+    setRows: (rows) => set({ rows: rows.map(normalizeRow), isDirty: false }),
     setLoading: (loading) => set({ loading }),
     setDirty: (isDirty) => set({ isDirty }),
 

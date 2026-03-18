@@ -92,6 +92,7 @@ export const GGVARIABLES_TEMPLATES: Record<string, GGTemplate> = {
             // 01.02.00 Seguros: Contratación
             { tipo_fila: 'seccion', item_codigo: '01.02.00', descripcion: 'Seguros: Contratación' },
             { tipo_fila: 'detalle', item_codigo: '', descripcion: '- Póliza de Seguros C.A.R. Contra Todo Riesgo (vigencia durante ejecución de la obra)', unidad: 'glb', cantidad: 1, costo_unitario: 0, tipo_calculo: 'poliza_car' },
+            { tipo_fila: 'detalle', item_codigo: '', descripcion: '- Ensayo de compresion de testigos', unidad: 'und', cantidad: 25, costo_unitario: 44, tipo_calculo: 'manual' },
             { tipo_fila: 'detalle', item_codigo: '', descripcion: '- Póliza SCTR del Personal de Administración y Control de Obra - Gastos Generales (vigencia durante ejec. de obra)', unidad: 'glb', cantidad: 1, costo_unitario: 0, tipo_calculo: 'poliza_sctr' },
             { tipo_fila: 'detalle', item_codigo: '', descripcion: '- PÓLIZA DE SEGUROS ESSALUD + VIDA', unidad: 'glb', cantidad: 1, costo_unitario: 0, tipo_calculo: 'poliza_essalud_vida' },
 
@@ -102,3 +103,4 @@ export const GGVARIABLES_TEMPLATES: Record<string, GGTemplate> = {
         ]
     }
 };
+

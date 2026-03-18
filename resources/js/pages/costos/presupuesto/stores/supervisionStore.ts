@@ -57,6 +57,11 @@ interface SupervisionState {
     setGastosGeneralesFromDetalle: (total: number) => void;
 }
 
+const toNumber = (value: unknown): number => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+};
+
 // Funciones de mapeo de datos
 function mapDbRowsToStoreRows(dbRows: SupervisionDbRow[]): SupervisionRow[] {
     // Crear un mapa para búsquedas rápidas por ID
@@ -69,11 +74,11 @@ function mapDbRowsToStoreRows(dbRows: SupervisionDbRow[]): SupervisionRow[] {
             item: row.item_codigo || '',
             descripcion: row.concepto || '',
             unidad: row.unidad || '',
-            cantidad: row.cantidad,
-            meses: row.meses,
-            precio: row.importe,
-            subtotal: row.subtotal,
-            total: row.total_seccion || row.subtotal,
+            cantidad: toNumber(row.cantidad),
+            meses: toNumber(row.meses),
+            precio: toNumber(row.importe),
+            subtotal: toNumber(row.subtotal),
+            total: toNumber(row.total_seccion ?? row.subtotal),
             tipo: mapTipoFila(row.tipo_fila),
             item_codigo: row.item_codigo,
             concepto: row.concepto,
@@ -587,12 +592,12 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
 
                 const calculateSectionTotal = (row: SupervisionRow): number => {
                     if (!row.hijos || row.hijos.length === 0) {
-                        return row.total || 0;
+                        return toNumber(row.total);
                     }
                     let sum = 0;
                     for (const hijo of row.hijos) {
                         hijo.total = calculateSectionTotal(hijo);
-                        sum += hijo.total;
+                        sum += toNumber(hijo.total);
                     }
                     row.total = Number(sum.toFixed(2));
                     return row.total;
@@ -629,17 +634,23 @@ export const useSupervisionStore = create<SupervisionState>((set, get) => ({
                 const rows = state.rows;
                 // Section IV index = 3
                 if (rows[3]) {
-                    rows[3].total = Number(total.toFixed(2));
+                    rows[3].total = Number(toNumber(total).toFixed(2));
                 }
                 // Recalculate downstream
                 // Section V: UTILIDAD (5% CD)
-                if (rows[4]) rows[4].total = Number((rows[2].total * 0.05).toFixed(2));
+                if (rows[4]) rows[4].total = Number((toNumber(rows[2]?.total) * 0.05).toFixed(2));
                 // Section VI: TOTAL = III + IV + V
-                if (rows[5]) rows[5].total = Number((rows[2].total + rows[3].total + rows[4].total).toFixed(2));
+                if (rows[5]) {
+                    const totalVI = toNumber(rows[2]?.total) + toNumber(rows[3]?.total) + toNumber(rows[4]?.total);
+                    rows[5].total = Number(totalVI.toFixed(2));
+                }
                 // Section VII: IGV (18%)
-                if (rows[6]) rows[6].total = Number((rows[5].total * 0.18).toFixed(2));
+                if (rows[6]) rows[6].total = Number((toNumber(rows[5]?.total) * 0.18).toFixed(2));
                 // Section VIII: TOTAL = VI + VII
-                if (rows[7]) rows[7].total = Number((rows[5].total + rows[6].total).toFixed(2));
+                if (rows[7]) {
+                    const totalVIII = toNumber(rows[5]?.total) + toNumber(rows[6]?.total);
+                    rows[7].total = Number(totalVIII.toFixed(2));
+                }
                 state.isDirty = true;
             })
         );

@@ -35,7 +35,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
             <td className="py-1 px-4 pl-10">
                 <input
                     type="text"
-                    value={row.concepto}
+                    value={row.concepto ?? ''}
                     onChange={(e) => updateCell(sectionIdx, rowIdx, 'concepto', e.target.value)}
                     className="w-full bg-transparent border-none text-[11px] text-slate-200 focus:ring-1 focus:ring-sky-500 rounded px-1 py-0.5"
                     placeholder="Concepto..."
@@ -44,7 +44,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
             <td className="py-1 px-2 text-center">
                 <input
                     type="text"
-                    value={row.unidad}
+                    value={row.unidad ?? ''}
                     onChange={(e) => updateCell(sectionIdx, rowIdx, 'unidad', e.target.value)}
                     className="w-14 bg-transparent border-none text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1"
                     placeholder="und"
@@ -53,7 +53,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
             <td className="py-1 px-2 text-center">
                 <input
                     type="number"
-                    value={row.cantidad}
+                    value={row.cantidad ?? ''}
                     onChange={(e) => handleChange('cantidad', e.target.value)}
                     className="w-16 bg-transparent border border-slate-700/50 text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
@@ -61,7 +61,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
             <td className="py-1 px-2 text-center">
                 <input
                     type="number"
-                    value={row.meses}
+                    value={row.meses ?? ''}
                     onChange={(e) => handleChange('meses', e.target.value)}
                     className="w-16 bg-transparent border border-slate-700/50 text-[10px] text-center text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
@@ -69,7 +69,7 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
             <td className="py-1 px-3 text-right">
                 <input
                     type="number"
-                    value={row.importe}
+                    value={row.importe ?? ''}
                     onChange={(e) => handleChange('importe', e.target.value)}
                     className="w-28 bg-transparent border border-slate-700/50 text-[10px] text-right text-slate-300 focus:ring-1 focus:ring-sky-500 rounded px-1 focus:bg-slate-800"
                 />
@@ -94,17 +94,19 @@ const DetailRow: React.FC<DetailRowProps> = ({ row, sectionIdx, rowIdx, onRemove
 interface SectionProps {
     section: SupervisionGGDetalleRow;
     sectionIdx: number;
+    onRemove: () => void;
 }
 
-const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx }) => {
+const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx, onRemove }) => {
     const [expanded, setExpanded] = React.useState(true);
     const addRow = useSupervisionGGDetalleStore((s) => s.addRow);
     const removeRow = useSupervisionGGDetalleStore((s) => s.removeRow);
+    const updateCell = useSupervisionGGDetalleStore((s) => s.updateCell);
 
     return (
         <>
             {/* Section Header row */}
-            <tr className="bg-sky-900/30 border-b border-sky-500/20">
+            <tr className="bg-sky-900/30 border-b border-sky-500/20 group/sec">
                 <td className="py-2 px-4">
                     <div className="flex items-center gap-2">
                         <button
@@ -115,9 +117,12 @@ const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx }) => {
                                 ? <ChevronDown size={13} />
                                 : <ChevronRight size={13} />}
                         </button>
-                        <span className="text-[11px] font-bold text-sky-300 uppercase tracking-wide">
-                            {section.concepto}
-                        </span>
+                        <input
+                            type="text"
+                            value={section.concepto ?? ''}
+                            onChange={(e) => updateCell(sectionIdx, -1, 'concepto', e.target.value)}
+                            className="flex-1 bg-transparent border-none text-[11px] font-bold text-sky-300 uppercase tracking-wide focus:ring-1 focus:ring-sky-500 rounded px-1"
+                        />
                     </div>
                 </td>
                 <td colSpan={4} />
@@ -126,7 +131,15 @@ const SectionComponent: React.FC<SectionProps> = ({ section, sectionIdx }) => {
                         {fmt(section.total_seccion)}
                     </span>
                 </td>
-                <td />
+                <td className="py-2 px-3 text-center">
+                    <button
+                        onClick={onRemove}
+                        className="opacity-0 group-hover/sec:opacity-100 p-1 rounded hover:bg-red-500/20 text-red-400 transition-all"
+                        title="Eliminar Sección"
+                    >
+                        <Trash2 size={13} />
+                    </button>
+                </td>
             </tr>
 
             {/* Detail rows */}
@@ -183,6 +196,8 @@ export function SupervisionGGDetalleModal({
     const setProjectId    = useSupervisionGGDetalleStore((s) => s.setProjectId);
     const loadFromDatabase = useSupervisionGGDetalleStore((s) => s.loadFromDatabase);
     const saveToDatabase   = useSupervisionGGDetalleStore((s) => s.saveToDatabase);
+    const addSection       = useSupervisionGGDetalleStore((s) => s.addSection);
+    const removeSection    = useSupervisionGGDetalleStore((s) => s.removeSection);
 
     // ── Load on open ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -310,8 +325,22 @@ export function SupervisionGGDetalleModal({
                                         key={sectionIdx}
                                         section={section}
                                         sectionIdx={sectionIdx}
+                                        onRemove={() => removeSection(sectionIdx)}
                                     />
                                 ))}
+
+                                {/* Add Section Row */}
+                                <tr>
+                                    <td colSpan={7} className="py-4 px-6 bg-slate-900/40">
+                                        <button
+                                            onClick={addSection}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-all text-xs font-bold uppercase tracking-wider"
+                                        >
+                                            <Plus size={14} />
+                                            Agregar Nueva Sección (A, B, C...)
+                                        </button>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     )}

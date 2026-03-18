@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { SupervisionPanel } from './components/SupervisionPanel';
+import { ConsolidadoPanel } from './components/ConsolidadoPanel';
 
 interface PageProps {
     project: {
@@ -465,43 +466,7 @@ export default function Index() {
                         ) : subsection === 'supervision' ? (
                             <SupervisionPanel projectId={project.id} />
                         ) : subsection === 'consolidado' ? (
-                            <div className="flex h-full flex-col overflow-hidden bg-slate-900">
-                                <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
-                                    <div>
-                                        <p className="mb-2 text-lg font-semibold text-slate-200">
-                                            Módulo de {subsectionLabel}
-                                        </p>
-                                        <p className="text-sm">
-                                            Esta sección utiliza la tabla
-                                            unificada para gestionar el
-                                            presupuesto del proyecto.
-                                        </p>
-                                        <div className="mt-8 rounded-lg border border-slate-700 bg-slate-800 p-8">
-                                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-sky-500">
-                                                <svg
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    fill="none"
-                                                    viewBox="0 0 24 24"
-                                                    strokeWidth={1.5}
-                                                    stroke="currentColor"
-                                                    className="h-8 w-8"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        d="M11.42 15.17L17.25 21A2.67 2.67 0 1113.5 17.25l-5.83-5.83m5.83 5.83l5.83 5.83M13.5 17.25l-5.83-5.83M8.58 11.42l-5.83 5.83A2.67 2.67 0 116.5 13.5l5.83-5.83m-5.83 5.83L12.33 18m-5.83-5.83l-5.83-5.83"
-                                                    />
-                                                </svg>
-                                            </div>
-                                            <p className="text-sm text-slate-500 italic">
-                                                Integración con base de datos
-                                                unificada [{subsection}]
-                                                habilitada.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <ConsolidadoPanel projectId={project.id} />
                         ) : (
                             <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>
