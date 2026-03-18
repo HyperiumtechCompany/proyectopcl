@@ -1657,23 +1657,698 @@ export async function exportAguaToExcel(dataSheet: AguaData, fileName: string = 
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    // =========================================================================
-    // HOJA 4: RED ALIMENTACIÓN
-    // =========================================================================
-    const ws4 = workbook.addWorksheet('4. Red Alimentación');
+// HOJA 4: RED DE ALIMENTACIÓN 
+{ const ws4 = workbook.addWorksheet('4. Red Alimentación');
+    const TS = 13; 
+
     ws4.columns = [
-        { width: 5 },
-        { width: 20 }, // Tramo
-        { width: 15 }, // Longitud (m)
-        { width: 15 }, // Diámetro (mm)
-        { width: 15 }, // Caudal (lps)
-        { width: 15 }, // Velocidad (m/s)
-        { width: 15 }, // Pérdida (m)
+        { width: 3 },  
+        { width: 18 }, 
+        { width: 16 }, 
+        { width: 16 }, 
+        { width: 16 },
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 14 }, 
+        { width: 3 },  
     ];
-    paintTitle(ws4, 7, 'MEMORIA DE CÁLCULO: RED DE ALIMENTACIÓN', COLORS.BLUE);
-    paintHeaders(ws4, ['Ítem', 'Tramo', 'Longitud (m)', 'Diámetro (mm)', 'Caudal (lps)', 'Velocidad (m/s)', 'Pérdida (m)'], 3, COLORS.LIGHT_BLUE);
-    // Llenado similar...
-    // Fin Hoja 4
+
+    // ---------- PALETA DE COLORES ----------
+    const CS_BLANC = 'FFFFFFFF';
+    const CS_SEC = 'FFE2E3E3';          // Gris para encabezados de sección
+    const CS_F4F8 = 'EFF6FF';           // Azul muy suave (bg cards)
+    const CS_BLUE = 'FF2563EB';         // Azul principal (texto)
+    const CS_BLUE_DARK = 'FF1E40AF';    // Azul oscuro (bordes)
+    const CS_NEGRO = 'FF1F2937';        // Texto principal
+    const CS_AMARILLO = 'FFFFF9C4';     // Amarillo para inputs editables 
+    const CS_BORD_AMARILLO = 'FFFCD34D';// Borde dorado
+    const CS_RED_BG = 'FFFEE2E2';       // Rojo suave
+    const CS_RED_TXT = 'FFDC2626';      // Rojo texto
+    const CS_GREEN_BG = 'FFECFDF5';     // Verde suave
+    const CS_GREEN_TXT = 'FF059669';    // Verde texto
+    const CS_YELLOW_HEADER = 'FFFFC000';// Amarillo exacto para encabezados de tabla
+
+    // ---------- ESTILOS DE BORDE ----------
+    const c2BT = { style: 'thin' as ExcelJS.BorderStyle, color: { argb: 'FFD1D5DB' } };
+    const c2BM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: CS_BLUE_DARK } };
+    const c2BBL = { style: 'thick' as ExcelJS.BorderStyle, color: { argb: 'FF000000' } };
+    const c2BGold = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FFD97706' } };
+
+    // ---------- FUNCIONES AUXILIARES ----------
+    function c2Fill(r: number, bg: string, h: number = 20): void {
+        const row = ws4.getRow(r);
+        row.height = h;
+        
+        for (let c = 1; c <= TS; c++) {
+            const cell = ws4.getCell(r, c);
+            cell.fill = { 
+                type: 'pattern', 
+                pattern: 'solid', 
+                fgColor: { argb: c === 1 ? CS_BLANC : bg } 
+            };
+            
+            cell.border = { 
+                top: { style: undefined }, 
+                left: { style: undefined }, 
+                bottom: { style: undefined }, 
+                right: { style: undefined } 
+            };
+        }
+    }
+
+    function c2Sep(r: number, h: number = 6): void {
+        const row = ws4.getRow(r);
+        row.height = h;
+        
+        for (let c = 1; c <= TS; c++) {
+            const cell = ws4.getCell(r, c);
+            cell.fill = { 
+                type: 'pattern', 
+                pattern: 'solid', 
+                fgColor: { argb: CS_BLANC } 
+            };
+            
+            cell.border = { 
+                top: { style: undefined }, 
+                left: { style: undefined }, 
+                bottom: { style: undefined }, 
+                right: { style: undefined } 
+            };
+        }
+    }
+
+    function c2Wide(r: number, text: string, opts: {
+        bg?: string; h?: number; bold?: boolean; size?: number;
+        color?: string; halign?: ExcelJS.Alignment['horizontal'];
+        borderStyle?: 'all' | 'bottom' | 'topBottom';
+    } = {}) {
+        const bg = opts.bg ?? CS_BLANC;
+        c2Fill(r, bg, opts.h ?? 24);
+        ws4.mergeCells(r, 2, r, TS - 1); 
+        const cell = ws4.getCell(r, 2);
+        cell.value = text;
+        cell.font = { 
+            bold: opts.bold ?? false, 
+            size: opts.size ?? 12, 
+            name: 'Arial', 
+            color: { argb: opts.color ?? CS_NEGRO } 
+        };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.alignment = { horizontal: opts.halign ?? 'left', vertical: 'middle', indent: 1 };
+        
+        if (opts.borderStyle === 'all') {
+            cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+        } else if (opts.borderStyle === 'bottom') {
+            cell.border = { bottom: c2BBL };
+        } else if (opts.borderStyle === 'topBottom') {
+            cell.border = { top: c2BT, bottom: c2BT };
+        }
+    }
+
+    function setInputGroup(r: number, colLabel: number, label: string, colVal: number, val: any, fmt: string, isHighlight: boolean = false) {
+        const lCell = ws4.getCell(r, colLabel);
+        lCell.value = label;
+        lCell.font = { size: 11, name: 'Arial', bold: true, color: {argb: CS_NEGRO} };
+        lCell.alignment = { horizontal: 'right', vertical: 'middle' };
+        lCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_BLANC } };
+
+        const vCell = ws4.getCell(r, colVal);
+        vCell.value = val;
+        vCell.numFmt = fmt;
+        vCell.font = { size: 11, name: 'Courier New', bold: true, color: {argb: 'FF000000'} };
+        vCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        if (isHighlight) {
+            vCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_AMARILLO } };
+            vCell.border = { top: c2BGold, left: c2BGold, bottom: c2BGold, right: c2BGold };
+        } else {
+            vCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+            vCell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+        }
+    }
+
+    // ---------- DATOS Y CONFIGURACIÓN ----------
+    const config = {
+        diametros: {
+            '1/2 pulg': { mm: 15, area: 0.50, pulg: '1/2' },
+            '3/4 pulg': { mm: 20, area: 0.74, pulg: '3/4' },
+            '1 pulg': { mm: 25, area: 1, pulg: '1' },
+            '1 1/4 pulg': { mm: 32, area: 1.25, pulg: '1 1/4' },
+            '1 1/2 pulg': { mm: 40, area: 1.5, pulg: '1 1/2' },
+            '2 pulg': { mm: 50, area: 2, pulg: '2' },
+            '2 1/2 pulg': { mm: 50, area: 2.5, pulg: '2' },
+            '3 pulg': { mm: 50, area: 3, pulg: '2' },
+            '4 pulg': { mm: 50, area: 4, pulg: '2' },
+            '6 pulg': { mm: 50, area: 6, pulg: '2' },
+        },
+        accesoriosDisponibles: [
+            { label: 'Codo de 45°', key: 'codo45' },
+            { label: 'Codo de 90°', key: 'codo90' },
+            { label: 'Tee', key: 'tee' },
+            { label: 'Válvula Compuerta', key: 'valCompuerta' },
+            { label: 'Válvula Check', key: 'valCheck' },
+            { label: 'Canastilla', key: 'canastilla' },
+            { label: 'Reducción 1', key: 'reduccion1' },
+            { label: 'Reducción 2', key: 'reduccion2' }
+        ]
+    };
+
+    const datosReales: Record<number, [number, number][]> = {
+        15: [[0.4, 0.1], [0.5, 0.15], [0.6, 0.2], [0.7, 0.27], [0.8, 0.35], [0.9, 0.44], [1, 0.5], [1.1, 0.58], [1.2, 0.7], [1.3, 0.82], [1.4, 0.95], [1.5, 1.1], [1.7, 1.4], [2, 2], [2.5, 3], [3, 4.5], [3.5, 6.2], [4, 8]],
+        20: [[0.6, 0.1], [0.7, 0.12], [0.8, 0.15], [0.9, 0.19], [1, 0.25], [1.2, 0.35], [1.4, 0.42], [1.5, 0.5], [1.7, 0.65], [2, 0.8], [2.5, 1.25], [3, 1.8], [3.5, 2.4], [4, 3.2], [4.5, 4.1], [5, 5], [6, 7.2], [7, 9.8], [8, 12.5], [9, 15.8], [10, 19.5]],
+        25: [[0.8, 0.1], [0.9, 0.12], [1, 0.15], [1.2, 0.22], [1.4, 0.26], [1.5, 0.3], [1.7, 0.38], [2, 0.5], [2.5, 0.78], [3, 1.1], [3.5, 1.5], [4, 2], [4.5, 2.55], [5, 3.1], [5.5, 3.75], [6, 4.5], [7, 6.2], [8, 8], [9, 10.2], [10, 12.5], [12, 18], [15, 28], [18, 40], [20, 50]],
+        32: [[1, 0.1], [1.2, 0.14], [1.4, 0.17], [1.5, 0.2], [1.7, 0.25], [2, 0.3], [2.2, 0.38], [2.5, 0.48], [3, 0.65], [3.5, 0.85], [4, 1.15], [4.5, 1.45], [5, 1.8], [5.5, 2.2], [6, 2.6], [7, 3.6], [8, 4.6], [9, 5.8], [10, 7.2], [12, 10.5], [15, 16], [18, 22], [20, 28], [25, 44], [30, 63], [35, 86], [40, 112]],
+        40: [[1.5, 0.08], [2, 0.1], [2.2, 0.12], [2.5, 0.15], [3, 0.2], [3.5, 0.27], [4, 0.35], [4.5, 0.44], [5, 0.55], [5.5, 0.67], [6, 0.8], [7, 1.1], [8, 1.4], [9, 1.75], [10, 2.2], [12, 3.2], [15, 5], [18, 7.2], [20, 8.9], [25, 14], [30, 20], [35, 27], [40, 35]],
+        50: [[2, 0.06], [2.5, 0.08], [3, 0.1], [3.5, 0.12], [4, 0.15], [4.5, 0.19], [5, 0.25], [5.5, 0.29], [6, 0.35], [7, 0.48], [8, 0.6], [9, 0.75], [10, 0.95], [12, 1.35], [15, 2.1], [18, 3], [20, 3.8], [25, 6], [30, 8.5], [35, 11.5], [40, 15], [45, 19], [50, 23]]
+    };
+
+    const asignarColor = (d: number): string => {
+        const colores: Record<number, string> = { 15: '#e74c3c', 20: '#F44336', 25: '#9C27B0', 32: '#FF9800', 40: '#2196F3', 50: '#4CAF50' };
+        return colores[d] || '#333';
+    };
+
+    const interpolarLog = (x: number, pts: [number, number][]): number | null => {
+        if (!pts || !pts.length || x <= 0) return null;
+        if (x <= pts[0][0]) return pts[0][1];
+        if (x >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+        for (let i = 0; i < pts.length - 1; i++) {
+            const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+            if (x >= x1 && x <= x2) {
+                return Math.exp(Math.log(y1) + (Math.log(y2) - Math.log(y1)) * (Math.log(x) - Math.log(x1)) / (Math.log(x2) - Math.log(x1)));
+            }
+        }
+        return null;
+    };
+
+    const generarCurva = (d: number): [number, number][] => {
+        const pts = datosReales[d];
+        const curva: [number, number][] = [];
+        if (!pts) return curva;
+        for (let i = 0; i <= 200; i++) {
+            const x = 0.4 * Math.pow(50 / 0.4, i / 200);
+            const y = interpolarLog(x, pts);
+            if (y !== null) curva.push([x, y]);
+        }
+        return curva;
+    };
+
+    const dCurvas: Record<number, [number, number][]> = {};
+    Object.keys(datosReales).forEach(d => {
+        dCurvas[parseInt(d)] = generarCurva(parseInt(d));
+    });
+
+    // OBTENCIÓN DE DATOS DESDE dataSheet 
+    const redD = dataSheet.redAlimentacion || {};
+    const volCisterna = parseFloat(redD.volCisterna) || 2000;
+    const volRequerido = parseFloat(redD.volRequerido) || 0;
+    const consumoDiario = parseFloat(redD.consumoDiario) || 0;
+    const tiempoLlenado = parseFloat(redD.tiempoLlenado) || 10;
+    const nivelTerreno = parseFloat(redD.nivelTerreno) || 0;
+    const presionConn = parseFloat(redD.presionConn) || 10.00;
+    const presionSalida = parseFloat(redD.presionSalida) || 2.00;
+    const nivIngCist = parseFloat(redD.nivIngCist) || 0;
+    const diamConn = redD.diamConn || '1 pulg';
+    const micro = redD.micro || 'SI';
+    const lTuberia = parseFloat(redD.lTuberia) || 5.40;
+    const hfMed = parseFloat(redD.hfMed) || 1.10;
+    const accs = redD.accs || [
+        { tipo: 'codo45', cantidad: 0, leq: 0.477 }, { tipo: 'codo90', cantidad: 3, leq: 1.023 },
+        { tipo: 'tee', cantidad: 1, leq: 2.045 }, { tipo: 'valCompuerta', cantidad: 2, leq: 0.216 },
+        { tipo: 'valCheck', cantidad: 0, leq: 2.114 }, { tipo: 'reduccion2', cantidad: 1, leq: 1.045 }
+    ];
+    const diaSel = redD.diaSel || '1 pulg';
+    const diaLTub = parseFloat(redD.diaLTub) || 15.88;
+    const diaAccs = redD.diaAccs || [
+        { tipo: 'codo45', cantidad: 0, leq: 0.477 }, { tipo: 'codo90', cantidad: 7, leq: 1.023 },
+        { tipo: 'tee', cantidad: 2, leq: 2.045 }, { tipo: 'valCompuerta', cantidad: 2, leq: 0.216 },
+        { tipo: 'valCheck', cantidad: 0, leq: 2.114 }, { tipo: 'reduccion2', cantidad: 0, leq: 1.045 }
+    ];
+
+    // FUNCIONES DE CÁLCULO 
+    const calcV = (q: number, diam: string): number => {
+        const area = config.diametros[diam as keyof typeof config.diametros]?.area;
+        if (!area || q <= 0) return 0;
+        const diamM = area * 2.54 / 100;
+        const seccion = Math.PI * Math.pow(diamM, 2) / 4;
+        return parseFloat(((q / 1000) / seccion).toFixed(3));
+    };
+
+    const calcS = (q: number, diam: string): number => {
+        const area = config.diametros[diam as keyof typeof config.diametros]?.area;
+        if (!area || q <= 0) return 0;
+        const diamM = area * 2.54 / 100;
+        const base = (q / 1000) / 0.2785 / 140 / Math.pow(diamM, 2.63);
+        return Math.pow(base, 1.85);
+    };
+
+    // --- CÁLCULOS PRINCIPALES ---
+    const qLlenado = tiempoLlenado > 0 ? volCisterna / (tiempoLlenado * 3600) : 0;
+    const qLlenadoM3h = parseFloat((qLlenado * 3.6).toFixed(2));
+    const nivTubConn = parseFloat((nivelTerreno - 0.70).toFixed(2));
+    const altEstatica = parseFloat((nivIngCist - nivTubConn).toFixed(2));
+    const cargaDispTot = parseFloat((presionConn - presionSalida - altEstatica).toFixed(2));
+
+    const vel = calcV(qLlenado, diamConn);
+    const leqT = Math.round(accs.reduce((s: number, a: any) => s + a.cantidad * a.leq, 0) * 1000) / 1000;
+    const lTot = parseFloat((leqT + lTuberia).toFixed(2));
+    const sH = calcS(qLlenado, diamConn);
+    const hf = parseFloat((lTot * sH).toFixed(2));
+    const hfMedV = micro === 'SI' ? parseFloat(hfMed.toFixed(2)) : 0;
+    const cDisp = parseFloat((cargaDispTot - hfMed - hf).toFixed(2));
+
+    const dVel = calcV(qLlenado, diaSel);
+    const dLeqT = Math.round(diaAccs.reduce((s: number, a: any) => s + a.cantidad * a.leq, 0) * 1000) / 1000;
+    const dLTot = parseFloat((dLeqT + diaLTub).toFixed(2));
+    const dS = calcS(qLlenado, diaSel);
+    const dHf = parseFloat((dLTot * dS).toFixed(2));
+    const dCDisp = parseFloat((cDisp - dHf).toFixed(2));
+
+    // FUNCIÓN GENERADORA DE TABLAS DE ACCESORIOS 
+    const renderTablaAccesorios = (
+        title: string, 
+        qVal: number, diamVal: string, vVal: number, 
+        lPipe: number, lTotVal: number, sVal: number, hfVal: number, 
+        items: any[], startRow: number
+    ) => {
+        let r = startRow;
+        
+        // Título Sección
+        c2Wide(r, title, { bg: CS_SEC, bold: true, h: 24, borderStyle: 'all' });
+        r++;
+        c2Sep(r, 4); // espacio mínimo
+        r++;
+
+        // Inputs de configuración 
+        if (title.includes('RED PÚBLICA')) {
+            ws4.getRow(r).height = 22;
+            setInputGroup(r, 2, 'Diámetro Conexión:', 3, diamVal, '@', false);
+            setInputGroup(r, 4, 'Micromedidor:', 5, micro, '@', false);
+            setInputGroup(r, 6, 'Longitud Tubería (m):', 7, lPipe, '0.00', true);
+            setInputGroup(r, 8, 'Hf medidor (m):', 9, hfMed, '0.00', true);
+            r++;
+            c2Sep(r, 4); r++;
+        } else {
+            // Inputs Tramo 2
+            ws4.getRow(r).height = 22;
+            setInputGroup(r, 2, 'Longitud (m):', 3, lPipe, '0.00', true);
+            setInputGroup(r, 4, 'Tuberías:', 5, diamVal, '@', false);
+            r++;
+            c2Sep(r, 4); r++;
+        }
+
+        // Encabezados Tabla 
+        const headRow = r;
+        ws4.getRow(headRow).height = 26;
+        const headsMain = [
+            { t: 'q (L/s)', c: 2, w: 1 }, { t: 'Diámetro', c: 3, w: 1 }, { t: 'V (m/s)', c: 4, w: 1 },
+            { t: 'L accesorios', c: 5, w: 4 }, // Merge 5-8
+            { t: 'L tubería', c: 9, w: 1 }, { t: 'L total', c: 10, w: 1 }, { t: 'S (m/m)', c: 11, w: 1 }, { t: 'hf (m)', c: 12, w: 1 }
+        ];
+
+        headsMain.forEach(h => {
+            if (h.w > 1) ws4.mergeCells(headRow, h.c, headRow, h.c + h.w - 1);
+            const cell = ws4.getCell(headRow, h.c);
+            cell.value = h.t;
+            cell.font = { bold: true, size: 10, color: { argb: 'FF000000' }, name: 'Arial' }; // texto negro
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_YELLOW_HEADER } }; // fondo amarillo exacto
+            cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        });
+
+        r++;
+        // Sub-encabezados
+        ws4.getRow(r).height = 20;
+        const subs = ['Accesorio', '#', 'Leq', 'Leq.T'];
+        subs.forEach((sub, idx) => {
+            const cell = ws4.getCell(r, 5 + idx);
+            cell.value = sub;
+            cell.font = { bold: true, size: 9, name: 'Arial' };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1D5DB' } };
+            cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+        // Rellenar blancos
+        [2,3,4,9,10,11,12].forEach(c => {
+            const cell = ws4.getCell(r, c);
+            cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_BLANC } };
+        });
+
+        r++;
+        // Datos
+        const dataStart = r;
+        const count = items.length || 1;
+
+        items.forEach((acc: any, idx: number) => {
+            const currR = dataStart + idx;
+            ws4.getRow(currR).height = 20;
+            const label = config.accesoriosDisponibles.find(a => a.key === acc.tipo)?.label || acc.tipo;
+
+            // Columnas Fijas 
+            if (idx === 0) {
+                const fixed = [
+                    { c: 2, v: qVal, f: '0.000', b: true, col: CS_BLUE },
+                    { c: 3, v: diamVal, b: true },
+                    { c: 4, v: vVal, f: '0.00', b: true, col: CS_GREEN_TXT },
+                    { c: 9, v: lPipe, f: '0.00', b: true },
+                    { c: 10, v: lTotVal, f: '0.00', b: true, col: 'FF7C3AED' },
+                    { c: 11, v: sVal, f: '0.000000', s: 9, col: 'FF6B7280' },
+                    { c: 12, v: hfVal, f: '0.00', b: true, col: CS_RED_TXT }
+                ];
+                fixed.forEach(fc => {
+                    const cell = ws4.getCell(currR, fc.c);
+                    cell.value = fc.v; if(fc.f) cell.numFmt = fc.f;
+                    cell.font = { bold: !!fc.b, size: fc.s || 11, color: { argb: fc.col || 'FF000000' } };
+                    cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                });
+            }
+
+            // Columnas Accesorios
+            const cAcc = ws4.getCell(currR, 5);
+            cAcc.value = label; cAcc.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+            ws4.getCell(currR, 6).value = acc.cantidad;
+            const cLeq = ws4.getCell(currR, 7); cLeq.value = acc.leq; cLeq.numFmt = '0.000';
+            const cLeqT = ws4.getCell(currR, 8); cLeqT.value = acc.cantidad * acc.leq; cLeqT.numFmt = '0.000'; cLeqT.font = {bold:true};
+
+            // Estilos fila
+            for(let c=2; c<=12; c++) {
+                const cell = ws4.getCell(currR, c);
+                if(!cell.border || !cell.border.top) cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+                if(!cell.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx%2===0 ? 'FFF9FAFB' : 'FFFFFFFF' } };
+                if(c>=5 && c<=8) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            }
+        });
+
+        // MERGES VERTICALES
+        if (count > 1) {
+            const endR = dataStart + count - 1;
+            [2,3,4,9,10,11,12].forEach(c => {
+                ws4.mergeCells(dataStart, c, endR, c);
+                const mCell = ws4.getCell(dataStart, c);
+                mCell.alignment = { ...mCell.alignment, vertical: 'middle' };
+            });
+        }
+
+        // Fila Total
+        const totR = dataStart + count;
+        ws4.getRow(totR).height = 20;
+        ws4.mergeCells(totR, 5, totR, 7);
+        const cellTot = ws4.getCell(totR, 5);
+        cellTot.value = 'L. EQ TOTAL:'; cellTot.font = {bold:true}; cellTot.alignment = {horizontal:'right'};
+        const valTot = ws4.getCell(totR, 8);
+        const totalVal = items.reduce((s:number, a:any) => s+(a.cantidad*a.leq),0);
+        valTot.value = totalVal; valTot.numFmt='0.000'; valTot.font={bold:true, color:{argb:CS_BLUE}};
+        for(let c=2; c<=12; c++) {
+            const cell = ws4.getCell(totR, c);
+            cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_F4F8 } };
+            if(c<5 || c>8) cell.value = null;
+        }
+        
+        return totR + 1;
+    };
+
+    // =========================================================================
+    // CONSTRUCCIÓN DE LA HOJA
+    // =========================================================================
+    let tr = 1;
+
+    // 1. TÍTULO PRINCIPAL
+    c2Fill(tr, CS_BLANC, 32);
+    ws4.mergeCells(tr, 2, tr, TS - 1);
+    const titulo = ws4.getCell(tr, 2);
+    titulo.value = '3. CALCULO DE LA RED DE ALIMENTACION';
+    titulo.font = { bold: true, size: 16, name: 'Times New Roman', color: { argb: CS_BLUE } };
+    titulo.alignment = { horizontal: 'left', vertical: 'bottom', indent: 1 };
+    titulo.border = { bottom: c2BBL };
+    tr++;
+    c2Sep(tr, 8); tr++; 
+    tr++;
+
+
+    // =========================================================================
+    // 3.1 CAUDAL DE ENTRADA
+    // =========================================================================
+    c2Wide(tr, '3.1. CAUDAL DE ENTRADA', { bg: CS_SEC, bold: true, h: 24, borderStyle: 'all' });
+    tr++;
+    c2Sep(tr, 4); tr++;
+    tr++;
+
+    // Grid de 4 columnas
+    const rowIn1 = tr;
+    ws4.getRow(rowIn1).height = 24;
+    setInputGroup(rowIn1, 2, 'Consumo Diario:', 3, consumoDiario, '0.00', false);
+    setInputGroup(rowIn1, 4, 'Vol. Cisterna (Real):', 5, volCisterna, '0.00', true);
+    setInputGroup(rowIn1, 6, 'Tiempo de Llenado:', 7, tiempoLlenado, '0.0', true);
+    setInputGroup(rowIn1, 8, 'Q llenado:', 9, qLlenado, '0.000', false);
+    ws4.getCell(rowIn1, 10).value = 'L/s';
+    ws4.getCell(rowIn1, 10).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    tr++;
+    c2Sep(tr, 6); tr++;
+    tr++;
+
+    // =========================================================================
+    // 3.2 CARGA DISPONIBLE
+    // =========================================================================
+    c2Wide(tr, '3.2. CARGA DISPONIBLE', { bg: CS_SEC, bold: true, h: 24, borderStyle: 'all' });
+    tr++;
+    c2Sep(tr, 4); tr++;
+    tr++;
+
+    // Subtítulo Factibilidad
+    c2Wide(tr, 'Datos de la FACTIBILIDAD DE SERVICIO', { bg: CS_F4F8, bold: true, h: 22, halign: 'center' });
+    tr++;
+    c2Sep(tr, 4); tr++;
+    tr++;
+
+    // Grid 3 columnas de datos
+    const factData = [
+        { l: 'Nivel del terreno cnx.', v: nivelTerreno, h: true },
+        { l: 'Nivel de la tubería de cnx.', v: nivTubConn, h: false },
+        { l: 'Nivel de tubería ingreso a cist.', v: nivIngCist, h: false },
+        { l: 'Presión en CONEXIÓN PÚBLICA', v: presionConn, h: true },
+        { l: 'Presión de salida en tub.', v: presionSalida, h: true },
+        { l: 'Altura estática est.', v: altEstatica, h: false }
+    ];
+
+    for (let i = 0; i < factData.length; i += 3) {
+        const r = tr + (i/3);
+        ws4.getRow(r).height = 22;
+        for (let j = 0; j < 3; j++) {
+            const item = factData[i+j];
+            if (!item) break;
+            const cL = 2 + (j*3);
+            const cV = cL + 1;
+            const cU = cV + 1;
+            
+            ws4.getCell(r, cL).value = item.l;
+            ws4.getCell(r, cL).font = { size: 11, name: 'Arial' };
+            ws4.getCell(r, cL).alignment = { horizontal: 'right', vertical: 'middle' };
+            
+            ws4.getCell(r, cV).value = item.v;
+            ws4.getCell(r, cV).numFmt = '0.00';
+            ws4.getCell(r, cV).font = { size: 11, name: 'Courier New', bold: true };
+            ws4.getCell(r, cV).alignment = { horizontal: 'center', vertical: 'middle' };
+            
+            if (item.h) {
+                ws4.getCell(r, cV).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CS_AMARILLO } };
+                ws4.getCell(r, cV).border = { top: c2BGold, left: c2BGold, bottom: c2BGold, right: c2BGold };
+            } else {
+                ws4.getCell(r, cV).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+                ws4.getCell(r, cV).border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+            }
+            
+            ws4.getCell(r, cU).value = 'm';
+            ws4.getCell(r, cU).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        }
+    }
+    tr += 2;
+    c2Sep(tr, 4); tr++;
+    tr++;
+    tr++;
+
+    // Caja Resultado Hd1
+    c2Fill(tr, CS_F4F8, 28);
+    ws4.mergeCells(tr, 2, tr, TS - 1);
+    const boxHd1 = ws4.getCell(tr, 2);
+    boxHd1.value = `Carga Disponible (Hd 1) = ${cargaDispTot} m`;
+    boxHd1.font = { bold: true, size: 14, color: { argb: CS_BLUE } };
+    boxHd1.alignment = { horizontal: 'center', vertical: 'middle' };
+    boxHd1.border = { top: c2BM, left: c2BM, bottom: c2BM, right: c2BM };
+    tr++;
+    c2Sep(tr, 8); tr++;
+    tr++;
+
+    // =========================================================================
+    // 3.3 PÉRDIDA DE CARGA: TRAMO RED PÚBLICA - MEDIDOR
+    // =========================================================================
+    tr = renderTablaAccesorios(
+        '3.3. PÉRDIDA DE CARGA: TRAMO RED PÚBLICA - MEDIDOR',
+        qLlenado, diamConn, vel, lTuberia, lTot, sH, hf, accs, tr
+    );
+    c2Sep(tr, 4); tr++;
+    tr++;
+
+    // GRÁFICO SVG (
+    const grafStart = tr;
+    const grafRows = 18; // altura en filas
+    c2Fill(grafStart, CS_BLANC, grafRows * 16);
+    ws4.mergeCells(grafStart, 2, grafStart + grafRows - 1, TS - 1); // área del gráfico
+
+    try {
+        const width = 720, height = 380;
+        const margin = { top: 25, right: 25, bottom: 40, left: 55 };
+        const iw = width - margin.left - margin.right;
+        const ih = height - margin.top - margin.bottom;
+        const xMin = 0.4, xMax = 50, yMin = 0.05, yMax = 12;
+        const xS = (x: number) => margin.left + Math.log(x/xMin)/Math.log(xMax/xMin)*iw;
+        const yS = (y: number) => margin.top + ih - Math.log(y/yMin)/Math.log(yMax/yMin)*ih;
+
+        let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" style="font-family:Arial;">
+        <rect width="100%" height="100%" fill="white"/>
+        <text x="${width/2}" y="18" font-size="14" font-weight="bold" text-anchor="middle">Curva de Pérdida de Presión</text>
+        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top+ih}" stroke="#333" stroke-width="2"/>
+        <line x1="${margin.left}" y1="${margin.top+ih}" x2="${margin.left+iw}" y2="${margin.top+ih}" stroke="#333" stroke-width="2"/>
+        <text x="${margin.left+iw/2}" y="${margin.top+ih+30}" font-size="11" text-anchor="middle">Caudal - m³/h</text>
+        <text x="${margin.left-35}" y="${margin.top+ih/2}" font-size="11" text-anchor="middle" transform="rotate(-90 ${margin.left-35} ${margin.top+ih/2})">Pérdida de Presión (m.c.a.)</text>`;
+
+        Object.entries(dCurvas).forEach(([dStr, pts]) => {
+            const d = parseInt(dStr);
+            const color = asignarColor(d);
+            const path = pts.map(p => `${xS(p[0])},${yS(p[1])}`).join(' ');
+            svg += `<polyline points="${path}" stroke="${color}" stroke-width="2" fill="none"/>`;
+            const last = pts[pts.length-1];
+            svg += `<text x="${xS(last[0])+5}" y="${yS(last[1])}" font-size="9" fill="${color}" font-weight="bold">Ø ${d}</text>`;
+        });
+
+        const dMm = config.diametros[diamConn as keyof typeof config.diametros]?.mm || 25;
+        const perd = interpolarLog(qLlenadoM3h, datosReales[dMm]);
+        if(perd && qLlenadoM3h > 0) {
+            const xp = xS(qLlenadoM3h), yp = yS(perd);
+            svg += `<circle cx="${xp}" cy="${yp}" r="5" fill="#9C27B0" stroke="white" stroke-width="2"/>
+            <line x1="${margin.left}" y1="${yp}" x2="${xp}" y2="${yp}" stroke="#9C27B0" stroke-dasharray="4,3"/>
+            <line x1="${xp}" y1="${margin.top+ih}" x2="${xp}" y2="${yp}" stroke="#9C27B0" stroke-dasharray="4,3"/>`;
+        }
+        svg += `</svg>`;
+
+        const pngB64 = await svgToPngBase64(svg, width, height);
+        const imgId = workbook.addImage({ base64: pngB64, extension: 'png' });
+        ws4.addImage(imgId, {
+            tl: { nativeCol: 1, nativeRow: grafStart - 1 },
+            ext: { width: width, height: height }
+        } as any);
+    } catch(e) {
+        console.warn("Error gráfico", e);
+        ws4.getCell(grafStart, 2).value = "[Gráfico de Curva No Generado]";
+    }
+
+    tr += grafRows;
+    c2Sep(tr, 4); tr++;
+
+    // Tarjetas Resultados Tramo 1
+    const rowCards1 = tr;
+    ws4.getRow(rowCards1).height = 28;
+    const cards1 = [
+        { t: `Carga Disponible: ${cargaDispTot} m`, c: CS_BLUE, bg: 'FFE0F2FE' },
+        { t: `Pérdida Medidor: ${hfMedV} m`, c: CS_RED_TXT, bg: 'FFFEE2E2' },
+        { t: `Pérdida Red: ${hf} m`, c: CS_GREEN_TXT, bg: CS_GREEN_BG }
+    ];
+    cards1.forEach((card, i) => {
+        const cStart = 2 + (i*3);
+        ws4.mergeCells(rowCards1, cStart, rowCards1, cStart+2);
+        const cell = ws4.getCell(rowCards1, cStart);
+        cell.value = card.t;
+        cell.font = { bold: true, size: 11, color: {argb: card.c} };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: card.bg} };
+        cell.border = { top: c2BM, left: c2BM, bottom: c2BM, right: c2BM };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    tr++;
+    tr++;
+    
+    // Fila extra Hd2
+    ws4.getRow(tr).height = 22;
+    ws4.mergeCells(tr, 2, tr, 6);
+    const cellHd2 = ws4.getCell(tr, 2);
+    cellHd2.value = `Diámetro: ${diamConn}  |  Carga Disponible (Hd 2): ${cDisp} m`;
+    cellHd2.font = { bold: true, color: {argb: CS_BLUE} };
+    cellHd2.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: CS_F4F8} };
+    cellHd2.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+    cellHd2.alignment = { horizontal: 'left', indent: 1 };
+    tr++;
+    c2Sep(tr, 8); tr++;
+    tr++;
+
+    // =========================================================================
+    // 3.4 PÉRDIDA DE CARGA: MEDIDOR - CISTERNA
+    // =========================================================================
+    tr = renderTablaAccesorios(
+        '3.4. PÉRDIDA DE CARGA: MEDIDOR - CISTERNA',
+        qLlenado, diaSel, dVel, diaLTub, dLTot, dS, dHf, diaAccs, tr
+    );
+    c2Sep(tr, 4); tr++;
+    tr++;
+    tr++;
+
+
+    // Tarjetas Resultados Tramo 2
+    const rowCards2 = tr;
+    ws4.getRow(rowCards2).height = 28;
+    const cards2 = [
+        { t: `Hd 2: ${cDisp} m`, c: CS_BLUE, bg: 'FFE0F2FE' },
+        { t: `Pérdida: ${dHf} m`, c: CS_RED_TXT, bg: 'FFFEE2E2' },
+        { t: `Hd 3: ${dCDisp} m`, c: CS_GREEN_TXT, bg: CS_GREEN_BG }
+    ];
+    cards2.forEach((card, i) => {
+        const cStart = 2 + (i*3);
+        ws4.mergeCells(rowCards2, cStart, rowCards2, cStart+2);
+        const cell = ws4.getCell(rowCards2, cStart);
+        cell.value = card.t;
+        cell.font = { bold: true, size: 11, color: {argb: card.c} };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: card.bg} };
+        cell.border = { top: c2BM, left: c2BM, bottom: c2BM, right: c2BM };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    tr++;
+    tr++;
+    c2Sep(tr, 8); tr++;
+    tr++;
+
+    // =========================================================================
+    // 3.5 RESULTADOS FINALES
+    // =========================================================================
+    c2Wide(tr, '3.5. RESULTADOS', { bg: CS_SEC, bold: true, h: 24, borderStyle: 'all' });
+    tr++;
+    c2Sep(tr, 4); tr++;
+    tr++;
+
+    const rowFin = tr;
+    ws4.getRow(rowFin).height = 28;
+    const fins = [
+        { t: `Q llenado: ${qLlenado} L/s` },
+        { t: `Ø Red-Med: ${diamConn}` },
+        { t: `Ø Med-Cist: ${diaSel}` }
+    ];
+    fins.forEach((f, i) => {
+        const cStart = 2 + (i*3);
+        ws4.mergeCells(rowFin, cStart, rowFin, cStart+2);
+        const cell = ws4.getCell(rowFin, cStart);
+        cell.value = f.t;
+        cell.font = { bold: true, size: 12 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: CS_F4F8} };
+        cell.border = { top: c2BT, left: c2BT, bottom: c2BT, right: c2BT };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    tr++;
+    c2Sep(tr, 12); tr++; 
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
     // =========================================================================
     // HOJA 5: MÁXIMA DEMANDA SIMULTÁNEA
