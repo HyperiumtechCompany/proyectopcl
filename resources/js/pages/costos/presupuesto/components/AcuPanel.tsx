@@ -21,6 +21,7 @@ import type {
     ACURowSummary,
     InsumoProducto,
 } from '@/types/presupuestos';
+import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 const fmt = (n: number | undefined | null, d = 2) =>
     (n ?? 0).toLocaleString('es-PE', {
@@ -1081,8 +1082,14 @@ export function AcuPanel({
 
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
-    const [hoursPerDay, setHoursPerDay] = useState(8);
+    
+    const globalHours = useProjectParamsStore(s => s.getJornadaHoras());
+    const [hoursPerDay, setHoursPerDay] = useState(globalHours || 8);
     const [searchOpen, setSearchOpen] = useState(false);
+
+    useEffect(() => {
+        if (globalHours) setHoursPerDay(globalHours);
+    }, [globalHours]);
     const [searchTargetType, setSearchTargetType] = useState<SearchType | null>(
         null,
     );

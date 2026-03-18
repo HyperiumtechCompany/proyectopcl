@@ -18,7 +18,7 @@ export interface BudgetItemRow {
   _expanded?: boolean;
   _hasChildren?: boolean;
 }
-
+ 
 interface BudgetState {
   rows: BudgetItemRow[];
   expandedMap: Record<string, boolean>;
@@ -73,18 +73,21 @@ const generateNextCode = (parentCode: string | null, rows: BudgetItemRow[]) => {
 };
 
 const rebuildHierarchy = (rows: any[]) => {
+  if (!rows) return [];
   const rowsMap = new Map();
   const parentsFound = new Set<string>();
 
+  // Filter out rows without 'partida' to avoid localeCompare crash
+  const rowsWithPartida = rows.filter(r => r && typeof r.partida === 'string');
+
   // Sort rows properly by WBS numerical order
-  const sorted = [...rows].sort((a, b) => a.partida.localeCompare(b.partida, undefined, { numeric: true, sensitivity: 'base' }));
+  const sorted = [...rowsWithPartida].sort((a, b) => a.partida.localeCompare(b.partida, undefined, { numeric: true, sensitivity: 'base' }));
 
   const enhanced = sorted.map((r, i) => {
     const level = getLevel(r.partida);
     const parentId = getParentPartida(r.partida);
     if (parentId) parentsFound.add(parentId);
     
-    // Ensure _expanded is preserved if it already exists, otherwise default true
     const expanded = r._expanded !== undefined ? r._expanded : true;
     
     rowsMap.set(r.partida, { ...r, _level: level, _parentId: parentId, _hasChildren: false, _expanded: expanded, _index: i });
@@ -143,6 +146,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
   initialize: (initialRows) => {
     const enhanced = rebuildHierarchy(initialRows);
+    performTreeCalculation(enhanced);
     
     // Default expanded state for top level if freshly initializing
     const expandedMap: Record<string, boolean> = {};

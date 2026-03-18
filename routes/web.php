@@ -141,7 +141,16 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::delete('/presupuesto/{subsection}/delete-row', [\App\Http\Controllers\PresupuestoController::class, 'deleteRow'])->name('proyectos.presupuesto.delete-row');
             Route::post('/presupuesto/import-metrado', [\App\Http\Controllers\PresupuestoController::class, 'importFromMetrado'])->name('proyectos.presupuesto.import-metrado');
             Route::post('/presupuesto/acus/calculate', [\App\Http\Controllers\PresupuestoController::class, 'calculateACU'])->name('proyectos.presupuesto.acus.calculate');
+            Route::get('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [\App\Http\Controllers\PresupuestoController::class, 'getGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.show');
+            Route::post('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [\App\Http\Controllers\PresupuestoController::class, 'saveGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.save');
+            Route::get('/presupuesto/gastos-fijos-global/totals', [\App\Http\Controllers\PresupuestoController::class, 'getGGFijosTotals'])->name('proyectos.presupuesto.gastos-fijos-global.totals');
+            Route::get('/presupuesto/gastos-fijos-global/desagregado', [\App\Http\Controllers\PresupuestoController::class, 'getGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.show');
+            Route::post('/presupuesto/gastos-fijos-global/desagregado', [\App\Http\Controllers\PresupuestoController::class, 'saveGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.save');
             Route::get('/presupuesto/export', [\App\Http\Controllers\PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
+
+            // ─── Parámetros Globales del Proyecto (centralizados en tenant) ────
+            Route::get('/presupuesto/params', [\App\Http\Controllers\PresupuestoController::class, 'getProjectParams'])->name('proyectos.presupuesto.params.show');
+            Route::patch('/presupuesto/params', [\App\Http\Controllers\PresupuestoController::class, 'updateProjectParams'])->name('proyectos.presupuesto.params.update');
 
             // ─── Insumos Catálogo (por proyecto, en tenant DB) ────
             Route::get('/presupuesto/insumos/search', [InsumoProductoController::class, 'search'])->name('proyectos.presupuesto.insumos.search');

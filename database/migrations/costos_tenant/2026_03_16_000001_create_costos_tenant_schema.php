@@ -44,15 +44,46 @@ return new class extends Migration
     public function up(): void
     {
         // ══════════════════════════════════════════════════════════════════════
-        // 0. PROJECT META — metadatos redundantes para acceso rápido
+        // 0. PROJECT PARAMS — parámetros globales centralizados
+        //    Fuente única de verdad para todos los módulos del tenant.
+        //    Sincronizado automáticamente desde costo_projects (BD principal).
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('project_meta')) {
-            Schema::connection($this->connection)->create('project_meta', function (Blueprint $table) {
+        if (!Schema::connection($this->connection)->hasTable('project_params')) {
+            Schema::connection($this->connection)->create('project_params', function (Blueprint $table) {
                 $table->id();
-                $table->string('key');
-                $table->text('value')->nullable();
+
+                // ── Datos Generales (sync desde costo_projects) ──
+                $table->string('nombre');
+                $table->string('uei')->nullable();
+                $table->string('unidad_ejecutora')->nullable();
+                $table->string('codigo_snip')->nullable();
+                $table->string('codigo_cui')->nullable();
+                $table->string('codigo_local')->nullable();
+
+                // ── Fechas y Duración (auto-calculados) ──
+                $table->date('fecha_inicio')->nullable();
+                $table->date('fecha_fin')->nullable();
+                $table->unsignedSmallInteger('duracion_dias')->default(0)
+                    ->comment('Auto: DATEDIFF(fecha_fin, fecha_inicio)');
+                $table->decimal('duracion_meses', 8, 2)->default(0)
+                    ->comment('Auto: duracion_dias / 30');
+
+                // ── Ubicación (nombres resueltos) ──
+                $table->string('departamento')->nullable();
+                $table->string('provincia')->nullable();
+                $table->string('distrito')->nullable();
+                $table->string('centro_poblado')->nullable();
+
+                // ── Parámetros Financieros Globales ──
+                $table->decimal('costo_directo', 15, 4)->default(0)
+                    ->comment('Sync desde SUM(presupuesto_general.parcial) de raíces');
+                $table->decimal('utilidad_porcentaje', 5, 2)->default(10.00);
+                $table->decimal('igv_porcentaje', 5, 2)->default(18.00);
+                $table->decimal('jornada_laboral_horas', 4, 2)->default(8.00);
+                $table->decimal('rmv', 10, 2)->default(1025.00)
+                    ->comment('Remuneración Mínima Vital vigente');
+
                 $table->timestamps();
-                $table->unique('key');
             });
         }
 
@@ -456,11 +487,11 @@ return new class extends Migration
                 $table->decimal('gratificacion',       15, 2)->default(0);
 
                 $table->decimal('total_mensual_unitario', 15, 4)->storedAs('
-                    sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion
+                    sueldo_basico + asignacion_familiar + essalud + cts + vacaciones + gratificacion
                 ');
 
                 $table->decimal('total_proyecto', 15, 4)->storedAs('
-                    (sueldo_basico + asignacion_familiar + snp + essalud + cts + vacaciones + gratificacion)
+                    (sueldo_basico + asignacion_familiar + essalud + cts + vacaciones + gratificacion)
                     * cantidad * meses * (participacion / 100)
                 ');
 
@@ -888,6 +919,6 @@ return new class extends Migration
         Schema::dropIfExists('metrado_arquitectura');
 
         Schema::dropIfExists('presupuestos');
-        Schema::connection('costos_tenant')->dropIfExists('project_meta');
+        Schema::connection('costos_tenant')->dropIfExists('project_params');
     }
 };
