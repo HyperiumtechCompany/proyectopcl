@@ -49,8 +49,8 @@ export function useGGFijos({ projectId, subsection }: UseGGFijosProps) {
         return { rows: next, injected: true };
     };
 
-    // Cargar datos cuando es 'gastos_fijos' o cuando está en 'gastos_generales' (se muestran ambos paneles)
-    const isActive = subsection === 'gastos_fijos' || subsection === 'gastos_generales';
+    // Cargar datos cuando es 'gastos_fijos', 'gastos_generales' o 'consolidado'
+    const isActive = subsection === 'gastos_fijos' || subsection === 'gastos_generales' || subsection === 'consolidado';
 
     useEffect(() => {
         if (!isActive) return;

@@ -148,6 +148,10 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::patch('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'saveSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.save');
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
 
+            // ─── Consolidado Snapshot (cache de totales) ───
+            Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
+            Route::patch('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'saveConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.save');
+
             // ─── Parámetros Globales del Proyecto (centralizados en tenant) ────
             Route::get('/presupuesto/params', [PresupuestoController::class, 'getProjectParams'])->name('proyectos.presupuesto.params.show');
             Route::patch('/presupuesto/params', [PresupuestoController::class, 'updateProjectParams'])->name('proyectos.presupuesto.params.update');
