@@ -10,6 +10,7 @@
  */
 import axios from 'axios';
 import { create } from 'zustand';
+import { useConsolidadoStore } from './consolidadoStore';
 
 export interface ProjectParams {
     id?: number;
@@ -64,8 +65,9 @@ interface ProjectParamsState {
     getJornadaHoras: () => number;
 
     // ── Computed Financial ──
-    getGastosGenerales: () => number;    // placeholder, summed from gg_consolidado
-    getUtilidad: () => number;           // costo_directo × utilidad% / 100
+    getGastosGenerales: () => number;     // GG = Consolidado Base
+    getTotalInversion: () => number;      // Total = Consolidado Base + Control Concurrente
+    getUtilidad: () => number;            // costo_directo × utilidad% / 100
     getSubtotalSinIgv: () => number;     // CD + GG + U
     getIgv: () => number;                // subtotal × igv% / 100
     getTotalConIgv: () => number;        // subtotal + IGV
@@ -168,9 +170,22 @@ export const useProjectParamsStore = create<ProjectParamsState>((set, get) => ({
     getJornadaHoras: () => get().params?.jornada_laboral_horas ?? 8,
 
     // ── Financial Computed ──
+    /** Gastos Generales = Consolidado Base (GG Variables + GG Fijos + Supervisión) */
     getGastosGenerales: () => {
-        // Will be populated from gg_consolidado in future
-        return 0;
+        try {
+            return useConsolidadoStore.getState().getConsolidadoBase();
+        } catch {
+            return 0;
+        }
+    },
+
+    /** Total de Inversión para la Obra = Consolidado Base + Control Concurrente */
+    getTotalInversion: () => {
+        try {
+            return useConsolidadoStore.getState().getTotalInversion();
+        } catch {
+            return 0;
+        }
     },
 
     getUtilidad: () => {

@@ -11,7 +11,7 @@ interface UseGGVariablesProps {
 export function useGGVariables({ projectId, subsection }: UseGGVariablesProps) {
     const { nodes, loading, setNodes, setLoading, setDirty, checkAndSyncRemuneraciones, syncFromRemuneraciones } = useGGVariablesStore();
 
-    const isActive = subsection === 'gastos_generales';
+    const isActive = subsection === 'gastos_generales' || subsection === 'consolidado';
     const normalizeText = (value: string) =>
         (value || '')
             .toLowerCase()

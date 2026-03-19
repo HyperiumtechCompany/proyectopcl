@@ -166,6 +166,7 @@ export function SupervisionPanel({ projectId, onSaveSupervision }: SupervisionPa
     const setProjectId = useSupervisionStore((s) => s.setProjectId);
     const loadFromDatabase = useSupervisionStore((s) => s.loadFromDatabase);
     const saveToDatabase = useSupervisionStore((s) => s.saveToDatabase);
+    const calculateTree = useSupervisionStore((s) => s.calculateTree);
     const setGastosGeneralesFromDetalle = useSupervisionStore((s) => s.setGastosGeneralesFromDetalle);
 
     // GG Detalle store for initial total loading
@@ -173,12 +174,14 @@ export function SupervisionPanel({ projectId, onSaveSupervision }: SupervisionPa
     const loadDetalle = useSupervisionGGDetalleStore((s: any) => s.loadFromDatabase);
 
     const [ggModalOpen, setGgModalOpen] = React.useState(false);
+    const [initialLoadDone, setInitialLoadDone] = React.useState(false);
 
     // Load supervision data on mount
     React.useEffect(() => {
         if (projectId) {
+            setInitialLoadDone(false);
             setProjectId(projectId);
-            loadFromDatabase(projectId);
+            loadFromDatabase(projectId).then(() => setInitialLoadDone(true));
         }
     }, [projectId, setProjectId, loadFromDatabase]);
 
@@ -197,6 +200,21 @@ export function SupervisionPanel({ projectId, onSaveSupervision }: SupervisionPa
     React.useEffect(() => {
         setGastosGeneralesFromDetalle(detalleTotal);
     }, [detalleTotal, setGastosGeneralesFromDetalle]);
+
+    // Auto-save with debounce to avoid manual clicks
+    React.useEffect(() => {
+        if (!initialLoadDone || loading || !isDirty || isSaving) return;
+        const handle = window.setTimeout(() => {
+            // Recalculate right before persisting
+            calculateTree();
+            if (onSaveSupervision) {
+                onSaveSupervision(rows);
+            } else {
+                saveToDatabase();
+            }
+        }, 900);
+        return () => window.clearTimeout(handle);
+    }, [initialLoadDone, loading, isDirty, isSaving, rows, saveToDatabase, onSaveSupervision, calculateTree]);
 
     const handleSave = async () => {
         if (onSaveSupervision) {
