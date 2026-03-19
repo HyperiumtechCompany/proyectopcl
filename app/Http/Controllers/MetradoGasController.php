@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class MetradoElectricasController extends Controller
+class MetradoGasController extends Controller
 {
-    private const TABLE_METRADO = 'metrados_electricos';
-    private const TABLE_RESUMEN = 'metrados_electricos'; 
+    private const TABLE_METRADO = 'metrados_gas';
+    private const TABLE_RESUMEN = 'metrados_gas'; 
 
     public function index(CostoProject $costoProject): Response  
     {
@@ -23,7 +23,7 @@ class MetradoElectricasController extends Controller
         $metrado = $this->queryRows($costoProject->id, 'metrado');
         $resumen = $this->queryRows($costoProject->id, 'resumen');
 
-        return Inertia::render('costos/metrados/ElectricasIndex', [
+        return Inertia::render('costos/metrados/GasIndex', [
             'project' => [
                 'id'     => $costoProject->id,
                 'nombre' => $costoProject->nombre,
@@ -124,11 +124,11 @@ class MetradoElectricasController extends Controller
     private function validateModuleEnabled(CostoProject $project): void
     {
         $enabled = $project->enabledModules()
-            ->where('module_type', 'metrado_electricas')
+            ->where('module_type', 'metrado_gas')
             ->exists();
 
         if (!$enabled) {
-            abort(403, 'El módulo de eléctricas no está habilitado.');
+            abort(403, 'El módulo de gas no está habilitado.');
         }
     }
 }

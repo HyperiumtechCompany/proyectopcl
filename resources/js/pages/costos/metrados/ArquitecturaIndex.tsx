@@ -97,7 +97,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO ELÉCTRICAS
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 3; // ⚡ INICIA EN 03 (cambiado de 4)
+const TOP_LEVEL_START = 1; //
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 

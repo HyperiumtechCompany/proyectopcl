@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 // ═══════════════════════════════════════════════════════════════════════
 interface ColumnDef { key: string; label: string; width: number }
 
-interface ElectricasPageProps {
+interface ComunicacionesPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
@@ -97,7 +97,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO ELÉCTRICAS
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 3; // ⚡ INICIA EN 03 (cambiado de 4)
+const TOP_LEVEL_START = 5; // ⚡ INICIA EN 03 (cambiado de 4)
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -281,8 +281,8 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════
-export default function ElectricasIndex() {
-  const { project, metrado, resumen } = usePage<ElectricasPageProps>().props;
+export default function ComunicacionesIndex() {
+  const { project, metrado, resumen } = usePage<ComunicacionesPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',              href: '/costos' },
@@ -377,12 +377,12 @@ export default function ElectricasIndex() {
       const name = String(sheet?.name ?? '');
       if (name === 'Metrado') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-electricas/metrado`,
+          url: `/costos/${project.id}/metrado-comunicaciones/metrado`,
           body: { rows: sheetToRows(sheet, BASE_COLS) },
         });
       } else if (name === 'Resumen') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-electricas/resumen`,
+          url: `/costos/${project.id}/metrado-comunicaciones/resumen`,
           body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
         });
       }

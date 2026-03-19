@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\CostoProject;  
+use App\Models\CostoProject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class MetradoElectricasController extends Controller
+class MetradoComunicacionesController extends Controller
 {
-    private const TABLE_METRADO = 'metrados_electricos';
-    private const TABLE_RESUMEN = 'metrados_electricos'; 
+    private const TABLE_METRADO = 'metrados_comunicaciones';
+    private const TABLE_RESUMEN = 'metrados_comunicaciones';
 
-    public function index(CostoProject $costoProject): Response  
+    public function index(CostoProject $costoProject): Response
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject);
@@ -23,7 +22,7 @@ class MetradoElectricasController extends Controller
         $metrado = $this->queryRows($costoProject->id, 'metrado');
         $resumen = $this->queryRows($costoProject->id, 'resumen');
 
-        return Inertia::render('costos/metrados/ElectricasIndex', [
+        return Inertia::render('costos/metrados/ComunicacionesIndex', [
             'project' => [
                 'id'     => $costoProject->id,
                 'nombre' => $costoProject->nombre,
@@ -59,8 +58,9 @@ class MetradoElectricasController extends Controller
     {
         $rows = $request->input('rows', []);
         $connection = DB::connection('costos_tenant');
-        
+
         $connection->beginTransaction();
+
         try {
             $connection->table(self::TABLE_METRADO)
                 ->where('project_id', $costoProject->id)
@@ -102,6 +102,7 @@ class MetradoElectricasController extends Controller
             ]);
         } catch (\Exception $e) {
             $connection->rollBack();
+
             return response()->json([
                 'success' => false,
                 'error'   => $e->getMessage(),
@@ -124,11 +125,11 @@ class MetradoElectricasController extends Controller
     private function validateModuleEnabled(CostoProject $project): void
     {
         $enabled = $project->enabledModules()
-            ->where('module_type', 'metrado_electricas')
+            ->where('module_type', 'metrado_comunicaciones')
             ->exists();
 
         if (!$enabled) {
-            abort(403, 'El módulo de eléctricas no está habilitado.');
+            abort(403, 'El módulo de comunicaciones no está habilitado.');
         }
     }
 }

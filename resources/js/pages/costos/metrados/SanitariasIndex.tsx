@@ -16,7 +16,6 @@ import {
     ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { update } from '@/routes/profile';
 
 // TIPOS
 interface ColumnDef { key: string; label: string; width: number }
@@ -56,7 +55,7 @@ const VISIBLE_COLS: ColumnDef[] = [
     { key: 'area',        label: 'Área',          width: 76  },
     { key: 'vol',         label: 'Vol.',          width: 76  },
     { key: 'kg',          label: 'Kg.',           width: 76  },
-    { key: 'und',         label: 'Und.',          width: 76  },
+    { key: 'und',         label: 'Parcial',       width: 76  },
     { key: 'total',       label: 'Total',         width: 95  },
     { key: 'observacion', label: 'Observaciones', width: 148 },
 ];
@@ -249,13 +248,10 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
 /** Lee una fila completa desde data[][] en un objeto plano */
 function readDataRow(data: any[][], ri: number): Record<string, any> {
     const row: Record<string, any> = {};
-
     BASE_COLS.forEach((col, ci) => {
         const raw = cellRaw(data[ri]?.[ci]);
         row[col.key] = blank(raw) ? null : raw;
     });
-
-    console.log("ROW:", JSON.stringify(row)); 
     return row;
 }
 
@@ -293,6 +289,7 @@ export default function SanitariasIndex() {
     const saveTimer            = useRef<ReturnType<typeof setTimeout> | null>(null);
     const latestSheets         = useRef<any[]>([]);
     const progUpdateCount = useRef(0); // contador: >0 = escritura programática en curso
+    const recalcTimer = useRef<any>(null);
 
     // ── Columnas del resumen (dinámicas por N módulos) ─────────────────────
     const resumenCols = useMemo<ColumnDef[]>(() => [
@@ -335,7 +332,7 @@ export default function SanitariasIndex() {
             rows.forEach((row) => {
                 const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
                 if (kind !== 'group') return;
-                const code = String(row.partida ?? '').trim();
+                const code = `${row._level}|${String(row.descripcion ?? '').trim()}`;
                 if (!code) return;
                 const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
                 const t = toNum(row.total);
@@ -441,157 +438,20 @@ export default function SanitariasIndex() {
         saveTimer.current = setTimeout(() => doSave(latestSheets.current), SAVE_DEBOUNCE);
     }, [doSave]);
 
-    // resumen 
-
-    const handleSyncResumen = useCallback(() => {
-        const ls = (window as any).luckysheet;
-        if (!ls) return;
-
-        const sheets = ls.getAllSheets?.() ?? [];
-        if (!sheets.length) return;
-
-        const resumenIndex = sheets.findIndex((s: any) =>
-            String(s.name).toLowerCase().includes('resumen')
-        );
-
-        if (resumenIndex === -1) return;
-
-        const map = new Map<string, any>();
-
-        // RECORRER MODULOS + CISTERNA + EXTERIOR
-        sheets.forEach((sheet: any) => {
-            const name = String(sheet.name || '').toLowerCase();
-
-            const esModulo = name.includes('modulo') || name.includes('módulo');
-            const esCisterna = name.includes('cisterna');
-            const esExterior = name.includes('exterior');
-
-            if (!esModulo && !esCisterna && !esExterior) return;
-
-            const data = sheet.data || [];
-
-            let currentTitulo = '';
-            let currentSub = '';
-
-            for (let r = 1; r < data.length; r++) {
-                const row = readDataRow(data, r);
-                const { level, kind } = rowMeta(row);
-
-                if (!row.descripcion) continue;
-
-                // tITULO
-                if (kind === 'group' && level === 1) {
-                    currentTitulo = row.descripcion;
-
-                    if (!map.has(currentTitulo)) {
-                        map.set(currentTitulo, {
-                            partida: row.partida,
-                            descripcion: currentTitulo,
-                            unidad: '',
-                            total: 0,
-                            subs: new Map()
-                        });
-                    }
-
-                    currentSub = '';
-                }
-
-                // SUBTITULO
-                if (kind === 'group' && level === 2) {
-                    currentSub = row.descripcion;
-
-                    const tituloObj = map.get(currentTitulo);
-                    if (!tituloObj) continue;
-
-                    if (!tituloObj.subs.has(currentSub)) {
-                        tituloObj.subs.set(currentSub, {
-                            partida: row.partida,
-                            descripcion: currentSub,
-                            unidad: '',
-                            total: 0
-                        });
-                    }
-                }
-
-                // PARTIDAS (SUMA)
-                if (kind === 'leaf') {
-                    const total = toNum(row.total);
-
-                    const tituloObj = map.get(currentTitulo);
-                    if (!tituloObj) continue;
-
-                    tituloObj.total += total;
-
-                    if (currentSub) {
-                        const subObj = tituloObj.subs.get(currentSub);
-                        if (subObj) subObj.total += total;
-                    }
-                }
-            }
-        });
-
-        // CONVERTIR A LISTA
-        const result: any[] = [];
-
-        map.forEach((tituloObj) => {
-            result.push({
-                partida: tituloObj.partida,
-                descripcion: tituloObj.descripcion,
-                unidad: '',
-                total: tituloObj.total
-            });
-
-            tituloObj.subs.forEach((subObj: any) => {
-                result.push(subObj);
-            });
-        });
-
-        // ESCRIBIR EN RESUMEN
-        progUpdateCount.current++;
-
-        ls.setSheetActive(resumenIndex);
-
-        setTimeout(() => {
-            result.forEach((r, i) => {
-                const row = i + 1;
-
-                ls.setCellValue(row, 0, r.partida);
-                ls.setCellValue(row, 1, r.descripcion);
-                ls.setCellValue(row, 2, r.unidad);
-                ls.setCellValue(row, 3, r.total);
-            });
-
-            progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
-        }, 100);
-
-    }, []);
-
     // ═══════════════════════════════════════════════════════════════════════
     // RECÁLCULO AUTOMÁTICO — N NIVELES
     // ═══════════════════════════════════════════════════════════════════════
     const recalcActiveSheet = useCallback(() => {
 
+        if (progUpdateCount.current > 2) return; 
         const ls = (window as any).luckysheet;
         if (!ls) return;
-
-        const sheet = ls.getSheet();
-        const name = String(sheet?.name || '').toLowerCase();
-
-        // no calcular resumen
-        if (name.includes('resumen')) return;
-
-        // hojas válidas
-        const esModulo = name.includes('modulo') || name.includes('módulo');
-        const esCisterna = name.includes('cisterna');
-        const esExterior = name.includes('exterior');
-
-        if (!esModulo && !esCisterna && !esExterior) return;
 
         const sheets = ls.getAllSheets?.() ?? [];
         const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
         if (!active || active.name === 'Resumen') return;
 
-        const data = active.data || [];
+        const data: any[][] = active.data || [];
         const sheetOrder = active.order ?? 0;
 
         // ── Leer todas las filas con datos ──────────────────────────────────
@@ -704,50 +564,50 @@ export default function SanitariasIndex() {
             if (e.kind !== 'leaf') return;
 
             const { row, ri } = e;
-
-            const elsim  = toNum(row.elsim) || 1;
-            const nveces = toNum(row.nveces) || 1;
+            const elsim  = toNum(row.elsim);
+            const nveces = toNum(row.nveces);
             const largo  = toNum(row.largo);
             const ancho  = toNum(row.ancho);
             const alto   = toNum(row.alto);
 
-            const unidad = String(row.unidad ?? '').toLowerCase();
+            const newUnd  = r4(elsim * nveces);
+            const newLon  = r4(largo * nveces);
+            const newArea = r4(largo * ancho * nveces);
+            const newVol  = r4(largo * ancho * alto * nveces);
 
-            let total = 0;
+            const upd = (key: string, val: number) => {
+                if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
+            };
 
-            switch (unidad) {
-                case 'ml':
-                case 'm':
-                    total = largo * elsim * nveces;
-                    break;
+            const setFormula = (key: string, formula: string) => {
+                set(ri, key, {
+                    f: formula,
+                    v: null,
+                    m: '',
+                    ct: { fa: 'General', t: 'n' },
+                });
+            };
 
-                case 'm2':
-                    total = largo * ancho * elsim * nveces;
-                    break;
+            // columnas
+            upd('lon', newLon);
+            upd('area', newArea);
+            upd('vol', newVol);
+            upd('und', newUnd);
 
-                case 'm3':
-                    total = largo * ancho * alto * elsim * nveces;
-                    break;
+            const unidad   = String(row.unidad ?? '').trim().toLowerCase();
+            
+            let tVal = 0;
 
-                case 'kg':
-                    total = largo * ancho * alto * elsim * nveces * 7850;
-                    break;
+            if (unidad === 'm' || unidad === 'ml') tVal = newLon;
+            else if (unidad === 'm2') tVal = newArea;
+            else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
+            else if (unidad === 'kg') tVal = toNum(row.kg);
+            else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
 
-                case 'und':
-                case 'pza':
-                    total = elsim * nveces;
-                    break;
-            }
-
-            total = r4(total);
-
-            if (toNum(row.total) !== total) {
-                set(ri, 'total', mkNum(total));
-                row.total = total;
-            }
-
-            e.total = total;
+            e.total = tVal;
+            set(ri, 'total', mkNum(tVal));
         });
+        
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASE 4 — ROLL-UP: de la profundidad máxima hasta el nivel 1
@@ -777,6 +637,7 @@ export default function SanitariasIndex() {
         // PASE 5 — FLUSH (un único batch de setCellValue)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         if (updates.length === 0) return;
+        if (updates.length > 10000) return;
 
         progUpdateCount.current++;
         updates.forEach((u, idx) => {
@@ -788,25 +649,26 @@ export default function SanitariasIndex() {
         // Decrementar tras el ciclo de Luckysheet para no bloquear la siguiente edición
         setTimeout(() => {
             progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
+
             const all = ls.getAllSheets?.() ?? [];
-            if (all.length > 0) scheduleSave(all);
-        }, 0);
+            if (all.length > 0) {
+                scheduleSave(all);
+
+                handleSyncResumen();
+            }
+
+        }, 120);
     }, [scheduleSave]);
 
     // ── Handlers Luckysheet ────────────────────────────────────────────────
-    const afterChange = useCallback(() => {
-        if (progUpdateCount.current > 0) return;
+    const afterChange = useCallback((data: any) => {
+        if (!data) return;
 
         setTimeout(() => {
             recalcActiveSheet();
+        }, 80);
 
-            setTimeout(() => {
-                handleSyncResumen();
-            }, 100);
-
-        }, 50);
-
-    }, [recalcActiveSheet, handleSyncResumen]);
+    }, [recalcActiveSheet]);
 
     const handleDataChange = useCallback((sheets: any[]) => {
         scheduleSave(sheets);
@@ -937,9 +799,8 @@ export default function SanitariasIndex() {
 
         setTimeout(() => {
             progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
-            afterChange();
-        }, 150);
-    }, [afterChange]);
+        }, 100);
+    }, [recalcActiveSheet]);
 
     // ═══════════════════════════════════════════════════════════════════════
     // AGREGAR FILAS
@@ -1012,8 +873,8 @@ export default function SanitariasIndex() {
             ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
         }
 
-        setTimeout(() => afterChange(), 120);
-    }, [afterChange]);
+        setTimeout(() => recalcActiveSheet(), 120);
+    }, [recalcActiveSheet]);
     //  Dropdown de unidades  retry hasta que Luckysheet esté listo 
     useEffect(() => {
         let attempts = 0;
@@ -1043,11 +904,93 @@ export default function SanitariasIndex() {
 
         timer = setTimeout(applyVerification, 400);
         return () => clearTimeout(timer);
+
     }, [initialSheets]);
+
+    useEffect(() => {
+        let intentos = 0;
+
+        const ejecutar = () => {
+            const ls = (window as any).luckysheet;
+
+            if (!ls || typeof ls.getAllSheets !== 'function') {
+                if (intentos < 20) {
+                    intentos++;
+                    setTimeout(ejecutar, 300);
+                }
+                return;
+            }
+
+            recalcActiveSheet();
+        };
+
+        ejecutar();
+    }, [recalcActiveSheet]);
 
     // ═══════════════════════════════════════════════════════════════════════
     // SINCRONIZAR RESUMEN
-    
+    // ═══════════════════════════════════════════════════════════════════════
+    const handleSyncResumen = useCallback(() => {
+        setIsSyncing(true);
+        setTimeout(() => {
+            const ls = (window as any).luckysheet;
+            if (!ls) { setIsSyncing(false); return; }
+
+            const all: any[] = ls.getAllSheets();
+            const mods: Record<string, Record<string, any>[]> = {};
+            let ext: Record<string, any>[] = [];
+            let cis: Record<string, any>[] = [];
+            let resIdx = -1;
+
+            all.forEach((sheet: any, idx: number) => {
+                if (sheet.name.startsWith('Módulo')) {
+                    const m = sheet.name.match(/(\d+)/);
+                    const n = m ? Number(m[1]) : NaN;
+                    if (!isNaN(n)) mods[String(n)] = sheetToRows(sheet, BASE_COLS);
+                } else if (sheet.name === 'Exterior') { ext = sheetToRows(sheet, BASE_COLS); }
+                else if (sheet.name === 'Cisterna')   { cis = sheetToRows(sheet, BASE_COLS); }
+                else if (sheet.name === 'Resumen')    { resIdx = idx; }
+            });
+
+            if (resIdx === -1) { setIsSyncing(false); return; }
+
+            const newRows  = buildResumenRows(mods, ext, cis);
+
+
+            const currentSheet = ls.getSheet().order;
+
+            ls.setSheetActive(resIdx);
+
+            ls.clearRange({
+                row: [0, 500],
+                column: [0, 20]
+            });
+
+            newRows.forEach((row, r) => {
+                resumenCols.forEach((col, c) => {
+                    const val = row[col.key as keyof typeof row] ?? '';
+                    ls.setCellValue(r + 1, c, val, {
+                        isRefresh: false
+                    });
+                });
+            });
+
+            resumenCols.forEach((col, c) => {
+                ls.setCellValue(0, c, col.label, {
+                    isRefresh: false
+                });
+            });
+
+            ls.refresh();
+
+            ls.setSheetActive(currentSheet);
+
+
+            doSave(all);
+            setIsSyncing(false);
+        }, 400);
+    }, [buildResumenRows, resumenCols, doSave]);
+
     // ── Config módulos ─────────────────────────────────────────────────────
     const handleUpdateConfig = async () => {
         if (newModuleCount === moduleCount) { setIsConfigOpen(false); return; }
@@ -1060,6 +1003,12 @@ export default function SanitariasIndex() {
             );
         } catch { setSaveError('Error al actualizar la configuración.'); }
         finally { setIsUpdatingConfig(false); }
+    };
+
+    const triggerRecalc = () => {
+        setTimeout(() => {
+            recalcActiveSheet();
+        }, 0);
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1208,14 +1157,12 @@ export default function SanitariasIndex() {
                             showinfobar:      false,
                             sheetFormulaBar:  true,
                             showstatisticBar: true,
-                            afterChange: afterChange,
-                            cellUpdated: afterChange,
-                            updated: afterChange,
+                            afterChange:      afterChange,
                             contextMenu: {
                                 row: [
-                                    ctxItem('Insertar Grupo al mismo nivel', 'group', true,  afterChange, addRow),
-                                    ctxItem('Insertar Sub-grupo (N+1)',       'group', false, afterChange, addRow),
-                                    ctxItem('Insertar Partida (hoja)',         'leaf',  false, afterChange, addRow),
+                                    ctxItem('Insertar Grupo al mismo nivel', 'group', true,  triggerRecalc, addRow),
+                                    ctxItem('Insertar Sub-grupo (N+1)',       'group', false, triggerRecalc, addRow),
+                                    ctxItem('Insertar Partida (hoja)',        'leaf',  false, triggerRecalc, addRow),
                                     { type: 'separator' },
                                     {
                                         text: '↑ Mover bloque arriba',
@@ -1237,7 +1184,7 @@ export default function SanitariasIndex() {
                                             const r = ls.getRange?.();
                                             if (!r?.length) return;
                                             ls.deleteRow(r[0].row[0], 1);
-                                            afterChange();
+                                            triggerRecalc();
                                         },
                                     },
                                 ],
@@ -1330,13 +1277,15 @@ function ctxItem(
     text: string,
     kind: EntryKind,
     sameLevelAsSelected: boolean,
-    afterChange: () => void,
+    triggerRecalc: () => void,
     addRow: (k: EntryKind, same: boolean) => void,
 ) {
     return {
         text,
         type: 'button',
-        onClick: () => addRow(kind, sameLevelAsSelected),
+        onClick: () => {
+            addRow(kind, sameLevelAsSelected);
+            triggerRecalc(); 
+        },
     };
 }
-
