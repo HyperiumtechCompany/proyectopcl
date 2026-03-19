@@ -883,6 +883,97 @@ export default function ComunicacionesIndex() {
     setTimeout(() => { recalcActiveSheet(); }, 0);
   };
 
+  // ----
+  // export excel
+  const exportToExcel = () => {
+    const ls = (window as any).luckysheet;
+    if (!ls) return;
+
+    const sheets = ls.getAllSheets();
+    const wb = XLSX.utils.book_new();
+
+    sheets.forEach((sheet: any) => {
+      const cols =
+        sheet.name === 'Resumen' ? RESUMEN_BASE : BASE_COLS;
+
+      const rows = sheetToRows(sheet, cols);
+
+      // 🔹 Limpieza opcional (quitar columnas internas)
+      const cleanRows = rows.map((r: any) => {
+        const { _level, _kind, ...rest } = r;
+        return rest;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(cleanRows);
+      XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+    });
+
+    const buffer = XLSX.write(wb, {
+      bookType: 'xlsx',
+      type: 'array',
+    });
+
+    saveAs(
+      new Blob([buffer]),
+      `metrado_${project.nombre}.xlsx`
+    );
+  };
+
+  //--------
+  // importar excel 
+  const handleImport = (file: File) => {
+    if (!file.name.endsWith('.xlsx')) {
+      alert('Solo archivos Excel (.xlsx)');
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e: any) => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+
+      const newSheets: any[] = [];
+
+      workbook.SheetNames.forEach((name, index) => {
+        const ws = workbook.Sheets[name];
+
+        let json: any[] = XLSX.utils.sheet_to_json(ws, {
+          defval: null,
+        });
+
+        const cols =
+          name === 'Resumen' ? RESUMEN_BASE : BASE_COLS;
+
+        json = json.map((row) => ({
+          ...row,
+          _level: row._level ?? 1,
+          _kind: row._kind ?? 'leaf',
+        }));
+
+        const sheet = rowsToSheet(json, cols, name, index);
+        newSheets.push(sheet);
+      });
+
+      const ls = (window as any).luckysheet;
+      if (!ls) return;
+
+      ls.destroy(); 
+
+      ls.create({
+        container: 'luckysheet', 
+        data: newSheets,
+      });
+
+      setTimeout(() => {
+        recalcActiveSheet();
+      }, 200);
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════
@@ -1002,6 +1093,19 @@ export default function ComunicacionesIndex() {
             >
               Exportar
             </Button>
+
+            <label className="cursor-pointer">
+                <span className="text-[11px]">Importar</span>
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImport(file);
+                  }}
+                />
+              </label>
           </div>
         </header>
 
