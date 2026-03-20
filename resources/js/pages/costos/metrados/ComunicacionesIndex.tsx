@@ -104,7 +104,7 @@ const RESUMEN_BASE: ColumnDef[] = [
 // ═══════════════════════════════════════════════════════════════════════
 const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza'];
 
-const TOP_LEVEL_START = 5;
+const TOP_LEVEL_START = 6;
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 const MAX_LEVELS = 10;
