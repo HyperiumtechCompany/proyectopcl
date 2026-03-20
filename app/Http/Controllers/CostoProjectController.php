@@ -82,9 +82,11 @@ class CostoProjectController extends Controller
 
         $dbName = CostoProject::generateDatabaseName(Auth::id());
         $project = null;
+        $cantidadModulos = $validated['sanitarias_cantidad_modulos'] ?? 1;
 
         try {
-            // 1. Crear registro en BD principal
+
+            // 1️⃣ Crear registro en BD principal
             $project = CostoProject::create([
                 'user_id' => Auth::id(),
                 'nombre' => $validated['nombre'],
@@ -103,15 +105,15 @@ class CostoProjectController extends Controller
                 'database_name' => $dbName,
             ]);
 
-            // 2. Crear registros de módulos seleccionados
-            $cantidadModulos = $validated['sanitarias_cantidad_modulos'] ?? 1;
-
+            // 2️⃣ Crear módulos seleccionados
             foreach ($validated['modules'] as $moduleType) {
+
                 $moduleConfig = null;
 
-                // Store sanitarias-specific config
                 if ($moduleType === 'metrado_sanitarias') {
-                    $moduleConfig = ['cantidad_modulos' => $cantidadModulos];
+                    $moduleConfig = [
+                        'cantidad_modulos' => $cantidadModulos
+                    ];
                 }
 
                 CostoProjectModule::create([
@@ -122,36 +124,42 @@ class CostoProjectController extends Controller
                 ]);
             }
 
-            // 3. Crear la BD aislada y ejecutar migraciones tenant
+            // 3️⃣ Crear base de datos aislada
             $this->dbService->createDatabase($project);
 
-            // 4. Initialize sanitarias config in tenant DB if module is enabled
+            // 4️⃣ Configuración inicial para sanitarias
             if (in_array('metrado_sanitarias', $validated['modules'])) {
+
                 $this->dbService->setTenantConnection($dbName);
+
                 DB::connection('costos_tenant')
                     ->table('metrado_sanitarias_config')
                     ->insert([
                         'cantidad_modulos' => $cantidadModulos,
-                        'nombre_proyecto'  => $validated['nombre'],
-                        'created_at'       => now(),
-                        'updated_at'       => now(),
+                        'nombre_proyecto' => $validated['nombre'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ]);
             }
 
             return redirect()->route('costos.show', $project)
                 ->with('success', 'Proyecto de costos creado exitosamente.');
+
         } catch (\Exception $e) {
+
             Log::error('Error creating costos project', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Limpiar: eliminar BD si se creó y eliminar registro
-            if ($this->dbService->databaseExists($dbName)) {
+            // Limpieza si algo falló
+            if ($project && $this->dbService->databaseExists($dbName)) {
                 try {
                     $this->dbService->dropDatabase($project);
                 } catch (\Exception $dropEx) {
-                    Log::error('Failed to cleanup DB', ['error' => $dropEx->getMessage()]);
+                    Log::error('Failed to cleanup DB', [
+                        'error' => $dropEx->getMessage()
+                    ]);
                 }
             }
 
@@ -160,12 +168,14 @@ class CostoProjectController extends Controller
                 $project->delete();
             }
 
-            return back()->withErrors(['general' => 'Error al crear el proyecto: ' . $e->getMessage()]);
+            return back()->withErrors([
+                'general' => 'Error al crear el proyecto: ' . $e->getMessage()
+            ]);
         }
     }
 
     /**
-     * Dashboard de un proyecto de costos.
+     * Dashboard del proyecto.
      */
     public function show(CostoProject $costoProject)
     {
@@ -197,13 +207,12 @@ class CostoProjectController extends Controller
     }
 
     /**
-     * Eliminar proyecto y su base de datos aislada.
+     * Eliminar proyecto.
      */
     public function destroy(CostoProject $costoProject)
     {
         $this->authorizeProject($costoProject);
 
-        // Drop the isolated database
         $this->dbService->dropDatabase($costoProject);
 
         $costoProject->delete();
@@ -213,7 +222,7 @@ class CostoProjectController extends Controller
     }
 
     /**
-     * Verificar que el usuario actual es dueño del proyecto.
+     * Verificar dueño del proyecto.
      */
     protected function authorizeProject(CostoProject $project): void
     {

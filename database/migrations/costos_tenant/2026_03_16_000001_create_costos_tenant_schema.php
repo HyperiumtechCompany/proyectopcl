@@ -99,7 +99,7 @@ return new class extends Migration
         // 1. PRESUPUESTOS — TABLA MAESTRA (padre de todo el sistema)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuestos')) {
-            Schema::create('presupuestos', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuestos', function (Blueprint $table) {
                 $table->id();
                 $table->string('nombre');
                 $table->text('descripcion')->nullable();
@@ -132,12 +132,15 @@ return new class extends Migration
 
         foreach ($metradoTables as $tableName) {
             if (!Schema::connection($this->connection)->hasTable($tableName)) {
-                Schema::create($tableName, function (Blueprint $table) {
+                Schema::connection($this->connection)->create($tableName, function (Blueprint $table) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();
                     $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
 
                     $table->integer('item_order')->default(0);
+                    $table->string('node_type', 20)->default('partida');
+                    $table->string('titulo', 255)->nullable();
+                    $table->string('item', 30)->nullable();
                     $table->string('partida', 50)->nullable();
                     $table->text('descripcion')->nullable();
                     $table->string('unidad', 20)->nullable();
@@ -224,7 +227,7 @@ return new class extends Migration
 
         // 3a. Cronograma General (tipo Gantt)
         if (!Schema::connection($this->connection)->hasTable('cronograma_general')) {
-            Schema::create('cronograma_general', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('cronograma_general', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
@@ -247,7 +250,7 @@ return new class extends Migration
 
         // 3b. Cronograma Valorizado (distribución mensual del presupuesto)
         if (!Schema::connection($this->connection)->hasTable('cronograma_valorizado')) {
-            Schema::create('cronograma_valorizado', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('cronograma_valorizado', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
@@ -267,7 +270,7 @@ return new class extends Migration
 
         // 3c. Cronograma de Materiales (adquisición de materiales por mes)
         if (!Schema::connection($this->connection)->hasTable('cronograma_materiales')) {
-            Schema::create('cronograma_materiales', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('cronograma_materiales', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
@@ -289,7 +292,7 @@ return new class extends Migration
         // 4. ESPECIFICACIONES TÉCNICAS — vinculadas a presupuestos
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('especificaciones_tecnicas')) {
-            Schema::create('especificaciones_tecnicas', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('especificaciones_tecnicas', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
@@ -316,7 +319,7 @@ return new class extends Migration
         // 5. PRESUPUESTO GENERAL — partidas WBS
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuesto_general')) {
-            Schema::create('presupuesto_general', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuesto_general', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -344,7 +347,7 @@ return new class extends Migration
         // 6. GG FIJOS — árbol principal (seccion → grupo → detalle)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_fijos')) {
-            Schema::create('gg_fijos', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_fijos', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -390,7 +393,7 @@ return new class extends Migration
         // 6a. GG FIJOS DESAGREGADO — FIANZAS
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_fijos_fianzas')) {
-            Schema::create('gg_fijos_fianzas', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_fijos_fianzas', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -443,7 +446,7 @@ return new class extends Migration
         // 6b. GG FIJOS DESAGREGADO — PÓLIZAS DE SEGUROS
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_fijos_polizas')) {
-            Schema::create('gg_fijos_polizas', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_fijos_polizas', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -487,7 +490,7 @@ return new class extends Migration
         // 7. GG VARIABLES — árbol con vínculo opcional a remuneraciones
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_variables')) {
-            Schema::create('gg_variables', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_variables', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -526,7 +529,7 @@ return new class extends Migration
         // 8. PRESUPUESTO REMUNERACIONES (Detalle de GG Variables)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuesto_remuneraciones')) {
-            Schema::create('presupuesto_remuneraciones', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuesto_remuneraciones', function (Blueprint $table) {
                 $table->id();
 
                 $table->unsignedBigInteger('presupuesto_id');
@@ -572,7 +575,7 @@ return new class extends Migration
         // 9. GG SUPERVISIÓN
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_supervision')) {
-            Schema::create('gg_supervision', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_supervision', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -653,7 +656,7 @@ return new class extends Migration
         // 10. GG CONTROL CONCURRENTE
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_control_concurrente')) {
-            Schema::create('gg_control_concurrente', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_control_concurrente', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -695,7 +698,7 @@ return new class extends Migration
         // 11. GG CONSOLIDADO — caché de totales + resumen
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('gg_consolidado')) {
-            Schema::create('gg_consolidado', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('gg_consolidado', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->unique();
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -709,17 +712,17 @@ return new class extends Migration
 
                 // Componentes I–VI
                 $table->decimal('comp_i_costo_directo',            15, 4)->default(0);
-                $table->decimal('comp_i_porcentaje',                6, 4)->default(0);
+                $table->decimal('comp_i_porcentaje',               12, 4)->default(0);
                 $table->decimal('comp_ii_gastos_generales',        15, 4)->default(0);
-                $table->decimal('comp_ii_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_ii_porcentaje',              12, 4)->default(0);
                 $table->decimal('comp_iii_utilidad',               15, 4)->default(0);
-                $table->decimal('comp_iii_porcentaje',              6, 4)->default(0);
+                $table->decimal('comp_iii_porcentaje',             12, 4)->default(0);
                 $table->decimal('comp_iv_subtotal_sin_igv',        15, 4)->default(0);
-                $table->decimal('comp_iv_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_iv_porcentaje',              12, 4)->default(0);
                 $table->decimal('comp_v_igv',                      15, 4)->default(0);
-                $table->decimal('comp_v_porcentaje',                6, 4)->default(18.00);
+                $table->decimal('comp_v_porcentaje',               12, 4)->default(18.00);
                 $table->decimal('comp_vi_valor_con_igv',           15, 4)->default(0);
-                $table->decimal('comp_vi_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_vi_porcentaje',              12, 4)->default(0);
 
                 // Totales finales
                 $table->decimal('total_presupuesto_obra',          15, 4)->default(0);
@@ -731,8 +734,8 @@ return new class extends Migration
                 $table->string('total_inversion_obra_letras', 500)->nullable();
 
                 // Indicadores
-                $table->decimal('porcentaje_gg_sobre_cd',          6, 4)->default(0);
-                $table->decimal('porcentaje_supervision_sobre_cd', 6, 4)->default(0);
+                $table->decimal('porcentaje_gg_sobre_cd',          12, 4)->default(0);
+                $table->decimal('porcentaje_supervision_sobre_cd', 12, 4)->default(0);
 
                 $table->timestamp('calculado_at')->nullable();
                 $table->timestamps();
@@ -745,7 +748,7 @@ return new class extends Migration
         // 12. PRESUPUESTO ACUs (Análisis de Costos Unitarios)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuesto_acus')) {
-            Schema::create('presupuesto_acus', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuesto_acus', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -783,7 +786,7 @@ return new class extends Migration
         // 13. PRESUPUESTO INSUMOS (catálogo por proyecto)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuesto_insumos')) {
-            Schema::create('presupuesto_insumos', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuesto_insumos', function (Blueprint $table) {
                 $table->id();
                 $table->string('codigo', 50)->unique();
                 $table->text('descripcion');
@@ -803,7 +806,7 @@ return new class extends Migration
         // 14. PRESUPUESTO ÍNDICES (fórmula polinómica)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('presupuesto_indices')) {
-            Schema::create('presupuesto_indices', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('presupuesto_indices', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
                 $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->cascadeOnDelete();
@@ -829,7 +832,7 @@ return new class extends Migration
         // 15. CATÁLOGOS GLOBALES DE INSUMOS (sin presupuesto_id)
         // ══════════════════════════════════════════════════════════════════════
         if (!Schema::connection($this->connection)->hasTable('insumo_clases')) {
-            Schema::create('insumo_clases', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('insumo_clases', function (Blueprint $table) {
                 $table->id();
                 $table->string('codigo', 20)->unique();
                 $table->string('descripcion', 255);
@@ -840,7 +843,7 @@ return new class extends Migration
         }
 
         if (!Schema::connection($this->connection)->hasTable('insumo_productos')) {
-            Schema::create('insumo_productos', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('insumo_productos', function (Blueprint $table) {
                 $table->id();
                 $table->string('codigo_producto', 50)->unique();
                 $table->text('descripcion');
@@ -868,7 +871,7 @@ return new class extends Migration
 
         // 16a. Configuración del módulo sanitarias
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_config')) {
-            Schema::create('metrado_sanitarias_config', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('metrado_sanitarias_config', function (Blueprint $table) {
                 $table->id();
                 $table->integer('cantidad_modulos')->default(1);
                 $table->string('nombre_proyecto', 255)->nullable();
@@ -878,7 +881,7 @@ return new class extends Migration
 
         // 16b. Módulos dinámicos (N hojas con misma estructura)
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_modulos')) {
-            Schema::create('metrado_sanitarias_modulos', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('metrado_sanitarias_modulos', function (Blueprint $table) {
                 $table->id();
                 $table->integer('modulo_numero')->default(1);
                 $table->string('modulo_nombre', 100)->nullable();
@@ -910,7 +913,7 @@ return new class extends Migration
 
         // 16c. Red Exterior
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_exterior')) {
-            Schema::create('metrado_sanitarias_exterior', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('metrado_sanitarias_exterior', function (Blueprint $table) {
                 $table->id();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
@@ -938,7 +941,7 @@ return new class extends Migration
 
         // 16d. Cisterna / Tanque Elevado
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_cisterna')) {
-            Schema::create('metrado_sanitarias_cisterna', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('metrado_sanitarias_cisterna', function (Blueprint $table) {
                 $table->id();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
@@ -966,7 +969,7 @@ return new class extends Migration
 
         // 16e. Resumen Consolidado
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_resumen')) {
-            Schema::create('metrado_sanitarias_resumen', function (Blueprint $table) {
+            Schema::connection($this->connection)->create('metrado_sanitarias_resumen', function (Blueprint $table) {
                 $table->id();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');

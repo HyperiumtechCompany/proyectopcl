@@ -11,6 +11,7 @@ interface GGFijosDesagregadoEditorProps {
     syncTrigger?: number;
     totalSueldos?: number;
     totalBeneficios?: number;
+    montoCG?: number;
 }
 
 interface DesagregadoRow {
@@ -49,7 +50,8 @@ export function GGFijosDesagregadoEditor({
     onSaved, 
     syncTrigger,
     totalSueldos = 0,
-    totalBeneficios = 0
+    totalBeneficios = 0,
+    montoCG = 0
 }: GGFijosDesagregadoEditorProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -60,6 +62,9 @@ export function GGFijosDesagregadoEditor({
     // Consume parameters from store
     const globalBase = useProjectParamsStore(s => s.getCostoDirecto());
     const globalDays = useProjectParamsStore(s => s.getDuracionDias());
+    
+    // Usar montoCG como base para los cálculos si está disponible, sino usar globalBase
+    const baseParaCalculos = montoCG > 0 ? montoCG : globalBase;
 
     useEffect(() => {
         if (tipoCalculo === 'manual') return;
@@ -100,7 +105,7 @@ export function GGFijosDesagregadoEditor({
             .finally(() => setLoading(false));
     }, [tipoCalculo, projectId]);
 
-    // syncTrigger, totalSueldos, totalBeneficios, globalBase, globalDays
+    // syncTrigger, totalSueldos, totalBeneficios, baseParaCalculos, globalDays
     useEffect(() => {
         if (loading) return;
 
@@ -109,8 +114,8 @@ export function GGFijosDesagregadoEditor({
             const newRows = prev.map(row => {
                 const nr = { ...row };
                 
-                // Determine base base calculation
-                let targetBase = globalBase;
+                // Determine base calculation - usar montoCG si está disponible
+                let targetBase = baseParaCalculos;
                 if (tipoCalculo === 'poliza_sctr') {
                     targetBase = totalSueldos + totalBeneficios;
                 } else if (tipoCalculo === 'poliza_essalud_vida') {
@@ -137,7 +142,7 @@ export function GGFijosDesagregadoEditor({
             if (changed) setIsDirty(true);
             return changed ? newRows : prev;
         });
-    }, [syncTrigger, globalBase, globalDays, totalSueldos, totalBeneficios, tipoCalculo, loading]);
+    }, [syncTrigger, baseParaCalculos, globalDays, totalSueldos, totalBeneficios, tipoCalculo, loading]);
 
     // Auto-save effect
     useEffect(() => {
@@ -176,8 +181,8 @@ export function GGFijosDesagregadoEditor({
     };
 
     const addRow = () => {
-        // Al añadir fila, hereda la base actual
-        let targetBase = globalBase;
+        // Al añadir fila, hereda la base actual - usar montoCG si está disponible
+        let targetBase = baseParaCalculos;
         if (tipoCalculo === 'poliza_sctr') targetBase = totalSueldos + totalBeneficios;
         else if (tipoCalculo === 'poliza_essalud_vida') targetBase = totalSueldos;
 

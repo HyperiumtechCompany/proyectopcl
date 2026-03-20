@@ -16,4 +16,16 @@ class MetradosController extends Controller
     {
         return Inertia::render('costos/metrados/Index');
     }
+
+    public function indexComunicacion(): Response
+    {
+        return Inertia::render('costos/metrados/Comunicacion/Index');
+    }
+
+    public function indexElectricas(): Response
+    {
+        return Inertia::render('costos/metrados/metrado_electricas/index');
+    }
+
 }
+

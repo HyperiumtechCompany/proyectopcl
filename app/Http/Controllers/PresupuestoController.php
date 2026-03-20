@@ -218,6 +218,11 @@ class PresupuestoController extends Controller
                 $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
             }
 
+            // Recalcular consolidado en backend para evitar circularidad y cachear totales
+            if (in_array($subsection, ['general', 'gastos_fijos', 'gastos_generales', 'supervision', 'control_concurrente'], true)) {
+                $this->recalculateConsolidadoSnapshot($project, null);
+            }
+
             // Fetch updated data to return
             $updatedRows = $this->getOrderedRows($tableName)
                 ->map(fn($row) => (array)$row)
@@ -243,6 +248,257 @@ class PresupuestoController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Devuelve el snapshot consolidado (cálculo cacheado).
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/consolidado/snapshot
+     */
+    public function getConsolidadoSnapshot(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        try {
+            $row = $this->recalculateConsolidadoSnapshot($project, null);
+        } catch (\Throwable $e) {
+            Log::error('Error recalculating consolidado snapshot', [
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo calcular el consolidado',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $row,
+        ]);
+    }
+
+    /**
+     * Guarda inputs del consolidado y recalcula.
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/consolidado/snapshot
+     */
+    public function saveConsolidadoSnapshot(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $inputs = [
+            'utilidad_porcentaje' => $request->input('utilidad_porcentaje'),
+            'igv_porcentaje' => $request->input('igv_porcentaje'),
+            'componente_ii_monto' => $request->input('componente_ii_monto'),
+            'componentes_extra' => $request->input('componentes_extra'),
+        ];
+
+        try {
+            $row = $this->recalculateConsolidadoSnapshot($project, $inputs);
+        } catch (\Throwable $e) {
+            Log::error('Error saving consolidado snapshot', [
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo guardar el consolidado',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $row,
+        ]);
+    }
+
+    /**
+     * Recalcula el consolidado y lo persiste en gg_consolidado.
+     */
+    private function recalculateConsolidadoSnapshot(CostoProject $project, ?array $inputs): array
+    {
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $existing = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->first();
+
+        $projectParams = $connection->table('project_params')->first();
+
+        $utilidadPct = $inputs['utilidad_porcentaje'] ?? ($existing->utilidad_porcentaje ?? ($projectParams->utilidad_porcentaje ?? 5));
+        $igvPct = $inputs['igv_porcentaje'] ?? ($existing->igv_porcentaje ?? ($projectParams->igv_porcentaje ?? 18));
+        $componenteIIMonto = $inputs['componente_ii_monto'] ?? ($existing->componente_ii_monto ?? 0);
+
+        $extraComponents = $inputs['componentes_extra'] ?? null;
+        if ($extraComponents === null) {
+            $extraComponents = $existing->componentes_extra_json ?? '[]';
+            $extraComponents = is_string($extraComponents) ? json_decode($extraComponents, true) : $extraComponents;
+        }
+        if (!is_array($extraComponents)) {
+            $extraComponents = [];
+        }
+
+        $costoDirecto = (float) $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->sum('parcial');
+
+        $ggFijosTotal = (float) $connection->table('gg_fijos')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial');
+
+        $ggVariablesTotal = (float) $connection->table('gg_variables')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial');
+
+        $supervisionRow = $connection->table('gg_supervision')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('item_codigo', 'VIII')
+            ->orderBy('id', 'desc')
+            ->first();
+        $supervisionTotal = $supervisionRow
+            ? (float) ($supervisionRow->subtotal ?? 0)
+            : (float) $connection->table('gg_supervision')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->where('tipo_fila', 'detalle')
+                ->sum('subtotal');
+
+        $controlConcurrenteTotal = (float) $connection->table('gg_control_concurrente')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('sub_total');
+
+        $totalGastosGenerales = $ggFijosTotal + $ggVariablesTotal;
+        $utilidadTotal = $costoDirecto * ($utilidadPct / 100);
+        $subTotalPresupuesto = $costoDirecto + $totalGastosGenerales + $utilidadTotal;
+        $igvComponenteI = $subTotalPresupuesto * ($igvPct / 100);
+        $subTotalComponenteI = $subTotalPresupuesto + $igvComponenteI;
+
+        $componenteIIMontoNum = (float) $componenteIIMonto;
+        $igvComponenteII = $componenteIIMontoNum * ($igvPct / 100);
+        $subTotalComponenteII = $componenteIIMontoNum + $igvComponenteII;
+
+        $extraTotal = 0.0;
+        foreach ($extraComponents as $comp) {
+            $monto = (float) ($comp['monto'] ?? 0);
+            $extraTotal += $monto + ($monto * ($igvPct / 100));
+        }
+
+        $totalComponents = $subTotalComponenteI + $subTotalComponenteII + $extraTotal;
+        $totalConsolidado = $totalComponents + $supervisionTotal;
+        $controlConcurrenteFinanciado = $totalConsolidado * 0.02;
+        $totalInversionObra = $totalConsolidado + $controlConcurrenteFinanciado;
+
+        $payload = [
+            'presupuesto_id' => $tenantPresupuestoId,
+            'total_costo_directo' => round($costoDirecto, 4),
+            'total_gg_fijos' => round($ggFijosTotal, 4),
+            'total_gg_variables' => round($ggVariablesTotal, 4),
+            'total_supervision' => round($supervisionTotal, 4),
+            'total_control_concurrente' => round($controlConcurrenteTotal, 4),
+
+            'utilidad_porcentaje' => round((float) $utilidadPct, 4),
+            'igv_porcentaje' => round((float) $igvPct, 4),
+            'componente_ii_monto' => round($componenteIIMontoNum, 4),
+            'componentes_extra_json' => json_encode($extraComponents),
+
+            'comp_i_costo_directo' => round($costoDirecto, 4),
+            'comp_i_porcentaje' => 100.0000,
+            'comp_ii_gastos_generales' => round($totalGastosGenerales, 4),
+            'comp_ii_porcentaje' => $costoDirecto > 0 ? round(($totalGastosGenerales / $costoDirecto) * 100, 4) : 0,
+            'comp_iii_utilidad' => round($utilidadTotal, 4),
+            'comp_iii_porcentaje' => round((float) $utilidadPct, 4),
+            'comp_iv_subtotal_sin_igv' => round($subTotalPresupuesto, 4),
+            'comp_iv_porcentaje' => 100.0000,
+            'comp_v_igv' => round($igvComponenteI, 4),
+            'comp_v_porcentaje' => round((float) $igvPct, 4),
+            'comp_vi_valor_con_igv' => round($subTotalComponenteI, 4),
+            'comp_vi_porcentaje' => 100.0000,
+
+            'total_presupuesto_obra' => round($totalComponents, 4),
+            'total_con_igv' => round($subTotalComponenteI, 4),
+            'total_inversion_obra' => round($totalInversionObra, 4),
+
+            'total_letras' => $this->amountToWords($totalConsolidado),
+            'total_inversion_obra_letras' => $this->amountToWords($totalInversionObra),
+            'porcentaje_gg_sobre_cd' => $costoDirecto > 0 ? round($totalGastosGenerales / $costoDirecto, 4) : 0,
+            'porcentaje_supervision_sobre_cd' => $costoDirecto > 0 ? round($supervisionTotal / $costoDirecto, 4) : 0,
+            'calculado_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        // Filtrar payload a columnas reales (tenants pueden no tener nuevas columnas)
+        $realColumns = Schema::connection('costos_tenant')->getColumnListing('gg_consolidado');
+        $filteredPayload = collect($payload)
+            ->filter(fn($val, $key) => in_array($key, $realColumns, true))
+            ->toArray();
+
+        if ($existing) {
+            $connection->table('gg_consolidado')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->update($filteredPayload);
+        } else {
+            $filteredPayload['created_at'] = now();
+            $connection->table('gg_consolidado')->insert($filteredPayload);
+        }
+
+        return $filteredPayload + ['presupuesto_id' => $tenantPresupuestoId];
+    }
+
+    private function numberToWordsES(int $n): string
+    {
+        $ones = [
+            '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+            'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE',
+            'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES',
+            'VEINTICUATRO', 'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
+        ];
+        $tens = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+        $hundreds = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+        if ($n === 0) return '';
+        if ($n === 100) return 'CIEN';
+        if ($n < 30) return $ones[$n];
+        if ($n < 100) {
+            $t = intdiv($n, 10);
+            $o = $n % 10;
+            return $tens[$t] . ($o ? ' Y ' . $ones[$o] : '');
+        }
+        $h = intdiv($n, 100);
+        $rem = $n % 100;
+        return $hundreds[$h] . ($rem ? ' ' . $this->numberToWordsES($rem) : '');
+    }
+
+    private function amountToWords(float $amount): string
+    {
+        $intPart = (int) floor($amount);
+        $decPart = (int) round(($amount - $intPart) * 100);
+
+        if ($intPart === 0) {
+            $words = 'CERO';
+        } else {
+            $words = '';
+            $rem = $intPart;
+            if ($rem >= 1000000) {
+                $m = intdiv($rem, 1000000);
+                $words .= ($m === 1 ? 'UN MILLON' : $this->numberToWordsES($m) . ' MILLONES') . ' ';
+                $rem = $rem % 1000000;
+            }
+            if ($rem >= 1000) {
+                $k = intdiv($rem, 1000);
+                $words .= ($k === 1 ? 'MIL' : $this->numberToWordsES($k) . ' MIL') . ' ';
+                $rem = $rem % 1000;
+            }
+            if ($rem > 0) {
+                $words .= $this->numberToWordsES($rem);
+            }
+            $words = trim($words);
+        }
+
+        return 'SON: ' . $words . ' CON ' . str_pad((string) $decPart, 2, '0', STR_PAD_LEFT) . '/100 SOLES';
     }
 
     /**
@@ -802,6 +1058,98 @@ class PresupuestoController extends Controller
             'success' => true,
             'totals' => $totals,
         ]);
+    }
+
+    /**
+     * Obtiene los valores de GGF%, GGV% y Utilidad% para el cálculo de montoCG.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/ggfijos-monto-cg
+     */
+    public function getGGFijosMontoCG(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Verificar si existen las columnas, si no, agregarlas
+        $this->ensureColumnsExist($connection);
+
+        $record = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ggf_porcentaje' => $record && isset($record->ggf_porcentaje) ? (float) $record->ggf_porcentaje : 0,
+                'ggv_porcentaje' => $record && isset($record->ggv_porcentaje) ? (float) $record->ggv_porcentaje : 0,
+                'utilidad_porcentaje' => $record && isset($record->utilidad_porcentaje) ? (float) $record->utilidad_porcentaje : 10,
+            ],
+        ]);
+    }
+
+    /**
+     * Guarda los valores de GGF%, GGV% y Utilidad% para el cálculo de montoCG.
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/ggfijos-monto-cg
+     */
+    public function saveGGFijosMontoCG(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $ggfPorcentaje = $request->input('ggf_porcentaje', 0);
+        $ggvPorcentaje = $request->input('ggv_porcentaje', 0);
+        $utilidadPorcentaje = $request->input('utilidad_porcentaje', 10);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Verificar si existen las columnas, si no, agregarlas
+        $this->ensureColumnsExist($connection);
+
+        // Upsert the record
+        $connection->table('gg_consolidado')
+            ->updateOrInsert(
+                ['presupuesto_id' => $tenantPresupuestoId],
+                [
+                    'ggf_porcentaje' => $ggfPorcentaje,
+                    'ggv_porcentaje' => $ggvPorcentaje,
+                    'utilidad_porcentaje' => $utilidadPorcentaje,
+                    'updated_at' => now(),
+                ]
+            );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ggf_porcentaje' => $ggfPorcentaje,
+                'ggv_porcentaje' => $ggvPorcentaje,
+                'utilidad_porcentaje' => $utilidadPorcentaje,
+            ],
+        ]);
+    }
+
+    /**
+     * Asegura que las columnas necesarias existan en la tabla gg_consolidado
+     */
+    private function ensureColumnsExist($connection): void
+    {
+        try {
+            // Verificar si ggf_porcentaje existe
+            $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
+            if (!in_array('ggf_porcentaje', $columns)) {
+                $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggf_porcentaje DECIMAL(12,4) DEFAULT 0');
+            }
+
+            // Verificar si ggv_porcentaje existe
+            $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
+            if (!in_array('ggv_porcentaje', $columns)) {
+                $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggv_porcentaje DECIMAL(12,4) DEFAULT 0');
+            }
+        } catch (\Exception $e) {
+            // Silently fail - columns might already exist
+        }
     }
 
     /**

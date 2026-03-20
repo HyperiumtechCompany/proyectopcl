@@ -16,7 +16,10 @@ export interface ACUComponente {
     descripcion: string;
     unidad: string;
     cantidad: number;
+<<<<<<< HEAD
+=======
     recursos?: number;
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     precio_unitario: number;
     factor_desperdicio?: number;
     precio_hora?: number;
@@ -32,6 +35,11 @@ export interface ACU {
     mano_de_obra: ACUComponente[];
     materiales: ACUComponente[];
     equipos: ACUComponente[];
+<<<<<<< HEAD
+    costo_mano_obra: number;
+    costo_materiales: number;
+    costo_equipos: number;
+=======
     subcontratos?: ACUComponente[];
     subpartidas?: ACUComponente[];
     costo_mano_obra: number;
@@ -39,6 +47,7 @@ export interface ACU {
     costo_equipos: number;
     costo_subcontratos?: number;
     costo_subpartidas?: number;
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     costo_unitario_total: number;
     item_order: number;
 }
@@ -153,11 +162,15 @@ export interface ColumnDef {
 export type RendimientoModo = 'dia' | 'hora' | 'global';
 
 export interface ACUComponenteRow {
+    recursos: null;
     codigo?: string | null;
     descripcion: string;
     unidad?: string | null;
     cantidad?: number | null;
+<<<<<<< HEAD
+=======
     recursos?: number | null;
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     precio_unitario?: number | null;
     precio_hora?: number | null;
     factor_desperdicio?: number | null;
@@ -173,14 +186,20 @@ export interface ACURowSummary {
     costo_mano_obra: number;
     costo_materiales: number;
     costo_equipos: number;
+<<<<<<< HEAD
+=======
     costo_subcontratos: number;
     costo_subpartidas: number;
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     costo_unitario_total: number;
     mano_de_obra: ACUComponenteRow[];
     materiales: ACUComponenteRow[];
     equipos: ACUComponenteRow[];
+<<<<<<< HEAD
+=======
     subcontratos: ACUComponenteRow[];
     subpartidas: ACUComponenteRow[];
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 }
 
 // export const SUBSECTION_COLUMNS: Record<PresupuestoSubsection, ColumnDef[]> = {

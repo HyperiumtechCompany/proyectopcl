@@ -12,6 +12,7 @@ import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
 import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
 import { useGGFijos } from './hooks/useGGFijos';
 import { useGGVariables } from './hooks/useGGVariables';
+import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
 import { useBudgetStore } from './stores/budgetStore';
 import { RemuneracionesPanel } from './components/RemuneracionesPanel';
 import { GGFijosPanel } from './components/GGFijosPanel';
@@ -30,6 +31,7 @@ import {
 import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { SupervisionPanel } from './components/SupervisionPanel';
 import { ConsolidadoPanel } from './components/ConsolidadoPanel';
+import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
 
 interface PageProps {
     project: {
@@ -142,7 +144,6 @@ export default function Index() {
                 `/costos/proyectos/${project.id}/presupuesto/general`,
                 { rows: currentRows },
             );
-
             setDirty(false);
             setLastSavedTime(new Date());
         } catch (error) {
@@ -227,6 +228,15 @@ export default function Index() {
         subsection,
     });
 
+    const {
+        gastosGeneralesRows,
+        gastosGeneralesLoading,
+        saveGastoGeneral,
+    } = usePresupuestoGastosGenerales({
+        projectId: project.id,
+        subsection,
+    });
+
     const handleSaveGGFijos = async (data: any) => {
         return await saveGGFijos(data);
     };
@@ -237,6 +247,10 @@ export default function Index() {
 
     const handleSaveRemuneracion = async (data: any) => {
         return await saveRemuneracion(data);
+    };
+
+    const handleSaveControlConcurrente = async (data: any) => {
+        return await saveGastoGeneral(data);
     };
 
     // --- Navigation Groups ---
@@ -290,7 +304,7 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Presupuesto - ${project.nombre}`} />
 
-            <div className="flex h-[calc(100vh-120px)] flex-col gap-3 p-2">
+            <div className="flex h-full flex-col gap-3 p-2">
                 {/* --- Root Menu --- */}
                 <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-900 p-1 shadow-inner">
                     {mainTabs.map((tab) => {
@@ -438,26 +452,32 @@ export default function Index() {
                                 projectId={project.id}
                             />
                         ) : subsection === 'gastos_generales' ? (
-                            <Group orientation="horizontal">
-                                <Panel defaultSize={40} minSize={20}>
-                                    <GGFijosPanel
-                                        loading={ggFijosLoading}
-                                        nodes={ggFijosNodes}
-                                        onSave={handleSaveGGFijos}
-                                        projectId={project.id}
-                                        totalBudget={totalBudget}
-                                    />
-                                </Panel>
-                                <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
-                                <Panel defaultSize={40} minSize={25}>
-                                    <GGVariablesPanel
-                                        loading={ggVariablesLoading}
-                                        nodes={ggVariablesNodes}
-                                        onSave={handleSaveGGVariables}
-                                        projectId={project.id}
-                                    />
-                                </Panel>
-                            </Group>
+                            <div className="flex flex-1 flex-col overflow-auto gap-4 p-4">
+                                {/* Gastos Generales Fijos - Listado 1 */}
+                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+                                    <div className="flex-1 overflow-auto">
+                                        <GGFijosPanel
+                                            loading={ggFijosLoading}
+                                            nodes={ggFijosNodes}
+                                            onSave={handleSaveGGFijos}
+                                            projectId={project.id}
+                                            totalBudget={totalBudget}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Gastos Generales Variables - Listado 2 */}
+                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+                                    <div className="flex-1 overflow-auto">
+                                        <GGVariablesPanel
+                                            loading={ggVariablesLoading}
+                                            nodes={ggVariablesNodes}
+                                            onSave={handleSaveGGVariables}
+                                            projectId={project.id}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         ) : subsection === 'gastos_fijos' ? (
                             //gastos fijos desagregados (parámetros vienen del store)
                             <GGFijosDesagregadoPanel
@@ -465,6 +485,13 @@ export default function Index() {
                             />
                         ) : subsection === 'supervision' ? (
                             <SupervisionPanel projectId={project.id} />
+                        ) : subsection === 'control_concurrente' ? (
+                            <ControlConcurrentePanel
+                                loading={gastosGeneralesLoading}
+                                rows={gastosGeneralesRows}
+                                onSaveGastoGeneral={handleSaveControlConcurrente}
+                                projectId={project.id}
+                            />
                         ) : subsection === 'consolidado' ? (
                             <ConsolidadoPanel projectId={project.id} />
                         ) : (
