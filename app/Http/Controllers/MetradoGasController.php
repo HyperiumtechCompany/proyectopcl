@@ -2,133 +2,57 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\CostoProject;  
+use App\Models\CostoProject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Traits\HandleMetradoSpreadsheet;
 
 class MetradoGasController extends Controller
 {
-    private const TABLE_METRADO = 'metrados_gas';
-    private const TABLE_RESUMEN = 'metrados_gas'; 
+    use HandleMetradoSpreadsheet;
 
-    public function index(CostoProject $costoProject): Response  
+    private const TABLE_METRADO = 'metrado_gas';
+    private const TABLE_RESUMEN = 'metrado_gas_resumen';
+
+    public function index(CostoProject $costoProject): Response
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        $metrado = $this->queryRows($costoProject->id, 'metrado');
-        $resumen = $this->queryRows($costoProject->id, 'resumen');
+        $this->validateModuleEnabled($costoProject, 'metrado_gas');
 
         return Inertia::render('costos/metrados/GasIndex', [
             'project' => [
                 'id'     => $costoProject->id,
                 'nombre' => $costoProject->nombre,
             ],
-            'metrado' => $metrado,
-            'resumen' => $resumen,
+            'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
+            'resumen' => $this->queryRows($costoProject, self::TABLE_RESUMEN),
         ]);
     }
 
     public function updateMetrado(CostoProject $costoProject, Request $request): JsonResponse
     {
-        return $this->updateSheet($costoProject, 'metrado', $request);
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_gas');
+        return $this->updateSheet($costoProject, self::TABLE_METRADO, $request);
     }
 
     public function updateResumen(CostoProject $costoProject, Request $request): JsonResponse
     {
-        return $this->updateSheet($costoProject, 'resumen', $request);
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_gas');
+        return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
-    private function queryRows(int $projectId, string $hoja): array
+    public function syncResumen(CostoProject $costoProject): JsonResponse
     {
-        return DB::connection('costos_tenant')
-            ->table(self::TABLE_METRADO)
-            ->where('project_id', $projectId)
-            ->where('hoja', $hoja)
-            ->orderBy('orden')
-            ->get()
-            ->map(fn($row) => (array) $row)
-            ->toArray();
-    }
-
-    private function updateSheet(CostoProject $costoProject, string $hoja, Request $request): JsonResponse
-    {
-        $rows = $request->input('rows', []);
-        $connection = DB::connection('costos_tenant');
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_gas');
         
-        $connection->beginTransaction();
-        try {
-            $connection->table(self::TABLE_METRADO)
-                ->where('project_id', $costoProject->id)
-                ->where('hoja', $hoja)
-                ->delete();
-
-            foreach ($rows as $index => $row) {
-                $connection->table(self::TABLE_METRADO)->insert([
-                    'project_id'  => $costoProject->id,
-                    'hoja'        => $hoja,
-                    'orden'       => $index,
-                    'partida'     => $row['partida'] ?? null,
-                    'descripcion' => $row['descripcion'] ?? null,
-                    'unidad'      => $row['unidad'] ?? null,
-                    'elsim'       => $this->toDecimal($row['elsim'] ?? 0),
-                    'largo'       => $this->toDecimal($row['largo'] ?? 0),
-                    'ancho'       => $this->toDecimal($row['ancho'] ?? 0),
-                    'alto'        => $this->toDecimal($row['alto'] ?? 0),
-                    'nveces'      => $this->toDecimal($row['nveces'] ?? 0),
-                    'lon'         => $this->toDecimal($row['lon'] ?? 0),
-                    'area'        => $this->toDecimal($row['area'] ?? 0),
-                    'vol'         => $this->toDecimal($row['vol'] ?? 0),
-                    'kg'          => $this->toDecimal($row['kg'] ?? 0),
-                    'und'         => $this->toDecimal($row['und'] ?? 0),
-                    'total'       => $this->toDecimal($row['total'] ?? 0),
-                    'observacion' => $row['observacion'] ?? null,
-                    '_level'      => $row['_level'] ?? 1,
-                    '_kind'       => $row['_kind'] ?? 'leaf',
-                    'created_at'  => now(),
-                    'updated_at'  => now(),
-                ]);
-            }
-
-            $connection->commit();
-
-            return response()->json([
-                'success' => true,
-                'count'   => count($rows),
-            ]);
-        } catch (\Exception $e) {
-            $connection->rollBack();
-            return response()->json([
-                'success' => false,
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    private function toDecimal(mixed $value): float
-    {
-        return is_numeric($value) ? (float) $value : 0.0;
-    }
-
-    private function authorizeProject(CostoProject $project): void
-    {
-        if ($project->user_id !== auth()->id()) {
-            abort(403, 'No tienes acceso a este proyecto.');
-        }
-    }
-
-    private function validateModuleEnabled(CostoProject $project): void
-    {
-        $enabled = $project->enabledModules()
-            ->where('module_type', 'metrado_gas')
-            ->exists();
-
-        if (!$enabled) {
-            abort(403, 'El módulo de gas no está habilitado.');
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Sincronización completada (backend stub)',
+        ]);
     }
 }

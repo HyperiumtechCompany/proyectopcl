@@ -7,8 +7,10 @@ use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
-use App\Http\Controllers\MetradoComunicacionController;
+use App\Http\Controllers\MetradoArquitecturaController;
+use App\Http\Controllers\MetradoComunicacionesController;
 use App\Http\Controllers\MetradoEstructurasController;
+use App\Http\Controllers\MetradoGasController;
 use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradoElectricasController;
 use App\Http\Controllers\MetradosController;
@@ -17,6 +19,8 @@ use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\MetradoComunicacionSpreadsheetController;
+use App\Http\Controllers\MetradoElectricasSpreadsheetController;
 use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -67,18 +71,34 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
     Route::get('/', [MetradosController::class, 'index'])->name('index');
 
     // cada disciplina se define en un sub‑grupo; aquí va Comunicaciones
-    Route::prefix('comunicacion')->name('comunicacion.')->group(function () {
-        Route::get('/', [MetradoComunicacionController::class, 'index'])->name('index');
-        Route::post('/', [MetradoComunicacionController::class, 'store'])->name('store');
-        Route::get('/join', fn() => redirect()->route('metrados.comunicacion.index'))->name('join.form');
-        Route::post('/join', [MetradoComunicacionController::class, 'join'])->name('join');
-        Route::get('/{metradosComunicacion}', [MetradoComunicacionController::class, 'show'])->name('show');
-        Route::patch('/{metradosComunicacion}', [MetradoComunicacionController::class, 'update'])->name('update');
-        Route::delete('/{metradosComunicacion}', [MetradoComunicacionController::class, 'destroy'])->name('destroy');
-        Route::post('/{metradosComunicacion}/enable-collab', [MetradoComunicacionController::class, 'enableCollaboration'])->name('enable-collab');
+    Route::group(['prefix' => 'comunicaciones', 'as' => 'comunicaciones.'], function () {
+        Route::get('/', [MetradoComunicacionSpreadsheetController::class, 'index'])->name('index');
+        Route::post('/', [MetradoComunicacionSpreadsheetController::class, 'store'])->name('store');
+        Route::get('/join', fn() => redirect()->route('metrados.comunicaciones.index'))->name('join.form');
+        Route::post('/join', [MetradoComunicacionSpreadsheetController::class, 'join'])->name('join');
+        Route::get('/{metradosComunicacion}', [MetradoComunicacionSpreadsheetController::class, 'show'])->name('show');
+        Route::patch('/{metradosComunicacion}', [MetradoComunicacionSpreadsheetController::class, 'update'])->name('update');
+        Route::patch('/{metradosComunicacion}/metrado', [MetradoComunicacionSpreadsheetController::class, 'updateMetrado'])->name('metrado.update');
+        Route::patch('/{metradosComunicacion}/resumen', [MetradoComunicacionSpreadsheetController::class, 'updateResumen'])->name('resumen.update');
+        Route::delete('/{metradosComunicacion}', [MetradoComunicacionSpreadsheetController::class, 'destroy'])->name('destroy');
+        Route::post('/{metradosComunicacion}/enable-collab', [MetradoComunicacionSpreadsheetController::class, 'enableCollaboration'])->name('enable-collab');
     });
 
-    // próximamente: arquitectura, estructuras, sanitarias, eléctricas, gas...
+    // metrado electricas
+    Route::group(['prefix' => 'electricas', 'as' => 'electricas.'], function () {
+        Route::get('/', [MetradoElectricasSpreadsheetController::class, 'index'])->name('index');
+        Route::post('/', [MetradoElectricasSpreadsheetController::class, 'store'])->name('store');
+        Route::get('/join', fn() => redirect()->route('metrados.electricas.index'))->name('join.form');
+        Route::post('/join', [MetradoElectricasSpreadsheetController::class, 'join'])->name('join');
+        Route::get('/{metradosElectrica}', [MetradoElectricasSpreadsheetController::class, 'show'])->name('show');
+        Route::patch('/{metradosElectrica}', [MetradoElectricasSpreadsheetController::class, 'update'])->name('update');
+        Route::patch('/{metradosElectrica}/metrado', [MetradoElectricasSpreadsheetController::class, 'updateMetrado'])->name('metrado.update');
+        Route::patch('/{metradosElectrica}/resumen', [MetradoElectricasSpreadsheetController::class, 'updateResumen'])->name('resumen.update');
+        Route::delete('/{metradosElectrica}', [MetradoElectricasSpreadsheetController::class, 'destroy'])->name('destroy');
+        Route::post('/{metradosElectrica}/enable-collab', [MetradoElectricasSpreadsheetController::class, 'enableCollaboration'])->name('enable-collab');
+    });
+
+    // próximamente: arquitectura, estructuras, sanitarias, gas...
 });
 
 // ─── Cálculo de Agua ────────────────────────────────────────────────────────
@@ -204,6 +224,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::patch('/metrado', [MetradoEstructurasController::class, 'updateMetrado'])->name('metrado.update');
             Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
+            Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
         });
 
     // metrado electricas
@@ -258,7 +279,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
             ->name('resumen.update');
 
-        Route::post('/resumen/sync', [MetradoElectricasController::class, 'syncResumen'])
+        Route::post('/resumen/sync', [MetradoArquitecturaController::class, 'syncResumen'])
             ->name('resumen.sync');
 
         });

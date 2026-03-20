@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 // ═══════════════════════════════════════════════════════════════════════
 interface ColumnDef { key: string; label: string; width: number }
 
-interface ElectricasPageProps {
+interface ArquitecturaPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
@@ -95,7 +95,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// NUMERACIÓN BASE PARA METRADO ELÉCTRICAS
+// NUMERACIÓN BASE PARA METRADO ARQUITECTURA
 // ═══════════════════════════════════════════════════════════════════════
 const TOP_LEVEL_START = 1; //
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
@@ -281,13 +281,13 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════
-export default function ElectricasIndex() {
-  const { project, metrado, resumen } = usePage<ElectricasPageProps>().props;
+export default function ArquitecturaIndex() {
+  const { project, metrado, resumen } = usePage<ArquitecturaPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',              href: '/costos' },
-    { title: project.nombre,        href: `/costos/${project.id}` },
-    { title: 'Metrado Eléctricas',  href: '#' },
+    { title: 'Costos',               href: '/costos' },
+    { title: project.nombre,         href: `/costos/${project.id}` },
+    { title: 'Metrado Arquitectura', href: '#' },
   ];
 
   // ── State ──────────────────────────────────────────────────────────────
@@ -377,12 +377,12 @@ export default function ElectricasIndex() {
       const name = String(sheet?.name ?? '');
       if (name === 'Metrado') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-electricas/metrado`,
+          url: `/costos/${project.id}/metrado-arquitectura/metrado`,
           body: { rows: sheetToRows(sheet, BASE_COLS) },
         });
       } else if (name === 'Resumen') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-electricas/resumen`,
+          url: `/costos/${project.id}/metrado-arquitectura/resumen`,
           body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
         });
       }

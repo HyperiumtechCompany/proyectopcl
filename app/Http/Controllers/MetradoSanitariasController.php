@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
+use App\Traits\HandleMetradoSpreadsheet;
+use App\Services\CostoDatabaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,40 +15,24 @@ use Inertia\Response;
 
 class MetradoSanitariasController extends Controller
 {
-    /**
-     * Sub-table names within the tenant DB.
-     */
+    use HandleMetradoSpreadsheet;
+
     private const TABLE_CONFIG   = 'metrado_sanitarias_config';
     private const TABLE_MODULOS  = 'metrado_sanitarias_modulos';
     private const TABLE_EXTERIOR = 'metrado_sanitarias_exterior';
     private const TABLE_CISTERNA = 'metrado_sanitarias_cisterna';
     private const TABLE_RESUMEN  = 'metrado_sanitarias_resumen';
 
-    /**
-     * Columns shared by módulos, exterior and cisterna (the "base" metrado columns).
-     */
-    private const BASE_COLUMNS = [
-        'item_order', 'node_type', 'titulo', 'partida', 'descripcion', 'unidad',
-        'elsim', 'largo', 'ancho', 'alto', 'nveces',
-        'lon', 'area', 'vol', 'kg', 'und', 'total',
-        'observacion', 'parent_id', 'nivel',
-    ];
-
-    // ─── Index (Inertia page) ────────────────────────────────────────────────────
-
-    /**
-     * Main view: returns config + all sub-table data for the Inertia page.
-     */
     public function index(CostoProject $costoProject): Response
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
 
         $config = $this->getOrCreateConfig();
 
         $modulosData = [];
         for ($i = 1; $i <= $config->cantidad_modulos; $i++) {
-            $modulosData[$i] = $this->queryModuloRows($i);
+            $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
         }
 
         return Inertia::render('costos/metrados/SanitariasIndex', [
@@ -56,18 +42,16 @@ class MetradoSanitariasController extends Controller
             ],
             'config'   => (array) $config,
             'modulos'  => $modulosData,
-            'exterior' => $this->queryTableRows(self::TABLE_EXTERIOR),
-            'cisterna' => $this->queryTableRows(self::TABLE_CISTERNA),
-            'resumen'  => $this->queryTableRows(self::TABLE_RESUMEN),
+            'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
+            'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
+            'resumen'  => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
         ]);
     }
-
-    // ─── Config CRUD ─────────────────────────────────────────────────────────────
 
     public function getConfig(CostoProject $costoProject): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
 
         $config = $this->getOrCreateConfig();
 
@@ -80,7 +64,7 @@ class MetradoSanitariasController extends Controller
     public function updateConfig(CostoProject $costoProject, Request $request): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
 
         $validated = $request->validate([
             'cantidad_modulos' => 'required|integer|min:1|max:50',
@@ -98,7 +82,6 @@ class MetradoSanitariasController extends Controller
                 'updated_at'       => now(),
             ]);
 
-        // Also update the module config in the main DB
         $costoProject->modules()
             ->where('module_type', 'metrado_sanitarias')
             ->update([
@@ -115,48 +98,66 @@ class MetradoSanitariasController extends Controller
         ]);
     }
 
-    // ─── Módulos CRUD ────────────────────────────────────────────────────────────
-
     public function getModulo(CostoProject $costoProject, int $moduloNumero): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
         $this->validateModuloNumero($moduloNumero);
 
         return response()->json([
             'success'       => true,
             'modulo_numero' => $moduloNumero,
-            'rows'          => $this->queryModuloRows($moduloNumero),
+            'rows'          => $this->queryModuloRows($costoProject, $moduloNumero),
         ]);
     }
 
     public function updateModulo(CostoProject $costoProject, int $moduloNumero, Request $request): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
         $this->validateModuloNumero($moduloNumero);
 
         $rows = $request->input('rows', []);
         $moduloNombre = $request->input('modulo_nombre', "Módulo {$moduloNumero}");
 
         $connection = DB::connection('costos_tenant');
+        $presupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($costoProject->database_name);
+        $columns = $connection->getSchemaBuilder()->getColumnListing(self::TABLE_MODULOS);
+        $hasColumn = fn($col) => in_array($col, $columns);
+        
         $connection->beginTransaction();
-
         try {
-            // Delete existing rows for this module
             $connection->table(self::TABLE_MODULOS)
+                ->where('presupuesto_id', $presupuestoId)
                 ->where('modulo_numero', $moduloNumero)
                 ->delete();
 
-            // Insert new rows
             foreach ($rows as $index => $row) {
-                $cleanRow = $this->cleanBaseRow($row, $index);
-                $cleanRow['modulo_numero'] = $moduloNumero;
-                $cleanRow['modulo_nombre'] = $moduloNombre;
-                $cleanRow['created_at']    = now();
-                $cleanRow['updated_at']    = now();
+                $data = [
+                    'presupuesto_id' => $presupuestoId,
+                    'modulo_numero'  => $moduloNumero,
+                    'modulo_nombre'  => $moduloNombre,
+                    'item_order'     => $index,
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
+                ];
 
-                $connection->table(self::TABLE_MODULOS)->insert($cleanRow);
+                if ($hasColumn('node_type'))   $data['node_type']   = $this->normalizeNodeType($row['node_type'] ?? $row['_kind'] ?? 'partida');
+                if ($hasColumn('titulo'))      $data['titulo']      = $row['titulo'] ?? null;
+                if ($hasColumn('partida'))     $data['partida']     = $row['partida'] ?? null;
+                if ($hasColumn('descripcion')) $data['descripcion'] = $row['descripcion'] ?? null;
+                if ($hasColumn('unidad'))      $data['unidad']      = $row['unidad'] ?? null;
+                
+                $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'und', 'total'];
+                foreach ($decimalFields as $f) {
+                    if ($hasColumn($f)) $data[$f] = $this->toDecimalValue($row[$f] ?? 0);
+                }
+
+                if ($hasColumn('observacion')) $data['observacion'] = $row['observacion'] ?? null;
+                if ($hasColumn('parent_id'))   $data['parent_id']   = $row['parent_id'] ?? null;
+                if ($hasColumn('nivel'))       $data['nivel']       = $row['nivel'] ?? $row['_level'] ?? 0;
+
+                $connection->table(self::TABLE_MODULOS)->insert($data);
             }
 
             $connection->commit();
@@ -164,298 +165,73 @@ class MetradoSanitariasController extends Controller
             return response()->json([
                 'success' => true,
                 'count'   => count($rows),
-                'rows'    => $this->queryModuloRows($moduloNumero),
+                'rows'    => $this->queryModuloRows($costoProject, $moduloNumero),
             ]);
         } catch (\Exception $e) {
-            if ($connection->transactionLevel() > 0) {
-                $connection->rollBack();
-            }
-            Log::error('Error saving metrado sanitarias módulo', [
-                'project'       => $costoProject->id,
-                'modulo_numero' => $moduloNumero,
-                'error'         => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error'   => $e->getMessage(),
-            ], 500);
+            $connection->rollBack();
+            Log::error('Error saving sanitarias modulo', ['e' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
-    }
-
-    // ─── Exterior CRUD ───────────────────────────────────────────────────────────
-
-    public function getExterior(CostoProject $costoProject): JsonResponse
-    {
-        $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        return response()->json([
-            'success' => true,
-            'rows'    => $this->queryTableRows(self::TABLE_EXTERIOR),
-        ]);
     }
 
     public function updateExterior(CostoProject $costoProject, Request $request): JsonResponse
     {
-        return $this->updateSimpleTable($costoProject, self::TABLE_EXTERIOR, $request);
-    }
-
-    // ─── Cisterna CRUD ───────────────────────────────────────────────────────────
-
-    public function getCisterna(CostoProject $costoProject): JsonResponse
-    {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        return response()->json([
-            'success' => true,
-            'rows'    => $this->queryTableRows(self::TABLE_CISTERNA),
-        ]);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
+        return $this->updateSheet($costoProject, self::TABLE_EXTERIOR, $request);
     }
 
     public function updateCisterna(CostoProject $costoProject, Request $request): JsonResponse
     {
-        return $this->updateSimpleTable($costoProject, self::TABLE_CISTERNA, $request);
-    }
-
-    // ─── Resumen CRUD ────────────────────────────────────────────────────────────
-
-    public function getResumen(CostoProject $costoProject): JsonResponse
-    {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        return response()->json([
-            'success' => true,
-            'rows'    => $this->queryTableRows(self::TABLE_RESUMEN),
-        ]);
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
+        return $this->updateSheet($costoProject, self::TABLE_CISTERNA, $request);
     }
 
     public function updateResumen(CostoProject $costoProject, Request $request): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        $rows = $request->input('rows', []);
-        $connection = DB::connection('costos_tenant');
-        $connection->beginTransaction();
-
-        try {
-            $connection->table(self::TABLE_RESUMEN)->delete();
-
-            foreach ($rows as $index => $row) {
-                $connection->table(self::TABLE_RESUMEN)->insert([
-                    'item_order'  => $index,
-                    'node_type'   => $this->normalizeNodeType($row['node_type'] ?? 'partida'),
-                    'titulo'      => $row['titulo'] ?? null,
-                    'partida'     => $row['partida'] ?? null,
-                    'descripcion' => $row['descripcion'] ?? null,
-                    'unidad'      => $row['unidad'] ?? null,
-                    'total_modulos'   => $this->toDecimal($row['total_modulos'] ?? 0),
-                    'total_exterior'  => $this->toDecimal($row['total_exterior'] ?? 0),
-                    'total_cisterna'  => $this->toDecimal($row['total_cisterna'] ?? 0),
-                    'total_general'   => $this->toDecimal($row['total_general'] ?? 0),
-                    'observacion' => $row['observacion'] ?? null,
-                    'parent_id'   => $row['parent_id'] ?? null,
-                    'nivel'       => $row['nivel'] ?? 0,
-                    'created_at'  => now(),
-                    'updated_at'  => now(),
-                ]);
-            }
-
-            $connection->commit();
-
-            return response()->json([
-                'success' => true,
-                'count'   => count($rows),
-                'rows'    => $this->queryTableRows(self::TABLE_RESUMEN),
-            ]);
-        } catch (\Exception $e) {
-            if ($connection->transactionLevel() > 0) {
-                $connection->rollBack();
-            }
-            Log::error('Error saving metrado sanitarias resumen', [
-                'project' => $costoProject->id,
-                'error'   => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
+        $this->validateModuleEnabled($costoProject, 'metrado_sanitarias');
+        return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
-    // ─── Shared helpers ──────────────────────────────────────────────────────────
-
-    /**
-     * Get or create the config row (always exactly one row).
-     */
     private function getOrCreateConfig(): object
     {
-        $config = DB::connection('costos_tenant')
-            ->table(self::TABLE_CONFIG)
-            ->first();
-
+        $config = DB::connection('costos_tenant')->table(self::TABLE_CONFIG)->first();
         if (!$config) {
-            DB::connection('costos_tenant')
-                ->table(self::TABLE_CONFIG)
-                ->insert([
-                    'cantidad_modulos' => 1,
-                    'nombre_proyecto'  => null,
-                    'created_at'       => now(),
-                    'updated_at'       => now(),
-                ]);
-
-            $config = DB::connection('costos_tenant')
-                ->table(self::TABLE_CONFIG)
-                ->first();
+            DB::connection('costos_tenant')->table(self::TABLE_CONFIG)->insert([
+                'cantidad_modulos' => 1,
+                'nombre_proyecto'  => null,
+                'created_at'       => now(),
+                'updated_at'       => now(),
+            ]);
+            $config = DB::connection('costos_tenant')->table(self::TABLE_CONFIG)->first();
         }
-
         return $config;
     }
 
-    /**
-     * Query rows from a table ordered by item_order + id.
-     */
-    private function queryTableRows(string $table): array
+    private function queryTableRows(CostoProject $costoProject, string $table): array
     {
-        return DB::connection('costos_tenant')
-            ->table($table)
-            ->orderBy('item_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn($row) => (array) $row)
-            ->toArray();
+        return $this->queryRows($costoProject, $table);
     }
 
-    /**
-     * Query module rows for a specific modulo_numero.
-     */
-    private function queryModuloRows(int $moduloNumero): array
+    private function queryModuloRows(CostoProject $costoProject, int $moduloNumero): array
     {
+        $presupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($costoProject->database_name);
         return DB::connection('costos_tenant')
             ->table(self::TABLE_MODULOS)
             ->where('modulo_numero', $moduloNumero)
+            ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
-            ->orderBy('id')
             ->get()
             ->map(fn($row) => (array) $row)
             ->toArray();
-    }
-
-    /**
-     * Generic update for simple tables (exterior, cisterna).
-     */
-    private function updateSimpleTable(CostoProject $costoProject, string $table, Request $request): JsonResponse
-    {
-        $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject);
-
-        $rows = $request->input('rows', []);
-        $connection = DB::connection('costos_tenant');
-        $connection->beginTransaction();
-
-        try {
-            $connection->table($table)->delete();
-
-            foreach ($rows as $index => $row) {
-                $cleanRow = $this->cleanBaseRow($row, $index);
-                $cleanRow['created_at'] = now();
-                $cleanRow['updated_at'] = now();
-
-                $connection->table($table)->insert($cleanRow);
-            }
-
-            $connection->commit();
-
-            return response()->json([
-                'success' => true,
-                'count'   => count($rows),
-                'rows'    => $this->queryTableRows($table),
-            ]);
-        } catch (\Exception $e) {
-            if ($connection->transactionLevel() > 0) {
-                $connection->rollBack();
-            }
-            Log::error("Error saving metrado sanitarias {$table}", [
-                'project' => $costoProject->id,
-                'error'   => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Clean a row to only include base metrado columns.
-     */
-    private function cleanBaseRow(array $row, int $index): array
-    {
-        return [
-            'item_order'  => $index,
-            'node_type'   => $this->normalizeNodeType($row['node_type'] ?? 'partida'),
-            'titulo'      => $row['titulo'] ?? null,
-            'partida'     => $row['partida'] ?? null,
-            'descripcion' => $row['descripcion'] ?? null,
-            'unidad'      => $row['unidad'] ?? null,
-            'elsim'       => $this->toDecimal($row['elsim'] ?? 0),
-            'largo'       => $this->toDecimal($row['largo'] ?? 0),
-            'ancho'       => $this->toDecimal($row['ancho'] ?? 0),
-            'alto'        => $this->toDecimal($row['alto'] ?? 0),
-            'nveces'      => $this->toDecimal($row['nveces'] ?? 0),
-            'lon'         => $this->toDecimal($row['lon'] ?? 0),
-            'area'        => $this->toDecimal($row['area'] ?? 0),
-            'vol'         => $this->toDecimal($row['vol'] ?? 0),
-            'kg'          => $this->toDecimal($row['kg'] ?? 0),
-            'und'         => $this->toDecimal($row['und'] ?? 0),
-            'total'       => $this->toDecimal($row['total'] ?? 0),
-            'observacion' => $row['observacion'] ?? null,
-            'parent_id'   => $row['parent_id'] ?? null,
-            'nivel'       => $row['nivel'] ?? 0,
-        ];
-    }
-
-    /**
-     * Safely cast a value to decimal.
-     */
-    private function toDecimal(mixed $value): float
-    {
-        return is_numeric($value) ? (float) $value : 0.0;
     }
 
     private function normalizeNodeType(mixed $value): string
     {
         $raw = strtolower(trim((string) $value));
-        if ($raw === 'titulo') {
-            return 'titulo';
-        }
-        if ($raw === 'subtitulo') {
-            return 'subtitulo';
-        }
-        return 'partida';
-    }
-
-    private function authorizeProject(CostoProject $project): void
-    {
-        if ($project->user_id !== Auth::id()) {
-            abort(403, 'No tienes acceso a este proyecto.');
-        }
-    }
-
-    private function validateModuleEnabled(CostoProject $project): void
-    {
-        $enabled = $project->enabledModules()
-            ->where('module_type', 'metrado_sanitarias')
-            ->exists();
-
-        if (!$enabled) {
-            abort(403, 'El módulo de sanitarias no está habilitado para este proyecto.');
-        }
+        return in_array($raw, ['titulo', 'subtitulo', 'group']) ? 'titulo' : 'partida';
     }
 
     private function validateModuloNumero(int $moduloNumero): void

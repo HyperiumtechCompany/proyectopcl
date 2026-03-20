@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    protected $connection = 'costos';
+    protected $connection = 'costos_tenant';
 
     public function up(): void
     {
