@@ -145,6 +145,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/gastos-fijos-global/totals', [PresupuestoController::class, 'getGGFijosTotals'])->name('proyectos.presupuesto.gastos-fijos-global.totals');
             Route::get('/presupuesto/gastos-fijos-global/desagregado', [PresupuestoController::class, 'getGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.show');
             Route::post('/presupuesto/gastos-fijos-global/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.save');
+            Route::get('/presupuesto/ggfijos-monto-cg', [PresupuestoController::class, 'getGGFijosMontoCG'])->name('proyectos.presupuesto.ggfijos-monto-cg.show');
+            Route::post('/presupuesto/ggfijos-monto-cg', [PresupuestoController::class, 'saveGGFijosMontoCG'])->name('proyectos.presupuesto.ggfijos-monto-cg.save');
             Route::get('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'getSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.show');
             Route::patch('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'saveSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.save');
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');

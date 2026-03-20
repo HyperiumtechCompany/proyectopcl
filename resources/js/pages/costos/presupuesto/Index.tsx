@@ -455,12 +455,6 @@ export default function Index() {
                             <div className="flex flex-1 flex-col overflow-auto gap-4 p-4">
                                 {/* Gastos Generales Fijos - Listado 1 */}
                                 <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
-                                    <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-3">
-                                        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                                        <h3 className="text-sm font-semibold tracking-widest text-slate-200 uppercase">
-                                            1) Gastos Generales Fijos
-                                        </h3>
-                                    </div>
                                     <div className="flex-1 overflow-auto">
                                         <GGFijosPanel
                                             loading={ggFijosLoading}
@@ -474,12 +468,6 @@ export default function Index() {
 
                                 {/* Gastos Generales Variables - Listado 2 */}
                                 <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
-                                    <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-3">
-                                        <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                                        <h3 className="text-sm font-semibold tracking-widest text-slate-200 uppercase">
-                                            2) Gastos Generales Variables
-                                        </h3>
-                                    </div>
                                     <div className="flex-1 overflow-auto">
                                         <GGVariablesPanel
                                             loading={ggVariablesLoading}

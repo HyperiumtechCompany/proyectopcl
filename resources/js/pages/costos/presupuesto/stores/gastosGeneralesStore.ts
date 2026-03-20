@@ -43,6 +43,13 @@ const toText = (value: unknown): string => {
     return String(value);
 };
 
+/**
+ * normalizeRow: normaliza una fila proveniente de la BD o de cualquier fuente.
+ * - participacion: siempre en rango 0-100 (porcentaje entendible por humanos).
+ *   Si la BD devuelve valores fraccionarios (p.ej. 1 = 100%), los convertimos
+ *   multiplicando por 100. El motor recalculate se encarga de dividir entre 100.
+ * - parcial: se recalcula si no viene de la BD (sub_total).
+ */
 const normalizeRow = (row: GastoGeneralRow): GastoGeneralRow => {
     const cantidad = toNumber(
         (row as any).cantidad_descripcion ?? row.cantidad,
@@ -51,14 +58,18 @@ const normalizeRow = (row: GastoGeneralRow): GastoGeneralRow => {
         (row as any).cantidad_tiempo ?? row.periodo,
         1,
     );
-    const participacion = toNumber(
+    // participacion de BD puede venir como 0-100 o como fracción 0-1.
+    // Normalizamos: si viene <= 1 y no es exactamente 0 ó 100, asumimos fracción → ×100
+    const rawPart = toNumber(
         (row as any).participacion ?? row.participacion,
-        1,
+        100,
     );
+    const participacion = rawPart > 0 && rawPart <= 1 ? rawPart * 100 : rawPart;
     const porcentaje = toNumber((row as any).porcentaje ?? row.porcentaje, 0);
     const precioUnitario = toNumber(row.precio_unitario);
     const parcialRaw = toNumber((row as any).sub_total ?? row.parcial, NaN);
-    const participacionFactor = participacion <= 1 ? participacion : participacion / 100;
+    // Factor siempre es participacion / 100
+    const participacionFactor = participacion / 100;
     const parcial = Number.isFinite(parcialRaw)
         ? parcialRaw
         : cantidad * periodo * participacionFactor * precioUnitario;
@@ -103,11 +114,9 @@ export const useGastosGeneralesStore = create<GastosGeneralesState>((set, get) =
                         field === 'participacion' ||
                         field === 'periodo'
                     ) {
-                        const participacion = toNumber(row.participacion, 1);
-                        const participacionFactor =
-                            participacion <= 1
-                                ? participacion
-                                : participacion / 100;
+                        // participacion siempre en 0-100 → factor = /100
+                        const participacion = toNumber(row.participacion, 100);
+                        const participacionFactor = participacion / 100;
                         row.parcial =
                             (Number(row.cantidad) || 0) *
                             (Number(row.periodo) || 0) *
@@ -129,7 +138,7 @@ export const useGastosGeneralesStore = create<GastosGeneralesState>((set, get) =
                     unidad: 'glb',
                     cantidad: 1,
                     periodo: 1,
-                    participacion: 1,
+                    participacion: 100, // 100% por defecto
                     precio_unitario: 0,
                     parcial: 0,
                 });
