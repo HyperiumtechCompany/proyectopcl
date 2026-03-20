@@ -1,120 +1,101 @@
 <?php
 
-namespace App\Models\Costos;
+namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
-/**
- * MetradoElectricasNode
- * 
- * Representa un nodo (grupo o partida) en la estructura jerárquica del metrado eléctrico.
- * Maneja la relación padre-hijo y los niveles de profundidad.
- */
-class MetradoElectricasNode extends Model
+class MetradoEstructurasNode extends Model
 {
-    protected $table = 'metrados_electricos_nodos';
+    use HasFactory;
+    protected $table = 'metrado_estructuras_nodes';
+    
+    protected $keyType = 'string';
+    
+    public $incrementing = false;
     
     protected $fillable = [
         'project_id',
-        'hoja',              // 'metrado' | 'resumen'
-        'parent_id',         // null para root, o ID del padre
-        'nivel',             // 1-10 (profundidad)
-        'tipo_nodo',         // 'group' | 'leaf'
-        'orden',             // orden dentro del mismo nivel
-        'partida',           // código: 03, 03.01, etc.
-        'descripcion',       // descripción con indentación
-        'unidad',            // und, m, m2, m3, kg, etc.
-        'observacion',
-        'expanded',          // estado UI: true/false
+        'parent_id',
+        'node_type',
+        'name',
+        'numbering',
+        'unit',
+        'level',
+        'position',
     ];
     
     protected $casts = [
-        'nivel' => 'integer',
-        'orden' => 'integer',
-        'expanded' => 'boolean',
+        'level' => 'integer',
+        'position' => 'integer',
     ];
-    
+
+    // ─── Boot ────────────────────────────────────────────────────────────────
+
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::creating(function ($model) {
+            if (empty($model->id)) {
+                $model->id = (string) Str::uuid();
+            }
+        });
+    }
+
+    // ─── Relationships ───────────────────────────────────────────────────────
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(MetradoEstructurasNode::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(MetradoEstructurasNode::class, 'parent_id')->orderBy('position');
+    }
+
+    public function values(): HasMany
+    {
+        return $this->hasMany(MetradoEstructurasValue::class, 'node_id');
+    }
 
     public function project(): BelongsTo
     {
         return $this->belongsTo(CostoProject::class, 'project_id');
     }
-    
 
-    public function parent(): BelongsTo
-    {
-        return $this->belongsTo(MetradoElectricasNode::class, 'parent_id');
-    }
-    
+    // ─── Scopes ──────────────────────────────────────────────────────────────
 
-    public function children()
+    public function scopeRootNodes(Builder $query): Builder
     {
-        return $this->hasMany(MetradoElectricasNode::class, 'parent_id')
-            ->orderBy('orden');
-    }
-    
- 
-    public function scopeGroups($query)
-    {
-        return $query->where('tipo_nodo', 'group');
-    }
- 
-    public function scopeLeaves($query)
-    {
-        return $this->where('tipo_nodo', 'leaf');
-    }
-    
-
-    public function scopeHoja($query, string $hoja)
-    {
-        return $query->where('hoja', $hoja);
+        return $query->whereNull('parent_id');
     }
 
-    public function getAllDescendants()
+    public function scopeByLevel(Builder $query, int $level): Builder
     {
-        $descendants = [];
-        $children = $this->children()->get();
-        
-        foreach ($children as $child) {
-            $descendants[] = $child;
-            $descendants = array_merge($descendants, $child->getAllDescendants());
-        }
-        
-        return $descendants;
-    }
-    
-
-    public function isRoot(): bool
-    {
-        return is_null($this->parent_id);
-    }
-    
-
-    public function isGroup(): bool
-    {
-        return $this->tipo_nodo === 'group';
+        return $query->where('level', $level);
     }
 
-    public function isLeaf(): bool
+    public function scopeOrdered(Builder $query): Builder
     {
-        return $this->tipo_nodo === 'leaf';
+        return $query->orderBy('position');
     }
 
-    public function generatePartidaCode(): string
+    // ─── Type Check Methods ──────────────────────────────────────────────────
+
+    public function isTitle(): bool
     {
-        if ($this->isRoot()) {
-            return str_pad((string) $this->orden, 2, '0', STR_PAD_LEFT);
-        }
-        
-        $parentCode = $this->parent->partida ?? $this->parent->generatePartidaCode();
-        return $parentCode . '.' . str_pad((string) $this->orden, 2, '0', STR_PAD_LEFT);
+        return $this->node_type === 'titulo';
     }
 
-    public function getIndentation(): string
+    public function isSubtitle(): bool
     {
-        $nbsp = "\u{00A0}\u{00A0}\u{00A0}"; // 3 NBSP
-        $level = $this->isGroup() ? max(0, $this->nivel - 1) : $this->nivel;
-        return str_repeat($nbsp, $level);
+        return $this->node_type === 'subtitulo';
     }
 }

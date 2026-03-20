@@ -10,26 +10,37 @@ import { BudgetTree } from './components/BudgetTree';
 import { SubsectionNav } from './components/SubsectionNav';
 import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
 import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
+import { useGGFijos } from './hooks/useGGFijos';
+import { useGGVariables } from './hooks/useGGVariables';
 import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
 import { useBudgetStore } from './stores/budgetStore';
 import { RemuneracionesPanel } from './components/RemuneracionesPanel';
-import { GastosGeneralesPanel } from './components/GastosGeneralesPanel';
-import { 
-    Building2, 
-    Calculator, 
-    Wallet, 
-    Users, 
-    Settings2, 
-    LayoutDashboard, 
+import { GGFijosPanel } from './components/GGFijosPanel';
+import { GGVariablesPanel } from './components/GGVariablesPanel';
+import { useProjectParamsStore } from './stores/projectParamsStore';
+import {
+    Building2,
+    Calculator,
+    Wallet,
+    Users,
+    Settings2,
+    LayoutDashboard,
     FileDown,
-    Search
+    Search,
 } from 'lucide-react';
+import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
+import { SupervisionPanel } from './components/SupervisionPanel';
+import { ConsolidadoPanel } from './components/ConsolidadoPanel';
+import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
 
 interface PageProps {
     project: {
         id: number;
         nombre: string;
+        fecha_inicio?: string;
+        fecha_fin?: string;
     };
+    projectParams: Record<string, any> | null;
     subsection: PresupuestoSubsection;
     subsectionLabel: string;
     rows: any[];
@@ -41,11 +52,18 @@ interface PageProps {
 }
 
 export default function Index() {
-    const { project, subsection, subsectionLabel, rows, availableSubsections } =
+    const { project, projectParams, subsection, subsectionLabel, rows, availableSubsections } =
         usePage<PageProps>().props;
 
     const initialize = useBudgetStore((state) => state.initialize);
+    const initializeParams = useProjectParamsStore((state) => state.initialize);
     const selectedId = useBudgetStore((state) => state.selectedId);
+
+    // Initialize both stores
+    useEffect(() => {
+        initializeParams(projectParams);
+    }, [projectParams, initializeParams]);
+
     const [generalRows, setGeneralRows] = useState<any[] | null>(null);
     const [generalLoading, setGeneralLoading] = useState(false);
 
@@ -75,7 +93,9 @@ export default function Index() {
 
     // We only initialize when rows or subsection changes
     useEffect(() => {
-        initialize(effectiveRows);
+        if (subsection === 'general' || subsection === 'acus') {
+            initialize(effectiveRows);
+        }
     }, [effectiveRows, subsection, initialize]);
 
     const addNode = useBudgetStore((state) => state.addNode);
@@ -95,6 +115,12 @@ export default function Index() {
     } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+
+    const totalBudget = useMemo(() => {
+        return storeRows
+            .filter((r) => !r._parentId)
+            .reduce((sum, r) => sum + (Number(r.parcial) || 0), 0);
+    }, [storeRows]);
 
     const handleSaveGeneral = async () => {
         if (!isDirty && !isSaving) return; // Ignore if already saved
@@ -170,7 +196,7 @@ export default function Index() {
         selectedPartidaCode: selectedId,
         selectedPartidaData,
         lastSaved: null,
-        setSheetVersion: () => {},
+        setSheetVersion: () => { },
     });
 
     // Wrapped save so that AcuPanel updates budgetStore state appropriately
@@ -186,11 +212,18 @@ export default function Index() {
         return result;
     };
 
-    const {
-        remuneracionesRows,
-        remuneracionesLoading,
-        saveRemuneracion,
-    } = usePresupuestoRemuneraciones({
+    const { remuneracionesRows, remuneracionesLoading, saveRemuneracion } =
+        usePresupuestoRemuneraciones({
+            projectId: project.id,
+            subsection,
+        });
+
+    const { ggFijosNodes, ggFijosLoading, saveGGFijos } = useGGFijos({
+        projectId: project.id,
+        subsection,
+    });
+
+    const { ggVariablesNodes, ggVariablesLoading, saveGGVariables } = useGGVariables({
         projectId: project.id,
         subsection,
     });
@@ -204,11 +237,19 @@ export default function Index() {
         subsection,
     });
 
+    const handleSaveGGFijos = async (data: any) => {
+        return await saveGGFijos(data);
+    };
+
+    const handleSaveGGVariables = async (data: any) => {
+        return await saveGGVariables(data);
+    };
+
     const handleSaveRemuneracion = async (data: any) => {
         return await saveRemuneracion(data);
     };
 
-    const handleSaveGastoGeneral = async (data: any) => {
+    const handleSaveControlConcurrente = async (data: any) => {
         return await saveGastoGeneral(data);
     };
 
@@ -216,28 +257,40 @@ export default function Index() {
     const mainTabs = [
         { key: 'general', label: 'P. General', icon: Building2 },
         { key: 'acus', label: 'ACUs', icon: Calculator },
-        { 
-            key: 'gg_group', 
-            label: 'Gastos Gen.', 
+        {
+            key: 'gg_group',
+            label: 'Gastos Gen.',
             icon: Wallet,
             subTabs: [
                 { key: 'consolidado', label: 'Consolidado' },
-                { key: 'gastos_generales', label: 'G.G. Variables' },
+                { key: 'gastos_generales', label: 'Gastos Generales' },
                 { key: 'gastos_fijos', label: 'G.G. Fijos' },
                 { key: 'supervision', label: 'Supervisión' },
                 { key: 'control_concurrente', label: 'Control Concurrente' },
-            ]
+            ],
         },
         { key: 'remuneraciones', label: 'Remuneraciones', icon: Users },
         { key: 'insumos', label: 'Insumos', icon: Settings2 },
     ];
 
-    const isGGSubsection = ['consolidado', 'gastos_generales', 'gastos_fijos', 'supervision', 'control_concurrente'].includes(subsection);
-    const activeMainTab = isGGSubsection ? 'gg_group' : (subsection === 'indices' ? 'insumos' : subsection);
+    const isGGSubsection = [
+        'consolidado',
+        'gastos_generales',
+        'gastos_fijos',
+        'supervision',
+        'control_concurrente',
+    ].includes(subsection);
+    const activeMainTab = isGGSubsection
+        ? 'gg_group'
+        : subsection === 'indices'
+            ? 'insumos'
+            : subsection;
 
     const handleMainTabChange = (key: string) => {
         if (key === 'gg_group') {
-            router.get(`/costos/proyectos/${project.id}/presupuesto/consolidado`);
+            router.get(
+                `/costos/proyectos/${project.id}/presupuesto/consolidado`,
+            );
         } else {
             router.get(`/costos/proyectos/${project.id}/presupuesto/${key}`);
         }
@@ -250,10 +303,10 @@ export default function Index() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Presupuesto - ${project.nombre}`} />
-            
-            <div className="flex h-[calc(100vh-120px)] flex-col gap-3 p-2">
+
+            <div className="flex h-full flex-col gap-3 p-2">
                 {/* --- Root Menu --- */}
-                <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-slate-900 border border-slate-700/50 p-1 shadow-inner">
+                <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-900 p-1 shadow-inner">
                     {mainTabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeMainTab === tab.key;
@@ -261,14 +314,17 @@ export default function Index() {
                             <button
                                 key={tab.key}
                                 onClick={() => handleMainTabChange(tab.key)}
-                                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[10px] font-bold transition-all uppercase tracking-wider ${
-                                    isActive
-                                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95'
-                                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                                }`}
+                                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[10px] font-bold tracking-wider uppercase transition-all ${isActive
+                                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 active:scale-95'
+                                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                    }`}
                             >
-                                <Icon className={`h-3.5 w-3.5 ${isActive ? 'animate-pulse' : ''}`} />
-                                <span className="whitespace-nowrap">{tab.label}</span>
+                                <Icon
+                                    className={`h-3.5 w-3.5 ${isActive ? 'animate-pulse' : ''}`}
+                                />
+                                <span className="whitespace-nowrap">
+                                    {tab.label}
+                                </span>
                             </button>
                         );
                     })}
@@ -277,161 +333,195 @@ export default function Index() {
                 <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                     {/* --- Sub-Tabs Secondary Layer --- */}
                     {isGGSubsection && (
-                        <div className="flex items-center gap-8 px-6 py-2.5 bg-slate-800/40 border-b border-slate-700/50 backdrop-blur-sm">
-                            {mainTabs.find(t => t.key === 'gg_group')?.subTabs?.map((sub) => (
-                                <button
-                                    key={sub.key}
-                                    onClick={() => handleSubTabChange(sub.key)}
-                                    className={`relative text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
-                                        subsection === sub.key
+                        <div className="flex items-center gap-8 border-b border-slate-700/50 bg-slate-800/40 px-6 py-2.5 backdrop-blur-sm">
+                            {mainTabs
+                                .find((t) => t.key === 'gg_group')
+                                ?.subTabs?.map((sub) => (
+                                    <button
+                                        key={sub.key}
+                                        onClick={() =>
+                                            handleSubTabChange(sub.key)
+                                        }
+                                        className={`relative text-[10px] font-bold tracking-[0.2em] uppercase transition-all ${subsection === sub.key
                                             ? 'text-amber-400'
                                             : 'text-slate-500 hover:text-slate-300'
-                                    }`}
-                                >
-                                    {sub.label}
-                                    {subsection === sub.key && (
-                                        <span className="absolute -bottom-[10px] left-0 right-0 h-0.5 bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
-                                    )}
-                                </button>
-                            ))}
+                                            }`}
+                                    >
+                                        {sub.label}
+                                        {subsection === sub.key && (
+                                            <span className="absolute right-0 -bottom-[10px] left-0 h-0.5 bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+                                        )}
+                                    </button>
+                                ))}
                         </div>
                     )}
 
                     <div className="flex flex-1 flex-col overflow-hidden">
-                    {subsection === 'general' || subsection === 'acus' ? (
-                        <Group orientation="horizontal">
-                            <Panel defaultSize={45} minSize={28}>
-                                <div className="flex h-full flex-col">
-                                    <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-3 py-2">
-                                        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-widest text-slate-200 uppercase">
-                                            <span className="h-2 w-2 rounded-full bg-sky-500"></span>{' '}
-                                            Presupuesto General
-                                        </h2>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex flex-col items-end justify-center">
-                                                <span className="text-[10px] font-medium tracking-wide text-slate-400">
+                        {subsection === 'general' || subsection === 'acus' ? (
+                            <Group orientation="horizontal">
+                                <Panel defaultSize={45} minSize={28}>
+                                    <div className="flex h-full flex-col">
+                                        <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-3 py-2">
+                                            <h2 className="flex items-center gap-2 text-sm font-semibold tracking-widest text-slate-200 uppercase">
+                                                <span className="h-2 w-2 rounded-full bg-sky-500"></span>{' '}
+                                                Presupuesto General
+                                            </h2>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col items-end justify-center">
+                                                    <span className="text-[10px] font-medium tracking-wide text-slate-400">
+                                                        {isSaving
+                                                            ? 'Guardando en la nube...'
+                                                            : isDirty
+                                                                ? 'Cambios sin guardar'
+                                                                : 'Presupuesto actualizado'}
+                                                    </span>
+                                                    {lastSavedTime &&
+                                                        !isDirty &&
+                                                        !isSaving && (
+                                                            <span className="text-[9px] text-slate-500/80">
+                                                                Último guardado:{' '}
+                                                                {lastSavedTime.toLocaleTimeString()}
+                                                            </span>
+                                                        )}
+                                                </div>
+                                                <button
+                                                    className={`rounded px-3 py-1 text-xs text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                                                    onClick={handleSaveGeneral}
+                                                    disabled={
+                                                        isSaving || !isDirty
+                                                    }
+                                                >
                                                     {isSaving
-                                                        ? 'Guardando en la nube...'
+                                                        ? 'Guardando...'
                                                         : isDirty
-                                                          ? 'Cambios sin guardar'
-                                                          : 'Presupuesto actualizado'}
-                                                </span>
-                                                {lastSavedTime &&
-                                                    !isDirty &&
-                                                    !isSaving && (
-                                                        <span className="text-[9px] text-slate-500/80">
-                                                            Último guardado:{' '}
-                                                            {lastSavedTime.toLocaleTimeString()}
-                                                        </span>
-                                                    )}
+                                                            ? 'Guardar Cambios'
+                                                            : 'Guardado'}
+                                                </button>
+                                                <button
+                                                    className="rounded bg-sky-600 px-3 py-1 text-xs text-white transition-colors hover:bg-sky-500"
+                                                    onClick={() =>
+                                                        addNode(null, 'titulo')
+                                                    }
+                                                >
+                                                    + Añadir Título
+                                                </button>
                                             </div>
-                                            <button
-                                                className={`rounded px-3 py-1 text-xs text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
-                                                onClick={handleSaveGeneral}
-                                                disabled={isSaving || !isDirty}
-                                            >
-                                                {isSaving
-                                                    ? 'Guardando...'
-                                                    : isDirty
-                                                      ? 'Guardar Cambios'
-                                                      : 'Guardado'}
-                                            </button>
-                                            <button
-                                                className="rounded bg-sky-600 px-3 py-1 text-xs text-white transition-colors hover:bg-sky-500"
-                                                onClick={() =>
-                                                    addNode(null, 'titulo')
-                                                }
-                                            >
-                                                + Añadir Título
-                                            </button>
+                                        </div>
+                                        <div className="relative flex-1 overflow-hidden">
+                                            {generalLoading ? (
+                                                <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                                                    Cargando partidas...
+                                                </div>
+                                            ) : (
+                                                <BudgetTree
+                                                    onContextMenu={(
+                                                        e,
+                                                        item,
+                                                    ) => {
+                                                        e.preventDefault();
+                                                        setContextMenu({
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            partidaId:
+                                                                item.partida,
+                                                        });
+                                                    }}
+                                                />
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="relative flex-1 overflow-hidden">
-                                        {generalLoading ? (
-                                            <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                                                Cargando partidas...
-                                            </div>
-                                        ) : (
-                                            <BudgetTree
-                                                onContextMenu={(e, item) => {
-                                                    e.preventDefault();
-                                                    setContextMenu({
-                                                        x: e.clientX,
-                                                        y: e.clientY,
-                                                        partidaId: item.partida,
-                                                    });
-                                                }}
-                                            />
-                                        )}
+                                </Panel>
+
+                                <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
+
+                                <Panel defaultSize={50} minSize={30}>
+                                    <AcuPanel
+                                        acuLoading={acuLoading}
+                                        acuRows={acuRows}
+                                        selectedAcu={selectedAcu}
+                                        onSaveAcu={handleSaveAcu}
+                                        projectId={project.id}
+                                    />
+                                </Panel>
+                            </Group>
+                        ) : subsection === 'remuneraciones' ? (
+                            <RemuneracionesPanel
+                                loading={remuneracionesLoading}
+                                rows={remuneracionesRows}
+                                onSaveRemuneracion={handleSaveRemuneracion}
+                                projectId={project.id}
+                            />
+                        ) : subsection === 'gastos_generales' ? (
+                            <div className="flex flex-1 flex-col overflow-auto gap-4 p-4">
+                                {/* Gastos Generales Fijos - Listado 1 */}
+                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+                                    <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-3">
+                                        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                        <h3 className="text-sm font-semibold tracking-widest text-slate-200 uppercase">
+                                            1) Gastos Generales Fijos
+                                        </h3>
+                                    </div>
+                                    <div className="flex-1 overflow-auto">
+                                        <GGFijosPanel
+                                            loading={ggFijosLoading}
+                                            nodes={ggFijosNodes}
+                                            onSave={handleSaveGGFijos}
+                                            projectId={project.id}
+                                            totalBudget={totalBudget}
+                                        />
                                     </div>
                                 </div>
-                            </Panel>
 
-                            <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
-
-                            <Panel defaultSize={50} minSize={30}>
-                                <AcuPanel
-                                    acuLoading={acuLoading}
-                                    acuRows={acuRows}
-                                    selectedAcu={selectedAcu}
-                                    onSaveAcu={handleSaveAcu}
-                                    projectId={project.id}
-                                />
-                            </Panel>
-                        </Group>
-                    ) : subsection === 'remuneraciones' ? (
-                        <RemuneracionesPanel
-                            loading={remuneracionesLoading}
-                            rows={remuneracionesRows}
-                            onSaveRemuneracion={handleSaveRemuneracion}
-                            projectId={project.id}
-                        />
-                    ) : subsection === 'gastos_generales' || subsection === 'gastos_fijos' || subsection === 'supervision' || subsection === 'control_concurrente' ? (
-                        <GastosGeneralesPanel
-                            loading={gastosGeneralesLoading}
-                            rows={gastosGeneralesRows}
-                            onSaveGastoGeneral={handleSaveGastoGeneral}
-                            projectId={project.id}
-                        />
-                    ) : subsection === 'consolidado' ? (
-                        <div className="flex h-full flex-col overflow-hidden bg-slate-900">
-                             <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
+                                {/* Gastos Generales Variables - Listado 2 */}
+                                <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+                                    <div className="flex items-center gap-2 border-b border-slate-700 bg-slate-800 px-4 py-3">
+                                        <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                                        <h3 className="text-sm font-semibold tracking-widest text-slate-200 uppercase">
+                                            2) Gastos Generales Variables
+                                        </h3>
+                                    </div>
+                                    <div className="flex-1 overflow-auto">
+                                        <GGVariablesPanel
+                                            loading={ggVariablesLoading}
+                                            nodes={ggVariablesNodes}
+                                            onSave={handleSaveGGVariables}
+                                            projectId={project.id}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : subsection === 'gastos_fijos' ? (
+                            //gastos fijos desagregados (parámetros vienen del store)
+                            <GGFijosDesagregadoPanel
+                                projectId={project.id}
+                            />
+                        ) : subsection === 'supervision' ? (
+                            <SupervisionPanel projectId={project.id} />
+                        ) : subsection === 'control_concurrente' ? (
+                            <ControlConcurrentePanel
+                                loading={gastosGeneralesLoading}
+                                rows={gastosGeneralesRows}
+                                onSaveGastoGeneral={handleSaveControlConcurrente}
+                                projectId={project.id}
+                            />
+                        ) : subsection === 'consolidado' ? (
+                            <ConsolidadoPanel projectId={project.id} />
+                        ) : (
+                            <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>
-                                    <p className="mb-2 text-lg font-semibold text-slate-200">
-                                        Módulo de {subsectionLabel}
+                                    <p className="mb-2 text-lg">
+                                        Sección en desarrollo
                                     </p>
                                     <p className="text-sm">
-                                        Esta sección utiliza la tabla unificada para gestionar el presupuesto del proyecto.
+                                        La sección de {subsectionLabel} está
+                                        pendiente de desarrollo.
                                     </p>
-                                    <div className="mt-8 rounded-lg border border-slate-700 bg-slate-800 p-8">
-                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-sky-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.67 2.67 0 1113.5 17.25l-5.83-5.83m5.83 5.83l5.83 5.83M13.5 17.25l-5.83-5.83M8.58 11.42l-5.83 5.83A2.67 2.67 0 116.5 13.5l5.83-5.83m-5.83 5.83L12.33 18m-5.83-5.83l-5.83-5.83" />
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm italic text-slate-500">
-                                            Integración con base de datos unificada [{subsection}] habilitada.
-                                        </p>
-                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
-                            <div>
-                                <p className="mb-2 text-lg">
-                                    Sección en desarrollo
-                                </p>
-                                <p className="text-sm">
-                                    La sección de {subsectionLabel} está
-                                    pendiente de desarrollo.
-                                </p>
-                            </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
 
             {/* Context Menu overlay */}
             {contextMenu && (

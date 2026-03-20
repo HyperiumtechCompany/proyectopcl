@@ -524,4 +524,5 @@ const AddBtn = ({ onClick, label, color }) => {
     );
 };
 
-export default DemandaDiaria;
+ export default DemandaDiaria;
+

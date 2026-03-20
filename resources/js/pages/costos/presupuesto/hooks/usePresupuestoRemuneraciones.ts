@@ -50,13 +50,16 @@ export function usePresupuestoRemuneraciones({
             );
             
             if (response.data?.success) {
+                if (response.data.rows) {
+                    setRows(response.data.rows);
+                }
                 setDirty(false);
             }
             
             return response.data;
         } catch (error) {
             console.error('Error saving remuneracion:', error);
-            return { success: false, error };
+            throw error; // Rethrow to let the UI handle the error state if needed
         }
     }, [projectId, setDirty]);
 

@@ -7,8 +7,7 @@ use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
-use App\Http\Controllers\MetradoArquitecturaController;
-use App\Http\Controllers\MetradoComunicacionesController;
+use App\Http\Controllers\MetradoComunicacionController;
 use App\Http\Controllers\MetradoEstructurasController;
 use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradoElectricasController;
@@ -143,16 +142,15 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/{subsection}/data', [PresupuestoController::class, 'show'])->name('proyectos.presupuesto.show');
             Route::patch('/presupuesto/{subsection}', [PresupuestoController::class, 'update'])->name('proyectos.presupuesto.update');
             Route::delete('/presupuesto/{subsection}/delete-row', [PresupuestoController::class, 'deleteRow'])->name('proyectos.presupuesto.delete-row');
-            Route::post('/presupuesto/import-metrado', [PresupuestoController::class, 'importFromMetrado'])->name('proyectos.presupuesto.import-metrado');
-            Route::post('/presupuesto/acus/calculate', [PresupuestoController::class, 'calculateACU'])->name('proyectos.presupuesto.acus.calculate');
-            Route::get('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'getGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.show');
-            Route::post('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.save');
-            Route::get('/presupuesto/gastos-fijos-global/totals', [PresupuestoController::class, 'getGGFijosTotals'])->name('proyectos.presupuesto.gastos-fijos-global.totals');
             Route::get('/presupuesto/gastos-fijos-global/desagregado', [PresupuestoController::class, 'getGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.show');
             Route::post('/presupuesto/gastos-fijos-global/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregadoGlobal'])->name('proyectos.presupuesto.gastos-fijos-global.desagregado.save');
             Route::get('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'getSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.show');
             Route::patch('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'saveSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.save');
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
+
+            // ─── Consolidado Snapshot (cache de totales) ───
+            Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
+            Route::patch('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'saveConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.save');
 
             // ─── Parámetros Globales del Proyecto (centralizados en tenant) ────
             Route::get('/presupuesto/params', [PresupuestoController::class, 'getProjectParams'])->name('proyectos.presupuesto.params.show');
@@ -165,6 +163,12 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
+
+            // ─── Rutas Comodín (Wildcards) - DEBEN IR AL FINAL ────
+            Route::get('/presupuesto/{subsection?}', [PresupuestoController::class, 'index'])->name('proyectos.presupuesto.index');
+            Route::get('/presupuesto/{subsection}/data', [PresupuestoController::class, 'show'])->name('proyectos.presupuesto.show');
+            Route::patch('/presupuesto/{subsection}', [PresupuestoController::class, 'update'])->name('proyectos.presupuesto.update');
+            Route::delete('/presupuesto/{subsection}/delete-row', [PresupuestoController::class, 'deleteRow'])->name('proyectos.presupuesto.delete-row');
         });
 
     // ─── Metrado Sanitarias Modular (con middleware de BD dinámica) ────
@@ -274,6 +278,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             ->name('resumen.sync');
 
         });
+
 
 
 });

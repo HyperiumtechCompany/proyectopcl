@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
+use App\Services\GGFijoDesagregadoService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,7 +57,8 @@ class PresupuestoController extends Controller
     ];
 
     public function __construct(
-        protected CostoDatabaseService $dbService
+        protected CostoDatabaseService $dbService,
+        protected GGFijoDesagregadoService $desagregadoService
     ) {}
 
     /**
@@ -76,11 +78,17 @@ class PresupuestoController extends Controller
             ->map(fn($row) => (array)$row)
             ->toArray();
 
+        // Get centralized project params from tenant DB
+        $projectParams = $this->dbService->getProjectParams($project->database_name);
+
         return Inertia::render('costos/presupuesto/Index', [
             'project' => [
                 'id' => $project->id,
                 'nombre' => $project->nombre,
+                'fecha_inicio' => $project->fecha_inicio?->format('Y-m-d'),
+                'fecha_fin' => $project->fecha_fin?->format('Y-m-d'),
             ],
+            'projectParams' => $projectParams ? (array)$projectParams : null,
             'subsection' => $subsection,
             'subsectionLabel' => self::SUBSECTION_LABELS[$subsection],
             'tableName' => $tableName,
@@ -144,28 +152,56 @@ class PresupuestoController extends Controller
 
         try {
             // Strategy: clear + re-insert (simple for spreadsheet-like data)
-            // Avoid TRUNCATE because it performs an implicit commit in MySQL,
-            // which would end the transaction and break rollback handling.
             $connection->table($tableName)->delete();
 
+            $idMapping = []; // Maps client-side IDs to new database IDs
+
             foreach ($rows as $index => $row) {
+                $oldId = $row['id'] ?? null;
+                
                 // Clean and prepare row data
                 $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index, $project, $tenantPresupuestoId);
 
-                $connection->table($tableName)->insert($cleanedRow);
+                // Remap parent_id if it exists in our mapping
+                $originalParentId = $row['parent_id'] ?? null;
+                if (!is_null($originalParentId)) {
+                    if (isset($idMapping[$originalParentId])) {
+                        $cleanedRow['parent_id'] = $idMapping[$originalParentId];
+                    } else {
+                        // Crucial: If the parent hasn't been inserted yet or was deleted, 
+                        // set to null to avoid FK violation (500 Error)
+                        $cleanedRow['parent_id'] = null;
+                        
+                        // Log for debugging if needed
+                        // Log::debug("PresupuestoController: Parent ID {$originalParentId} not found in mapping - set to NULL");
+                    }
+                }
+
+                // Insert and capture new ID
+                $newId = $connection->table($tableName)->insertGetId($cleanedRow);
+
+                // Store mapping for children that might follow
+                if ($oldId) {
+                    $idMapping[$oldId] = $newId;
+                }
 
                 // Sincronización automática con GG Variables
                 if ($subsection === 'remuneraciones' && !empty($cleanedRow['gg_variable_id'])) {
+                    // Si viene con un ID de variable de la tabla temporal de remapeo, lo usamos
+                    $varId = $cleanedRow['gg_variable_id'];
+                    if (isset($idMapping[$varId])) {
+                        $varId = $idMapping[$varId];
+                    }
+
                     $totalUnitario = ($cleanedRow['sueldo_basico'] ?? 0) +
                         ($cleanedRow['asignacion_familiar'] ?? 0) +
-                        ($cleanedRow['snp'] ?? 0) +
                         ($cleanedRow['essalud'] ?? 0) +
                         ($cleanedRow['cts'] ?? 0) +
                         ($cleanedRow['vacaciones'] ?? 0) +
                         ($cleanedRow['gratificacion'] ?? 0);
 
                     $connection->table('gg_variables')
-                        ->where('id', $cleanedRow['gg_variable_id'])
+                        ->where('id', $varId)
                         ->update([
                             'precio' => $totalUnitario,
                             'cantidad_descripcion' => $cleanedRow['cantidad'] ?? 1,
@@ -176,6 +212,16 @@ class PresupuestoController extends Controller
             }
 
             $connection->commit();
+
+            // Sincronización automática de totales si es presupuesto general
+            if ($subsection === 'general') {
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+            }
+
+            // Recalcular consolidado en backend para evitar circularidad y cachear totales
+            if (in_array($subsection, ['general', 'gastos_fijos', 'gastos_generales', 'supervision', 'control_concurrente'], true)) {
+                $this->recalculateConsolidadoSnapshot($project, null);
+            }
 
             // Fetch updated data to return
             $updatedRows = $this->getOrderedRows($tableName)
@@ -202,6 +248,257 @@ class PresupuestoController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Devuelve el snapshot consolidado (cálculo cacheado).
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/consolidado/snapshot
+     */
+    public function getConsolidadoSnapshot(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        try {
+            $row = $this->recalculateConsolidadoSnapshot($project, null);
+        } catch (\Throwable $e) {
+            Log::error('Error recalculating consolidado snapshot', [
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo calcular el consolidado',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $row,
+        ]);
+    }
+
+    /**
+     * Guarda inputs del consolidado y recalcula.
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/consolidado/snapshot
+     */
+    public function saveConsolidadoSnapshot(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $inputs = [
+            'utilidad_porcentaje' => $request->input('utilidad_porcentaje'),
+            'igv_porcentaje' => $request->input('igv_porcentaje'),
+            'componente_ii_monto' => $request->input('componente_ii_monto'),
+            'componentes_extra' => $request->input('componentes_extra'),
+        ];
+
+        try {
+            $row = $this->recalculateConsolidadoSnapshot($project, $inputs);
+        } catch (\Throwable $e) {
+            Log::error('Error saving consolidado snapshot', [
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'No se pudo guardar el consolidado',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $row,
+        ]);
+    }
+
+    /**
+     * Recalcula el consolidado y lo persiste en gg_consolidado.
+     */
+    private function recalculateConsolidadoSnapshot(CostoProject $project, ?array $inputs): array
+    {
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $existing = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->first();
+
+        $projectParams = $connection->table('project_params')->first();
+
+        $utilidadPct = $inputs['utilidad_porcentaje'] ?? ($existing->utilidad_porcentaje ?? ($projectParams->utilidad_porcentaje ?? 5));
+        $igvPct = $inputs['igv_porcentaje'] ?? ($existing->igv_porcentaje ?? ($projectParams->igv_porcentaje ?? 18));
+        $componenteIIMonto = $inputs['componente_ii_monto'] ?? ($existing->componente_ii_monto ?? 0);
+
+        $extraComponents = $inputs['componentes_extra'] ?? null;
+        if ($extraComponents === null) {
+            $extraComponents = $existing->componentes_extra_json ?? '[]';
+            $extraComponents = is_string($extraComponents) ? json_decode($extraComponents, true) : $extraComponents;
+        }
+        if (!is_array($extraComponents)) {
+            $extraComponents = [];
+        }
+
+        $costoDirecto = (float) $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->sum('parcial');
+
+        $ggFijosTotal = (float) $connection->table('gg_fijos')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial');
+
+        $ggVariablesTotal = (float) $connection->table('gg_variables')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial');
+
+        $supervisionRow = $connection->table('gg_supervision')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('item_codigo', 'VIII')
+            ->orderBy('id', 'desc')
+            ->first();
+        $supervisionTotal = $supervisionRow
+            ? (float) ($supervisionRow->subtotal ?? 0)
+            : (float) $connection->table('gg_supervision')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->where('tipo_fila', 'detalle')
+                ->sum('subtotal');
+
+        $controlConcurrenteTotal = (float) $connection->table('gg_control_concurrente')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('sub_total');
+
+        $totalGastosGenerales = $ggFijosTotal + $ggVariablesTotal;
+        $utilidadTotal = $costoDirecto * ($utilidadPct / 100);
+        $subTotalPresupuesto = $costoDirecto + $totalGastosGenerales + $utilidadTotal;
+        $igvComponenteI = $subTotalPresupuesto * ($igvPct / 100);
+        $subTotalComponenteI = $subTotalPresupuesto + $igvComponenteI;
+
+        $componenteIIMontoNum = (float) $componenteIIMonto;
+        $igvComponenteII = $componenteIIMontoNum * ($igvPct / 100);
+        $subTotalComponenteII = $componenteIIMontoNum + $igvComponenteII;
+
+        $extraTotal = 0.0;
+        foreach ($extraComponents as $comp) {
+            $monto = (float) ($comp['monto'] ?? 0);
+            $extraTotal += $monto + ($monto * ($igvPct / 100));
+        }
+
+        $totalComponents = $subTotalComponenteI + $subTotalComponenteII + $extraTotal;
+        $totalConsolidado = $totalComponents + $supervisionTotal;
+        $controlConcurrenteFinanciado = $totalConsolidado * 0.02;
+        $totalInversionObra = $totalConsolidado + $controlConcurrenteFinanciado;
+
+        $payload = [
+            'presupuesto_id' => $tenantPresupuestoId,
+            'total_costo_directo' => round($costoDirecto, 4),
+            'total_gg_fijos' => round($ggFijosTotal, 4),
+            'total_gg_variables' => round($ggVariablesTotal, 4),
+            'total_supervision' => round($supervisionTotal, 4),
+            'total_control_concurrente' => round($controlConcurrenteTotal, 4),
+
+            'utilidad_porcentaje' => round((float) $utilidadPct, 4),
+            'igv_porcentaje' => round((float) $igvPct, 4),
+            'componente_ii_monto' => round($componenteIIMontoNum, 4),
+            'componentes_extra_json' => json_encode($extraComponents),
+
+            'comp_i_costo_directo' => round($costoDirecto, 4),
+            'comp_i_porcentaje' => 100.0000,
+            'comp_ii_gastos_generales' => round($totalGastosGenerales, 4),
+            'comp_ii_porcentaje' => $costoDirecto > 0 ? round(($totalGastosGenerales / $costoDirecto) * 100, 4) : 0,
+            'comp_iii_utilidad' => round($utilidadTotal, 4),
+            'comp_iii_porcentaje' => round((float) $utilidadPct, 4),
+            'comp_iv_subtotal_sin_igv' => round($subTotalPresupuesto, 4),
+            'comp_iv_porcentaje' => 100.0000,
+            'comp_v_igv' => round($igvComponenteI, 4),
+            'comp_v_porcentaje' => round((float) $igvPct, 4),
+            'comp_vi_valor_con_igv' => round($subTotalComponenteI, 4),
+            'comp_vi_porcentaje' => 100.0000,
+
+            'total_presupuesto_obra' => round($totalComponents, 4),
+            'total_con_igv' => round($subTotalComponenteI, 4),
+            'total_inversion_obra' => round($totalInversionObra, 4),
+
+            'total_letras' => $this->amountToWords($totalConsolidado),
+            'total_inversion_obra_letras' => $this->amountToWords($totalInversionObra),
+            'porcentaje_gg_sobre_cd' => $costoDirecto > 0 ? round($totalGastosGenerales / $costoDirecto, 4) : 0,
+            'porcentaje_supervision_sobre_cd' => $costoDirecto > 0 ? round($supervisionTotal / $costoDirecto, 4) : 0,
+            'calculado_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        // Filtrar payload a columnas reales (tenants pueden no tener nuevas columnas)
+        $realColumns = Schema::connection('costos_tenant')->getColumnListing('gg_consolidado');
+        $filteredPayload = collect($payload)
+            ->filter(fn($val, $key) => in_array($key, $realColumns, true))
+            ->toArray();
+
+        if ($existing) {
+            $connection->table('gg_consolidado')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->update($filteredPayload);
+        } else {
+            $filteredPayload['created_at'] = now();
+            $connection->table('gg_consolidado')->insert($filteredPayload);
+        }
+
+        return $filteredPayload + ['presupuesto_id' => $tenantPresupuestoId];
+    }
+
+    private function numberToWordsES(int $n): string
+    {
+        $ones = [
+            '', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+            'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE',
+            'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIUN', 'VEINTIDOS', 'VEINTITRES',
+            'VEINTICUATRO', 'VEINTICINCO', 'VEINTISEIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE',
+        ];
+        $tens = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+        $hundreds = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+        if ($n === 0) return '';
+        if ($n === 100) return 'CIEN';
+        if ($n < 30) return $ones[$n];
+        if ($n < 100) {
+            $t = intdiv($n, 10);
+            $o = $n % 10;
+            return $tens[$t] . ($o ? ' Y ' . $ones[$o] : '');
+        }
+        $h = intdiv($n, 100);
+        $rem = $n % 100;
+        return $hundreds[$h] . ($rem ? ' ' . $this->numberToWordsES($rem) : '');
+    }
+
+    private function amountToWords(float $amount): string
+    {
+        $intPart = (int) floor($amount);
+        $decPart = (int) round(($amount - $intPart) * 100);
+
+        if ($intPart === 0) {
+            $words = 'CERO';
+        } else {
+            $words = '';
+            $rem = $intPart;
+            if ($rem >= 1000000) {
+                $m = intdiv($rem, 1000000);
+                $words .= ($m === 1 ? 'UN MILLON' : $this->numberToWordsES($m) . ' MILLONES') . ' ';
+                $rem = $rem % 1000000;
+            }
+            if ($rem >= 1000) {
+                $k = intdiv($rem, 1000);
+                $words .= ($k === 1 ? 'MIL' : $this->numberToWordsES($k) . ' MIL') . ' ';
+                $rem = $rem % 1000;
+            }
+            if ($rem > 0) {
+                $words .= $this->numberToWordsES($rem);
+            }
+            $words = trim($words);
+        }
+
+        return 'SON: ' . $words . ' CON ' . str_pad((string) $decPart, 2, '0', STR_PAD_LEFT) . '/100 SOLES';
     }
 
     /**
@@ -279,6 +576,7 @@ class PresupuestoController extends Controller
                             'updated_at' => now(),
                         ]);
                     $updatedCount++;
+                } else {
                     // Create new partida
                     $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
                     $insertData = [
@@ -304,6 +602,10 @@ class PresupuestoController extends Controller
             }
 
             DB::connection('costos_tenant')->commit();
+
+            // Sincronizar totales tras importación
+            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+            $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
 
             return response()->json([
                 'success' => true,
@@ -533,6 +835,300 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Obtiene datos de un desagregado de G.G. Fijos
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/gastos-fijos/{ggFijoId}/desagregado
+     */
+    public function getGGFijoDesagregado(CostoProject $project, int $ggFijoId, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $tipoCalculo = $request->query('tipo_calculo');
+        $connection = DB::connection('costos_tenant');
+
+        if (!$tipoCalculo || $tipoCalculo === 'manual') {
+            return response()->json(['success' => true, 'data' => null]);
+        }
+
+        if (str_starts_with($tipoCalculo, 'fianza_')) {
+            $tableName = 'gg_fijos_fianzas';
+            $field = 'tipo_fianza';
+            $value = match ($tipoCalculo) {
+                'fianza_fiel_cumplimiento' => 'fiel_cumplimiento',
+                'fianza_adelanto_efectivo' => 'adelanto_efectivo',
+                'fianza_adelanto_materiales' => 'adelanto_materiales',
+                default => 'fiel_cumplimiento',
+            };
+        } else {
+            $tableName = 'gg_fijos_polizas';
+            $field = 'tipo_poliza';
+            $value = match ($tipoCalculo) {
+                'poliza_car' => 'car',
+                'poliza_sctr' => 'sctr_salud', // Default to salud for Polizas table
+                'poliza_essalud_vida' => 'essalud_vida',
+                'sencico' => 'sencico',
+                'itf' => 'itf',
+                default => $tipoCalculo,
+            };
+        }
+
+        $rows = $connection->table($tableName)
+            ->where('gg_fijos_id', $ggFijoId)
+            ->where($field, $value)
+            ->orderBy('item_order')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows,
+        ]);
+    }
+
+    /**
+     * Guarda datos de un desagregado de G.G. Fijos
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/gastos-fijos/{ggFijoId}/desagregado
+     */
+    public function saveGGFijoDesagregado(CostoProject $project, int $ggFijoId, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $tipoCalculo = $request->input('tipo_calculo');
+        $data = $request->input('data', []);
+        
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+        $data['presupuesto_id'] = $tenantPresupuestoId;
+
+        $result = $this->desagregadoService->calculateAndSave(
+            $project->database_name,
+            $ggFijoId,
+            $tipoCalculo,
+            $data
+        );
+
+        return response()->json($result);
+    }
+
+    /**
+     * Obtiene datos de un desagregado de G.G. Fijos global (sin id de gg_fijos)
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/gastos-fijos-global/desagregado
+     */
+    public function getGGFijoDesagregadoGlobal(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $tipoCalculo = $request->query('tipo_calculo');
+        $connection = DB::connection('costos_tenant');
+
+        if (!$tipoCalculo || $tipoCalculo === 'manual') {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        if (str_starts_with($tipoCalculo, 'fianza_')) {
+            $tableName = 'gg_fijos_fianzas';
+            $field = 'tipo_fianza';
+            $value = match ($tipoCalculo) {
+                'fianza_fiel_cumplimiento' => 'fiel_cumplimiento',
+                'fianza_adelanto_efectivo' => 'adelanto_efectivo',
+                'fianza_adelanto_materiales' => 'adelanto_materiales',
+                default => 'fiel_cumplimiento',
+            };
+        } else {
+            $tableName = 'gg_fijos_polizas';
+            $field = 'tipo_poliza';
+            $value = match ($tipoCalculo) {
+                'poliza_car' => 'car',
+                'poliza_sctr' => 'sctr_salud',
+                'poliza_essalud_vida' => 'essalud_vida',
+                'sencico' => 'sencico',
+                'itf' => 'itf',
+                default => $tipoCalculo,
+            };
+        }
+
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $query = $connection->table($tableName)
+            ->where('presupuesto_id', $tenantPresupuestoId);
+            
+        if ($value === 'sctr_salud') {
+            $query->whereIn($field, ['sctr_salud', 'sctr_pension']);
+        } else {
+            $query->where($field, $value);
+        }
+
+        $rows = $query->orderBy('item_order')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows,
+        ]);
+    }
+
+    /**
+     * Guarda datos de un desagregado de G.G. Fijos global
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/gastos-fijos-global/desagregado
+     */
+    public function saveGGFijoDesagregadoGlobal(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $tipoCalculo = $request->input('tipo_calculo');
+        $data = $request->input('data', []);
+        
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+        
+        // Ensure each row has presupuesto_id
+        if (is_array($data)) {
+            // Is it an array of associative arrays (multiple rows)?
+            if (!empty($data) && isset($data[0]) && is_array($data[0])) {
+                foreach ($data as &$row) {
+                    $row['presupuesto_id'] = $tenantPresupuestoId;
+                }
+            } else {
+                // It is a single associative array
+                $data['presupuesto_id'] = $tenantPresupuestoId;
+            }
+        }
+
+        $result = $this->desagregadoService->calculateAndSave(
+            $project->database_name,
+            null, // ggFijoId is null since it's global
+            $tipoCalculo,
+            $data
+        );
+
+        return response()->json($result);
+    }
+
+    /**
+     * Obtiene los totales de GG Fijos global para sincronizar con el store de GG Fijos.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/gastos-fijos-global/totals
+     */
+    public function getGGFijosTotals(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $totals = [];
+
+        // Get totals from gg_fijos_fianzas
+        $fianzaTotals = $connection->table('gg_fijos_fianzas')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->select('tipo_fianza', DB::raw('SUM(garantia_fc_sin_igv) as total'))
+            ->groupBy('tipo_fianza')
+            ->get();
+
+        foreach ($fianzaTotals as $row) {
+            $key = 'fianza_' . $row->tipo_fianza;
+            $totals[$key] = (float) $row->total;
+        }
+
+        // Get totals from gg_fijos_polizas
+        $polizaTotals = $connection->table('gg_fijos_polizas')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->select('tipo_poliza', DB::raw('SUM(poliza_sin_igv) as total'))
+            ->groupBy('tipo_poliza')
+            ->get();
+
+        foreach ($polizaTotals as $row) {
+            $tipo = $row->tipo_poliza;
+            $rowTotal = (float) $row->total;
+
+            if (in_array($tipo, ['sctr_salud', 'sctr_pension'], true)) {
+                $totals['poliza_sctr'] = ($totals['poliza_sctr'] ?? 0) + $rowTotal;
+                continue;
+            }
+
+            if (in_array($tipo, ['sencico', 'itf'], true)) {
+                $totals[$tipo] = ($totals[$tipo] ?? 0) + $rowTotal;
+                continue;
+            }
+
+            $key = 'poliza_' . $tipo;
+            $totals[$key] = ($totals[$key] ?? 0) + $rowTotal;
+        }
+
+        return response()->json([
+            'success' => true,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Obtiene los parámetros globales del proyecto desde el tenant DB.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/params
+     */
+    public function getProjectParams(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $params = $this->dbService->getProjectParams($project->database_name);
+
+        return response()->json([
+            'success' => true,
+            'data' => $params ? (array)$params : null,
+        ]);
+    }
+
+    /**
+     * Actualiza parámetros financieros globales del proyecto.
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/params
+     *
+     * Propaga automáticamente cambios a:
+     * - gg_fijos_fianzas.base_calculo
+     * - gg_fijos_polizas.base_calculo
+     */
+    public function updateProjectParams(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $validated = $request->validate([
+            'costo_directo'          => 'nullable|numeric|min:0',
+            'utilidad_porcentaje'    => 'nullable|numeric|min:0|max:100',
+            'igv_porcentaje'         => 'nullable|numeric|min:0|max:100',
+            'jornada_laboral_horas'  => 'nullable|numeric|min:1|max:24',
+            'rmv'                    => 'nullable|numeric|min:0',
+        ]);
+
+        $this->dbService->updateProjectFinancialParams(
+            $project->database_name,
+            array_filter($validated, fn($v) => $v !== null)
+        );
+
+        // Auto-propagate costo_directo to fianzas/polizas base_calculo
+        if (isset($validated['costo_directo']) && $validated['costo_directo'] !== null) {
+            $connection = DB::connection('costos_tenant');
+            $costoDirecto = (float)$validated['costo_directo'];
+
+            // Update base_calculo for all fianzas
+            $connection->table('gg_fijos_fianzas')
+                ->update(['base_calculo' => $costoDirecto]);
+
+            // Update base_calculo for all polizas
+            $connection->table('gg_fijos_polizas')
+                ->update(['base_calculo' => $costoDirecto]);
+        }
+
+        // Return updated params
+        $params = $this->dbService->getProjectParams($project->database_name);
+
+        return response()->json([
+            'success' => true,
+            'data' => $params ? (array)$params : null,
+            'message' => 'Parámetros actualizados correctamente.',
+        ]);
+    }
+
+
+    /**
      * Exporta presupuesto a formato Excel/PDF
      * Ruta: GET /costos/proyectos/{project}/presupuesto/export
      */
@@ -597,6 +1193,12 @@ class PresupuestoController extends Controller
             }
 
             DB::connection('costos_tenant')->commit();
+
+            // Sincronizar totales tras eliminaciÃ³n si es presupuesto general
+            if ($subsection === 'general') {
+                $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+            }
 
             return response()->json([
                 'success' => true,
@@ -722,10 +1324,12 @@ class PresupuestoController extends Controller
             $rowErrors = match ($subsection) {
                 'general' => $this->validateGeneralRow($row, $index),
                 'acus' => $this->validateAcusRow($row, $index),
-                'gastos_generales' => $this->validateGastosGeneralesRow($row, $index),
+                'gastos_generales' => $this->validateGGVariablesRow($row, $index),
+                'gastos_fijos' => $this->validateGGFijosRow($row, $index),
                 'insumos' => $this->validateInsumosRow($row, $index),
                 'remuneraciones' => $this->validateRemuneracionesRow($row, $index),
                 'indices' => $this->validateIndicesRow($row, $index),
+                'supervision' => $this->validateSupervisionRow($row, $index),
                 default => [],
             };
 
@@ -863,38 +1467,59 @@ class PresupuestoController extends Controller
     }
 
     /**
-     * Validate presupuesto_gastos_generales row
+     * Validate gg_variables row (GG Variables tree node)
      */
-    private function validateGastosGeneralesRow(array $row, int $index): array
+    private function validateGGVariablesRow(array $row, int $index): array
     {
         $errors = [];
 
-        if (empty($row['codigo'])) {
-            $errors[] = 'El campo código es requerido';
-        } elseif (strlen($row['codigo']) > 50) {
-            $errors[] = 'El campo código no puede exceder 50 caracteres';
+        if (empty($row['descripcion'])) {
+            $errors[] = "Fila {$index}: El campo descripción es requerido";
         }
+
+        $tipoFila = $row['tipo_fila'] ?? 'detalle';
+        if (!in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
+            $errors[] = "Fila {$index}: tipo_fila inválido";
+        }
+
+        if ($tipoFila === 'detalle') {
+            if (isset($row['cantidad_descripcion']) && !is_numeric($row['cantidad_descripcion'])) {
+                $errors[] = "Fila {$index}: cantidad_descripcion debe ser numérico";
+            }
+            if (isset($row['cantidad_tiempo']) && !is_numeric($row['cantidad_tiempo'])) {
+                $errors[] = "Fila {$index}: cantidad_tiempo debe ser numérico";
+            }
+            if (isset($row['precio']) && !is_numeric($row['precio'])) {
+                $errors[] = "Fila {$index}: precio debe ser numérico";
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate gg_fijos row (GG Fijos tree node)
+     */
+    private function validateGGFijosRow(array $row, int $index): array
+    {
+        $errors = [];
 
         if (empty($row['descripcion'])) {
-            $errors[] = 'El campo descripción es requerido';
+            $errors[] = "Fila {$index}: El campo descripción es requerido";
         }
 
-        if (empty($row['unidad'])) {
-            $errors[] = 'El campo unidad es requerido';
-        } elseif (strlen($row['unidad']) > 20) {
-            $errors[] = 'El campo unidad no puede exceder 20 caracteres';
+        $tipoFila = $row['tipo_fila'] ?? 'detalle';
+        if (!in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
+            $errors[] = "Fila {$index}: tipo_fila inválido";
         }
 
-        if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
-            $errors[] = 'El campo cantidad debe ser numérico';
-        }
-
-        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
-            $errors[] = 'El campo precio_unitario debe ser numérico';
-        }
-
-        if (isset($row['categoria']) && strlen($row['categoria']) > 50) {
-            $errors[] = 'El campo categoría no puede exceder 50 caracteres';
+        if ($tipoFila === 'detalle') {
+            if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+                $errors[] = "Fila {$index}: cantidad debe ser numérico";
+            }
+            if (isset($row['costo_unitario']) && !is_numeric($row['costo_unitario'])) {
+                $errors[] = "Fila {$index}: costo_unitario debe ser numérico";
+            }
         }
 
         return $errors;
@@ -961,12 +1586,8 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo sueldo_basico debe ser numérico';
         }
 
-        if (isset($row['bonificaciones']) && !is_numeric($row['bonificaciones'])) {
-            $errors[] = 'El campo bonificaciones debe ser numérico';
-        }
-
-        if (isset($row['beneficios_sociales']) && !is_numeric($row['beneficios_sociales'])) {
-            $errors[] = 'El campo beneficios_sociales debe ser numérico';
+        if (isset($row['asignacion_familiar']) && !is_numeric($row['asignacion_familiar'])) {
+            $errors[] = 'El campo asignacion_familiar debe ser numérico';
         }
 
         if (isset($row['meses'])) {
@@ -1017,6 +1638,36 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Validate gg_supervision row
+     */
+    private function validateSupervisionRow(array $row, int $index): array
+    {
+        $errors = [];
+
+        if (empty($row['item_codigo'])) {
+            $errors[] = 'El campo código de ítem es requerido';
+        }
+
+        if (empty($row['concepto'])) {
+            $errors[] = 'El campo concepto es requerido';
+        }
+
+        if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+            $errors[] = 'El campo cantidad debe ser numérico';
+        }
+
+        if (isset($row['meses']) && !is_numeric($row['meses'])) {
+            $errors[] = 'El campo meses debe ser numérico';
+        }
+
+        if (isset($row['importe']) && !is_numeric($row['importe'])) {
+            $errors[] = 'El campo importe debe ser numérico';
+        }
+
+        return $errors;
+    }
+
+    /**
      * Prepare row data for insertion based on subsection type
      */
     private function prepareRowForSubsection(string $subsection, array $row, int $index, CostoProject $project, ?int $tenantPresupuestoId = null): array
@@ -1043,10 +1694,13 @@ class PresupuestoController extends Controller
                 unset($row['costo_unitario_total']);
                 break;
             case 'gastos_generales':
+            case 'gastos_fijos':
+            case 'supervision':
+            case 'control_concurrente':
                 unset($row['parcial']);
                 break;
             case 'remuneraciones':
-                unset($row['total_mensual'], $row['total_proyecto']);
+                unset($row['total_mensual_unitario'], $row['total_proyecto']);
                 break;
             case 'indices':
                 unset($row['monomio']);
@@ -1074,6 +1728,14 @@ class PresupuestoController extends Controller
         $row['created_at'] = $row['created_at'] ?? $now;
         $row['updated_at'] = $now;
 
+        // AGGRESSIVE CLEANING: Filter only real columns of the table to avoid 500 errors
+        if ($tableName) {
+            $realColumns = Schema::connection('costos_tenant')->getColumnListing($tableName);
+            return collect($row)
+                ->filter(fn($val, $key) => in_array($key, $realColumns))
+                ->toArray();
+        }
+
         return $row;
     }
 
@@ -1098,10 +1760,26 @@ class PresupuestoController extends Controller
                 'costo_materiales' => $row['costo_materiales'] ?? 0,
                 'costo_equipos' => $row['costo_equipos'] ?? 0,
             ] + $row,
-            'gastos_generales' => [
+            'gastos_generales' => [ // gg_variables table
+                'tipo_fila' => $row['tipo_fila'] ?? 'detalle',
+                'item_codigo' => $row['item_codigo'] ?? null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? null,
+                'cantidad_descripcion' => $row['cantidad_descripcion'] ?? 0,
+                'cantidad_tiempo' => $row['cantidad_tiempo'] ?? 0,
+                'participacion' => $row['participacion'] ?? 100,
+                'precio' => $row['precio'] ?? 0,
+                'parent_id' => $row['parent_id'] ?? null,
+            ] + $row,
+            'gastos_fijos' => [ // gg_fijos table
+                'tipo_fila' => $row['tipo_fila'] ?? 'detalle',
+                'item_codigo' => $row['item_codigo'] ?? null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? null,
                 'cantidad' => $row['cantidad'] ?? 0,
-                'precio_unitario' => $row['precio_unitario'] ?? 0,
-                'categoria' => $row['categoria'] ?? null,
+                'costo_unitario' => $row['costo_unitario'] ?? 0,
+                'parent_id' => $row['parent_id'] ?? null,
+                'tipo_calculo' => $row['tipo_calculo'] ?? 'manual',
             ] + $row,
             'insumos' => [
                 'precio_unitario' => $row['precio_unitario'] ?? 0,
@@ -1129,6 +1807,16 @@ class PresupuestoController extends Controller
                 'indice_actual' => $row['indice_actual'] ?? 100,
                 'fecha_indice_base' => $row['fecha_indice_base'] ?? null,
                 'fecha_indice_actual' => $row['fecha_indice_actual'] ?? null,
+            ] + $row,
+            'supervision' => [ // gg_supervision table
+                'tipo_fila' => $row['tipo_fila'] ?? 'detalle',
+                'item_codigo' => $row['item_codigo'] ?? null,
+                'concepto' => $row['concepto'] ?? '',
+                'unidad' => $row['unidad'] ?? null,
+                'cantidad' => $row['cantidad'] ?? 0,
+                'meses' => $row['meses'] ?? 0,
+                'importe' => $row['importe'] ?? 0,
+                'parent_id' => $row['parent_id'] ?? null,
             ] + $row,
             default => $row,
         };
@@ -1274,6 +1962,208 @@ class PresupuestoController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+    }
+
+    /**
+     * Recalcula el costo directo sumando los parciales de presupuesto_general
+     * y actualiza project_params y presupuestos (tabla centralizada).
+     */
+    private function syncCostoDirecto(string $databaseName, int $tenantPresupuestoId): void
+    {
+        $connection = DB::connection('costos_tenant');
+
+        // Sumar todos los parciales de presupuesto_general vinculados a este presupuesto
+        // Nota: metrado * precio_unitario es la base del parcial en DB.
+        $totalCostoDirecto = (float)$connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->sum(DB::raw('metrado * precio_unitario'));
+
+        // 1. Actualizar tabla maestra de presupuestos del tenant
+        if (Schema::connection('costos_tenant')->hasTable('presupuestos')) {
+            $connection->table('presupuestos')
+                ->where('id', $tenantPresupuestoId)
+                ->update([
+                    'costo_directo' => $totalCostoDirecto,
+                    'updated_at'    => now(),
+                ]);
+        }
+
+        // 2. Actualizar tabla de parámetros globales (project_params)
+        if (Schema::connection('costos_tenant')->hasTable('project_params')) {
+            $connection->table('project_params')
+                ->where('id', 1)
+                ->update([
+                    'costo_directo' => $totalCostoDirecto,
+                    'updated_at'    => now(),
+                ]);
+        }
+
+        // 3. Propagación automática a base_calculo de Fianzas y Pólizas
+        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_fianzas')) {
+            $connection->table('gg_fijos_fianzas')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->update(['base_calculo' => $totalCostoDirecto]);
+        }
+
+        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_polizas')) {
+            $connection->table('gg_fijos_polizas')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->update(['base_calculo' => $totalCostoDirecto]);
+        }
+
+        Log::info("PresupuestoController: Sync costo_directo [{$totalCostoDirecto}] for budget [{$tenantPresupuestoId}]");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SUPERVISIÓN — DETALLE GASTOS GENERALES (Sección IV)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Obtiene todas las filas del detalle de Gastos Generales de Supervisión.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/supervision-gg-detalle
+     */
+    public function getSupervisionGGDetalle(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+            return response()->json(['success' => true, 'rows' => [], 'total' => 0]);
+        }
+
+        $rows = DB::connection('costos_tenant')
+            ->table('supervision_gg_detalle')
+            ->orderBy('item_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn($r) => (array)$r)
+            ->toArray();
+
+        // Calculate global total as SUM of total_seccion for root sections
+        $total = DB::connection('costos_tenant')
+            ->table('supervision_gg_detalle')
+            ->whereNull('parent_id')
+            ->where('tipo_fila', 'seccion')
+            ->sum('total_seccion');
+
+        return response()->json([
+            'success' => true,
+            'rows'    => $rows,
+            'total'   => round((float)$total, 2),
+        ]);
+    }
+
+    /**
+     * Guarda/actualiza el detalle de Gastos Generales de Supervisión.
+     * Estrategia: clear + re-insert con remapeo de parent_id.
+     * Devuelve el total calculado para actualizar la Sección IV automáticamente.
+     * Ruta: PATCH /costos/proyectos/{project}/presupuesto/supervision-gg-detalle
+     */
+    public function saveSupervisionGGDetalle(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+            return response()->json(['success' => false, 'error' => 'Tabla no existe. Ejecute las migraciones.'], 500);
+        }
+
+        $rows = $request->input('rows', []);
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        $connection->beginTransaction();
+        try {
+            // Clear all rows for this presupuesto
+            $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->delete();
+
+            $idMapping   = [];
+            $sectionTotals = []; // parentId (new) => sum of subtotals
+
+            foreach ($rows as $index => $row) {
+                $oldId = $row['id'] ?? null;
+
+                // Prepare clean row
+                $cleanRow = [
+                    'presupuesto_id' => $tenantPresupuestoId,
+                    'parent_id'      => null,
+                    'tipo_fila'      => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
+                    'item_codigo'    => substr((string)($row['item_codigo'] ?? ''), 0, 20) ?: null,
+                    'concepto'       => $row['concepto'] ?? '',
+                    'unidad'         => substr((string)($row['unidad'] ?? ''), 0, 20) ?: null,
+                    'cantidad'       => is_numeric($row['cantidad'] ?? null) ? (float)$row['cantidad'] : 0,
+                    'meses'          => is_numeric($row['meses'] ?? null)    ? (float)$row['meses']    : 0,
+                    'importe'        => is_numeric($row['importe'] ?? null)  ? (float)$row['importe']  : 0,
+                    'total_seccion'  => 0, // will be updated after all children inserted
+                    'item_order'     => $index,
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
+                ];
+
+                // Remap parent_id
+                $originalParentId = $row['parent_id'] ?? null;
+                if (!is_null($originalParentId) && isset($idMapping[$originalParentId])) {
+                    $cleanRow['parent_id'] = $idMapping[$originalParentId];
+                }
+
+                $newId = $connection->table('supervision_gg_detalle')->insertGetId($cleanRow);
+
+                if ($oldId) {
+                    $idMapping[$oldId] = $newId;
+                }
+            }
+
+            // Recalculate total_seccion for each section row
+            // (sum the stored subtotal of its direct children)
+            $sectionRows = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->where('tipo_fila', 'seccion')
+                ->get();
+
+            foreach ($sectionRows as $section) {
+                $sectionTotal = $connection->table('supervision_gg_detalle')
+                    ->where('parent_id', $section->id)
+                    ->where('tipo_fila', 'detalle')
+                    ->sum('subtotal');
+
+                $connection->table('supervision_gg_detalle')
+                    ->where('id', $section->id)
+                    ->update(['total_seccion' => round((float)$sectionTotal, 4)]);
+            }
+
+            // Global total = SUM of root section totals
+            $grandTotal = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->whereNull('parent_id')
+                ->where('tipo_fila', 'seccion')
+                ->sum('total_seccion');
+
+            $connection->commit();
+
+            // Return updated rows
+            $updatedRows = $connection->table('supervision_gg_detalle')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->orderBy('item_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn($r) => (array)$r)
+                ->toArray();
+
+            return response()->json([
+                'success' => true,
+                'rows'    => $updatedRows,
+                'total'   => round((float)$grandTotal, 2),
+            ]);
+        } catch (\Exception $e) {
+            $connection->rollBack();
+            Log::error('Error saving supervision_gg_detalle', [
+                'project' => $project->id,
+                'error'   => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 }

@@ -21,6 +21,7 @@ import type {
     ACURowSummary,
     InsumoProducto,
 } from '@/types/presupuestos';
+import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 const fmt = (n: number | undefined | null, d = 2) =>
     (n ?? 0).toLocaleString('es-PE', {
@@ -484,7 +485,7 @@ function ResourceSearchDialog({
                                 Código
                                 <input
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.codigo_producto}
+                                    value={editorForm.codigo_producto ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -497,7 +498,7 @@ function ResourceSearchDialog({
                                 Unidad
                                 <input
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.unidad}
+                                    value={editorForm.unidad ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -510,7 +511,7 @@ function ResourceSearchDialog({
                                 Descripción
                                 <input
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.descripcion}
+                                    value={editorForm.descripcion ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -523,7 +524,7 @@ function ResourceSearchDialog({
                                 Especificaciones
                                 <input
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.especificaciones}
+                                    value={editorForm.especificaciones ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -536,7 +537,7 @@ function ResourceSearchDialog({
                                 Tipo
                                 <select
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.tipo}
+                                    value={editorForm.tipo ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -560,7 +561,7 @@ function ResourceSearchDialog({
                                 Clase
                                 <select
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.insumo_clase_id}
+                                    value={editorForm.insumo_clase_id ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -585,7 +586,7 @@ function ResourceSearchDialog({
                                 <input
                                     type="number"
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.costo_unitario_lista}
+                                    value={editorForm.costo_unitario_lista ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -601,7 +602,7 @@ function ResourceSearchDialog({
                                 <input
                                     type="number"
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.costo_unitario}
+                                    value={editorForm.costo_unitario ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -617,7 +618,7 @@ function ResourceSearchDialog({
                                 <input
                                     type="number"
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.costo_flete}
+                                    value={editorForm.costo_flete ?? ''}
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
@@ -1081,8 +1082,14 @@ export function AcuPanel({
 
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
-    const [hoursPerDay, setHoursPerDay] = useState(8);
+    
+    const globalHours = useProjectParamsStore(s => s.getJornadaHoras());
+    const [hoursPerDay, setHoursPerDay] = useState(globalHours || 8);
     const [searchOpen, setSearchOpen] = useState(false);
+
+    useEffect(() => {
+        if (globalHours) setHoursPerDay(globalHours);
+    }, [globalHours]);
     const [searchTargetType, setSearchTargetType] = useState<SearchType | null>(
         null,
     );
