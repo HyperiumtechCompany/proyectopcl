@@ -1061,6 +1061,98 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Obtiene los valores de GGF%, GGV% y Utilidad% para el cálculo de montoCG.
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/ggfijos-monto-cg
+     */
+    public function getGGFijosMontoCG(CostoProject $project): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Verificar si existen las columnas, si no, agregarlas
+        $this->ensureColumnsExist($connection);
+
+        $record = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ggf_porcentaje' => $record && isset($record->ggf_porcentaje) ? (float) $record->ggf_porcentaje : 0,
+                'ggv_porcentaje' => $record && isset($record->ggv_porcentaje) ? (float) $record->ggv_porcentaje : 0,
+                'utilidad_porcentaje' => $record && isset($record->utilidad_porcentaje) ? (float) $record->utilidad_porcentaje : 10,
+            ],
+        ]);
+    }
+
+    /**
+     * Guarda los valores de GGF%, GGV% y Utilidad% para el cálculo de montoCG.
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/ggfijos-monto-cg
+     */
+    public function saveGGFijosMontoCG(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        $ggfPorcentaje = $request->input('ggf_porcentaje', 0);
+        $ggvPorcentaje = $request->input('ggv_porcentaje', 0);
+        $utilidadPorcentaje = $request->input('utilidad_porcentaje', 10);
+
+        $connection = DB::connection('costos_tenant');
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Verificar si existen las columnas, si no, agregarlas
+        $this->ensureColumnsExist($connection);
+
+        // Upsert the record
+        $connection->table('gg_consolidado')
+            ->updateOrInsert(
+                ['presupuesto_id' => $tenantPresupuestoId],
+                [
+                    'ggf_porcentaje' => $ggfPorcentaje,
+                    'ggv_porcentaje' => $ggvPorcentaje,
+                    'utilidad_porcentaje' => $utilidadPorcentaje,
+                    'updated_at' => now(),
+                ]
+            );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ggf_porcentaje' => $ggfPorcentaje,
+                'ggv_porcentaje' => $ggvPorcentaje,
+                'utilidad_porcentaje' => $utilidadPorcentaje,
+            ],
+        ]);
+    }
+
+    /**
+     * Asegura que las columnas necesarias existan en la tabla gg_consolidado
+     */
+    private function ensureColumnsExist($connection): void
+    {
+        try {
+            // Verificar si ggf_porcentaje existe
+            $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
+            if (!in_array('ggf_porcentaje', $columns)) {
+                $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggf_porcentaje DECIMAL(12,4) DEFAULT 0');
+            }
+
+            // Verificar si ggv_porcentaje existe
+            $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
+            if (!in_array('ggv_porcentaje', $columns)) {
+                $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggv_porcentaje DECIMAL(12,4) DEFAULT 0');
+            }
+        } catch (\Exception $e) {
+            // Silently fail - columns might already exist
+        }
+    }
+
+    /**
      * Obtiene los parámetros globales del proyecto desde el tenant DB.
      * Ruta: GET /costos/proyectos/{project}/presupuesto/params
      */

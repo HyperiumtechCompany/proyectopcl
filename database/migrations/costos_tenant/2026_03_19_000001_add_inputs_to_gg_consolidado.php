@@ -16,10 +16,10 @@ return new class extends Migration
 
         Schema::connection($this->connection)->table('gg_consolidado', function (Blueprint $table) {
             if (!Schema::connection($this->connection)->hasColumn('gg_consolidado', 'utilidad_porcentaje')) {
-                $table->decimal('utilidad_porcentaje', 6, 4)->default(5.00)->after('total_control_concurrente');
+                $table->decimal('utilidad_porcentaje', 12, 4)->default(5.00)->after('total_control_concurrente');
             }
             if (!Schema::connection($this->connection)->hasColumn('gg_consolidado', 'igv_porcentaje')) {
-                $table->decimal('igv_porcentaje', 6, 4)->default(18.00)->after('utilidad_porcentaje');
+                $table->decimal('igv_porcentaje', 12, 4)->default(18.00)->after('utilidad_porcentaje');
             }
             if (!Schema::connection($this->connection)->hasColumn('gg_consolidado', 'componente_ii_monto')) {
                 $table->decimal('componente_ii_monto', 15, 4)->default(0)->after('igv_porcentaje');

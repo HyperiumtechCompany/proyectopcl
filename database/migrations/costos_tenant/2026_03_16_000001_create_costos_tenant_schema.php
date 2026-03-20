@@ -709,17 +709,17 @@ return new class extends Migration
 
                 // Componentes I–VI
                 $table->decimal('comp_i_costo_directo',            15, 4)->default(0);
-                $table->decimal('comp_i_porcentaje',                6, 4)->default(0);
+                $table->decimal('comp_i_porcentaje',               12, 4)->default(0);
                 $table->decimal('comp_ii_gastos_generales',        15, 4)->default(0);
-                $table->decimal('comp_ii_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_ii_porcentaje',              12, 4)->default(0);
                 $table->decimal('comp_iii_utilidad',               15, 4)->default(0);
-                $table->decimal('comp_iii_porcentaje',              6, 4)->default(0);
+                $table->decimal('comp_iii_porcentaje',             12, 4)->default(0);
                 $table->decimal('comp_iv_subtotal_sin_igv',        15, 4)->default(0);
-                $table->decimal('comp_iv_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_iv_porcentaje',              12, 4)->default(0);
                 $table->decimal('comp_v_igv',                      15, 4)->default(0);
-                $table->decimal('comp_v_porcentaje',                6, 4)->default(18.00);
+                $table->decimal('comp_v_porcentaje',               12, 4)->default(18.00);
                 $table->decimal('comp_vi_valor_con_igv',           15, 4)->default(0);
-                $table->decimal('comp_vi_porcentaje',               6, 4)->default(0);
+                $table->decimal('comp_vi_porcentaje',              12, 4)->default(0);
 
                 // Totales finales
                 $table->decimal('total_presupuesto_obra',          15, 4)->default(0);
@@ -731,8 +731,8 @@ return new class extends Migration
                 $table->string('total_inversion_obra_letras', 500)->nullable();
 
                 // Indicadores
-                $table->decimal('porcentaje_gg_sobre_cd',          6, 4)->default(0);
-                $table->decimal('porcentaje_supervision_sobre_cd', 6, 4)->default(0);
+                $table->decimal('porcentaje_gg_sobre_cd',          12, 4)->default(0);
+                $table->decimal('porcentaje_supervision_sobre_cd', 12, 4)->default(0);
 
                 $table->timestamp('calculado_at')->nullable();
                 $table->timestamps();
