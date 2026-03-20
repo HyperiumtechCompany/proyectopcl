@@ -67,6 +67,19 @@ export function AppSidebar() {
             href: '/costos',
             icon: Folder,
         },
+        
+        {
+            title: 'Electricas',
+            href: '/metrados/electrica',
+            icon: Folder,
+        },
+        
+        {
+            title: 'Comunicaciones',
+            href: '/metrados/comunicacion',
+            icon: Folder,
+        }
+        
         // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
         // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
     ];

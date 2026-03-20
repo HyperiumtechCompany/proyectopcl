@@ -144,7 +144,6 @@ export default function Index() {
                 `/costos/proyectos/${project.id}/presupuesto/general`,
                 { rows: currentRows },
             );
-
             setDirty(false);
             setLastSavedTime(new Date());
         } catch (error) {

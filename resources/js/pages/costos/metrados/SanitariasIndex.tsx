@@ -16,9 +16,20 @@ import {
     ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import * as XLSX from "xlsx";
+import { Row } from 'exceljs';
 
 // TIPOS
 interface ColumnDef { key: string; label: string; width: number }
+type BaseKeys =
+    | 'partida' | 'descripcion' | 'unidad'
+    | 'largo' | 'ancho' | 'alto'
+    | 'elsim' | 'nveces'
+    | '_level' | '_kind';
+
+type ImportRow = Record<BaseKeys, any> & {
+    [key: string]: any;
+};
 
 interface SanitariasPageProps {
     project:  { id: number; nombre: string };
@@ -55,7 +66,7 @@ const VISIBLE_COLS: ColumnDef[] = [
     { key: 'area',        label: 'Área',          width: 76  },
     { key: 'vol',         label: 'Vol.',          width: 76  },
     { key: 'kg',          label: 'Kg.',           width: 76  },
-    { key: 'und',         label: 'Und.',          width: 76  },
+    { key: 'und',         label: 'Parcial',       width: 76  },
     { key: 'total',       label: 'Total',         width: 95  },
     { key: 'observacion', label: 'Observaciones', width: 148 },
 ];
@@ -289,6 +300,8 @@ export default function SanitariasIndex() {
     const saveTimer            = useRef<ReturnType<typeof setTimeout> | null>(null);
     const latestSheets         = useRef<any[]>([]);
     const progUpdateCount = useRef(0); // contador: >0 = escritura programática en curso
+    const recalcTimer = useRef<any>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // ── Columnas del resumen (dinámicas por N módulos) ─────────────────────
     const resumenCols = useMemo<ColumnDef[]>(() => [
@@ -334,7 +347,7 @@ export default function SanitariasIndex() {
                 const code = String(row.partida ?? '').trim();
                 if (!code) return;
                 const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
-                const t = toNum(row.total);
+                const t = r4(toNum(row.total));
                 if (modIdx !== undefined) e.mod[modIdx] = (e.mod[modIdx] || 0) + t;
                 if (isExt) e.ext += t;
                 if (isCis) e.cis += t;
@@ -344,6 +357,10 @@ export default function SanitariasIndex() {
         for (let i = 1; i <= moduleCount; i++) process(modulosData?.[String(i)] ?? [], i);
         process(extData  ?? [], undefined, true,  false);
         process(cisData  ?? [], undefined, false, true);
+
+        codeOrder.sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true })
+        );
 
         return codeOrder.map((code) => {
             const v = byCode[code];
@@ -441,6 +458,8 @@ export default function SanitariasIndex() {
     // RECÁLCULO AUTOMÁTICO — N NIVELES
     // ═══════════════════════════════════════════════════════════════════════
     const recalcActiveSheet = useCallback(() => {
+
+        if (progUpdateCount.current > 3) return; 
         const ls = (window as any).luckysheet;
         if (!ls) return;
 
@@ -469,11 +488,7 @@ export default function SanitariasIndex() {
             if (c !== undefined) updates.push({ r, c, v });
         };
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASE 1 — NUMERACIÓN AUTOMÁTICA
-        // Grupos: código jerárquico 01 / 01.01 / 01.01.01 …
-        // Hojas:  sin número (columna partida vacía)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const counters = new Array(MAX_LEVELS + 1).fill(0); // counters[1..MAX_LEVELS]
         counters[1] = Math.max(0, TOP_LEVEL_START - 1);
 
@@ -521,14 +536,6 @@ export default function SanitariasIndex() {
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASE 2 — PROPAGACIÓN DE UNIDAD
-        // Cada hoja hereda la unidad del GRUPO ANCESTRO MÁS CERCANO que
-        // tenga unidad definida (el más profundo gana = más específico).
-        //
-        // Algoritmo: pila indexada por nivel. Al entrar a un grupo, se actualiza
-        // unitStack[group.level]. La hoja busca desde su level-1 hacia arriba.
-        // Al abrir un grupo en nivel L, se limpian los niveles > L (salimos del
-        // scope de los hermanos anteriores).
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const unitStack: Array<string> = new Array(MAX_LEVELS + 1).fill('');
 
         entries.forEach(({ ri, row, level, kind }) => {
@@ -575,24 +582,36 @@ export default function SanitariasIndex() {
             const upd = (key: string, val: number) => {
                 if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
             };
-            upd('und',  newUnd);
-            upd('lon',  newLon);
+
+            const setFormula = (key: string, formula: string) => {
+                set(ri, key, {
+                    f: formula,
+                    v: null,
+                    m: '',
+                    ct: { fa: 'General', t: 'n' },
+                });
+            };
+
+            // columnas
+            upd('lon', newLon);
             upd('area', newArea);
-            upd('vol',  newVol);
+            upd('vol', newVol);
+            upd('und', newUnd);
 
             const unidad   = String(row.unidad ?? '').trim().toLowerCase();
-            const totalKey = UNIT_TOTAL_COL[unidad];
-            if (totalKey) {
-                const tVal = toNum(row[totalKey]);
-                // Total en hojas no se muestra; se acumula en el padre
-                if (!blank(row.total)) { set(ri, 'total', ''); row.total = null; }
-                e.total = tVal;
-            } else {
-                // Si la unidad es inválida/no definida, no sumar
-                if (!blank(row.total)) { set(ri, 'total', ''); row.total = null; }
-                e.total = 0;
-            }
+            
+            let tVal = 0;
+
+            if (unidad === 'm' || unidad === 'ml') tVal = newLon;
+            else if (unidad === 'm2') tVal = newArea;
+            else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
+            else if (unidad === 'kg') tVal = toNum(row.kg);
+            else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
+
+            e.total = tVal;
+            set(ri, 'total', mkNum(tVal));
         });
+        
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASE 4 — ROLL-UP: de la profundidad máxima hasta el nivel 1
@@ -622,6 +641,7 @@ export default function SanitariasIndex() {
         // PASE 5 — FLUSH (un único batch de setCellValue)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         if (updates.length === 0) return;
+        if (updates.length > 10000) return;
 
         progUpdateCount.current++;
         updates.forEach((u, idx) => {
@@ -633,15 +653,30 @@ export default function SanitariasIndex() {
         // Decrementar tras el ciclo de Luckysheet para no bloquear la siguiente edición
         setTimeout(() => {
             progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
+
             const all = ls.getAllSheets?.() ?? [];
-            if (all.length > 0) scheduleSave(all);
-        }, 0);
+            if (all.length > 0) {
+                scheduleSave(all);
+
+                handleSyncResumen();
+            }
+
+        }, 120);
     }, [scheduleSave]);
 
     // ── Handlers Luckysheet ────────────────────────────────────────────────
-    const afterChange = useCallback(() => {
+    const afterChange = useCallback((data: any) => {
+        if (!data) return;
+
         if (progUpdateCount.current > 0) return;
-        recalcActiveSheet();
+
+        clearTimeout(recalcTimer.current);
+
+        recalcTimer.current = setTimeout(() => {
+            progUpdateCount.current = 0;
+            recalcActiveSheet();
+        }, 120);
+
     }, [recalcActiveSheet]);
 
     const handleDataChange = useCallback((sheets: any[]) => {
@@ -773,9 +808,8 @@ export default function SanitariasIndex() {
 
         setTimeout(() => {
             progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
-            afterChange();
-        }, 150);
-    }, [afterChange]);
+        }, 100);
+    }, [recalcActiveSheet]);
 
     // ═══════════════════════════════════════════════════════════════════════
     // AGREGAR FILAS
@@ -848,8 +882,8 @@ export default function SanitariasIndex() {
             ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
         }
 
-        setTimeout(() => afterChange(), 120);
-    }, [afterChange]);
+        setTimeout(() => recalcActiveSheet(), 120);
+    }, [recalcActiveSheet]);
     //  Dropdown de unidades  retry hasta que Luckysheet esté listo 
     useEffect(() => {
         let attempts = 0;
@@ -879,6 +913,7 @@ export default function SanitariasIndex() {
 
         timer = setTimeout(applyVerification, 400);
         return () => clearTimeout(timer);
+
     }, [initialSheets]);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -909,13 +944,37 @@ export default function SanitariasIndex() {
             if (resIdx === -1) { setIsSyncing(false); return; }
 
             const newRows  = buildResumenRows(mods, ext, cis);
-            const newSheet = rowsToSheet(newRows, resumenCols, 'Resumen', all[resIdx]?.order ?? resIdx);
-            const res      = all[resIdx];
-            res.celldata   = newSheet.celldata;
-            if (typeof ls.transToData === 'function') res.data = ls.transToData(newSheet.celldata);
-            res.config     = { ...(res.config ?? {}), columnlen: newSheet.config.columnlen };
+
+
+            const currentSheet = ls.getSheet().order;
+
+            ls.setSheetActive(resIdx);
+
+            ls.clearRange({
+                row: [0, 500],
+                column: [0, 20]
+            });
+
+            newRows.forEach((row, r) => {
+                resumenCols.forEach((col, c) => {
+                    const val = row[col.key as keyof typeof row] ?? '';
+                    ls.setCellValue(r + 1, c, val, {
+                        isRefresh: false
+                    });
+                });
+            });
+
+            resumenCols.forEach((col, c) => {
+                ls.setCellValue(0, c, col.label, {
+                    isRefresh: false
+                });
+            });
 
             ls.refresh();
+
+            ls.setSheetActive(currentSheet);
+
+
             doSave(all);
             setIsSyncing(false);
         }, 400);
@@ -933,6 +992,130 @@ export default function SanitariasIndex() {
             );
         } catch { setSaveError('Error al actualizar la configuración.'); }
         finally { setIsUpdatingConfig(false); }
+    };
+
+    const triggerRecalc = () => {
+        setTimeout(() => {
+            recalcActiveSheet();
+        }, 0);
+    };
+
+    //export 
+    const handleExportExcel = () => {
+        const ls = (window as any).luckysheet;
+        if (!ls) return;
+
+        const wb = XLSX.utils.book_new();
+        const sheets = ls.getAllSheets();
+
+        sheets.forEach((sheet: any) => {
+            const name = sheet.name;
+
+            let cols = BASE_COLS;
+            if (name === "Resumen") cols = resumenCols;
+
+            const rows = sheetToRows(sheet, cols);
+
+            const clean = rows.map((r) => {
+                const obj: any = {};
+                cols.forEach(c => {
+                    if (!c.key.startsWith("_")) {
+                        let val = r[c.key];
+
+                        if (typeof val === "number") {
+                            val = Number(val.toFixed(4));
+                        }
+
+                        obj[c.key] = val ?? "";
+                    }
+                });
+                return obj;
+            });
+
+            const ws = XLSX.utils.json_to_sheet(clean);
+            XLSX.utils.book_append_sheet(wb, ws, name);
+        });
+
+        XLSX.writeFile(wb, "sanitarias.xlsx");
+    };
+
+
+    //import
+    const importExcel = (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = (evt: any) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: "array" });
+
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+
+            const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+            const parsed: ImportRow[] = json.map((row) => {
+                const partida = String(row.partida || "").trim();
+                const hasCode = partida !== "";
+
+                return {
+                    partida,
+                    descripcion: row.descripcion || "",
+                    unidad: row.unidad || "",
+
+                    largo: Number(row.largo) || 0,
+                    ancho: Number(row.ancho) || 0,
+                    alto: Number(row.alto) || 0,
+                    elsim: Number(row.elsim) || 0,
+                    nveces: Number(row.nveces) || 0,
+
+                    _level: hasCode ? partida.split(".").length : 1,
+                    _kind: hasCode ? "group" : "leaf",
+                };
+            });
+
+            const ls = (window as any).luckysheet;
+            if (!ls) return;
+
+            const sheets = ls.getAllSheets();
+            const active = sheets.find((s: any) => s.status === 1);
+
+            if (!active || active.name === "Resumen") {
+                alert("Selecciona una hoja válida (Módulo, Exterior o Cisterna)");
+                return;
+            }
+
+            const sheetOrder = active.order ?? 0;
+
+            ls.clearRange({
+                row: [1, 2000],
+                column: [0, BASE_COLS.length],
+            });
+
+            parsed.forEach((row, r) => {
+                BASE_COLS.forEach((col, c) => {
+                    let val = row[col.key];
+
+                    if (val === undefined) val = "";
+
+                    ls.setCellValue(r + 1, c, val, {
+                        order: sheetOrder,
+                        isRefresh: false,
+                    });
+                });
+            });
+
+            ls.refresh();
+
+            setTimeout(() => {
+                progUpdateCount.current = 0; 
+                recalcActiveSheet();
+            }, 300);
+        };
+
+        reader.readAsArrayBuffer(file);
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -999,7 +1182,7 @@ export default function SanitariasIndex() {
                             {/* Grupo raíz / mismo nivel */}
                             <ActionBtn
                                 icon={<FolderPlus className="h-3 w-3" />}
-                                label="Grupo"
+                                label="GRUPO"
                                 title="Insertar grupo al mismo nivel que la fila seleccionada"
                                 style={{ background: GROUP_PALETTE[0].bg, color: '#fff' }}
                                 onClick={() => addRow('group', true)}
@@ -1040,6 +1223,29 @@ export default function SanitariasIndex() {
                             onClick={() => moveBlock('down')}
                         />
 
+                        <ActionBtn
+                            label="Export Excel"
+                            title="Exportar todo a Excel"
+                            icon={<Save className="h-3 w-3" />}
+                            style={{ background: '#16a34a', color: 'white' }}
+                            onClick={handleExportExcel}
+                        />
+
+                        <ActionBtn
+                            label="Import Excel"
+                            title="Importar desde Excel"
+                            icon={<ArrowUp className="h-3 w-3" />}
+                            style={{ background: '#2563eb', color: 'white' }}
+                            onClick={() => fileInputRef.current?.click()}
+                        />
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            ref={fileInputRef}
+                            onChange={importExcel}
+                            className="hidden"
+                        />
+
                         <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
                         {/* ── Acciones generales ── */}
@@ -1067,6 +1273,8 @@ export default function SanitariasIndex() {
                             <Settings2 className="h-3 w-3" />
                             Config
                         </Button>
+
+                        
                     </div>
                 </header>
 
@@ -1081,13 +1289,21 @@ export default function SanitariasIndex() {
                             showinfobar:      false,
                             sheetFormulaBar:  true,
                             showstatisticBar: true,
-                            afterChange:      afterChange,
-                            updated:          afterChange,
+                            cellUpdated: () => {
+                                if (progUpdateCount.current > 0) return;
+
+                                clearTimeout(recalcTimer.current);
+
+                                recalcTimer.current = setTimeout(() => {
+                                    progUpdateCount.current = 0; // 🔥 CLAVE
+                                    recalcActiveSheet();
+                                }, 80);
+                            },
                             contextMenu: {
                                 row: [
-                                    ctxItem('Insertar Grupo al mismo nivel', 'group', true,  afterChange, addRow),
-                                    ctxItem('Insertar Sub-grupo (N+1)',       'group', false, afterChange, addRow),
-                                    ctxItem('Insertar Partida (hoja)',         'leaf',  false, afterChange, addRow),
+                                    ctxItem('Insertar Grupo al mismo nivel', 'group', true,  triggerRecalc, addRow),
+                                    ctxItem('Insertar Sub-grupo (N+1)',       'group', false, triggerRecalc, addRow),
+                                    ctxItem('Insertar Partida (hoja)',        'leaf',  false, triggerRecalc, addRow),
                                     { type: 'separator' },
                                     {
                                         text: '↑ Mover bloque arriba',
@@ -1109,7 +1325,7 @@ export default function SanitariasIndex() {
                                             const r = ls.getRange?.();
                                             if (!r?.length) return;
                                             ls.deleteRow(r[0].row[0], 1);
-                                            afterChange();
+                                            triggerRecalc();
                                         },
                                     },
                                 ],
@@ -1202,12 +1418,19 @@ function ctxItem(
     text: string,
     kind: EntryKind,
     sameLevelAsSelected: boolean,
-    afterChange: () => void,
+    triggerRecalc: () => void,
     addRow: (k: EntryKind, same: boolean) => void,
 ) {
     return {
         text,
         type: 'button',
-        onClick: () => addRow(kind, sameLevelAsSelected),
+        onClick: () => {
+            addRow(kind, sameLevelAsSelected);
+            triggerRecalc(); 
+        },
     };
 }
+function onClick(): void {
+    throw new Error('Function not implemented.');
+}
+

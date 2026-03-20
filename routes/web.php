@@ -10,6 +10,7 @@ use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\MetradoComunicacionController;
 use App\Http\Controllers\MetradoEstructurasController;
 use App\Http\Controllers\MetradoSanitariasController;
+use App\Http\Controllers\MetradoElectricasController;
 use App\Http\Controllers\MetradosController;
 use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\PresupuestoController;
@@ -203,6 +204,82 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::patch('/metrado', [MetradoEstructurasController::class, 'updateMetrado'])->name('metrado.update');
             Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
+        });
+
+    // metrado electricas
+    Route::middleware([SetCostosDatabase::class])
+        ->prefix('/{costoProject}/metrado-electricas')
+        ->name('metrado-electricas.')
+        ->group(function () {
+            
+            Route::get('/', [MetradoElectricasController::class, 'index'])
+                ->name('index');
+            
+            Route::patch('/metrado', [MetradoElectricasController::class, 'updateMetrado'])
+                ->name('metrado.update');
+            
+            Route::patch('/resumen', [MetradoElectricasController::class, 'updateResumen'])
+                ->name('resumen.update');
+            
+            Route::post('/resumen/sync', [MetradoElectricasController::class, 'syncResumen'])
+                ->name('resumen.sync');
+        });
+
+    //metrado comunicaciones
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-comunicaciones')
+    ->name('metrado-comunicaciones.')
+    ->group(function () {
+
+        Route::get('/', [MetradoComunicacionesController::class, 'index'])
+            ->name('index');
+
+        Route::patch('/metrado', [MetradoComunicacionesController::class, 'updateMetrado'])
+            ->name('metrado.update');
+
+        Route::patch('/resumen', [MetradoComunicacionesController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoComunicacionesController::class, 'syncResumen'])
+            ->name('resumen.sync');
+        });
+
+    //metrado arquitectura
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-arquitectura')
+    ->name('metrado-arquitectura.')
+    ->group(function () {
+        Route::get('/', [MetradoArquitecturaController::class, 'index'])
+            ->name('index');
+
+        Route::patch('/metrado', [MetradoArquitecturaController::class, 'updateMetrado'])
+            ->name('metrado.update');
+
+        Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoElectricasController::class, 'syncResumen'])
+            ->name('resumen.sync');
+
+        });
+
+    //metrado gas
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-gas')
+    ->name('metrado-gas.')
+    ->group(function () {
+        Route::get('/', [MetradoGasController::class, 'index'])
+            ->name('index');
+
+        Route::patch('/metrado', [MetradoGasController::class, 'updateMetrado'])
+            ->name('metrado.update');
+
+        Route::patch('/resumen', [MetradoGasController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoGasController::class, 'syncResumen'])
+            ->name('resumen.sync');
+
         });
 });
 
