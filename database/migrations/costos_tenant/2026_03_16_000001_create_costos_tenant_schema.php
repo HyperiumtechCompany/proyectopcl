@@ -161,6 +161,7 @@ return new class extends Migration
                     $table->timestamps();
 
                     $table->index('presupuesto_id');
+                    $table->index('item_order');
                 });
             }
         }
@@ -710,6 +711,12 @@ return new class extends Migration
                 $table->decimal('total_supervision',         15, 4)->default(0);
                 $table->decimal('total_control_concurrente', 15, 4)->default(0);
 
+                // Inputs de porcentaje (absorbido de 2026_03_19_000001)
+                $table->decimal('utilidad_porcentaje',    12, 4)->default(5.00);
+                $table->decimal('igv_porcentaje',         12, 4)->default(18.00);
+                $table->decimal('componente_ii_monto',    15, 4)->default(0);
+                $table->longText('componentes_extra_json')->nullable();
+
                 // Componentes I–VI
                 $table->decimal('comp_i_costo_directo',            15, 4)->default(0);
                 $table->decimal('comp_i_porcentaje',               12, 4)->default(0);
@@ -883,6 +890,8 @@ return new class extends Migration
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_modulos')) {
             Schema::connection($this->connection)->create('metrado_sanitarias_modulos', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('modulo_numero')->default(1);
                 $table->string('modulo_nombre', 100)->nullable();
                 $table->integer('item_order')->default(0);
@@ -907,7 +916,8 @@ return new class extends Migration
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
 
-                $table->index(['modulo_numero', 'item_order']);
+                $table->index('presupuesto_id', 'idx_san_mod_presupuesto');
+                $table->index(['presupuesto_id', 'modulo_numero', 'item_order'], 'idx_san_mod_composite');
             });
         }
 
@@ -915,6 +925,8 @@ return new class extends Migration
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_exterior')) {
             Schema::connection($this->connection)->create('metrado_sanitarias_exterior', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
                 $table->string('titulo', 255)->nullable();
@@ -936,6 +948,8 @@ return new class extends Migration
                 $table->unsignedBigInteger('parent_id')->nullable();
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
+
+                $table->index('presupuesto_id');
             });
         }
 
@@ -943,6 +957,8 @@ return new class extends Migration
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_cisterna')) {
             Schema::connection($this->connection)->create('metrado_sanitarias_cisterna', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
                 $table->string('titulo', 255)->nullable();
@@ -964,6 +980,8 @@ return new class extends Migration
                 $table->unsignedBigInteger('parent_id')->nullable();
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
+
+                $table->index('presupuesto_id');
             });
         }
 
@@ -971,6 +989,8 @@ return new class extends Migration
         if (!Schema::connection($this->connection)->hasTable('metrado_sanitarias_resumen')) {
             Schema::connection($this->connection)->create('metrado_sanitarias_resumen', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
                 $table->string('titulo', 255)->nullable();
@@ -985,31 +1005,27 @@ return new class extends Migration
                 $table->unsignedBigInteger('parent_id')->nullable();
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
+
+                $table->index('presupuesto_id');
             });
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // 17. METRADO ESTRUCTURAS MODULAR
-        //     (Antes en 2026_03_18_000001_create_metrado_estructuras_tables.php)
+        // 17. METRADO ESTRUCTURAS
+        //     Dos tablas: metrado_estructuras (hoja principal) + resumen.
+        //     Ambas vinculadas a presupuesto_id.
         // ══════════════════════════════════════════════════════════════════════
 
-        // 17a. Configuración del módulo estructuras
-        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_config')) {
-            Schema::connection($this->connection)->create('metrado_estructuras_config', function (Blueprint $table) {
-                $table->id();
-                $table->integer('cantidad_modulos')->default(1);
-                $table->string('nombre_proyecto', 255)->nullable();
-                $table->timestamps();
-            });
-        }
-
-        // 17b. Hoja principal de metrado estructuras
+        // 17a. Hoja principal de metrado estructuras
         if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_metrado')) {
             Schema::connection($this->connection)->create('metrado_estructuras_metrado', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
                 $table->string('titulo', 255)->nullable();
+                $table->string('item', 30)->nullable();
                 $table->string('partida', 50)->nullable();
                 $table->text('descripcion')->nullable();
                 $table->string('unidad', 20)->nullable();
@@ -1029,14 +1045,17 @@ return new class extends Migration
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
 
-                $table->index(['item_order']);
+                $table->index('presupuesto_id');
+                $table->index('item_order');
             });
         }
 
-        // 17c. Resumen Consolidado de Estructuras
+        // 17b. Resumen Consolidado de Estructuras
         if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_resumen')) {
             Schema::connection($this->connection)->create('metrado_estructuras_resumen', function (Blueprint $table) {
                 $table->id();
+                $table->unsignedBigInteger('presupuesto_id')->nullable();
+                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
                 $table->integer('item_order')->default(0);
                 $table->string('node_type', 20)->default('partida');
                 $table->string('titulo', 255)->nullable();
@@ -1048,6 +1067,8 @@ return new class extends Migration
                 $table->unsignedBigInteger('parent_id')->nullable();
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
+
+                $table->index('presupuesto_id');
             });
         }
     }
@@ -1056,10 +1077,9 @@ return new class extends Migration
     {
         // Orden inverso estricto respetando todas las FKs
 
-        // 17. Metrado Estructuras Modular
+        // 17. Metrado Estructuras
         Schema::connection($this->connection)->dropIfExists('metrado_estructuras_resumen');
         Schema::connection($this->connection)->dropIfExists('metrado_estructuras_metrado');
-        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_config');
 
         // 16. Metrado Sanitarias Modular
         Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_resumen');
