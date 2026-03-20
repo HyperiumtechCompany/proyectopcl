@@ -88,6 +88,26 @@ class CostoModuleController extends Controller
             return redirect()->route('costos.metrado-sanitarias.index', ['costoProject' => $costoProject->id]);
         }
 
+        // Eléctricas has a specialized controller with modular structure
+        if ($moduleType === 'metrado_electricas') {
+            return redirect()->route('costos.metrado-electricas.index', ['costoProject' => $costoProject->id]);
+        }
+
+        // Comunicaciones has a specialized controller with modular structure
+        if ($moduleType === 'metrado_comunicaciones') {
+            return redirect()->route('costos.metrado-comunicaciones.index', ['costoProject' => $costoProject->id]);
+        }
+
+        // Arquitectura has a specialized controller with modular structure
+        if ($moduleType === 'metrado_arquitectura') {
+            return redirect()->route('costos.metrado-arquitectura.index', ['costoProject' => $costoProject->id]);
+        }
+
+        // Gas has a specialized controller with modular structure
+        if ($moduleType === 'metrado_gas') {
+            return redirect()->route('costos.metrado-gas.index', ['costoProject' => $costoProject->id]);
+        }
+
         $tableName = self::MODULE_TABLE_MAP[$moduleType];
 
         // Read rows from the tenant DB
@@ -177,8 +197,6 @@ class CostoModuleController extends Controller
                 $insertAt = 3; // after unidad (index 2), before cantidad
                 array_splice($cols, $insertAt, 0, self::MODULE_COLUMNS['metrado_sanitarias_extra']);
             }
-
-            return $cols;
         }
 
         // For non-metrado modules, return generic columns from DB schema

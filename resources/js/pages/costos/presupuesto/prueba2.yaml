@@ -1,0 +1,659 @@
+import { useState, useCallback, useMemo, useRef } from "react";
+import {
+  ChevronRight, ChevronDown, Plus, Trash2, Copy, Eye,
+  Search, Settings, FileText, Calculator, BarChart2,
+  Users, Package, Wrench, ChevronUp, GripVertical,
+  X, Check, AlertCircle, Layers, FolderOpen
+} from "lucide-react";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+type ResourceType = "LABOR" | "MATERIAL" | "EQUIPMENT";
+
+interface AcuResource {
+  id: string;
+  code: string;
+  description: string;
+  unit: string;
+  cuadrilla: number;
+  rendimiento: number;
+  percentD: number;
+  price: number;
+  total: number;
+}
+
+interface AcuSection {
+  type: ResourceType;
+  label: string;
+  items: AcuResource[];
+  subtotal: number;
+}
+
+interface BudgetItem {
+  id: string;
+  parentId: string | null;
+  level: number;
+  code: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  expanded: boolean;
+  children: string[];
+  acu: AcuSection[];
+  rendimiento: number;
+}
+
+// ── Initial Data ─────────────────────────────────────────────────────────────
+const initialItems: Record<string, BudgetItem> = {
+  "1": {
+    id: "1", parentId: null, level: 0, code: "01",
+    description: "OBRAS PRELIMINARES", unit: "", quantity: 0,
+    unitPrice: 0, total: 4820.50, expanded: true,
+    children: ["1-1", "1-2"], rendimiento: 200, acu: []
+  },
+  "1-1": {
+    id: "1-1", parentId: "1", level: 1, code: "01.01",
+    description: "Trazo y replanteo", unit: "m²", quantity: 150,
+    unitPrice: 12.40, total: 1860.00, expanded: false,
+    children: [], rendimiento: 200,
+    acu: [
+      {
+        type: "LABOR", label: "MANO DE OBRA", subtotal: 8.20,
+        items: [
+          { id: "l1", code: "471060001", description: "Capataz", unit: "hh", cuadrilla: 0.10, rendimiento: 0.0040, percentD: 1.00, price: 25.00, total: 0.10 },
+          { id: "l2", code: "471060003", description: "Operario", unit: "hh", cuadrilla: 1.00, rendimiento: 0.0400, percentD: 1.00, price: 22.00, total: 0.88 },
+          { id: "l3", code: "471060002", description: "Oficial", unit: "hh", cuadrilla: 1.00, rendimiento: 0.0400, percentD: 1.00, price: 18.00, total: 0.72 },
+          { id: "l4", code: "471060004", description: "Peón", unit: "hh", cuadrilla: 8.00, rendimiento: 0.3200, percentD: 90.00, price: 15.00, total: 4.32 },
+          { id: "l5", code: "471060005", description: "Topógrafo", unit: "hh", cuadrilla: 2.00, rendimiento: 0.0800, percentD: 1.00, price: 27.00, total: 2.16 },
+        ]
+      },
+      {
+        type: "MATERIAL", label: "MATERIALES", subtotal: 2.80,
+        items: [
+          { id: "m1", code: "020300010002", description: "Cal hidratada bolsa 30 kg", unit: "bls", cuadrilla: 0.50, rendimiento: 0.0020, percentD: 1.00, price: 12.00, total: 0.024 },
+          { id: "m2", code: "020200030002", description: "Yeso bolsa 20 kg", unit: "bls", cuadrilla: 2.00, rendimiento: 0.0100, percentD: 1.00, price: 8.50, total: 0.085 },
+        ]
+      },
+      {
+        type: "EQUIPMENT", label: "EQUIPOS", subtotal: 1.40,
+        items: [
+          { id: "e1", code: "490101010003", description: "Nivel topográfico", unit: "hm", cuadrilla: 1.00, rendimiento: 0.0400, percentD: 1.00, price: 15.00, total: 0.60 },
+          { id: "e2", code: "490105010004", description: "Estación total", unit: "hm", cuadrilla: 1.00, rendimiento: 0.0400, percentD: 1.00, price: 20.00, total: 0.80 },
+        ]
+      }
+    ]
+  },
+  "1-2": {
+    id: "1-2", parentId: "1", level: 1, code: "01.02",
+    description: "Movilización y desmovilización de equipos", unit: "glb", quantity: 1,
+    unitPrice: 2960.50, total: 2960.50, expanded: false,
+    children: [], rendimiento: 150,
+    acu: [
+      {
+        type: "LABOR", label: "MANO DE OBRA", subtotal: 1200.00,
+        items: [
+          { id: "l1", code: "471060001", description: "Capataz", unit: "hh", cuadrilla: 0.10, rendimiento: 0.0040, percentD: 1.00, price: 25.00, total: 120.00 },
+          { id: "l2", code: "471060003", description: "Operario", unit: "hh", cuadrilla: 2.00, rendimiento: 0.0400, percentD: 1.00, price: 22.00, total: 880.00 },
+        ]
+      },
+      {
+        type: "MATERIAL", label: "MATERIALES", subtotal: 560.50,
+        items: [
+          { id: "m1", code: "020300010002", description: "Combustible diesel galón", unit: "gal", cuadrilla: 50.00, rendimiento: 0.5000, percentD: 1.00, price: 16.00, total: 560.50 },
+        ]
+      },
+      {
+        type: "EQUIPMENT", label: "EQUIPOS", subtotal: 1200.00,
+        items: [
+          { id: "e1", code: "490101010003", description: "Camión plataforma 6×4", unit: "hm", cuadrilla: 2.00, rendimiento: 0.0800, percentD: 1.00, price: 180.00, total: 1200.00 },
+        ]
+      }
+    ]
+  },
+  "2": {
+    id: "2", parentId: null, level: 0, code: "02",
+    description: "MOVIMIENTO DE TIERRAS", unit: "", quantity: 0,
+    unitPrice: 0, total: 38420.80, expanded: true,
+    children: ["2-1", "2-2", "2-3"], rendimiento: 300, acu: []
+  },
+  "2-1": {
+    id: "2-1", parentId: "2", level: 1, code: "02.01",
+    description: "Excavación masiva c/equipo", unit: "m³", quantity: 520,
+    unitPrice: 38.22, total: 19874.40, expanded: false,
+    children: [], rendimiento: 300,
+    acu: [
+      {
+        type: "LABOR", label: "MANO DE OBRA", subtotal: 5.60,
+        items: [
+          { id: "l1", code: "471060001", description: "Capataz", unit: "hh", cuadrilla: 0.10, rendimiento: 0.0003, percentD: 1.00, price: 25.00, total: 0.08 },
+          { id: "l2", code: "471060003", description: "Operario", unit: "hh", cuadrilla: 1.00, rendimiento: 0.0027, percentD: 1.00, price: 22.00, total: 0.06 },
+          { id: "l4", code: "471060004", description: "Peón", unit: "hh", cuadrilla: 4.00, rendimiento: 0.0107, percentD: 90.00, price: 15.00, total: 1.44 },
+        ]
+      },
+      {
+        type: "MATERIAL", label: "MATERIALES", subtotal: 2.62,
+        items: [
+          { id: "m1", code: "020300010002", description: "Combustible diesel", unit: "gal", cuadrilla: 8.00, rendimiento: 0.0267, percentD: 1.00, price: 16.00, total: 2.62 },
+        ]
+      },
+      {
+        type: "EQUIPMENT", label: "EQUIPOS", subtotal: 30.00,
+        items: [
+          { id: "e1", code: "490101010003", description: "Excavadora sobre orugas 170-250HP", unit: "hm", cuadrilla: 1.00, rendimiento: 0.0027, percentD: 1.00, price: 350.00, total: 18.00 },
+          { id: "e2", code: "490105010004", description: "Camión volquete 15 m³", unit: "hm", cuadrilla: 3.00, rendimiento: 0.0080, percentD: 1.00, price: 150.00, total: 12.00 },
+        ]
+      }
+    ]
+  },
+  "2-2": {
+    id: "2-2", parentId: "2", level: 1, code: "02.02",
+    description: "Relleno compactado c/material propio", unit: "m³", quantity: 280,
+    unitPrice: 28.38, total: 10546.40, expanded: false,
+    children: [], rendimiento: 250, acu: []
+  },
+  "2-3": {
+    id: "2-3", parentId: "2", level: 1, code: "02.03",
+    description: "Eliminación de material excedente", unit: "m³", quantity: 240,
+    unitPrice: 33.33, total: 8000.00, expanded: false,
+    children: [], rendimiento: 200, acu: []
+  },
+  "3": {
+    id: "3", parentId: null, level: 0, code: "03",
+    description: "CONCRETO ARMADO", unit: "", quantity: 0,
+    unitPrice: 0, total: 125680.20, expanded: false,
+    children: ["3-1", "3-2"], rendimiento: 100, acu: []
+  },
+  "3-1": {
+    id: "3-1", parentId: "3", level: 1, code: "03.01",
+    description: "Concreto f'c=210 kg/cm² - Losa cimentación", unit: "m³", quantity: 85,
+    unitPrice: 520.00, total: 44200.00, expanded: false,
+    children: [], rendimiento: 100, acu: []
+  },
+  "3-2": {
+    id: "3-2", parentId: "3", level: 1, code: "03.02",
+    description: "Acero de refuerzo fy=4200 kg/cm²", unit: "kg", quantity: 12500,
+    unitPrice: 6.52, total: 81480.20, expanded: false,
+    children: [], rendimiento: 250, acu: []
+  },
+};
+
+const rootOrder = ["1", "2", "3"];
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+const fmt = (n: number, d = 2) =>
+  n.toLocaleString("es-PE", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const sectionIcon = { LABOR: Users, MATERIAL: Package, EQUIPMENT: Wrench };
+const sectionColor = {
+  LABOR: "text-blue-400",
+  MATERIAL: "text-emerald-400",
+  EQUIPMENT: "text-amber-400"
+};
+
+// ── ACU Table ─────────────────────────────────────────────────────────────────
+function AcuSection({ section, rendimiento }: { section: AcuSection; rendimiento: number }) {
+  const [expanded, setExpanded] = useState(true);
+  const Icon = sectionIcon[section.type];
+  const color = sectionColor[section.type];
+
+  return (
+    <div className="border-b border-slate-700">
+      <div
+        className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 cursor-pointer hover:bg-slate-750 select-none"
+        onClick={() => setExpanded(e => !e)}
+      >
+        {expanded ? <ChevronDown size={13} className="text-slate-400" /> : <ChevronRight size={13} className="text-slate-400" />}
+        <Icon size={13} className={color} />
+        <span className="text-xs font-semibold text-slate-200 tracking-wide">{section.label}</span>
+        <span className={`ml-auto text-xs font-bold ${color}`}>{fmt(section.subtotal)}</span>
+      </div>
+
+      {expanded && (
+        <table className="w-full text-xs">
+          <tbody>
+            {section.items.map((item) => (
+              <tr key={item.id} className="group hover:bg-slate-700/40 border-b border-slate-700/50">
+                <td className="pl-8 pr-2 py-1 text-slate-500 w-28 font-mono text-[10px]">{item.code}</td>
+                <td className="px-2 py-1 text-slate-200 min-w-0">
+                  <span className="block truncate max-w-xs">{item.description}</span>
+                </td>
+                <td className="px-2 py-1 text-slate-400 text-center w-10">{item.unit}</td>
+                <td className="px-2 py-1 text-right text-slate-300 w-16">{fmt(item.cuadrilla, 2)}</td>
+                <td className="px-2 py-1 text-right text-slate-300 w-16">{item.rendimiento.toFixed(4)}</td>
+                <td className="px-2 py-1 text-right text-slate-300 w-14">{fmt(item.percentD, 2)}</td>
+                <td className="px-2 py-1 text-right text-slate-300 w-20">{fmt(item.price, 2)}</td>
+                <td className="px-2 py-1 text-right font-semibold text-slate-100 w-20 pr-3">{fmt(item.total, 2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ── ACU Panel ─────────────────────────────────────────────────────────────────
+function AcuPanel({ item }: { item: BudgetItem | null }) {
+  const [rendimiento, setRendimiento] = useState(item?.rendimiento ?? 200);
+  const [perDay, setPerDay] = useState(true);
+
+  if (!item) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-500">
+        <Calculator size={40} className="opacity-30" />
+        <p className="text-sm">Seleccione una partida para ver el ACU</p>
+      </div>
+    );
+  }
+
+  const grandTotal = item.acu.reduce((s, sec) => s + sec.subtotal, 0);
+
+  return (
+    <div className="h-full flex flex-col bg-slate-850">
+      {/* Header */}
+      <div className="px-4 py-2.5 border-b border-slate-700 bg-slate-800">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest">Análisis de Costo Unitario</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              <span className="text-slate-500">Presupuesto:</span>{" "}
+              <span className="text-sky-400 font-medium">PROYECTO</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500">Hecho por: <span className="text-slate-300">Administrador</span></p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Especificaciones:</p>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-slate-500">
+            <span className="text-sky-400 font-mono font-semibold">{item.code}</span>
+            {" — "}
+            <span className="text-slate-200">{item.description}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Rendimiento bar */}
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-700 bg-slate-800/50">
+        <span className="text-xs text-slate-400">Rendimiento:</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            value={rendimiento}
+            onChange={e => setRendimiento(Number(e.target.value))}
+            className="w-20 bg-slate-700 border border-slate-600 rounded text-xs text-slate-200 px-2 py-0.5 text-right focus:outline-none focus:border-sky-500"
+          />
+          <span className="text-xs text-slate-400">m³</span>
+        </div>
+        <div className="flex items-center gap-1 border border-slate-600 rounded overflow-hidden">
+          <button
+            onClick={() => setPerDay(true)}
+            className={`px-2 py-0.5 text-xs transition-colors ${perDay ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Por día
+          </button>
+          <button
+            onClick={() => setPerDay(false)}
+            className={`px-2 py-0.5 text-xs transition-colors ${!perDay ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Hora
+          </button>
+        </div>
+        <span className="ml-auto text-[10px] text-slate-500">Horas por Día:</span>
+        <input
+          type="number"
+          defaultValue={8}
+          className="w-12 bg-slate-700 border border-slate-600 rounded text-xs text-slate-200 px-2 py-0.5 text-right focus:outline-none focus:border-sky-500"
+        />
+      </div>
+
+      {/* Column headers */}
+      <div className="grid text-[10px] text-slate-500 uppercase tracking-wider border-b border-slate-700 bg-slate-800/30"
+        style={{ gridTemplateColumns: "7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem" }}
+      >
+        <div className="px-3 py-1.5">Cod. Eléctr.</div>
+        <div className="px-2 py-1.5">Descripción</div>
+        <div className="px-2 py-1.5 text-center">Und.</div>
+        <div className="px-2 py-1.5 text-right">Cuadr.</div>
+        <div className="px-2 py-1.5 text-right">Recur.</div>
+        <div className="px-2 py-1.5 text-right">%D.</div>
+        <div className="px-2 py-1.5 text-right">Precio</div>
+        <div className="px-2 py-1.5 text-right pr-3">Total</div>
+      </div>
+
+      {/* Sections */}
+      <div className="flex-1 overflow-auto scrollbar-thin">
+        {item.acu.map(section => (
+          <AcuSection key={section.type} section={section} rendimiento={rendimiento} />
+        ))}
+        {/* Empty sections */}
+        {(["SUB-CONTRATOS", "SUB-PARTIDAS"] as const).map(label => (
+          <div key={label} className="flex items-center justify-between px-3 py-1.5 border-b border-slate-700 bg-slate-800/40">
+            <span className="text-xs text-slate-500">{label}</span>
+            <span className="text-xs text-slate-600">0.00</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Total footer */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-t-2 border-sky-600/50 bg-slate-800">
+        <span className="text-sm font-bold text-slate-300 tracking-wide">TOTAL</span>
+        <span className="text-lg font-bold text-sky-400 font-mono">{fmt(grandTotal || item.unitPrice)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Budget Row ────────────────────────────────────────────────────────────────
+function BudgetRow({
+  item, isSelected, onSelect, onToggle, editingId, onStartEdit, onEndEdit
+}: {
+  item: BudgetItem;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  editingId: string | null;
+  onStartEdit: (id: string) => void;
+  onEndEdit: () => void;
+}) {
+  const isPartida = item.level > 0;
+  const isTitle = item.level === 0;
+  const indent = item.level * 20;
+
+  return (
+    <tr
+      className={`group cursor-pointer border-b border-slate-700/60 transition-colors
+        ${isSelected ? "bg-sky-900/40 border-sky-700/50" : "hover:bg-slate-700/30"}
+        ${isTitle ? "bg-slate-800/60" : ""}
+      `}
+      onClick={() => {
+        onSelect(item.id);
+        if (isPartida) onSelect(item.id);
+      }}
+    >
+      {/* Description */}
+      <td className="py-1 pr-1" style={{ paddingLeft: `${indent + 8}px` }}>
+        <div className="flex items-center gap-1">
+          {item.children.length > 0 ? (
+            <button
+              onClick={e => { e.stopPropagation(); onToggle(item.id); }}
+              className="text-slate-400 hover:text-slate-200 flex-shrink-0"
+            >
+              {item.expanded
+                ? <ChevronDown size={14} />
+                : <ChevronRight size={14} />
+              }
+            </button>
+          ) : <span className="w-[14px]" />}
+          {isTitle
+            ? <span className="text-sky-300 font-semibold text-xs tracking-wide">{item.description}</span>
+            : (
+              <button
+                className="text-left text-xs text-slate-300 hover:text-sky-300 transition-colors truncate max-w-[280px]"
+                title={item.description}
+              >
+                {item.description}
+              </button>
+            )
+          }
+        </div>
+      </td>
+
+      {/* Unit */}
+      <td className="px-2 py-1 text-center text-xs text-slate-400 w-14">
+        {item.unit}
+      </td>
+
+      {/* Quantity */}
+      <td className="px-2 py-1 text-right text-xs text-slate-300 w-20 font-mono">
+        {isPartida && item.quantity > 0 ? fmt(item.quantity, 2) : ""}
+      </td>
+
+      {/* Unit Price */}
+      <td className="px-2 py-1 text-right text-xs w-24 font-mono">
+        {isPartida && item.unitPrice > 0 ? (
+          <span className={`font-semibold ${isSelected ? "text-sky-300" : "text-orange-400"}`}>
+            {fmt(item.unitPrice, 2)}
+          </span>
+        ) : ""}
+      </td>
+
+      {/* Total */}
+      <td className="px-3 py-1 text-right text-xs font-bold w-24 font-mono">
+        <span className={isTitle ? "text-sky-400" : "text-slate-200"}>
+          {fmt(item.total, 2)}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+export default function DelphinsApp() {
+  const [items, setItems] = useState(initialItems);
+  const [selectedId, setSelectedId] = useState<string | null>("1-1");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [splitPct, setSplitPct] = useState(42);
+  const [searchText, setSearchText] = useState("");
+  const [activeTab, setActiveTab] = useState<"presupuesto" | "recursos" | "reportes">("presupuesto");
+  const dragging = useRef(false);
+
+  // Flatten tree for rendering
+  const flatItems = useMemo(() => {
+    const result: BudgetItem[] = [];
+    const visit = (ids: string[]) => {
+      for (const id of ids) {
+        const item = items[id];
+        if (!item) continue;
+        result.push(item);
+        if (item.expanded && item.children.length > 0) {
+          visit(item.children);
+        }
+      }
+    };
+    visit(rootOrder);
+    return result;
+  }, [items]);
+
+  const handleToggle = useCallback((id: string) => {
+    setItems(prev => ({
+      ...prev,
+      [id]: { ...prev[id], expanded: !prev[id].expanded }
+    }));
+  }, []);
+
+  const selectedItem = selectedId ? items[selectedId] : null;
+
+  // Grand total
+  const grandTotal = useMemo(() =>
+    rootOrder.reduce((s, id) => s + (items[id]?.total ?? 0), 0)
+    , [items]);
+
+  // Drag divider
+  const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    const startX = e.clientX;
+    const startPct = splitPct;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const container = document.getElementById("split-container");
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newPct = Math.max(25, Math.min(70, startPct + ((ev.clientX - startX) / rect.width) * 100));
+      setSplitPct(newPct);
+    };
+    const onUp = () => { dragging.current = false; };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp, { once: true });
+    e.preventDefault();
+  }, [splitPct]);
+
+  const tabs = [
+    { id: "presupuesto", label: "Presupuesto", icon: Layers },
+    { id: "recursos", label: "Recursos", icon: Package },
+    { id: "reportes", label: "Reportes", icon: FileText },
+  ] as const;
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-900 text-slate-200 font-sans overflow-hidden"
+      style={{ fontFamily: "'JetBrains Mono', 'Consolas', monospace" }}
+    >
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-0 border-b border-slate-700 bg-slate-850 px-2 py-1 flex-shrink-0"
+        style={{ backgroundColor: "#1a2235" }}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-2 pr-4 mr-2 border-r border-slate-700">
+          <div className="w-7 h-7 rounded bg-sky-600 flex items-center justify-center">
+            <Calculator size={14} className="text-white" />
+          </div>
+          <span className="text-xs font-bold text-sky-400 tracking-widest uppercase">S10·Web</span>
+        </div>
+
+        {/* Tabs */}
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-colors mr-0.5
+              ${activeTab === id
+                ? "bg-sky-700/30 text-sky-300 border border-sky-600/40"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/30"
+              }`}
+          >
+            <Icon size={12} />
+            {label}
+          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        {/* Actions */}
+        <div className="flex items-center gap-1">
+          <button className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-emerald-700/30 text-emerald-300 border border-emerald-600/30 rounded hover:bg-emerald-700/50 transition-colors">
+            <Plus size={11} /> Partida
+          </button>
+          <button className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 text-slate-300 border border-slate-600/40 rounded hover:bg-slate-700 transition-colors">
+            <Copy size={11} /> Copiar
+          </button>
+          <button className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-red-900/30 text-red-400 border border-red-700/30 rounded hover:bg-red-900/50 transition-colors">
+            <Trash2 size={11} />
+          </button>
+          <div className="w-px h-5 bg-slate-700 mx-1" />
+          <button className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded">
+            <Settings size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Project bar ── */}
+      <div className="flex items-center gap-3 px-3 py-1 bg-slate-800/50 border-b border-slate-700 flex-shrink-0 text-xs">
+        <FolderOpen size={12} className="text-amber-400" />
+        <span className="text-slate-500">Proyecto:</span>
+        <span className="text-amber-300 font-semibold">MEJORAMIENTO DE PISTAS Y VEREDAS - SECTOR 03</span>
+        <span className="text-slate-600 mx-1">|</span>
+        <span className="text-slate-500">Moneda:</span>
+        <span className="text-slate-300">S/. (Soles)</span>
+        <span className="text-slate-600 mx-1">|</span>
+        <span className="text-slate-500">IGV:</span>
+        <span className="text-slate-300">18%</span>
+        <div className="flex-1" />
+        <span className="text-slate-500">Total Presupuesto:</span>
+        <span className="text-sky-400 font-bold font-mono">{fmt(grandTotal)}</span>
+      </div>
+
+      {/* ── Main split ── */}
+      <div id="split-container" className="flex flex-1 overflow-hidden min-h-0">
+        {/* LEFT: Budget tree */}
+        <div className="flex flex-col overflow-hidden min-w-0" style={{ width: `${splitPct}%` }}>
+          {/* Search */}
+          <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-700 bg-slate-800/30 flex-shrink-0">
+            <Search size={11} className="text-slate-500 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar partida..."
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              className="flex-1 bg-transparent text-xs text-slate-300 placeholder-slate-600 focus:outline-none"
+            />
+            {searchText && (
+              <button onClick={() => setSearchText("")} className="text-slate-500 hover:text-slate-300">
+                <X size={11} />
+              </button>
+            )}
+          </div>
+
+          {/* Table header */}
+          <div className="flex-shrink-0 border-b border-slate-600 bg-slate-800">
+            <table className="w-full text-[10px] text-slate-500 uppercase tracking-wider">
+              <thead>
+                <tr>
+                  <th className="text-left py-1.5 pl-3 font-medium">Descripción</th>
+                  <th className="text-center py-1.5 w-14 font-medium">Und.</th>
+                  <th className="text-right py-1.5 w-20 font-medium">Cantidad</th>
+                  <th className="text-right py-1.5 w-24 font-medium">P. Unit.</th>
+                  <th className="text-right py-1.5 w-24 pr-3 font-medium">Total</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+
+          {/* Rows */}
+          <div className="flex-1 overflow-auto">
+            <table className="w-full">
+              <tbody>
+                {flatItems
+                  .filter(item =>
+                    !searchText ||
+                    item.description.toLowerCase().includes(searchText.toLowerCase()) ||
+                    item.code.includes(searchText)
+                  )
+                  .map(item => (
+                    <BudgetRow
+                      key={item.id}
+                      item={item}
+                      isSelected={selectedId === item.id}
+                      onSelect={setSelectedId}
+                      onToggle={handleToggle}
+                      editingId={editingId}
+                      onStartEdit={setEditingId}
+                      onEndEdit={() => setEditingId(null)}
+                    />
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+
+          {/* Status bar */}
+          <div className="flex items-center gap-3 px-3 py-1 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
+            <span className="text-[10px] text-slate-500">
+              PROYECTO: (Incidencia de costos)
+            </span>
+            <div className="flex-1" />
+            <span className="text-[10px] text-slate-500">
+              {flatItems.length} partidas
+            </span>
+          </div>
+        </div>
+
+        {/* ── Divider ── */}
+        <div
+          className="w-1 bg-slate-700 hover:bg-sky-600 cursor-col-resize flex-shrink-0 flex items-center justify-center transition-colors group"
+          onMouseDown={onDividerMouseDown}
+        >
+          <div className="w-0.5 h-8 bg-slate-500 group-hover:bg-sky-400 rounded-full" />
+        </div>
+
+        {/* RIGHT: ACU */}
+        <div className="flex-1 overflow-hidden min-w-0">
+          <AcuPanel item={selectedItem?.acu.length ? selectedItem : null} />
+        </div>
+      </div>
+    </div>
+  );
+}

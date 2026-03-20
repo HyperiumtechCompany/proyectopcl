@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 // ═══════════════════════════════════════════════════════════════════════
 interface ColumnDef { key: string; label: string; width: number }
 
-interface GasPageProps {
+interface ElectricasPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
@@ -95,9 +95,9 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// NUMERACIÓN BASE PARA METRADO GAS
+// NUMERACIÓN BASE PARA METRADO ELÉCTRICAS
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 2; 
+const TOP_LEVEL_START = 1; //
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -281,13 +281,13 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════
-export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
-  const { project, metrado, resumen } = usePage<GasPageProps>().props;
+export default function ElectricasIndex() {
+  const { project, metrado, resumen } = usePage<ElectricasPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',           href: '/costos' },
-    { title: project.nombre,     href: `/costos/${project.id}` },
-    { title: 'Metrado Gas',      href: '#' },  // ✅ TÍTULO CORREGIDO
+    { title: 'Costos',              href: '/costos' },
+    { title: project.nombre,        href: `/costos/${project.id}` },
+    { title: 'Metrado Eléctricas',  href: '#' },
   ];
 
   // ── State ──────────────────────────────────────────────────────────────
@@ -377,12 +377,12 @@ export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
       const name = String(sheet?.name ?? '');
       if (name === 'Metrado') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-gas/metrado`,  // ✅ URL CORREGIDA
+          url: `/costos/${project.id}/metrado-electricas/metrado`,
           body: { rows: sheetToRows(sheet, BASE_COLS) },
         });
       } else if (name === 'Resumen') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-gas/resumen`,  // ✅ URL CORREGIDA
+          url: `/costos/${project.id}/metrado-electricas/resumen`,
           body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
         });
       }
@@ -453,7 +453,7 @@ export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
     // PASE 1 — NUMERACIÓN AUTOMÁTICA (BASE 3)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const counters = new Array(MAX_LEVELS + 1).fill(0);
-    counters[1] = Math.max(0, TOP_LEVEL_START - 1);
+    counters[1] = Math.max(0, TOP_LEVEL_START - 1); // ⚡ INICIA EN 3
 
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'leaf') {
@@ -926,7 +926,7 @@ export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
 
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Gas  {/* ✅ TÍTULO CORREGIDO */}
+                Metrado Eléctricas
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -1031,7 +1031,7 @@ export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Gas',  // ✅ TÍTULO CORREGIDO
+              title:            'Metrado Eléctricas',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,
