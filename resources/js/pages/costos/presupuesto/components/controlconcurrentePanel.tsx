@@ -883,8 +883,7 @@ export function ControlConcurrentePanel({
                     <span className="whitespace-nowrap">
                         <span className="text-slate-500">% Real: </span>
                         <span
-                            className={`font-mono font-semibold ${porcentajeReal > PCT_CC ? 'text-red-400' : 'text-amber-400'}`}
-                        >
+                            className={`font-mono font-semibold ${porcentajeReal > PCT_CC ? 'text-red-400' : 'text-amber-400'}`}>
                             {fmtPct(porcentajeReal)}
                         </span>
                     </span>
@@ -1012,8 +1011,7 @@ export function ControlConcurrentePanel({
                                 <React.Fragment
                                     key={
                                         sec.id ?? sec.item_codigo ?? sec.partida
-                                    }
-                                >
+                                    }>
                                     {/* Fila seccion */}
                                     <tr className="bg-slate-800/70">
                                         <td
@@ -1024,8 +1022,7 @@ export function ControlConcurrentePanel({
                                                     ...p,
                                                     [secCode]: !p[secCode],
                                                 }))
-                                            }
-                                        >
+                                            }>
                                             <div className="flex items-center gap-2">
                                                 {isExp ? (
                                                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
@@ -1056,8 +1053,7 @@ export function ControlConcurrentePanel({
                                             return (
                                                 <tr
                                                     key={rowKey}
-                                                    className="group transition-colors hover:bg-slate-800/40"
-                                                >
+                                                    className="group transition-colors hover:bg-slate-800/40">
                                                     {/* Descripcion */}
                                                     <td className="p-1 pl-10">
                                                         <input
@@ -1205,8 +1201,7 @@ export function ControlConcurrentePanel({
                                                                 )
                                                             }
                                                             title="Eliminar fila"
-                                                            className="rounded p-1 text-slate-700 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/30 hover:text-red-400"
-                                                        >
+                                                            className="rounded p-1 text-slate-700 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/30 hover:text-red-400">
                                                             <Trash2 className="h-3 w-3" />
                                                         </button>
                                                     </td>
@@ -1219,14 +1214,12 @@ export function ControlConcurrentePanel({
                                         <tr className="bg-slate-900/20">
                                             <td
                                                 colSpan={10}
-                                                className="py-1 pl-10"
-                                            >
+                                                className="py-1 pl-10">
                                                 <button
                                                     onClick={() =>
                                                         handleAddRow(secCode)
                                                     }
-                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400"
-                                                >
+                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400">
                                                     <Plus className="h-3 w-3" />
                                                     Anadir item a esta seccion
                                                 </button>
@@ -1286,8 +1279,7 @@ export function ControlConcurrentePanel({
                             isDirty && !loading
                                 ? 'bg-emerald-600 shadow-emerald-900/30 hover:bg-emerald-500 active:scale-95'
                                 : 'cursor-not-allowed bg-slate-700 opacity-50',
-                        ].join(' ')}
-                    >
+                        ].join(' ')}>
                         <Save className="h-4 w-4" />
                         {loading
                             ? 'Guardando...'

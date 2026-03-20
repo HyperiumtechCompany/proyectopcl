@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 // ═══════════════════════════════════════════════════════════════════════
 interface ColumnDef { key: string; label: string; width: number }
 
-interface GasPageProps {
+interface EstructurasPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
@@ -95,7 +95,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// NUMERACIÓN BASE PARA METRADO GAS
+// NUMERACIÓN BASE PARA METRADO ESTRUCTURAS
 // ═══════════════════════════════════════════════════════════════════════
 const TOP_LEVEL_START = 2; 
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
@@ -281,13 +281,13 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════
-export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
-  const { project, metrado, resumen } = usePage<GasPageProps>().props;
+export default function EstructurasIndex() {
+  const { project, metrado, resumen } = usePage<EstructurasPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',           href: '/costos' },
-    { title: project.nombre,     href: `/costos/${project.id}` },
-    { title: 'Metrado Gas',      href: '#' },  // ✅ TÍTULO CORREGIDO
+    { title: 'Costos',              href: '/costos' },
+    { title: project.nombre,        href: `/costos/${project.id}` },
+    { title: 'Metrado Estructuras', href: '#' },
   ];
 
   // ── State ──────────────────────────────────────────────────────────────
@@ -377,12 +377,12 @@ export default function GasIndex() {  // ✅ NOMBRE CORREGIDO
       const name = String(sheet?.name ?? '');
       if (name === 'Metrado') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-gas/metrado`,  // ✅ URL CORREGIDA
+          url: `/costos/${project.id}/metrado-estructuras/metrado`,
           body: { rows: sheetToRows(sheet, BASE_COLS) },
         });
       } else if (name === 'Resumen') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-gas/resumen`,  // ✅ URL CORREGIDA
+          url: `/costos/${project.id}/metrado-estructuras/resumen`,
           body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
         });
       }
