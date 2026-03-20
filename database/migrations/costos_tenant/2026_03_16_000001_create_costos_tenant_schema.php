@@ -916,8 +916,8 @@ return new class extends Migration
                 $table->integer('nivel')->default(0);
                 $table->timestamps();
 
-                $table->index('presupuesto_id');
-                $table->index(['presupuesto_id', 'modulo_numero', 'item_order']);
+                $table->index('presupuesto_id', 'idx_san_mod_presupuesto');
+                $table->index(['presupuesto_id', 'modulo_numero', 'item_order'], 'idx_san_mod_composite');
             });
         }
 
