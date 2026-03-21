@@ -4,47 +4,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * ═══════════════════════════════════════════════════════════════════════════════
- * COSTOS TENANT — ESQUEMA UNIFICADO v3
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * Migración única que crea TODAS las tablas del tenant de costos en el
- * orden correcto de dependencias:
- *
- *   0. project_params            — parámetros globales centralizados
- *   1. presupuestos              — tabla maestra (padre de todo)
- *   2. Metrados (6 especialidades) — hojas de metrado vinculadas a presupuestos
- *   2b. Resúmenes de Metrados    — tablas de resumen (item, descripcion, und, parcial, total)
- *       · metrado_arquitectura_resumen
- *       · metrado_estructura_resumen
- *       · metrado_electricas_resumen
- *       · metrado_comunicaciones_resumen
- *       · metrado_gas_resumen
- *   3. Cronogramas (3 tipos)     — vinculados a presupuestos
- *   4. Especificaciones Técnicas — vinculados a presupuestos
- *   5. Presupuesto General       — partidas WBS
- *   6. GG Fijos + desagregados   — fianzas, pólizas
- *   7. GG Variables              — gastos variables
- *   8. Presupuesto Remuneraciones
- *   9. GG Supervisión + detalle GG
- *  10. GG Control Concurrente
- *  11. GG Consolidado            — caché de totales
- *  12. Presupuesto ACUs
- *  13. Presupuesto Insumos
- *  14. Presupuesto Índices (fórmula polinómica)
- *  15. Catálogos Insumos (clases + productos)
- *  16. Metrado Sanitarias Modular (config, módulos, exterior, cisterna, resumen)
- *  17. Metrado Estructuras Modular (config, metrado, resumen)
- *
- * Reemplaza las migraciones antiguas:
- *   - 2026_03_06_000001_create_project_meta_table.php
- *   - 2026_03_06_000002_create_costos_module_tables.php
- *   - 2026_03_07_000001_create_presupuesto_unificado_tables.php
- *   - 2026_03_13_000001_create_metrado_sanitarias_modular_tables.php
- *   - 2026_03_13_174330_add_node_type_and_titulo_to_metrado_sanitarias_tables.php
- *   - 2026_03_18_000001_create_metrado_estructuras_tables.php
- */
 return new class extends Migration
 {
     protected $connection = 'costos_tenant';
@@ -838,14 +797,26 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
         // 15. CATÁLOGOS GLOBALES DE INSUMOS (sin presupuesto_id)
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('insumo_clases')) {
-            Schema::connection($this->connection)->create('insumo_clases', function (Blueprint $table) {
+        if(!Schema::connection($this->connection)->hasTable('unidad')){
+            Schema::connection($this->connection)->create('unidad', function (Blueprint $table) {
                 $table->id();
-                $table->string('codigo', 20)->unique();
+                $table->string('descripcion', 20)->unique();
+                $table->string('descripcion_singular', 255);
+                $table->string('orden', 255);
+                $table->string('informacion_unidad', 255);
+                $table->string('abreviatura_unidad', 255);
+                $table->timestamps();
+            });
+        }
+
+        if(!Schema::connection($this->connection)->hasTable('diccionario')){
+            Schema::connection($this->connection)->create('diccionario', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo', 20);
                 $table->string('descripcion', 255);
                 $table->timestamps();
 
-                $table->index('codigo', 'idx_ic_codigo');
+                $table->index('codigo', 'idx_dicc_codigo');
             });
         }
 
@@ -855,20 +826,28 @@ return new class extends Migration
                 $table->string('codigo_producto', 50)->unique();
                 $table->text('descripcion');
                 $table->text('especificaciones')->nullable();
-                $table->string('unidad', 20);
+                
+                $table->unsignedBigInteger('diccionario_id')->nullable();
+                $table->foreign('diccionario_id')->references('id')->on('diccionario')->nullOnDelete();
+                
+                $table->unsignedBigInteger('unidad_id')->nullable();
+                $table->foreign('unidad_id')->references('id')->on('unidad')->nullOnDelete();
+                
+                $table->string('tipo_proveedor', 3)->default('001');
+
                 $table->decimal('costo_unitario_lista', 15, 4)->default(0);
                 $table->decimal('costo_unitario',       15, 4)->default(0);
                 $table->decimal('costo_flete',          15, 4)->default(0);
                 $table->date('fecha_lista')->nullable();
-                $table->unsignedBigInteger('insumo_clase_id');
-                $table->foreign('insumo_clase_id')->references('id')->on('insumo_clases')->cascadeOnDelete();
+                
                 $table->string('tipo', 20)->comment('mano_de_obra | materiales | equipos');
                 $table->boolean('estado')->default(true);
                 $table->timestamps();
 
                 $table->index('codigo_producto', 'idx_ip_codigo');
                 $table->index('tipo',            'idx_ip_tipo');
-                $table->index('insumo_clase_id', 'idx_ip_clase');
+                $table->index('diccionario_id',  'idx_ip_dicc');
+                $table->index('unidad_id',       'idx_ip_und');
             });
         }
 
@@ -1090,7 +1069,8 @@ return new class extends Migration
 
         // 15. Catálogos Insumos
         Schema::connection($this->connection)->dropIfExists('insumo_productos');
-        Schema::connection($this->connection)->dropIfExists('insumo_clases');
+        Schema::connection($this->connection)->dropIfExists('diccionario');
+        Schema::connection($this->connection)->dropIfExists('unidad');
 
         // 14–12. Índices, Insumos, ACUs
         Schema::connection($this->connection)->dropIfExists('presupuesto_indices');
