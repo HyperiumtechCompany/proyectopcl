@@ -926,7 +926,7 @@ export default function EstructurasIndex() {
 
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Gas  {/* ✅ TÍTULO CORREGIDO */}
+                Metrado Estructuras  {/* ✅ TÍTULO CORREGIDO */}
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -1031,7 +1031,7 @@ export default function EstructurasIndex() {
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Gas',  // ✅ TÍTULO CORREGIDO
+              title:            'Metrado Estructuras',  // ✅ TÍTULO CORREGIDO
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,

@@ -97,7 +97,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO ARQUITECTURA
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 1; //
+const TOP_LEVEL_START = 3; //
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -926,7 +926,7 @@ export default function ArquitecturaIndex() {
 
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Eléctricas
+                Metrado Arquitectura
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -1031,7 +1031,7 @@ export default function ArquitecturaIndex() {
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Eléctricas',
+              title:            'Metrado Arquitectura',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,
