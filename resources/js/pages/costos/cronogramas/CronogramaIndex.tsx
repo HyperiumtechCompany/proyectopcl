@@ -4,6 +4,7 @@ import axios from 'axios';
 import { gantt } from 'dhtmlx-gantt';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERFACES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,15 +40,15 @@ const LINK_NAMES: Record<string, string> = {
 
 const DEFAULT_DATA = {
     tasks: [
-        { id: 1, text: 'Office itinerancy',     start_date: '2024-07-22 00:00', duration: 25, progress: 0.6, open: true, cost: 5000 },
-        { id: 2, text: 'Office facing',          start_date: '2024-07-22 00:00', duration: 20, parent: 1,    progress: 0.5, cost: 2500 },
-        { id: 3, text: 'Furniture installation', start_date: '2024-07-22 00:00', duration: 5,  parent: 1,    progress: 0.8, cost: 1000 },
-        { id: 4, text: 'Employee relocation',    start_date: '2024-07-29 00:00', duration: 15, parent: 1,    progress: 0.2, cost: 1200 },
-        { id: 5, text: 'Interior office',        start_date: '2024-07-29 00:00', duration: 15, parent: 1,    progress: 0.3, cost: 3000 },
-        { id: 6, text: 'Air conditioners',       start_date: '2024-08-19 00:00', duration: 2,  parent: 1,    progress: 0,   cost: 400  },
-        { id: 7, text: 'Workplaces preparation', start_date: '2024-08-21 00:00', duration: 2,  parent: 1,    progress: 0,   cost: 600  },
-        { id: 8, text: 'Preparing workplaces',   start_date: '2024-07-22 00:00', duration: 10, parent: 1,    progress: 0.6, cost: 1500 },
-        { id: 9, text: 'Workplaces imports',     start_date: '2024-08-23 00:00', duration: 1,  parent: 1,    progress: 0,   cost: 2000 },
+        { id: 1, text: 'Office itinerancy', start_date: '2024-07-22 00:00', duration: 25, progress: 0.6, open: true, cost: 5000 },
+        { id: 2, text: 'Office facing', start_date: '2024-07-22 00:00', duration: 20, parent: 1, progress: 0.5, cost: 2500 },
+        { id: 3, text: 'Furniture installation', start_date: '2024-07-22 00:00', duration: 5, parent: 1, progress: 0.8, cost: 1000 },
+        { id: 4, text: 'Employee relocation', start_date: '2024-07-29 00:00', duration: 15, parent: 1, progress: 0.2, cost: 1200 },
+        { id: 5, text: 'Interior office', start_date: '2024-07-29 00:00', duration: 15, parent: 1, progress: 0.3, cost: 3000 },
+        { id: 6, text: 'Air conditioners', start_date: '2024-08-19 00:00', duration: 2, parent: 1, progress: 0, cost: 400 },
+        { id: 7, text: 'Workplaces preparation', start_date: '2024-08-21 00:00', duration: 2, parent: 1, progress: 0, cost: 600 },
+        { id: 8, text: 'Preparing workplaces', start_date: '2024-07-22 00:00', duration: 10, parent: 1, progress: 0.6, cost: 1500 },
+        { id: 9, text: 'Workplaces imports', start_date: '2024-08-23 00:00', duration: 1, parent: 1, progress: 0, cost: 2000 },
     ],
     links: [
         { id: 1, source: 3, target: 4, type: '0' },
@@ -65,6 +66,12 @@ const DEFAULT_DATA = {
 // a través de dependencias continuas (sin holgura).
 // ─────────────────────────────────────────────────────────────────────────────
 function markCriticalTasks() {
+    // Si no hay enlaces, limpiar ruta crítica y salir
+    if (gantt.getLinks().length === 0) {
+        gantt.eachTask((task: any) => { task._critical = false; });
+        return;
+    }
+
     // Intentar usar el método nativo primero (disponible en versiones PRO)
     try {
         if (typeof gantt.isCriticalTask === 'function') {
@@ -73,7 +80,7 @@ function markCriticalTasks() {
             });
             return;
         }
-    } catch (_) {}
+    } catch (_) { }
 
     // Fallback manual: encontrar la fecha de fin máxima del proyecto
     let maxEnd: Date | null = null;
@@ -86,14 +93,11 @@ function markCriticalTasks() {
 
     if (!maxEnd) return;
 
-    // Conjunto de IDs en la ruta crítica
     const criticalIds = new Set<any>();
 
-    // Recorremos hacia atrás desde las tareas finales
     function traceBack(taskId: any) {
         if (criticalIds.has(taskId)) return;
         criticalIds.add(taskId);
-        // Buscar predecesoras directas
         gantt.getLinks().forEach((link: any) => {
             if (link.target == taskId) {
                 traceBack(link.source);
@@ -101,18 +105,16 @@ function markCriticalTasks() {
         });
     }
 
-    // Iniciar desde tareas que terminan en la fecha máxima (con tolerancia de 1 día)
     gantt.eachTask((task: any) => {
         if (!gantt.hasChild(task.id) && task.end_date) {
             const d = new Date(task.end_date);
             const diff = Math.abs(d.getTime() - (maxEnd as Date).getTime());
-            if (diff <= 86400000) { // 1 día de tolerancia
+            if (diff === 0) {
                 traceBack(task.id);
             }
         }
     });
 
-    // Aplicar el flag _critical
     gantt.eachTask((task: any) => {
         task._critical = criticalIds.has(task.id);
     });
@@ -123,26 +125,29 @@ function markCriticalTasks() {
 // ─────────────────────────────────────────────────────────────────────────────
 const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
-    const isUpdatingRef  = useRef(false);
-    const criticalOnRef  = useRef(true); // ref para acceder desde templates
+    const isUpdatingRef = useRef(false);
+    const criticalOnRef = useRef(true); // ref para acceder desde templates
 
     // UI State
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [topUnit,        setTopUnit]        = useState('month');
-    const [bottomUnit,     setBottomUnit]     = useState('day');
-    const [workStartTime,  setWorkStartTime]  = useState('08:00');
-    const [workEndTime,    setWorkEndTime]    = useState('17:00');
+    const [topUnit, setTopUnit] = useState('month');
+    const [bottomUnit, setBottomUnit] = useState('day');
+    const [workStartTime, setWorkStartTime] = useState('08:00');
+    const [workEndTime, setWorkEndTime] = useState('17:00');
+    const [projectStart, setProjectStart] = useState('');
+    const [projectEnd, setProjectEnd] = useState('');
+    const [scheduleFromEnd, setScheduleFromEnd] = useState(false);
     const [workDays, setWorkDays] = useState({
         lunes: true, martes: true, miercoles: true,
         jueves: true, viernes: true, sabado: false, domingo: false,
     });
 
     // Predecesoras modal
-    const [predOpen,   setPredOpen]   = useState(false);
+    const [predOpen, setPredOpen] = useState(false);
     const [predTaskId, setPredTaskId] = useState<any>(null);
     const [predSearch, setPredSearch] = useState('');
-    const [predTasks,  setPredTasks]  = useState<PredTask[]>([]);
-    const [predLinks,  setPredLinks]  = useState<GLink[]>([]);
+    const [predTasks, setPredTasks] = useState<PredTask[]>([]);
+    const [predLinks, setPredLinks] = useState<GLink[]>([]);
 
     // Ruta crítica toggle (UI)
     const [criticalOn, setCriticalOn] = useState(true);
@@ -158,8 +163,8 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
         if (!task?.start_date || !task?.end_date) return null;
 
         let earliest = new Date(task.start_date);
-        let latest   = new Date(task.end_date);
-        const seen   = new Set<any>();
+        let latest = new Date(task.end_date);
+        const seen = new Set<any>();
 
         function walk(id: any) {
             if (seen.has(id)) return;
@@ -168,7 +173,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                 let c: any; try { c = gantt.getTask(cid); } catch { return; }
                 if (!c?.start_date || !c?.end_date) return;
                 if (new Date(c.start_date) < earliest) earliest = new Date(c.start_date);
-                if (new Date(c.end_date)   > latest)   latest   = new Date(c.end_date);
+                if (new Date(c.end_date) > latest) latest = new Date(c.end_date);
                 if (gantt.hasChild(cid)) walk(cid);
             });
         }
@@ -183,8 +188,8 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             let ci = 1;
             gantt.getChildren(parentId).forEach((id: any) => {
                 const t: any = gantt.getTask(id);
-                t.counter    = counter++;
-                t.item       = parentItem
+                t.counter = counter++;
+                t.item = parentItem
                     ? `${parentItem}.${String(ci).padStart(2, '0')}`
                     : String(ci).padStart(2, '0');
                 ci++;
@@ -213,7 +218,9 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     });
                 });
             }
-            gantt.autoSchedule();
+            if (typeof (gantt as any).autoSchedule === 'function') {
+                gantt.autoSchedule();
+            }
         } catch (e) { console.warn('autoSchedule:', e); }
     }
 
@@ -239,47 +246,192 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
 
         // ── 1. PLUGINS (siempre primero) ──────────────────────────────
         gantt.plugins({
-            critical_path:   true,
+            critical_path: true,
             auto_scheduling: true,
-            tooltip:         true,
+            tooltip: true,
         });
 
         // ── 2. LOCALE ──────────────────────────────────────────────────
         gantt.i18n.setLocale('es');
-
         // ── 3. CONFIG ──────────────────────────────────────────────────
-        gantt.config.date_format                   = '%Y-%m-%d %H:%i';
-        gantt.config.row_height                    = 32;
-        gantt.config.grid_width                    = 750;
-        gantt.config.work_time                     = true;
-        gantt.config.fit_tasks                     = true;
-        gantt.config.min_column_width              = 50;
-        gantt.config.scale_height                  = 50;
-        gantt.config.highlight_critical_path       = true;  // activa el plugin
-        gantt.config.auto_scheduling               = true;
-        gantt.config.auto_scheduling_strict        = false;
+        gantt.config.date_format = '%Y-%m-%d %H:%i';
+        gantt.config.row_height = 32;
+        gantt.config.grid_width = 750;
+        gantt.config.work_time = true;
+        gantt.config.skip_off_time = true;
+        gantt.config.fit_tasks = false;
+        gantt.config.min_column_width = 50;
+        gantt.config.scale_height = 50;
+        gantt.config.highlight_critical_path = true;  // activa el plugin
+        gantt.config.auto_scheduling = true;
+        gantt.config.auto_scheduling_strict = false;
         gantt.config.auto_scheduling_compatibility = true;
-        gantt.config.schedule_from_end             = false;
-        gantt.config.open_tree_initially           = true;
+        gantt.config.schedule_from_end = false;
+        gantt.config.open_tree_initially = true;
+        // Configurar Sábados y Domingos como no laborables
+        gantt.setWorkTime({ day: 6, hours: false }); // Sábado
+        gantt.setWorkTime({ day: 0, hours: false }); // Domingo
+
+        // 1. Permitir que las tareas se dividan visualmente
+        gantt.config.show_chart_work_time = true; // Resalta el tiempo de trabajo
+        gantt.config.work_time = true; // Activa el cálculo de tiempo real
+
+        // 2. ESTA ES LA CLAVE: Permite que las barras se dividan en los días no laborables
+        gantt.config.skip_off_time = true;
+        gantt.config.split_tasks = true;
+
+        // 3. Para que se vea el "hueco", debemos configurar la apariencia de la tarea dividida
+        gantt.templates.task_class = function (start, end, task) {
+            if (task.render == "split") {
+                return "split_task_style";
+            }
+            return "";
+        };
+
+        gantt.attachEvent("onTaskLoading", function (task) {
+            // Si la tarea NO tiene hijos (es una tarea azul), le decimos que se pueda dividir
+            if (!gantt.hasChild(task.id)) {
+                task.render = "split";
+            }
+            return true;
+        });
+
+        gantt.templates.task_text = function (start, end, task: any) {
+            // 1. Lógica para el PADRE (Tu diseño de Corchete Negro se mantiene igual)
+            if (gantt.hasChild(task.id)) {
+                return `
+            <div style="width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center;">
+                <div style="position: absolute; width: 100%; height: 2px; background: #000; top: 0; left: 0;"></div>
+                <div style="position: absolute; width: 2px; height: 10px; background: #000; top: 0; left: 0;"></div>
+                <div style="position: absolute; width: 2px; height: 10px; background: #000; top: 0; right: 0;"></div>
+                
+                <span style="color: #fff; font-weight: bold; position: relative; z-index: 1; font-size: 12px;">
+                    ${task.text}
+                </span>
+            </div>
+        `;
+            }
+            // 2. Lógica para los HIJOS (Tareas azules con huecos)
+            // Añadimos 'white-space: nowrap' para que el nombre no se corte si el pedacito azul es muy chico
+            return `
+        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: visible;">
+            <span style="color: #fff; font-weight: 500; white-space: nowrap; pointer-events: none;">
+                ${task.text}
+            </span>
+        </div>
+    `;
+        };
+
         gantt.config.links = {
-            finish_to_start:  '0',
-            start_to_start:   '1',
+            finish_to_start: '0',
+            start_to_start: '1',
             finish_to_finish: '2',
-            start_to_finish:  '3',
+            start_to_finish: '3',
+
         };
 
         // ── 4. ESCALAS DE TIEMPO ───────────────────────────────────────
         gantt.config.scales = [
             { unit: 'month', step: 1, format: '%F, %Y' },
-            { unit: 'day',   step: 1, format: '%j %D'  },
+            { unit: 'day', step: 1, format: '%j %D' },
         ];
 
+        // ── VINCULACIÓN CON REACT: MODAL DE PREDECESORAS ──
+        (window as any).__openPredModal = (taskId: string | number) => {
+            const task = gantt.getTask(taskId);
+            if (task) {
+                // Aquí dispara tu lógica de React para abrir el modal
+                console.log("Abriendo modal para la tarea:", task.text);
+
+            }
+        };
+
+        // 1. Función para reconstruir el texto de la columna Predecesoras
+        const updatePredecessorsText = (taskId: string | number) => {
+            const task = gantt.getTask(taskId);
+            // Obtenemos todos los enlaces donde esta tarea es el "target" (destino)
+            const links = gantt.getLinks().filter(l => String(l.target) === String(taskId));
+
+            const preds = links.map(l => {
+                const sourceTask = gantt.getTask(l.source);
+                const typeLabel = LINK_LABELS[l.type] || 'FC';
+                // Usamos el campo 'item' (WBS) si existe, si no el ID
+                const taskRef = sourceTask.item || sourceTask.id;
+                return `${taskRef}${typeLabel}`;
+            });
+
+            task.predecessors = preds.join(', ');
+            gantt.updateTask(taskId);
+        };
+
+        // 1. Definición de la función con escape de tipos para evitar el rojo
+        const updateParentDates = (childId: string | number) => {
+            // Usamos 'any' aquí solo para que TS no se queje de las propiedades internas de la tarea
+            const child: any = gantt.getTask(childId);
+            if (!child || !child.parent) return;
+
+            const parent: any = gantt.getTask(child.parent);
+            const childrenIds: (string | number)[] = gantt.getChildren(parent.id);
+
+            let minStart: Date | null = null;
+            let maxEnd: Date | null = null;
+
+            childrenIds.forEach((id) => {
+                const t: any = gantt.getTask(id);
+                if (!minStart || t.start_date < minStart) minStart = t.start_date;
+                if (!maxEnd || t.end_date > maxEnd) maxEnd = t.end_date;
+            });
+
+            if (minStart && maxEnd) {
+                // Comparamos milisegundos para que sea seguro
+                if (parent.start_date.getTime() !== minStart.getTime() ||
+                    parent.end_date.getTime() !== maxEnd.getTime()) {
+                    parent.start_date = minStart;
+                    parent.end_date = maxEnd;
+                    gantt.updateTask(parent.id);
+
+                    // Recursividad para subir niveles (Fase -> Proyecto -> Global)
+                    updateParentDates(parent.id);
+                }
+            }
+        };
+
+        // 2. Registro de eventos con tipado explícito
+        gantt.attachEvent("onAfterTaskUpdate", (id: string | number) => {
+            updateParentDates(id);
+            return true;
+        });
+
+        gantt.attachEvent("onAfterTaskAdd", (id: string | number) => {
+            updateParentDates(id);
+            return true;
+        });
+
+        // 2. Eventos para que el texto cambie al crear/borrar flechas
+        gantt.attachEvent("onAfterLinkAdd", (id, link) => {
+            updatePredecessorsText(link.target);
+            return true;
+        });
+
+        gantt.attachEvent("onAfterLinkDelete", (id, link) => {
+            updatePredecessorsText(link.target);
+            return true;
+        });
+
+        // 3. Lógica para que el WBS (Item) se actualice al mover tareas
+        gantt.attachEvent("onAfterTaskMove", (id, parent, tindex) => {
+            gantt.eachTask((task) => {
+                task.item = gantt.getWBSCode(task);
+            });
+            gantt.render();
+        });
+
         // ── 5. EDITORES INLINE ─────────────────────────────────────────
-        const textEditor     = { type: 'text',   map_to: 'text'       };
-        const dateEditor     = { type: 'date',   map_to: 'start_date' };
-        const endDateEditor  = { type: 'date',   map_to: 'end_date'   };
+        const textEditor = { type: 'text', map_to: 'text' };
+        const dateEditor = { type: 'date', map_to: 'start_date' };
+        const endDateEditor = { type: 'date', map_to: 'end_date' };
         const durationEditor = { type: 'number', map_to: 'duration', min: 0, max: 1000 };
-        const costEditor     = { type: 'text',   map_to: 'cost'       };
+        const costEditor = { type: 'text', map_to: 'cost' };
 
         // ── 6. COLUMNAS ────────────────────────────────────────────────
         gantt.config.columns = [
@@ -294,22 +446,33 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     catch { return task.item || ''; }
                 },
             },
-            { name: 'text',       label: 'NOMBRE',   tree: true, width: 200, editor: textEditor },
+            { name: 'text', label: 'NOMBRE', tree: true, width: 200, editor: textEditor },
             {
-                name: 'duration', label: 'DURACIÓN',  align: 'center', width: 70, editor: durationEditor,
+                name: 'duration', label: 'DURACIÓN', align: 'center', width: 70, editor: durationEditor,
                 template: (t: any) => `${t.duration} d`,
             },
+
+            // COLUMNA DE COSTOS ACTUALIZADA
             {
-                name: 'cost',     label: 'COSTOS',    align: 'right',  width: 100, editor: costEditor,
-                template: (t: any) => t.cost ? `S/. ${parseFloat(t.cost).toFixed(2)}` : 'S/. 0.00',
+                name: 'cost',
+                label: 'COSTOS',
+                align: 'right',
+                width: 100,
+                editor: costEditor,
+                template: (t: any) => {
+                    // Convertimos a número por si viene como string de la BD
+                    const valor = parseFloat(t.cost);
+                    if (isNaN(valor)) return 'S/. 0.00';
+                    return `S/. ${valor.toFixed(2)}`;
+                }
             },
-            { name: 'start_date', label: 'INICIO',   align: 'center', width: 90, editor: dateEditor },
+
+            { name: 'start_date', label: 'INICIO', align: 'center', width: 90, editor: dateEditor },
             {
-                name: 'end_date', label: 'FIN',       align: 'center', width: 90, editor: endDateEditor,
+                name: 'end_date', label: 'FIN', align: 'center', width: 90, editor: endDateEditor,
                 template: (task: any) => gantt.templates.date_grid(task.end_date, task),
             },
             {
-                // Columna predecesoras: muestra los vínculos y el botón 🔗
                 name: 'predecessors', label: 'PREDECESORAS', align: 'center', width: 110,
                 template: (task: any) => {
                     const links: GLink[] = gantt.getLinks().filter((l: any) => l.target == task.id);
@@ -323,14 +486,16 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     }).filter(Boolean);
 
                     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;width:100%;">
-                        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${labels.join(', ')}</span>
-                        <button onclick="event.stopPropagation();window.__openPredModal(${task.id})"
-                            style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;line-height:1;">🔗</button>
-                    </div>`;
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${labels.join(', ')}</span>
+                <button onclick="event.stopPropagation();window.__openPredModal(${task.id})"
+                    style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;line-height:1;">🔗</button>
+            </div>`;
                 },
             },
             { name: 'add', width: 44 },
         ];
+
+        
 
         // ── 7. LIGHTBOX ────────────────────────────────────────────────
         gantt.config.lightbox.sections = [
@@ -351,7 +516,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                 if (typeof gantt.isCriticalTask === 'function') {
                     return gantt.isCriticalTask(task) ? 'gantt_critical_task' : '';
                 }
-            } catch (_) {}
+            } catch (_) { }
             // Fallback: flag manual
             return task._critical ? 'gantt_critical_task' : '';
         };
@@ -362,9 +527,9 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             try {
                 const s: any = gantt.getTask(link.source);
                 const t: any = gantt.getTask(link.target);
-                const sCrit  = typeof gantt.isCriticalTask === 'function'
+                const sCrit = typeof gantt.isCriticalTask === 'function'
                     ? gantt.isCriticalTask(s) : s?._critical;
-                const tCrit  = typeof gantt.isCriticalTask === 'function'
+                const tCrit = typeof gantt.isCriticalTask === 'function'
                     ? gantt.isCriticalTask(t) : t?._critical;
                 return sCrit && tCrit ? 'gantt_critical_link' : '';
             } catch { return ''; }
@@ -382,7 +547,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             const isCrit = (() => {
                 try {
                     if (typeof gantt.isCriticalTask === 'function') return gantt.isCriticalTask(task);
-                } catch (_) {}
+                } catch (_) { }
                 return task._critical || false;
             })();
 
@@ -391,8 +556,8 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                 `<b>Duración:</b> ${task.duration} días<br/>` +
                 `<b>Inicio:</b> ${gantt.templates.tooltip_date_format(start)}<br/>` +
                 `<b>Fin:</b> ${gantt.templates.tooltip_date_format(end)}`;
-            if (task.cost)  html += `<br/><b>Costo:</b> S/. ${task.cost}`;
-            if (isCrit)     html += `<br/><span style="color:#f87171;font-weight:bold;">⚠ Ruta Crítica</span>`;
+            if (task.cost) html += `<br/><b>Costo:</b> S/. ${task.cost}`;
+            if (isCrit) html += `<br/><span style="color:#f87171;font-weight:bold;">⚠ Ruta Crítica</span>`;
 
             try {
                 const preds: GLink[] = gantt.getLinks().filter((l: any) => l.target == task.id);
@@ -403,22 +568,21 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     });
                     html += `<br/><b>Predecesoras:</b> ${labels.join(', ')}`;
                 }
-            } catch (_) {}
+            } catch (_) { }
             return html;
         };
 
         // Días no laborables en gris
-        gantt.templates.scale_cell_class    = (date: Date) =>
+        gantt.templates.scale_cell_class = (date: Date) =>
             !gantt.isWorkTime(date) ? 'columna-no-laborable' : '';
         gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
             !gantt.isWorkTime(date) ? 'columna-no-laborable' : '';
 
         // ── 9. EVENTOS ─────────────────────────────────────────────────
-
         // Marcar tareas padre para ocultar su barra estándar
         gantt.attachEvent('onTaskLoading', (task: any) => {
             if (gantt.hasChild(task.id)) {
-                task.type        = gantt.config.types.project;
+                task.type = gantt.config.types.project;
                 task.unscheduled = true;
             }
             return true;
@@ -433,7 +597,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                 if (dates) {
                     const t: any = gantt.getTask(id);
                     t.start_date = dates.start_date;
-                    t.end_date   = dates.end_date;
+                    t.end_date = dates.end_date;
                     gantt.updateTask(id);
                 }
             } finally { isUpdatingRef.current = false; }
@@ -471,7 +635,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     (target.predecessors ? target.predecessors + ', ' : '') +
                     `${source.item || source.id} (${LINK_LABELS[link.type]})`;
                 gantt.updateTask(target.id);
-            } catch (_) {}
+            } catch (_) { }
             applyAutoScheduling();
             markCriticalTasks();
             gantt.render();
@@ -488,7 +652,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                         return `${src.item || src.id} (${LINK_LABELS[l.type]})`;
                     }).join(', ');
                 gantt.updateTask(target.id);
-            } catch (_) {}
+            } catch (_) { }
             applyAutoScheduling();
             markCriticalTasks();
             gantt.render();
@@ -500,7 +664,49 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
         // Recalcular ruta crítica después de auto-scheduling
         gantt.attachEvent('onAfterAutoSchedule', () => {
             markCriticalTasks();
+            gantt.eachTask((task: any) => {
+                if (!gantt.hasChild(task.id)) {
+                    task.duration = gantt.calculateDuration({
+                        start_date: task.start_date,
+                        end_date: task.end_date,
+                        task: task,
+                    });
+                    gantt.updateTask(task.id);
+                }
+            });
         });
+
+        // Esto fuerza a que las tareas hijas se dividan cuando hay días no laborables
+        gantt.attachEvent("onTaskLoading", function (task) {
+            if (!gantt.hasChild(task.id)) {
+                task.render = "split";
+            }
+            return true;
+        });
+
+
+        // 1. Forzar que las tareas nuevas nazcan en la fecha de inicio del ajuste
+        gantt.attachEvent("onTaskCreated", (task) => {
+            // Usamos la fecha que configuraste (1 de Abril)
+            // Si tienes una variable para la fecha del modal, úsala aquí. 
+            // Por ahora, forzamos el 1 de Abril de 2026.
+            const fechaInicioAjuste = new Date(2026, 3, 1);
+
+            task.start_date = fechaInicioAjuste;
+            task.end_date = gantt.date.add(fechaInicioAjuste, 1, "day"); // Dura 1 día por defecto
+
+            return true;
+        });
+
+        // 2. Hacer que el calendario se desplace automáticamente a esa fecha
+        // para que no tengas que buscar la barra azul manualmente.
+        gantt.attachEvent("onAfterTaskAdd", (id, item) => {
+            gantt.showTask(id);
+        });
+
+        // 3. Configuración para que el usuario no pueda mover tareas "fuera" de Abril
+        // (Esto evita que las tareas se vuelvan "fantasmas" por accidente)
+        gantt.config.limit_view = true;
 
         // ── 10. INIT ───────────────────────────────────────────────────
         gantt.init(ganttContainer.current);
@@ -528,9 +734,28 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
         (window as any).__openPredModal = (taskId: any) => {
             const links: GLink[] = gantt.getLinks().filter((l: any) => l.target == taskId);
             const tasks: PredTask[] = [];
+            const taskIds = new Set<any>();
+
+            // 1. Solo capturamos IDs de tareas que pasen el filtro visual
             gantt.eachTask((t: any) => {
-                if (t.id != taskId) tasks.push({ id: t.id, text: t.text, item: t.item });
+                // FILTRO: Solo agregamos si la tarea NO es de marzo (Abril = mes 3)
+                if (t.start_date >= new Date(2026, 3, 1)) {
+                    taskIds.add(t.id);
+                }
             });
+
+            taskIds.forEach((id: any) => {
+                if (id != taskId) {
+                    try {
+                        const t: any = gantt.getTask(id);
+                        // 2. Solo agregamos tareas que tengan texto y no sean "fantasmas"
+                        if (t.text && t.text.trim() !== "") {
+                            tasks.push({ id: t.id, text: t.text, item: t.item });
+                        }
+                    } catch (_) { }
+                }
+            });
+
             setPredTasks(tasks);
             setPredLinks(links);
             setPredTaskId(taskId);
@@ -547,7 +772,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
     /** Toggle ruta crítica */
     const toggleCriticalPath = () => {
         const next = !criticalOnRef.current;
-        criticalOnRef.current            = next;
+        criticalOnRef.current = next;
         gantt.config.highlight_critical_path = next;
         setCriticalOn(next);
         if (next) markCriticalTasks();
@@ -556,33 +781,33 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
 
     /** Guardar cronograma — usa el cronogramaId como número limpio */
     const handleSave = async () => {
-        const id  = Number(cronogramaId); // garantiza que sea número, no "1:1"
+        const id = Number(cronogramaId);
         const fmt = gantt.date.date_to_str('%Y-%m-%d %H:%i');
 
         const tasks = gantt.getTaskByTime().map((t: any) => ({
             id: t.id,
             text: t.text,
             start_date: fmt(t.start_date),
-            end_date:   fmt(t.end_date),
-            duration:   t.duration,
-            parent:     t.parent || 0,
-            counter:    t.counter,
-            item:       t.item,
-            cost:       t.cost || 0,
+            end_date: fmt(t.end_date),
+            duration: t.duration,
+            parent: t.parent || 0,
+            counter: t.counter,
+            item: t.item,
+            cost: t.cost || 0,
             predecessors: t.predecessors || '',
-            progress:   t.progress || 0,
+            progress: t.progress || 0,
         }));
 
         const links = gantt.getLinks().map((l: any) => ({
-            id:     l.id,
+            id: l.id,
             source: l.source,
             target: l.target,
-            type:   l.type,
+            type: l.type,
         }));
 
         try {
-            await axios.post(`/guardar-cronograma/${id}`, {
-                datacronograma: JSON.stringify({ tasks, links }),
+            await axios.post(`/cronograma/save/${id}`, {
+                data: JSON.stringify({ tasks, links }),
             });
             alert('✅ ¡Cronograma guardado correctamente!');
         } catch (err: any) {
@@ -590,39 +815,45 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             alert(`❌ No se pudo guardar.\n${err?.response?.data?.message || err.message || ''}`);
         }
     };
-
-    /** Aplicar ajustes del modal de configuración */
     const aplicarAjustes = () => {
-    gantt.config.scales = [
-        { unit: topUnit    as any, step: 1, format: topUnit    === 'year' ? '%Y'    : '%F, %Y' },
-        { unit: bottomUnit as any, step: 1, format: bottomUnit === 'day'  ? '%j %D' : 'Sem %W' },
-    ];
+        // ── Escala de tiempo ──────────────────────────────────────
+        gantt.config.scales = [
+            { unit: topUnit as any, step: 1, format: topUnit === 'year' ? '%Y' : '%F, %Y' },
+            { unit: bottomUnit as any, step: 1, format: bottomUnit === 'day' ? '%j %D' : 'Sem %W' },
+        ];
 
-    // ── Días laborables ──────────────────────────────────────
-    const dayMap: Record<string, number> = {
-        domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6,
-    };
+        // ── Días laborables ──────────────────────────────────────
+        const dayMap: Record<string, number> = {
+            domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6,
+        };
 
-    // Primero resetear TODOS los días a no laborable
-    for (let i = 0; i <= 6; i++) {
-        gantt.setWorkTime({ day: i, hours: false });
-    }
-
-    // Luego activar solo los marcados con el rango correcto
-    Object.entries(workDays).forEach(([name, active]) => {
-        if (active) {
-            gantt.setWorkTime({
-                day: dayMap[name],
-                hours: [`${workStartTime}-${workEndTime}`],  // ← formato correcto: "08:00-17:00"
-            });
+        for (let i = 0; i <= 6; i++) {
+            gantt.setWorkTime({ day: i, hours: false });
         }
-    });
 
-    gantt.config.skip_off_time = false; // mostrar días no laborables en gris (no ocultarlos)
-    gantt.render();
-    setIsSettingsOpen(false);
-};
+        Object.entries(workDays).forEach(([name, active]) => {
+            if (active) {
+                gantt.setWorkTime({
+                    day: dayMap[name],
+                    hours: [`${workStartTime}-${workEndTime}`],
+                });
+            }
+        });
 
+        // ── Fechas del proyecto (solo mueven la vista, no las tareas) ──
+        if (projectStart) gantt.config.start_date = new Date(projectStart);
+        if (projectEnd) gantt.config.end_date = new Date(projectEnd);
+        gantt.config.schedule_from_end = scheduleFromEnd;
+
+        gantt.config.skip_off_time = true;
+        gantt.render();
+
+        if (projectStart) {
+            setTimeout(() => gantt.showDate(new Date(projectStart)), 100);
+        }
+
+        setIsSettingsOpen(false);
+    };
     // ── Predecesoras modal ────────────────────────────────────────────────
     const predAdd = (sourceId: any, type = '0') => {
         gantt.addLink({ id: gantt.uid(), source: sourceId, target: predTaskId, type });
@@ -683,9 +914,8 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     {/* Ruta Crítica */}
                     <button
                         onClick={toggleCriticalPath}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors text-white ${
-                            criticalOn ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-600 hover:bg-slate-500'
-                        }`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold uppercase transition-colors text-white ${criticalOn ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-600 hover:bg-slate-500'
+                            }`}
                     >
                         <span className={`w-2 h-2 rounded-full border-2 ${criticalOn ? 'bg-white border-white' : 'bg-transparent border-red-400'}`} />
                         Ruta Crítica
@@ -743,7 +973,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                             )}
                             {filteredPredTasks.map((t) => {
                                 const existingLink = predLinks.find((l) => l.source == t.id);
-                                const added        = !!existingLink;
+                                const added = !!existingLink;
                                 return (
                                     <div key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                                         <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">
@@ -770,11 +1000,10 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                                                     ? predRemove(existingLink.id)
                                                     : predAdd(t.id)
                                             }
-                                            className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 ${
-                                                added
-                                                    ? 'bg-red-500 hover:bg-red-600'
-                                                    : 'bg-emerald-500 hover:bg-emerald-600'
-                                            }`}
+                                            className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 ${added
+                                                ? 'bg-red-500 hover:bg-red-600'
+                                                : 'bg-emerald-500 hover:bg-emerald-600'
+                                                }`}
                                         >
                                             {added ? 'Quitar' : 'Agregar'}
                                         </button>
@@ -785,10 +1014,9 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     </div>
                 </div>
             )}
-
             {/* ══════════════════════════════════════════════════════════
-                MODAL: AJUSTES PROYECTO
-            ══════════════════════════════════════════════════════════ */}
+    MODAL: AJUSTES PROYECTO
+══════════════════════════════════════════════════════════ */}
             {isSettingsOpen && (
                 <div
                     className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -807,58 +1035,99 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                             {/* Escala de tiempo */}
                             <section>
                                 <h3 className="text-[11px] font-black text-blue-600 border-b border-blue-100 mb-4 pb-1 uppercase tracking-wider">
-                                    Escala de Tiempo
+                                    Configuración de Escala de Tiempo
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Unidad Superior</label>
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Unidad (Capa Superior)</label>
                                         <select value={topUnit} onChange={(e) => setTopUnit(e.target.value)}
                                             className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                                            <option value="month">Mes</option>
-                                            <option value="year">Año</option>
+                                            <option value="month">Mes (M)</option>
+                                            <option value="year">Año (Y)</option>
                                         </select>
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Unidad Inferior</label>
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Formato</label>
+                                        <select
+                                            value={topUnit === 'year' ? '%Y' : '%F, %Y'}
+                                            disabled
+                                            className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-400 bg-gray-50 outline-none cursor-not-allowed">
+                                            <option value="%F, %Y">Jan 2019</option>
+                                            <option value="%Y">2019</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Unidad (Capa Inferior)</label>
                                         <select value={bottomUnit} onChange={(e) => setBottomUnit(e.target.value)}
                                             className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                                             <option value="day">Día</option>
                                             <option value="week">Semana</option>
                                         </select>
                                     </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Formato</label>
+                                        <select
+                                            value={bottomUnit === 'day' ? '%j %D' : 'Sem %W'}
+                                            disabled
+                                            className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-400 bg-gray-50 outline-none cursor-not-allowed">
+                                            <option value="%j %D">01 Lun</option>
+                                            <option value="Sem %W">Sem 01</option>
+                                        </select>
+                                    </div>
                                 </div>
+                            </section>
+
+                            {/* Fechas del proyecto */}
+                            <section>
+                                <h3 className="text-[11px] font-black text-blue-600 border-b border-blue-100 mb-4 pb-1 uppercase tracking-wider">
+                                    Fechas del Proyecto
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Inicio del Proyecto</label>
+                                        <input type="date" value={projectStart}
+                                            onChange={(e) => setProjectStart(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Fin Pronosticado</label>
+                                        <input type="date" value={projectEnd}
+                                            onChange={(e) => setProjectEnd(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+                                    <input type="checkbox" checked={scheduleFromEnd}
+                                        onChange={(e) => setScheduleFromEnd(e.target.checked)}
+                                        className="w-4 h-4 rounded accent-blue-600" />
+                                    <span className="text-xs font-medium text-gray-700">Programar desde el Fin</span>
+                                </label>
                             </section>
 
                             {/* Calendario laboral */}
                             <section>
                                 <h3 className="text-[11px] font-black text-blue-600 border-b border-blue-100 mb-4 pb-1 uppercase tracking-wider">
-                                    Calendario Laboral
+                                    Días Laborales
                                 </h3>
                                 <div className="grid grid-cols-4 gap-3">
                                     {([
-                                        ['lunes',     'Lunes'],
-                                        ['martes',    'Martes'],
+                                        ['lunes', 'Lunes'],
+                                        ['martes', 'Martes'],
                                         ['miercoles', 'Miércoles'],
-                                        ['jueves',    'Jueves'],
-                                        ['viernes',   'Viernes'],
-                                        ['sabado',    'Sábado'],
-                                        ['domingo',   'Domingo'],
+                                        ['jueves', 'Jueves'],
+                                        ['viernes', 'Viernes'],
+                                        ['sabado', 'Sábado'],
+                                        ['domingo', 'Domingo'],
                                     ] as [keyof typeof workDays, string][]).map(([key, label]) => (
                                         <label key={key}
-                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium select-none ${
-                                                workDays[key]
-                                                    ? 'bg-blue-50 border-blue-400 text-blue-700'
-                                                    : 'bg-gray-50 border-gray-300 text-gray-500'
-                                            }`}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium select-none ${workDays[key]
+                                                ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                                : 'bg-gray-50 border-gray-300 text-gray-500'
+                                                }`}
                                         >
-                                            <input
-                                                type="checkbox"
-                                                checked={workDays[key]}
-                                                onChange={(e) =>
-                                                    setWorkDays((d) => ({ ...d, [key]: e.target.checked }))
-                                                }
-                                                className="w-3.5 h-3.5 rounded accent-blue-600"
-                                            />
+                                            <input type="checkbox" checked={workDays[key]}
+                                                onChange={(e) => setWorkDays((d) => ({ ...d, [key]: e.target.checked }))}
+                                                className="w-3.5 h-3.5 rounded accent-blue-600" />
                                             {label}
                                         </label>
                                     ))}
@@ -868,17 +1137,17 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                             {/* Jornada laboral */}
                             <section>
                                 <h3 className="text-[11px] font-black text-blue-600 border-b border-blue-100 mb-4 pb-1 uppercase tracking-wider">
-                                    Jornada Laboral
+                                    Horario Laboral
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Hora Inicio</label>
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Hora de Inicio</label>
                                         <input type="time" value={workStartTime}
                                             onChange={(e) => setWorkStartTime(e.target.value)}
                                             className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Hora Fin</label>
+                                        <label className="text-[10px] text-gray-500 font-bold uppercase">Hora de Fin</label>
                                         <input type="time" value={workEndTime}
                                             onChange={(e) => setWorkEndTime(e.target.value)}
                                             className="w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
@@ -894,7 +1163,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                             </button>
                             <button onClick={aplicarAjustes}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-xs font-black uppercase shadow-md transition-colors">
-                                Aplicar Cambios
+                                Guardar Cambios
                             </button>
                         </div>
                     </div>
@@ -944,7 +1213,39 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                     padding: 10px 14px !important; font-size: 12px !important;
                     line-height: 1.7 !important; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
                 }
-            `}</style>
+
+                /* Oculta la barra de color de la tarea padre para que no tape el corchete */
+                /* Esto asegura que los padres tengan el mismo color azul que los hijos */
+                .gantt_parent_task {
+                    background-color: #3db9d3 !important; /* El azul de tu imagen */
+                    border: 1px solid #2d96ad !important;
+                }
+
+                /* 1. Hace invisible la barra larga "madre" para que se vea el fondo */
+                .gantt_task_line.gantt_split_parent {
+                    background-color: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
+                /* 2. Estilo para los bloques azules de los días que SÍ se trabajan */
+                .gantt_split_child {
+                    background-color: #3db9d3 !important; /* Tu azul original */
+                    border: 1px solid #2d96ad !important;
+                    border-radius: 4px;
+                    height: 24px !important; /* Ajusta esto según el alto de tu fila */
+                    top: 3px !important;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white !important;
+                }
+
+                /* 3. Si la tarea es CRÍTICA, que los pedacitos sean rojos */
+                .gantt_critical_task.gantt_split_parent .gantt_split_child {
+                    background-color: #ff4d4d !important;
+                    border: 1px solid #d43f3f !important;
+                }`}</style>
         </div>
     );
 };

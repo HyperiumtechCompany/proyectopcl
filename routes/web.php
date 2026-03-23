@@ -172,12 +172,10 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 }); // Cierre de costos
 
 // ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/module/crono_general', [CronogramaController::class, 'index'])
-        ->name('proyectos.cronograma.index');
+    Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
 
-    Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])
-        ->name('proyectos.cronograma.save');
+    Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 });
 
 // ─── METRADOS MODULARES (Sanitarias y Estructuras) ─────────────────────────────
