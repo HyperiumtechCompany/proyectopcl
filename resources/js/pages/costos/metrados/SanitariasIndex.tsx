@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as XLSX from "xlsx";
-import { Row } from 'exceljs';
 
 // TIPOS
 interface ColumnDef { key: string; label: string; width: number }
@@ -91,15 +90,15 @@ const RESUMEN_BASE: ColumnDef[] = [
 ];
 
 // UNIDADES Y MAPA DE CÁLCULO
-const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza'];
+const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza', 'pto', 'glb'];
 
-/** Unidad → columna numérica que se copia en "total" */
 const UNIT_TOTAL_COL: Record<string, string> = {
-    und: 'und', pza: 'und',
-    m:   'lon', ml:  'lon',
-    m2:  'area',
-    m3:  'vol', lt: 'vol', gl: 'vol',
-    kg:  'kg',
+  und: 'und', pza: 'und', pto: 'und',  
+  m:   'lon', ml:  'lon',
+  m2:  'area',
+  m3:  'vol', lt: 'vol', gl: 'vol',
+  kg:  'kg',
+  glb: 'total',  
 };
 
 // Numeración base para Metrado Sanitarias
@@ -236,23 +235,38 @@ function rowsToSheet(
 
 function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
     if (!sheet) return [];
+
     const data: any[][] = sheet.data || [];
     const rows: Record<string, any>[] = [];
 
     for (let r = 1; r < data.length; r++) {
         const row: Record<string, any> = {};
         let hasData = false;
+
         cols.forEach((col, ci) => {
-            const raw = cellRaw(data[r]?.[ci]);
+            const cell = data[r]?.[ci];
+
+            let raw = null;
+            if (cell && typeof cell === 'object') {
+                raw = cell.v?.v ?? cell.v ?? null;
+            } else {
+                raw = cell ?? null;
+            }
+
             if (!blank(raw)) {
-                row[col.key] = col.key === 'descripcion' ? String(raw).trimStart() : raw;
+                row[col.key] =
+                    col.key === 'descripcion'
+                        ? String(raw).trimStart()
+                        : raw;
                 hasData = true;
             } else {
                 row[col.key] = null;
             }
         });
+
         if (hasData) rows.push(row);
     }
+
     return rows;
 }
 
@@ -307,7 +321,7 @@ export default function SanitariasIndex() {
     const resumenCols = useMemo<ColumnDef[]>(() => [
         ...RESUMEN_BASE,
         ...Array.from({ length: moduleCount }, (_, i) => ({
-            key: `modulo_${i + 1}`, label: `Módulo ${i + 1}`, width: 110,
+        key: `modulo_${i + 1}`, label: `Módulo ${i + 1}`, width: 110,
         })),
         { key: 'total_modulos',  label: 'Total Módulos',  width: 110 },
         { key: 'total_exterior', label: 'Total Exterior', width: 110 },
@@ -334,7 +348,15 @@ export default function SanitariasIndex() {
 
         const ensure = (code: string, desc: string, und: string, level: number) => {
             if (!byCode[code]) {
-                byCode[code] = { code, desc, und, level, mod: {}, ext: 0, cis: 0 };
+                byCode[code] = { 
+                    code, 
+                    desc, 
+                    und, 
+                    level, 
+                    mod: {}, 
+                    ext: 0, 
+                    cis: 0 
+                };
                 codeOrder.push(code);
             }
             return byCode[code];
@@ -344,10 +366,17 @@ export default function SanitariasIndex() {
             rows.forEach((row) => {
                 const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
                 if (kind !== 'group') return;
-                const code = String(row.partida ?? '').trim();
+                const fullCode = String(row.partida ?? '').trim();
+                if (!fullCode) return;
+                const code = fullCode;
                 if (!code) return;
-                const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
-                const t = r4(toNum(row.total));
+                const e = ensure(
+                    code,
+                    byCode[code]?.desc || String(row.descripcion ?? ''),
+                    byCode[code]?.und || String(row.unidad ?? ''),
+                    toNum(row['_level']) || 1
+                );
+                const t = r4(toNum(row.total ?? 0));
                 if (modIdx !== undefined) e.mod[modIdx] = (e.mod[modIdx] || 0) + t;
                 if (isExt) e.ext += t;
                 if (isCis) e.cis += t;
@@ -392,9 +421,9 @@ export default function SanitariasIndex() {
         for (let i = 1; i <= moduleCount; i++) {
             sheets.push(rowsToSheet(modulos?.[String(i)] ?? [], BASE_COLS, `Módulo ${i}`, order++));
         }
-        sheets.push(rowsToSheet(exterior  ?? [], BASE_COLS,   'Exterior', order++));
-        sheets.push(rowsToSheet(cisterna  ?? [], BASE_COLS,   'Cisterna', order++));
-        sheets.push(rowsToSheet(resumenRows,     resumenCols, 'Resumen',  order++));
+        sheets.push(rowsToSheet(exterior  ?? [], BASE_COLS,   `Exterior`, order++));
+        sheets.push(rowsToSheet(cisterna  ?? [], BASE_COLS,   `Cisterna`, order++));
+        sheets.push(rowsToSheet(resumenRows,     resumenCols, `Resumen`,  order++));
         return sheets;
     }, [moduleCount, modulos, exterior, cisterna, resumenRows, resumenCols]);
 
@@ -425,9 +454,9 @@ export default function SanitariasIndex() {
             } else if (name === 'Exterior') {
                 reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/exterior`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
             } else if (name === 'Cisterna') {
-                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/cisterna`,  body: { rows: sheetToRows(sheet, BASE_COLS) } });
+                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/cisterna`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
             } else if (name === 'Resumen') {
-                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/resumen`,   body: { rows: sheetToRows(sheet, resumenCols) } });
+                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/resumen`, body: { rows: sheetToRows(sheet, resumenCols) } });
             }
         });
 
@@ -463,12 +492,11 @@ export default function SanitariasIndex() {
         const ls = (window as any).luckysheet;
         if (!ls) return;
 
-        const sheets = ls.getAllSheets?.() ?? [];
-        const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
+        const active = ls.getSheet();
         if (!active || active.name === 'Resumen') return;
 
         const data: any[][] = active.data || [];
-        const sheetOrder = active.order ?? 0;
+        const sheetOrder = ls.getSheet().order;
 
         // ── Leer todas las filas con datos ──────────────────────────────────
         const entries: Entry[] = [];
@@ -557,62 +585,52 @@ export default function SanitariasIndex() {
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS
-        //   und  = elsim × nveces
-        //   lon  = largo × nveces
-        //   area = largo × ancho × nveces
-        //   vol  = largo × ancho × alto × nveces
-        //   total = columna determinada por UNIT_TOTAL_COL[unidad]
+        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         entries.forEach((e) => {
-            if (e.kind !== 'leaf') return;
+        if (e.kind !== 'leaf') return;
+        const { row, ri } = e;
+        
+        const elsim  = toNum(row.elsim);
+        const nveces = toNum(row.nveces);
+        const largo  = toNum(row.largo);
+        const ancho  = toNum(row.ancho);
+        const alto   = toNum(row.alto);
+        
+        const newUnd  = r4(elsim * nveces);
+        const newLon  = r4(largo * nveces);
+        const newArea = r4(largo * ancho * nveces);
+        const newVol  = r4(largo * ancho * alto * nveces);
+        
+        const upd = (key: string, val: number) => {
+            if (toNum(row[key]) !== val) { 
+            set(ri, key, mkNum(val)); 
+            row[key] = val; 
+            }
+        };
 
-            const { row, ri } = e;
-            const elsim  = toNum(row.elsim);
-            const nveces = toNum(row.nveces);
-            const largo  = toNum(row.largo);
-            const ancho  = toNum(row.ancho);
-            const alto   = toNum(row.alto);
-
-            const newUnd  = r4(elsim * nveces);
-            const newLon  = r4(largo * nveces);
-            const newArea = r4(largo * ancho * nveces);
-            const newVol  = r4(largo * ancho * alto * nveces);
-
-            const upd = (key: string, val: number) => {
-                if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
-            };
-
-            const setFormula = (key: string, formula: string) => {
-                set(ri, key, {
-                    f: formula,
-                    v: null,
-                    m: '',
-                    ct: { fa: 'General', t: 'n' },
-                });
-            };
-
-            // columnas
-            upd('lon', newLon);
-            upd('area', newArea);
-            upd('vol', newVol);
-            upd('und', newUnd);
-
-            const unidad   = String(row.unidad ?? '').trim().toLowerCase();
-            
-            let tVal = 0;
-
-            if (unidad === 'm' || unidad === 'ml') tVal = newLon;
-            else if (unidad === 'm2') tVal = newArea;
-            else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
-            else if (unidad === 'kg') tVal = toNum(row.kg);
-            else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
-
-            e.total = tVal;
-            set(ri, 'total', mkNum(tVal));
-        });
+        upd('lon', newLon);
+        upd('area', newArea);
+        upd('vol', newVol);
+        upd('und', newUnd);
+        
+        const unidadRaw = String(row.unidad ?? '').trim().toLowerCase();
+        const unidad = unidadRaw.replace(/\s+/g, ''); 
         
 
+        let tVal = 0;
+        const totalCol = UNIT_TOTAL_COL[unidad];
+        
+        if (totalCol === 'lon') tVal = newLon;
+        else if (totalCol === 'area') tVal = newArea;
+        else if (totalCol === 'vol') tVal = newVol;
+        else if (totalCol === 'kg') tVal = toNum(row.kg);
+        else if (totalCol === 'und') tVal = newUnd;
+        
+        
+        e.total = tVal;
+        set(ri, 'total', mkNum(tVal));
+        });
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASE 4 — ROLL-UP: de la profundidad máxima hasta el nivel 1
         // Cada GRUPO acumula la suma de sus HIJOS DIRECTOS (level + 1)
@@ -644,21 +662,20 @@ export default function SanitariasIndex() {
         if (updates.length > 10000) return;
 
         progUpdateCount.current++;
+
         updates.forEach((u, idx) => {
             ls.setCellValue(u.r, u.c, u.v, {
-                order:     sheetOrder,
+                order: sheetOrder,
                 isRefresh: idx === updates.length - 1,
             });
         });
-        // Decrementar tras el ciclo de Luckysheet para no bloquear la siguiente edición
+
         setTimeout(() => {
             progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
 
-            const all = ls.getAllSheets?.() ?? [];
-            if (all.length > 0) {
-                scheduleSave(all);
-
-                handleSyncResumen();
+            const active = ls.getSheet();
+            if (active) {
+                scheduleSave([active]);
             }
 
         }, 120);
@@ -680,7 +697,8 @@ export default function SanitariasIndex() {
     }, [recalcActiveSheet]);
 
     const handleDataChange = useCallback((sheets: any[]) => {
-        scheduleSave(sheets);
+        const active = sheets.find((s: any) => s.status === 1);
+        if (active) scheduleSave([active]);
     }, [scheduleSave]);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -698,15 +716,14 @@ export default function SanitariasIndex() {
         const ls = (window as any).luckysheet;
         if (!ls) return;
 
-        const sheets = ls.getAllSheets?.() ?? [];
-        const active = sheets.find((s: any) => s.status === 1);
+        const active = ls.getSheet();
         if (!active || active.name === 'Resumen') return;
 
         const range = ls.getRange?.();
         if (!range?.length) return;
         const selRow = range[0].row[0]; // 1-based (row 0 = cabecera)
         const data: any[][] = active.data || [];
-        const sheetOrder = active.order ?? 0;
+        const sheetOrder = ls.getSheet().order;
 
         // ── Leer índice de filas con datos ──────────────────────────────────
         type RI = { ri: number; level: number; kind: EntryKind };
@@ -822,12 +839,12 @@ export default function SanitariasIndex() {
         const ls = (window as any).luckysheet;
         if (!ls) return;
 
-        const sheets = ls.getAllSheets?.() ?? [];
-        const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
+        const active = ls.getSheet();
+        if (!active) return;
         if (!active || active.name === 'Resumen') return;
 
         const data: any[][] = active.data || [];
-        const sheetOrder = active.order ?? 0;
+        const sheetOrder = ls.getSheet().order;
 
         // Determinar nivel de la fila seleccionada
         const range    = ls.getRange?.();
@@ -905,10 +922,18 @@ export default function SanitariasIndex() {
                 type: 'dropdown', value1: UNIDAD_OPTIONS.join(','),
                 prohibitInput: false, hint: 'Seleccione una unidad',
             };
+            const current = ls.getSheet().order;
+
             sheets.forEach((s: any) => {
                 if (s.name === 'Resumen') return;
-                ls.setDataVerification(opt, { range, order: s.order ?? 0 });
+
+                ls.setDataVerification(opt, { 
+                    range, 
+                    order: s.order 
+                });
             });
+
+            ls.setSheetActive(current);
         };
 
         timer = setTimeout(applyVerification, 400);
@@ -921,11 +946,21 @@ export default function SanitariasIndex() {
     // ═══════════════════════════════════════════════════════════════════════
     const handleSyncResumen = useCallback(() => {
         setIsSyncing(true);
+
         setTimeout(() => {
             const ls = (window as any).luckysheet;
             if (!ls) { setIsSyncing(false); return; }
 
+            // ✅ FORZAR recálculo antes de leer datos
+            recalcActiveSheet();
+
             const all: any[] = ls.getAllSheets();
+
+            all.forEach((sheet: any) => {
+                ls.setSheetActive(sheet.order);
+                recalcActiveSheet();
+            });
+
             const mods: Record<string, Record<string, any>[]> = {};
             let ext: Record<string, any>[] = [];
             let cis: Record<string, any>[] = [];
@@ -935,26 +970,38 @@ export default function SanitariasIndex() {
                 if (sheet.name.startsWith('Módulo')) {
                     const m = sheet.name.match(/(\d+)/);
                     const n = m ? Number(m[1]) : NaN;
-                    if (!isNaN(n)) mods[String(n)] = sheetToRows(sheet, BASE_COLS);
-                } else if (sheet.name === 'Exterior') { ext = sheetToRows(sheet, BASE_COLS); }
-                else if (sheet.name === 'Cisterna')   { cis = sheetToRows(sheet, BASE_COLS); }
-                else if (sheet.name === 'Resumen')    { resIdx = idx; }
+                    if (!isNaN(n)) {
+                        mods[String(n)] = sheetToRows(sheet, BASE_COLS);
+                    }
+                } else if (sheet.name === 'Exterior') {
+                    ext = sheetToRows(sheet, BASE_COLS);
+                } else if (sheet.name === 'Cisterna') {
+                    cis = sheetToRows(sheet, BASE_COLS);
+                } else if (sheet.name === 'Resumen') {
+                    resIdx = idx;
+                }
             });
 
-            if (resIdx === -1) { setIsSyncing(false); return; }
+            if (resIdx === -1) {
+                setIsSyncing(false);
+                return;
+            }
 
-            const newRows  = buildResumenRows(mods, ext, cis);
-
+            const newRows = buildResumenRows(mods, ext, cis);
 
             const currentSheet = ls.getSheet().order;
 
-            ls.setSheetActive(resIdx);
+            const resumenSheet = all[resIdx];
 
             ls.clearRange({
-                row: [0, 500],
-                column: [0, 20]
+                range: {
+                    row: [1, 2000],
+                    column: [0, resumenCols.length],
+                },
+                order: resumenSheet.order
             });
 
+            // ✅ LLENAR DATOS
             newRows.forEach((row, r) => {
                 resumenCols.forEach((col, c) => {
                     const val = row[col.key as keyof typeof row] ?? '';
@@ -964,6 +1011,7 @@ export default function SanitariasIndex() {
                 });
             });
 
+            // ✅ HEADERS
             resumenCols.forEach((col, c) => {
                 ls.setCellValue(0, c, col.label, {
                     isRefresh: false
@@ -974,11 +1022,12 @@ export default function SanitariasIndex() {
 
             ls.setSheetActive(currentSheet);
 
+            // ✅ AHORA sí guardar todo
+            doSave(ls.getAllSheets());
 
-            doSave(all);
             setIsSyncing(false);
-        }, 400);
-    }, [buildResumenRows, resumenCols, doSave]);
+        }, 300);
+    }, [buildResumenRows, resumenCols, doSave, recalcActiveSheet]);
 
     // ── Config módulos ─────────────────────────────────────────────────────
     const handleUpdateConfig = async () => {
@@ -1080,14 +1129,14 @@ export default function SanitariasIndex() {
             if (!ls) return;
 
             const sheets = ls.getAllSheets();
-            const active = sheets.find((s: any) => s.status === 1);
+            const active = (window as any).luckysheet.getSheet();
 
             if (!active || active.name === "Resumen") {
                 alert("Selecciona una hoja válida (Módulo, Exterior o Cisterna)");
                 return;
             }
 
-            const sheetOrder = active.order ?? 0;
+            const sheetOrder = ls.getSheet().order;
 
             ls.clearRange({
                 row: [1, 2000],
@@ -1290,12 +1339,13 @@ export default function SanitariasIndex() {
                             sheetFormulaBar:  true,
                             showstatisticBar: true,
                             cellUpdated: () => {
+                                
                                 if (progUpdateCount.current > 0) return;
 
                                 clearTimeout(recalcTimer.current);
 
                                 recalcTimer.current = setTimeout(() => {
-                                    progUpdateCount.current = 0; // 🔥 CLAVE
+                                    progUpdateCount.current = 0; 
                                     recalcActiveSheet();
                                 }, 80);
                             },
@@ -1429,8 +1479,5 @@ function ctxItem(
             triggerRecalc(); 
         },
     };
-}
-function onClick(): void {
-    throw new Error('Function not implemented.');
 }
 
