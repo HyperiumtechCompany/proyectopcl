@@ -16,10 +16,7 @@ export interface ACUComponente {
     descripcion: string;
     unidad: string;
     cantidad: number;
-<<<<<<< HEAD
-=======
     recursos?: number;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     precio_unitario: number;
     factor_desperdicio?: number;
     precio_hora?: number;
@@ -35,11 +32,6 @@ export interface ACU {
     mano_de_obra: ACUComponente[];
     materiales: ACUComponente[];
     equipos: ACUComponente[];
-<<<<<<< HEAD
-    costo_mano_obra: number;
-    costo_materiales: number;
-    costo_equipos: number;
-=======
     subcontratos?: ACUComponente[];
     subpartidas?: ACUComponente[];
     costo_mano_obra: number;
@@ -47,7 +39,6 @@ export interface ACU {
     costo_equipos: number;
     costo_subcontratos?: number;
     costo_subpartidas?: number;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     costo_unitario_total: number;
     item_order: number;
 }
@@ -116,23 +107,35 @@ export interface MetradoInfo {
 
 // ─── Catálogo de Insumos (Delphin/S10) ───────────────────────────────────────
 
-export interface InsumoClase {
+export interface Diccionario {
     id: number;
     codigo: string;
     descripcion: string;
 }
 
+export interface Unidad {
+    id: number;
+    descripcion: string;
+    descripcion_singular: string;
+    orden: string;
+    informacion_unidad: string;
+    abreviatura_unidad: string;
+}
+
 export interface InsumoProducto {
     id: number;
-    codigo: string;
+    codigo?: string;
     descripcion: string;
     especificaciones?: string | null;
-    unidad: string;
+    diccionario_id: number;
+    unidad_id: number;
+    tipo_proveedor: string;
     precio: number;
     costo_unitario_lista: number;
     costo_flete: number;
     tipo: 'mano_de_obra' | 'materiales' | 'equipos';
-    clase: InsumoClase | null;
+    diccionario?: Diccionario | null;
+    unidad?: Unidad | null;
 }
 
 export type PresupuestoSubsection =
@@ -162,15 +165,11 @@ export interface ColumnDef {
 export type RendimientoModo = 'dia' | 'hora' | 'global';
 
 export interface ACUComponenteRow {
-    recursos: null;
     codigo?: string | null;
     descripcion: string;
     unidad?: string | null;
     cantidad?: number | null;
-<<<<<<< HEAD
-=======
     recursos?: number | null;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     precio_unitario?: number | null;
     precio_hora?: number | null;
     factor_desperdicio?: number | null;
@@ -186,20 +185,14 @@ export interface ACURowSummary {
     costo_mano_obra: number;
     costo_materiales: number;
     costo_equipos: number;
-<<<<<<< HEAD
-=======
     costo_subcontratos: number;
     costo_subpartidas: number;
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
     costo_unitario_total: number;
     mano_de_obra: ACUComponenteRow[];
     materiales: ACUComponenteRow[];
     equipos: ACUComponenteRow[];
-<<<<<<< HEAD
-=======
     subcontratos: ACUComponenteRow[];
     subpartidas: ACUComponenteRow[];
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 }
 
 // export const SUBSECTION_COLUMNS: Record<PresupuestoSubsection, ColumnDef[]> = {

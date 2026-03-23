@@ -632,6 +632,141 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Importa estructura de partidas desde múltiples metrados secuencialmente
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/import-batch-metrados
+     */
+    public function importBatchFromMetrados(
+        CostoProject $project,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+
+        // Validate request
+        $validated = $request->validate([
+            'metrados' => 'required|array|min:1',
+            'metrados.*' => 'required|string|in:metrado_arquitectura,metrado_estructura,metrado_sanitarias,metrado_electricas,metrado_comunicaciones,metrado_gas',
+        ]);
+
+        $metradosList = $validated['metrados'];
+
+        // Validate that all requested metrado modules are enabled
+        foreach ($metradosList as $metradoType) {
+            if (!$project->hasModule($metradoType)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "El módulo {$metradoType} no está habilitado en este proyecto.",
+                ], 422);
+            }
+        }
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            $createdCount = 0;
+            $updatedCount = 0;
+            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+            $hasItemOrder = $this->hasTenantColumn('presupuesto_general', 'item_order');
+
+            foreach ($metradosList as $metradoType) {
+                // Special handling for sanitarias: read from resumen table
+                if ($metradoType === 'metrado_sanitarias') {
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table('metrado_sanitarias_resumen')
+                        ->select('partida', 'descripcion', 'unidad', 'total_general as total')
+                        ->whereNotNull('partida')
+                        ->where('partida', '!=', '')
+                        ->orderBy('item_order')
+                        ->orderBy('id');
+                } else {
+                    // Query the metrado table for partida structure
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table($metradoType)
+                        ->select('partida', 'descripcion', 'unidad', 'total')
+                        ->whereNotNull('partida')
+                        ->where('partida', '!=', '');
+                    if ($this->hasTenantColumn($metradoType, 'item_order')) {
+                        $metradoQuery->orderBy('item_order');
+                    }
+                    if ($this->hasTenantColumn($metradoType, 'id')) {
+                        $metradoQuery->orderBy('id');
+                    }
+                }
+                $metradoRows = $metradoQuery->get();
+
+                foreach ($metradoRows as $metradoRow) {
+                    // Check if partida already exists in presupuesto_general
+                    $existingPartida = DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->where('partida', $metradoRow->partida)
+                        ->first();
+
+                    if ($existingPartida) {
+                        // Update only metrado field, preserve prices
+                        DB::connection('costos_tenant')
+                            ->table('presupuesto_general')
+                            ->where('partida', $metradoRow->partida)
+                            ->update([
+                                'metrado' => $metradoRow->total,
+                                'metrado_source' => $metradoType,
+                                'updated_at' => now(),
+                            ]);
+                        $updatedCount++;
+                    } else {
+                        // Create new partida
+                        $insertData = [
+                            'presupuesto_id' => $tenantPresupuestoId,
+                            'partida' => $metradoRow->partida,
+                            'descripcion' => $metradoRow->descripcion ?? '',
+                            'unidad' => $metradoRow->unidad ?? '',
+                            'metrado' => $metradoRow->total,
+                            'precio_unitario' => 0,
+                            'metrado_source' => $metradoType,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                        if ($hasItemOrder) {
+                            $insertData['item_order'] = 0;
+                        }
+
+                        DB::connection('costos_tenant')
+                            ->table('presupuesto_general')
+                            ->insert($insertData);
+                        $createdCount++;
+                    }
+                }
+            }
+
+            DB::connection('costos_tenant')->commit();
+
+            // Sincronizar totales tras importación
+            $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Importación por lotes completada exitosamente',
+                'summary' => [
+                    'created' => $createdCount,
+                    'updated' => $updatedCount,
+                    'total' => $createdCount + $updatedCount,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error("Error batch importing metrados", [
+                'metrados' => $metradosList,
+                'project' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al importar metrados: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Calcula o recalcula un ACU específico
      * Ruta: POST /costos/proyectos/{project}/presupuesto/acus/calculate
      */
@@ -2257,5 +2392,139 @@ class PresupuestoController extends Controller
             ]);
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Export helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Helper: obtiene las filas del presupuesto general desde el tenant.
+     */
+    private function buildPresupuestoRows(CostoProject $project): array
+    {
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+        return DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->orderBy('partida')
+            ->get()
+            ->map(fn($r) => (array)$r)
+            ->toArray();
+    }
+
+    /**
+     * Exporta el presupuesto general a CSV/Excel (UTF-8 BOM para compatibilidad con Microsoft Excel).
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/export/excel
+     */
+    public function exportExcel(CostoProject $project): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        abort_unless(Auth::check(), 403);
+
+        $rows = $this->buildPresupuestoRows($project);
+        $filename = 'presupuesto_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $f = fopen('php://output', 'w');
+            // BOM para que Excel lo abra correctamente en UTF-8
+            fprintf($f, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fputcsv($f, ['Ítem', 'Descripción', 'Unidad', 'Metrado', 'Precio Unit.', 'Parcial'], ';');
+
+            foreach ($rows as $row) {
+                $level  = substr_count((string)($row['partida'] ?? ''), '.');
+                $indent = str_repeat('  ', $level);
+                fputcsv($f, [
+                    $row['partida']       ?? '',
+                    $indent . ($row['descripcion'] ?? ''),
+                    $row['unidad']        ?? '',
+                    number_format((float)($row['metrado'] ?? 0), 4, '.', ''),
+                    number_format((float)($row['precio_unitario'] ?? 0), 4, '.', ''),
+                    number_format((float)($row['parcial'] ?? 0), 4, '.', ''),
+                ], ';');
+            }
+            fclose($f);
+        }, $filename, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Exporta el presupuesto general como HTML imprimible (o PDF si Dompdf está disponible).
+     * Ruta: GET /costos/proyectos/{project}/presupuesto/export/pdf
+     */
+    public function exportPdf(CostoProject $project): \Illuminate\Http\Response
+    {
+        abort_unless(Auth::check(), 403);
+
+        $rows   = $this->buildPresupuestoRows($project);
+        $nombre = $project->nombre;
+        $fecha  = now()->format('d/m/Y');
+
+        $levelColors = ['#1e3a5f', '#1a5276', '#1f618d', '#2471a3', '#2e86c1'];
+        $bgColors    = ['#d6eaf8', '#eaf4fb', '#f2f9fd', '#ffffff', '#ffffff'];
+
+        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Presupuesto - ' . e($nombre) . '</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 10px; color: #111; margin: 20px; }
+  h1 { font-size: 14px; color: #1a3a5c; margin-bottom: 4px; }
+  p.sub { color: #555; font-size: 10px; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #1e3a5f; color: #fff; padding: 5px 8px; text-align: left; }
+  th.r { text-align: right; }
+  td { padding: 3px 8px; border-bottom: 1px solid #e0e0e0; }
+  td.r { text-align: right; font-family: monospace; }
+  .tot td { font-weight: bold; background: #d6eaf8; }
+  @media print { @page { size: A4 landscape; margin: 15mm; } }
+</style></head><body>
+<h1>PRESUPUESTO GENERAL</h1>
+<p class="sub">Proyecto: <strong>' . e($nombre) . '</strong> &nbsp;|&nbsp; ' . $fecha . '</p>
+<table><thead><tr>
+  <th style="width:90px">Ítem</th><th>Descripción</th>
+  <th style="width:40px" class="r">Und.</th>
+  <th style="width:80px" class="r">Metrado</th>
+  <th style="width:80px" class="r">P. Unit.</th>
+  <th style="width:90px" class="r">Parcial</th>
+</tr></thead><tbody>';
+
+        $rootTotal = 0;
+        foreach ($rows as $row) {
+            $level   = substr_count((string)($row['partida'] ?? ''), '.');
+            $bg      = $bgColors[min($level, 4)];
+            $color   = $levelColors[min($level, 4)];
+            $bold    = $level <= 1 ? ' font-weight:bold;' : '';
+            $indent  = $level * 16;
+            $parcial = (float)($row['parcial'] ?? 0);
+            if ($level === 0) $rootTotal += $parcial;
+
+            $html .= '<tr style="background:' . $bg . ';color:' . $color . ';' . $bold . '">';
+            $html .= '<td style="padding-left:' . ($indent + 8) . 'px;font-size:9px">' . e($row['partida'] ?? '') . '</td>';
+            $html .= '<td style="padding-left:' . ($indent + 8) . 'px">' . e($row['descripcion'] ?? '') . '</td>';
+            $html .= '<td class="r">' . e($row['unidad'] ?? '') . '</td>';
+            $html .= '<td class="r">' . ((float)($row['metrado'] ?? 0) > 0 ? number_format((float)$row['metrado'], 4, '.', ',') : '') . '</td>';
+            $html .= '<td class="r">' . ((float)($row['precio_unitario'] ?? 0) > 0 ? number_format((float)$row['precio_unitario'], 4, '.', ',') : '') . '</td>';
+            $html .= '<td class="r">' . number_format($parcial, 2, '.', ',') . '</td>';
+            $html .= '</tr>';
+        }
+
+        $html .= '<tr class="tot"><td colspan="5" style="text-align:right;padding-right:16px">COSTO DIRECTO TOTAL</td>';
+        $html .= '<td class="r">' . number_format($rootTotal, 2, '.', ',') . '</td></tr>';
+        $html .= '</tbody></table></body></html>';
+
+        $filename = 'presupuesto_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.pdf';
+
+        // Si Dompdf (barryvdh/laravel-dompdf) está instalado, generar PDF real
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+            return $pdf->download($filename);
+        }
+
+        // Fallback: HTML con ventana de impresión automática
+        $html = str_replace('</body>', '<script>window.onload=function(){window.print();}</script></body>', $html);
+        return response($html, 200, [
+            'Content-Type'        => 'text/html; charset=UTF-8',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
     }
 }

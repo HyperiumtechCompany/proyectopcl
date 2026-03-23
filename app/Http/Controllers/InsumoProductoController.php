@@ -6,44 +6,45 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class InsumoProductoController extends Controller
 {
     /**
-     * Seed the insumos catalog (clases + productos) in the current tenant DB.
+     * Seed the insumos catalog (diccionario + unidades) in the current tenant DB.
      * POST /costos/proyectos/{project}/presupuesto/insumos/seed
      */
     public function seedCatalog(): JsonResponse
     {
         $connection = DB::connection('costos_tenant');
 
-        // Ensure insumo tables exist (run migration if needed)
-        if (!Schema::connection('costos_tenant')->hasTable('insumo_clases')) {
-            Artisan::call('migrate', [
-                '--database' => 'costos_tenant',
-                '--path' => 'database/migrations/costos_tenant/2026_03_07_000001_create_presupuesto_unificado_tables.php',
-                '--force' => true,
-            ]);
-        }
-
-        // Run the seeder
+        // Run the seeders
+        Artisan::call('db:seed', [
+            '--class' => 'Database\\Seeders\\diccionarioSeeder',
+            '--force' => true,
+        ]);
+        Artisan::call('db:seed', [
+            '--class' => 'Database\\Seeders\\unidadSeeder',
+            '--force' => true,
+        ]);
         Artisan::call('db:seed', [
             '--class' => 'Database\\Seeders\\InsumoProductoSeeder',
             '--force' => true,
         ]);
 
-        $claseCount = $connection->table('insumo_clases')->count();
-        $productoCount = $connection->table('insumo_productos')->count();
+        $diccionarioCount = $connection->table('diccionario')->count();
+        $unidadCount = $connection->table('unidad')->count();
+        $insumoCount = $connection->table('insumo_productos')->count();
 
         return response()->json([
             'success' => true,
-            'message' => "Catálogo inicializado: {$claseCount} clases, {$productoCount} productos.",
-            'clases' => $claseCount,
-            'productos' => $productoCount,
+            'message' => "Catálogo inicializado: {$diccionarioCount} diccionarios, {$unidadCount} unidades, {$insumoCount} insumos base.",
+            'diccionarios' => $diccionarioCount,
+            'unidades' => $unidadCount,
+            'insumos' => $insumoCount,
         ]);
     }
+
     /**
      * Buscar productos/insumos por descripción o código.
      * GET /costos/proyectos/{project}/presupuesto/insumos/search?q=cemento&tipo=materiales
@@ -53,20 +54,27 @@ class InsumoProductoController extends Controller
         $connection = DB::connection('costos_tenant');
 
         $query = $connection->table('insumo_productos as p')
-            ->leftJoin('insumo_clases as c', 'p.insumo_clase_id', '=', 'c.id')
+            ->leftJoin('diccionario as d', 'p.diccionario_id', '=', 'd.id')
+            ->leftJoin('unidad as u', 'p.unidad_id', '=', 'u.id')
             ->select([
                 'p.id',
                 'p.codigo_producto as codigo',
                 'p.descripcion',
                 'p.especificaciones',
-                'p.unidad',
+                'p.unidad_id',
+                'p.diccionario_id',
+                'p.tipo_proveedor',
                 'p.costo_unitario as precio',
                 'p.costo_unitario_lista',
                 'p.costo_flete',
                 'p.tipo',
-                'c.id as clase_id',
-                'c.codigo as clase_codigo',
-                'c.descripcion as clase_descripcion',
+                'd.id as diccionario_id_rel',
+                'd.codigo as diccionario_codigo',
+                'd.descripcion as diccionario_descripcion',
+                'u.id as unidad_id_rel',
+                'u.descripcion as unidad_descripcion',
+                'u.descripcion_singular as unidad_descripcion_singular',
+                'u.abreviatura_unidad',
             ])
             ->where('p.estado', true);
 
@@ -94,15 +102,23 @@ class InsumoProductoController extends Controller
                 'codigo'               => $p->codigo,
                 'descripcion'          => $p->descripcion,
                 'especificaciones'     => $p->especificaciones,
-                'unidad'               => $p->unidad,
+                'unidad_id'            => $p->unidad_id,
+                'diccionario_id'       => $p->diccionario_id,
+                'tipo_proveedor'       => $p->tipo_proveedor,
                 'precio'               => (float) $p->precio,
                 'costo_unitario_lista' => (float) $p->costo_unitario_lista,
                 'costo_flete'          => (float) $p->costo_flete,
                 'tipo'                 => $p->tipo,
-                'clase'                => $p->clase_id ? [
-                    'id'          => $p->clase_id,
-                    'codigo'      => $p->clase_codigo,
-                    'descripcion' => $p->clase_descripcion,
+                'diccionario'          => $p->diccionario_id_rel ? [
+                    'id'          => $p->diccionario_id_rel,
+                    'codigo'      => $p->diccionario_codigo,
+                    'descripcion' => $p->diccionario_descripcion,
+                ] : null,
+                'unidad'               => $p->unidad_id_rel ? [
+                    'id'                   => $p->unidad_id_rel,
+                    'descripcion'          => $p->unidad_descripcion,
+                    'descripcion_singular' => $p->unidad_descripcion_singular,
+                    'abreviatura_unidad'   => $p->abreviatura_unidad,
                 ] : null,
             ]);
 
@@ -113,19 +129,36 @@ class InsumoProductoController extends Controller
     }
 
     /**
-     * Listar clases de insumos.
-     * GET /costos/proyectos/{project}/presupuesto/insumos/clases
+     * Listar diccionarios.
+     * GET /costos/proyectos/{project}/presupuesto/insumos/diccionarios
      */
-    public function clases(): JsonResponse
+    public function diccionarios(): JsonResponse
     {
-        $clases = DB::connection('costos_tenant')
-            ->table('insumo_clases')
-            ->orderBy('codigo')
+        $diccionarios = DB::connection('costos_tenant')
+            ->table('diccionario')
+            ->orderBy('descripcion')
             ->get();
 
         return response()->json([
-            'success' => true,
-            'clases'  => $clases,
+            'success'      => true,
+            'diccionarios' => $diccionarios,
+        ]);
+    }
+
+    /**
+     * Listar unidades.
+     * GET /costos/proyectos/{project}/presupuesto/insumos/unidades
+     */
+    public function unidades(): JsonResponse
+    {
+        $unidades = DB::connection('costos_tenant')
+            ->table('unidad')
+            ->orderBy('descripcion_singular')
+            ->get();
+
+        return response()->json([
+            'success'  => true,
+            'unidades' => $unidades,
         ]);
     }
 
@@ -136,39 +169,51 @@ class InsumoProductoController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'codigo_producto'      => 'required|string|max:50',
             'descripcion'          => 'required|string',
             'especificaciones'     => 'nullable|string',
-            'unidad'               => 'required|string|max:20',
+            'unidad_id'            => 'required|integer',
+            'diccionario_id'       => 'required|integer',
+            'tipo_proveedor'       => 'required|string|size:3',
             'costo_unitario_lista' => 'required|numeric|min:0',
             'costo_unitario'       => 'required|numeric|min:0',
             'costo_flete'          => 'nullable|numeric|min:0',
             'fecha_lista'          => 'nullable|date',
-            'insumo_clase_id'      => 'required|integer',
-            'tipo'                 => 'required|in:mano_de_obra,materiales,equipos',
+            'tipo'                 => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
             'estado'               => 'nullable|boolean',
         ]);
 
         $connection = DB::connection('costos_tenant');
 
-        // Check unique codigo_producto in tenant DB
-        $exists = $connection->table('insumo_productos')
-            ->where('codigo_producto', $validated['codigo_producto'])
-            ->exists();
-
-        if ($exists) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ya existe un producto con ese código.',
-            ], 422);
+        // Generar código de producto automáticamente
+        $diccionario = $connection->table('diccionario')->where('id', $validated['diccionario_id'])->first();
+        if (!$diccionario) {
+             return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
         }
+
+        $prefix = $diccionario->codigo . $validated['tipo_proveedor'];
+        
+        $lastM = $connection->table('insumo_productos')
+            ->where('codigo_producto', 'like', $prefix . '%')
+            ->orderBy('codigo_producto', 'desc')
+            ->first();
+            
+        $nextSequence = 1;
+        if ($lastM) {
+            $lastSequence = substr($lastM->codigo_producto, strlen($prefix));
+            if (is_numeric($lastSequence)) {
+                $nextSequence = intval($lastSequence) + 1;
+            }
+        }
+        
+        $codigoProducto = $prefix . str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
 
         $now = now();
         $id = $connection->table('insumo_productos')->insertGetId(array_merge($validated, [
-            'estado'     => $validated['estado'] ?? true,
-            'costo_flete' => $validated['costo_flete'] ?? 0,
-            'created_at' => $now,
-            'updated_at' => $now,
+            'codigo_producto' => $codigoProducto,
+            'estado'          => $validated['estado'] ?? true,
+            'costo_flete'     => $validated['costo_flete'] ?? 0,
+            'created_at'      => $now,
+            'updated_at'      => $now,
         ]));
 
         $producto = $connection->table('insumo_productos')->where('id', $id)->first();
@@ -187,20 +232,22 @@ class InsumoProductoController extends Controller
     public function update(Request $request, $project, $insumoId): JsonResponse
     {
         $validated = $request->validate([
-            'codigo_producto'      => 'sometimes|string|max:50',
             'descripcion'          => 'sometimes|string',
             'especificaciones'     => 'nullable|string',
-            'unidad'               => 'sometimes|string|max:20',
+            'unidad_id'            => 'sometimes|integer',
+            'diccionario_id'       => 'sometimes|integer',
+            'tipo_proveedor'       => 'sometimes|string|size:3',
             'costo_unitario_lista' => 'sometimes|numeric|min:0',
             'costo_unitario'       => 'sometimes|numeric|min:0',
             'costo_flete'          => 'nullable|numeric|min:0',
             'fecha_lista'          => 'nullable|date',
-            'insumo_clase_id'      => 'sometimes|integer',
-            'tipo'                 => 'sometimes|in:mano_de_obra,materiales,equipos',
+            'tipo'                 => 'sometimes|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
             'estado'               => 'nullable|boolean',
         ]);
 
         $connection = DB::connection('costos_tenant');
+
+        // We assume auto-generated codes don't change frequently. If they do, they'll be left as is.
 
         $connection->table('insumo_productos')
             ->where('id', $insumoId)
@@ -232,3 +279,4 @@ class InsumoProductoController extends Controller
         ]);
     }
 }
+

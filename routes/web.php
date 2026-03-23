@@ -159,6 +159,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         ->prefix('/proyectos/{project}')
         ->group(function () {
             Route::post('/presupuesto/import-metrado', [PresupuestoController::class, 'importFromMetrado'])->name('proyectos.presupuesto.import-metrado');
+            Route::post('/presupuesto/import-batch-metrados', [PresupuestoController::class, 'importBatchFromMetrados'])->name('proyectos.presupuesto.import-batch-metrados');
             Route::post('/presupuesto/acus/calculate', [PresupuestoController::class, 'calculateACU'])->name('proyectos.presupuesto.acus.calculate');
             Route::get('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'getGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.show');
             Route::post('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.save');
@@ -170,6 +171,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'getSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.show');
             Route::patch('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'saveSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.save');
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
+            Route::get('/presupuesto/export/excel', [PresupuestoController::class, 'exportExcel'])->name('proyectos.presupuesto.export.excel');
+            Route::get('/presupuesto/export/pdf', [PresupuestoController::class, 'exportPdf'])->name('proyectos.presupuesto.export.pdf');
 
             // ─── Consolidado Snapshot (cache de totales) ───
             Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
@@ -181,7 +184,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 
             // ─── Insumos Catálogo (por proyecto, en tenant DB) ────
             Route::get('/presupuesto/insumos/search', [InsumoProductoController::class, 'search'])->name('proyectos.presupuesto.insumos.search');
-            Route::get('/presupuesto/insumos/clases', [InsumoProductoController::class, 'clases'])->name('proyectos.presupuesto.insumos.clases');
+            Route::get('/presupuesto/insumos/diccionarios', [InsumoProductoController::class, 'diccionarios'])->name('proyectos.presupuesto.insumos.diccionarios');
+            Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
