@@ -502,7 +502,7 @@ export default function GasIndex() {
     };
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 1 — NUMERACIÓN AUTOMÁTICA (BASE 3)
+    // PASE 1 — NUMERACIÓN AUTOMÁTICA 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const counters = new Array(MAX_LEVELS + 1).fill(0);
     counters[1] = Math.max(0, TOP_LEVEL_START - 1);
