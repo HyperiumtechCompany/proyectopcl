@@ -97,7 +97,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO ELÉCTRICAS
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 3; // ⚡ INICIA EN 03 (cambiado de 4)
+const TOP_LEVEL_START = 5;
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -327,7 +327,7 @@ export default function ElectricasIndex() {
       const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
       if (kind !== 'group') return;
 
-      const code = `${row._level}|${String(row.descripcion ?? '').trim()}`;
+       const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
       if (!code) return;
 
       const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
@@ -338,7 +338,7 @@ export default function ElectricasIndex() {
       const v = byCode[code];
       return {
         _level: v.level, _kind: 'group',
-        partida: code, descripcion: v.desc, unidad: v.und,
+        partida: v.code, descripcion: v.desc, unidad: v.und,
         total: v.total,
       };
     });

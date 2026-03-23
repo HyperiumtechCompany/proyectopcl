@@ -1,46 +1,46 @@
+// ═══════════════════════════════════════════════════════════════════════
+// IMPORTS
+// ═══════════════════════════════════════════════════════════════════════
 import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+} from 'react';
+
 import AppLayout from '@/layouts/app-layout';
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
 import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
-import {
-  ChevronLeft, Save, RefreshCcw,
-  CheckCircle2, AlertCircle, Loader2,
-  ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
-
 import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 
-const exportToExcel = () => {
-  const ls = (window as any).luckysheet;
-  if (!ls) return;
+import {
+  ChevronLeft,
+  Settings2,
+  Save,
+  RefreshCcw,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  ArrowUp,
+  ArrowDown,
+  FolderPlus,
+  Folder,
+  FileText,
+} from 'lucide-react';
 
-  const sheets = ls.getAllSheets();
-
-  const wb = XLSX.utils.book_new();
-
-  sheets.forEach((sheet: any) => {
-    const rows = sheetToRows(
-      sheet,
-      sheet.name === 'Resumen' ? RESUMEN_BASE : BASE_COLS
-    );
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
-  });
-
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-
-  saveAs(new Blob([wbout]), `metrado_${project.nombre}.xlsx`);
-};
 
 // ═══════════════════════════════════════════════════════════════════════
-// TIPOS
+// TIPOS E INTERFACES
 // ═══════════════════════════════════════════════════════════════════════
-interface ColumnDef { key: string; label: string; width: number }
+interface ColumnDef {
+  key: string;
+  label: string;
+  width: number;
+}
 
 interface ComunicacionesPageProps {
   project: { id: number; nombre: string };
@@ -59,8 +59,11 @@ interface Entry {
   total: number;
 }
 
+type ImportRow = Record<string, any>;
+
+
 // ═══════════════════════════════════════════════════════════════════════
-// COLUMNAS
+// DEFINICIÓN DE COLUMNAS
 // ═══════════════════════════════════════════════════════════════════════
 const VISIBLE_COLS: ColumnDef[] = [
   { key: 'partida',     label: 'Partida',       width: 105 },
@@ -88,23 +91,23 @@ const HIDDEN_COLS: ColumnDef[] = [
 const BASE_COLS: ColumnDef[] = [...VISIBLE_COLS, ...HIDDEN_COLS];
 
 const COL: Record<string, number> = Object.fromEntries(
-  BASE_COLS.map((c, i) => [c.key, i]),
+  BASE_COLS.map((c, i) => [c.key, i])
 );
 
 const RESUMEN_BASE: ColumnDef[] = [
-  { key: 'partida',     label: 'Código',       width: 105 },
-  { key: 'descripcion', label: 'Descripción',  width: 295 },
-  { key: 'unidad',      label: 'Und',          width: 60  },
-  { key: 'total',       label: 'Total',        width: 115 },
-  { key: 'observacion', label: 'Obs.',         width: 120 },
+  { key: 'partida',     label: 'Código',      width: 105 },
+  { key: 'descripcion', label: 'Descripción', width: 295 },
+  { key: 'unidad',      label: 'Und',         width: 60  },
+  { key: 'total',       label: 'Total',       width: 115 },
+  { key: 'observacion', label: 'Obs.',        width: 120 },
 ];
 
+
 // ═══════════════════════════════════════════════════════════════════════
-// CONFIGURACIÓN
+// CONFIGURACIÓN GLOBAL
 // ═══════════════════════════════════════════════════════════════════════
 const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza'];
-
-const TOP_LEVEL_START = 5;
+const TOP_LEVEL_START = 6;
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 const MAX_LEVELS = 10;
@@ -125,19 +128,28 @@ const GROUP_PALETTE: { bg: string; fc: string; bl: number }[] = [
 
 const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 };
 
-const groupStyle = (level: number) => GROUP_PALETTE[Math.min(level - 1, MAX_LEVELS - 1)];
+const groupStyle = (level: number) =>
+  GROUP_PALETTE[Math.min(level - 1, MAX_LEVELS - 1)];
 
 const NBSP = '\u00A0\u00A0\u00A0';
+
 const indent = (level: number, isLeaf: boolean) =>
   NBSP.repeat(isLeaf ? level : Math.max(0, level - 1));
 
+
 // ═══════════════════════════════════════════════════════════════════════
-// HELPERS
+// HELPERS PUROS
 // ═══════════════════════════════════════════════════════════════════════
-const toNum  = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const r4     = (n: number)  => Math.round(n * 10000) / 10000;
-const trim0  = (v: unknown) => String(v ?? '').trimStart();
-const blank  = (v: any)     => v === null || v === undefined || v === '';
+const toNum = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const r4 = (n: number) => Math.round(n * 10000) / 10000;
+
+const trim0 = (v: unknown) => String(v ?? '').trimStart();
+
+const blank = (v: any) => v === null || v === undefined || v === '';
 
 const cellRaw = (cell: any): any => {
   if (!cell) return null;
@@ -146,45 +158,87 @@ const cellRaw = (cell: any): any => {
 };
 
 const mkNum = (v: number): Record<string, any> => ({
-  v, m: v === 0 ? '' : String(v), ct: { fa: '#,##0.0000', t: 'n' },
+  v,
+  m: v === 0 ? '' : String(v),
+  ct: { fa: '#,##0.0000', t: 'n' },
 });
 
 const mkTxt = (v: string, extra: Record<string, any> = {}): Record<string, any> => ({
-  v, m: v, ct: { fa: 'General', t: 'g' }, ...extra,
+  v,
+  m: v,
+  ct: { fa: 'General', t: 'g' },
+  ...extra,
 });
 
-const styledNum = (v: number, st: { bg: string; fc: string; bl: number }) => ({
-  ...mkNum(v), bl: st.bl, fs: 10,
+const styledNum = (
+  v: number,
+  st: { bg: string; fc: string; bl: number }
+) => ({
+  ...mkNum(v),
+  bl: st.bl,
+  fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
 
-const styledTxt = (v: string, disp: string, st: { bg: string; fc: string; bl: number }) => ({
-  ...mkTxt(v), m: disp, bl: st.bl, fs: 10,
+const styledTxt = (
+  v: string,
+  disp: string,
+  st: { bg: string; fc: string; bl: number }
+) => ({
+  ...mkTxt(v),
+  m: disp,
+  bl: st.bl,
+  fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
 
 const colLetter = (i: number) => {
-  let r = '', t = i;
-  while (t >= 0) { r = String.fromCharCode((t % 26) + 65) + r; t = Math.floor(t / 26) - 1; }
+  let r = '';
+  let t = i;
+  while (t >= 0) {
+    r = String.fromCharCode((t % 26) + 65) + r;
+    t = Math.floor(t / 26) - 1;
+  }
   return r;
 };
 
+
 // ═══════════════════════════════════════════════════════════════════════
-// CONVERSIÓN FILAS ↔ HOJA
+// CONVERSIÓN FILAS ↔ HOJA LUCKYSHEET
 // ═══════════════════════════════════════════════════════════════════════
-function rowsToSheet(rows: Record<string, any>[], cols: ColumnDef[], name: string, order = 0) {
+function rowsToSheet(
+  rows: Record<string, any>[],
+  cols: ColumnDef[],
+  name: string,
+  order = 0
+) {
+  // ─────────────────────────────────────────
+  // HEADER
+  // ─────────────────────────────────────────
   const header: any[] = cols.map((col, ci) => ({
-    r: 0, c: ci,
-    v: { v: col.label, m: col.label, ct: { fa: 'General', t: 'g' },
-      bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10 },
+    r: 0,
+    c: ci,
+    v: {
+      v: col.label,
+      m: col.label,
+      ct: { fa: 'General', t: 'g' },
+      bg: '#0f172a',
+      fc: '#94a3b8',
+      bl: 1,
+      fs: 10,
+    },
   }));
 
+  // ─────────────────────────────────────────
+  // CELLS
+  // ─────────────────────────────────────────
   const cells: any[] = [];
+
   rows.forEach((row, ri) => {
-    const kind  = String(row['_kind']  ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
+    const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
-    const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
-    const rIdx  = ri + 1;
+    const st = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
+    const rIdx = ri + 1;
 
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
@@ -194,47 +248,66 @@ function rowsToSheet(rows: Record<string, any>[], cols: ColumnDef[], name: strin
       if (blank(val)) return;
 
       let store: any = val;
-      let display    = String(val);
+      let display = String(val);
 
       if (col.key === 'descripcion' && typeof val === 'string') {
-        store   = val.trimStart();
+        store = val.trimStart();
         display = indent(level, kind === 'leaf') + store;
       }
 
       const isNum = typeof store === 'number' || (store !== '' && !isNaN(Number(store)));
 
       const cell: Record<string, any> = {
-        v:  isNum ? Number(store) : store,
-        m:  display,
+        v: isNum ? Number(store) : store,
+        m: display,
         ct: { fa: isNum ? '#,##0.0000' : 'General', t: isNum ? 'n' : 'g' },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
       };
 
-      if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
+      if (st.bg) {
+        cell.bg = st.bg;
+        cell.fc = st.fc;
+      }
+
       cells.push({ r: rIdx, c: ci, v: cell });
     });
   });
 
+  // ─────────────────────────────────────────
+  // CONFIG
+  // ─────────────────────────────────────────
   const columnlen: Record<number, number> = {};
   const colhidden: Record<number, number> = {};
+
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
     if (col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
   });
 
   return {
-    name, status: order === 0 ? 1 : 0, order,
-    row:    Math.max(rows.length + 50, 100),
+    name,
+    status: order === 0 ? 1 : 0,
+    order,
+    row: Math.max(rows.length + 50, 100),
     column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
-    config: { columnlen, colhidden, rowlen: { 0: 30 } },
-    frozen: { type: 'row', range: { row_focus: 0 } },
+    config: {
+      columnlen,
+      colhidden,
+      rowlen: { 0: 30 },
+    },
+    frozen: {
+      type: 'row',
+      range: { row_focus: 0 },
+    },
   };
 }
 
+
 function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   if (!sheet) return [];
+
   const data: any[][] = sheet.data || [];
   const rows: Record<string, any>[] = [];
 
@@ -245,7 +318,9 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
       if (!blank(raw)) {
-        row[col.key] = col.key === 'descripcion' ? String(raw).trimStart() : raw;
+        row[col.key] = col.key === 'descripcion'
+          ? String(raw).trimStart()
+          : raw;
         hasData = true;
       } else {
         row[col.key] = null;
@@ -258,21 +333,26 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   return rows;
 }
 
+
 function readDataRow(data: any[][], ri: number): Record<string, any> {
   const row: Record<string, any> = {};
+
   BASE_COLS.forEach((col, ci) => {
     const raw = cellRaw(data[ri]?.[ci]);
     row[col.key] = blank(raw) ? null : raw;
   });
+
   return row;
 }
+
 
 function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
   return {
     level: Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1)),
-    kind:  String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
+    kind: String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -281,29 +361,35 @@ export default function ComunicacionesIndex() {
   const { project, metrado, resumen } = usePage<ComunicacionesPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',                 href: '/costos' },
-    { title: project.nombre,           href: `/costos/${project.id}` },
-    { title: 'Metrado Comunicaciones', href: '#' },
+    { title: 'Costos',                  href: '/costos' },
+    { title: project.nombre,            href: `/costos/${project.id}` },
+    { title: 'Metrado Comunicaciones',  href: '#' },
   ];
 
+  // ── State ──────────────────────────────────────────────────────────────
   const [saving,    setSaving]    = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const saveTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestSheets      = useRef<any[]>([]);
-  const progUpdateCount   = useRef(0);
-  const recalcTimer       = useRef<any>(null);
+  // ── Refs ───────────────────────────────────────────────────────────────
+  const saveTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSheets    = useRef<any[]>([]);
+  const progUpdateCount = useRef(0);
+  const recalcTimer     = useRef<any>(null);
+  const fileInputRef    = useRef<HTMLInputElement | null>(null);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // RESUMEN
-  // ═══════════════════════════════════════════════════════════════════════
-  const buildResumenRows = useCallback((
-    metradoData: Record<string, any>[],
-  ) => {
+
+  // ═════════════════════════════════════════════════════════════════════
+  // CONSTRUCTOR DE FILAS RESUMEN
+  // ═════════════════════════════════════════════════════════════════════
+  const buildResumenRows = useCallback((metradoData: Record<string, any>[]) => {
     type Agg = {
-      code: string; desc: string; und: string; level: number; total: number;
+      code: string;
+      desc: string;
+      und: string;
+      level: number;
+      total: number;
     };
 
     const byCode: Record<string, Agg> = {};
@@ -321,34 +407,39 @@ export default function ComunicacionesIndex() {
       const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
       if (kind !== 'group') return;
 
-      // row partida
-      const code = row.partida 
-        ? String(row.partida).trim() 
-        : `${row._level}|${String(row.descripcion ?? '').trim()}`; 
-      
+       const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
       if (!code) return;
 
-      const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
+      const e = ensure(
+        code,
+        String(row.descripcion ?? ''),
+        String(row.unidad ?? ''),
+        toNum(row['_level']) || 1
+      );
       e.total += toNum(row.total);
     });
 
     return codeOrder.map((code) => {
       const v = byCode[code];
       return {
-        _level: v.level, _kind: 'group',
-        partida: code,  
-        descripcion: v.desc, 
+        _level: v.level,
+        _kind: 'group',
+        partida: v.code,
+        descripcion: v.desc,
         unidad: v.und,
         total: v.total,
       };
     });
   }, []);
 
+
   const resumenRows = useMemo(() => {
     const c = buildResumenRows(metrado ?? []);
     return c.length > 0 ? c : (resumen ?? []);
   }, [buildResumenRows, metrado, resumen]);
 
+
+  // ── Hojas iniciales ───────────────────────────────────────────────────
   const initialSheets = useMemo(() => {
     const sheets: any[] = [];
     sheets.push(rowsToSheet(metrado ?? [], BASE_COLS, 'Metrado', 0));
@@ -356,9 +447,10 @@ export default function ComunicacionesIndex() {
     return sheets;
   }, [metrado, resumenRows]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // GUARDAR
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
+  // GUARDAR EN BASE DE DATOS
+  // ═════════════════════════════════════════════════════════════════════
   const doSave = useCallback(async (sheets: any[]) => {
     setSaving(true);
     setSaveError(null);
@@ -391,13 +483,16 @@ export default function ComunicacionesIndex() {
       const results = await Promise.all(
         reqs.map((r) =>
           fetch(r.url, { method: 'PATCH', headers, body: JSON.stringify(r.body) })
-            .then((res) => ({ ok: res.ok, status: res.status })),
-        ),
+            .then((res) => ({ ok: res.ok, status: res.status }))
+        )
       );
 
       const bad = results.find((r) => !r.ok);
-      if (bad) setSaveError(`Error ${bad.status} al guardar`);
-      else setLastSaved(new Date());
+      if (bad) {
+        setSaveError(`Error ${bad.status} al guardar`);
+      } else {
+        setLastSaved(new Date());
+      }
     } catch (e: any) {
       setSaveError(e.message ?? 'Error de red');
     } finally {
@@ -405,48 +500,167 @@ export default function ComunicacionesIndex() {
     }
   }, [project.id]);
 
+
   const scheduleSave = useCallback((sheets: any[]) => {
     latestSheets.current = sheets;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => doSave(latestSheets.current), SAVE_DEBOUNCE);
+    saveTimer.current = setTimeout(
+      () => doSave(latestSheets.current),
+      SAVE_DEBOUNCE
+    );
   }, [doSave]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // RECÁLCULO
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
+  // EXPORTAR EXCEL
+  // ═════════════════════════════════════════════════════════════════════
+  const handleExportExcel = () => {
+    const ls = (window as any).luckysheet;
+    if (!ls) return;
+
+    const wb = XLSX.utils.book_new();
+    const sheets = ls.getAllSheets();
+
+    sheets.forEach((sheet: any) => {
+      const name = sheet.name;
+      const cols = name === 'Resumen' ? RESUMEN_BASE : BASE_COLS;
+      const rows = sheetToRows(sheet, cols);
+
+      const clean = rows.map((r) => {
+        const obj: any = {};
+        cols.forEach((c) => {
+          if (!c.key.startsWith('_')) {
+            let val = r[c.key];
+            if (typeof val === 'number') {
+              val = Number(val.toFixed(4));
+            }
+            obj[c.key] = val ?? '';
+          }
+        });
+        return obj;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(clean);
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+
+    XLSX.writeFile(wb, 'comunicaciones.xlsx');
+  };
+
+
+  // ═════════════════════════════════════════════════════════════════════
+  // IMPORTAR EXCEL
+  // ═════════════════════════════════════════════════════════════════════
+  const importExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (evt: any) => {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      const parsed: ImportRow[] = json.map((row) => {
+        const partida = String(row.partida || '').trim();
+        const hasCode = partida !== '';
+        return {
+          partida,
+          descripcion: row.descripcion || '',
+          unidad: row.unidad || '',
+          largo: Number(row.largo) || 0,
+          ancho: Number(row.ancho) || 0,
+          alto: Number(row.alto) || 0,
+          elsim: Number(row.elsim) || 0,
+          nveces: Number(row.nveces) || 0,
+          _level: hasCode ? partida.split('.').length : 1,
+          _kind: hasCode ? 'group' : 'leaf',
+        };
+      });
+
+      const ls = (window as any).luckysheet;
+      if (!ls) return;
+
+      const sheets = ls.getAllSheets();
+      const active = sheets.find((s: any) => s.status === 1);
+
+      if (!active || active.name === 'Resumen') {
+        alert('Selecciona la hoja Metrado');
+        return;
+      }
+
+      const sheetOrder = active.order ?? 0;
+
+      ls.clearRange({
+        row: [1, 2000],
+        column: [0, BASE_COLS.length],
+      });
+
+      parsed.forEach((row, r) => {
+        BASE_COLS.forEach((col, c) => {
+          let val = (row as Record<string, any>)[col.key];
+          if (val === undefined) val = '';
+          
+          ls.setCellValue(r + 1, c, val, {
+            order: sheetOrder,
+            isRefresh: false,
+          });
+        });
+      });
+
+      ls.refresh();
+
+      setTimeout(() => {
+        progUpdateCount.current = 0;
+        recalcActiveSheet();
+      }, 300);
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+
+  // ═════════════════════════════════════════════════════════════════════
+  // RECÁLCULO AUTOMÁTICO
+  // ═════════════════════════════════════════════════════════════════════
   const recalcActiveSheet = useCallback(() => {
     if (progUpdateCount.current > 2) return;
+    progUpdateCount.current++;
 
     const ls = (window as any).luckysheet;
     if (!ls) return;
 
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
-
     if (!active || active.name === 'Resumen') return;
 
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
+    // ── Leer filas con datos ───────────────────────────────────────────
     const entries: Entry[] = [];
     for (let r = 1; r < data.length; r++) {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
-
       const { level, kind } = rowMeta(row);
       entries.push({ ri: r, row, level, kind, total: 0 });
     }
-
     if (entries.length === 0) return;
 
+    // ── Acumular cambios ───────────────────────────────────────────────
     const updates: Array<{ r: number; c: number; v: any }> = [];
     const set = (r: number, key: string, v: any) => {
       const c = COL[key];
       if (c !== undefined) updates.push({ r, c, v });
     };
 
-    // Numeración
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 1 — NUMERACIÓN AUTOMÁTICA
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const counters = new Array(MAX_LEVELS + 1).fill(0);
     counters[1] = Math.max(0, TOP_LEVEL_START - 1);
 
@@ -456,13 +670,11 @@ export default function ComunicacionesIndex() {
           set(ri, 'partida', mkTxt(''));
           row.partida = '';
         }
-
         const desc = trim0(row.descripcion);
         if (desc) {
           set(ri, 'descripcion', styledTxt(desc, indent(level, true) + desc, LEAF_STYLE));
           row.descripcion = desc;
         }
-
         if (row['_kind'] !== 'leaf') set(ri, '_kind', 'leaf');
         return;
       }
@@ -475,22 +687,21 @@ export default function ComunicacionesIndex() {
         .join('.');
 
       const st = groupStyle(level);
-
       if (row.partida !== code) {
         set(ri, 'partida', styledTxt(code, code, st));
         row.partida = code;
       }
-
       const desc = trim0(row.descripcion);
       if (desc) {
         set(ri, 'descripcion', styledTxt(desc, indent(level, false) + desc, st));
         row.descripcion = desc;
       }
-
       if (row['_kind'] !== 'group') set(ri, '_kind', 'group');
     });
 
-    // Unidad
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 2 — PROPAGACIÓN DE UNIDAD
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const unitStack: Array<string> = new Array(MAX_LEVELS + 1).fill('');
 
     entries.forEach(({ ri, row, level, kind }) => {
@@ -500,33 +711,46 @@ export default function ComunicacionesIndex() {
       } else {
         let inherited = '';
         for (let l = level - 1; l >= 1; l--) {
-          if (unitStack[l]) { inherited = unitStack[l]; break; }
+          if (unitStack[l]) {
+            inherited = unitStack[l];
+            break;
+          }
         }
         if (inherited && String(row.unidad ?? '').trim() !== inherited) {
           row.unidad = inherited;
-          set(ri, 'unidad', { ...mkTxt(inherited), bg: LEAF_STYLE.bg, fc: LEAF_STYLE.fc, fs: 10 });
+          set(ri, 'unidad', {
+            ...mkTxt(inherited),
+            bg: LEAF_STYLE.bg,
+            fc: LEAF_STYLE.fc,
+            fs: 10,
+          });
         }
       }
     });
 
-    // Cálculos
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 3 — CÁLCULO NUMÉRICO
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     entries.forEach((e) => {
       if (e.kind !== 'leaf') return;
-
       const { row, ri } = e;
+
       const elsim  = toNum(row.elsim);
-      const nveces = toNum(row.nveces);
+      const nveces = blank(row.nveces) ? 1 : toNum(row.nveces);
       const largo  = toNum(row.largo);
       const ancho  = toNum(row.ancho);
       const alto   = toNum(row.alto);
 
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4(largo * nveces);
+      const newLon  = r4((largo + ancho) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 
       const upd = (key: string, val: number) => {
-        if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
+        if (toNum(row[key]) !== val) {
+          set(ri, key, mkNum(val));
+          row[key] = val;
+        }
       };
 
       upd('lon', newLon);
@@ -547,13 +771,14 @@ export default function ComunicacionesIndex() {
       set(ri, 'total', mkNum(tVal));
     });
 
-    // Roll-up
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 4 — ROLL-UP
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const maxLevel = entries.reduce((m, e) => Math.max(m, e.level), 1);
 
     for (let lvl = maxLevel; lvl >= 1; lvl--) {
       entries.forEach((e, idx) => {
         if (e.kind !== 'group' || e.level !== lvl) return;
-
         let sum = 0;
         for (let j = idx + 1; j < entries.length; j++) {
           const child = entries[j];
@@ -562,21 +787,20 @@ export default function ComunicacionesIndex() {
             sum = r4(sum + child.total);
           }
         }
-
         e.total = sum;
         e.row.total = sum;
         set(e.ri, 'total', styledNum(sum, groupStyle(lvl)));
       });
     }
 
-    if (updates.length === 0) return;
-    if (updates.length > 10000) return;
-
-    progUpdateCount.current++;
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 5 — FLUSH
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (updates.length === 0 || updates.length > 10000) return;
 
     updates.forEach((u, idx) => {
       ls.setCellValue(u.r, u.c, u.v, {
-        order:     sheetOrder,
+        order: sheetOrder,
         isRefresh: idx === updates.length - 1,
       });
     });
@@ -591,18 +815,24 @@ export default function ComunicacionesIndex() {
     }, 120);
   }, [scheduleSave]);
 
+  // ── Handlers Luckysheet ───────────────────────────────────────────────
   const afterChange = useCallback((data: any) => {
     if (!data) return;
-    setTimeout(() => { recalcActiveSheet(); }, 80);
+    if (progUpdateCount.current > 0) return;
+    clearTimeout(recalcTimer.current);
+    recalcTimer.current = setTimeout(() => {
+      recalcActiveSheet();
+    }, 120);
   }, [recalcActiveSheet]);
 
   const handleDataChange = useCallback((sheets: any[]) => {
     scheduleSave(sheets);
   }, [scheduleSave]);
 
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
   // MOVER BLOQUE
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════
   const moveBlock = useCallback((direction: 'up' | 'down') => {
     const ls = (window as any).luckysheet;
     if (!ls) return;
@@ -625,7 +855,6 @@ export default function ComunicacionesIndex() {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
-
       const { level, kind } = rowMeta(row);
       riList.push({ ri: r, level, kind });
     }
@@ -634,8 +863,8 @@ export default function ComunicacionesIndex() {
     if (selIdx === -1) return;
 
     const selLevel = riList[selIdx].level;
-
     let blockEnd = selRow;
+
     for (let i = selIdx + 1; i < riList.length; i++) {
       if (riList[i].level <= selLevel) break;
       blockEnd = riList[i].ri;
@@ -669,48 +898,50 @@ export default function ComunicacionesIndex() {
       let prevSibIdx = -1;
       for (let i = selIdx - 1; i >= 0; i--) {
         if (riList[i].level < selLevel) break;
-        if (riList[i].level === selLevel) { prevSibIdx = i; break; }
+        if (riList[i].level === selLevel) {
+          prevSibIdx = i;
+          break;
+        }
       }
-
       if (prevSibIdx === -1) return;
 
       const prevStart = riList[prevSibIdx].ri;
       let prevEnd = prevStart;
-
       for (let i = prevSibIdx + 1; i < selIdx; i++) {
         if (riList[i].level <= selLevel) break;
         prevEnd = riList[i].ri;
       }
 
       const prevBlock = readBlock(prevStart, prevEnd);
-      const ourBlock  = readBlock(selRow, blockEnd);
+      const ourBlock = readBlock(selRow, blockEnd);
 
       progUpdateCount.current++;
-      writeBlock(ourBlock,  prevStart,               false);
+      writeBlock(ourBlock, prevStart, false);
       writeBlock(prevBlock, prevStart + ourBlock.length, true);
     } else {
       let nextSibIdx = -1;
       for (let i = blockEndIdx + 1; i < riList.length; i++) {
         if (riList[i].level < selLevel) break;
-        if (riList[i].level === selLevel) { nextSibIdx = i; break; }
+        if (riList[i].level === selLevel) {
+          nextSibIdx = i;
+          break;
+        }
       }
-
       if (nextSibIdx === -1) return;
 
       const nextStart = riList[nextSibIdx].ri;
       let nextEnd = nextStart;
-
       for (let i = nextSibIdx + 1; i < riList.length; i++) {
         if (riList[i].level <= selLevel) break;
         nextEnd = riList[i].ri;
       }
 
       const nextBlock = readBlock(nextStart, nextEnd);
-      const ourBlock  = readBlock(selRow, blockEnd);
+      const ourBlock = readBlock(selRow, blockEnd);
 
-      progUpdateCount.current++;
-      writeBlock(nextBlock, selRow,                   false);
-      writeBlock(ourBlock,  selRow + nextBlock.length, true);
+      
+      writeBlock(nextBlock, selRow, false);
+      writeBlock(ourBlock, selRow + nextBlock.length, true);
     }
 
     setTimeout(() => {
@@ -718,9 +949,10 @@ export default function ComunicacionesIndex() {
     }, 100);
   }, [recalcActiveSheet]);
 
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
   // AGREGAR FILAS
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════
   const addRow = useCallback((kind: EntryKind, sameLevelAsSelected = true) => {
     const ls = (window as any).luckysheet;
     if (!ls) return;
@@ -732,56 +964,55 @@ export default function ComunicacionesIndex() {
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
-    const range    = ls.getRange?.();
-    const selRow   = range?.[0]?.row?.[1] ?? range?.[0]?.row?.[0] ?? 1;
-    const selData  = readDataRow(data, selRow);
+    const range = ls.getRange?.();
+    const selRow = range?.[0]?.row?.[1] ?? range?.[0]?.row?.[0] ?? 1;
+    const selData = readDataRow(data, selRow);
     const { level: selLevel, kind: selKind } = rowMeta(selData);
 
-    let newLevel: number;
-    if (kind === 'leaf') {
-      newLevel = (selKind === 'group' ? selLevel + 1 : selLevel);
-    } else {
-      newLevel = sameLevelAsSelected ? selLevel : Math.min(selLevel + 1, MAX_LEVELS);
+    let effectiveLevel = selLevel;
+    if (kind === 'group' && selKind === 'leaf') {
+      ls.setCellValue(selRow, COL['_kind'], 'group', { order: sheetOrder });
     }
 
-    let insertAfter = selRow;
-    if (!sameLevelAsSelected || kind === 'leaf') {
-      insertAfter = selRow;
-    } else {
-      for (let r = selRow + 1; r < data.length; r++) {
-        const rd = readDataRow(data, r);
-        const hasData = BASE_COLS.some((col) => !blank(rd[col.key]));
-        if (!hasData) break;
+    const newLevel = kind === 'leaf'
+      ? (selKind === 'group' ? selLevel + 1 : selLevel)
+      : (sameLevelAsSelected ? selLevel : selLevel + 1);
 
-        const { level } = rowMeta(rd);
-        if (level <= selLevel) break;
-        insertAfter = r;
-      }
+    let insertAfter = selRow;
+    for (let r = selRow + 1; r < data.length; r++) {
+      const rd = readDataRow(data, r);
+      const hasData = BASE_COLS.some((col) => !blank(rd[col.key]));
+      if (!hasData) break;
+      const { level } = rowMeta(rd);
+      if (level <= effectiveLevel) break;
+      insertAfter = r;
     }
 
     ls.insertRow(insertAfter + 1, 1);
-
     const r = insertAfter + 1;
+
     ls.setCellValue(r, COL['_level'], newLevel, { order: sheetOrder });
-    ls.setCellValue(r, COL['_kind'],  kind,     { order: sheetOrder });
+    ls.setCellValue(r, COL['_kind'], kind, { order: sheetOrder });
 
     if (kind === 'group') {
       ['elsim','largo','ancho','alto','nveces','lon','area','vol','kg','und','total']
         .forEach((key) => ls.setCellValue(r, COL[key], '', { order: sheetOrder }));
     }
 
-    if (kind === 'group') {
-      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_GROUP, { order: sheetOrder });
-    } else {
-      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
-    }
+    ls.setCellValue(
+      r,
+      COL['descripcion'],
+      kind === 'group' ? DEFAULT_DESC_GROUP : DEFAULT_DESC_LEAF,
+      { order: sheetOrder }
+    );
 
     setTimeout(() => recalcActiveSheet(), 120);
   }, [recalcActiveSheet]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // DROPDOWN UNIDADES
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
+  // DROPDOWN DE UNIDADES
+  // ═════════════════════════════════════════════════════════════════════
   useEffect(() => {
     let attempts = 0;
     const MAX_ATTEMPTS = 40;
@@ -801,8 +1032,10 @@ export default function ComunicacionesIndex() {
 
       const range = colLetter(ci) + '2:' + colLetter(ci) + '3000';
       const opt = {
-        type: 'dropdown', value1: UNIDAD_OPTIONS.join(','),
-        prohibitInput: false, hint: 'Seleccione una unidad',
+        type: 'dropdown',
+        value1: UNIDAD_OPTIONS.join(','),
+        prohibitInput: false,
+        hint: 'Seleccione una unidad',
       };
 
       sheets.forEach((s: any) => {
@@ -814,6 +1047,7 @@ export default function ComunicacionesIndex() {
     timer = setTimeout(applyVerification, 400);
     return () => clearTimeout(timer);
   }, [initialSheets]);
+
 
   useEffect(() => {
     let intentos = 0;
@@ -831,15 +1065,19 @@ export default function ComunicacionesIndex() {
     ejecutar();
   }, [recalcActiveSheet]);
 
-  // ═══════════════════════════════════════════════════════════════════════
+
+  // ═════════════════════════════════════════════════════════════════════
   // SINCRONIZAR RESUMEN
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════
   const handleSyncResumen = useCallback(() => {
     setIsSyncing(true);
 
     setTimeout(() => {
       const ls = (window as any).luckysheet;
-      if (!ls) { setIsSyncing(false); return; }
+      if (!ls) {
+        setIsSyncing(false);
+        return;
+      }
 
       const all: any[] = ls.getAllSheets();
       let metradoData: Record<string, any>[] = [];
@@ -853,7 +1091,10 @@ export default function ComunicacionesIndex() {
         }
       });
 
-      if (resIdx === -1) { setIsSyncing(false); return; }
+      if (resIdx === -1) {
+        setIsSyncing(false);
+        return;
+      }
 
       const newRows = buildResumenRows(metradoData);
       const currentSheet = ls.getSheet().order;
@@ -879,118 +1120,33 @@ export default function ComunicacionesIndex() {
     }, 400);
   }, [buildResumenRows, doSave]);
 
+
   const triggerRecalc = () => {
     setTimeout(() => { recalcActiveSheet(); }, 0);
   };
 
-  // ----
-  // export excel
-  const exportToExcel = () => {
-    const ls = (window as any).luckysheet;
-    if (!ls) return;
 
-    const sheets = ls.getAllSheets();
-    const wb = XLSX.utils.book_new();
-
-    sheets.forEach((sheet: any) => {
-      const cols =
-        sheet.name === 'Resumen' ? RESUMEN_BASE : BASE_COLS;
-
-      const rows = sheetToRows(sheet, cols);
-
-      // 🔹 Limpieza opcional (quitar columnas internas)
-      const cleanRows = rows.map((r: any) => {
-        const { _level, _kind, ...rest } = r;
-        return rest;
-      });
-
-      const ws = XLSX.utils.json_to_sheet(cleanRows);
-      XLSX.utils.book_append_sheet(wb, ws, sheet.name);
-    });
-
-    const buffer = XLSX.write(wb, {
-      bookType: 'xlsx',
-      type: 'array',
-    });
-
-    saveAs(
-      new Blob([buffer]),
-      `metrado_${project.nombre}.xlsx`
-    );
-  };
-
-  //--------
-  // importar excel 
-  const handleImport = (file: File) => {
-    if (!file.name.endsWith('.xlsx')) {
-      alert('Solo archivos Excel (.xlsx)');
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = (e: any) => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-
-      const newSheets: any[] = [];
-
-      workbook.SheetNames.forEach((name, index) => {
-        const ws = workbook.Sheets[name];
-
-        let json: any[] = XLSX.utils.sheet_to_json(ws, {
-          defval: null,
-        });
-
-        const cols =
-          name === 'Resumen' ? RESUMEN_BASE : BASE_COLS;
-
-        json = json.map((row) => ({
-          ...row,
-          _level: row._level ?? 1,
-          _kind: row._kind ?? 'leaf',
-        }));
-
-        const sheet = rowsToSheet(json, cols, name, index);
-        newSheets.push(sheet);
-      });
-
-      const ls = (window as any).luckysheet;
-      if (!ls) return;
-
-      ls.destroy(); 
-
-      ls.create({
-        container: 'luckysheet', 
-        data: newSheets,
-      });
-
-      setTimeout(() => {
-        recalcActiveSheet();
-      }, 200);
-    };
-
-    reader.readAsArrayBuffer(file);
-  };
-
-
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════
   // RENDER
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
-        {/* HEADER */}
+
+        {/* ━━━━━━━━━━━━━━━━━━━━━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━ */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
           gap-2 border-b border-slate-200/80 bg-white/92 px-4 py-2 shadow-sm
           backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/92">
 
+          {/* Izquierda */}
           <div className="flex items-center gap-2.5">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => router.get(`/costos/${project.id}`)}
               className="flex h-7 w-7 items-center justify-center rounded-full
                 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700
-                dark:hover:bg-gray-800 dark:hover:text-gray-200">
+                dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
@@ -1003,26 +1159,37 @@ export default function ComunicacionesIndex() {
               </p>
             </div>
 
+            {/* Leyenda visual de niveles */}
             <div className="hidden items-center gap-1 xl:flex">
               {GROUP_PALETTE.slice(0, 4).map((p, i) => (
-                <span key={i}
+                <span
+                  key={i}
                   className="rounded px-1.5 py-0.5 text-[9px] font-bold"
-                  style={{ background: p.bg, color: p.fc }}>
+                  style={{ background: p.bg, color: p.fc }}
+                >
                   N{i + 1}
                 </span>
               ))}
-              <span className="rounded px-1.5 py-0.5 text-[9px] font-bold"
-                style={{ background: LEAF_STYLE.bg, color: LEAF_STYLE.fc, border: '1px solid #cbd5e1' }}>
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-bold"
+                style={{
+                  background: LEAF_STYLE.bg,
+                  color: LEAF_STYLE.fc,
+                  border: '1px solid #cbd5e1',
+                }}
+              >
                 Hoja
               </span>
             </div>
           </div>
 
+          {/* Derecha */}
           <div className="flex flex-wrap items-center gap-1.5">
             <SaveStatus saving={saving} error={saveError} lastSaved={lastSaved} />
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
+            {/* Botones de inserción */}
             <div className="flex items-center gap-1">
               <ActionBtn
                 icon={<FolderPlus className="h-3 w-3" />}
@@ -1031,7 +1198,6 @@ export default function ComunicacionesIndex() {
                 style={{ background: GROUP_PALETTE[0].bg, color: '#fff' }}
                 onClick={() => addRow('group', true)}
               />
-
               <ActionBtn
                 icon={<Folder className="h-3 w-3" />}
                 label="Sub-grupo"
@@ -1039,7 +1205,6 @@ export default function ComunicacionesIndex() {
                 style={{ background: GROUP_PALETTE[2].bg, color: '#fff' }}
                 onClick={() => addRow('group', false)}
               />
-
               <ActionBtn
                 icon={<FileText className="h-3 w-3" />}
                 label="Partida"
@@ -1051,84 +1216,100 @@ export default function ComunicacionesIndex() {
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
+            {/* Mover bloque */}
             <ActionBtn
               icon={<ArrowUp className="h-3 w-3" />}
               label="↑ Bloque"
-              title="Mover bloque hacia arriba"
-              style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
               onClick={() => moveBlock('up')}
+              style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
             />
-
             <ActionBtn
               icon={<ArrowDown className="h-3 w-3" />}
               label="↓ Bloque"
-              title="Mover bloque hacia abajo"
-              style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
               onClick={() => moveBlock('down')}
+              style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
+            />
+
+            {/* Export/Import Excel */}
+            <ActionBtn
+              label="Export Excel"
+              title="Exportar todo a Excel"
+              icon={<Save className="h-3 w-3" />}
+              style={{ background: '#16a34a', color: 'white' }}
+              onClick={handleExportExcel}
+            />
+            <ActionBtn
+              label="Import Excel"
+              title="Importar desde Excel"
+              icon={<ArrowUp className="h-3 w-3" />}
+              style={{ background: '#2563eb', color: 'white' }}
+              onClick={() => fileInputRef.current?.click()}
+            />
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              ref={fileInputRef}
+              onChange={importExcel}
+              className="hidden"
             />
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
-            <Button variant="outline" size="sm"
+            {/* Acciones generales */}
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => doSave(latestSheets.current)}
               disabled={saving}
-              className="h-7 gap-1 text-[11px]">
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+              className="h-7 gap-1 text-[11px]"
+            >
+              {saving
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Save className="h-3 w-3" />
+              }
               {saving ? 'Guardando…' : 'Guardar'}
-            </Button>
-
-            <Button variant="outline" size="sm"
-              onClick={handleSyncResumen}
-              disabled={isSyncing || saving}
-              className="h-7 gap-1 text-[11px]">
-              <RefreshCcw className={cn('h-3 w-3', isSyncing && 'animate-spin')} />
-              {isSyncing ? 'Sincronizando…' : 'Sync Resumen'}
             </Button>
 
             <Button
               variant="outline"
               size="sm"
-              onClick={exportToExcel}
+              onClick={handleSyncResumen}
+              disabled={isSyncing || saving}
               className="h-7 gap-1 text-[11px]"
             >
-              Exportar
+              <RefreshCcw className={cn('h-3 w-3', isSyncing && 'animate-spin')} />
+              {isSyncing ? 'Sincronizando…' : 'Sync Resumen'}
             </Button>
-
-            <label className="cursor-pointer">
-                <span className="text-[11px]">Importar</span>
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImport(file);
-                  }}
-                />
-              </label>
           </div>
         </header>
 
-        {/* HOJA */}
+        {/* ━━━━━━━━━━━━━━━━━━━━━━━━ HOJA ━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <main className="relative flex-1 overflow-hidden">
           <Luckysheet
             data={initialSheets}
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Comunicaciones',
-              showinfobar:      false,
-              sheetFormulaBar:  true,
+              title: 'Metrado Comunicaciones',
+              showinfobar: false,
+              sheetFormulaBar: true,
               showstatisticBar: true,
-              afterChange:      afterChange,
               contextMenu: {
                 row: [
-                  ctxItem('Insertar Grupo al mismo nivel', 'group', true,  triggerRecalc, addRow),
-                  ctxItem('Insertar Sub-grupo (N+1)',       'group', false, triggerRecalc, addRow),
-                  ctxItem('Insertar Partida (hoja)',        'leaf',  false, triggerRecalc, addRow),
+                  ctxItem('Insertar Grupo al mismo nivel', 'group', true, triggerRecalc, addRow),
+                  ctxItem('Insertar Sub-grupo (N+1)', 'group', false, triggerRecalc, addRow),
+                  ctxItem('Insertar Partida (hoja)', 'leaf', false, triggerRecalc, addRow),
                   { type: 'separator' },
-                  { text: '↑ Mover bloque arriba', type: 'button', onClick: () => moveBlock('up') },
-                  { text: '↓ Mover bloque abajo', type: 'button', onClick: () => moveBlock('down') },
+                  {
+                    text: '↑ Mover bloque arriba',
+                    type: 'button',
+                    onClick: () => moveBlock('up'),
+                  },
+                  {
+                    text: '↓ Mover bloque abajo',
+                    type: 'button',
+                    onClick: () => moveBlock('down'),
+                  },
                   { type: 'separator' },
                   {
                     text: 'Eliminar fila',
@@ -1152,11 +1333,18 @@ export default function ComunicacionesIndex() {
   );
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════
 // SUBCOMPONENTES
 // ═══════════════════════════════════════════════════════════════════════
-function SaveStatus({ saving, error, lastSaved }: {
-  saving: boolean; error: string | null; lastSaved: Date | null;
+function SaveStatus({
+  saving,
+  error,
+  lastSaved,
+}: {
+  saving: boolean;
+  error: string | null;
+  lastSaved: Date | null;
 }) {
   return (
     <div className="flex items-center rounded-full bg-slate-100/80 px-2.5 py-1
@@ -1183,33 +1371,47 @@ function SaveStatus({ saving, error, lastSaved }: {
   );
 }
 
-function ActionBtn({ icon, label, title, style, onClick }: {
-  icon: React.ReactNode; label: string; title: string;
-  style: React.CSSProperties; onClick: () => void;
+
+function ActionBtn({
+  icon,
+  label,
+  title,
+  style,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  title: string;
+  style: React.CSSProperties;
+  onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} title={title}
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
       className="inline-flex h-7 items-center gap-1 rounded-md px-2
         text-[10px] font-bold transition-all hover:opacity-85 active:scale-95"
-      style={style}>
+      style={style}
+    >
       {icon} {label}
     </button>
   );
 }
+
 
 function ctxItem(
   text: string,
   kind: EntryKind,
   sameLevelAsSelected: boolean,
   triggerRecalc: () => void,
-  addRow: (k: EntryKind, same: boolean) => void,
+  addRow: (k: EntryKind, same: boolean) => void
 ) {
   return {
     text,
     type: 'button',
     onClick: () => {
       addRow(kind, sameLevelAsSelected);
-      triggerRecalc();
     },
   };
 }

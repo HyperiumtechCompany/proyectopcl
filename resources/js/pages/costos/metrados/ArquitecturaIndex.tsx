@@ -97,7 +97,7 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO ARQUITECTURA
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 1; //
+const TOP_LEVEL_START = 3; 
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -327,7 +327,7 @@ export default function ArquitecturaIndex() {
       const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
       if (kind !== 'group') return;
 
-      const code = `${row._level}|${String(row.descripcion ?? '').trim()}`;
+     const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
       if (!code) return;
 
       const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
@@ -338,7 +338,7 @@ export default function ArquitecturaIndex() {
       const v = byCode[code];
       return {
         _level: v.level, _kind: 'group',
-        partida: code, descripcion: v.desc, unidad: v.und,
+        partida: v.code, descripcion: v.desc, unidad: v.und,
         total: v.total,
       };
     });
@@ -531,7 +531,7 @@ export default function ArquitecturaIndex() {
       const alto   = toNum(row.alto);
 
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4(largo * nveces);
+      const newLon  = r4((largo + ancho) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 
@@ -926,7 +926,7 @@ export default function ArquitecturaIndex() {
 
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Eléctricas
+                Metrado Arquitectura
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -1031,7 +1031,7 @@ export default function ArquitecturaIndex() {
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Eléctricas',
+              title:            'Metrado Arquitectura',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,
