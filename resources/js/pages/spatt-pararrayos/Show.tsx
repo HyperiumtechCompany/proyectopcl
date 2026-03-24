@@ -1,11 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
-import ExcelJS from 'exceljs';
 import { Download, Calculator, UploadCloud, FileSpreadsheet, Settings, Save, ArrowLeft, Users } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import * as spattPararrayosRoutes from '@/routes/spatt-pararrayos';
 import type { BreadcrumbItem } from '@/types';
 import type { SpattPararrayoSpreadsheet } from '@/types/spatt-pararrayos';
+import { exportToExcel } from '@/lib/pararrayos_export';
 
 interface PageProps {
     auth: { user: { name: string; email: string; plan: string } };
@@ -47,7 +47,7 @@ export default function Show() {
     const [activeTab, setActiveTab] = useState<'pozo' | 'pararrayo'>('pozo');
 
     const [header, setHeader] = useState({
-        proyecto: spreadsheet.project_name || '“MEJORAMIENTO DE LOS SERVICIOS DE EDUCACIÓN INICIAL Y PRIMARIA...”',
+        proyecto: spreadsheet.project_name || '"MEJORAMIENTO DE LOS SERVICIOS DE EDUCACIÓN INICIAL Y PRIMARIA..."',
         cui: 'CUI: ',
         codigoModular: 'CÓDIGO MODULAR: ',
         codigoLocal: 'CÓDIGO LOCAL: ',
@@ -165,7 +165,6 @@ export default function Show() {
 
     const handleEnableCollab = () => {
         if (confirm('¿Habilitar colaboración para esta hoja? Los usuarios con el código podrán editarla.')) {
-            // Utilizamos el path directo para evitar tener que ejecutar wayfinder otra vez justo ahora
             router.post(`/spatt-pararrayos/${spreadsheet.id}/enable-collab`, {}, { preserveScroll: true });
         }
     };
@@ -177,8 +176,7 @@ export default function Show() {
         }
     };
 
-    const exportToExcel = async () => {
-        // Lógica de exportación igual a la implementada anteriormente (removida por brevedad en este snippet, puedes dejarla intacta de la versión anterior o ajustarla... voy a incluir la funcion completa para evitar que se pierda la funcionalidad de exportación del archivo original)
+    const handleExport = async () => {
         if (!logo1 || !logo2) {
             setShowModal(true); return;
         }
@@ -190,143 +188,15 @@ export default function Show() {
             alert('Calcula el Pararrayo antes de exportar.'); return;
         }
 
-        const fileToBuffer = (file: File): Promise<ArrayBuffer> => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target?.result as ArrayBuffer);
-                reader.onerror = reject;
-                reader.readAsArrayBuffer(file);
-            });
-        };
-
-        const addEncabezado = (sheet: ExcelJS.Worksheet, workbook: ExcelJS.Workbook, l1Buf: ArrayBuffer, l1Ext: string, l2Buf: ArrayBuffer, l2Ext: string) => {
-            sheet.getRow(1).height = 100;
-            const img1 = workbook.addImage({ buffer: l1Buf, extension: l1Ext as any });
-            const img2 = workbook.addImage({ buffer: l2Buf, extension: l2Ext as any });
-            sheet.addImage(img1, { tl: { col: 0, row: 0 }, ext: { width: 90, height: 90 } });
-            sheet.addImage(img2, { tl: { col: 13, row: 0 }, ext: { width: 90, height: 90 } });
-
-            sheet.mergeCells('B1:M1');
-            const cell = sheet.getCell('B1');
-            cell.value = `${header.proyecto}\n${header.cui}; ${header.codigoModular}; ${header.codigoLocal}\n${header.unidadEjecutora}`;
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.font = { bold: true, size: 11, name: 'Calibri' };
-            sheet.getColumn('A').width = 13;
-            sheet.getColumn('N').width = 13;
-        };
-
-        const l1Buf = await fileToBuffer(logo1);
-        const l2Buf = await fileToBuffer(logo2);
-        const l1Ext = logo1.name.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') || 'png';
-        const l2Ext = logo2.name.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') || 'png';
-
-        const workbook = new ExcelJS.Workbook();
-
-        if (exportOption === 'both' || exportOption === 'pozo') {
-            const sheet = workbook.addWorksheet('Pozo a Tierra');
-            addEncabezado(sheet, workbook, l1Buf, l1Ext, l2Buf, l2Ext);
-
-            sheet.mergeCells('B2:M2');
-            const title = sheet.getCell('B2');
-            title.value = 'CÁLCULO DE LA RESISTENCIA DE PUESTA A TIERRA';
-            title.alignment = { horizontal: 'center', vertical: 'middle' };
-            title.font = { bold: true, size: 14, color: { argb: '002060' } };
-
-            sheet.addRow([]);
-            const fRow = sheet.addRow(['', 'Ecuación de cálculo:']);
-            fRow.getCell(2).font = { bold: true, italic: true };
-            sheet.addRow(['', 'R = (ρ / 2πL) × [ ln(4L / a) – 1 ]']);
-
-            sheet.addRow([]);
-
-            const tRow = sheet.addRow(['', 'CARACTERÍSTICAS DEL TERRENO']);
-            sheet.mergeCells(`B${tRow.number}:M${tRow.number}`);
-            tRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            tRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-
-            const hTer = sheet.addRow(['', 'I.E. N°', 'Tipo de Terreno', 'ρ (Ω·m)', 'Descripción']);
-            hTer.eachCell((c, i) => { if (i > 1) c.font = { bold: true }; });
-            sheet.addRow(['', '64193', pozo.tipoTerreno, pozo.resistividad, terrainDescs[pozo.tipoTerreno]]);
-
-            sheet.addRow([]);
-
-            const trRow = sheet.addRow(['', 'RESULTADOS DE CÁLCULO']);
-            sheet.mergeCells(`B${trRow.number}:M${trRow.number}`);
-            trRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            trRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-
-            const hRes = sheet.addRow(['', 'I.E. N°', 'Terreno', 'ρ (Ω·m)', 'R (Ω)']);
-            hRes.eachCell((c, i) => { if (i > 1) c.font = { bold: true }; });
-            sheet.addRow(['', '64193', pozo.tipoTerreno, pozo.resistividad, pozo.resultados.resistencia]);
-            sheet.addRow([]);
-
-            const rRow = sheet.addRow(['', 'REDUCCIÓN DE LA RESISTENCIA DE PUESTA A TIERRA']);
-            sheet.mergeCells(`B${rRow.number}:M${rRow.number}`);
-            rRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            rRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-
-            const hRed = sheet.addRow(['', 'R Inicial (Ω)', '% Reducción', 'R Final (Ω)', 'Descripción']);
-            hRed.eachCell((c, i) => { if (i > 1) c.font = { bold: true }; });
-            pozo.dosisReduccion.forEach(d => {
-                sheet.addRow(['', d.rInicial, d.reduccion, d.rFinal, d.descripcion]);
-            });
-
-            sheet.getColumn('B').width = 25;
-            sheet.getColumn('C').width = 20;
-            sheet.getColumn('D').width = 20;
-            sheet.getColumn('E').width = 20;
-        }
-
-        if (exportOption === 'both' || exportOption === 'pararrayo') {
-            const sheet = workbook.addWorksheet('Pararrayo');
-            addEncabezado(sheet, workbook, l1Buf, l1Ext, l2Buf, l2Ext);
-
-            sheet.mergeCells('B2:M2');
-            const title = sheet.getCell('B2');
-            title.value = 'CÁLCULO DEL PARARRAYO';
-            title.alignment = { horizontal: 'center', vertical: 'middle' };
-            title.font = { bold: true, size: 14, color: { argb: '002060' } };
-
-            sheet.addRow([]);
-            const s1 = sheet.addRow(['', '1 Frecuencia anual de caída de rayos']);
-            sheet.mergeCells(`B${s1.number}:M${s1.number}`);
-            s1.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            s1.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-
-            sheet.addRow(['', 'Td=', pararrayo.td, 'isocerauno']);
-            sheet.addRow(['', 'Nk = Ng =', pararrayo.resultados.nkng, 'rayos/km²·año']);
-
-            sheet.addRow([]);
-            const s2 = sheet.addRow(['', '2 Cálculo de Área Equivalente']);
-            sheet.mergeCells(`B${s2.number}:M${s2.number}`);
-            s2.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            s2.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-            sheet.addRow(['', `Ae: ${pararrayo.resultados.areaEquivalente} m²`]);
-
-            sheet.addRow([]);
-            const s5 = sheet.addRow(['', '5 Evaluación y comparación de riesgos']);
-            sheet.mergeCells(`B${s5.number}:M${s5.number}`);
-            s5.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-            s5.getCell(2).font = { bold: true, color: { argb: 'FFFFFF' } };
-
-            const hEv = sheet.addRow(['', 'AREA', 'Nd', 'Nc', 'REQUIERE PROTECCIÓN']);
-            hEv.eachCell((c, i) => { if (i > 1) c.font = { bold: true }; });
-            sheet.addRow(['', pararrayo.resultados.areaEquivalente, pararrayo.resultados.Nd, pararrayo.resultados.nc, pararrayo.resultados.requiereProteccion ? 'SI' : 'NO']);
-
-            sheet.getColumn('B').width = 30;
-            sheet.getColumn('C').width = 25;
-            sheet.getColumn('D').width = 25;
-            sheet.getColumn('E').width = 25;
-        }
-
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `CÁLCULO SPAT PARARRAYOS - ${spreadsheet.name}.xlsx`;
-        a.click();
-        URL.revokeObjectURL(url);
+        await exportToExcel({
+            logo1,
+            logo2,
+            exportOption,
+            header,
+            pozo,
+            pararrayo,
+            spreadsheetName: spreadsheet.name,
+        });
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -406,7 +276,7 @@ export default function Show() {
                             </div>
 
                             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-gray-800">
-                                <button onClick={exportToExcel} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow">
+                                <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow">
                                     <FileSpreadsheet className="w-5 h-5" /> Exportar Excel
                                 </button>
                             </div>
@@ -460,7 +330,6 @@ export default function Show() {
                                         </tr>
                                         <tr><td colSpan={5} className="py-2"></td></tr>
 
-                                        {/* Ajustar parámetros extra como diámetro y longitud antes de resultados */}
                                         <tr className="bg-[#002060] text-white">
                                             <td colSpan={5} className="py-2 px-4 font-bold border border-[#002060]">PARÁMETROS DE DISEÑO</td>
                                         </tr>

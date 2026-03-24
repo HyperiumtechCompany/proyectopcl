@@ -2572,33 +2572,24 @@ export async function exportAguaToExcel(dataSheet: any, fileName: string = 'Calc
     raSep(rr, 18); rr++;
     //--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    // =========================================================================
 // HOJA 5: MÁXIMA DEMANDA SIMULTÁNEA
-// =========================================================================
-// Diseño fiel a la imagen:
-// - Sin columna "Módulo" ni "Nivel" — solo DESCRIPCION
-// - Nombre del módulo como fila fusionada coloreada
-// - Encabezado por categoría con su color propio
-// - Columnas: DESCRIPCION | Cat1(cant+UH) | Cat2(cant+UH) | ... | U.H.
-// =========================================================================
-
 const ws5 = workbook.addWorksheet('5. Max. Demanda');
 
-// ── Constantes de color ────────────────────────────────────────────────────
+// Constantes de color 
 const MD_BLANC  = 'FFFFFFFF';
 const MD_NEGRO  = 'FF000000';
-const MD_TITLE  = 'FF4F4F4F';   // gris oscuro — título principal
-const MD_HEADER = 'FF6D6D6D';   // gris medio — sub-barras
-const MD_YELLOW = 'FFFFC000';   // amarillo — valores destacados
-const MD_LYELL  = 'FFFFF2CC';   // amarillo claro
-const MD_LGRAY  = 'FFD9D9D9';   // gris claro
+const MD_TITLE  = 'FF4F4F4F';   
+const MD_HEADER = 'FF6D6D6D';   
+const MD_YELLOW = 'FFFFC000';  
+const MD_LYELL  = 'FFFFF2CC';  
+const MD_LGRAY  = 'FFD9D9D9';   
 const MD_BLUE   = 'FF1F4E78';
 const MD_BLUE2  = 'FF2E75B6';
 const MD_LBLUE  = 'FFD6E4F0';
 const MD_DGREEN = 'FF375623';
 const MD_TEAL   = 'FFE2F0ED';
 
-// Colores por categoría de accesorio (fiel a imagen)
+// Colores por categoría de accesorio 
 const MD_CAT: Record<string, { hdr: string; sub: string; bg: string; bgAlt: string }> = {
     inodoro:   { hdr: 'FF1F4E78', sub: 'FF2E75B6', bg: 'FFD6E4F0', bgAlt: 'FFE8F1F9' },
     urinario:  { hdr: 'FF375623', sub: 'FF548235', bg: 'FFE2EFDA', bgAlt: 'FFEEF5E8' },
@@ -2614,7 +2605,7 @@ const mdBT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0'
 const mdBM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF666666' } };
 const mdBW = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFFFFFFF' } };
 
-// ── Leer datos del frontend ────────────────────────────────────────────────
+// Leer datos 
 const mdD            = dataSheet.maximademandasimultanea || {};
 const mdGrades       = mdD.grades || { inicial: true, primaria: false, secundaria: false };
 const mdTables       = mdD.tables || {};
@@ -2644,7 +2635,7 @@ const mdExteriores = mdD.exterioresData || {
 const mdTotals         = mdD.totals || {};
 const mdSelectedGrades = Object.keys(mdGrades).filter(g => mdGrades[g]);
 
-// ── Categorías extraídas del Anexo02 (igual que el frontend) ──────────────
+// Categorías extraídas del Anexo02 
 const mdCategoryMap: Record<string, string> = {
     inodoro:'inodoro', urinario:'urinario', lavatorio:'lavatorio',
     lavadero:'lavadero', lavadero_con_triturador:'lavatorio',
@@ -2665,26 +2656,26 @@ mdAnexo02.forEach((row: any) => {
     mdCats.find(c => c.key === ck)!.count++;
 });
 
-// Columnas: 1(spacer) | 2(descripcion) | 3..N-1(accesorios×2) | N(total UH)
-const MD_DESC_COL  = 2;                          // col descripción
-const MD_ACC_START = 3;                          // primera col de accesorio
+// Columnas: 1
+const MD_DESC_COL  = 2;                          
+const MD_ACC_START = 3;                          
 const MD_ACC_COLS  = mdCats.length * 2;
-const MD_TOTAL_COL = MD_ACC_START + MD_ACC_COLS; // col total U.H.
-const MD_LAST      = MD_TOTAL_COL;               // última col de datos
+const MD_TOTAL_COL = MD_ACC_START + MD_ACC_COLS; 
+const MD_LAST      = MD_TOTAL_COL;             
 
-// ── Anchos de columnas ─────────────────────────────────────────────────────
+// Anchos de columnas 
 const mdColDefs: Partial<ExcelJS.Column>[] = [
-    { width: 3  },  // 1 spacer
-    { width: 35 },  // 2 descripción (amplia)
+    { width: 3  },  
+    { width: 35 },  
 ];
 mdCats.forEach(() => {
-    mdColDefs.push({ width: 8 });   // cantidad
-    mdColDefs.push({ width: 7 });   // UH/u
+    mdColDefs.push({ width: 8 }); 
+    mdColDefs.push({ width: 7 });   
 });
-mdColDefs.push({ width: 10 });      // total U.H.
+mdColDefs.push({ width: 10 });      
 ws5.columns = mdColDefs;
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers 
 const gc5 = (r: number, c: number) => ws5.getCell(r, c);
 
 function md5Fill(r: number, bg: string, h = 17) {
@@ -2719,7 +2710,7 @@ function md5SubBar(r: number, text: string, bg = MD_HEADER) {
     cell.border = { top: mdBT, left: mdBM, bottom: mdBT, right: mdBM };
 }
 
-// Calcular UD de un item (misma lógica que frontend)
+// Calcular UD de un item 
 const mdCalcUD = (item: any): number => {
     if (!item?.accessories) return parseFloat(item?.udTotal) || 0;
     return mdCats.reduce((sum, cat) => {
@@ -2729,7 +2720,7 @@ const mdCalcUD = (item: any): number => {
     }, 0);
 };
 
-// Interpolación curva Hunter (igual que frontend)
+// Interpolación curva Hunter 
 const mdUHData: [number, number][] = [
     [0,0],[1,0.12],[2,0.18],[3,0.27],[4,0.36],[5,0.42],[6,0.48],[7,0.54],[8,0.60],
     [10,0.72],[12,0.84],[14,0.96],[16,1.02],[18,1.08],[20,1.14],[25,1.26],[30,1.32],
@@ -2784,18 +2775,14 @@ const mdGradeNames: Record<string, string> = {
     inicial:'INICIAL', primaria:'PRIMARIA', secundaria:'SECUNDARIA',
 };
 
-// =========================================================================
-// ESCRITURA — cursor mr
-// =========================================================================
+// ESCRITURA 
 let mr = 1;
 
-// ── Título principal ───────────────────────────────────────────────────────
+// Título principal 
 md5TitleBar(mr, '5. CALCULO DE LA MÁXIMA DEMANDA SIMULTÁNEA'); mr++;
 md5Sep(mr, 14); mr++;
 
-// =========================================================================
 // ANEXO-02 — APARATOS SANITARIOS
-// =========================================================================
 ws5.getRow(mr).height = 25;
 for (let c = 2; c <= 6; c++) {
     gc5(mr, c).fill   = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD4740A'} };
@@ -2867,9 +2854,7 @@ for (let c = 5; c <= 6; c++) {
 mr++;
 md5Sep(mr, 18); mr++;
 
-// =========================================================================
-// TABLAS POR GRADO — diseño imagen
-// =========================================================================
+// TABLAS POR GRADO 
 if (mdSelectedGrades.length === 0) {
     md5Fill(mr, MD_LYELL, 30);
     ws5.mergeCells(mr, 2, mr, MD_LAST);
@@ -2890,7 +2875,7 @@ function md5DrawGrade(grade: string) {
     md5SubBar(mr, `CÁLCULOS PARA NIVEL ${gradeName}`, colors.bar); mr++;
     md5Sep(mr, 8); mr++;
 
-    // ── Fila 0: Título "SUMATORIA DE GASTOS POR ACCESORIOS - NIVEL X" ─────
+    //  Fila 0: Título "SUMATORIA DE GASTOS POR ACCESORIOS - NIVEL X" 
     ws5.getRow(mr).height = 18;
     // Descripción vacía (col 2)
     gc5(mr, 2).fill   = { type:'pattern', pattern:'solid', fgColor:{argb:MD_LGRAY} };
@@ -2912,9 +2897,9 @@ function md5DrawGrade(grade: string) {
     gc5(mr, MD_TOTAL_COL).border = { top:mdBT, left:mdBT, bottom:mdBT, right:mdBM };
     mr++;
 
-    // ── Fila 1: DESCRIPCION (rowspan=2) | categorías (span=2 cada una) | U.H.(rowspan=2) ──
+    // Fila 1: DESCRIPCION 
     ws5.getRow(mr).height = 20;
-    // DESCRIPCION — rowspan 2
+    // DESCRIPCION 
     ws5.mergeCells(mr, 2, mr+1, 2);
     const hDesc     = gc5(mr, 2);
     hDesc.value     = 'DESCRIPCION';
@@ -2923,7 +2908,7 @@ function md5DrawGrade(grade: string) {
     hDesc.alignment = { horizontal:'center', vertical:'middle' };
     hDesc.border    = { top:mdBM, left:mdBM, bottom:mdBM, right:mdBT };
 
-    // Cabecera de cada categoría (span 2 cols) con color propio
+    // Cabecera de cada categoría 
     mdCats.forEach((cat, ci) => {
         const cStart  = MD_ACC_START + ci * 2;
         const catC    = MD_CAT[cat.key] || MD_CAT.default;
@@ -2938,7 +2923,7 @@ function md5DrawGrade(grade: string) {
         gc5(mr, cStart+1).border = { top:mdBW, bottom:mdBW };
     });
 
-    // U.H. — rowspan 2
+    // U.H. 
     ws5.mergeCells(mr, MD_TOTAL_COL, mr+1, MD_TOTAL_COL);
     const hUH     = gc5(mr, MD_TOTAL_COL);
     hUH.value     = 'U.H.';
@@ -2948,7 +2933,7 @@ function md5DrawGrade(grade: string) {
     hUH.border    = { top:mdBW, left:mdBW, bottom:mdBW, right:mdBM };
     mr++;
 
-    // ── Fila 2: sub-cabeceras # | UH por categoría ────────────────────────
+    // Fila 2: 
     ws5.getRow(mr).height = 16;
     // col descripcion ya mergeada
     gc5(mr, 2).fill = { type:'pattern', pattern:'solid', fgColor:{argb:MD_LGRAY} };
@@ -2969,7 +2954,7 @@ function md5DrawGrade(grade: string) {
     gc5(mr, MD_TOTAL_COL).fill = { type:'pattern', pattern:'solid', fgColor:{argb:MD_LGRAY} };
     mr++;
 
-    // ── Filas de datos ────────────────────────────────────────────────────
+    // Filas de datos 
     if (modules.length === 0) {
         md5Fill(mr, MD_LYELL, 18);
         ws5.mergeCells(mr, 2, mr, MD_LAST);
@@ -2989,7 +2974,7 @@ function md5DrawGrade(grade: string) {
                 s + mdCalcUD(c) +
                 (c.details||[]).reduce((gs: number, gc: any) => gs + mdCalcUD(gc), 0), 0);
 
-        // ── Fila módulo — nombre fusionado en color del grado ─────────────
+        // Fila módulo — nombre fusionado en color del grado 
         ws5.getRow(mr).height = 20;
         // Descripción (col 2) con nombre del módulo
         const modCell     = gc5(mr, 2);
@@ -3018,11 +3003,11 @@ function md5DrawGrade(grade: string) {
         modTot.numFmt    = '0';
         mr++;
 
-        // ── Filas detail del módulo ────────────────────────────────────────
+        // Filas detail del módulo 
         (mod.details||[]).forEach((det: any, di: number) => {
             ws5.getRow(mr).height = 16;
             const detUD = mdCalcUD(det);
-            // Descripcion — alternar blanco/azul muy claro
+            // Descripcion — alternar blanco/azul 
             const detBg = di % 2 === 0 ? MD_BLANC : MD_LBLUE;
             const dDesc = gc5(mr, 2);
             dDesc.value     = det.descripcion || '';
@@ -3065,11 +3050,11 @@ function md5DrawGrade(grade: string) {
             mr++;
         });
 
-        // ── Children (sub-niveles) ─────────────────────────────────────────
+        // Children
         (mod.children||[]).forEach((child: any) => {
             const childUD = mdCalcUD(child);
 
-            // Fila child — nombre del sub-nivel en color child
+            // Fila child — nombre del sub-nivel 
             ws5.getRow(mr).height = 18;
             const chDesc     = gc5(mr, 2);
             const chLabel    = child.descripcion || child.nivel || '↳ Sub-Nivel';
@@ -3156,7 +3141,7 @@ function md5DrawGrade(grade: string) {
         });
     });
 
-    // ── Fila TOTAL U.D. NIVEL ─────────────────────────────────────────────
+    // Fila TOTAL U.D. NIVEL 
     const gradeTotal = mdGradeTotals[grade] || 0;
     ws5.getRow(mr).height = 22;
     ws5.mergeCells(mr, 2, mr, MD_TOTAL_COL - 1);
@@ -3183,9 +3168,7 @@ function md5DrawGrade(grade: string) {
 
 mdSelectedGrades.forEach(grade => md5DrawGrade(grade));
 
-// =========================================================================
 // TABLA EXTERIORES — ÁREAS VERDES
-// =========================================================================
 ws5.getRow(mr).height = 25;
 for (let c = 2; c <= 7; c++) {
     gc5(mr, c).fill   = { type:'pattern', pattern:'solid', fgColor:{argb:'FF00695C'} };
@@ -3256,9 +3239,7 @@ mdExtTotVal.numFmt    = '0.00';
 mr++;
 md5Sep(mr, 18); mr++;
 
-// =========================================================================
 // RESUMEN GENERAL DE RESULTADOS
-// =========================================================================
 ws5.getRow(mr).height = 25;
 for (let c = 2; c <= 6; c++) {
     gc5(mr, c).fill   = { type:'pattern', pattern:'solid', fgColor:{argb:MD_BLUE} };
@@ -4045,14 +4026,9 @@ br++;
 _sep(br, 14); br++;
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// =========================================================================
     // HOJA 7: TUBERÍAS DE RED DE DISTRIBUCIÓN (RD)
-    // =========================================================================
     const ws7 = workbook.addWorksheet('7. Tuberías RD');
 
-    // 26 columnas: 1 spacer + 25 datos
-    // Col:  1   2     3     4    5      6      7      8     9    10   11   12   13   14  15   16   17    18    19  20  21    22    23    24    25    26
-    // Use: spc  seg  pto  cota  uhP   uhT   caud   long  diam  n1  c90  n2  tee  n3  vc  n4  red  ltot  crf   s   hf  hpz   vel   pre  ver1  ver2
     ws7.columns = [
         { width: 3  }, // 1  spacer
         { width: 9  }, // 2  segmento
@@ -4082,28 +4058,28 @@ _sep(br, 14); br++;
         { width: 8  }, // 26 verif 2
     ];
 
-    const RD_LAST = 26; // última columna
+    const RD_LAST = 26; 
 
-    // ── Paleta estilo ingeniero (igual imagen de referencia) ──────────────────
+    // Paleta estilo 
     const RD_BLANC  = 'FFFFFFFF';
     const RD_NEGRO  = 'FF000000';
-    const RD_TITLE  = 'FF4F4F4F'; // gris oscuro — barra título módulo
-    const RD_HDR1   = 'FF595959'; // gris medio oscuro — primera fila header
-    const RD_HDR2   = 'FF737373'; // gris medio — segunda fila header
-    const RD_YELLOW = 'FFFFC000'; // amarillo — valores clave
-    const RD_LYELL  = 'FFFFF2CC'; // amarillo suave — valores calculados
-    const RD_LGRAY  = 'FFD9D9D9'; // gris claro — totales / estáticas
-    const RD_LBLUE  = 'FFD6E4F0'; // azul claro — filas alternas
-    const RD_GREEN  = 'FF70AD47'; // verde — CUMPLE
-    const RD_RED    = 'FFFF0000'; // rojo — NO CUMPLE
-    const RD_ORANG  = 'FFFCE4D6'; // naranja suave — fila estática
-    const RD_SECTB  = 'FF203864'; // azul muy oscuro — barra sección grado
+    const RD_TITLE  = 'FF4F4F4F'; 
+    const RD_HDR1   = 'FF595959';
+    const RD_HDR2   = 'FF737373'; 
+    const RD_YELLOW = 'FFFFC000'; 
+    const RD_LYELL  = 'FFFFF2CC'; 
+    const RD_LGRAY  = 'FFD9D9D9'; 
+    const RD_LBLUE  = 'FFD6E4F0'; 
+    const RD_GREEN  = 'FF70AD47';
+    const RD_RED    = 'FFFF0000'; 
+    const RD_ORANG  = 'FFFCE4D6';
+    const RD_SECTB  = 'FF203864';
 
     const rdBT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
     const rdBM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF444444' } };
     const rdBW = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFFFFFFF' } };
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers 
     function rdFill(r: number, bg: string, h = 17) {
         ws7.getRow(r).height = h;
         ws7.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid',
@@ -4144,7 +4120,7 @@ _sep(br, 14); br++;
         if (opts.numFmt) cell.numFmt = opts.numFmt;
     }
 
-    // Barra de título de módulo (gris oscuro, texto blanco, full-width merge)
+    // Barra de título de módulo 
     function rdModuleTitle(r: number, text: string) {
         rdFill(r, RD_TITLE, 22);
         ws7.mergeCells(r, 2, r, RD_LAST);
@@ -4156,7 +4132,7 @@ _sep(br, 14); br++;
         cell.border = { top: rdBM, left: rdBM, bottom: rdBM, right: rdBM };
     }
 
-    // Barra sección grado (azul muy oscuro)
+    // Barra sección grado 
     function rdGradeBar(r: number, text: string) {
         rdFill(r, RD_SECTB, 24);
         ws7.mergeCells(r, 2, r, RD_LAST);
@@ -4180,12 +4156,12 @@ _sep(br, 14); br++;
         cell.border = { top: rdBM, left: rdBM, bottom: rdBM, right: rdBM };
     }
 
-    // ── Encabezados de tabla (2 filas) ────────────────────────────────────────
+    // -----> Encabezados de tabla 
     // Devuelve la fila después de los headers
     function rdDrawHeaders(r: number, accLabels: {
         codo90: string; tee: string; val_compuerta: string; reduccion2: string;
     }): number {
-        // ── Fila 1 ────────────────────────────────────────────────────────────
+        // Fila 1 
         rdFill(r, RD_HDR1, 28);
         const h1: Array<{ c: number; cEnd?: number; text: string }> = [
             { c: 2,  text: 'Segmento' },
@@ -4222,7 +4198,7 @@ _sep(br, 14); br++;
         });
         r++;
 
-        // ── Fila 2 ────────────────────────────────────────────────────────────
+        // Fila 2 
         rdFill(r, RD_HDR2, 24);
         const h2: Array<{ c: number; text: string }> = [
             { c: 2,  text: 'Seg.' },
@@ -4263,7 +4239,7 @@ _sep(br, 14); br++;
         return r;
     }
 
-    // ── Fila de datos ──────────────────────────────────────────────────────────
+    // Fila de datos 
     function rdDataRow(r: number, row: any, idx: number): void {
         const isStatic = row.isStatic;
         const bg = isStatic ? RD_ORANG : (idx % 2 === 0 ? RD_BLANC : RD_LBLUE);
@@ -4340,7 +4316,7 @@ _sep(br, 14); br++;
         });
     }
 
-    // ── Leer datos ─────────────────────────────────────────────────────────────
+    // Leer datos 
     const rdD      = dataSheet.tuberiasRD || {};
     const rdConfig = rdD.config || { npisoterminado: 0.65, altasumfondotanqueelevado: 13.85 };
     const rdGrades = rdD.grades || { inicial: true, primaria: false, secundaria: false };
@@ -4368,17 +4344,13 @@ _sep(br, 14); br++;
 
     const rdSelectedGrades = Object.keys(rdGrades).filter(g => rdGrades[g]);
 
-    let rr7 = 1; // row cursor
+    let rr7 = 1;
 
-    // =========================================================================
     // TÍTULO PRINCIPAL
-    // =========================================================================
     rdMainTitle(rr7, '7. CÁLCULO DE LA RED DE DISTRIBUCIÓN (TUBERÍAS RD)'); rr7++;
     rdSep(rr7, 14); rr7++;
 
-    // =========================================================================
     // CONFIGURACIÓN
-    // =========================================================================
     // Barra config
     rdFill(rr7, RD_HDR1, 22);
     ws7.mergeCells(rr7, 2, rr7, RD_LAST);
@@ -4391,7 +4363,7 @@ _sep(br, 14); br++;
     rr7++;
     rdSep(rr7, 6); rr7++;
 
-    // Filas de config
+    // Filas de configuracion 
     const rdCfgRows = [
         { label: 'Nivel de Piso Terminado',
           val: parseFloat(rdConfig.npisoterminado || 0.65), unit: 'm' },
@@ -4443,9 +4415,7 @@ _sep(br, 14); br++;
     });
     rdSep(rr7, 16); rr7++;
 
-    // =========================================================================
     // TABLAS POR GRADO
-    // =========================================================================
     if (rdSelectedGrades.length === 0) {
         rdFill(rr7, RD_LYELL, 24);
         ws7.mergeCells(rr7, 2, rr7, RD_LAST);
@@ -4463,10 +4433,10 @@ _sep(br, 14); br++;
         const gradeData = rdTables[grade];
         if (gradeData) {
             if (Array.isArray(gradeData)) {
-                // formato tablas: [{ nombre, data }]
+                // formato tablas: [{ nombre, datos }]
                 rdModules = gradeData;
             } else if (gradeData.modules) {
-                // formato tables: { modules: [{ id, nombre, data }] }
+                // formato tables: { modules: [{ id, nombre, datos }] }
                 rdModules = gradeData.modules;
             }
         }
@@ -4536,9 +4506,7 @@ _sep(br, 14); br++;
         rdSep(rr7, 18); rr7++;
     });
 
-    // =========================================================================
     // RESUMEN FINAL
-    // =========================================================================
     rdFill(rr7, RD_HDR1, 22);
     ws7.mergeCells(rr7, 2, rr7, RD_LAST);
     const rdResHdr = ws7.getCell(rr7, 2);
@@ -4610,15 +4578,13 @@ _sep(br, 14); br++;
     });
 
     rdSep(rr7, 16); rr7++;
-    // ── Fin Hoja 7 ─────────────────────────────────────────────────────────────
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-   // =============================================================================
-// HOJA 8: REDES INTERIORES (estilo igual que Hoja 7)
-// =============================================================================
+   
+// HOJA 8: REDES INTERIORES 
 {
     const ws8 = workbook.addWorksheet('8. Redes Interiores');
 
-    // 26 columnas: 1 spacer + 25 datos (misma estructura que Tuberias RD)
     ws8.columns = [
         { width: 3  }, // 1  spacer
         { width: 9  }, // 2  segmento
@@ -4648,28 +4614,28 @@ _sep(br, 14); br++;
         { width: 8  }, // 26 verif 2
     ];
 
-    const RI_LAST = 26; // última columna
+    const RI_LAST = 26;
 
-    // ── Paleta estilo ingeniero (igual que Hoja 7) ─────────────────────────────
+    // Paleta estilo 
     const RI_BLANC  = 'FFFFFFFF';
     const RI_NEGRO  = 'FF000000';
-    const RI_TITLE  = 'FF4F4F4F'; // gris oscuro — barra título módulo
-    const RI_HDR1   = 'FF595959'; // gris medio oscuro — primera fila header
-    const RI_HDR2   = 'FF737373'; // gris medio — segunda fila header
-    const RI_YELLOW = 'FFFFC000'; // amarillo — valores clave
-    const RI_LYELL  = 'FFFFF2CC'; // amarillo suave — valores calculados
-    const RI_LGRAY  = 'FFD9D9D9'; // gris claro — totales / estáticas
-    const RI_LBLUE  = 'FFD6E4F0'; // azul claro — filas alternas
-    const RI_GREEN  = 'FF70AD47'; // verde — CUMPLE
-    const RI_RED    = 'FFFF0000'; // rojo — NO CUMPLE
-    const RI_ORANG  = 'FFFCE4D6'; // naranja suave — fila estática
-    const RI_SECTB  = 'FF203864'; // azul muy oscuro — barra sección grado
+    const RI_TITLE  = 'FF4F4F4F'; 
+    const RI_HDR1   = 'FF595959'; 
+    const RI_HDR2   = 'FF737373';
+    const RI_YELLOW = 'FFFFC000'; 
+    const RI_LYELL  = 'FFFFF2CC';
+    const RI_LGRAY  = 'FFD9D9D9'; 
+    const RI_LBLUE  = 'FFD6E4F0';
+    const RI_GREEN  = 'FF70AD47'; 
+    const RI_RED    = 'FFFF0000'; 
+    const RI_ORANG  = 'FFFCE4D6';
+    const RI_SECTB  = 'FF203864'; 
 
     const riBT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
     const riBM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF444444' } };
     const riBW = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFFFFFFF' } };
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers 
     function riFill(r: number, bg: string, h = 17) {
         ws8.getRow(r).height = h;
         ws8.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid',
@@ -4710,7 +4676,7 @@ _sep(br, 14); br++;
         if (opts.numFmt) cell.numFmt = opts.numFmt;
     }
 
-    // Barra de título de módulo (gris oscuro, texto blanco, full-width merge)
+    // Barra de título de módulo 
     function riModuleTitle(r: number, text: string) {
         riFill(r, RI_TITLE, 22);
         ws8.mergeCells(r, 2, r, RI_LAST);
@@ -4722,7 +4688,7 @@ _sep(br, 14); br++;
         cell.border = { top: riBM, left: riBM, bottom: riBM, right: riBM };
     }
 
-    // Barra sección grado (azul muy oscuro)
+    // Barra sección grado 
     function riGradeBar(r: number, text: string) {
         riFill(r, RI_SECTB, 24);
         ws8.mergeCells(r, 2, r, RI_LAST);
@@ -4746,12 +4712,12 @@ _sep(br, 14); br++;
         cell.border = { top: riBM, left: riBM, bottom: riBM, right: riBM };
     }
 
-    // ── Encabezados de tabla (2 filas) ────────────────────────────────────────
+    // Encabezados de tabla 
     // Devuelve la fila después de los headers
     function riDrawHeaders(r: number, accLabels: {
         codo90: string; tee: string; val_compuerta: string; reduccion2: string;
     }): number {
-        // ── Fila 1 ────────────────────────────────────────────────────────────
+        // Fila 1 
         riFill(r, RI_HDR1, 28);
         const h1: Array<{ c: number; cEnd?: number; text: string }> = [
             { c: 2,  text: 'Segmento' },
@@ -4788,7 +4754,7 @@ _sep(br, 14); br++;
         });
         r++;
 
-        // ── Fila 2 ────────────────────────────────────────────────────────────
+        // Fila 2 
         riFill(r, RI_HDR2, 24);
         const h2: Array<{ c: number; text: string }> = [
             { c: 2,  text: 'Seg.' },
@@ -4829,7 +4795,7 @@ _sep(br, 14); br++;
         return r;
     }
 
-    // ── Fila de datos ──────────────────────────────────────────────────────────
+    // Fila de datos 
     function riDataRow(r: number, row: any, idx: number): void {
         const isStatic = row.isStatic;
         const bg = isStatic ? RI_ORANG : (idx % 2 === 0 ? RI_BLANC : RI_LBLUE);
@@ -4906,7 +4872,7 @@ _sep(br, 14); br++;
         });
     }
 
-    // ── Leer datos ─────────────────────────────────────────────────────────────
+    // Leer datos 
     const riD      = dataSheet.redesInteriores || {};
     const riConfig = riD.config || { npisoterminado: 0.65, altasumfondotanqueelevado: 13.85 };
     const riGrades = riD.grades || { inicial: true, primaria: false, secundaria: false };
@@ -4934,11 +4900,9 @@ _sep(br, 14); br++;
 
     const riSelectedGrades = Object.keys(riGrades).filter(g => riGrades[g]);
 
-    let rr = 1; // row cursor
+    let rr = 1; 
 
-    // =========================================================================
     // TÍTULO PRINCIPAL
-    // =========================================================================
     riMainTitle(rr, '8. CÁLCULO DE REDES INTERIORES'); rr++;
     riSep(rr, 14); rr++;
 
@@ -4954,7 +4918,7 @@ _sep(br, 14); br++;
     rr++;
     riSep(rr, 6); rr++;
 
-    // Filas de config
+    // Filas de configuracion 
     const riCfgRows = [
         { label: 'Nivel de Piso Terminado',
           val: parseFloat(riConfig.npisoterminado || 0.65), unit: 'm' },
@@ -5006,9 +4970,7 @@ _sep(br, 14); br++;
     });
     riSep(rr, 16); rr++;
 
-    // =========================================================================
     // TABLAS POR GRADO
-    // =========================================================================
     if (riSelectedGrades.length === 0) {
         riFill(rr, RI_LYELL, 24);
         ws8.mergeCells(rr, 2, rr, RI_LAST);
@@ -5026,10 +4988,10 @@ _sep(br, 14); br++;
         const gradeData = riTables[grade];
         if (gradeData) {
             if (Array.isArray(gradeData)) {
-                // formato tablas: [{ nombre, data }]
+                // formato tablas: [{ nombre, datos }]
                 riModules = gradeData;
             } else if (gradeData.modules) {
-                // formato tables: { modules: [{ id, nombre, data }] }
+                // formato tables: { modules: [{ id, nombre, datos}] }
                 riModules = gradeData.modules;
             }
         }
@@ -5099,9 +5061,7 @@ _sep(br, 14); br++;
         riSep(rr, 18); rr++;
     });
 
-    // =========================================================================
     // RESUMEN FINAL
-    // =========================================================================
     riFill(rr, RI_HDR1, 22);
     ws8.mergeCells(rr, 2, rr, RI_LAST);
     const riResHdr = ws8.getCell(rr, 2);
@@ -5174,15 +5134,12 @@ _sep(br, 14); br++;
 
     riSep(rr, 16); rr++;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-    // =============================================================================
-// HOJA 9: RED DE RIEGO (estilo idéntico a la Hoja 7)
-// =============================================================================
-
+// HOJA 9: RED DE RIEGO
 const ws9 = workbook.addWorksheet('9. Red de Riego');
 
-// 26 columnas: 1 spacer + 25 datos (misma estructura que Hoja 7)
 ws9.columns = [
     { width: 3  }, // 1  spacer
     { width: 9  }, // 2  segmento
@@ -5214,26 +5171,25 @@ ws9.columns = [
 
 const RR_LAST = 26;
 
-// ── Paleta estilo ingeniero (igual que Hoja 7) ─────────────────────────────
 const RR_BLANC  = 'FFFFFFFF';
 const RR_NEGRO  = 'FF000000';
-const RR_TITLE  = 'FF4F4F4F'; // gris oscuro — barra título módulo
-const RR_HDR1   = 'FF595959'; // gris medio oscuro — primera fila header
-const RR_HDR2   = 'FF737373'; // gris medio — segunda fila header
-const RR_YELLOW = 'FFFFC000'; // amarillo — valores clave
-const RR_LYELL  = 'FFFFF2CC'; // amarillo suave — valores calculados
-const RR_LGRAY  = 'FFD9D9D9'; // gris claro — totales / estáticas
-const RR_LBLUE  = 'FFD6E4F0'; // azul claro — filas alternas
-const RR_GREEN  = 'FF70AD47'; // verde — CUMPLE
-const RR_RED    = 'FFFF0000'; // rojo — NO CUMPLE
-const RR_ORANG  = 'FFFCE4D6'; // naranja suave — fila estática
-const RR_SECTB  = 'FF203864'; // azul muy oscuro — barra sección grado
+const RR_TITLE  = 'FF4F4F4F'; 
+const RR_HDR1   = 'FF595959'; 
+const RR_HDR2   = 'FF737373'; 
+const RR_YELLOW = 'FFFFC000'; 
+const RR_LYELL  = 'FFFFF2CC'; 
+const RR_LGRAY  = 'FFD9D9D9'; 
+const RR_LBLUE  = 'FFD6E4F0'; 
+const RR_GREEN  = 'FF70AD47'; 
+const RR_RED    = 'FFFF0000'; 
+const RR_ORANG  = 'FFFCE4D6'; 
+const RR_SECTB  = 'FF203864';
 
 const rrBT = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFA0A0A0' } };
 const rrBM = { style: 'medium' as ExcelJS.BorderStyle, color: { argb: 'FF444444' } };
 const rrBW = { style: 'thin'   as ExcelJS.BorderStyle, color: { argb: 'FFFFFFFF' } };
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// Helpers 
 function rrFill(r: number, bg: string, h = 17) {
     ws9.getRow(r).height = h;
     ws9.getCell(r, 1).fill = { type: 'pattern', pattern: 'solid',
@@ -5274,7 +5230,7 @@ function rrC(r: number, c: number, val: any, opts: {
     if (opts.numFmt) cell.numFmt = opts.numFmt;
 }
 
-// Barra de título de módulo (gris oscuro, texto blanco, full-width merge)
+// Barra de título de módulo 
 function rrModuleTitle(r: number, text: string) {
     rrFill(r, RR_TITLE, 22);
     ws9.mergeCells(r, 2, r, RR_LAST);
@@ -5286,7 +5242,7 @@ function rrModuleTitle(r: number, text: string) {
     cell.border = { top: rrBM, left: rrBM, bottom: rrBM, right: rrBM };
 }
 
-// Barra sección grado (azul muy oscuro)
+// Barra sección grado 
 function rrGradeBar(r: number, text: string) {
     rrFill(r, RR_SECTB, 24);
     ws9.mergeCells(r, 2, r, RR_LAST);
@@ -5310,7 +5266,7 @@ function rrMainTitle(r: number, text: string) {
     cell.border = { top: rrBM, left: rrBM, bottom: rrBM, right: rrBM };
 }
 
-// ── Encabezados de tabla (2 filas) ────────────────────────────────────────
+// Encabezados de tabla 
 function rrDrawHeaders(r: number, accLabels: {
     codo90: string; tee: string; val_compuerta: string; reduccion2: string;
 }): number {
@@ -5392,7 +5348,7 @@ function rrDrawHeaders(r: number, accLabels: {
     return r;
 }
 
-// ── Fila de datos ──────────────────────────────────────────────────────────
+// Fila de datos 
 function rrDataRow(r: number, row: any, idx: number): void {
     const isStatic = row.isStatic;
     const bg = isStatic ? RR_ORANG : (idx % 2 === 0 ? RR_BLANC : RR_LBLUE);
@@ -5468,7 +5424,7 @@ function rrDataRow(r: number, row: any, idx: number): void {
     });
 }
 
-// ── Leer datos ─────────────────────────────────────────────────────────────
+// Leer datos 
 const rrData      = dataSheet.redRiego || {};
 const rrConfig    = rrData.config || { npisoterminado: 0.65, altasumfondotanqueelevado: 13.85 };
 const rrGrades    = rrData.grades || { inicial: true, primaria: false, secundaria: false };
@@ -5496,17 +5452,13 @@ const rrGradeNames: Record<string, string> = {
 
 const rrSelectedGrades = Object.keys(rrGrades).filter(g => rrGrades[g]);
 
- rr7 = 1; // row cursor
+ rr7 = 1; 
 
-// =========================================================================
 // TÍTULO PRINCIPAL
-// =========================================================================
-rrMainTitle(rr7, '8. CÁLCULO DE LA RED DE RIEGO'); rr7++;
+rrMainTitle(rr7, '9. CÁLCULO DE LA RED DE RIEGO'); rr7++;
 rrSep(rr7, 14); rr7++;
 
-// =========================================================================
 // CONFIGURACIÓN
-// =========================================================================
 rrFill(rr7, RR_HDR1, 22);
 ws9.mergeCells(rr7, 2, rr7, RR_LAST);
 const rrCfgHdr = ws9.getCell(rr7, 2);
@@ -5565,9 +5517,7 @@ rrCfgRows.forEach((cfg, idx) => {
 });
 rrSep(rr7, 16); rr7++;
 
-// =========================================================================
 // TABLAS POR GRADO
-// =========================================================================
 if (rrSelectedGrades.length === 0) {
     rrFill(rr7, RR_LYELL, 24);
     ws9.mergeCells(rr7, 2, rr7, RR_LAST);
@@ -5654,9 +5604,7 @@ rrSelectedGrades.forEach(grade => {
     rrSep(rr7, 18); rr7++;
 });
 
-// =========================================================================
-// RESUMEN FINAL (opcional, similar a Hoja 7)
-// =========================================================================
+// RESUMEN FINAL 
 rrFill(rr7, RR_HDR1, 22);
 ws9.mergeCells(rr7, 2, rr7, RR_LAST);
 const rrResHdr = ws9.getCell(rr7, 2);
@@ -5728,10 +5676,7 @@ rrSelectedGrades.forEach((grade, idx) => {
 
 rrSep(rr7, 16); rr7++;
  
-   
-    // =========================================================================
     // GENERAR ARCHIVO
-    // =========================================================================
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
