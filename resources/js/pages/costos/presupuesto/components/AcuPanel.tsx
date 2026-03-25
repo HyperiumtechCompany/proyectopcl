@@ -1161,6 +1161,7 @@ interface AcuPanelProps {
     } | null;
     onSaveAcu?: (
         acuData: Record<string, any>,
+        options?: { updateProjectPrices?: boolean }
     ) => Promise<{ success: boolean; acu?: any; error?: string }>;
 }
 
@@ -1178,13 +1179,14 @@ export function AcuPanel({
         | 'equipos'
         | 'subcontratos'
         | 'subpartidas';
-    type SearchType = 'mano_de_obra' | 'materiales' | 'equipos';
+    type SearchType = 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas';
 
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
     
     const globalHours = useProjectParamsStore(s => s.getJornadaHoras());
     const [hoursPerDay, setHoursPerDay] = useState(globalHours || 8);
+    const [updateProjectPrices, setUpdateProjectPrices] = useState(true);
     const [searchOpen, setSearchOpen] = useState(false);
 
     useEffect(() => {
@@ -1283,31 +1285,6 @@ export function AcuPanel({
     const handleAddResourceClick = (type: SectionType) => {
         if (!selectedAcu || !onSaveAcu) return;
 
-        if (type === 'subcontratos' || type === 'subpartidas') {
-            const label =
-                type === 'subcontratos'
-                    ? 'Nuevo subcontrato'
-                    : 'Nueva subpartida';
-            const newComponent = {
-                codigo: null,
-                descripcion: label,
-                unidad: 'und',
-                cantidad: 1,
-                precio_unitario: 0,
-                factor_desperdicio: 1,
-            };
-            const updatedAcuData = {
-                ...selectedAcu,
-                [type]: [
-                    ...((selectedAcu[type as keyof ACURowSummary] as any[]) ||
-                        []),
-                    newComponent,
-                ],
-            };
-            void onSaveAcu(updatedAcuData);
-            return;
-        }
-
         setSearchTargetType(type);
         setSearchOpen(true);
     };
@@ -1324,9 +1301,10 @@ export function AcuPanel({
             : 1;
 
         const newComponent = {
+            insumo_id: resource.id,
             codigo: resource.codigo_producto,
             descripcion: resource.descripcion,
-            unidad: resource.unidad,
+            unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? resource.unidad,
             cantidad,
             recursos,
             precio_unitario: resource.tipo === 'equipos' ? 0 : resource.precio,
@@ -1344,7 +1322,7 @@ export function AcuPanel({
             ],
         };
 
-        await onSaveAcu(updatedAcuData);
+        await onSaveAcu(updatedAcuData, { updateProjectPrices });
     };
 
     const handleUpdateItem = async (
@@ -1385,7 +1363,7 @@ export function AcuPanel({
                 precio_hora: selectedAcu.costo_mano_obra || 0,
             };
         }
-        await onSaveAcu({ ...selectedAcu, [type]: arr });
+        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
     };
 
     const handleDeleteItem = async (type: SectionType, index: number) => {
@@ -1394,7 +1372,7 @@ export function AcuPanel({
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
         ];
         arr.splice(index, 1);
-        await onSaveAcu({ ...selectedAcu, [type]: arr });
+        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
     };
 
     const handleUpdateRendimiento = async (newRendimiento: number) => {
@@ -1427,7 +1405,7 @@ export function AcuPanel({
                 selectedAcu.costo_mano_obra || 0,
             ),
         };
-        await onSaveAcu(updated);
+        await onSaveAcu(updated, { updateProjectPrices });
     };
 
     const handleTogglePerDay = async (nextPerDay: boolean) => {
@@ -1612,6 +1590,18 @@ export function AcuPanel({
                     }
                     className="w-12 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
+                <div className="ml-auto flex items-center gap-2 rounded border border-slate-600 bg-slate-700/50 px-2 py-1">
+                    <input
+                        type="checkbox"
+                        id="update-global-prices"
+                        checked={updateProjectPrices}
+                        onChange={(e) => setUpdateProjectPrices(e.target.checked)}
+                        className="h-3 w-3 rounded border-slate-500 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-800"
+                    />
+                    <label htmlFor="update-global-prices" className="cursor-pointer select-none text-[10px] text-slate-300">
+                        Actualizar precio en todo el proyecto
+                    </label>
+                </div>
             </div>
 
             <div className="flex-1 overflow-hidden">

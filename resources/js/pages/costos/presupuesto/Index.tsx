@@ -39,6 +39,7 @@ import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
 import { ImportMetradosModal } from './components/ImportMetradosModal';
 import { Download } from 'lucide-react';
 import { InsumosPanel } from './components/InsumosPanel';
+import { FormulaPolinomica } from './components/formula_polinomica';
 
 interface PageProps {
     project: {
@@ -165,12 +166,12 @@ export default function Index() {
         }
     };
 
-    // Auto-save debounce effect
-    useEffect(() => {
-        if (!isDirty) return;
-        const timer = setTimeout(() => { void handleSaveGeneral(); }, 1500);
-        return () => clearTimeout(timer);
-    }, [isDirty, storeRows]);
+    // Auto-save desactivado temporalmente para probar importaciones
+    // useEffect(() => {
+    //     if (!isDirty) return;
+    //     const timer = setTimeout(() => { void handleSaveGeneral(); }, 1500);
+    //     return () => clearTimeout(timer);
+    // }, [isDirty, storeRows]);
 
     // Export handlers
     const handleExport = async (format: 'excel' | 'pdf') => {
@@ -283,7 +284,6 @@ export default function Index() {
     // --- Navigation Groups ---
     const mainTabs = [
         { key: 'general', label: 'P. General', icon: Building2 },
-        { key: 'acus', label: 'ACUs', icon: Calculator },
         {
             key: 'gg_group',
             label: 'Gastos Gen.',
@@ -298,6 +298,7 @@ export default function Index() {
         },
         { key: 'remuneraciones', label: 'Remuneraciones', icon: Users },
         { key: 'insumos', label: 'Insumos', icon: Settings2 },
+        { key: 'f_polinomica', label: 'Formula Polinomica', icon: Calculator },
     ];
 
     const isGGSubsection = [
@@ -331,7 +332,8 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Presupuesto - ${project.nombre}`} />
 
-            <div className="flex h-full flex-col gap-3 p-2">
+            {/* Use calc to subtract header height (64px/h-16) and padding to keep everything in view */}
+            <div className="flex h-[calc(100vh-68px)] flex-col gap-3 overflow-hidden p-2">
                 {/* --- Root Menu --- */}
                 <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-900 p-1 shadow-inner">
                     {mainTabs.map((tab) => {
@@ -357,7 +359,7 @@ export default function Index() {
                     })}
                 </div>
 
-                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                     {/* --- Sub-Tabs Secondary Layer --- */}
                     {isGGSubsection && (
                         <div className="flex items-center gap-8 border-b border-slate-700/50 bg-slate-800/40 px-6 py-2.5 backdrop-blur-sm">
@@ -383,12 +385,11 @@ export default function Index() {
                         </div>
                     )}
 
-                    <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                         {subsection === 'general' || subsection === 'acus' ? (
                             <Group orientation="horizontal">
                                 <Panel defaultSize={45} minSize={28}>
                                     <div className="flex h-full flex-col">
-
                                         {/* ── Toolbar S10-style ── */}
                                         <div className="flex flex-wrap items-center gap-1 border-b border-slate-700 bg-slate-800/90 px-2 py-1.5">
                                             <span className="text-[9px] font-bold tracking-wider text-slate-600 uppercase mr-0.5">Insertar</span>
@@ -453,35 +454,36 @@ export default function Index() {
                                             )}
                                         </div>
 
-                                        <div className="relative flex-1 overflow-hidden min-h-0">
+                                        <div className="relative flex-1 overflow-hidden min-h-0 h-full">
                                             {generalLoading ? (
-                                                <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                                                    Cargando partidas...
+                                                <div className="flex h-full items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
+                                                        <span className="text-xs font-medium text-slate-400">Cargando presupuesto...</span>
+                                                    </div>
                                                 </div>
                                             ) : (
-                                                <BudgetTree
-                                                    onRowSelect={(id) => setSelectedId(id)}
-                                                />
+                                                <BudgetTree onRowSelect={(id) => setSelectedId(id)} />
                                             )}
-                                            <ImportMetradosModal
-                                                projectId={project.id}
-                                                isOpen={isImportModalOpen}
-                                                onClose={() => setIsImportModalOpen(false)}
-                                                onSuccess={() => {
-                                                    // Trigger a reload of the general rows
-                                                    setGeneralLoading(true);
-                                                    axios
-                                                        .get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
-                                                        .then((response) => {
-                                                            if (response.data?.success) {
-                                                                setGeneralRows(response.data.rows || []);
-                                                                initialize(response.data.rows || []);
-                                                            }
-                                                        })
-                                                        .finally(() => setGeneralLoading(false));
-                                                }}
-                                            />
                                         </div>
+
+                                        <ImportMetradosModal
+                                            projectId={project.id}
+                                            isOpen={isImportModalOpen}
+                                            onClose={() => setIsImportModalOpen(false)}
+                                            onSuccess={() => {
+                                                setGeneralLoading(true);
+                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
+                                                    .then((response) => {
+                                                        if (response.data?.success) {
+                                                            setGeneralRows(response.data.rows || []);
+                                                            initialize(response.data.rows || []);
+                                                            setDirty(false);
+                                                        }
+                                                    })
+                                                    .finally(() => setGeneralLoading(false));
+                                            }}
+                                        />
                                     </div>
                                 </Panel>
 
@@ -505,7 +507,7 @@ export default function Index() {
                                 projectId={project.id}
                             />
                         ) : subsection === 'gastos_generales' ? (
-                            <div className="flex flex-1 flex-col overflow-auto gap-4 p-4">
+                            <div className="flex min-h-0 flex-1 flex-col overflow-auto gap-4 p-4">
                                 {/* Gastos Generales Fijos - Listado 1 */}
                                 <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
                                     <div className="flex-1 overflow-auto">
@@ -549,6 +551,8 @@ export default function Index() {
                             <ConsolidadoPanel projectId={project.id} />
                         ) : subsection === 'insumos' ? (
                             <InsumosPanel projectId={project.id} />
+                        ) : subsection === 'f_polinomica' ? (
+                            <FormulaPolinomica />
                         ) : (
                             <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>

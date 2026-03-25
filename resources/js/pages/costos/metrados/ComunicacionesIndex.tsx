@@ -1,3 +1,4 @@
+
 import { router, usePage } from '@inertiajs/react';
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -67,8 +68,8 @@ const VISIBLE_COLS: ColumnDef[] = [
 ];
 
 const HIDDEN_COLS: ColumnDef[] = [
-  { key: '_level', label: '', width: 1 },
-  { key: '_kind',  label: '', width: 1 },
+  { key: '_level', label: '_level', width: 1 },
+  { key: '_kind',  label: '_kind',  width: 1 },
 ];
 
 const BASE_COLS: ColumnDef[] = [...VISIBLE_COLS, ...HIDDEN_COLS];
@@ -78,11 +79,11 @@ const COL: Record<string, number> = Object.fromEntries(
 );
 
 const RESUMEN_BASE: ColumnDef[] = [
-  { key: 'partida',     label: 'Código',       width: 105 },
-  { key: 'descripcion', label: 'Descripción',  width: 295 },
-  { key: 'unidad',      label: 'Und',          width: 60  },
-  { key: 'total',       label: 'Total',        width: 115 },
-  { key: 'observacion', label: 'Obs.',         width: 120 },
+  { key: 'item',        label: 'Items',        width: 80  },
+  { key: 'descripcion', label: 'Descripción',  width: 350 },
+  { key: 'und',         label: 'Und',           width: 60  },
+  { key: 'parcial',     label: 'Parcial',      width: 100 },
+  { key: 'total',       label: 'Total',         width: 100 },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -154,6 +155,34 @@ const colLetter = (i: number) => {
   return r;
 };
 
+// ─── Constructores de celdas ─────────────────────────────────────────
+const mkTxt = (v: string, extra: Record<string, any> = {}): Record<string, any> => ({
+  v, m: v, ct: { fa: 'General', t: 'g' }, ...extra,
+});
+
+const mkNum = (v: number): Record<string, any> => ({
+  v, m: v === 0 ? '' : String(v), ct: { fa: '#,##0.0000', t: 'n' },
+});
+
+/** Texto para un grupo: color de texto jerárquico, sin fondo */
+const mkGroupTxt = (raw: string, disp: string, level: number) => {
+  const st = hierText(level);
+  return { v: raw, m: disp, ct: { fa: 'General', t: 'g' }, ...st };
+};
+
+/** Número para un grupo: color de texto jerárquico, sin fondo */
+const mkGroupNum = (v: number, level: number) => {
+  const st = hierText(level);
+  return { v, m: v === 0 ? '' : String(v), ct: { fa: '#,##0.0000', t: 'n' }, ...st };
+};
+
+/** Número para una hoja con bg según tipo de campo */
+const mkLeafNum = (v: number, bg: string) => ({
+  v, m: v === 0 ? '' : String(v),
+  ct: { fa: '#,##0.0000', t: 'n' },
+  bg, fc: LEAF_TEXT.fc, fs: LEAF_TEXT.fs, bl: 0,
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 // CONVERSIÓN FILAS ↔ DATOS DE HOJA LUCKYSHEET
 // ═══════════════════════════════════════════════════════════════════════
@@ -165,14 +194,17 @@ function rowsToSheet(
 ) {
   const header: any[] = cols.map((col, ci) => ({
     r: 0, c: ci,
-    v: { v: col.label, m: col.label, ct: { fa: 'General', t: 'g' },
-      bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10 },
+    v: {
+      v: col.label, m: col.label,
+      ct: { fa: 'General', t: 'g' },
+      ...HEADER_STYLE,
+    },
   }));
   const cells: any[] = [];
+
   rows.forEach((row, ri) => {
     const kind  = String(row['_kind']  ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
-    const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
     const rIdx  = ri + 1;
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
@@ -224,7 +256,9 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
       if (!blank(raw)) {
-        row[col.key] = col.key === 'descripcion' ? String(raw).trimStart() : raw;
+        row[col.key] = col.key === 'descripcion'
+          ? String(raw).trimStart()
+          : raw;
         hasData = true;
       } else {
         row[col.key] = null;
@@ -249,6 +283,112 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
     level: Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1)),
     kind:  String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 3. PLANTILLA EXCEL PARA IMPORTACIÓN
+// ═══════════════════════════════════════════════════════════════════════
+function downloadTemplate(projectName: string) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Hoja "Metrado" con filas de ejemplo ───────────────────────────
+  const exampleRows: Record<string, any>[] = [
+    {
+      partida: '', descripcion: 'INSTALACIONES DE COMUNICACIONES',
+      unidad: 'glb', elsim: '', largo: '', ancho: '', alto: '', nveces: '',
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: '',
+      _level: 1, _kind: 'group',
+    },
+    {
+      partida: '', descripcion: 'CABLEADO ESTRUCTURADO',
+      unidad: 'm', elsim: '', largo: '', ancho: '', alto: '', nveces: '',
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: '',
+      _level: 2, _kind: 'group',
+    },
+    {
+      partida: '', descripcion: 'Cable UTP CAT6 horizontal',
+      unidad: 'm', elsim: '', largo: 25, ancho: '', alto: '', nveces: 4,
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: 'Piso 1',
+      _level: 3, _kind: 'leaf',
+    },
+    {
+      partida: '', descripcion: 'Canaleta 60x40 mm',
+      unidad: 'm', elsim: '', largo: 12, ancho: '', alto: '', nveces: 2,
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: '',
+      _level: 3, _kind: 'leaf',
+    },
+    {
+      partida: '', descripcion: 'EQUIPOS ACTIVOS',
+      unidad: 'und', elsim: '', largo: '', ancho: '', alto: '', nveces: '',
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: '',
+      _level: 2, _kind: 'group',
+    },
+    {
+      partida: '', descripcion: 'Switch 24 puertos POE',
+      unidad: 'und', elsim: 1, largo: '', ancho: '', alto: '', nveces: 3,
+      lon: '', area: '', vol: '', kg: '', und: '', total: '', observacion: 'Gabinete principal',
+      _level: 3, _kind: 'leaf',
+    },
+  ];
+
+  // Exportar con CLAVES como encabezados (necesario para re-importar)
+  const colKeys = BASE_COLS.map(c => c.key);
+  const wsData: any[][] = [
+    colKeys, // fila 0: headers = claves exactas
+    ...exampleRows.map(r => colKeys.map(k => r[k] ?? '')),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Anchos aproximados
+  ws['!cols'] = BASE_COLS.map(c => ({ wpx: c.width }));
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Metrado');
+
+  // ── Hoja "Instrucciones" ──────────────────────────────────────────
+  const instrRows = [
+    ['INSTRUCCIONES DE IMPORTACIÓN', '', ''],
+    ['', '', ''],
+    ['CAMPO', 'DESCRIPCIÓN', 'VALORES POSIBLES'],
+    ['_level', 'Nivel jerárquico (1 = mayor, 10 = más profundo)',   '1, 2, 3, 4 ... 10'],
+    ['_kind',  'Tipo de fila',                                      'group | leaf'],
+    ['partida','Código (se calcula automáticamente al importar)',   'Dejar vacío'],
+    ['descripcion','Nombre de la partida o grupo',                 'Texto libre'],
+    ['unidad', 'Unidad de medida',                                  'und, m, ml, m2, m3, kg, lt, gl, pza'],
+    ['elsim',  'Elementos similares (Und = elsim × nveces)',        'Número'],
+    ['largo',  'Dimensión largo',                                   'Número (m)'],
+    ['ancho',  'Dimensión ancho  (m2 = largo × ancho × nveces)',   'Número (m)'],
+    ['alto',   'Dimensión alto   (m3 = largo × ancho × alto × nveces)', 'Número (m)'],
+    ['nveces', 'Número de veces',                                   'Número entero'],
+    ['lon',    'Calculado automáticamente (largo × nveces)',        'No ingresar'],
+    ['area',   'Calculado automáticamente (largo × ancho × nveces)','No ingresar'],
+    ['vol',    'Calculado automáticamente (largo × ancho × alto × nveces)', 'No ingresar'],
+    ['kg',     'Peso en kg (solo para unidad = kg)',                'Número'],
+    ['und',    'Parcial calculado (elsim × nveces)',                'No ingresar'],
+    ['total',  'Total calculado automáticamente',                   'No ingresar'],
+    ['observacion','Comentarios opcionales',                        'Texto libre'],
+    ['', '', ''],
+    ['CÁLCULOS AUTOMÁTICOS POR UNIDAD', '', ''],
+    ['Unidad', 'Campos a rellenar', 'Resultado'],
+    ['m / ml', 'largo, nveces',     'lon'],
+    ['m2',     'largo, ancho, nveces', 'area'],
+    ['m3 / lt / gl', 'largo, ancho, alto, nveces', 'vol'],
+    ['kg',     'kg',                'total = kg'],
+    ['und / pza', 'elsim, nveces',  'und (parcial)'],
+    ['', '', ''],
+    ['JERARQUÍA', '', ''],
+    ['• _kind=group → grupo/cabecera (no lleva dimensiones)',       '', ''],
+    ['• _kind=leaf  → partida/detalle (lleva dimensiones)',         '', ''],
+    ['• Los grupos anidan grupos o partidas según su _level',       '', ''],
+    ['• El sistema recalcula los totales y la numeración automáticamente', '', ''],
+  ];
+
+  const wsInstr = XLSX.utils.aoa_to_sheet(instrRows);
+  wsInstr['!cols'] = [{ wpx: 280 }, { wpx: 300 }, { wpx: 200 }];
+  XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  saveAs(new Blob([buffer]), `plantilla_metrado_${projectName}.xlsx`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -358,9 +498,27 @@ export default function ComunicacionesIndex() {
   }, []);
 
   const resumenRows = useMemo(() => {
-    const c = buildResumenRows(metrado ?? []);
-    return c.length > 0 ? c : (resumen ?? []);
-  }, [buildResumenRows, metrado, resumen]);
+    // Primero: usar los datos del resumen del servidor si están disponibles
+    if (resumen && Array.isArray(resumen) && resumen.length > 0) {
+      return resumen.map((row: any, idx: number) => ({
+        _level: row._level ?? row.nivel ?? 1,
+        _kind: 'group',
+        item: row.item || row.partida || String(idx + 1).padStart(2, '0'),
+        descripcion: row.descripcion || row.titulo || '',
+        und: row.und || row.unidad || 'gl',
+        parcial: toNum(row.parcial ?? 0),
+        total: toNum(row.total ?? row.parcial ?? 0),
+      }));
+    }
+    
+    // Segundo: construir desde el metrado si no hay resumen del servidor
+    const metradoData = metrado ?? [];
+    if (metradoData.length > 0) {
+      return buildResumenRows(metradoData);
+    }
+    
+    return [];
+  }, [resumen, metrado, buildResumenRows]);
 
   // ── Hojas iniciales ───────────────────────────────────────────────────
   const initialSheets = useMemo(() => {
@@ -431,11 +589,12 @@ export default function ComunicacionesIndex() {
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
     if (!active || active.name === 'Resumen') return;
     const data: any[][] = active.data || [];
-    const sheetOrder = active.order ?? 0;
+    const sheetOrder    = active.order ?? 0;
 
+    // Recolectar entradas válidas
     const entries: Entry[] = [];
     for (let r = 1; r < data.length; r++) {
-      const row = readDataRow(data, r);
+      const row     = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
       const { level, kind } = rowMeta(row);
@@ -454,13 +613,17 @@ export default function ComunicacionesIndex() {
     counters[1] = Math.max(0, TOP_LEVEL_START - 1);
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'leaf') {
+        // Hojas: limpiar código, aplicar estilo neutro
         if (!blank(row.partida)) {
           set(ri, 'partida', mkTxt(''));
           row.partida = '';
         }
         const desc = trim0(row.descripcion);
         if (desc) {
-          set(ri, 'descripcion', styledTxt(desc, indent(level, true) + desc, LEAF_STYLE));
+          set(ri, 'descripcion', {
+            v: desc, m: indent(level, true) + desc,
+            ct: { fa: 'General', t: 'g' }, ...LEAF_TEXT,
+          });
           row.descripcion = desc;
         }
         if (row['_kind'] !== 'leaf') set(ri, '_kind', 'leaf');
@@ -473,12 +636,12 @@ export default function ComunicacionesIndex() {
         .join('.');
       const st = groupStyle(level);
       if (row.partida !== code) {
-        set(ri, 'partida', styledTxt(code, code, st));
+        set(ri, 'partida', mkGroupTxt(code, code, level));
         row.partida = code;
       }
       const desc = trim0(row.descripcion);
       if (desc) {
-        set(ri, 'descripcion', styledTxt(desc, indent(level, false) + desc, st));
+        set(ri, 'descripcion', mkGroupTxt(desc, indent(level, false) + desc, level));
         row.descripcion = desc;
       }
       if (row['_kind'] !== 'group') set(ri, '_kind', 'group');
@@ -497,7 +660,7 @@ export default function ComunicacionesIndex() {
         }
         if (inherited && String(row.unidad ?? '').trim() !== inherited) {
           row.unidad = inherited;
-          set(ri, 'unidad', { ...mkTxt(inherited), bg: LEAF_STYLE.bg, fc: LEAF_STYLE.fc, fs: 10 });
+          set(ri, 'unidad', { ...mkTxt(inherited), ...LEAF_TEXT });
         }
       }
     });
@@ -518,6 +681,18 @@ export default function ComunicacionesIndex() {
         return;
       }
       const { row, ri } = e;
+
+      const unidad    = String(row.unidad ?? '').trim().toLowerCase();
+      const inputSet  = new Set(UNIT_INPUTS[unidad]  ?? []);
+      const outputSet = new Set(UNIT_OUTPUTS[unidad] ?? []);
+
+      /** Determina el color de fondo de un campo de hoja */
+      const fieldBg = (key: string): string => {
+        if (inputSet.has(key))  return FIELD_BG.input;
+        if (outputSet.has(key)) return FIELD_BG.output;
+        return FIELD_BG.inactive;
+      };
+
       const elsim  = toNum(row.elsim);
       const nveces = toNum(row.nveces) || 1;
       const largo  = toNum(row.largo);
@@ -539,7 +714,7 @@ export default function ComunicacionesIndex() {
       if (unidad === 'm' || unidad === 'ml') tVal = newLon;
       else if (unidad === 'm2') tVal = newArea;
       else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
-      else if (unidad === 'kg') tVal = toNum(row.kg);
+      else if (unidad === 'kg')               tVal = toNum(row.kg);
       else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
       e.total = tVal;
       set(ri, 'total', mkNum(tVal));
@@ -551,6 +726,7 @@ export default function ComunicacionesIndex() {
       entries.forEach((e, idx) => {
         if (e.kind !== 'group' || e.level !== lvl) return;
         let sum = 0;
+        // Sumar todos los totals de entries que están dentro de este grupo
         for (let j = idx + 1; j < entries.length; j++) {
           const child = entries[j];
           if (child.level <= lvl) break;
@@ -562,7 +738,7 @@ export default function ComunicacionesIndex() {
         }
         e.total = sum;
         e.row.total = sum;
-        set(e.ri, 'total', styledNum(sum, groupStyle(lvl)));
+        set(e.ri, 'total', mkGroupNum(sum, lvl));
       });
     }
 
@@ -572,7 +748,7 @@ export default function ComunicacionesIndex() {
     progUpdateCount.current++;
     updates.forEach((u, idx) => {
       ls.setCellValue(u.r, u.c, u.v, {
-        order:     sheetOrder,
+        order: sheetOrder,
         isRefresh: idx === updates.length - 1,
       });
     });
@@ -584,7 +760,7 @@ export default function ComunicacionesIndex() {
         handleSyncResumen();
       }
     }, 120);
-  }, [scheduleSave]);
+  }, [scheduleSave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handlers Luckysheet ────────────────────────────────────────────────
   const afterChange = useCallback((data: any) => {
@@ -598,9 +774,9 @@ export default function ComunicacionesIndex() {
     scheduleSave(sheets);
   }, [scheduleSave]);
 
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════
   // MOVER BLOQUE
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════
   const moveBlock = useCallback((direction: 'up' | 'down') => {
     const ls = (window as any).luckysheet;
     if (!ls) return;
@@ -611,7 +787,7 @@ export default function ComunicacionesIndex() {
     if (!range?.length) return;
     const selRow = range[0].row[0];
     const data: any[][] = active.data || [];
-    const sheetOrder = active.order ?? 0;
+    const sheetOrder    = active.order ?? 0;
 
     type RI = { ri: number; level: number; kind: EntryKind };
     const riList: RI[] = [];
@@ -632,11 +808,9 @@ export default function ComunicacionesIndex() {
     }
     const blockEndIdx = riList.findIndex((e) => e.ri === blockEnd);
 
-    const readBlock = (from: number, to: number): any[][] => {
+    const readBlock = (from: number, to: number) => {
       const out: any[][] = [];
-      for (let r = from; r <= to; r++) {
-        out.push(data[r] ? [...data[r]] : []);
-      }
+      for (let r = from; r <= to; r++) out.push(data[r] ? [...data[r]] : []);
       return out;
     };
 
@@ -647,12 +821,13 @@ export default function ComunicacionesIndex() {
           const val = rowData[ci] ?? null;
           const isLastCell = isLast && i === rows.length - 1 && ci === BASE_COLS.length - 1;
           ls.setCellValue(r, ci, blank(val) ? '' : val, {
-            order: sheetOrder,
-            isRefresh: isLastCell,
+            order: sheetOrder, isRefresh: isLastCell,
           });
         });
       });
     };
+
+    progUpdateCount.current++;
 
     if (direction === 'up') {
       let prevSibIdx = -1;
@@ -694,7 +869,7 @@ export default function ComunicacionesIndex() {
     setTimeout(() => {
       progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
     }, 100);
-  }, [recalcActiveSheet]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ═══════════════════════════════════════════════════════════════════════
   // AGREGAR FILAS CON NIVEL PERSONALIZADO
@@ -799,7 +974,7 @@ export default function ComunicacionesIndex() {
       const ls = (window as any).luckysheet;
       const sheets = ls?.getAllSheets?.() ?? [];
       if (!ls || typeof ls.setDataVerification !== 'function' || sheets.length === 0) {
-        if (++attempts < MAX_ATTEMPTS) timer = setTimeout(applyVerification, 250);
+        if (++attempts < 40) setTimeout(apply, 250);
         return;
       }
       const ci = COL['unidad'];
@@ -816,27 +991,24 @@ export default function ComunicacionesIndex() {
     };
     timer = setTimeout(applyVerification, 400);
     return () => clearTimeout(timer);
-  }, [initialSheets]);
+  }, [initialSheets, applyUnitDropdowns]);
 
   useEffect(() => {
     let intentos = 0;
-    const ejecutar = () => {
+    const run = () => {
       const ls = (window as any).luckysheet;
       if (!ls || typeof ls.getAllSheets !== 'function') {
-        if (intentos < 20) {
-          intentos++;
-          setTimeout(ejecutar, 300);
-        }
+        if (intentos++ < 20) setTimeout(run, 300);
         return;
       }
       recalcActiveSheet();
     };
-    ejecutar();
+    run();
   }, [recalcActiveSheet]);
 
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════
   // SINCRONIZAR RESUMEN
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════
   const handleSyncResumen = useCallback(() => {
     setIsSyncing(true);
     setTimeout(() => {
@@ -846,11 +1018,8 @@ export default function ComunicacionesIndex() {
       let metradoData: Record<string, any>[] = [];
       let resIdx = -1;
       all.forEach((sheet: any, idx: number) => {
-        if (sheet.name === 'Metrado') {
-          metradoData = sheetToRows(sheet, BASE_COLS);
-        } else if (sheet.name === 'Resumen') {
-          resIdx = idx;
-        }
+        if (sheet.name === 'Metrado')  metradoData = sheetToRows(sheet, BASE_COLS);
+        if (sheet.name === 'Resumen')  resIdx = idx;
       });
       if (resIdx === -1) { setIsSyncing(false); return; }
       const newRows = buildResumenRows(metradoData);
@@ -867,7 +1036,7 @@ export default function ComunicacionesIndex() {
         ls.setCellValue(0, c, col.label, { isRefresh: false });
       });
       ls.refresh();
-      ls.setSheetActive(currentSheet);
+      ls.setSheetActive(currentOrder);
       doSave(all);
       setIsSyncing(false);
     }, 400);
@@ -881,7 +1050,7 @@ export default function ComunicacionesIndex() {
 
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
-  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
@@ -909,16 +1078,27 @@ export default function ComunicacionesIndex() {
             </div>
             {/* Leyenda visual de niveles */}
             <div className="hidden items-center gap-1 xl:flex">
-              {GROUP_PALETTE.slice(0, 4).map((p, i) => (
+              {HIER_TEXT.slice(0, 5).map((st, i) => (
                 <span key={i}
-                  className="rounded px-1.5 py-0.5 text-[9px] font-bold"
-                  style={{ background: p.bg, color: p.fc }}>
+                  className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-white border border-slate-200"
+                  style={{ color: st.fc }}>
                   N{i + 1}
                 </span>
               ))}
-              <span className="rounded px-1.5 py-0.5 text-[9px] font-bold"
-                style={{ background: LEAF_STYLE.bg, color: LEAF_STYLE.fc, border: '1px solid #cbd5e1' }}>
+              <span className="rounded px-1.5 py-0.5 text-[9px] border border-slate-200 bg-white"
+                style={{ color: LEAF_TEXT.fc }}>
                 Hoja
+              </span>
+              <span className="ml-1 text-[9px] text-slate-300">|</span>
+              {/* Leyenda campos */}
+              <span className="rounded px-1.5 py-0.5 text-[9px]" style={{ background: FIELD_BG.input, color: '#92400e' }}>
+                Ingresar
+              </span>
+              <span className="rounded px-1.5 py-0.5 text-[9px]" style={{ background: FIELD_BG.output, color: '#166534' }}>
+                Calculado
+              </span>
+              <span className="rounded px-1.5 py-0.5 text-[9px]" style={{ background: FIELD_BG.total, color: FIELD_BG.totalFc }}>
+                Total
               </span>
             </div>
           </div>
@@ -1201,7 +1381,7 @@ export default function ComunicacionesIndex() {
               disabled={isSyncing || saving}
               className="h-7 gap-1 text-[11px]">
               <RefreshCcw className={cn('h-3 w-3', isSyncing && 'animate-spin')} />
-              {isSyncing ? 'Sincronizando…' : 'Sync Resumen'}
+              {isSyncing ? 'Sincronizando…' : 'Sync'}
             </Button>
           </div>
         </header>
@@ -1215,8 +1395,10 @@ export default function ComunicacionesIndex() {
             options={{
               title:            'Metrado Comunicaciones',
               showinfobar:      false,
+              showtoolbar:      false,
+              showsheet:        false,
               sheetFormulaBar:  true,
-              showstatisticBar: true,
+              showstatisticBar: false,
               afterChange:      afterChange,
               contextMenu: {
               },
@@ -1231,6 +1413,10 @@ export default function ComunicacionesIndex() {
 // ═══════════════════════════════════════════════════════════════════════
 // SUBCOMPONENTES
 // ═══════════════════════════════════════════════════════════════════════
+function Divider() {
+  return <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />;
+}
+
 function SaveStatus({ saving, error, lastSaved }: {
   saving: boolean; error: string | null; lastSaved: Date | null;
 }) {
@@ -1264,7 +1450,10 @@ function ActionBtn({ icon, label, title, style, onClick }: {
   style: React.CSSProperties; onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} title={title}
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
       className="inline-flex h-7 items-center gap-1 rounded-md px-2
         text-[10px] font-bold transition-all hover:opacity-85 active:scale-95"
       style={style}>
@@ -1283,9 +1472,6 @@ function ctxItem(
   return {
     text,
     type: 'button',
-    onClick: () => {
-      addRow(kind, sameLevelAsSelected);
-      triggerRecalc();
-    },
+    onClick: () => { addRow(kind, sameLevelAsSelected); triggerRecalc(); },
   };
 }

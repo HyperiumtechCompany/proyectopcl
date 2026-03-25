@@ -3,6 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
+use App\Models\PresupuestoAcu;
+use App\Models\AcuManoDeObra;
+use App\Models\AcuMaterial;
+use App\Models\AcuEquipo;
+use App\Models\AcuSubcontrato;
+use App\Models\AcuSubpartida;
 use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
 use Illuminate\Database\Schema\Blueprint;
@@ -36,7 +42,10 @@ class PresupuestoController extends Controller
         'supervision' => 'gg_supervision',
         'control_concurrente' => 'gg_control_concurrente',
         'remuneraciones' => 'presupuesto_remuneraciones',
-        'insumos' => 'presupuesto_insumos',
+        // Catálogo maestro de insumos (se usa solo para validar la sub‑sección y evitar 404).
+        // La vista consume sus propios endpoints (/presupuesto/insumos/search), pero necesitamos
+        // un mapeo a una tabla existente para que validateSubsection no lance 404.
+        'insumos' => 'insumo_productos',
         'indices' => 'presupuesto_indices',
     ];
 
@@ -179,6 +188,18 @@ class PresupuestoController extends Controller
 
                 // Insert and capture new ID
                 $newId = $connection->table($tableName)->insertGetId($cleanedRow);
+
+                // ─── Sincronizar con Tablas Hijas si es ACU ──────────────────────
+                if ($subsection === 'acus') {
+                    $this->syncAcuComponents(
+                        $newId,
+                        is_string($row['mano_de_obra'] ?? null) ? json_decode($row['mano_de_obra'], true) : ($row['mano_de_obra'] ?? []),
+                        is_string($row['materiales'] ?? null) ? json_decode($row['materiales'], true) : ($row['materiales'] ?? []),
+                        is_string($row['equipos'] ?? null) ? json_decode($row['equipos'], true) : ($row['equipos'] ?? []),
+                        is_string($row['subcontratos'] ?? null) ? json_decode($row['subcontratos'], true) : ($row['subcontratos'] ?? []),
+                        is_string($row['subpartidas'] ?? null) ? json_decode($row['subpartidas'], true) : ($row['subpartidas'] ?? [])
+                    );
+                }
 
                 // Store mapping for children that might follow
                 if ($oldId) {
@@ -360,7 +381,7 @@ class PresupuestoController extends Controller
             ->orderBy('id', 'desc')
             ->first();
         $supervisionTotal = $supervisionRow
-            ? (float) ($supervisionRow->subtotal ?? 0)
+            ? (float) (($supervisionRow->subtotal ?? $supervisionRow->sub_total) ?? 0)
             : (float) $connection->table('gg_supervision')
                 ->where('presupuesto_id', $tenantPresupuestoId)
                 ->where('tipo_fila', 'detalle')
@@ -530,22 +551,33 @@ class PresupuestoController extends Controller
         DB::connection('costos_tenant')->beginTransaction();
 
         try {
-            // Special handling for sanitarias: read from resumen table
-            if ($metradoType === 'metrado_sanitarias') {
+            // Prefer summary table (item, descripcion, und, total) when available
+            $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
+            $resumenTable  = "{$metradoType}_resumen";
+
+            $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+
+            if ($isModular) {
+                // Modulares usa total_general, unidad y partida
                 $metradoQuery = DB::connection('costos_tenant')
-                    ->table('metrado_sanitarias_resumen')
+                    ->table("{$metradoType}_resumen")
                     ->select('partida', 'descripcion', 'unidad', 'total_general as total')
                     ->whereNotNull('partida')
                     ->where('partida', '!=', '')
                     ->orderBy('item_order')
                     ->orderBy('id');
+            } elseif ($schemaBuilder->hasTable($resumenTable)) {
+                // Tablas resumen planas: item, descripcion, und (unidad), total
+                $metradoQuery = DB::connection('costos_tenant')
+                    ->table($resumenTable)
+                    ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
+                    ->orderBy('item_order')
+                    ->orderBy('id');
             } else {
-                // Query the metrado table for partida structure
+                // Fallback: tabla principal
                 $metradoQuery = DB::connection('costos_tenant')
                     ->table($metradoType)
-                    ->select('partida', 'descripcion', 'unidad', 'total')
-                    ->whereNotNull('partida')
-                    ->where('partida', '!=', '');
+                    ->select('item', 'partida', 'descripcion', 'unidad', 'total');
                 if ($this->hasTenantColumn($metradoType, 'item_order')) {
                     $metradoQuery->orderBy('item_order');
                 }
@@ -558,21 +590,36 @@ class PresupuestoController extends Controller
             $createdCount = 0;
             $updatedCount = 0;
 
+            $rowIndex = 0;
             foreach ($metradoRows as $metradoRow) {
+                $codigo = $metradoRow->item ?? $metradoRow->partida;
+                if (!$codigo) {
+                    // Saltamos filas sin código de ítem
+                    continue;
+                }
+
+                // Usamos la descripción tal cual viene del resumen; si falta, caemos al código de ítem.
+                $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
+                $unidad      = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                $total       = $metradoRow->total ?? 0;
+
                 // Check if partida already exists in presupuesto_general
                 $existingPartida = DB::connection('costos_tenant')
                     ->table('presupuesto_general')
-                    ->where('partida', $metradoRow->partida)
+                    ->where('partida', $codigo)
                     ->first();
 
                 if ($existingPartida) {
-                    // Update only metrado field, preserve prices
+                    // Update metrado y sincronizamos unidad/descripcion desde el origen
                     DB::connection('costos_tenant')
                         ->table('presupuesto_general')
-                        ->where('partida', $metradoRow->partida)
+                        ->where('partida', $codigo)
                         ->update([
-                            'metrado' => $metradoRow->total,
+                            'metrado' => $total,
+                            'unidad'  => $unidad,
+                            'descripcion' => $descripcion,
                             'metrado_source' => $metradoType,
+                            'item_order' => $this->hasTenantColumn('presupuesto_general', 'item_order') ? $rowIndex : null,
                             'updated_at' => now(),
                         ]);
                     $updatedCount++;
@@ -581,17 +628,17 @@ class PresupuestoController extends Controller
                     $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
                     $insertData = [
                         'presupuesto_id' => $tenantPresupuestoId,
-                        'partida' => $metradoRow->partida,
-                        'descripcion' => $metradoRow->descripcion ?? '',
-                        'unidad' => $metradoRow->unidad ?? '',
-                        'metrado' => $metradoRow->total,
+                        'partida' => $codigo,
+                        'descripcion' => $descripcion,
+                        'unidad' => $unidad,
+                        'metrado' => $total,
                         'precio_unitario' => 0,
                         'metrado_source' => $metradoType,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
                     if ($this->hasTenantColumn('presupuesto_general', 'item_order')) {
-                        $insertData['item_order'] = 0;
+                        $insertData['item_order'] = $rowIndex;
                     }
 
                     DB::connection('costos_tenant')
@@ -599,6 +646,8 @@ class PresupuestoController extends Controller
                         ->insert($insertData);
                     $createdCount++;
                 }
+
+                $rowIndex++;
             }
 
             DB::connection('costos_tenant')->commit();
@@ -668,23 +717,30 @@ class PresupuestoController extends Controller
             $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
             $hasItemOrder = $this->hasTenantColumn('presupuesto_general', 'item_order');
 
+            $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
+
             foreach ($metradosList as $metradoType) {
-                // Special handling for sanitarias: read from resumen table
-                if ($metradoType === 'metrado_sanitarias') {
+                $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+                
+                if ($isModular) {
                     $metradoQuery = DB::connection('costos_tenant')
-                        ->table('metrado_sanitarias_resumen')
+                        ->table("{$metradoType}_resumen")
                         ->select('partida', 'descripcion', 'unidad', 'total_general as total')
                         ->whereNotNull('partida')
                         ->where('partida', '!=', '')
+                        ->orderBy('item_order')
+                        ->orderBy('id');
+                } elseif ($schemaBuilder->hasTable("{$metradoType}_resumen")) {
+                    $metradoQuery = DB::connection('costos_tenant')
+                        ->table("{$metradoType}_resumen")
+                        ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
                         ->orderBy('item_order')
                         ->orderBy('id');
                 } else {
                     // Query the metrado table for partida structure
                     $metradoQuery = DB::connection('costos_tenant')
                         ->table($metradoType)
-                        ->select('partida', 'descripcion', 'unidad', 'total')
-                        ->whereNotNull('partida')
-                        ->where('partida', '!=', '');
+                        ->select('item', 'partida', 'descripcion', 'unidad', 'total');
                     if ($this->hasTenantColumn($metradoType, 'item_order')) {
                         $metradoQuery->orderBy('item_order');
                     }
@@ -694,21 +750,35 @@ class PresupuestoController extends Controller
                 }
                 $metradoRows = $metradoQuery->get();
 
+                $rowIndex = 0;
                 foreach ($metradoRows as $metradoRow) {
+                    $codigo = $metradoRow->item ?? $metradoRow->partida;
+                    if (!$codigo) {
+                        continue;
+                    }
+
+                    // No duplicar el código en la descripción: usamos la descripción del resumen o, si falta, el código.
+                    $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
+                    $unidad      = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                    $total       = $metradoRow->total ?? 0;
+
                     // Check if partida already exists in presupuesto_general
                     $existingPartida = DB::connection('costos_tenant')
                         ->table('presupuesto_general')
-                        ->where('partida', $metradoRow->partida)
+                        ->where('partida', $codigo)
                         ->first();
 
                     if ($existingPartida) {
-                        // Update only metrado field, preserve prices
+                        // Update metrado y campos derivados
                         DB::connection('costos_tenant')
                             ->table('presupuesto_general')
-                            ->where('partida', $metradoRow->partida)
+                            ->where('partida', $codigo)
                             ->update([
-                                'metrado' => $metradoRow->total,
+                                'metrado' => $total,
+                                'unidad'  => $unidad,
+                                'descripcion' => $descripcion,
                                 'metrado_source' => $metradoType,
+                                'item_order' => $hasItemOrder ? $rowIndex : $existingPartida->item_order ?? null,
                                 'updated_at' => now(),
                             ]);
                         $updatedCount++;
@@ -716,17 +786,17 @@ class PresupuestoController extends Controller
                         // Create new partida
                         $insertData = [
                             'presupuesto_id' => $tenantPresupuestoId,
-                            'partida' => $metradoRow->partida,
-                            'descripcion' => $metradoRow->descripcion ?? '',
-                            'unidad' => $metradoRow->unidad ?? '',
-                            'metrado' => $metradoRow->total,
+                            'partida' => $codigo,
+                            'descripcion' => $descripcion,
+                            'unidad' => $unidad,
+                            'metrado' => $total,
                             'precio_unitario' => 0,
                             'metrado_source' => $metradoType,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];
                         if ($hasItemOrder) {
-                            $insertData['item_order'] = 0;
+                            $insertData['item_order'] = $rowIndex;
                         }
 
                         DB::connection('costos_tenant')
@@ -734,6 +804,8 @@ class PresupuestoController extends Controller
                             ->insert($insertData);
                         $createdCount++;
                     }
+
+                    $rowIndex++;
                 }
             }
 
@@ -793,28 +865,34 @@ class PresupuestoController extends Controller
             'mano_de_obra.*.cantidad' => 'required|numeric|min:0',
             'mano_de_obra.*.recursos' => 'nullable|numeric|min:0',
             'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
+            'mano_de_obra.*.insumo_id' => 'nullable|integer',
             'materiales' => 'nullable|array',
             'materiales.*.descripcion' => 'required|string',
             'materiales.*.unidad' => 'required|string|max:20',
             'materiales.*.cantidad' => 'required|numeric|min:0',
             'materiales.*.precio_unitario' => 'required|numeric|min:0',
             'materiales.*.factor_desperdicio' => 'nullable|numeric|min:1',
+            'materiales.*.insumo_id' => 'nullable|integer',
             'equipos' => 'nullable|array',
             'equipos.*.descripcion' => 'required|string',
             'equipos.*.unidad' => 'required|string|max:20',
             'equipos.*.cantidad' => 'required|numeric|min:0',
             'equipos.*.recursos' => 'nullable|numeric|min:0',
             'equipos.*.precio_hora' => 'required|numeric|min:0',
+            'equipos.*.insumo_id' => 'nullable|integer',
             'subcontratos' => 'nullable|array',
             'subcontratos.*.descripcion' => 'required|string',
             'subcontratos.*.unidad' => 'required|string|max:20',
             'subcontratos.*.cantidad' => 'required|numeric|min:0',
             'subcontratos.*.precio_unitario' => 'required|numeric|min:0',
+            'subcontratos.*.insumo_id' => 'nullable|integer',
             'subpartidas' => 'nullable|array',
             'subpartidas.*.descripcion' => 'required|string',
             'subpartidas.*.unidad' => 'required|string|max:20',
             'subpartidas.*.cantidad' => 'required|numeric|min:0',
             'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
+            'subpartidas.*.insumo_id' => 'nullable|integer',
+            'update_project_prices' => 'nullable|boolean',
         ]);
 
         DB::connection('costos_tenant')->beginTransaction();
@@ -891,6 +969,46 @@ class PresupuestoController extends Controller
             }
             $costoSubpartidas = round($costoSubpartidas, 2);
 
+            // ─── Update Master Project Prices如果 flag is active ────────────
+            if (!empty($validated['update_project_prices'])) {
+                $dbService = app(\App\Services\CostoDatabaseService::class);
+                $dbService->setTenantConnection($project->database_name);
+                
+                $checkAndUpdatePrice = function ($items, $priceKey) use ($project, $dbService) {
+                    foreach ($items as $item) {
+                        if (!empty($item['insumo_id'])) {
+                            $sentPrice = (float)($item[$priceKey] ?? 0);
+                            $insumo = DB::connection('costos_tenant')
+                                ->table('insumo_productos')
+                                ->where('id', $item['insumo_id'])
+                                ->first();
+                                
+                            if ($insumo && (float)$insumo->costo_unitario !== $sentPrice) {
+                                // Price changed! Update catalog and propagate
+                                DB::connection('costos_tenant')
+                                    ->table('insumo_productos')
+                                    ->where('id', $insumo->id)
+                                    ->update([
+                                        'costo_unitario' => $sentPrice,
+                                        'updated_at' => now(),
+                                    ]);
+                                
+                                // Update memory object for propagation
+                                $insumo->costo_unitario = $sentPrice;
+                                $dbService->propagateInsumoUpdate($project, $insumo);
+                            }
+                        }
+                    }
+                };
+
+                $checkAndUpdatePrice($manoDeObra, 'precio_unitario');
+                $checkAndUpdatePrice($materiales, 'precio_unitario');
+                $checkAndUpdatePrice($equipos, 'precio_hora');
+                $checkAndUpdatePrice($subcontratos, 'precio_unitario');
+                $checkAndUpdatePrice($subpartidas, 'precio_unitario');
+            }
+            // ──────────────────────────────────────────────────────────────────
+
             // Prepare data for database
             $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
             $acuData = [
@@ -933,6 +1051,10 @@ class PresupuestoController extends Controller
                     ->insertGetId($acuData);
             }
 
+            // ─── Sincronizar con Tablas Hijas Especializadas ──────────────────
+            // Estas tablas permiten propagación de precios y mejor rendimiento
+            $this->syncAcuComponents($acuId, $manoDeObra, $materiales, $equipos, $subcontratos, $subpartidas);
+
             // Fetch the complete ACU with calculated total
             $calculatedAcu = DB::connection('costos_tenant')
                 ->table('presupuesto_acus')
@@ -944,8 +1066,26 @@ class PresupuestoController extends Controller
             $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
             $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
             $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
-            $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
             $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
+
+            // ── Sincronizar con Presupuesto General ───────────────────────────
+            // Buscamos la partida en presupuesto_general para actualizar su precio_unitario
+            if ($calculatedAcu) {
+                $newUnitPrice = (float)($calculatedAcu->costo_unitario_total ?? 0);
+                
+                DB::connection('costos_tenant')
+                    ->table('presupuesto_general')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->where('partida', $validated['partida'])
+                    ->update([
+                        'precio_unitario' => $newUnitPrice,
+                        'updated_at'      => now(),
+                    ]);
+
+                // Recalcular el costo directo total del presupuesto
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+            }
+            // ──────────────────────────────────────────────────────────────────
 
             DB::connection('costos_tenant')->commit();
 
@@ -1493,9 +1633,13 @@ class PresupuestoController extends Controller
 
         foreach ($metradoTypes as $type => $label) {
             if ($project->hasModule($type)) {
+                // Determine the correct table to check for rows
+                $isModular = in_array($type, ['metrado_arquitectura', 'metrado_estructura', 'metrado_sanitarias']);
+                $tableName = $isModular ? "{$type}_resumen" : $type;
+
                 // Count rows in the metrado table
                 $rowCount = DB::connection('costos_tenant')
-                    ->table($type)
+                    ->table($tableName)
                     ->count();
 
                 $availableMetrados[] = [
@@ -2070,7 +2214,32 @@ class PresupuestoController extends Controller
             $query->orderBy("$tableName.id");
         }
 
-        return $query->get();
+        $rows = $query->get();
+
+        // ─── Cargar Componentes para ACUs desde Tablas Hijas ──────────────────
+        if ($tableName === 'presupuesto_acus') {
+            return $rows->map(function ($row) use ($connection) {
+                $acuId = $row->id;
+                
+                // Estos campos reemplazan el contenido de los JSON si están presentes
+                // (Para compatibilidad gradual, si no hay filas en las tablas hijas, conserva el JSON)
+                $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+                $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
+
+                if ($mo->isNotEmpty()) $row->mano_de_obra = json_encode($mo);
+                if ($ma->isNotEmpty()) $row->materiales = json_encode($ma);
+                if ($eq->isNotEmpty()) $row->equipos = json_encode($eq);
+                if ($sc->isNotEmpty()) $row->subcontratos = json_encode($sc);
+                if ($sp->isNotEmpty()) $row->subpartidas = json_encode($sp);
+
+                return $row;
+            });
+        }
+
+        return $rows;
     }
 
     /**
@@ -2198,48 +2367,7 @@ class PresupuestoController extends Controller
      */
     private function syncCostoDirecto(string $databaseName, int $tenantPresupuestoId): void
     {
-        $connection = DB::connection('costos_tenant');
-
-        // Sumar todos los parciales de presupuesto_general vinculados a este presupuesto
-        // Nota: metrado * precio_unitario es la base del parcial en DB.
-        $totalCostoDirecto = (float)$connection->table('presupuesto_general')
-            ->where('presupuesto_id', $tenantPresupuestoId)
-            ->sum(DB::raw('metrado * precio_unitario'));
-
-        // 1. Actualizar tabla maestra de presupuestos del tenant
-        if (Schema::connection('costos_tenant')->hasTable('presupuestos')) {
-            $connection->table('presupuestos')
-                ->where('id', $tenantPresupuestoId)
-                ->update([
-                    'costo_directo' => $totalCostoDirecto,
-                    'updated_at'    => now(),
-                ]);
-        }
-
-        // 2. Actualizar tabla de parámetros globales (project_params)
-        if (Schema::connection('costos_tenant')->hasTable('project_params')) {
-            $connection->table('project_params')
-                ->where('id', 1)
-                ->update([
-                    'costo_directo' => $totalCostoDirecto,
-                    'updated_at'    => now(),
-                ]);
-        }
-
-        // 3. Propagación automática a base_calculo de Fianzas y Pólizas
-        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_fianzas')) {
-            $connection->table('gg_fijos_fianzas')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->update(['base_calculo' => $totalCostoDirecto]);
-        }
-
-        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_polizas')) {
-            $connection->table('gg_fijos_polizas')
-                ->where('presupuesto_id', $tenantPresupuestoId)
-                ->update(['base_calculo' => $totalCostoDirecto]);
-        }
-
-        Log::info("PresupuestoController: Sync costo_directo [{$totalCostoDirecto}] for budget [{$tenantPresupuestoId}]");
+        $this->dbService->syncCostoDirecto($databaseName, $tenantPresupuestoId);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -2465,28 +2593,28 @@ class PresupuestoController extends Controller
         $bgColors    = ['#d6eaf8', '#eaf4fb', '#f2f9fd', '#ffffff', '#ffffff'];
 
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Presupuesto - ' . e($nombre) . '</title>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 10px; color: #111; margin: 20px; }
-  h1 { font-size: 14px; color: #1a3a5c; margin-bottom: 4px; }
-  p.sub { color: #555; font-size: 10px; margin: 0 0 12px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #1e3a5f; color: #fff; padding: 5px 8px; text-align: left; }
-  th.r { text-align: right; }
-  td { padding: 3px 8px; border-bottom: 1px solid #e0e0e0; }
-  td.r { text-align: right; font-family: monospace; }
-  .tot td { font-weight: bold; background: #d6eaf8; }
-  @media print { @page { size: A4 landscape; margin: 15mm; } }
-</style></head><body>
-<h1>PRESUPUESTO GENERAL</h1>
-<p class="sub">Proyecto: <strong>' . e($nombre) . '</strong> &nbsp;|&nbsp; ' . $fecha . '</p>
-<table><thead><tr>
-  <th style="width:90px">Ítem</th><th>Descripción</th>
-  <th style="width:40px" class="r">Und.</th>
-  <th style="width:80px" class="r">Metrado</th>
-  <th style="width:80px" class="r">P. Unit.</th>
-  <th style="width:90px" class="r">Parcial</th>
-</tr></thead><tbody>';
+            <title>Presupuesto - ' . e($nombre) . '</title>
+            <style>
+            body { font-family: Arial, sans-serif; font-size: 10px; color: #111; margin: 20px; }
+            h1 { font-size: 14px; color: #1a3a5c; margin-bottom: 4px; }
+            p.sub { color: #555; font-size: 10px; margin: 0 0 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #1e3a5f; color: #fff; padding: 5px 8px; text-align: left; }
+            th.r { text-align: right; }
+            td { padding: 3px 8px; border-bottom: 1px solid #e0e0e0; }
+            td.r { text-align: right; font-family: monospace; }
+            .tot td { font-weight: bold; background: #d6eaf8; }
+            @media print { @page { size: A4 landscape; margin: 15mm; } }
+            </style></head><body>
+            <h1>PRESUPUESTO GENERAL</h1>
+            <p class="sub">Proyecto: <strong>' . e($nombre) . '</strong> &nbsp;|&nbsp; ' . $fecha . '</p>
+            <table><thead><tr>
+            <th style="width:90px">Ítem</th><th>Descripción</th>
+            <th style="width:40px" class="r">Und.</th>
+            <th style="width:80px" class="r">Metrado</th>
+            <th style="width:80px" class="r">P. Unit.</th>
+            <th style="width:90px" class="r">Parcial</th>
+            </tr></thead><tbody>';
 
         $rootTotal = 0;
         foreach ($rows as $row) {
@@ -2526,5 +2654,323 @@ class PresupuestoController extends Controller
             'Content-Type'        => 'text/html; charset=UTF-8',
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
+    }
+    /**
+     * Obtener componentes de un ACU por tipo.
+     */
+    public function getAcuComponentes(CostoProject $project, int $acuId, string $tipo): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateAcuComponentType($tipo);
+
+        $model = $this->getAcuComponentModel($tipo);
+        $componentes = $model::where('acu_id', $acuId)->orderBy('item_order')->get();
+
+        return response()->json([
+            'success' => true,
+            'tipo' => $tipo,
+            'rows' => $componentes,
+        ]);
+    }
+
+    /**
+     * Agregar un componente a un ACU.
+     */
+    public function storeAcuComponente(CostoProject $project, int $acuId, string $tipo, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateAcuComponentType($tipo);
+
+        $model = $this->getAcuComponentModel($tipo);
+        $data = $request->all();
+        $data['acu_id'] = $acuId;
+        
+        // Calculate item_order if not provided
+        if (!isset($data['item_order'])) {
+            $data['item_order'] = $model::where('acu_id', $acuId)->count();
+        }
+
+        $componente = $model::create($data);
+
+        // Importante: Al cambiar componentes individuales, debemos sincronizar el ACU padre (totales + JSON)
+        $this->refreshAcuTotalsAndJson($acuId);
+
+        return response()->json([
+            'success' => true,
+            'componente' => $componente,
+        ]);
+    }
+
+    /**
+     * Actualizar un componente de un ACU.
+     */
+    public function updateAcuComponente(CostoProject $project, int $acuId, string $tipo, int $id, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateAcuComponentType($tipo);
+
+        $model = $this->getAcuComponentModel($tipo);
+        $componente = $model::where('acu_id', $acuId)->findOrFail($id);
+        
+        $componente->update($request->all());
+
+        $this->refreshAcuTotalsAndJson($acuId);
+
+        return response()->json([
+            'success' => true,
+            'componente' => $componente,
+        ]);
+    }
+
+    /**
+     * Eliminar un componente de un ACU.
+     */
+    public function destroyAcuComponente(CostoProject $project, int $acuId, string $tipo, int $id): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $this->validateAcuComponentType($tipo);
+
+        $model = $this->getAcuComponentModel($tipo);
+        $model::where('acu_id', $acuId)->where('id', $id)->delete();
+
+        $this->refreshAcuTotalsAndJson($acuId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Componente eliminado',
+        ]);
+    }
+
+    /**
+     * Copiar presupuesto completo
+     */
+    public function copy(CostoProject $project, Request $request): JsonResponse
+    {
+        $this->authorizeProject($project);
+        $sourcePresupuestoId = $request->input('source_presupuesto_id');
+        
+        if (!$sourcePresupuestoId) {
+            return response()->json(['success' => false, 'message' => 'ID de presupuesto origen requerido'], 422);
+        }
+
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+        
+        DB::connection('costos_tenant')->beginTransaction();
+        try {
+            $this->copyAcuData($sourcePresupuestoId, $tenantPresupuestoId, $project->database_name);
+            DB::connection('costos_tenant')->commit();
+            
+            return response()->json(['success' => true, 'message' => 'Presupuesto copiado exitosamente']);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error("Error copying budget: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al copiar presupuesto: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function validateAcuComponentType(string $tipo): void
+    {
+        $validTypes = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
+        if (!in_array($tipo, $validTypes)) {
+            abort(400, "Tipo de componente de ACU inválido: {$tipo}");
+        }
+    }
+
+    private function getAcuComponentModel(string $tipo): string
+    {
+        return match ($tipo) {
+            'mano_de_obra' => AcuManoDeObra::class,
+            'materiales'   => AcuMaterial::class,
+            'equipos'      => AcuEquipo::class,
+            'subcontratos' => AcuSubcontrato::class,
+            'subpartidas'  => AcuSubpartida::class,
+        };
+    }
+
+    private function refreshAcuTotalsAndJson(int $acuId): void
+    {
+        $connection = DB::connection('costos_tenant');
+        
+        $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
+        $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
+        $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+        $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+        $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
+
+        $costoMo = $mo->sum('parcial');
+        $costoMa = $ma->sum('parcial');
+        $costoEq = $eq->sum('parcial');
+        $costoSc = $sc->sum('parcial');
+        $costoSp = $sp->sum('parcial');
+
+        $connection->table('presupuesto_acus')
+            ->where('id', $acuId)
+            ->update([
+                'mano_de_obra'       => json_encode($mo),
+                'materiales'         => json_encode($ma),
+                'equipos'            => json_encode($eq),
+                'subcontratos'       => json_encode($sc),
+                'subpartidas'        => json_encode($sp),
+                'costo_mano_obra'    => $costoMo,
+                'costo_materiales'   => $costoMa,
+                'costo_equipos'      => $costoEq,
+                'costo_subcontratos' => $costoSc,
+                'costo_subpartidas'  => $costoSp,
+                'updated_at'         => now(),
+            ]);
+            
+        // Sync with presupuesto_general
+        $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
+        if ($acu) {
+            $connection->table('presupuesto_general')
+                ->where('presupuesto_id', data_get($acu, 'presupuesto_id'))
+                ->where('partida', data_get($acu, 'partida'))
+                ->update([
+                    'precio_unitario' => (float)data_get($acu, 'costo_unitario_total', 0),
+                    'updated_at'      => now(),
+                ]);
+            
+            $this->dbService->syncCostoDirecto(DB::connection('costos_tenant')->getDatabaseName(), data_get($acu, 'presupuesto_id'));
+        }
+    }
+
+    /**
+     * Copia todos los ACUs y sus componentes de un presupuesto a otro.
+     */
+    private function copyAcuData(int $sourcePresupuestoId, int $targetPresupuestoId, string $databaseName): void
+    {
+        $this->dbService->setTenantConnection($databaseName);
+        $connection = DB::connection('costos_tenant');
+
+        $sourceAcus = $connection->table('presupuesto_acus')
+            ->where('presupuesto_id', $sourcePresupuestoId)
+            ->get();
+
+        foreach ($sourceAcus as $sourceAcu) {
+            $acuData = (array)$sourceAcu;
+            unset($acuData['id']);
+            $acuData['presupuesto_id'] = $targetPresupuestoId;
+            $acuData['created_at'] = now();
+            $acuData['updated_at'] = now();
+
+            $newAcuId = $connection->table('presupuesto_acus')->insertGetId($acuData);
+
+            // Copiar componentes relacionales
+            $componentTables = [
+                'acu_mano_de_obra',
+                'acu_materiales',
+                'acu_equipos',
+                'acu_subcontratos',
+                'acu_subpartidas',
+            ];
+
+            foreach ($componentTables as $table) {
+                $components = $connection->table($table)
+                    ->where('acu_id', $sourceAcu->id)
+                    ->get();
+
+                foreach ($components as $comp) {
+                    $compData = (array)$comp;
+                    unset($compData['id']);
+                    $compData['acu_id'] = $newAcuId;
+                    $compData['created_at'] = now();
+                    $compData['updated_at'] = now();
+
+                    $connection->table($table)->insert($compData);
+                }
+            }
+        }
+    }
+
+    /**
+     * Sincroniza los componentes de un ACU con las tablas hijas especializadas.
+     */
+    private function syncAcuComponents(
+        int $acuId, 
+        array $manoDeObra, 
+        array $materiales, 
+        array $equipos, 
+        array $subcontratos, 
+        array $subpartidas
+    ): void {
+        // Limpiar registros previos
+        AcuManoDeObra::where('acu_id', $acuId)->delete();
+        AcuMaterial::where('acu_id', $acuId)->delete();
+        AcuEquipo::where('acu_id', $acuId)->delete();
+        AcuSubcontrato::where('acu_id', $acuId)->delete();
+        AcuSubpartida::where('acu_id', $acuId)->delete();
+
+        // Insertar Mano de Obra
+        foreach ($manoDeObra as $index => $row) {
+            AcuManoDeObra::create([
+                'acu_id' => $acuId,
+                'insumo_id' => $row['insumo_id'] ?? null,
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'recursos' => $row['recursos'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'],
+                'parcial' => $row['parcial'],
+                'item_order' => $index,
+            ]);
+        }
+
+        // Insertar Materiales
+        foreach ($materiales as $index => $row) {
+            AcuMaterial::create([
+                'acu_id' => $acuId,
+                'insumo_id' => $row['insumo_id'] ?? null,
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'precio_unitario' => $row['precio_unitario'],
+                'factor_desperdicio' => $row['factor_desperdicio'] ?? 1.0,
+                'parcial' => $row['parcial'],
+                'item_order' => $index,
+            ]);
+        }
+
+        // Insertar Equipos
+        foreach ($equipos as $index => $row) {
+            AcuEquipo::create([
+                'acu_id' => $acuId,
+                'insumo_id' => $row['insumo_id'] ?? null,
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'recursos' => $row['recursos'] ?? 0,
+                'precio_hora' => $row['precio_hora'] ?? $row['precio_unitario'] ?? 0,
+                'parcial' => $row['parcial'],
+                'item_order' => $index,
+            ]);
+        }
+
+        // Insertar Subcontratos
+        foreach ($subcontratos as $index => $row) {
+            AcuSubcontrato::create([
+                'acu_id' => $acuId,
+                'insumo_id' => $row['insumo_id'] ?? null,
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'precio_unitario' => $row['precio_unitario'],
+                'parcial' => $row['parcial'],
+                'item_order' => $index,
+            ]);
+        }
+
+        // Insertar Subpartidas
+        foreach ($subpartidas as $index => $row) {
+            AcuSubpartida::create([
+                'acu_id' => $acuId,
+                'insumo_id' => $row['insumo_id'] ?? null,
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'precio_unitario' => $row['precio_unitario'],
+                'parcial' => $row['parcial'],
+                'item_order' => $index,
+            ]);
+        }
     }
 }

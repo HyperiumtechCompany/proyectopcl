@@ -141,28 +141,48 @@ const rebuildHierarchy = (rows: any[]) => {
 };
 
 const performTreeCalculation = (rows: BudgetItemRow[]) => {
-  const sorted = [...rows].sort((a, b) =>
-    b.partida.localeCompare(a.partida, undefined, { numeric: true, sensitivity: 'base' }),
-  ); // Bottom-up
+  // 1. Build a map of parent -> children for O(1) lookup
+  const childrenMap = new Map<string, string[]>();
+  rows.forEach(row => {
+    const parent = getParentPartida(row.partida);
+    if (parent) {
+      if (!childrenMap.has(parent)) childrenMap.set(parent, []);
+      childrenMap.get(parent)!.push(row.partida);
+    }
+  });
 
+  // 2. Sort rows bottom-up (longer codes first) to ensure children are calculated before parents
+  const sorted = [...rows].sort((a, b) => {
+    const levelA = getLevel(a.partida);
+    const levelB = getLevel(b.partida);
+    if (levelA !== levelB) return levelB - levelA;
+    return b.partida.localeCompare(a.partida, undefined, { numeric: true });
+  });
+
+  // 3. One-pass calculation
   const partialSums = new Map<string, number>();
-
-  sorted.forEach(row => {
-    const hasChildren = sorted.some(r => getParentPartida(r.partida) === row.partida);
-
-    if (!hasChildren) {
+  
+  // First, initialize partialSums for leaf nodes (partidas without children)
+  rows.forEach(row => {
+    if (!childrenMap.has(row.partida)) {
       partialSums.set(row.partida, Number(row.parcial) || 0);
-    } else {
-      const children = sorted.filter(r => getParentPartida(r.partida) === row.partida);
-      const sum = children.reduce((acc, child) => acc + (Number(partialSums.get(child.partida)) || 0), 0);
-      partialSums.set(row.partida, sum);
+    }
+  });
 
-      const originalRow = rows.find(r => r.partida === row.partida);
-      if (originalRow) {
-        originalRow.parcial = sum;
-        originalRow.precio_unitario = 0;
-        originalRow.metrado = 0;
-        originalRow.unidad = '';
+  // Then calculate upwards
+  sorted.forEach(row => {
+    const childrenIds = childrenMap.get(row.partida);
+    if (childrenIds && childrenIds.length > 0) {
+      const sum = childrenIds.reduce((acc, childId) => acc + (partialSums.get(childId) || 0), 0);
+      partialSums.set(row.partida, sum);
+      
+      // Update original row reference
+      row.parcial = sum;
+      // Clear values for titles
+      if (row.tipo_fila !== 'partida') {
+        row.precio_unitario = 0;
+        row.metrado = 0;
+        row.unidad = '';
       }
     }
   });
@@ -259,24 +279,20 @@ const remapBlock = (
 // Optimized visibility: O(n) instead of O(n²)
 // ─────────────────────────────────────────────────────────────────────────────
 const buildCollapsedSet = (rows: BudgetItemRow[], expandedMap: Record<string, boolean>): Set<string> => {
-  // Find all nodes that are collapsed (have children but expandedMap[id] is falsy)
-  const collapsedRoots = new Set<string>();
-  rows.forEach(r => {
-    if (r._hasChildren && !expandedMap[r.partida]) {
-      collapsedRoots.add(r.partida);
-    }
-  });
-
-  // Build set of all partidas that are hidden (have a collapsed ancestor)
   const hidden = new Set<string>();
-  rows.forEach(r => {
-    let parentId = r._parentId;
-    while (parentId) {
-      if (collapsedRoots.has(parentId)) {
+  const rowMap = new Map(rows.map(r => [r.partida, r]));
+  const sorted = [...rows].sort((a, b) => a.partida.localeCompare(b.partida, undefined, { numeric: true }));
+
+  sorted.forEach((r) => {
+    const parentId = getParentPartida(r.partida);
+    if (parentId) {
+      const isParentHidden = hidden.has(parentId);
+      const parentRow = rowMap.get(parentId);
+      const isParentCollapsed = expandedMap[parentId] === false && parentRow?._hasChildren;
+
+      if (isParentHidden || isParentCollapsed) {
         hidden.add(r.partida);
-        break;
       }
-      parentId = getParentPartida(parentId);
     }
   });
 
