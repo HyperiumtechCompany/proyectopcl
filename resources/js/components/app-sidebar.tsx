@@ -68,6 +68,7 @@ export function AppSidebar() {
             icon: Folder,
         },
         
+
     
         {
         title: 'Estructura',
@@ -79,6 +80,10 @@ export function AppSidebar() {
             href: '/metrados/gas',
             icon: Folder,
         },
+
+        // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
+        // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
+
     ];
 
     return (

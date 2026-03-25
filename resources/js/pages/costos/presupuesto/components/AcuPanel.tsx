@@ -92,6 +92,93 @@ const computeRecursosFromCantidadBase = (
     return cantidad * safeRend;
 };
 
+function SearchableSelect({
+    options,
+    value,
+    onChange,
+    placeholder,
+    disabled = false,
+}: {
+    options: { value: string | number; label: string }[];
+    value: string | number;
+    onChange: (val: string | number) => void;
+    placeholder?: string;
+    disabled?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(
+        (o) => o.value.toString() === value?.toString(),
+    );
+    const filteredOptions = options.filter((o) =>
+        o.label.toLowerCase().includes(search.toLowerCase()),
+    );
+
+    return (
+        <div className="relative" ref={ref}>
+            <div
+                className={`flex w-full items-center justify-between rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100 ${
+                    disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                }`}
+                onClick={() => !disabled && setOpen(!open)}
+            >
+                <span className="truncate">
+                    {selectedOption ? selectedOption.label : placeholder}
+                </span>
+                <ChevronDown size={12} className="shrink-0 text-slate-400" />
+            </div>
+            {open && (
+                <div className="absolute z-70 mt-1 max-h-48 w-full overflow-y-auto rounded border border-slate-700 bg-slate-800 shadow-xl">
+                    <div className="sticky top-0 bg-slate-800 p-1">
+                        <input
+                            autoFocus
+                            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 outline-none"
+                            placeholder="Buscar..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                    {filteredOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-500">
+                            Sin resultados
+                        </div>
+                    ) : (
+                        filteredOptions.map((o) => (
+                            <div
+                                key={o.value}
+                                className={`cursor-pointer px-2 py-1.5 text-xs hover:bg-sky-600 hover:text-white ${
+                                    value?.toString() === o.value.toString()
+                                        ? 'bg-sky-900/40 text-sky-200'
+                                        : 'text-slate-200'
+                                }`}
+                                onClick={() => {
+                                    onChange(o.value);
+                                    setOpen(false);
+                                    setSearch('');
+                                }}
+                            >
+                                {o.label}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function ResourceSearchDialog({
     open,
     onOpenChange,
@@ -102,7 +189,7 @@ function ResourceSearchDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSelect: (resource: any) => void;
-    targetType: 'mano_de_obra' | 'materiales' | 'equipos' | null;
+    targetType: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas' | null;
     projectId: number;
 }) {
     const [query, setQuery] = useState('');
@@ -115,24 +202,30 @@ function ResourceSearchDialog({
     const [editorOpen, setEditorOpen] = useState(false);
     const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create');
     const [editorSaving, setEditorSaving] = useState(false);
-    const [clases, setClases] = useState<
+    const [diccionarios, setDiccionarios] = useState<
         Array<{ id: number; codigo: string; descripcion: string }>
     >([]);
-    const [clasesLoading, setClasesLoading] = useState(false);
+    const [unidades, setUnidades] = useState<
+        Array<{ id: number; descripcion: string; descripcion_singular: string; abreviatura_unidad: string }>
+    >([]);
+    const [dependenciesLoading, setDependenciesLoading] = useState(false);
     const [editorForm, setEditorForm] = useState({
         id: null as number | null,
         codigo_producto: '',
         descripcion: '',
         especificaciones: '',
-        unidad: '',
+        diccionario_id: '',
+        unidad_id: '',
+        tipo_proveedor: '106',
         costo_unitario_lista: 0,
         costo_unitario: 0,
         costo_flete: 0,
-        insumo_clase_id: '',
         tipo: (targetType ?? 'materiales') as
             | 'mano_de_obra'
             | 'materiales'
-            | 'equipos',
+            | 'equipos'
+            | 'subcontratos'
+            | 'subpartidas',
     });
 
     // Fetch products from API with debounce
@@ -187,21 +280,24 @@ function ResourceSearchDialog({
 
     useEffect(() => {
         if (!editorOpen) return;
-        if (clases.length > 0 || clasesLoading) return;
+        if (diccionarios.length > 0 && unidades.length > 0) return;
+        if (dependenciesLoading) return;
 
-        setClasesLoading(true);
-        axios
-            .get(`/costos/proyectos/${projectId}/presupuesto/insumos/clases`)
-            .then((res) => {
-                if (res.data?.success) {
-                    setClases(res.data.clases || []);
-                }
-            })
-            .catch(() => {
-                setClases([]);
-            })
-            .finally(() => setClasesLoading(false));
-    }, [editorOpen, clases.length, clasesLoading, projectId]);
+        setDependenciesLoading(true);
+        Promise.all([
+            axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/diccionarios`),
+            axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/unidades`)
+        ])
+        .then(([resDic, resUnd]) => {
+            if (resDic.data?.success) setDiccionarios(resDic.data.diccionarios || []);
+            if (resUnd.data?.success) setUnidades(resUnd.data.unidades || []);
+        })
+        .catch(() => {
+            setDiccionarios([]);
+            setUnidades([]);
+        })
+        .finally(() => setDependenciesLoading(false));
+    }, [editorOpen, diccionarios.length, unidades.length, dependenciesLoading, projectId]);
 
     useEffect(() => {
         if (!editorOpen) return;
@@ -210,7 +306,9 @@ function ResourceSearchDialog({
             tipo: (targetType ?? prev.tipo) as
                 | 'mano_de_obra'
                 | 'materiales'
-                | 'equipos',
+                | 'equipos'
+                | 'subcontratos'
+                | 'subpartidas',
         }));
     }, [targetType, editorOpen]);
 
@@ -221,15 +319,18 @@ function ResourceSearchDialog({
             codigo_producto: '',
             descripcion: '',
             especificaciones: '',
-            unidad: '',
+            diccionario_id: '',
+            unidad_id: '',
+            tipo_proveedor: '106',
             costo_unitario_lista: 0,
             costo_unitario: 0,
             costo_flete: 0,
-            insumo_clase_id: '',
             tipo: (targetType ?? 'materiales') as
                 | 'mano_de_obra'
                 | 'materiales'
-                | 'equipos',
+                | 'equipos'
+                | 'subcontratos'
+                | 'subpartidas',
         });
         setEditorOpen(true);
     };
@@ -238,14 +339,15 @@ function ResourceSearchDialog({
         setEditorMode('edit');
         setEditorForm({
             id: item.id,
-            codigo_producto: item.codigo,
+            codigo_producto: item.codigo ?? '',
             descripcion: item.descripcion,
             especificaciones: item.especificaciones || '',
-            unidad: item.unidad,
+            diccionario_id: item.diccionario_id?.toString() || '',
+            unidad_id: item.unidad_id?.toString() || '',
+            tipo_proveedor: item.tipo_proveedor || '106',
             costo_unitario_lista: item.costo_unitario_lista ?? 0,
             costo_unitario: item.precio ?? 0,
             costo_flete: item.costo_flete ?? 0,
-            insumo_clase_id: item.clase?.id?.toString() || '',
             tipo: item.tipo,
         });
         setEditorOpen(true);
@@ -288,22 +390,22 @@ function ResourceSearchDialog({
         if (editorSaving) return;
         setEditorSaving(true);
         try {
-            if (!editorForm.insumo_clase_id) {
-                alert('Seleccione una clase de insumo.');
+            if (!editorForm.diccionario_id || !editorForm.unidad_id || !editorForm.tipo_proveedor) {
+                alert('Seleccione un diccionario, unidad y tipo de proveedor válidos.');
                 setEditorSaving(false);
                 return;
             }
             const payload = {
-                codigo_producto: editorForm.codigo_producto.trim(),
                 descripcion: editorForm.descripcion.trim(),
                 especificaciones: editorForm.especificaciones?.trim() || null,
-                unidad: editorForm.unidad.trim(),
+                diccionario_id: Number(editorForm.diccionario_id),
+                unidad_id: Number(editorForm.unidad_id),
+                tipo_proveedor: editorForm.tipo_proveedor,
                 costo_unitario_lista: Number(
                     editorForm.costo_unitario_lista || 0,
                 ),
                 costo_unitario: Number(editorForm.costo_unitario || 0),
                 costo_flete: Number(editorForm.costo_flete || 0),
-                insumo_clase_id: Number(editorForm.insumo_clase_id),
                 tipo: editorForm.tipo,
             };
 
@@ -426,9 +528,9 @@ function ResourceSearchDialog({
                                         <span className="font-mono text-[10px] text-slate-500">
                                             {r.codigo}
                                         </span>
-                                        {r.clase && (
+                                        {r.diccionario && (
                                             <span className="rounded bg-slate-700/60 px-1.5 py-0.5 text-[9px] font-medium text-slate-400">
-                                                {r.clase.descripcion}
+                                                {r.diccionario.codigo} - {r.diccionario.descripcion}
                                             </span>
                                         )}
                                     </div>
@@ -438,7 +540,7 @@ function ResourceSearchDialog({
                                         {fmt(r.precio)}
                                     </span>
                                     <span className="text-[10px] text-slate-500">
-                                        {r.unidad}
+                                        {r.unidad?.abreviatura_unidad || '-'}
                                     </span>
                                     <button
                                         className="mt-1 inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
@@ -482,29 +584,21 @@ function ResourceSearchDialog({
 
                         <div className="grid grid-cols-2 gap-3 text-xs">
                             <label className="col-span-1 flex flex-col gap-1">
-                                Código
+                                Código (Autogenerado)
                                 <input
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100 disabled:opacity-50"
                                     value={editorForm.codigo_producto ?? ''}
-                                    onChange={(e) =>
-                                        setEditorForm((prev) => ({
-                                            ...prev,
-                                            codigo_producto: e.target.value,
-                                        }))
-                                    }
+                                    disabled
+                                    placeholder={editorMode === 'create' ? 'Se generará al guardar...' : ''}
                                 />
                             </label>
                             <label className="col-span-1 flex flex-col gap-1">
                                 Unidad
-                                <input
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.unidad ?? ''}
-                                    onChange={(e) =>
-                                        setEditorForm((prev) => ({
-                                            ...prev,
-                                            unidad: e.target.value,
-                                        }))
-                                    }
+                                <SearchableSelect
+                                    options={unidades.map(u => ({ value: u.id, label: u.descripcion_singular || u.abreviatura_unidad }))}
+                                    value={editorForm.unidad_id ?? ''}
+                                    onChange={(val) => setEditorForm(prev => ({ ...prev, unidad_id: val.toString() }))}
+                                    placeholder={dependenciesLoading ? 'Cargando...' : 'Seleccione...'}
                                 />
                             </label>
                             <label className="col-span-2 flex flex-col gap-1">
@@ -534,17 +628,45 @@ function ResourceSearchDialog({
                                 />
                             </label>
                             <label className="col-span-1 flex flex-col gap-1">
-                                Tipo
+                                Diccionario
+                                <SearchableSelect
+                                    options={diccionarios.map(d => ({ value: d.id, label: `${d.codigo} - ${d.descripcion}` }))}
+                                    value={editorForm.diccionario_id ?? ''}
+                                    onChange={(val) => setEditorForm(prev => ({ ...prev, diccionario_id: val.toString() }))}
+                                    placeholder={dependenciesLoading ? 'Cargando...' : 'Seleccione...'}
+                                />
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Tipo de Proveedor
                                 <select
                                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
+                                    value={editorForm.tipo_proveedor ?? ''}
+                                    onChange={(e) =>
+                                        setEditorForm((prev) => ({
+                                            ...prev,
+                                            tipo_proveedor: e.target.value,
+                                        }))
+                                    }
+                                >
+                                    <option value="106">Local (106)</option>
+                                    <option value="001">Sin Clasificar (001)</option>
+                                </select>
+                            </label>
+                            <label className="col-span-1 flex flex-col gap-1">
+                                Tipo
+                                <select
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100 disabled:opacity-50"
                                     value={editorForm.tipo ?? ''}
+                                    disabled
                                     onChange={(e) =>
                                         setEditorForm((prev) => ({
                                             ...prev,
                                             tipo: e.target.value as
                                                 | 'mano_de_obra'
                                                 | 'materiales'
-                                                | 'equipos',
+                                                | 'equipos'
+                                                | 'subcontratos'
+                                                | 'subpartidas',
                                         }))
                                     }
                                 >
@@ -555,30 +677,8 @@ function ResourceSearchDialog({
                                         Materiales
                                     </option>
                                     <option value="equipos">Equipos</option>
-                                </select>
-                            </label>
-                            <label className="col-span-1 flex flex-col gap-1">
-                                Clase
-                                <select
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100"
-                                    value={editorForm.insumo_clase_id ?? ''}
-                                    onChange={(e) =>
-                                        setEditorForm((prev) => ({
-                                            ...prev,
-                                            insumo_clase_id: e.target.value,
-                                        }))
-                                    }
-                                >
-                                    <option value="">
-                                        {clasesLoading
-                                            ? 'Cargando...'
-                                            : 'Seleccione'}
-                                    </option>
-                                    {clases.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.codigo} - {c.descripcion}
-                                        </option>
-                                    ))}
+                                    <option value="subcontratos">Sub-contratos</option>
+                                    <option value="subpartidas">Sub-partidas</option>
                                 </select>
                             </label>
                             <label className="col-span-1 flex flex-col gap-1">
@@ -1061,6 +1161,7 @@ interface AcuPanelProps {
     } | null;
     onSaveAcu?: (
         acuData: Record<string, any>,
+        options?: { updateProjectPrices?: boolean }
     ) => Promise<{ success: boolean; acu?: any; error?: string }>;
 }
 
@@ -1078,13 +1179,14 @@ export function AcuPanel({
         | 'equipos'
         | 'subcontratos'
         | 'subpartidas';
-    type SearchType = 'mano_de_obra' | 'materiales' | 'equipos';
+    type SearchType = 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas';
 
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
     
     const globalHours = useProjectParamsStore(s => s.getJornadaHoras());
     const [hoursPerDay, setHoursPerDay] = useState(globalHours || 8);
+    const [updateProjectPrices, setUpdateProjectPrices] = useState(true);
     const [searchOpen, setSearchOpen] = useState(false);
 
     useEffect(() => {
@@ -1183,31 +1285,6 @@ export function AcuPanel({
     const handleAddResourceClick = (type: SectionType) => {
         if (!selectedAcu || !onSaveAcu) return;
 
-        if (type === 'subcontratos' || type === 'subpartidas') {
-            const label =
-                type === 'subcontratos'
-                    ? 'Nuevo subcontrato'
-                    : 'Nueva subpartida';
-            const newComponent = {
-                codigo: null,
-                descripcion: label,
-                unidad: 'und',
-                cantidad: 1,
-                precio_unitario: 0,
-                factor_desperdicio: 1,
-            };
-            const updatedAcuData = {
-                ...selectedAcu,
-                [type]: [
-                    ...((selectedAcu[type as keyof ACURowSummary] as any[]) ||
-                        []),
-                    newComponent,
-                ],
-            };
-            void onSaveAcu(updatedAcuData);
-            return;
-        }
-
         setSearchTargetType(type);
         setSearchOpen(true);
     };
@@ -1224,9 +1301,10 @@ export function AcuPanel({
             : 1;
 
         const newComponent = {
+            insumo_id: resource.id,
             codigo: resource.codigo_producto,
             descripcion: resource.descripcion,
-            unidad: resource.unidad,
+            unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? resource.unidad,
             cantidad,
             recursos,
             precio_unitario: resource.tipo === 'equipos' ? 0 : resource.precio,
@@ -1244,7 +1322,7 @@ export function AcuPanel({
             ],
         };
 
-        await onSaveAcu(updatedAcuData);
+        await onSaveAcu(updatedAcuData, { updateProjectPrices });
     };
 
     const handleUpdateItem = async (
@@ -1285,7 +1363,7 @@ export function AcuPanel({
                 precio_hora: selectedAcu.costo_mano_obra || 0,
             };
         }
-        await onSaveAcu({ ...selectedAcu, [type]: arr });
+        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
     };
 
     const handleDeleteItem = async (type: SectionType, index: number) => {
@@ -1294,7 +1372,7 @@ export function AcuPanel({
             ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
         ];
         arr.splice(index, 1);
-        await onSaveAcu({ ...selectedAcu, [type]: arr });
+        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
     };
 
     const handleUpdateRendimiento = async (newRendimiento: number) => {
@@ -1327,7 +1405,7 @@ export function AcuPanel({
                 selectedAcu.costo_mano_obra || 0,
             ),
         };
-        await onSaveAcu(updated);
+        await onSaveAcu(updated, { updateProjectPrices });
     };
 
     const handleTogglePerDay = async (nextPerDay: boolean) => {
@@ -1512,6 +1590,18 @@ export function AcuPanel({
                     }
                     className="w-12 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                 />
+                <div className="ml-auto flex items-center gap-2 rounded border border-slate-600 bg-slate-700/50 px-2 py-1">
+                    <input
+                        type="checkbox"
+                        id="update-global-prices"
+                        checked={updateProjectPrices}
+                        onChange={(e) => setUpdateProjectPrices(e.target.checked)}
+                        className="h-3 w-3 rounded border-slate-500 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-800"
+                    />
+                    <label htmlFor="update-global-prices" className="cursor-pointer select-none text-[10px] text-slate-300">
+                        Actualizar precio en todo el proyecto
+                    </label>
+                </div>
             </div>
 
             <div className="flex-1 overflow-hidden">

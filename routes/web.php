@@ -144,6 +144,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         ->prefix('/proyectos/{project}')
         ->group(function () {
             Route::post('/presupuesto/import-metrado', [PresupuestoController::class, 'importFromMetrado'])->name('proyectos.presupuesto.import-metrado');
+            Route::post('/presupuesto/import-batch-metrados', [PresupuestoController::class, 'importBatchFromMetrados'])->name('proyectos.presupuesto.import-batch-metrados');
             Route::post('/presupuesto/acus/calculate', [PresupuestoController::class, 'calculateACU'])->name('proyectos.presupuesto.acus.calculate');
             Route::get('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'getGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.show');
             Route::post('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.save');
@@ -153,17 +154,45 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'getSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.show');
             Route::patch('/presupuesto/supervision-gg-detalle', [PresupuestoController::class, 'saveSupervisionGGDetalle'])->name('proyectos.presupuesto.supervision-gg-detalle.save');
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
+
+
+            Route::get('/presupuesto/export/excel', [PresupuestoController::class, 'exportExcel'])->name('proyectos.presupuesto.export.excel');
+            Route::get('/presupuesto/export/pdf', [PresupuestoController::class, 'exportPdf'])->name('proyectos.presupuesto.export.pdf');
+
+            // ─── Consolidado Snapshot (cache de totales) ───
+            Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
+            Route::patch('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'saveConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.save');
+
+            // ─── Parámetros Globales del Proyecto (centralizados en tenant) ────
+
             Route::get('/presupuesto/params', [PresupuestoController::class, 'getProjectParams'])->name('proyectos.presupuesto.params.show');
             Route::patch('/presupuesto/params', [PresupuestoController::class, 'updateProjectParams'])->name('proyectos.presupuesto.params.update');
 
             // Insumos
             Route::get('/presupuesto/insumos/search', [InsumoProductoController::class, 'search'])->name('proyectos.presupuesto.insumos.search');
-            Route::get('/presupuesto/insumos/clases', [InsumoProductoController::class, 'clases'])->name('proyectos.presupuesto.insumos.clases');
+            Route::get('/presupuesto/insumos/diccionarios', [InsumoProductoController::class, 'diccionarios'])->name('proyectos.presupuesto.insumos.diccionarios');
+            Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
+
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
 
             // Rutas Comodín
+
+            Route::post('/presupuesto/insumos/replace-project-insumo', [InsumoProductoController::class, 'replaceProjectInsumo'])->name('proyectos.presupuesto.insumos.replace');
+            Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
+            Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
+            Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
+
+            // ─── Componentes de ACU (CRUD Granular) ───
+            Route::get('/presupuesto/acus/{acuId}/componentes/{tipo}', [PresupuestoController::class, 'getAcuComponentes'])->name('proyectos.presupuesto.acus.componentes.index');
+            Route::post('/presupuesto/acus/{acuId}/componentes/{tipo}', [PresupuestoController::class, 'storeAcuComponente'])->name('proyectos.presupuesto.acus.componentes.store');
+            Route::put('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'updateAcuComponente'])->name('proyectos.presupuesto.acus.componentes.update');
+            Route::delete('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'destroyAcuComponente'])->name('proyectos.presupuesto.acus.componentes.destroy');
+            Route::post('/presupuesto/copy', [PresupuestoController::class, 'copy'])->name('proyectos.presupuesto.copy');
+
+            // ─── Rutas Comodín (Wildcards) - DEBEN IR AL FINAL ────
+
             Route::get('/presupuesto/{subsection?}', [PresupuestoController::class, 'index'])->name('proyectos.presupuesto.index');
             Route::get('/presupuesto/{subsection}/data', [PresupuestoController::class, 'show'])->name('proyectos.presupuesto.show');
             Route::patch('/presupuesto/{subsection}', [PresupuestoController::class, 'update'])->name('proyectos.presupuesto.update');
@@ -175,7 +204,112 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
 
+
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
+
+    // ─── Metrado Estructuras (con middleware de BD dinámica) ────
+    Route::middleware([SetCostosDatabase::class])
+        ->prefix('/{costoProject}/metrado-estructuras')
+        ->name('metrado-estructuras.')
+        ->group(function () {
+            Route::get('/', [MetradoEstructurasController::class, 'index'])->name('index');
+            Route::get('/config', [MetradoEstructurasController::class, 'getConfig'])->name('config.show');
+            Route::patch('/config', [MetradoEstructurasController::class, 'updateConfig'])->name('config.update');
+            Route::get('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'getModulo'])->name('modulo.show');
+            Route::patch('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'updateModulo'])->name('modulo.update');
+            Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
+            Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
+            Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
+        });
+
+    // metrado electricas
+    Route::middleware([SetCostosDatabase::class])
+        ->prefix('/{costoProject}/metrado-electricas')
+        ->name('metrado-electricas.')
+        ->group(function () {
+            
+            Route::get('/', [MetradoElectricasController::class, 'index'])
+                ->name('index');
+            
+            Route::patch('/metrado', [MetradoElectricasController::class, 'updateMetrado'])
+                ->name('metrado.update');
+            
+            Route::patch('/resumen', [MetradoElectricasController::class, 'updateResumen'])
+                ->name('resumen.update');
+            
+            Route::post('/resumen/sync', [MetradoElectricasController::class, 'syncResumen'])
+                ->name('resumen.sync');
+        });
+
+    //metrado comunicaciones
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-comunicaciones')
+    ->name('metrado-comunicaciones.')
+    ->group(function () {
+
+        Route::get('/', [MetradoComunicacionesController::class, 'index'])
+            ->name('index');
+
+        Route::patch('/metrado', [MetradoComunicacionesController::class, 'updateMetrado'])
+            ->name('metrado.update');
+
+        Route::patch('/resumen', [MetradoComunicacionesController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoComunicacionesController::class, 'syncResumen'])
+            ->name('resumen.sync');
+        });
+
+    //metrado arquitectura
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-arquitectura')
+    ->name('metrado-arquitectura.')
+    ->group(function () {
+        Route::get('/', [MetradoArquitecturaController::class, 'index'])
+            ->name('index');
+
+        Route::get('/config', [MetradoArquitecturaController::class, 'getConfig'])
+            ->name('config.show');
+
+        Route::patch('/config', [MetradoArquitecturaController::class, 'updateConfig'])
+            ->name('config.update');
+
+        Route::get('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'getModulo'])
+            ->name('modulo.show');
+
+        Route::patch('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'updateModulo'])
+            ->name('modulo.update');
+
+        Route::get('/resumen', [MetradoArquitecturaController::class, 'getResumen'])
+            ->name('resumen.show');
+
+        Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoArquitecturaController::class, 'syncResumen'])
+            ->name('resumen.sync');
+
+        });
+
+    //metrado gas
+    Route::middleware([SetCostosDatabase::class])
+    ->prefix('/{costoProject}/metrado-gas')
+    ->name('metrado-gas.')
+    ->group(function () {
+        Route::get('/', [MetradoGasController::class, 'index'])
+            ->name('index');
+
+        Route::patch('/metrado', [MetradoGasController::class, 'updateMetrado'])
+            ->name('metrado.update');
+
+        Route::patch('/resumen', [MetradoGasController::class, 'updateResumen'])
+            ->name('resumen.update');
+
+        Route::post('/resumen/sync', [MetradoGasController::class, 'syncResumen'])
+            ->name('resumen.sync');
+
+        });
+
 });
 
 // ─── METRADOS MODULARES (Sanitarias y Estructuras) ─────────────────────────────

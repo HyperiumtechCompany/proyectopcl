@@ -5,7 +5,11 @@ import Luckysheet from '@/components/costos/tablas/Luckysheet';
 import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
+
   ChevronLeft, Save,
+
+  ChevronLeft, Settings2, Save, RefreshCcw,
+
   CheckCircle2, AlertCircle, Loader2,
   ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
 } from 'lucide-react';
@@ -81,8 +85,15 @@ const UNIT_TOTAL_COL: Record<string, string> = {
   'kg': 'kg', // Si usas la columna de kilogramos
 };
 
+
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const TOP_LEVEL_START = 1;
+
+// ═══════════════════════════════════════════════════════════════════════
+// NUMERACIÓN BASE PARA METRADO GAS
+// ═══════════════════════════════════════════════════════════════════════
+const TOP_LEVEL_START = 7; 
+
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 const MAX_LEVELS = 10;
@@ -151,6 +162,7 @@ function rowsToSheet(
   name: string,
   order = 0,
 ) {
+
   const header: any[] = cols.map((col, ci) => ({
     r: 0, c: ci,
     v: {
@@ -159,12 +171,73 @@ function rowsToSheet(
     },
   }));
 
+  // ─────────────────────────────────────────
+  // HEADER MULTINIVEL
+  // ─────────────────────────────────────────
+  const header: any[] = [
+    // Fila 0
+    { r: 0, c: COL.partida, v: mkTxt('ITEM', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 0, c: COL.descripcion, v: mkTxt('DESCRIPCIÓN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 0, c: COL.unidad, v: mkTxt('UN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 0, c: COL.elsim, v: mkTxt('Elem.Simil.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
+
+    { r: 0, c: COL.largo, v: mkTxt('DIMENSIONES', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
+    { r: 0, c: COL.nveces, v: mkTxt('N° Veces', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
+    { r: 0, c: COL.lon, v: mkTxt('METRADO', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
+    { r: 0, c: COL.total, v: mkTxt('Total', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+  ];
+
+  // Fila 1 (subheaders)
+  header.push(
+    { r: 1, c: COL.largo, v: mkTxt('Largo', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.ancho, v: mkTxt('Ancho', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.alto, v: mkTxt('Alto', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
+    { r: 1, c: COL.lon, v: mkTxt('Lon.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.area, v: mkTxt('Área', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.vol, v: mkTxt('Vol.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.kg, v: mkTxt('Kg.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+    { r: 1, c: COL.und, v: mkTxt('Und.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+  );
+
+  // ─────────────────────────────────────────
+  // MERGES (CLAVE)
+  // ─────────────────────────────────────────
+  const merges = {
+    [`0_${COL.partida}`]: { r: 0, c: COL.partida, rs: 2, cs: 1 },
+    [`0_${COL.descripcion}`]: { r: 0, c: COL.descripcion, rs: 2, cs: 1 },
+    [`0_${COL.unidad}`]: { r: 0, c: COL.unidad, rs: 2, cs: 1 },
+    [`0_${COL.elsim}`]: { r: 0, c: COL.elsim, rs: 2, cs: 1 },
+
+    [`0_${COL.largo}`]: { r: 0, c: COL.largo, rs: 1, cs: 3 }, // DIMENSIONES
+    [`0_${COL.lon}`]: { r: 0, c: COL.lon, rs: 1, cs: 5 },     // METRADO
+
+    [`0_${COL.nveces}`]: { r: 0, c: COL.nveces, rs: 2, cs: 1 },
+    [`0_${COL.total}`]: { r: 0, c: COL.total, rs: 2, cs: 1 },
+  };
+
+  // ─────────────────────────────────────────
+  // DATA (empieza en fila 2 ⚡)
+  // ─────────────────────────────────────────
   const cells: any[] = [];
+
   rows.forEach((row, ri) => {
+
     const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
     const st = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
     const rIdx = ri + 1;
+
+    const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
+    const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
+    const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
+
+    const rIdx = ri + 2; // 🔥 IMPORTANTE
+
 
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
@@ -172,43 +245,77 @@ function rowsToSheet(
         : row[col.key];
       if (blank(val)) return;
 
+
       let store: any = val;
       let display = String(val);
 
       if (col.key === 'descripcion' && typeof val === 'string') {
         store = val.trimStart();
         display = indent(level, kind === 'leaf') + store;
+
+      let display = String(val);
+
+      if (col.key === 'descripcion' && typeof val === 'string') {
+        display = indent(level, kind === 'leaf') + val.trimStart();
+
       }
 
-      const isNum = typeof store === 'number' ||
-        (store !== '' && !isNaN(Number(store)));
+      const isNum = typeof val === 'number' || (!isNaN(Number(val)) && val !== '');
+
 
       const cell: Record<string, any> = {
         v: isNum ? Number(store) : store,
+
+      const cell = {
+        v: isNum ? Number(val) : val,
+
         m: display,
         ct: { fa: isNum ? '#,##0.0000' : 'General', t: isNum ? 'n' : 'g' },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
+        ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
       };
+
       if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
+
+
+
       cells.push({ r: rIdx, c: ci, v: cell });
     });
   });
 
+  // ─────────────────────────────────────────
+  // CONFIG
+  // ─────────────────────────────────────────
   const columnlen: Record<number, number> = {};
   const colhidden: Record<number, number> = {};
+
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
     if (col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
   });
 
   return {
+
     name, status: order === 0 ? 1 : 0, order,
+
+    name,
+    status: order === 0 ? 1 : 0,
+    order,
+
     row: Math.max(rows.length + 50, 100),
     column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
-    config: { columnlen, colhidden, rowlen: { 0: 30 } },
-    frozen: { type: 'row', range: { row_focus: 0 } },
+    config: {
+      columnlen,
+      colhidden,
+      rowlen: { 0: 28, 1: 28 },
+      merge: merges,
+    },
+    frozen: {
+      type: 'range',
+      range: { row_focus: 2, column_focus: 0 },
+    },
   };
 }
 
@@ -216,7 +323,12 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   if (!sheet) return [];
   const data: any[][] = sheet.data || [];
   const rows: Record<string, any>[] = [];
+
   for (let r = 1; r < data.length; r++) {
+
+
+  for (let r = 2; r < data.length; r++) {
+
     const row: Record<string, any> = {};
     let hasData = false;
     cols.forEach((col, ci) => {
@@ -248,6 +360,7 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
     kind: String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL — modo lista si no hay spreadsheet
@@ -305,6 +418,18 @@ function GasEditor({ spreadsheet }: { spreadsheet: Spreadsheet }) {
     { title: 'Costos', href: '/costos' },
     { title: 'Metrado Gas', href: GAS_BASE_URL },
     { title: spreadsheet.name, href: '#' },
+
+// ═══════════════════════════════════════════════════════════════════════
+// COMPONENTE PRINCIPAL
+// ═══════════════════════════════════════════════════════════════════════
+export default function GasIndex() {  
+  const { project, metrado, resumen } = usePage<GasPageProps>().props;
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Costos',           href: '/costos' },
+    { title: project.nombre,     href: `/costos/${project.id}` },
+    { title: 'Metrado Gas',      href: '#' },  
+
   ];
 
   // ── State ──────────────────────────────────────────────────────────────
@@ -317,7 +442,58 @@ function GasEditor({ spreadsheet }: { spreadsheet: Spreadsheet }) {
   const latestSheets = useRef<any[]>([]);
   const progUpdateCount = useRef(0);
 
+
   // ── Hoja inicial ───────────────────────────────────────────────────────
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CONSTRUCTOR DE FILAS RESUMEN
+  // ═══════════════════════════════════════════════════════════════════════
+  const buildResumenRows = useCallback((
+    metradoData: Record<string, any>[],
+  ) => {
+    type Agg = {
+      code: string; desc: string; und: string; level: number; total: number;
+    };
+
+    const byCode: Record<string, Agg> = {};
+    const codeOrder: string[] = [];
+
+    const ensure = (code: string, desc: string, und: string, level: number) => {
+      if (!byCode[code]) {
+        byCode[code] = { code, desc, und, level, total: 0 };
+        codeOrder.push(code);
+      }
+      return byCode[code];
+    };
+
+    metradoData.forEach((row) => {
+      const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
+      if (kind !== 'group') return;
+
+     const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
+      if (!code) return;
+
+      const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
+      e.total += toNum(row.total);
+    });
+
+    return codeOrder.map((code) => {
+      const v = byCode[code];
+      return {
+        _level: v.level, _kind: 'group',
+        partida: v.code, descripcion: v.desc, unidad: v.und,
+        total: v.total,
+      };
+    });
+  }, []);
+
+  const resumenRows = useMemo(() => {
+    const c = buildResumenRows(metrado ?? []);
+    return c.length > 0 ? c : (resumen ?? []);
+  }, [buildResumenRows, metrado, resumen]);
+
+  // ── Hojas iniciales (SOLO 2: Metrado y Resumen) ───────────────────────
+
   const initialSheets = useMemo(() => {
     if (Array.isArray(spreadsheet.sheet_data) && spreadsheet.sheet_data.length > 0) {
       return spreadsheet.sheet_data.map((s: any, i: number) => ({
@@ -469,9 +645,16 @@ entries.forEach((e) => {
   upd('area', r4(largo * ancho * nveces));
   upd('vol', r4(largo * ancho * alto * nveces));
 
+
   // ASIGNACIÓN AL TOTAL SEGÚN LA UNIDAD SELECCIONADA
   const unidad = String(row.unidad ?? '').trim().toLowerCase();
   let finalTotal = 0;
+
+      const newUnd  = r4(elsim * nveces);
+      const newLon  = r4((largo + ancho) * (nveces || 1));
+      const newArea = r4(largo * ancho * nveces);
+      const newVol  = r4(largo * ancho * alto * nveces);
+
 
   if (unidad === 'und' || unidad === 'pza' || unidad === 'gl') {
     // Si la unidad es 'und', el total es solo la cantidad

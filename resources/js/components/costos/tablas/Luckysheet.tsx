@@ -150,11 +150,9 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
     canEdit = true,
     columns = [],
 }) => {
-    // ID estable del contenedor (no usar useId() — genera ':' que Luckysheet no soporta como selector)
-    const containerIdRef = useRef<string>(
-        'ls-' + Math.random().toString(36).slice(2, 8)
-    );
-    const containerId = containerIdRef.current;
+    // ID fijo del contenedor — CommunicationsIndex.tsx y otros archivos
+    // manipulan window.luckysheet directamente esperando este ID
+    const containerId = 'luckysheet';
 
     const [scriptState, setScriptState] = useState<ScriptState>(_scriptState);
     const isInitialized = useRef(false);
@@ -429,7 +427,7 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
             id={containerId}
             style={{
                 width: '100%',
-                height,
+                height:'100%',
                 position: 'relative',
                 overflow: 'hidden',
                 // CRÍTICO: Sin un fondo explícito, el tema oscuro de la app

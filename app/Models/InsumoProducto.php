@@ -17,12 +17,13 @@ class InsumoProducto extends Model
         'codigo_producto',
         'descripcion',
         'especificaciones',
-        'unidad',
+        'diccionario_id',
+        'unidad_id',
+        'tipo_proveedor',
         'costo_unitario_lista',
         'costo_unitario',
         'costo_flete',
         'fecha_lista',
-        'insumo_clase_id',
         'tipo',
         'estado',
     ];
@@ -40,9 +41,14 @@ class InsumoProducto extends Model
 
     // ─── Relations ───────────────────────────────────────────────────────────────
 
-    public function clase(): BelongsTo
+    public function diccionario()
     {
-        return $this->belongsTo(InsumoClase::class, 'insumo_clase_id');
+        return $this->belongsTo(Diccionario::class, 'diccionario_id');
+    }
+
+    public function unidadObj()
+    {
+        return $this->belongsTo(Unidad::class, 'unidad_id');
     }
 
     // ─── Scopes ──────────────────────────────────────────────────────────────────

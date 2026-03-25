@@ -1,6 +1,6 @@
 import { router, usePage, Head } from '@inertiajs/react';
 import axios from 'axios';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
@@ -24,14 +24,22 @@ import {
     Wallet,
     Users,
     Settings2,
-    LayoutDashboard,
     FileDown,
     Search,
+    ChevronsDownUp,
+    ChevronsUpDown,
+    FilePlus,
+    FileSpreadsheet,
+    X,
 } from 'lucide-react';
 import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { SupervisionPanel } from './components/SupervisionPanel';
 import { ConsolidadoPanel } from './components/ConsolidadoPanel';
 import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
+import { ImportMetradosModal } from './components/ImportMetradosModal';
+import { Download } from 'lucide-react';
+import { InsumosPanel } from './components/InsumosPanel';
+import { FormulaPolinomica } from './components/formula_polinomica';
 
 interface PageProps {
     project: {
@@ -100,21 +108,25 @@ export default function Index() {
 
     const addNode = useBudgetStore((state) => state.addNode);
     const deleteRow = useBudgetStore((state) => state.deleteRow);
-    const clipboard = useBudgetStore((state) => state.clipboard);
-    const setClipboard = useBudgetStore((state) => state.setClipboard);
-    const pasteNode = useBudgetStore((state) => state.pasteNode);
     const calculateTree = useBudgetStore((state) => state.calculateTree);
+    const expandAll = useBudgetStore((state) => state.expandAll);
+    const collapseAll = useBudgetStore((state) => state.collapseAll);
+    const setSearchQuery = useBudgetStore((state) => state.setSearchQuery);
+    const setSelectedId = useBudgetStore((state) => state.setSelectedId);
     const isDirty = useBudgetStore((state) => state.isDirty);
     const setDirty = useBudgetStore((state) => state.setDirty);
     const storeRows = useBudgetStore((state) => state.rows);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchValue, setSearchValue] = useState('');
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const searchRef = useRef<HTMLInputElement>(null);
 
-    const [contextMenu, setContextMenu] = useState<{
-        x: number;
-        y: number;
-        partidaId: string;
-    } | null>(null);
+    // Sync search query to store
+    useEffect(() => { setSearchQuery(searchValue); }, [searchValue, setSearchQuery]);
+
     const [isSaving, setIsSaving] = useState(false);
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+    const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | null>(null);
 
     const totalBudget = useMemo(() => {
         return storeRows
@@ -154,16 +166,32 @@ export default function Index() {
         }
     };
 
-    // Auto-save debounce effect
-    useEffect(() => {
-        if (!isDirty) return;
+    // Auto-save desactivado temporalmente para probar importaciones
+    // useEffect(() => {
+    //     if (!isDirty) return;
+    //     const timer = setTimeout(() => { void handleSaveGeneral(); }, 1500);
+    //     return () => clearTimeout(timer);
+    // }, [isDirty, storeRows]);
 
-        const timer = setTimeout(() => {
-            void handleSaveGeneral();
-        }, 1500); // Wait 1.5s after last change
-
-        return () => clearTimeout(timer);
-    }, [isDirty, storeRows]);
+    // Export handlers
+    const handleExport = async (format: 'excel' | 'pdf') => {
+        setExportLoading(format);
+        try {
+            const url = `/costos/proyectos/${project.id}/presupuesto/export/${format}`;
+            const response = await axios.get(url, { responseType: 'blob' });
+            const ext = format === 'excel' ? 'xlsx' : 'pdf';
+            const blob = new Blob([response.data]);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `presupuesto_${project.nombre.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (e) {
+            alert(`Error al exportar a ${format.toUpperCase()}`);
+        } finally {
+            setExportLoading(null);
+        }
+    };
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
@@ -256,7 +284,6 @@ export default function Index() {
     // --- Navigation Groups ---
     const mainTabs = [
         { key: 'general', label: 'P. General', icon: Building2 },
-        { key: 'acus', label: 'ACUs', icon: Calculator },
         {
             key: 'gg_group',
             label: 'Gastos Gen.',
@@ -271,6 +298,7 @@ export default function Index() {
         },
         { key: 'remuneraciones', label: 'Remuneraciones', icon: Users },
         { key: 'insumos', label: 'Insumos', icon: Settings2 },
+        { key: 'f_polinomica', label: 'Formula Polinomica', icon: Calculator },
     ];
 
     const isGGSubsection = [
@@ -304,7 +332,8 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Presupuesto - ${project.nombre}`} />
 
-            <div className="flex h-full flex-col gap-3 p-2">
+            {/* Use calc to subtract header height (64px/h-16) and padding to keep everything in view */}
+            <div className="flex h-[calc(100vh-68px)] flex-col gap-3 overflow-hidden p-2">
                 {/* --- Root Menu --- */}
                 <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-900 p-1 shadow-inner">
                     {mainTabs.map((tab) => {
@@ -330,7 +359,7 @@ export default function Index() {
                     })}
                 </div>
 
-                <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                     {/* --- Sub-Tabs Secondary Layer --- */}
                     {isGGSubsection && (
                         <div className="flex items-center gap-8 border-b border-slate-700/50 bg-slate-800/40 px-6 py-2.5 backdrop-blur-sm">
@@ -356,79 +385,105 @@ export default function Index() {
                         </div>
                     )}
 
-                    <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                         {subsection === 'general' || subsection === 'acus' ? (
                             <Group orientation="horizontal">
                                 <Panel defaultSize={45} minSize={28}>
                                     <div className="flex h-full flex-col">
-                                        <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-3 py-2">
-                                            <h2 className="flex items-center gap-2 text-sm font-semibold tracking-widest text-slate-200 uppercase">
-                                                <span className="h-2 w-2 rounded-full bg-sky-500"></span>{' '}
-                                                Presupuesto General
-                                            </h2>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex flex-col items-end justify-center">
-                                                    <span className="text-[10px] font-medium tracking-wide text-slate-400">
-                                                        {isSaving
-                                                            ? 'Guardando en la nube...'
-                                                            : isDirty
-                                                                ? 'Cambios sin guardar'
-                                                                : 'Presupuesto actualizado'}
-                                                    </span>
-                                                    {lastSavedTime &&
-                                                        !isDirty &&
-                                                        !isSaving && (
-                                                            <span className="text-[9px] text-slate-500/80">
-                                                                Último guardado:{' '}
-                                                                {lastSavedTime.toLocaleTimeString()}
-                                                            </span>
-                                                        )}
-                                                </div>
-                                                <button
-                                                    className={`rounded px-3 py-1 text-xs text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
-                                                    onClick={handleSaveGeneral}
-                                                    disabled={
-                                                        isSaving || !isDirty
-                                                    }
-                                                >
-                                                    {isSaving
-                                                        ? 'Guardando...'
-                                                        : isDirty
-                                                            ? 'Guardar Cambios'
-                                                            : 'Guardado'}
-                                                </button>
-                                                <button
-                                                    className="rounded bg-sky-600 px-3 py-1 text-xs text-white transition-colors hover:bg-sky-500"
-                                                    onClick={() =>
-                                                        addNode(null, 'titulo')
-                                                    }
-                                                >
-                                                    + Añadir Título
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="relative flex-1 overflow-hidden">
-                                            {generalLoading ? (
-                                                <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                                                    Cargando partidas...
+                                        {/* ── Toolbar S10-style ── */}
+                                        <div className="flex flex-wrap items-center gap-1 border-b border-slate-700 bg-slate-800/90 px-2 py-1.5">
+                                            <span className="text-[9px] font-bold tracking-wider text-slate-600 uppercase mr-0.5">Insertar</span>
+                                            <button title="Importar Metrados" onClick={() => setIsImportModalOpen(true)}
+                                                className="flex items-center gap-1 rounded bg-amber-900/60 px-2 py-1 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-800">
+                                                <Download size={11} /> Importar...
+                                            </button>
+                                            <button title="Nuevo Título raíz" onClick={() => addNode(null, 'titulo')}
+                                                className="flex items-center gap-1 rounded bg-sky-900/60 px-2 py-1 text-[10px] font-semibold text-sky-300 transition-colors hover:bg-sky-800">
+                                                <FilePlus size={11} /> Título
+                                            </button>
+                                            <button title="Nuevo Subtítulo hijo del seleccionado" onClick={() => addNode(selectedId, 'subtitulo')}
+                                                className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-300 transition-colors hover:bg-slate-600">
+                                                <FilePlus size={11} /> Subtítulo
+                                            </button>
+                                            <button title="Nueva Partida hijo del seleccionado" onClick={() => addNode(selectedId, 'partida')}
+                                                className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-300 transition-colors hover:bg-slate-600">
+                                                <FilePlus size={11} /> Partida
+                                            </button>
+                                            <span className="mx-1 h-4 w-px bg-slate-700" />
+                                            <button title="Expandir todo" onClick={expandAll}
+                                                className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-200">
+                                                <ChevronsUpDown size={11} /> Exp.
+                                            </button>
+                                            <button title="Colapsar todo" onClick={collapseAll}
+                                                className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-200">
+                                                <ChevronsDownUp size={11} /> colap.
+                                            </button>
+                                            <div className="flex-1" />
+                                            <button title="Exportar a Excel" onClick={() => handleExport('excel')} disabled={exportLoading === 'excel'}
+                                                className="flex items-center gap-1 rounded bg-emerald-900/50 px-2 py-1 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-800/60 disabled:opacity-50">
+                                                <FileSpreadsheet size={11} />{exportLoading === 'excel' ? '...' : 'Excel'}
+                                            </button>
+                                            <button title="Exportar a PDF" onClick={() => handleExport('pdf')} disabled={exportLoading === 'pdf'}
+                                                className="flex items-center gap-1 rounded bg-red-900/50 px-2 py-1 text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-800/60 disabled:opacity-50">
+                                                <FileDown size={11} />{exportLoading === 'pdf' ? '...' : 'PDF'}
+                                            </button>
+                                            <span className="mx-1 h-4 w-px bg-slate-700" />
+                                            <button
+                                                className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
+                                                onClick={handleSaveGeneral} disabled={isSaving || !isDirty}>
+                                                {isSaving ? 'Guardando...' : isDirty ? 'Guardar' : '✓ Guardado'}
+                                            </button>
+
+                                            <span className="mx-1 h-4 w-px bg-slate-700" />
+                                            {searchOpen ? (
+                                                <div className="flex items-center gap-1 rounded border border-sky-700 bg-slate-900 px-2 py-0.5">
+                                                    <Search size={11} className="text-sky-400" />
+                                                    <input ref={searchRef} autoFocus value={searchValue}
+                                                        onChange={(e) => setSearchValue(e.target.value)}
+                                                        placeholder="Buscar partida..."
+                                                        className="w-28 bg-transparent text-[10px] text-slate-200 outline-none placeholder:text-slate-500" />
+                                                    <button onClick={() => { setSearchOpen(false); setSearchValue(''); }} className="text-slate-500 hover:text-slate-200">
+                                                        <X size={10} />
+                                                    </button>
                                                 </div>
                                             ) : (
-                                                <BudgetTree
-                                                    onContextMenu={(
-                                                        e,
-                                                        item,
-                                                    ) => {
-                                                        e.preventDefault();
-                                                        setContextMenu({
-                                                            x: e.clientX,
-                                                            y: e.clientY,
-                                                            partidaId:
-                                                                item.partida,
-                                                        });
-                                                    }}
-                                                />
+                                                <button onClick={() => setSearchOpen(true)}
+                                                    className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-200">
+                                                    <Search size={11} /> Buscar
+                                                </button>
                                             )}
                                         </div>
+
+                                        <div className="relative flex-1 overflow-hidden min-h-0 h-full">
+                                            {generalLoading ? (
+                                                <div className="flex h-full items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
+                                                        <span className="text-xs font-medium text-slate-400">Cargando presupuesto...</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <BudgetTree onRowSelect={(id) => setSelectedId(id)} />
+                                            )}
+                                        </div>
+
+                                        <ImportMetradosModal
+                                            projectId={project.id}
+                                            isOpen={isImportModalOpen}
+                                            onClose={() => setIsImportModalOpen(false)}
+                                            onSuccess={() => {
+                                                setGeneralLoading(true);
+                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
+                                                    .then((response) => {
+                                                        if (response.data?.success) {
+                                                            setGeneralRows(response.data.rows || []);
+                                                            initialize(response.data.rows || []);
+                                                            setDirty(false);
+                                                        }
+                                                    })
+                                                    .finally(() => setGeneralLoading(false));
+                                            }}
+                                        />
                                     </div>
                                 </Panel>
 
@@ -452,7 +507,7 @@ export default function Index() {
                                 projectId={project.id}
                             />
                         ) : subsection === 'gastos_generales' ? (
-                            <div className="flex flex-1 flex-col overflow-auto gap-4 p-4">
+                            <div className="flex min-h-0 flex-1 flex-col overflow-auto gap-4 p-4">
                                 {/* Gastos Generales Fijos - Listado 1 */}
                                 <div className="flex min-h-[300px] flex-col rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
                                     <div className="flex-1 overflow-auto">
@@ -494,6 +549,10 @@ export default function Index() {
                             />
                         ) : subsection === 'consolidado' ? (
                             <ConsolidadoPanel projectId={project.id} />
+                        ) : subsection === 'insumos' ? (
+                            <InsumosPanel projectId={project.id} />
+                        ) : subsection === 'f_polinomica' ? (
+                            <FormulaPolinomica />
                         ) : (
                             <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>
@@ -511,102 +570,7 @@ export default function Index() {
                 </div>
             </div>
 
-            {/* Context Menu overlay */}
-            {contextMenu && (
-                <>
-                    <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setContextMenu(null)}
-                        onContextMenu={(e) => {
-                            e.preventDefault();
-                            setContextMenu(null);
-                        }}
-                    />
-                    <div
-                        className="fixed z-50 min-w-[160px] rounded border border-slate-700 bg-slate-800 py-1 text-sm text-slate-300 shadow-2xl"
-                        style={{ top: contextMenu.y, left: contextMenu.x }}
-                    >
-                        <div className="mb-1 px-3 py-1 text-xs font-semibold tracking-wider text-slate-500 uppercase">
-                            Añadir
-                        </div>
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300"
-                            onClick={() => {
-                                addNode(contextMenu.partidaId, 'titulo');
-                                setContextMenu(null);
-                            }}
-                        >
-                            Título (Hijo)
-                        </button>
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300"
-                            onClick={() => {
-                                addNode(contextMenu.partidaId, 'subtitulo');
-                                setContextMenu(null);
-                            }}
-                        >
-                            Subtítulo (Hijo)
-                        </button>
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300"
-                            onClick={() => {
-                                addNode(contextMenu.partidaId, 'partida');
-                                setContextMenu(null);
-                            }}
-                        >
-                            Partida (Hijo)
-                        </button>
-                        <div className="my-1 border-t border-slate-700" />
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300"
-                            onClick={() => {
-                                setClipboard('copy', contextMenu.partidaId);
-                                setContextMenu(null);
-                            }}
-                        >
-                            Copiar rama
-                        </button>
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300"
-                            onClick={() => {
-                                setClipboard('cut', contextMenu.partidaId);
-                                setContextMenu(null);
-                            }}
-                        >
-                            Cortar rama
-                        </button>
-                        <button
-                            className="w-full px-4 py-1.5 text-left hover:bg-slate-700 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() => {
-                                pasteNode(contextMenu.partidaId);
-                                setContextMenu(null);
-                            }}
-                            disabled={!clipboard}
-                        >
-                            Pegar dentro
-                        </button>
-                        <div className="my-1 border-t border-slate-700" />
-                        <button
-                            className="w-full px-4 py-1.5 text-left text-emerald-500 hover:bg-slate-700 hover:text-emerald-400"
-                            onClick={() => {
-                                calculateTree();
-                                setContextMenu(null);
-                            }}
-                        >
-                            Forzar Cálculo
-                        </button>
-                        <button
-                            className="w-full px-4 py-1.5 text-left text-red-500 hover:bg-red-900/40 hover:text-red-400"
-                            onClick={() => {
-                                deleteRow(contextMenu.partidaId);
-                                setContextMenu(null);
-                            }}
-                        >
-                            Eliminar rama
-                        </button>
-                    </div>
-                </>
-            )}
+            {/* Context menu now lives inside BudgetTree component */}
         </AppLayout>
     );
 }

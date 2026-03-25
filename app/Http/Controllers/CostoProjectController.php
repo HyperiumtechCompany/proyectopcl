@@ -110,7 +110,7 @@ class CostoProjectController extends Controller
 
                 $moduleConfig = null;
 
-                if ($moduleType === 'metrado_sanitarias') {
+                if (in_array($moduleType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura'], true)) {
                     $moduleConfig = [
                         'cantidad_modulos' => $cantidadModulos
                     ];
@@ -128,18 +128,31 @@ class CostoProjectController extends Controller
             $this->dbService->createDatabase($project);
 
             // 4️⃣ Configuración inicial para sanitarias
-            if (in_array('metrado_sanitarias', $validated['modules'])) {
+            if (array_intersect($validated['modules'], ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura'])) {
 
                 $this->dbService->setTenantConnection($dbName);
 
-                DB::connection('costos_tenant')
-                    ->table('metrado_sanitarias_config')
-                    ->insert([
-                        'cantidad_modulos' => $cantidadModulos,
-                        'nombre_proyecto' => $validated['nombre'],
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                foreach ([
+                    'metrado_sanitarias' => 'metrado_sanitarias_config',
+                    'metrado_arquitectura' => 'metrado_arquitectura_config',
+                    'metrado_estructura' => 'metrado_estructura_config',
+                ] as $moduleType => $tableName) {
+                    if (!in_array($moduleType, $validated['modules'], true)) {
+                        continue;
+                    }
+
+                    DB::connection('costos_tenant')
+                        ->table($tableName)
+                        ->updateOrInsert(
+                            ['id' => 1],
+                            [
+                                'cantidad_modulos' => $cantidadModulos,
+                                'nombre_proyecto' => $validated['nombre'],
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]
+                        );
+                }
             }
 
             return redirect()->route('costos.show', $project)
