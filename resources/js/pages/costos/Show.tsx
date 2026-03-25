@@ -116,6 +116,11 @@ export default function Show() {
                                 // Redirige al nuevo controlador de Gantt pasando el ID del proyecto
                                 href = `/module/crono_general?project=${project.id}`;
                             }
+
+                            // ─── AGREGAR CONDICIÓN PARA ETTS ───
+                            else if (m === 'etts') {
+                                href = `/module/etts?project=${project.id}`;
+                            }
                             // ──────────────────────────────────────────────
                             else {
                                 // Cualquier otro módulo sigue usando la ruta genérica (Luckysheet)
