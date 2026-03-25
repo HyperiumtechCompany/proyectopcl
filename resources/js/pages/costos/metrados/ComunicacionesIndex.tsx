@@ -1011,9 +1011,9 @@ export default function ComunicacionesIndex() {
                           <SelectValue placeholder="Seleccione unidad" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="UND">UND (Unidad)</SelectItem>
-                          <SelectItem value="M">M (Metro)</SelectItem>
-                          <SelectItem value="ML">ML (Metro Lineal)</SelectItem>
+                          <SelectItem value="UND">und (Unidad)</SelectItem>
+                          <SelectItem value="M">m (Metro)</SelectItem>
+                          <SelectItem value="ML">ml (Metro Lineal)</SelectItem>
                           <SelectItem value="m2">m2 (Metro Cuadrado)</SelectItem>
                           <SelectItem value="m3">m3 (Metro Cúbico)</SelectItem>
                           <SelectItem value="Kg">Kg (Kilogramo)</SelectItem>

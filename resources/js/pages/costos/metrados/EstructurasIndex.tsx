@@ -192,7 +192,7 @@ const NBSP = '\u00A0\u00A0\u00A0';
 const indent = (level: number, isLeaf: boolean) => NBSP.repeat(isLeaf ? level : Math.max(0, level - 1));
 
 // ═══════════════════════════════════════════════════════════════════════
-// 🎨 RESALTADO DE INPUTS
+// RESALTADO DE INPUTS
 // ═══════════════════════════════════════════════════════════════════════
 const INPUT_ACTIVE_STYLE = {
   bg: '#fef3c7',
@@ -221,13 +221,11 @@ const FORMULA_INPUTS: Record<string, string[]> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// 🔥 FUNCIÓN PARA FORZAR COMMIT DE EDICIÓN (SOLUCIÓN DEFINITIVA)
+// FUNCIÓN PARA FORZAR COMMIT DE EDICIÓN (SOLUCIÓN DEFINITIVA)
 // ═══════════════════════════════════════════════════════════════════════
 const forceCommit = (ls: any) => {
   try {
-    // 🔥 esto fuerza a guardar el valor editado inmediatamente
     ls.exitEditMode?.();
-    // fallback interno (por si falla)
     if (ls.luckysheetupdateCell) {
       ls.luckysheetupdateCell();
     }
@@ -684,14 +682,12 @@ export default function EstructurasIndex() {
     }, 120);
   }, [scheduleSave]);
   
-  // ✅ afterChange CORREGIDO - CON FORCE COMMIT Y setTimeout(..., 0)
   const afterChange = useCallback((changeData: any) => {
     if (!changeData) return;
 
     const ls = (window as any).luckysheet;
     if (!ls) return;
 
-    // 🔥 1. FORZAR COMMIT (ESTO ES LA CLAVE)
     forceCommit(ls);
 
     const sheets = ls.getAllSheets?.() ?? [];
@@ -706,7 +702,6 @@ export default function EstructurasIndex() {
         const c = change.c;
 
         if (c === COL['unidad'] && r > 0) {
-          // 🔥 pequeño delay REAL (no visual) - solo para asegurar que Luckysheet terminó
           setTimeout(() => {
             const unidad = ls.getCellValue(r, c);
             
@@ -723,7 +718,6 @@ export default function EstructurasIndex() {
       });
     }
 
-    // 🔥 recalculo SIEMPRE después del commit
     setTimeout(() => {
       recalcActiveSheet();
     }, 0);

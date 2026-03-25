@@ -453,7 +453,7 @@ export default function ElectricasIndex() {
     // PASE 1 — NUMERACIÓN AUTOMÁTICA (BASE 3)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const counters = new Array(MAX_LEVELS + 1).fill(0);
-    counters[1] = Math.max(0, TOP_LEVEL_START - 1); // ⚡ INICIA EN 3
+    counters[1] = Math.max(0, TOP_LEVEL_START - 1); 
 
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'leaf') {
