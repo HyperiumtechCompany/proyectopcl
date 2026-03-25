@@ -367,9 +367,12 @@ export default function SanitariasIndex() {
                 const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
                 if (kind !== 'group') return;
                 const fullCode = String(row.partida ?? '').trim();
-                if (!fullCode) return;
-                const code = fullCode;
-                if (!code) return;
+
+                const code = fullCode
+                    .split('.')
+                    .map(n => String(Number(n))) 
+                    .map(n => n.padStart(2, '0')) 
+                    .join('.');
                 const e = ensure(
                     code,
                     byCode[code]?.desc || String(row.descripcion ?? ''),
@@ -1008,11 +1011,9 @@ export default function SanitariasIndex() {
             const resumenSheet = all[resIdx];
 
             ls.clearRange({
-                range: {
-                    row: [1, 2000],
-                    column: [0, resumenCols.length],
-                },
-                order: resumenSheet.order
+                row: [1, 2000],
+                column: [0, resumenCols.length - 1],
+                order: resumenSheet.order,
             });
 
             // ✅ LLENAR DATOS
@@ -1020,6 +1021,7 @@ export default function SanitariasIndex() {
                 resumenCols.forEach((col, c) => {
                     const val = row[col.key as keyof typeof row] ?? '';
                     ls.setCellValue(r + 1, c, val, {
+                        order: resumenSheet.order,
                         isRefresh: false
                     });
                 });

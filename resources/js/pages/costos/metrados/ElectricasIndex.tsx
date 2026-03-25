@@ -531,7 +531,7 @@ export default function ElectricasIndex() {
       const alto   = toNum(row.alto);
 
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4(largo * nveces);
+      const newLon  = r4((ancho + alto) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 

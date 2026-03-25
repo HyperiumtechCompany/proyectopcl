@@ -170,65 +170,18 @@ function rowsToSheet(
   name: string,
   order = 0,
 ) {
-  // ─────────────────────────────────────────
-  // HEADER MULTINIVEL
-  // ─────────────────────────────────────────
-  const header: any[] = [
-    // Fila 0
-    { r: 0, c: COL.partida, v: mkTxt('ITEM', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 0, c: COL.descripcion, v: mkTxt('DESCRIPCIÓN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 0, c: COL.unidad, v: mkTxt('UN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 0, c: COL.elsim, v: mkTxt('Elem.Simil.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+  const header: any[] = cols.map((col, ci) => ({
+    r: 0, c: ci,
+    v: { v: col.label, m: col.label, ct: { fa: 'General', t: 'g' },
+      bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10 },
+  }));
 
-    { r: 0, c: COL.largo, v: mkTxt('DIMENSIONES', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-
-    { r: 0, c: COL.nveces, v: mkTxt('N° Veces', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-
-    { r: 0, c: COL.lon, v: mkTxt('METRADO', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-
-    { r: 0, c: COL.total, v: mkTxt('Total', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-  ];
-
-  // Fila 1 (subheaders)
-  header.push(
-    { r: 1, c: COL.largo, v: mkTxt('Largo', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.ancho, v: mkTxt('Ancho', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.alto, v: mkTxt('Alto', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-
-    { r: 1, c: COL.lon, v: mkTxt('Lon.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.area, v: mkTxt('Área', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.vol, v: mkTxt('Vol.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.kg, v: mkTxt('Kg.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-    { r: 1, c: COL.und, v: mkTxt('Und.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
-  );
-
-  // ─────────────────────────────────────────
-  // MERGES (CLAVE)
-  // ─────────────────────────────────────────
-  const merges = {
-    [`0_${COL.partida}`]: { r: 0, c: COL.partida, rs: 2, cs: 1 },
-    [`0_${COL.descripcion}`]: { r: 0, c: COL.descripcion, rs: 2, cs: 1 },
-    [`0_${COL.unidad}`]: { r: 0, c: COL.unidad, rs: 2, cs: 1 },
-    [`0_${COL.elsim}`]: { r: 0, c: COL.elsim, rs: 2, cs: 1 },
-
-    [`0_${COL.largo}`]: { r: 0, c: COL.largo, rs: 1, cs: 3 }, // DIMENSIONES
-    [`0_${COL.lon}`]: { r: 0, c: COL.lon, rs: 1, cs: 5 },     // METRADO
-
-    [`0_${COL.nveces}`]: { r: 0, c: COL.nveces, rs: 2, cs: 1 },
-    [`0_${COL.total}`]: { r: 0, c: COL.total, rs: 2, cs: 1 },
-  };
-
-  // ─────────────────────────────────────────
-  // DATA (empieza en fila 2 ⚡)
-  // ─────────────────────────────────────────
   const cells: any[] = [];
-
   rows.forEach((row, ri) => {
-    const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
+    const kind  = String(row['_kind']  ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
     const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
-
-    const rIdx = ri + 2; // 🔥 IMPORTANTE
+    const rIdx  = ri + 1;
 
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
@@ -237,55 +190,44 @@ function rowsToSheet(
 
       if (blank(val)) return;
 
-      let display = String(val);
+      let store: any = val;
+      let display    = String(val);
 
       if (col.key === 'descripcion' && typeof val === 'string') {
-        display = indent(level, kind === 'leaf') + val.trimStart();
+        store   = val.trimStart();
+        display = indent(level, kind === 'leaf') + store;
       }
 
-      const isNum = typeof val === 'number' || (!isNaN(Number(val)) && val !== '');
+      const isNum = typeof store === 'number' ||
+        (store !== '' && !isNaN(Number(store)));
 
-      const cell = {
-        v: isNum ? Number(val) : val,
-        m: display,
+      const cell: Record<string, any> = {
+        v:  isNum ? Number(store) : store,
+        m:  display,
         ct: { fa: isNum ? '#,##0.0000' : 'General', t: isNum ? 'n' : 'g' },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
-        ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
       };
 
+      if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
       cells.push({ r: rIdx, c: ci, v: cell });
     });
   });
 
-  // ─────────────────────────────────────────
-  // CONFIG
-  // ─────────────────────────────────────────
   const columnlen: Record<number, number> = {};
   const colhidden: Record<number, number> = {};
-
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
     if (col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
   });
 
   return {
-    name,
-    status: order === 0 ? 1 : 0,
-    order,
-    row: Math.max(rows.length + 50, 100),
+    name, status: order === 0 ? 1 : 0, order,
+    row:    Math.max(rows.length + 50, 100),
     column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
-    config: {
-      columnlen,
-      colhidden,
-      rowlen: { 0: 28, 1: 28 },
-      merge: merges,
-    },
-    frozen: {
-      type: 'range',
-      range: { row_focus: 2, column_focus: 0 },
-    },
+    config: { columnlen, colhidden, rowlen: { 0: 30 } },
+    frozen: { type: 'row', range: { row_focus: 0 } },
   };
 }
 
@@ -294,7 +236,7 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   const data: any[][] = sheet.data || [];
   const rows: Record<string, any>[] = [];
 
-  for (let r = 2; r < data.length; r++) {
+  for (let r = 1; r < data.length; r++) {
     const row: Record<string, any> = {};
     let hasData = false;
 
@@ -329,6 +271,7 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
     kind:  String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -583,7 +526,7 @@ export default function GasIndex() {
       const alto   = toNum(row.alto);
 
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4((largo + ancho) * (nveces || 1));
+      const newLon  = r4((ancho + alto) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 
