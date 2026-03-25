@@ -748,25 +748,9 @@ return new class extends Migration
             });
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 13. PRESUPUESTO INSUMOS (catálogo por proyecto)
-        // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('presupuesto_insumos')) {
-            Schema::connection($this->connection)->create('presupuesto_insumos', function (Blueprint $table) {
-                $table->id();
-                $table->string('codigo', 50)->unique();
-                $table->text('descripcion');
-                $table->string('unidad', 20);
-                $table->decimal('precio_unitario', 15, 4)->default(0);
-                $table->string('tipo', 20)->comment('material | mano_obra | equipo');
-                $table->string('categoria', 50)->nullable();
-                $table->unsignedSmallInteger('item_order')->default(0);
-                $table->timestamps();
-
-                $table->index('codigo', 'idx_ins_codigo');
-                $table->index('tipo',   'idx_ins_tipo');
-            });
-        }
+        // (sección 13 reservada — presupuesto_insumos eliminada)
+        // Las 5 tablas ACU componentes se crean en sección 15b,
+        // después de insumo_productos (su FK lo requiere).
 
         // ══════════════════════════════════════════════════════════════════════
         // 14. PRESUPUESTO ÍNDICES (fórmula polinómica)
@@ -848,6 +832,126 @@ return new class extends Migration
                 $table->index('tipo',            'idx_ip_tipo');
                 $table->index('diccionario_id',  'idx_ip_dicc');
                 $table->index('unidad_id',       'idx_ip_und');
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 15b. ACU COMPONENTES — 5 tablas hijas de presupuesto_acus
+        //      Reemplazan a presupuesto_insumos. Vinculadas por acu_id.
+        //      Se crean aquí porque dependen de insumo_productos (FK).
+        //      Estructura Delphin/S10 para análisis de costos unitarios.
+        // ══════════════════════════════════════════════════════════════════════
+
+        // 15b-1. Mano de Obra
+        if (!Schema::connection($this->connection)->hasTable('acu_mano_de_obra')) {
+            Schema::connection($this->connection)->create('acu_mano_de_obra', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('acu_id');
+                $table->foreign('acu_id')->references('id')->on('presupuesto_acus')->cascadeOnDelete();
+                $table->unsignedBigInteger('insumo_id')->nullable();
+                $table->foreign('insumo_id')->references('id')->on('insumo_productos')->nullOnDelete();
+
+                $table->text('descripcion');
+                $table->string('unidad', 20)->default('hh');
+                $table->decimal('cantidad',        12, 4)->default(0);
+                $table->decimal('recursos',        12, 4)->default(0)->comment('Nº de recursos/cuadrilla');
+                $table->decimal('precio_unitario', 15, 4)->default(0);
+                $table->decimal('parcial',         15, 4)->default(0);
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('acu_id',    'idx_amo_acu');
+                $table->index('insumo_id', 'idx_amo_insumo');
+            });
+        }
+
+        // 15b-2. Materiales
+        if (!Schema::connection($this->connection)->hasTable('acu_materiales')) {
+            Schema::connection($this->connection)->create('acu_materiales', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('acu_id');
+                $table->foreign('acu_id')->references('id')->on('presupuesto_acus')->cascadeOnDelete();
+                $table->unsignedBigInteger('insumo_id')->nullable();
+                $table->foreign('insumo_id')->references('id')->on('insumo_productos')->nullOnDelete();
+
+                $table->text('descripcion');
+                $table->string('unidad', 20)->default('und');
+                $table->decimal('cantidad',           12, 4)->default(0);
+                $table->decimal('precio_unitario',    15, 4)->default(0);
+                $table->decimal('factor_desperdicio', 6,  4)->default(1.0000);
+                $table->decimal('parcial',            15, 4)->default(0);
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('acu_id',    'idx_amat_acu');
+                $table->index('insumo_id', 'idx_amat_insumo');
+            });
+        }
+
+        // 15b-3. Equipos
+        if (!Schema::connection($this->connection)->hasTable('acu_equipos')) {
+            Schema::connection($this->connection)->create('acu_equipos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('acu_id');
+                $table->foreign('acu_id')->references('id')->on('presupuesto_acus')->cascadeOnDelete();
+                $table->unsignedBigInteger('insumo_id')->nullable();
+                $table->foreign('insumo_id')->references('id')->on('insumo_productos')->nullOnDelete();
+
+                $table->text('descripcion');
+                $table->string('unidad', 20)->default('hm');
+                $table->decimal('cantidad',    12, 4)->default(0);
+                $table->decimal('recursos',    12, 4)->default(0)->comment('Nº de equipos');
+                $table->decimal('precio_hora', 15, 4)->default(0);
+                $table->decimal('parcial',     15, 4)->default(0);
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('acu_id',    'idx_aeq_acu');
+                $table->index('insumo_id', 'idx_aeq_insumo');
+            });
+        }
+
+        // 15b-4. Subcontratos
+        if (!Schema::connection($this->connection)->hasTable('acu_subcontratos')) {
+            Schema::connection($this->connection)->create('acu_subcontratos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('acu_id');
+                $table->foreign('acu_id')->references('id')->on('presupuesto_acus')->cascadeOnDelete();
+                $table->unsignedBigInteger('insumo_id')->nullable();
+                $table->foreign('insumo_id')->references('id')->on('insumo_productos')->nullOnDelete();
+
+                $table->text('descripcion');
+                $table->string('unidad', 20)->default('glb');
+                $table->decimal('cantidad',        12, 4)->default(0);
+                $table->decimal('precio_unitario', 15, 4)->default(0);
+                $table->decimal('parcial',         15, 4)->default(0);
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('acu_id',    'idx_asc_acu');
+                $table->index('insumo_id', 'idx_asc_insumo');
+            });
+        }
+
+        // 15b-5. Subpartidas
+        if (!Schema::connection($this->connection)->hasTable('acu_subpartidas')) {
+            Schema::connection($this->connection)->create('acu_subpartidas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('acu_id');
+                $table->foreign('acu_id')->references('id')->on('presupuesto_acus')->cascadeOnDelete();
+                $table->unsignedBigInteger('insumo_id')->nullable();
+                $table->foreign('insumo_id')->references('id')->on('insumo_productos')->nullOnDelete();
+
+                $table->text('descripcion');
+                $table->string('unidad', 20)->default('und');
+                $table->decimal('cantidad',        12, 4)->default(0);
+                $table->decimal('precio_unitario', 15, 4)->default(0);
+                $table->decimal('parcial',         15, 4)->default(0);
+                $table->unsignedSmallInteger('item_order')->default(0);
+                $table->timestamps();
+
+                $table->index('acu_id',    'idx_asp_acu');
+                $table->index('insumo_id', 'idx_asp_insumo');
             });
         }
 
@@ -988,78 +1092,10 @@ return new class extends Migration
                 $table->index('presupuesto_id');
             });
         }
-
-        // ══════════════════════════════════════════════════════════════════════
-        // 17. METRADO ESTRUCTURAS
-        //     Dos tablas: metrado_estructuras (hoja principal) + resumen.
-        //     Ambas vinculadas a presupuesto_id.
-        // ══════════════════════════════════════════════════════════════════════
-
-        // 17a. Hoja principal de metrado estructuras
-        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_metrado')) {
-            Schema::connection($this->connection)->create('metrado_estructuras_metrado', function (Blueprint $table) {
-                $table->id();
-                $table->unsignedBigInteger('presupuesto_id')->nullable();
-                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
-                $table->integer('item_order')->default(0);
-                $table->string('node_type', 20)->default('partida');
-                $table->string('titulo', 255)->nullable();
-                $table->string('item', 30)->nullable();
-                $table->string('partida', 50)->nullable();
-                $table->text('descripcion')->nullable();
-                $table->string('unidad', 20)->nullable();
-                $table->decimal('elsim', 12, 4)->default(0);
-                $table->decimal('largo', 12, 4)->default(0);
-                $table->decimal('ancho', 12, 4)->default(0);
-                $table->decimal('alto', 12, 4)->default(0);
-                $table->decimal('nveces', 12, 4)->default(0);
-                $table->decimal('lon', 12, 4)->default(0);
-                $table->decimal('area', 12, 4)->default(0);
-                $table->decimal('vol', 12, 4)->default(0);
-                $table->decimal('kg', 12, 4)->default(0);
-                $table->decimal('und', 14, 4)->default(0);
-                $table->decimal('total', 14, 4)->default(0);
-                $table->text('observacion')->nullable();
-                $table->unsignedBigInteger('parent_id')->nullable();
-                $table->integer('nivel')->default(0);
-                $table->timestamps();
-
-                $table->index('presupuesto_id');
-                $table->index('item_order');
-            });
-        }
-
-        // 17b. Resumen Consolidado de Estructuras
-        if (!Schema::connection($this->connection)->hasTable('metrado_estructuras_resumen')) {
-            Schema::connection($this->connection)->create('metrado_estructuras_resumen', function (Blueprint $table) {
-                $table->id();
-                $table->unsignedBigInteger('presupuesto_id')->nullable();
-                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
-                $table->integer('item_order')->default(0);
-                $table->string('node_type', 20)->default('partida');
-                $table->string('titulo', 255)->nullable();
-                $table->string('partida', 50)->nullable();
-                $table->text('descripcion')->nullable();
-                $table->string('unidad', 20)->nullable();
-                $table->decimal('total', 14, 4)->default(0);
-                $table->text('observacion')->nullable();
-                $table->unsignedBigInteger('parent_id')->nullable();
-                $table->integer('nivel')->default(0);
-                $table->timestamps();
-
-                $table->index('presupuesto_id');
-            });
-        }
     }
 
     public function down(): void
     {
-        // Orden inverso estricto respetando todas las FKs
-
-        // 17. Metrado Estructuras
-        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_resumen');
-        Schema::connection($this->connection)->dropIfExists('metrado_estructuras_metrado');
-
         // 16. Metrado Sanitarias Modular
         Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_resumen');
         Schema::connection($this->connection)->dropIfExists('metrado_sanitarias_cisterna');
@@ -1072,9 +1108,17 @@ return new class extends Migration
         Schema::connection($this->connection)->dropIfExists('diccionario');
         Schema::connection($this->connection)->dropIfExists('unidad');
 
-        // 14–12. Índices, Insumos, ACUs
+        // 14. Índices
         Schema::connection($this->connection)->dropIfExists('presupuesto_indices');
-        Schema::connection($this->connection)->dropIfExists('presupuesto_insumos');
+
+        // 13. ACU Componentes (hijas de presupuesto_acus)
+        Schema::connection($this->connection)->dropIfExists('acu_subpartidas');
+        Schema::connection($this->connection)->dropIfExists('acu_subcontratos');
+        Schema::connection($this->connection)->dropIfExists('acu_equipos');
+        Schema::connection($this->connection)->dropIfExists('acu_materiales');
+        Schema::connection($this->connection)->dropIfExists('acu_mano_de_obra');
+
+        // 12. ACUs
         Schema::connection($this->connection)->dropIfExists('presupuesto_acus');
 
         // 11–9. GG Consolidado, Control Concurrente, Supervisión

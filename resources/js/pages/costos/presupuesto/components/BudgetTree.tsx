@@ -180,7 +180,6 @@ const ContextMenu = ({
     const item = ctx.item;
     const isTitle = item._hasChildren || item._level === 0;
 
-    // Adjust position so menu doesn't go off-screen
     const menuRef = React.useRef<HTMLDivElement>(null);
     const [pos, setPos] = React.useState({ top: ctx.y, left: ctx.x });
     React.useEffect(() => {
@@ -213,11 +212,7 @@ const ContextMenu = ({
     return (
         <>
             <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-            <div
-                ref={menuRef}
-                className="fixed z-50 min-w-[210px] rounded-lg border border-slate-600 bg-slate-800 py-1.5 text-sm shadow-2xl shadow-black/60"
-                style={{ top: pos.top, left: pos.left }}
-            >
+            <div ref={menuRef} className="fixed z-50 min-w-[210px] rounded-lg border border-slate-600 bg-slate-800 py-1.5 text-sm shadow-2xl shadow-black/60" style={{ top: pos.top, left: pos.left }}>
                 {label('Insertar')}
                 {btn('+ Hijo → Título', () => addNode(item.partida, 'titulo'))}
                 {btn('+ Hijo → Partida', () => addNode(item.partida, 'partida'))}
@@ -287,6 +282,61 @@ const SelectionToolbar = ({ count }: { count: number }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Memoized Row Component
+// ─────────────────────────────────────────────────────────────────────────────
+const MemoizedRow = React.memo(({ 
+    virtualRow, 
+    row, 
+    isSelected, 
+    isMultiSelected, 
+    isTitle, 
+    onRowClick, 
+    onContextMenu,
+    measureElement
+}: { 
+    virtualRow: any; 
+    row: any; 
+    isSelected: boolean; 
+    isMultiSelected: boolean; 
+    isTitle: boolean;
+    onRowClick: (e: React.MouseEvent) => void;
+    onContextMenu: (e: React.MouseEvent) => void;
+    measureElement: (el: HTMLDivElement | null) => void;
+}) => {
+    return (
+        <div
+            data-index={virtualRow.index}
+            ref={measureElement}
+            className={[
+                'group absolute top-0 left-0 flex w-full cursor-pointer items-center border-b border-slate-700/60 transition-colors',
+                isSelected ? 'border-sky-700/50 bg-sky-900/40' : '',
+                isMultiSelected && !isSelected ? 'bg-indigo-900/30 border-indigo-700/40' : '',
+                isTitle && !isSelected && !isMultiSelected ? 'bg-slate-800/60' : '',
+                'hover:bg-slate-700/30',
+            ].join(' ')}
+            style={{
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+            }}
+            onClick={onRowClick}
+            onContextMenu={onContextMenu}>
+            {isMultiSelected && (<span className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500" />)}
+            {row.getVisibleCells().map((cell: any) => (
+                <div
+                    key={cell.id}
+                    className="px-2"
+                    style={{
+                        width: cell.column.getSize() === 150 ? 'auto' : cell.column.getSize(),
+                        flex: cell.column.getSize() === 150 ? 1 : 'none',
+                    }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </div>
+            ))}
+        </div>
+    );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main BudgetTree
 // ─────────────────────────────────────────────────────────────────────────────
 interface BudgetTreeProps {
@@ -316,9 +366,8 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-    // Keyboard handler for multi-select
     const handleRowClick = useCallback(
-        (e: React.MouseEvent, item: BudgetItemRow, isPartida: boolean) => {
+        (e: React.MouseEvent, item: BudgetItemRow) => {
             if (e.shiftKey && selectedId) {
                 rangeSelect(selectedId, item.partida);
                 return;
@@ -328,19 +377,15 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                 return;
             }
             setSelectedId(item.partida);
+            const isPartida = !(item._level === 0 || item._hasChildren);
             if (onRowSelect) onRowSelect(item.partida, isPartida);
         },
         [selectedId, setSelectedId, toggleMultiSelect, rangeSelect, onRowSelect],
     );
 
-    const lastClickedItem = React.useRef<BudgetItemRow | null>(null);
-
     const handleContainerContextMenu = useCallback(
         (e: React.MouseEvent<HTMLDivElement>) => {
-            // Only open menu if we didn't already handle it on a row
-            // (row handler sets lastClickedItem, container handler uses it as fallback)
             e.preventDefault();
-            // If right-click was on empty space (no row), use last selected item or skip
             const targetItem = lastClickedItem.current;
             if (!targetItem) return;
             setContextMenu({ x: e.clientX, y: e.clientY, item: targetItem });
@@ -359,7 +404,6 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
 
                     return (
                         <div style={{ paddingLeft: `${indent + 4}px` }} className="group/cell flex items-center gap-1">
-                            {/* Expand toggle */}
                             {item._hasChildren ? (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); toggleExpand(item.partida); }}
@@ -371,7 +415,6 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                 <span className="w-[13px] shrink-0" />
                             )}
 
-                            {/* Description text */}
                             {isTitle ? (
                                 <span className="flex min-w-0 shrink items-center text-xs font-semibold tracking-wide text-sky-300">
                                     <span className="mr-1 shrink-0 text-sky-500/70">{item.partida}</span>
@@ -389,32 +432,27 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                         value={item.descripcion}
                                         isEditable={true}
                                         onUpdate={(val) => updateCell(item.partida, 'descripcion', val)}
-                                        className="max-w-[260px] truncate"
-                                    />
+                                        className="max-w-[260px] truncate"/>
                                 </span>
                             )}
 
-                            {/* Inline action buttons — appear on row hover */}
                             <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/cell:opacity-100">
                                 <button
                                     title="Mover arriba"
                                     onClick={(e) => { e.stopPropagation(); moveUp(item.partida); }}
-                                    className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-sky-400 transition-colors"
-                                >
+                                    className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-sky-400 transition-colors">
                                     <ArrowUp size={11} />
                                 </button>
                                 <button
                                     title="Mover abajo"
                                     onClick={(e) => { e.stopPropagation(); moveDown(item.partida); }}
-                                    className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-sky-400 transition-colors"
-                                >
+                                    className="rounded p-0.5 text-slate-500 hover:bg-slate-700 hover:text-sky-400 transition-colors">
                                     <ArrowDown size={11} />
                                 </button>
                                 <button
                                     title="Insertar fila abajo"
                                     onClick={(e) => { e.stopPropagation(); addRowAfter(item.partida, 'partida'); }}
-                                    className="rounded p-0.5 text-slate-500 hover:bg-emerald-900/60 hover:text-emerald-400 transition-colors"
-                                >
+                                    className="rounded p-0.5 text-slate-500 hover:bg-emerald-900/60 hover:text-emerald-400 transition-colors">
                                     <Plus size={11} />
                                 </button>
                             </span>
@@ -432,8 +470,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                             <UnitSelectCell
                                 value={item.unidad}
                                 isEditable={true}
-                                onUpdate={(val) => updateCell(item.partida, 'unidad', val)}
-                            />
+                                onUpdate={(val) => updateCell(item.partida, 'unidad', val)}/>
                         ) : (
                             item.unidad
                         )}
@@ -470,8 +507,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                 value={item.precio_unitario}
                                 isEditable={isPartida}
                                 activeColor={activeColor}
-                                onUpdate={(val) => updateCell(item.partida, 'precio_unitario', val)}
-                            />
+                                onUpdate={(val) => updateCell(item.partida, 'precio_unitario', val)}/>
                         </div>
                     );
                 },
@@ -501,19 +537,23 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
         getCoreRowModel: getCoreRowModel(),
     });
 
-    const { rows } = table.getRowModel();
+    const { rows: tableRows } = table.getRowModel();
     const parentRef = useRef<HTMLDivElement>(null);
 
     const virtualizer = useVirtualizer({
-        count: rows.length,
+        count: tableRows.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => 28,
-        overscan: 15,
+        overscan: 12,
     });
 
+    const lastClickedItem = React.useRef<BudgetItemRow | null>(null);
+
     return (
-        <div className="flex h-full flex-col border-r border-slate-700 bg-slate-900">
-            {/* Table Header */}
+        // ← FIX 1: añadir min-h-0 para romper el crecimiento infinito en flex column
+        <div className="flex h-full min-h-0 flex-col border-r border-slate-700 bg-slate-900">
+
+            {/* Table Header — fijo, no scrollea */}
             <div className="shrink-0 border-b border-slate-600 bg-slate-800">
                 <table className="w-full table-fixed text-[10px] tracking-wider text-slate-500 uppercase">
                     <thead>
@@ -523,8 +563,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                     <th
                                         key={header.id}
                                         className="px-2 py-1.5 text-left font-medium"
-                                        style={{ width: header.getSize() === 150 ? 'auto' : header.getSize() }}
-                                    >
+                                        style={{ width: header.getSize() === 150 ? 'auto' : header.getSize() }}>
                                         {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                     </th>
                                 ))}
@@ -534,74 +573,55 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                 </table>
             </div>
 
-            {/* Virtualized Body */}
-            <div
-                ref={parentRef}
-                className="scrollbar-thin flex-1 overflow-auto bg-slate-900 min-h-0"
-                onContextMenu={handleContainerContextMenu}
-            >
-                <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+            {/*
+             * ← FIX 2: min-h-0 + overflow-y-auto
+             *   flex-1 solo funciona correctamente cuando el padre tiene min-h-0.
+             *   overflow-y-auto activa el scroll nativo del virtualizer.
+             *   overflow-x-hidden evita scroll horizontal accidental.
+             */}
+            <div ref={parentRef}
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-900 [scrollbar-gutter:stable] scrollbar-premium"
+                onContextMenu={handleContainerContextMenu}>
+                {/* Contenedor virtual: alto total calculado, filas posicionadas con translateY */}
+                <div
+                    style={{
+                        height: `${virtualizer.getTotalSize()}px`,
+                        width: '100%',
+                        position: 'relative',
+                    }}>
                     {virtualizer.getVirtualItems().map((virtualRow) => {
-                        const row = rows[virtualRow.index];
+                        const row = tableRows[virtualRow.index];
                         const item = row.original;
                         const isTitle = item._level === 0 || item._hasChildren;
-                        const isPartida = !isTitle;
                         const isSelected = selectedId === item.partida;
                         const isMultiSelected = multiSelection.includes(item.partida);
 
                         return (
-                            <div
+                            <MemoizedRow
                                 key={virtualRow.key}
-                                data-index={virtualRow.index}
-                                ref={virtualizer.measureElement}
-                                className={[
-                                    'group absolute top-0 left-0 flex w-full cursor-pointer items-center border-b border-slate-700/60 transition-colors',
-                                    isSelected ? 'border-sky-700/50 bg-sky-900/40' : '',
-                                    isMultiSelected && !isSelected ? 'bg-indigo-900/30 border-indigo-700/40' : '',
-                                    isTitle && !isSelected && !isMultiSelected ? 'bg-slate-800/60' : '',
-                                    'hover:bg-slate-700/30',
-                                ].join(' ')}
-                                style={{
-                                    height: `${virtualRow.size}px`,
-                                    transform: `translateY(${virtualRow.start}px)`,
-                                }}
-                                onClick={(e) => {
+                                virtualRow={virtualRow}
+                                row={row}
+                                isSelected={isSelected}
+                                isMultiSelected={isMultiSelected}
+                                isTitle={!!isTitle}
+                                measureElement={virtualizer.measureElement}
+                                onRowClick={(e) => {
                                     lastClickedItem.current = item;
-                                    handleRowClick(e, item, isPartida);
+                                    handleRowClick(e, item);
                                 }}
                                 onContextMenu={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     lastClickedItem.current = item;
                                     setContextMenu({ x: e.clientX, y: e.clientY, item });
-                                }}
-                            >
-                                {/* Multi-select indicator */}
-                                {isMultiSelected && (
-                                    <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500" />
-                                )}
-
-                                {row.getVisibleCells().map((cell) => (
-                                    <div
-                                        key={cell.id}
-                                        className="px-2"
-                                        style={{
-                                            width: cell.column.getSize() === 150 ? 'auto' : cell.column.getSize(),
-                                            flex: cell.column.getSize() === 150 ? 1 : 'none',
-                                        }}
-                                    >
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </div>
-                                ))}
-                            </div>
+                                }}/>
                         );
                     })}
                 </div>
             </div>
 
-            {/* Footer */}
+            {/* Footer — fijo abajo */}
             <div className="shrink-0 border-t border-slate-700 bg-slate-800/50">
-                {/* Total row */}
                 <div className="flex items-center border-b border-slate-700/60 px-3 py-1.5">
                     <span className="flex-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">Costo Directo Total</span>
                     <span className="font-mono text-xs font-bold text-sky-300">
@@ -613,7 +633,6 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                         )}
                     </span>
                 </div>
-                {/* Info bar */}
                 <div className="flex items-center gap-3 px-3 py-0.5 text-[10px] text-slate-600">
                     <span>Ctrl+Click: multi-sel. | Shift+Click: rango | Click derecho: menú</span>
                     <div className="flex-1" />

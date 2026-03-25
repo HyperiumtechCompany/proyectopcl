@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CostoProject;
+use App\Services\CostoDatabaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class InsumoProductoController extends Controller
@@ -49,9 +52,118 @@ class InsumoProductoController extends Controller
      * Buscar productos/insumos por descripción o código.
      * GET /costos/proyectos/{project}/presupuesto/insumos/search?q=cemento&tipo=materiales
      */
-    public function search(Request $request): JsonResponse
+    public function search(Request $request, $project): JsonResponse
     {
+        $tipo = $request->query('tipo');
+        $search = $request->query('q');
+        $usadosOnly = $request->boolean('usados_only');
+
         $connection = DB::connection('costos_tenant');
+
+        // Cuando se solicita "solo usados", los insumos se obtienen directamente
+        // de las tablas hijas de ACU (una por cada tipo), de modo que se muestren
+        // incluso los que no estÃ¡n enlazados al catÃ¡logo maestro.
+        if ($usadosOnly) {
+            $tableMap = [
+                'mano_de_obra' => [
+                    'table'        => 'acu_mano_de_obra',
+                    'price_column' => 'precio_unitario',
+                    'unit_column'  => 'unidad',
+                ],
+                'materiales' => [
+                    'table'        => 'acu_materiales',
+                    'price_column' => 'precio_unitario',
+                    'unit_column'  => 'unidad',
+                ],
+                'equipos' => [
+                    'table'        => 'acu_equipos',
+                    'price_column' => 'precio_hora',
+                    'unit_column'  => 'unidad',
+                ],
+                'subcontratos' => [
+                    'table'        => 'acu_subcontratos',
+                    'price_column' => 'precio_unitario',
+                    'unit_column'  => 'unidad',
+                ],
+                'subpartidas' => [
+                    'table'        => 'acu_subpartidas',
+                    'price_column' => 'precio_unitario',
+                    'unit_column'  => 'unidad',
+                ],
+            ];
+
+            if (!$tipo || !isset($tableMap[$tipo])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe especificar un tipo válido para listar insumos usados.',
+                    'productos' => [],
+                ], 422);
+            }
+
+            $conf = $tableMap[$tipo];
+
+            $projectModel = $project instanceof CostoProject 
+                ? $project 
+                : CostoProject::findOrFail($project);
+            $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
+
+            $query = $connection->table("{$conf['table']} as t")
+                ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
+                ->join('presupuesto_general as g', function($join) use ($tenantPresupuestoId) {
+                    $join->on('a.partida', '=', 'g.partida')
+                         ->where('g.presupuesto_id', '=', $tenantPresupuestoId);
+                })
+                ->leftJoin('insumo_productos as p', 't.insumo_id', '=', 'p.id')
+                ->leftJoin('diccionario as d', 'p.diccionario_id', '=', 'd.id')
+                ->leftJoin('unidad as u', 'p.unidad_id', '=', 'u.id')
+                ->select([
+                    't.insumo_id',
+                    DB::raw("COALESCE(p.id, JSON_UNQUOTE(JSON_EXTRACT(t.descripcion, '$'))) as group_id"),
+                    DB::raw('MAX(p.codigo_producto) as codigo'),
+                    DB::raw('COALESCE(MAX(p.descripcion), MAX(t.descripcion)) as descripcion'),
+                    DB::raw("COALESCE(MAX(u.descripcion_singular), MAX(u.abreviatura_unidad), MAX(t.{$conf['unit_column']})) as unidad_nombre"),
+                    DB::raw('MAX(p.tipo_proveedor) as tipo_proveedor'),
+                    DB::raw("MAX(COALESCE(p.costo_unitario, t.{$conf['price_column']}, 0)) as precio"),
+                    DB::raw("SUM(t.cantidad * COALESCE(g.metrado, 0)) as cantidad_total")
+                ])
+                ->where('a.presupuesto_id', $tenantPresupuestoId)
+                ->groupBy('t.insumo_id', 'group_id');
+
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('t.descripcion', 'like', "%{$search}%")
+                      ->orWhere('p.descripcion', 'like', "%{$search}%")
+                      ->orWhere('p.codigo_producto', 'like', "%{$search}%");
+                });
+            }
+
+            $rows = $query
+                ->orderBy(DB::raw('COALESCE(MAX(p.descripcion), MAX(t.descripcion))'))
+                ->limit(500)
+                ->get();
+
+            $productos = $rows->map(function ($row) use ($tipo) {
+                $precio = (float) $row->precio;
+                $cantidadTotal = (float) $row->cantidad_total;
+                return [
+                    'id'                   => $row->insumo_id ? 'ins-' . $row->insumo_id : 'desc-' . md5((string)$row->descripcion),
+                    'insumo_id'            => $row->insumo_id,
+                    'codigo'               => $row->codigo ?: '-',
+                    'descripcion'          => $row->descripcion,
+                    'unidad_nombre'        => $row->unidad_nombre ?: '-',
+                    'proveedor'            => $row->tipo_proveedor ?: 'SIN CLASIFICAR',
+                    'cantidad'             => $cantidadTotal,
+                    'precio'               => $precio,
+                    'total'                => round($cantidadTotal * $precio, 2),
+                    'tipo'                 => $tipo,
+                ];
+            })->values()->toArray();
+
+            return response()->json([
+                'success'   => true,
+                'productos' => $productos,
+            ]);
+        }
 
         $query = $connection->table('insumo_productos as p')
             ->leftJoin('diccionario as d', 'p.diccionario_id', '=', 'd.id')
@@ -78,17 +190,14 @@ class InsumoProductoController extends Controller
             ])
             ->where('p.estado', true);
 
-        // Filtrar por tipo si se proporciona
-        if ($request->filled('tipo')) {
-            $query->where('p.tipo', $request->input('tipo'));
+        if ($tipo) {
+            $query->where('p.tipo', $tipo);
         }
 
-        // Buscar por descripción o código
-        if ($request->filled('q')) {
-            $term = $request->input('q');
-            $query->where(function ($q) use ($term) {
-                $q->where('p.descripcion', 'like', "%{$term}%")
-                  ->orWhere('p.codigo_producto', 'like', "%{$term}%");
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('p.descripcion', 'like', "%{$search}%")
+                  ->orWhere('p.codigo_producto', 'like', "%{$search}%");
             });
         }
 
@@ -190,7 +299,8 @@ class InsumoProductoController extends Controller
              return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
         }
 
-        $prefix = $diccionario->codigo . $validated['tipo_proveedor'];
+        $diccionarioCodigo = data_get($diccionario, 'codigo', '');
+        $prefix = $diccionarioCodigo . $validated['tipo_proveedor'];
         
         $lastM = $connection->table('insumo_productos')
             ->where('codigo_producto', 'like', $prefix . '%')
@@ -199,7 +309,7 @@ class InsumoProductoController extends Controller
             
         $nextSequence = 1;
         if ($lastM) {
-            $lastSequence = substr($lastM->codigo_producto, strlen($prefix));
+            $lastSequence = substr((string)$lastM->codigo_producto, strlen($prefix));
             if (is_numeric($lastSequence)) {
                 $nextSequence = intval($lastSequence) + 1;
             }
@@ -255,6 +365,13 @@ class InsumoProductoController extends Controller
 
         $producto = $connection->table('insumo_productos')->where('id', $insumoId)->first();
 
+        // ─────────────────────────────────────────────────────────────────────
+        // PROPAGACIÓN DE PRECIO A ACUS Y PRESUPUESTO
+        // ─────────────────────────────────────────────────────────────────────
+        if ($producto) {
+            app(CostoDatabaseService::class)->propagateInsumoUpdate($project, $producto);
+        }
+
         return response()->json([
             'success'  => true,
             'message'  => 'Producto actualizado exitosamente',
@@ -278,5 +395,176 @@ class InsumoProductoController extends Controller
             'message' => 'Producto eliminado exitosamente',
         ]);
     }
-}
 
+    /**
+     * Reemplazar o renombrar un insumo a nivel de todo el proyecto.
+     * POST /costos/proyectos/{project}/presupuesto/insumos/replace-project-insumo
+     */
+    public function replaceProjectInsumo(Request $request, $project): JsonResponse
+    {
+        $validated = $request->validate([
+            'tipo'              => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'old_insumo_id'     => 'nullable|integer',
+            'old_descripcion'   => 'nullable|string',
+            'new_insumo_id'     => 'nullable|integer',
+            'new_descripcion'   => 'nullable|string',
+            'new_precio'        => 'nullable|numeric',
+        ]);
+
+        $tipo = $validated['tipo'];
+        
+        $tableMap = [
+            'mano_de_obra' => ['table' => 'acu_mano_de_obra', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+            'materiales'   => ['table' => 'acu_materiales', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+            'equipos'      => ['table' => 'acu_equipos', 'price_column' => 'precio_hora', 'unit_column' => 'unidad'],
+            'subcontratos' => ['table' => 'acu_subcontratos', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+            'subpartidas'  => ['table' => 'acu_subpartidas', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+        ];
+
+        $conf = $tableMap[$tipo];
+        $connection = DB::connection('costos_tenant');
+        
+        $projectModel = $project instanceof CostoProject ? $project : CostoProject::findOrFail($project);
+        $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
+
+        $query = $connection->table("{$conf['table']} as t")
+            ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
+            ->where('a.presupuesto_id', $tenantPresupuestoId);
+            
+        if (!empty($validated['old_insumo_id'])) {
+            $query->where('t.insumo_id', $validated['old_insumo_id']);
+        } else {
+            $query->where('t.descripcion', $validated['old_descripcion'])
+                  ->whereNull('t.insumo_id');
+        }
+
+        $items = $query->select('t.*')->get();
+
+        if ($items->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontraron items para reemplazar en este proyecto.',
+            ], 404);
+        }
+
+        // Si se seleccionó un insumo de catálogo para reemplazar:
+        $newInsumo = null;
+        if (!empty($validated['new_insumo_id'])) {
+            $newInsumo = $connection->table('insumo_productos')->where('id', $validated['new_insumo_id'])->first();
+            if (!$newInsumo) {
+                return response()->json(['success' => false, 'message' => 'El insumo de reemplazo no existe.'], 404);
+            }
+        }
+
+        $affectedAcuIds = [];
+        
+        foreach ($items as $item) {
+            $affectedAcuIds[] = $item->acu_id;
+            
+            $updateData = [];
+            if ($newInsumo) {
+                $updateData['insumo_id'] = $newInsumo->id;
+                $updateData['descripcion'] = $newInsumo->descripcion;
+                $updateData[$conf['price_column']] = $newInsumo->costo_unitario;
+                // Fetch unidad_nombre if needed, or leave it to join
+                $unidad = $newInsumo->unidad_id ? $connection->table('unidad')->where('id', $newInsumo->unidad_id)->first() : null;
+                $updateData[$conf['unit_column']] = $unidad ? ($unidad->abreviatura_unidad ?? $unidad->descripcion_singular) : null;
+            } else {
+                if (!empty($validated['new_descripcion'])) {
+                    $updateData['descripcion'] = $validated['new_descripcion'];
+                }
+                if (isset($validated['new_precio'])) {
+                    $updateData[$conf['price_column']] = $validated['new_precio'];
+                }
+            }
+
+            if (!empty($updateData)) {
+                // Recalcular parcial
+                $cant = (float)$item->cantidad;
+                $prec = (float)($updateData[$conf['price_column']] ?? $item->{$conf['price_column']});
+                $falc = (float)($item->factor_desperdicio ?? 1);
+                $parcial = round($cant * $prec * ($tipo === 'materiales' ? $falc : 1), 4);
+                
+                $updateData['parcial'] = $parcial;
+                $updateData['updated_at'] = now();
+
+                $connection->table($conf['table'])->where('id', $item->id)->update($updateData);
+            }
+        }
+
+        $affectedAcuIds = array_unique($affectedAcuIds);
+        
+        // Disparar recálculo de los ACUs afectados
+        app(CostoDatabaseService::class)->propagateInsumoUpdate($projectModel, (object)['id' => -1]); // Triggers update for the ACUs we just saved
+
+        // The propagateInsumoUpdate currently works differently: it takes an insumo and finds ACUs. 
+        // We modified ACU components directly, so we need to recalculate the ACU JSONs and totals.
+        $this->recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Insumos reemplazados correctamente en el proyecto.',
+        ]);
+    }
+    
+    private function recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel)
+    {
+        $updatedPartidas = [];
+        foreach ($affectedAcuIds as $acuId) {
+            $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
+            $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
+            $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+            $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
+            $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
+
+            $costoMo = $mo->sum('parcial');
+            $costoMa = $ma->sum('parcial');
+            $costoEq = $eq->sum('parcial');
+            $costoSc = $sc->sum('parcial');
+            $costoSp = $sp->sum('parcial');
+            $costoTotal = $costoMo + $costoMa + $costoEq + $costoSc + $costoSp;
+
+            $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
+            if ($acu) {
+                $connection->table('presupuesto_acus')
+                    ->where('id', $acuId)
+                    ->update([
+                        'mano_de_obra'       => json_encode($mo),
+                        'materiales'         => json_encode($ma),
+                        'equipos'            => json_encode($eq),
+                        'subcontratos'       => json_encode($sc),
+                        'subpartidas'        => json_encode($sp),
+                        'costo_mano_obra'    => $costoMo,
+                        'costo_materiales'   => $costoMa,
+                        'costo_equipos'      => $costoEq,
+                        'costo_subcontratos' => $costoSc,
+                        'costo_subpartidas'  => $costoSp,
+                        // 'costo_unitario_total' es una generated column y se calcula automáticamente
+                        'updated_at'         => now(),
+                    ]);
+                
+                $updatedPartidas[] = $acu->partida;
+            }
+        }
+
+        if (!empty($updatedPartidas)) {
+            foreach (array_unique($updatedPartidas) as $partida) {
+                $acuRes = $connection->table('presupuesto_acus')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->where('partida', $partida)
+                    ->first();
+                
+                if ($acuRes) {
+                    $connection->table('presupuesto_general')
+                        ->where('presupuesto_id', $tenantPresupuestoId)
+                        ->where('partida', $partida)
+                        ->update([
+                            'precio_unitario' => (float)($acuRes->costo_unitario_total ?? 0),
+                            'updated_at'      => now(),
+                        ]);
+                }
+            }
+            app(CostoDatabaseService::class)->syncCostoDirecto($projectModel->database_name, $tenantPresupuestoId);
+        }
+    }
+}
