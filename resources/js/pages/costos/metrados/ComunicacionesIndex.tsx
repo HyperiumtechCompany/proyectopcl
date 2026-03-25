@@ -270,9 +270,15 @@ export default function ComunicacionesIndex() {
   
   // Estados para el diálogo Agregar
   const [openAgregar, setOpenAgregar] = useState(false);
+  useEffect(() => {
+    if (openAgregar) {
+      setTimeout(() => {
+        document.getElementById('largo')?.focus();
+      }, 100);
+    }
+  }, [openAgregar]);
   const [nivelBase, setNivelBase] = useState<string>('1');
   const [unidadMedida, setUnidadMedida] = useState('UND');
-  const [versionMedida, setVersionMedida] = useState<'fx1' | 'fx2' | 'fx3'>('fx1');
   const [tipoFila, setTipoFila] = useState<'group' | 'leaf'>('group');
 
   const [elemValor, setElemValor] = useState<string>('');
@@ -280,6 +286,34 @@ export default function ComunicacionesIndex() {
   const [anchoValor, setAnchoValor] = useState<string>('');
   const [altoValor, setAltoValor] = useState<string>('');
   const [nvecesValor, setNvecesValor] = useState<string>('');
+  const preview = useMemo(() => {
+    const L = parseFloat(largoValor) || 0;
+    const A = parseFloat(anchoValor) || 0;
+    const H = parseFloat(altoValor) || 0;
+    const N = parseFloat(nvecesValor) || 1;
+    const E = parseFloat(elemValor) || 0;
+
+    const u = unidadMedida.toLowerCase();
+
+    if (['m', 'ml'].includes(u)) return (L + A) * N;
+    if (u === 'm2') return L * A * N;
+    if (['m3', 'lt', 'gl'].includes(u)) return L * A * H * N;
+    if (['und', 'pza'].includes(u)) return E * N;
+    if (u === 'kg') return E;
+
+    return 0;
+  }, [largoValor, anchoValor, altoValor, nvecesValor, elemValor, unidadMedida]);
+  const formulaTexto = useMemo(() => {
+    const u = unidadMedida.toLowerCase();
+
+    if (['m', 'ml'].includes(u)) return 'Lon = (Largo + Ancho) × N';
+    if (u === 'm2') return 'Área = Largo × Ancho × N';
+    if (['m3', 'lt', 'gl'].includes(u)) return 'Vol = Largo × Ancho × Alto × N';
+    if (['und', 'pza'].includes(u)) return 'Und = Elem × N';
+    if (u === 'kg') return 'Total = Kg';
+
+    return '';
+  }, [unidadMedida]);
 
   // ── Refs ───────────────────────────────────────────────────────────────
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -470,15 +504,27 @@ export default function ComunicacionesIndex() {
 
     // PASE 3 — CÁLCULO NUMÉRICO
     entries.forEach((e) => {
-      if (e.kind !== 'leaf') return;
+      if (e.kind !== 'leaf') {
+
+        set(e.ri, 'elsim', '');
+        set(e.ri, 'largo', '');
+        set(e.ri, 'ancho', '');
+        set(e.ri, 'alto', '');
+        set(e.ri, 'nveces', '');
+        set(e.ri, 'lon', '');
+        set(e.ri, 'area', '');
+        set(e.ri, 'vol', '');
+        set(e.ri, 'und', '');
+        return;
+      }
       const { row, ri } = e;
       const elsim  = toNum(row.elsim);
-      const nveces = toNum(row.nveces);
+      const nveces = toNum(row.nveces) || 1;
       const largo  = toNum(row.largo);
       const ancho  = toNum(row.ancho);
       const alto   = toNum(row.alto);
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4((largo + ancho) * (nveces || 1));
+      const newLon = r4((largo + ancho) * nveces);
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
       const upd = (key: string, val: number) => {
@@ -508,8 +554,10 @@ export default function ComunicacionesIndex() {
         for (let j = idx + 1; j < entries.length; j++) {
           const child = entries[j];
           if (child.level <= lvl) break;
-          if (child.level === lvl + 1) {
-            sum = r4(sum + child.total);
+          if (child.level > lvl) {
+            if (child.kind === 'leaf') {
+              sum = r4(sum + child.total);
+            }
           }
         }
         e.total = sum;
@@ -679,9 +727,25 @@ export default function ComunicacionesIndex() {
     // Insertar nueva fila
     ls.insertRow(selRow + 1, 1);
     const r = selRow + 1;
+
+    // DETECTAR NIVEL REAL SEGÚN CONTEXTO
+    const currentRow = readDataRow(data, selRow);
+    const parentMeta = rowMeta(currentRow);
+
+    let finalLevel = customLevel;
+
+    if (!customLevel || customLevel === 1) {
+      if (kind === 'leaf') {
+        // Partida siempre va como hijo
+        finalLevel = parentMeta.level + 1;
+      } else {
+        // Grupo por defecto al mismo nivel
+        finalLevel = parentMeta.level;
+      }
+    }
     
     // Establecer nivel y tipo
-    ls.setCellValue(r, COL['_level'], customLevel, { order: sheetOrder });
+    ls.setCellValue(r, COL['_level'], finalLevel, { order: sheetOrder });
     ls.setCellValue(r, COL['_kind'], kind, { order: sheetOrder });
     
     // Si es partida (leaf), establecer valores
@@ -890,21 +954,26 @@ export default function ComunicacionesIndex() {
                     <div className="grid gap-3">
                       <Label className="text-sm font-semibold">Tipo de Fila</Label>
                       <div className="flex gap-3">
-                        <div className="flex items-center gap-2">
-                          <Checkbox 
-                            id="group"
-                            checked={tipoFila === 'group'}
-                            onCheckedChange={() => setTipoFila('group')}
-                          />
-                          <label htmlFor="group" className="text-sm font-medium">Grupo</label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox 
-                            id="leaf"
-                            checked={tipoFila === 'leaf'}
-                            onCheckedChange={() => setTipoFila('leaf')}
-                          />
-                          <label htmlFor="leaf" className="text-sm font-medium">Partida</label>
+                        <div className="flex gap-3">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="tipoFila"
+                              checked={tipoFila === 'group'}
+                              onChange={() => setTipoFila('group')}
+                            />
+                            Grupo
+                          </label>
+
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="tipoFila"
+                              checked={tipoFila === 'leaf'}
+                              onChange={() => setTipoFila('leaf')}
+                            />
+                            Partida
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -958,37 +1027,17 @@ export default function ComunicacionesIndex() {
                     {/* Versiones de Medida */}
                     <div className="grid gap-3">
                       <Label className="text-sm font-semibold">Fórmula de Cálculo</Label>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Checkbox 
-                            id="fx1"
-                            checked={versionMedida === 'fx1'}
-                            onCheckedChange={() => setVersionMedida('fx1')}
-                          />
-                          <label htmlFor="fx1" className="text-sm">fx = L × Ancho × Alto</label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox 
-                            id="fx2"
-                            checked={versionMedida === 'fx2'}
-                            onCheckedChange={() => setVersionMedida('fx2')}
-                          />
-                          <label htmlFor="fx2" className="text-sm">fx = L × A</label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox 
-                            id="fx3"
-                            checked={versionMedida === 'fx3'}
-                            onCheckedChange={() => setVersionMedida('fx3')}
-                          />
-                          <label htmlFor="fx3" className="text-sm">fx = L × N veces</label>
-                        </div>
+                      <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md text-sm font-mono">
+                        {formulaTexto || 'Seleccione una unidad'}
                       </div>
                     </div>
                   </div>
 
                   {/* Ingresar Valores - Campos dinámicos según versión */}
                   <div className="grid gap-3">
+                    <div className="text-right text-sm font-semibold text-emerald-600">
+                      Resultado: {preview.toFixed(4)}
+                    </div>
                     <Label className="text-sm font-semibold">
                       Ingresar Valores
                     </Label>
@@ -996,7 +1045,8 @@ export default function ComunicacionesIndex() {
                       <div className="grid gap-1.5">
                         <Label htmlFor="elem" className="text-[10px]">Elem</Label>
                         <Input 
-                          id="elem" 
+                          id="elem"
+                          disabled={tipoFila !== 'leaf'} 
                           type="number" 
                           className="h-8 text-sm" 
                           placeholder="0"
@@ -1007,7 +1057,8 @@ export default function ComunicacionesIndex() {
                       <div className="grid gap-1.5">
                         <Label htmlFor="largo" className="text-[10px]">Largo</Label>
                         <Input 
-                          id="largo" 
+                          id="largo"
+                          disabled={tipoFila !== 'leaf'} 
                           type="number" 
                           className="h-8 text-sm" 
                           placeholder="0"
@@ -1015,11 +1066,14 @@ export default function ComunicacionesIndex() {
                           onChange={(e) => setLargoValor(e.target.value)}
                         />
                       </div>
-                      {(versionMedida === 'fx1' || versionMedida === 'fx2') && (
+
+                      {/* Versiones de Medida */}
+                      {['m', 'ml', 'm2', 'm3', 'lt', 'gl'].includes(unidadMedida.toLowerCase()) && (
                         <div className="grid gap-1.5">
                           <Label htmlFor="ancho" className="text-[10px]">Ancho</Label>
                           <Input 
-                            id="ancho" 
+                            id="ancho"
+                            disabled={tipoFila !== 'leaf'} 
                             type="number" 
                             className="h-8 text-sm" 
                             placeholder="0"
@@ -1028,11 +1082,13 @@ export default function ComunicacionesIndex() {
                           />
                         </div>
                       )}
-                      {versionMedida === 'fx1' && (
+
+                      {['m3', 'lt', 'gl'].includes(unidadMedida.toLowerCase()) && (
                         <div className="grid gap-1.5">
                           <Label htmlFor="alto" className="text-[10px]">Alto</Label>
                           <Input 
                             id="alto" 
+                            disabled={tipoFila !== 'leaf'}
                             type="number" 
                             className="h-8 text-sm" 
                             placeholder="0"
@@ -1041,11 +1097,23 @@ export default function ComunicacionesIndex() {
                           />
                         </div>
                       )}
-                      {versionMedida === 'fx3' && (
+
+                      {['und', 'pza', 'kg'].includes(unidadMedida.toLowerCase()) && (
+                        <div className="grid gap-1.5">
+                          <Label className="text-[10px]">Elem. Simil.</Label>
+                          <Input
+                            type="number"
+                            value={elemValor}
+                            onChange={(e) => setElemValor(e.target.value)}
+                          />
+                        </div>
+                      )}
+                      
                         <div className="grid gap-1.5">
                           <Label htmlFor="nveces" className="text-[10px]">N° Veces</Label>
                           <Input 
                             id="nveces" 
+                            disabled={tipoFila !== 'leaf'}
                             type="number" 
                             className="h-8 text-sm" 
                             placeholder="0"
@@ -1053,7 +1121,6 @@ export default function ComunicacionesIndex() {
                             onChange={(e) => setNvecesValor(e.target.value)}
                           />
                         </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1068,12 +1135,11 @@ export default function ComunicacionesIndex() {
                   <Button
                     onClick={() => {
                       const level = parseInt(nivelBase) || 1;
+
                       if (level < 1 || level > 10) {
-                        alert('El nivel debe estar entre 1 y 10');
-                        return;
+                        return; // luego ponemos mensaje 
                       }
-                      
-                      // Agregar fila con los valores del formulario
+
                       addRowWithLevel(tipoFila, level, {
                         elem: elemValor,
                         largo: largoValor,
@@ -1082,13 +1148,11 @@ export default function ComunicacionesIndex() {
                         nveces: nvecesValor,
                         unidad: unidadMedida,
                       });
-                      
-                      // Cerrar diálogo y resetear TODOS los valores
+
                       setOpenAgregar(false);
+
+                      // 🔥 RESET INTELIGENTE
                       setNivelBase('1');
-                      setUnidadMedida('UND');
-                      setVersionMedida('fx1');
-                      setTipoFila('group');
                       setElemValor('');
                       setLargoValor('');
                       setAnchoValor('');
