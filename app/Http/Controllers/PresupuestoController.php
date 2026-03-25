@@ -555,15 +555,19 @@ class PresupuestoController extends Controller
             $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
             $resumenTable  = "{$metradoType}_resumen";
 
-            if ($metradoType === 'metrado_sanitarias') {
-                // Sanitarias usa total_general y unidad ya definida
+            $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+
+            if ($isModular) {
+                // Modulares usa total_general, unidad y partida
                 $metradoQuery = DB::connection('costos_tenant')
-                    ->table('metrado_sanitarias_resumen')
-                    ->select('item', 'descripcion', 'unidad', 'total_general as total')
+                    ->table("{$metradoType}_resumen")
+                    ->select('partida', 'descripcion', 'unidad', 'total_general as total')
+                    ->whereNotNull('partida')
+                    ->where('partida', '!=', '')
                     ->orderBy('item_order')
                     ->orderBy('id');
             } elseif ($schemaBuilder->hasTable($resumenTable)) {
-                // Tablas resumen: item, descripcion, und (unidad), total
+                // Tablas resumen planas: item, descripcion, und (unidad), total
                 $metradoQuery = DB::connection('costos_tenant')
                     ->table($resumenTable)
                     ->select('item', DB::raw('item as partida'), 'descripcion', DB::raw('und as unidad'), 'total')
@@ -716,10 +720,11 @@ class PresupuestoController extends Controller
             $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
 
             foreach ($metradosList as $metradoType) {
-                // Special handling for sanitarias: read from resumen table
-                if ($metradoType === 'metrado_sanitarias') {
+                $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
+                
+                if ($isModular) {
                     $metradoQuery = DB::connection('costos_tenant')
-                        ->table('metrado_sanitarias_resumen')
+                        ->table("{$metradoType}_resumen")
                         ->select('partida', 'descripcion', 'unidad', 'total_general as total')
                         ->whereNotNull('partida')
                         ->where('partida', '!=', '')
@@ -1628,9 +1633,13 @@ class PresupuestoController extends Controller
 
         foreach ($metradoTypes as $type => $label) {
             if ($project->hasModule($type)) {
+                // Determine the correct table to check for rows
+                $isModular = in_array($type, ['metrado_arquitectura', 'metrado_estructura', 'metrado_sanitarias']);
+                $tableName = $isModular ? "{$type}_resumen" : $type;
+
                 // Count rows in the metrado table
                 $rowCount = DB::connection('costos_tenant')
-                    ->table($type)
+                    ->table($tableName)
                     ->count();
 
                 $availableMetrados[] = [
