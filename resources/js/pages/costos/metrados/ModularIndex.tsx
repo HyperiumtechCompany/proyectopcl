@@ -1,4 +1,4 @@
-﻿import { router, usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
@@ -30,8 +30,10 @@ type ImportRow = Record<BaseKeys, any> & {
     [key: string]: any;
 };
 
-interface SanitariasPageProps {
+interface ModularMetradoPageProps {
     project:  { id: number; nombre: string };
+    titulo:   string;
+    baseURL:  string;
     config:   { cantidad_modulos: number };
     modulos:  Record<string, Record<string, any>[]>;
     exterior: Record<string, any>[];
@@ -289,14 +291,14 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 }
 
 // COMPONENTE PRINCIPAL
-export default function SanitariasIndex() {
-    const { project, config, modulos, exterior, cisterna, resumen } =
-        usePage<SanitariasPageProps>().props;
+export default function ModularIndex() {
+    const { project, titulo, baseURL, config, modulos, exterior, cisterna, resumen } =
+        usePage<ModularMetradoPageProps>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos',             href: '/costos' },
         { title: project.nombre,       href: `/costos/${project.id}` },
-        { title: 'Metrado Sanitarias', href: '#' },
+        { title: titulo, href: '#' },
     ];
 
     const moduleCount = Math.max(1, Number(config?.cantidad_modulos ?? 1));
@@ -448,15 +450,15 @@ export default function SanitariasIndex() {
                 const m = name.match(/(\d+)/);
                 const n = m ? Number(m[1]) : NaN;
                 if (!isNaN(n)) reqs.push({
-                    url:  `/costos/${project.id}/metrado-sanitarias/modulo/${n}`,
+                    url:  `${baseURL}/modulo/${n}`,
                     body: { rows: sheetToRows(sheet, BASE_COLS), modulo_nombre: name },
                 });
             } else if (name === 'Exterior') {
-                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/exterior`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
+                reqs.push({ url: `${baseURL}/exterior`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
             } else if (name === 'Cisterna') {
-                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/cisterna`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
+                reqs.push({ url: `${baseURL}/cisterna`, body: { rows: sheetToRows(sheet, BASE_COLS) } });
             } else if (name === 'Resumen') {
-                reqs.push({ url: `/costos/${project.id}/metrado-sanitarias/resumen`, body: { rows: sheetToRows(sheet, resumenCols) } });
+                reqs.push({ url: `${baseURL}/resumen`, body: { rows: sheetToRows(sheet, resumenCols) } });
             }
         });
 
@@ -1035,7 +1037,7 @@ export default function SanitariasIndex() {
         setIsUpdatingConfig(true);
         try {
             await router.patch(
-                `/costos/${project.id}/metrado-sanitarias/config`,
+                `${baseURL}/config`,
                 { cantidad_modulos: newModuleCount },
                 { onSuccess: () => setIsConfigOpen(false), preserveScroll: true },
             );
@@ -1085,7 +1087,7 @@ export default function SanitariasIndex() {
             XLSX.utils.book_append_sheet(wb, ws, name);
         });
 
-        XLSX.writeFile(wb, "sanitarias.xlsx");
+        XLSX.writeFile(wb, `${titulo.toLowerCase().replace(/\s+/g, '_')}.xlsx`);
     };
 
 
@@ -1191,7 +1193,7 @@ export default function SanitariasIndex() {
 
                         <div className="leading-tight">
                             <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                                Metrado Sanitarias
+                                {titulo}
                             </p>
                             <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                                 {project.nombre}
@@ -1334,7 +1336,7 @@ export default function SanitariasIndex() {
                         onDataChange={handleDataChange}
                         height="calc(100vh - 112px)"
                         options={{
-                            title:            'Metrado Sanitarias',
+                            title:            titulo,
                             showinfobar:      false,
                             sheetFormulaBar:  true,
                             showstatisticBar: true,

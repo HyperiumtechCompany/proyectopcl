@@ -202,6 +202,8 @@ export function usePresupuestoAcu({
         type: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas',
     ) => {
         const normalized: Record<string, unknown> = {
+            id: item.id,
+            insumo_id: item.insumo_id,
             descripcion: String(item.descripcion ?? '').trim(),
             unidad: String(item.unidad ?? '').trim() || 'und',
             cantidad: normalizeNumber(item.cantidad, 0),
@@ -268,9 +270,12 @@ export function usePresupuestoAcu({
         };
     };
 
-    const saveAcu = useCallback(async (acuData: Record<string, any>) => {
+    const saveAcu = useCallback(async (acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
         try {
             const payload = normalizeAcuData(acuData);
+            if (options?.updateProjectPrices !== undefined) {
+                payload.update_project_prices = options.updateProjectPrices;
+            }
             const response = await axios.post(
                 `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
                 payload

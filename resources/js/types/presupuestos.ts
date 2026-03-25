@@ -13,6 +13,8 @@ export interface PresupuestoRow {
 }
 
 export interface ACUComponente {
+    id?: number;
+    insumo_id?: number | null;
     descripcion: string;
     unidad: string;
     cantidad: number;
@@ -150,7 +152,8 @@ export type PresupuestoSubsection =
     | 'insumos'
     | 'indices'
     | 'materiales'
-    | 'equipos';
+    | 'equipos'
+    | 'f_polinomica';
 
 export type ColumnType = 'string' | 'number' | 'date' | 'json';
 
@@ -165,6 +168,8 @@ export interface ColumnDef {
 export type RendimientoModo = 'dia' | 'hora' | 'global';
 
 export interface ACUComponenteRow {
+    id?: number;
+    insumo_id?: number | null;
     codigo?: string | null;
     descripcion: string;
     unidad?: string | null;

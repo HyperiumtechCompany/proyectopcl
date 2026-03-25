@@ -187,9 +187,17 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/insumos/diccionarios', [InsumoProductoController::class, 'diccionarios'])->name('proyectos.presupuesto.insumos.diccionarios');
             Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
+            Route::post('/presupuesto/insumos/replace-project-insumo', [InsumoProductoController::class, 'replaceProjectInsumo'])->name('proyectos.presupuesto.insumos.replace');
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
+
+            // ─── Componentes de ACU (CRUD Granular) ───
+            Route::get('/presupuesto/acus/{acuId}/componentes/{tipo}', [PresupuestoController::class, 'getAcuComponentes'])->name('proyectos.presupuesto.acus.componentes.index');
+            Route::post('/presupuesto/acus/{acuId}/componentes/{tipo}', [PresupuestoController::class, 'storeAcuComponente'])->name('proyectos.presupuesto.acus.componentes.store');
+            Route::put('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'updateAcuComponente'])->name('proyectos.presupuesto.acus.componentes.update');
+            Route::delete('/presupuesto/acus/{acuId}/componentes/{tipo}/{id}', [PresupuestoController::class, 'destroyAcuComponente'])->name('proyectos.presupuesto.acus.componentes.destroy');
+            Route::post('/presupuesto/copy', [PresupuestoController::class, 'copy'])->name('proyectos.presupuesto.copy');
 
             // ─── Rutas Comodín (Wildcards) - DEBEN IR AL FINAL ────
             Route::get('/presupuesto/{subsection?}', [PresupuestoController::class, 'index'])->name('proyectos.presupuesto.index');
@@ -224,8 +232,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/', [MetradoEstructurasController::class, 'index'])->name('index');
             Route::get('/config', [MetradoEstructurasController::class, 'getConfig'])->name('config.show');
             Route::patch('/config', [MetradoEstructurasController::class, 'updateConfig'])->name('config.update');
-            Route::get('/metrado', [MetradoEstructurasController::class, 'getMetrado'])->name('metrado.show');
-            Route::patch('/metrado', [MetradoEstructurasController::class, 'updateMetrado'])->name('metrado.update');
+            Route::get('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'getModulo'])->name('modulo.show');
+            Route::patch('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'updateModulo'])->name('modulo.update');
             Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
             Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
@@ -277,8 +285,20 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         Route::get('/', [MetradoArquitecturaController::class, 'index'])
             ->name('index');
 
-        Route::patch('/metrado', [MetradoArquitecturaController::class, 'updateMetrado'])
-            ->name('metrado.update');
+        Route::get('/config', [MetradoArquitecturaController::class, 'getConfig'])
+            ->name('config.show');
+
+        Route::patch('/config', [MetradoArquitecturaController::class, 'updateConfig'])
+            ->name('config.update');
+
+        Route::get('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'getModulo'])
+            ->name('modulo.show');
+
+        Route::patch('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'updateModulo'])
+            ->name('modulo.update');
+
+        Route::get('/resumen', [MetradoArquitecturaController::class, 'getResumen'])
+            ->name('resumen.show');
 
         Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
             ->name('resumen.update');
