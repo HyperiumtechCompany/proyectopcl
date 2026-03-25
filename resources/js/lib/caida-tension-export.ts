@@ -72,6 +72,9 @@ export async function exportCaidaTensionToExcel(
         wsTD.getRow(1).height = 25;
 
         // Encabezados
+
+        wsTD.views = [{ state: 'frozen', ySplit: 3}];
+
         const headersTD = ['CÓDIGO', 'NOMBRE', 'VOLTAJE', 'FASES', 'NEUTRO', 'DESCRIPCIÓN'];
         headersTD.forEach((header, idx) => {
             const cell = wsTD.getCell(3, idx + 1);
@@ -123,11 +126,13 @@ export async function exportCaidaTensionToExcel(
             { width: 15 },
         ];
 
+        wsTD.views = [{ state: 'frozen', ySplit: 3}];
+
         wsTG.mergeCells('A1:I1');
         const titleTG = wsTG.getCell('A1');
         titleTG.value = 'CÁLCULO DE CAÍDA DE TENSIÓN - TABLERO GENERAL';
         titleTG.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        titleTG.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+        titleTG.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0080' } };
         titleTG.alignment = { horizontal: 'center', vertical: 'middle' };
         wsTG.getRow(1).height = 25;
 
@@ -145,8 +150,8 @@ export async function exportCaidaTensionToExcel(
         headersTG.forEach((header, idx) => {
             const cell = wsTG.getCell(3, idx + 1);
             cell.value = header;
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF366092' } };
+            cell.font = { bold: true, color: { argb: '#000000' }, size: 10 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'BBBCB8' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
             cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
@@ -190,24 +195,24 @@ export async function exportCaidaTensionToExcel(
         wsTG.mergeCells(`A${rowTG}:B${rowTG}`);
         const totalCell = wsTG.getCell(`A${rowTG}`);
         totalCell.value = 'TOTAL';
-        totalCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        totalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        totalCell.font = { bold: true, color: { argb: '#ffffff' } };
+        totalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF404040' } };
         totalCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
         const totalPotenciaCell = wsTG.getCell(`C${rowTG}`);
         totalPotenciaCell.value = totalPotencia;
-        totalPotenciaCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        totalPotenciaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        totalPotenciaCell.font = { bold: true, color: { argb: '#ffffff' } };
+        totalPotenciaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF404040' } };
 
         const totalAparenteCell = wsTG.getCell(`H${rowTG}`);
         totalAparenteCell.value = totalAparentekVA;
-        totalAparenteCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        totalAparenteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        totalAparenteCell.font = { bold: true, color: { argb: '#ffffff' } };
+        totalAparenteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF404040' } };
 
         const totalCorrienteCell = wsTG.getCell(`I${rowTG}`);
         totalCorrienteCell.value = totalCorriente;
-        totalCorrienteCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        totalCorrienteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+        totalCorrienteCell.font = { bold: true, color: { argb: '#ffffff' } };
+        totalCorrienteCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF404040' } };
 
         // ========== HOJA 3: SELECCIÓN DE GRUPO ==========
         const wsSelection = workbook.addWorksheet('Selección de Grupo');
@@ -216,6 +221,8 @@ export async function exportCaidaTensionToExcel(
             { width: 20 },
             { width: 15 },
         ];
+
+        wsTD.views = [{ state: 'frozen', ySplit: 3}];
 
         wsSelection.mergeCells('A1:C1');
         const titleSelection = wsSelection.getCell('A1');
