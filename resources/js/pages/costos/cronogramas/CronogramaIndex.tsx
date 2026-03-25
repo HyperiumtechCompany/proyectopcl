@@ -495,13 +495,13 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             { name: 'add', width: 44 },
         ];
 
-        
+
 
         // ── 7. LIGHTBOX ────────────────────────────────────────────────
         gantt.config.lightbox.sections = [
             { name: 'description', height: 38, map_to: 'text', type: 'textarea', focus: true },
             { name: 'time', type: 'duration', map_to: 'auto', time_format: ['%d', '%m', '%Y'] },
-            { name: 'cost', height: 22, map_to: 'cost', type: 'textarea', default_value: '0' },
+            { name: 'cost', height: 22, map_to: 'cost', type: 'text', default_value: '0' },
         ];
         gantt.locale.labels.section_cost = 'Costo (S/.)';
 
@@ -589,18 +589,40 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
         });
 
         // Actualizar fechas de tarea padre cuando cambia un hijo
-        gantt.attachEvent('onAfterTaskUpdate', (id: any) => {
+        gantt.attachEvent('onAfterTaskUpdate', (id: any, item: any) => {
             if (isUpdatingRef.current) return true;
             isUpdatingRef.current = true;
+
             try {
+                // 1. Sincronizar Fechas Padre/Hijo (Tu lógica original)
                 const dates = getSubtreeDates(id);
                 if (dates) {
                     const t: any = gantt.getTask(id);
                     t.start_date = dates.start_date;
                     t.end_date = dates.end_date;
-                    gantt.updateTask(id);
                 }
-            } finally { isUpdatingRef.current = false; }
+
+                // 2. Sumar costos al padre automáticamente (Rollup)
+                if (item.parent && gantt.isTaskExists(item.parent)) {
+                    const children = gantt.getChildren(item.parent);
+                    let total = 0;
+                    children.forEach(childId => {
+                        const child = gantt.getTask(childId);
+                        if (child) {
+                            total += parseFloat(child.cost) || 0;
+                        }
+                    });
+                    const parent = gantt.getTask(item.parent);
+                    if (parseFloat(parent.cost || 0) !== total) {
+                        parent.cost = total;
+                        gantt.updateTask(parent.id);
+                    }
+                }
+            } finally {
+                isUpdatingRef.current = false;
+                // 3. Forzar al diagrama a redibujar las barras visualmente
+                gantt.render();
+            }
             return true;
         });
 
@@ -704,8 +726,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
             gantt.showTask(id);
         });
 
-        // 3. Configuración para que el usuario no pueda mover tareas "fuera" de Abril
-        // (Esto evita que las tareas se vuelvan "fantasmas" por accidente)
+
         gantt.config.limit_view = true;
 
         // ── 10. INIT ───────────────────────────────────────────────────
@@ -1229,23 +1250,30 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
                 }
 
                 /* 2. Estilo para los bloques azules de los días que SÍ se trabajan */
-                .gantt_split_child {
-                    background-color: #3db9d3 !important; /* Tu azul original */
-                    border: 1px solid #2d96ad !important;
-                    border-radius: 4px;
-                    height: 24px !important; /* Ajusta esto según el alto de tu fila */
-                    top: 3px !important;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white !important;
-                }
+                /* 1. Estilo base para los pedacitos (Azul) */
+.gantt_split_child {
+    background-color: #3db9d3 !important;
+    border: 1px solid #2d96ad !important;
+    border-radius: 4px;
+    height: 24px !important;
+    top: 3px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white !important;
+}
 
-                /* 3. Si la tarea es CRÍTICA, que los pedacitos sean rojos */
-                .gantt_critical_task.gantt_split_parent .gantt_split_child {
-                    background-color: #ff4d4d !important;
-                    border: 1px solid #d43f3f !important;
-                }`}</style>
+/* 2. NUEVO: Si el PADRE es CRÍTICO, marcar la fila (Igual al modelo) */
+.gantt_critical_task.gantt_split_parent {
+    background-color: rgba(255, 77, 77, 0.1) !important; /* Fondo sutil rojo */
+    border-right: 5px solid #ff4d4d !important; /* Marca lateral de advertencia */
+}
+
+/* 3. Si la tarea es CRÍTICA, que los pedacitos sean rojos */
+.gantt_critical_task.gantt_split_parent .gantt_split_child {
+    background-color: #ff4d4d !important;
+    border: 1px solid #d43f3f !important;
+}`}</style>
         </div>
     );
 };
