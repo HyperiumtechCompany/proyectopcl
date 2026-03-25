@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
 @import 'tw-animate-css';
+@import './luckysheet-custom.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -139,5 +140,36 @@
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /* Premium Scrollbar */
+    .scrollbar-premium {
+        scrollbar-width: thin;
+        scrollbar-color: #334155 #0f172a;
+    }
+
+    .scrollbar-premium::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    .scrollbar-premium::-webkit-scrollbar-track {
+        background: #0f172a;
+        border-radius: 10px;
+    }
+
+    .scrollbar-premium::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 10px;
+        border: 2px solid #0f172a;
+        transition: background 0.3s ease;
+    }
+
+    .scrollbar-premium::-webkit-scrollbar-thumb:hover {
+        background: #475569;
+    }
+
+    .scrollbar-premium::-webkit-scrollbar-corner {
+        background: transparent;
     }
 }

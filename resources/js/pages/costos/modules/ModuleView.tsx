@@ -1,7 +1,8 @@
 import React from 'react';
+import type { ColumnDef } from '@/components/costos/ModuleSpreadsheet';
+import ModuleSpreadsheet from '@/components/costos/ModuleSpreadsheet';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
-import ModuleSpreadsheet, { ColumnDef } from '@/components/costos/ModuleSpreadsheet';
 
 interface ModuleViewProps {
     project: {

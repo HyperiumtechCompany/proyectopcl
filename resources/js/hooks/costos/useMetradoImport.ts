@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+=======
+import { router } from '@inertiajs/react';
+import { useState } from 'react';
+>>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 interface MetradoImportResult {
     success: boolean;

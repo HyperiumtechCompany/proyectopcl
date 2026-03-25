@@ -62,6 +62,7 @@ export default function Create() {
 
     // Step 2 fields
     const [selectedModules, setSelectedModules] = useState<string[]>([]);
+    const [sanitariasModulos, setSanitariasModulos] = useState(1);
 
     // Load departamentos on mount
     useEffect(() => {
@@ -101,6 +102,7 @@ export default function Create() {
             departamento_id: depId || null, provincia_id: provId || null,
             distrito_id: distId || null, centro_poblado: centroPoblado || null,
             modules: selectedModules,
+            sanitarias_cantidad_modulos: selectedModules.includes('metrado_sanitarias') ? sanitariasModulos : null,
         }, {
             onFinish: () => setProcessing(false),
             onError: (e) => setErrors(e as Record<string, string>),
@@ -233,6 +235,25 @@ export default function Create() {
                                 </div>
                             );
                         })}
+
+                        {/* Sanitarias module count input */}
+                        {selectedModules.includes('metrado_sanitarias') && (
+                            <div className="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/20">
+                                <h3 className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">⚙️ Configuración de Sanitarias</h3>
+                                <p className="mb-2 text-xs text-blue-600 dark:text-blue-400">Define la cantidad de módulos (hojas) que tendrá el metrado sanitarias. Puedes cambiarlo después.</p>
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm font-medium text-blue-700 dark:text-blue-300">Cantidad de Módulos:</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={50}
+                                        value={sanitariasModulos}
+                                        onChange={e => setSanitariasModulos(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                                        className="w-20 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm text-gray-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-blue-600 dark:bg-gray-800 dark:text-gray-100"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {errors.modules && <p className="text-sm text-red-500">{errors.modules}</p>}
 

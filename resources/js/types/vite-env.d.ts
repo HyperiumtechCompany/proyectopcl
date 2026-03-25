@@ -14,4 +14,8 @@ declare module 'luckysheet' {
 
     const luckysheet: Luckysheet;
     export default luckysheet;
+
+  export function create(arg0: { container: HTMLDivElement; data: { name: any; celldata: any[]; row: number; column: number; }[]; showinfobar: boolean; showstatisticBar: boolean; toolbar: boolean; allowEdit: boolean; hook: { cellUpdated: (r: number) => void; }; }): any {
+    throw new Error("Function not implemented.");
+  }
 }

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
 
 interface UsePresupuestoAcuProps {
@@ -50,10 +50,14 @@ export function usePresupuestoAcu({
                 costo_mano_obra: Number(row.costo_mano_obra ?? 0),
                 costo_materiales: Number(row.costo_materiales ?? 0),
                 costo_equipos: Number(row.costo_equipos ?? 0),
+                costo_subcontratos: Number(row.costo_subcontratos ?? 0),
+                costo_subpartidas: Number(row.costo_subpartidas ?? 0),
                 costo_unitario_total: Number(row.costo_unitario_total ?? 0),
                 mano_de_obra: parseJsonArrayField(row.mano_de_obra),
                 materiales: parseJsonArrayField(row.materiales),
                 equipos: parseJsonArrayField(row.equipos),
+                subcontratos: parseJsonArrayField(row.subcontratos),
+                subpartidas: parseJsonArrayField(row.subpartidas),
             }));
         },
         [parseJsonArrayField],
@@ -85,10 +89,14 @@ export function usePresupuestoAcu({
             costo_mano_obra: 0,
             costo_materiales: 0,
             costo_equipos: 0,
+            costo_subcontratos: 0,
+            costo_subpartidas: 0,
             costo_unitario_total: 0,
             mano_de_obra: [],
             materiales: [],
-            equipos: []
+            equipos: [],
+            subcontratos: [],
+            subpartidas: [],
         } as ACURowSummary;
     }, [acuRows, selectedPartidaCode, selectedPartidaData]);
 
@@ -115,6 +123,8 @@ export function usePresupuestoAcu({
             mano_de_obra: matchingAcu.mano_de_obra || [],
             materiales: matchingAcu.materiales || [],
             equipos: matchingAcu.equipos || [],
+            subcontratos: (matchingAcu as any).subcontratos || [],
+            subpartidas: (matchingAcu as any).subpartidas || [],
         };
 
         try {
@@ -140,7 +150,7 @@ export function usePresupuestoAcu({
     }, [selectedCell, subsection, lastSaved, autoCalculateACU]);
 
     useEffect(() => {
-        if (subsection !== 'general') {
+        if (subsection !== 'general' && subsection !== 'acus') {
             setAcuRows([]);
             setAcuError(null);
             setAcuLoading(false);
@@ -179,11 +189,96 @@ export function usePresupuestoAcu({
         return () => controller.abort();
     }, [mapAcuRows, projectId, subsection]);
 
-    const saveAcu = useCallback(async (acuData: Record<string, any>) => {
+    const normalizeNumber = (value: unknown, fallback = 0): number => {
+        const num = Number(value);
+        if (!Number.isFinite(num) || num < 0) {
+            return fallback;
+        }
+        return num;
+    };
+
+    const normalizeAcuComponent = (
+        item: Record<string, unknown>,
+        type: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas',
+    ) => {
+        const normalized: Record<string, unknown> = {
+            id: item.id,
+            insumo_id: item.insumo_id,
+            descripcion: String(item.descripcion ?? '').trim(),
+            unidad: String(item.unidad ?? '').trim() || 'und',
+            cantidad: normalizeNumber(item.cantidad, 0),
+        };
+
+        if (type === 'mano_de_obra' || type === 'equipos') {
+            normalized.recursos = normalizeNumber(item.recursos, 0);
+        }
+
+        if (type === 'materiales' || type === 'subcontratos' || type === 'subpartidas') {
+            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+        }
+
+        if (type === 'mano_de_obra') {
+            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+        }
+
+        if (type === 'equipos') {
+            normalized.precio_hora = normalizeNumber(item.precio_hora, 0);
+        }
+
+        if (type === 'materiales') {
+            const factor = normalizeNumber(item.factor_desperdicio, 1);
+            normalized.factor_desperdicio = factor < 1 ? 1 : factor;
+        }
+
+        return normalized;
+    };
+
+    const normalizeAcuData = (data: Record<string, any>): Record<string, any> => {
+        return {
+            ...data,
+            descripcion: String(data.descripcion ?? '').trim(),
+            unidad: String(data.unidad ?? '').trim() || 'und',
+            rendimiento:
+                normalizeNumber(data.rendimiento, 1) <= 0
+                    ? 1
+                    : normalizeNumber(data.rendimiento, 1),
+            mano_de_obra: Array.isArray(data.mano_de_obra)
+                ? data.mano_de_obra.map((item: Record<string, unknown>) =>
+                      normalizeAcuComponent(item, 'mano_de_obra'),
+                  )
+                : [],
+            materiales: Array.isArray(data.materiales)
+                ? data.materiales.map((item: Record<string, unknown>) =>
+                      normalizeAcuComponent(item, 'materiales'),
+                  )
+                : [],
+            equipos: Array.isArray(data.equipos)
+                ? data.equipos.map((item: Record<string, unknown>) =>
+                      normalizeAcuComponent(item, 'equipos'),
+                  )
+                : [],
+            subcontratos: Array.isArray(data.subcontratos)
+                ? data.subcontratos.map((item: Record<string, unknown>) =>
+                      normalizeAcuComponent(item, 'subcontratos'),
+                  )
+                : [],
+            subpartidas: Array.isArray(data.subpartidas)
+                ? data.subpartidas.map((item: Record<string, unknown>) =>
+                      normalizeAcuComponent(item, 'subpartidas'),
+                  )
+                : [],
+        };
+    };
+
+    const saveAcu = useCallback(async (acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
         try {
+            const payload = normalizeAcuData(acuData);
+            if (options?.updateProjectPrices !== undefined) {
+                payload.update_project_prices = options.updateProjectPrices;
+            }
             const response = await axios.post(
                 `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
-                acuData
+                payload
             );
             
             const data = response.data;

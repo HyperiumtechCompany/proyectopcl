@@ -99,3 +99,19 @@
     color: #000000;
 }
 
+/* Force bold black text for cells, edit mode, selects, and other Luckysheet text elements */
+.luckysheet-container .luckysheet-cell,
+.luckysheet-container .luckysheet-cell-content,
+.luckysheet-container .luckysheet-colheader,
+.luckysheet-container input,
+.luckysheet-container textarea,
+.luckysheet-container select,
+.luckysheet-container option,
+#luckysheet-input-box,
+#luckysheet-rich-text-editor,
+.luckysheet-input-box,
+.luckysheet-container [contenteditable="true"] {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+

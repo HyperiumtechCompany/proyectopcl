@@ -114,21 +114,40 @@ export default function Show() {
     ];
 
     const renderNavActions = () => {
-        if (!spreadsheet.can_edit) return null;
-        return (
-            <div className="flex items-center gap-2">
+    const handleExport = async () => {
+        try {
+            // Importación dinámica del módulo de exportación
+            const { exportAguaToExcel } = await import('@/lib/calculo_agua_export');
+            await exportAguaToExcel(dataSheet, spreadsheet.name || 'Calculo_Agua');
+        } catch (error) {
+            console.error('Error al exportar Excel:', error);
+            alert('No se pudo generar el archivo Excel. Intenta de nuevo.');
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-2">
+            {spreadsheet.can_edit && (
                 <button
                     onClick={toggleEdit}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${editMode
-                        ? 'bg-orange-500 text-white hover:bg-orange-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                        }`}>
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        editMode
+                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                    }`}>
                     <span>{editMode ? '✓' : '✎'}</span>
                     <span>{editMode ? 'Editando' : 'Editar'}</span>
                 </button>
-            </div>
-        );
-    };
+            )}
+            <button
+                onClick={handleExport}   
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+                ↓ Excel
+            </button>
+        </div>
+    );
+};
 
     const renderTabContent = () => {
         const props = {
