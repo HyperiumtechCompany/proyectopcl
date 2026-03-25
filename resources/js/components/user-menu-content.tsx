@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
-import { logout } from '@/routes';
+// Eliminamos la importación fallida de logout
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
@@ -19,9 +19,11 @@ type Props = {
 export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
 
-    const handleLogout = () => {
+    const handleLogout = (e: React.MouseEvent) => {
+        e.preventDefault(); // Evitamos que el Link actúe como un enlace normal
         cleanup();
-        router.flushAll();
+        // Usamos el router de Inertia para enviar el POST de salida
+        router.post(route('logout')); 
     };
 
     return (
@@ -40,23 +42,22 @@ export function UserMenuContent({ user }: Props) {
                         prefetch
                         onClick={cleanup}
                     >
-                        <Settings className="mr-2" />
-                        Settings
+                        <Settings className="mr-2 h-4 w-4" />
+                        Configuración
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-                <Link
-                    className="block w-full cursor-pointer"
-                    href={logout()}
-                    as="button"
+                {/* Cambiamos el Link por un botón para el Logout seguro */}
+                <button
+                    className="flex w-full cursor-pointer items-center px-2 py-1.5 text-sm outline-none hover:bg-slate-100 dark:hover:bg-slate-800"
                     onClick={handleLogout}
                     data-test="logout-button"
                 >
-                    <LogOut className="mr-2" />
-                    Log out
-                </Link>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar Sesión
+                </button>
             </DropdownMenuItem>
         </>
     );
