@@ -3,75 +3,142 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
+use App\Traits\HandleMetradoSpreadsheet;
+use App\Traits\HandlesModularMetrado;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Traits\HandleMetradoSpreadsheet;
 
 class MetradoEstructurasController extends Controller
 {
     use HandleMetradoSpreadsheet;
+    use HandlesModularMetrado;
 
-    private const TABLE_METRADO = 'metrado_estructura';
+    private const MODULE_TYPE = 'metrado_estructura';
+    private const TABLE_CONFIG = 'metrado_estructura_config';
+    private const TABLE_MODULOS = 'metrado_estructura_modulos';
+    private const TABLE_EXTERIOR = 'metrado_estructura_exterior';
+    private const TABLE_CISTERNA = 'metrado_estructura_cisterna';
     private const TABLE_RESUMEN = 'metrado_estructura_resumen';
 
     public function index(CostoProject $costoProject): Response
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
 
-        return Inertia::render('costos/metrados/EstructurasIndex', [
+        $config = $this->getOrCreateModularConfig($costoProject);
+        $modulosData = [];
+
+        for ($i = 1; $i <= $config->cantidad_modulos; $i++) {
+            $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
+        }
+
+        return Inertia::render('costos/metrados/ModularIndex', [
             'project' => [
-                'id'     => $costoProject->id,
+                'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,
             ],
-            'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
-            'resumen' => $this->queryRows($costoProject, self::TABLE_RESUMEN),
+            'titulo' => 'Metrado Estructuras',
+            'baseURL' => "/costos/{$costoProject->id}/metrado-estructuras",
+            'config' => (array) $config,
+            'modulos' => $modulosData,
+            'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
+            'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
+            'resumen' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
         ]);
     }
 
-    public function updateMetrado(CostoProject $costoProject, Request $request): JsonResponse
+    public function getConfig(CostoProject $costoProject): JsonResponse
     {
-        $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
-        return $this->updateSheet($costoProject, self::TABLE_METRADO, $request);
+        return $this->getConfigResponse($costoProject);
     }
 
-    public function updateResumen(CostoProject $costoProject, Request $request): JsonResponse
+    public function updateConfig(CostoProject $costoProject, Request $request): JsonResponse
     {
-        $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
-        return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
+        return $this->updateConfigResponse($costoProject, $request);
     }
 
-    public function getMetrado(CostoProject $costoProject): JsonResponse
+    public function getModulo(CostoProject $costoProject, int $moduloNumero): JsonResponse
+    {
+        return $this->getModuloResponse($costoProject, $moduloNumero);
+    }
+
+    public function updateModulo(CostoProject $costoProject, int $moduloNumero, Request $request): JsonResponse
+    {
+        return $this->updateModuloResponse($costoProject, $moduloNumero, $request);
+    }
+
+    public function getExterior(CostoProject $costoProject): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
         return response()->json([
             'success' => true,
-            'rows'    => $this->queryRows($costoProject, self::TABLE_METRADO),
+            'rows' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
         ]);
+    }
+
+    public function updateExterior(CostoProject $costoProject, Request $request): JsonResponse
+    {
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
+        return $this->updateSheet($costoProject, self::TABLE_EXTERIOR, $request);
+    }
+
+    public function getCisterna(CostoProject $costoProject): JsonResponse
+    {
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
+        return response()->json([
+            'success' => true,
+            'rows' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
+        ]);
+    }
+
+    public function updateCisterna(CostoProject $costoProject, Request $request): JsonResponse
+    {
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
+        return $this->updateSheet($costoProject, self::TABLE_CISTERNA, $request);
     }
 
     public function getResumen(CostoProject $costoProject): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
         return response()->json([
             'success' => true,
-            'rows'    => $this->queryRows($costoProject, self::TABLE_RESUMEN),
+            'rows' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
         ]);
+    }
+
+    public function updateResumen(CostoProject $costoProject, Request $request): JsonResponse
+    {
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
+        return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
     public function syncResumen(CostoProject $costoProject): JsonResponse
     {
         $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, 'metrado_estructura');
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
         return response()->json([
             'success' => true,
-            'message' => 'Sincronización completada (backend stub)',
+            'message' => 'Sincronizacion completada (backend stub)',
         ]);
+    }
+
+    private function queryTableRows(CostoProject $costoProject, string $table): array
+    {
+        return $this->queryRows($costoProject, $table);
     }
 }

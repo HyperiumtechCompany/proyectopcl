@@ -232,8 +232,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/', [MetradoEstructurasController::class, 'index'])->name('index');
             Route::get('/config', [MetradoEstructurasController::class, 'getConfig'])->name('config.show');
             Route::patch('/config', [MetradoEstructurasController::class, 'updateConfig'])->name('config.update');
-            Route::get('/metrado', [MetradoEstructurasController::class, 'getMetrado'])->name('metrado.show');
-            Route::patch('/metrado', [MetradoEstructurasController::class, 'updateMetrado'])->name('metrado.update');
+            Route::get('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'getModulo'])->name('modulo.show');
+            Route::patch('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'updateModulo'])->name('modulo.update');
             Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
             Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
@@ -285,8 +285,20 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         Route::get('/', [MetradoArquitecturaController::class, 'index'])
             ->name('index');
 
-        Route::patch('/metrado', [MetradoArquitecturaController::class, 'updateMetrado'])
-            ->name('metrado.update');
+        Route::get('/config', [MetradoArquitecturaController::class, 'getConfig'])
+            ->name('config.show');
+
+        Route::patch('/config', [MetradoArquitecturaController::class, 'updateConfig'])
+            ->name('config.update');
+
+        Route::get('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'getModulo'])
+            ->name('modulo.show');
+
+        Route::patch('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'updateModulo'])
+            ->name('modulo.update');
+
+        Route::get('/resumen', [MetradoArquitecturaController::class, 'getResumen'])
+            ->name('resumen.show');
 
         Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
             ->name('resumen.update');
