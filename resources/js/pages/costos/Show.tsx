@@ -21,10 +21,9 @@ const MODULE_LABELS: Record<string, string> = {
     crono_general: 'Cronograma General', crono_valorizado: 'Cronograma Valorizado',
     crono_materiales: 'Cronograma Materiales',
     presupuesto: 'Presupuesto',
-    // Legacy modules (for compatibility)
     presupuesto_gg: 'Gastos Generales', presupuesto_insumos: 'Insumos',
     presupuesto_remuneraciones: 'Remuneraciones', presupuesto_acus: 'ACUs',
-    presupuesto_indice: 'Índice', 
+    presupuesto_indice: 'Índice',
     etts: 'ETTs',
 };
 
@@ -100,22 +99,39 @@ export default function Show() {
                     <h2 className="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Módulos Habilitados</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {project.modules.map(m => {
-                            // Special handling for unified presupuesto module
                             let href: string;
+
                             if (m === 'presupuesto') {
                                 href = `/costos/proyectos/${project.id}/presupuesto`;
                             } else if (m === 'metrado_sanitarias') {
                                 href = `/costos/${project.id}/metrado-sanitarias`;
                             } else if (m === 'metrado_estructura') {
                                 href = `/costos/${project.id}/metrado-estructuras`;
-                            } else {
+                            } else if (m === 'metrado_gas') {
+                                // ── Gas tiene su propio controlador y componente ──
+                                href = '/metrados/gas';
+                            }
+                            // ─── NUEVA LÓGICA PARA CRONOGRAMAS (GANTT) ───
+                            else if (m === 'crono_general' || m === 'crono_valorizado' || m === 'crono_materiales') {
+                                // Redirige al nuevo controlador de Gantt pasando el ID del proyecto
+                                href = `/module/crono_general?project=${project.id}`;
+                            }
+                            // ──────────────────────────────────────────────
+                            else {
+                                // Cualquier otro módulo sigue usando la ruta genérica (Luckysheet)
                                 href = `/costos/${project.id}/module/${m}`;
                             }
-                            
+
                             return (
-                                <Link key={m} href={href} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer">
+                                <Link
+                                    key={m}
+                                    href={href}
+                                    className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer"
+                                >
                                     <span className="text-lg">{getIcon(m)}</span>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{MODULE_LABELS[m] || m}</span>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {MODULE_LABELS[m] || m}
+                                    </span>
                                 </Link>
                             );
                         })}
