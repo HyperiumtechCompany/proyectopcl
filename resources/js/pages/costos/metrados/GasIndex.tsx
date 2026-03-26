@@ -5,101 +5,104 @@ import Luckysheet from '@/components/costos/tablas/Luckysheet';
 import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
+
+  ChevronLeft, Save,
+
   ChevronLeft, Settings2, Save, RefreshCcw,
+
   CheckCircle2, AlertCircle, Loader2,
   ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
-// ═══════════════════════════════════════════════════════════════════════
-// TIPOS
-// ═══════════════════════════════════════════════════════════════════════
+// ─── TIPOS ────────────────────────────────────────────────────────────────────
 interface ColumnDef { key: string; label: string; width: number }
 
+interface Spreadsheet {
+  id: number;
+  name: string;
+  project_name?: string;
+  project_location?: string;
+  sheet_data: any[];
+  updated_at?: string;
+  can_edit?: boolean;
+}
+
 interface GasPageProps {
-  project: { id: number; nombre: string };
-  metrado: Record<string, any>[];
-  resumen: Record<string, any>[];
+  spreadsheet: Spreadsheet | null;
+  spreadsheets: Spreadsheet[];
   [key: string]: unknown;
 }
 
 type EntryKind = 'group' | 'leaf';
 
 interface Entry {
-  ri: number;              // row index en la hoja (1-based, 0 = cabecera)
-  row: Record<string, any>; // datos de la fila (mutables durante recálculo)
-  level: number;           // profundidad 1–MAX_LEVELS
+  ri: number;
+  row: Record<string, any>;
+  level: number;
   kind: EntryKind;
-  total: number;           // calculado durante recálculo
+  total: number;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// DEFINICIÓN DE COLUMNAS
-// ═══════════════════════════════════════════════════════════════════════
+// ─── COLUMNAS ─────────────────────────────────────────────────────────────────
 const VISIBLE_COLS: ColumnDef[] = [
-  { key: 'partida',     label: 'Partida',       width: 105 },
-  { key: 'descripcion', label: 'Descripción',   width: 295 },
-  { key: 'unidad',      label: 'Und',           width: 60  },
-  { key: 'elsim',       label: 'Elem.Simil.',   width: 82  },
-  { key: 'largo',       label: 'Largo',         width: 70  },
-  { key: 'ancho',       label: 'Ancho',         width: 70  },
-  { key: 'alto',        label: 'Alto',          width: 70  },
-  { key: 'nveces',      label: 'N° Veces',      width: 70  },
-  { key: 'lon',         label: 'Lon.',          width: 76  },
-  { key: 'area',        label: 'Área',          width: 76  },
-  { key: 'vol',         label: 'Vol.',          width: 76  },
-  { key: 'kg',          label: 'Kg.',           width: 76  },
-  { key: 'und',         label: 'Parcial',       width: 76  },
-  { key: 'total',       label: 'Total',         width: 95  },
+  { key: 'partida', label: 'Partida', width: 105 },
+  { key: 'descripcion', label: 'Descripción', width: 295 },
+  { key: 'unidad', label: 'Und', width: 60 },
+  { key: 'elsim', label: 'Elem.Simil.', width: 82 },
+  { key: 'largo', label: 'Largo', width: 70 },
+  { key: 'ancho', label: 'Ancho', width: 70 },
+  { key: 'alto', label: 'Alto', width: 70 },
+  { key: 'nveces', label: 'N° Veces', width: 70 },
+  { key: 'lon', label: 'Lon.', width: 76 },
+  { key: 'area', label: 'Área', width: 76 },
+  { key: 'vol', label: 'Vol.', width: 76 },
+  { key: 'kg', label: 'Kg.', width: 76 },
+  { key: 'und', label: 'Und.', width: 76 },
+  { key: 'total', label: 'Total', width: 95 },
   { key: 'observacion', label: 'Observaciones', width: 148 },
 ];
 
-/** Columnas internas — ocultas en Luckysheet */
 const HIDDEN_COLS: ColumnDef[] = [
   { key: '_level', label: '', width: 1 },
-  { key: '_kind',  label: '', width: 1 },
+  { key: '_kind', label: '', width: 1 },
 ];
 
 const BASE_COLS: ColumnDef[] = [...VISIBLE_COLS, ...HIDDEN_COLS];
 
-/** Lookup estático key → índice de columna */
 const COL: Record<string, number> = Object.fromEntries(
   BASE_COLS.map((c, i) => [c.key, i]),
 );
 
-const RESUMEN_BASE: ColumnDef[] = [
-  { key: 'partida',     label: 'Código',       width: 105 },
-  { key: 'descripcion', label: 'Descripción',  width: 295 },
-  { key: 'unidad',      label: 'Und',          width: 60  },
-  { key: 'total',       label: 'Total',        width: 115 },
-  { key: 'observacion', label: 'Obs.',         width: 120 },
-];
-
-// ═══════════════════════════════════════════════════════════════════════
-// UNIDADES Y MAPA DE CÁLCULO
-// ═══════════════════════════════════════════════════════════════════════
+// ─── UNIDADES ─────────────────────────────────────────────────────────────────
 const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza'];
 
 const UNIT_TOTAL_COL: Record<string, string> = {
-  und: 'und', pza: 'und',
-  m:   'lon', ml:  'lon',
-  m2:  'area',
-  m3:  'vol', lt: 'vol', gl: 'vol',
-  kg:  'kg',
+  'und': 'und',
+  'm': 'lon',
+  'ml': 'lon',
+  'm2': 'area',
+  'm3': 'vol',
+  'kg': 'kg', // Si usas la columna de kilogramos
 };
+
+
+// ─── CONSTANTES ───────────────────────────────────────────────────────────────
+const TOP_LEVEL_START = 1;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO GAS
 // ═══════════════════════════════════════════════════════════════════════
 const TOP_LEVEL_START = 7; 
+
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
-
-// ═══════════════════════════════════════════════════════════════════════
-// ESTILOS VISUALES — 10 niveles de azul degradado
-// ═══════════════════════════════════════════════════════════════════════
 const MAX_LEVELS = 10;
+const SAVE_DEBOUNCE = 1800;
 
+// URL base de Gas — sin route(), sin dependencias externas
+const GAS_BASE_URL = '/metrados/gas';
+
+// ─── ESTILOS ──────────────────────────────────────────────────────────────────
 const GROUP_PALETTE: { bg: string; fc: string; bl: number }[] = [
   { bg: '#0c1e3a', fc: '#ffffff', bl: 1 },
   { bg: '#133163', fc: '#ffffff', bl: 1 },
@@ -107,29 +110,24 @@ const GROUP_PALETTE: { bg: string; fc: string; bl: number }[] = [
   { bg: '#1d5fa8', fc: '#ffffff', bl: 1 },
   { bg: '#2563eb', fc: '#ffffff', bl: 1 },
   { bg: '#3b82f6', fc: '#ffffff', bl: 1 },
-  { bg: '#60a5fa', fc: '#0f172a', bl: 0 },
+  { bg: '#60a5fa', fc: '#0f172a', bl: 1 },
   { bg: '#93c5fd', fc: '#0f172a', bl: 0 },
   { bg: '#bfdbfe', fc: '#0f172a', bl: 0 },
   { bg: '#dbeafe', fc: '#0f172a', bl: 0 },
 ];
 
 const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 };
-
 const groupStyle = (level: number) => GROUP_PALETTE[Math.min(level - 1, MAX_LEVELS - 1)];
 
 const NBSP = '\u00A0\u00A0\u00A0';
 const indent = (level: number, isLeaf: boolean) =>
   NBSP.repeat(isLeaf ? level : Math.max(0, level - 1));
 
-const SAVE_DEBOUNCE = 1800;
-
-// ═══════════════════════════════════════════════════════════════════════
-// HELPERS PUROS
-// ═══════════════════════════════════════════════════════════════════════
-const toNum  = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const r4     = (n: number)  => Math.round(n * 10000) / 10000;
-const trim0  = (v: unknown) => String(v ?? '').trimStart();
-const blank  = (v: any)     => v === null || v === undefined || v === '';
+// ─── HELPERS PUROS ────────────────────────────────────────────────────────────
+const toNum = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const r4 = (n: number) => Math.round(n * 10000) / 10000;
+const trim0 = (v: unknown) => String(v ?? '').trimStart();
+const blank = (v: any) => v === null || v === undefined || v === '';
 
 const cellRaw = (cell: any): any => {
   if (!cell) return null;
@@ -140,36 +138,39 @@ const cellRaw = (cell: any): any => {
 const mkNum = (v: number): Record<string, any> => ({
   v, m: v === 0 ? '' : String(v), ct: { fa: '#,##0.0000', t: 'n' },
 });
-
 const mkTxt = (v: string, extra: Record<string, any> = {}): Record<string, any> => ({
   v, m: v, ct: { fa: 'General', t: 'g' }, ...extra,
 });
-
 const styledNum = (v: number, st: { bg: string; fc: string; bl: number }) => ({
   ...mkNum(v), bl: st.bl, fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
-
 const styledTxt = (v: string, disp: string, st: { bg: string; fc: string; bl: number }) => ({
   ...mkTxt(v), m: disp, bl: st.bl, fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
-
 const colLetter = (i: number) => {
   let r = '', t = i;
   while (t >= 0) { r = String.fromCharCode((t % 26) + 65) + r; t = Math.floor(t / 26) - 1; }
   return r;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
-// CONVERSIÓN FILAS ↔ DATOS DE HOJA LUCKYSHEET
-// ═══════════════════════════════════════════════════════════════════════
+// ─── CONVERSIÓN FILAS ↔ HOJA ──────────────────────────────────────────────────
 function rowsToSheet(
   rows: Record<string, any>[],
   cols: ColumnDef[],
   name: string,
   order = 0,
 ) {
+
+  const header: any[] = cols.map((col, ci) => ({
+    r: 0, c: ci,
+    v: {
+      v: col.label, m: col.label, ct: { fa: 'General', t: 'g' },
+      bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10
+    },
+  }));
+
   // ─────────────────────────────────────────
   // HEADER MULTINIVEL
   // ─────────────────────────────────────────
@@ -179,6 +180,7 @@ function rowsToSheet(
     { r: 0, c: COL.descripcion, v: mkTxt('DESCRIPCIÓN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
     { r: 0, c: COL.unidad, v: mkTxt('UN', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
     { r: 0, c: COL.elsim, v: mkTxt('Elem.Simil.', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
+
 
     { r: 0, c: COL.largo, v: mkTxt('DIMENSIONES', { bg: '#0f172a', fc: '#fff', bl: 1 }) },
 
@@ -224,35 +226,59 @@ function rowsToSheet(
   const cells: any[] = [];
 
   rows.forEach((row, ri) => {
+
+    const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
+    const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
+    const st = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
+    const rIdx = ri + 1;
+
     const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
     const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
 
     const rIdx = ri + 2; // 🔥 IMPORTANTE
 
+
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
         ? (col.key === '_level' ? level : col.key === '_kind' ? kind : null)
         : row[col.key];
-
       if (blank(val)) return;
+
+
+      let store: any = val;
+      let display = String(val);
+
+      if (col.key === 'descripcion' && typeof val === 'string') {
+        store = val.trimStart();
+        display = indent(level, kind === 'leaf') + store;
 
       let display = String(val);
 
       if (col.key === 'descripcion' && typeof val === 'string') {
         display = indent(level, kind === 'leaf') + val.trimStart();
+
       }
 
       const isNum = typeof val === 'number' || (!isNaN(Number(val)) && val !== '');
 
+
+      const cell: Record<string, any> = {
+        v: isNum ? Number(store) : store,
+
       const cell = {
         v: isNum ? Number(val) : val,
+
         m: display,
         ct: { fa: isNum ? '#,##0.0000' : 'General', t: isNum ? 'n' : 'g' },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
         ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
       };
+
+      if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
+
+
 
       cells.push({ r: rIdx, c: ci, v: cell });
     });
@@ -270,9 +296,13 @@ function rowsToSheet(
   });
 
   return {
+
+    name, status: order === 0 ? 1 : 0, order,
+
     name,
     status: order === 0 ? 1 : 0,
     order,
+
     row: Math.max(rows.length + 50, 100),
     column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
@@ -294,10 +324,13 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   const data: any[][] = sheet.data || [];
   const rows: Record<string, any>[] = [];
 
+  for (let r = 1; r < data.length; r++) {
+
+
   for (let r = 2; r < data.length; r++) {
+
     const row: Record<string, any> = {};
     let hasData = false;
-
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
       if (!blank(raw)) {
@@ -307,10 +340,8 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
         row[col.key] = null;
       }
     });
-
     if (hasData) rows.push(row);
   }
-
   return rows;
 }
 
@@ -326,9 +357,67 @@ function readDataRow(data: any[][], ri: number): Record<string, any> {
 function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
   return {
     level: Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1)),
-    kind:  String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
+    kind: String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENTE PRINCIPAL — modo lista si no hay spreadsheet
+// ═══════════════════════════════════════════════════════════════════════════════
+export default function GasIndex() {
+  const { spreadsheet, spreadsheets } = usePage<GasPageProps>().props;
+
+  if (!spreadsheet) {
+    return (
+      <AppLayout breadcrumbs={[{ title: 'Metrado Gas', href: GAS_BASE_URL }]}>
+        <div className="p-8">
+          <h1 className="mb-6 text-xl font-bold text-slate-800 dark:text-slate-100">
+            Metrado Gas — Proyectos
+          </h1>
+          {spreadsheets.length === 0 ? (
+            <p className="text-sm text-slate-400">No hay proyectos disponibles.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {spreadsheets.map((ss) => (
+                <button key={ss.id} type="button"
+                  onClick={() => router.get(`${GAS_BASE_URL}/${ss.id}`)}
+                  className="group flex flex-col gap-1 rounded-xl border border-slate-200
+                                        bg-white p-4 text-left shadow-sm transition-all
+                                        hover:border-blue-300 hover:shadow-md
+                                        dark:border-gray-700 dark:bg-gray-900">
+                  <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+                    {ss.name}
+                  </span>
+                  {ss.project_name && (
+                    <span className="text-[11px] text-slate-500">{ss.project_name}</span>
+                  )}
+                  {ss.updated_at && (
+                    <span className="text-[10px] text-slate-400">
+                      Actualizado: {ss.updated_at}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return <GasEditor spreadsheet={spreadsheet} />;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EDITOR
+// ═══════════════════════════════════════════════════════════════════════════════
+function GasEditor({ spreadsheet }: { spreadsheet: Spreadsheet }) {
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Costos', href: '/costos' },
+    { title: 'Metrado Gas', href: GAS_BASE_URL },
+    { title: spreadsheet.name, href: '#' },
 
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -340,19 +429,21 @@ export default function GasIndex() {
     { title: 'Costos',           href: '/costos' },
     { title: project.nombre,     href: `/costos/${project.id}` },
     { title: 'Metrado Gas',      href: '#' },  
+
   ];
 
   // ── State ──────────────────────────────────────────────────────────────
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // ── Refs ───────────────────────────────────────────────────────────────
-  const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestSheets  = useRef<any[]>([]);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSheets = useRef<any[]>([]);
   const progUpdateCount = useRef(0);
-  const recalcTimer   = useRef<any>(null);
+
+
+  // ── Hoja inicial ───────────────────────────────────────────────────────
 
   // ═══════════════════════════════════════════════════════════════════════
   // CONSTRUCTOR DE FILAS RESUMEN
@@ -402,61 +493,44 @@ export default function GasIndex() {
   }, [buildResumenRows, metrado, resumen]);
 
   // ── Hojas iniciales (SOLO 2: Metrado y Resumen) ───────────────────────
+
   const initialSheets = useMemo(() => {
-    const sheets: any[] = [];
-    sheets.push(rowsToSheet(metrado ?? [], BASE_COLS, 'Metrado', 0));
-    sheets.push(rowsToSheet(resumenRows, RESUMEN_BASE, 'Resumen', 1));
-    return sheets;
-  }, [metrado, resumenRows]);
+    if (Array.isArray(spreadsheet.sheet_data) && spreadsheet.sheet_data.length > 0) {
+      return spreadsheet.sheet_data.map((s: any, i: number) => ({
+        ...s,
+        status: i === 0 ? 1 : 0,
+      }));
+    }
+    return [rowsToSheet([], BASE_COLS, 'Metrado Gas', 0)];
+  }, [spreadsheet.sheet_data]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // GUARDAR EN BASE DE DATOS
+  // GUARDAR
   // ═══════════════════════════════════════════════════════════════════════
   const doSave = useCallback(async (sheets: any[]) => {
     setSaving(true);
     setSaveError(null);
 
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-CSRF-TOKEN': csrf,
-      'X-Requested-With': 'XMLHttpRequest',
-    };
-
-    const reqs: Array<{ url: string; body: any }> = [];
-
-    sheets.forEach((sheet: any) => {
-      const name = String(sheet?.name ?? '');
-      if (name === 'Metrado') {
-        reqs.push({
-          url: `/costos/${project.id}/metrado-gas/metrado`,  // ✅ URL CORREGIDA
-          body: { rows: sheetToRows(sheet, BASE_COLS) },
-        });
-      } else if (name === 'Resumen') {
-        reqs.push({
-          url: `/costos/${project.id}/metrado-gas/resumen`,  // ✅ URL CORREGIDA
-          body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
-        });
-      }
-    });
 
     try {
-      const results = await Promise.all(
-        reqs.map((r) =>
-          fetch(r.url, { method: 'PATCH', headers, body: JSON.stringify(r.body) })
-            .then((res) => ({ ok: res.ok, status: res.status })),
-        ),
-      );
-
-      const bad = results.find((r) => !r.ok);
-      if (bad) setSaveError(`Error ${bad.status} al guardar`);
+      const res = await fetch(`${GAS_BASE_URL}/${spreadsheet.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrf,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ sheet_data: sheets }),
+      });
+      if (!res.ok) setSaveError(`Error ${res.status} al guardar`);
       else setLastSaved(new Date());
     } catch (e: any) {
       setSaveError(e.message ?? 'Error de red');
     } finally {
       setSaving(false);
     }
-  }, [project.id]);
+  }, [spreadsheet.id]);
 
   const scheduleSave = useCallback((sheets: any[]) => {
     latestSheets.current = sheets;
@@ -468,91 +542,70 @@ export default function GasIndex() {
   // RECÁLCULO AUTOMÁTICO — N NIVELES
   // ═══════════════════════════════════════════════════════════════════════
   const recalcActiveSheet = useCallback(() => {
-    if (progUpdateCount.current > 2) return;
-
     const ls = (window as any).luckysheet;
     if (!ls) return;
 
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
-
-    if (!active || active.name === 'Resumen') return;
+    if (!active) return;
 
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
-    // ── Leer todas las filas con datos ──────────────────────────────────
     const entries: Entry[] = [];
     for (let r = 1; r < data.length; r++) {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
-
       const { level, kind } = rowMeta(row);
       entries.push({ ri: r, row, level, kind, total: 0 });
     }
-
     if (entries.length === 0) return;
 
-    // ── Acumular cambios para un único flush ────────────────────────────
     const updates: Array<{ r: number; c: number; v: any }> = [];
     const set = (r: number, key: string, v: any) => {
       const c = COL[key];
       if (c !== undefined) updates.push({ r, c, v });
     };
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 1 — NUMERACIÓN AUTOMÁTICA (BASE 3)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Pase 1 — Identificación y Formato Visual (Sin fondos, solo letras de color)
     const counters = new Array(MAX_LEVELS + 1).fill(0);
     counters[1] = Math.max(0, TOP_LEVEL_START - 1);
 
     entries.forEach(({ ri, row, level, kind }) => {
-      if (kind === 'leaf') {
-        if (!blank(row.partida)) {
-          set(ri, 'partida', mkTxt(''));
-          row.partida = '';
-        }
+      // Resetear fondo a blanco en todas las columnas de la fila
+      BASE_COLS.forEach((_, ci) => {
+        ls.setCellFormat(ri, ci, "bg", null, { order: sheetOrder });
+      });
 
+      if (kind === 'group') {
+        for (let i = level + 1; i <= MAX_LEVELS; i++) counters[i] = 0;
+        counters[level]++;
+        const code = counters.slice(1, level + 1).map((n) => String(n).padStart(2, '0')).join('.');
+        const colorLetra = (level === 1) ? "#ef4444" : "#3b82f6";
+
+        set(ri, 'partida', { ...mkTxt(code), fc: colorLetra, bl: 1 });
         const desc = trim0(row.descripcion);
         if (desc) {
-          set(ri, 'descripcion', styledTxt(desc, indent(level, true) + desc, LEAF_STYLE));
+          set(ri, 'descripcion', { ...mkTxt(indent(level, false) + desc), fc: colorLetra, bl: 1 });
           row.descripcion = desc;
         }
-
-        if (row['_kind'] !== 'leaf') set(ri, '_kind', 'leaf');
-        return;
-      }
-
-      // GRUPO: incrementar contador en este nivel, resetear los más profundos
-      for (let i = level + 1; i <= MAX_LEVELS; i++) counters[i] = 0;
-      counters[level]++;
-
-      const code = counters.slice(1, level + 1)
-        .map((n) => String(n).padStart(2, '0'))
-        .join('.');
-
-      const st = groupStyle(level);
-
-      if (row.partida !== code) {
-        set(ri, 'partida', styledTxt(code, code, st));
         row.partida = code;
+        if (row['_kind'] !== 'group') set(ri, '_kind', 'group');
+      } else {
+        // Partidas normales: Letra negra, sin fondo
+        if (!blank(row.partida)) { set(ri, 'partida', mkTxt('')); row.partida = ''; }
+        const desc = trim0(row.descripcion);
+        if (desc) {
+          set(ri, 'descripcion', { ...mkTxt(indent(level, true) + desc), fc: "#000000", bl: 0 });
+          row.descripcion = desc;
+        }
+        if (row['_kind'] !== 'leaf') set(ri, '_kind', 'leaf');
       }
-
-      const desc = trim0(row.descripcion);
-      if (desc) {
-        set(ri, 'descripcion', styledTxt(desc, indent(level, false) + desc, st));
-        row.descripcion = desc;
-      }
-
-      if (row['_kind'] !== 'group') set(ri, '_kind', 'group');
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 2 — PROPAGACIÓN DE UNIDAD
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Pase 2 — Propagación de unidad
     const unitStack: Array<string> = new Array(MAX_LEVELS + 1).fill('');
-
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'group') {
         for (let i = level; i <= MAX_LEVELS; i++) unitStack[i] = '';
@@ -569,106 +622,172 @@ export default function GasIndex() {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    entries.forEach((e) => {
-      if (e.kind !== 'leaf') return;
+// Pase 3 — Cálculo numérico
+// Pase 3 — Cálculo numérico corregido
+entries.forEach((e) => {
+  if (e.kind !== 'leaf') return;
+  const { row, ri } = e;
+  
+  const valNum = (k: string) => toNum(row[k]);
+  const elsim = valNum('elsim'), nveces = valNum('nveces');
+  const largo = valNum('largo'), ancho = valNum('ancho'), alto = valNum('alto');
 
-      const { row, ri } = e;
-      const elsim  = toNum(row.elsim);
-      const nveces = toNum(row.nveces);
-      const largo  = toNum(row.largo);
-      const ancho  = toNum(row.ancho);
-      const alto   = toNum(row.alto);
+  // Columnas de apoyo (Cálculos automáticos ocultos)
+  const upd = (k: string, v: number) => { 
+    if (valNum(k) !== v) { set(ri, k, mkNum(v)); row[k] = v; } 
+  };
+  
+  // IMPORTANTE: Calculamos la cantidad base (Similares * Veces)
+  const cantBase = r4(elsim * nveces);
+  
+  upd('und', cantBase);
+  upd('lon', r4(largo * nveces));
+  upd('area', r4(largo * ancho * nveces));
+  upd('vol', r4(largo * ancho * alto * nveces));
+
+
+  // ASIGNACIÓN AL TOTAL SEGÚN LA UNIDAD SELECCIONADA
+  const unidad = String(row.unidad ?? '').trim().toLowerCase();
+  let finalTotal = 0;
 
       const newUnd  = r4(elsim * nveces);
       const newLon  = r4((largo + ancho) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 
-      const upd = (key: string, val: number) => {
-        if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
-      };
 
-      upd('lon', newLon);
-      upd('area', newArea);
-      upd('vol', newVol);
-      upd('und', newUnd);
+  if (unidad === 'und' || unidad === 'pza' || unidad === 'gl') {
+    // Si la unidad es 'und', el total es solo la cantidad
+    finalTotal = cantBase;
+  } else if (unidad === 'm3') {
+    finalTotal = r4(largo * ancho * alto * nveces * elsim);
+  } else if (unidad === 'm2') {
+    finalTotal = r4(largo * ancho * nveces * elsim);
+  } else if (unidad === 'm' || unidad === 'ml') {
+    finalTotal = r4(largo * nveces * elsim);
+  } else {
+    // Por defecto, usa la cantidad base
+    finalTotal = cantBase;
+  }
 
-      const unidad = String(row.unidad ?? '').trim().toLowerCase();
-      let tVal = 0;
-
-      if (unidad === 'm' || unidad === 'ml') tVal = newLon;
-      else if (unidad === 'm2') tVal = newArea;
-      else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
-      else if (unidad === 'kg') tVal = toNum(row.kg);
-      else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
-
-      e.total = tVal;
-      set(ri, 'total', mkNum(tVal));
-    });
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 4 — ROLL-UP: de la profundidad máxima hasta el nivel 1
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    const maxLevel = entries.reduce((m, e) => Math.max(m, e.level), 1);
-
-    for (let lvl = maxLevel; lvl >= 1; lvl--) {
-      entries.forEach((e, idx) => {
-        if (e.kind !== 'group' || e.level !== lvl) return;
-
+  e.total = finalTotal;
+  row.total = finalTotal;
+  set(ri, 'total', mkNum(finalTotal));
+});
+    // Pase 4 — Roll-up (Suma de hijos a padres)
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      if (e.kind === 'group') {
+        // Sumamos los totales de las filas que están inmediatamente debajo de este grupo
         let sum = 0;
-        for (let j = idx + 1; j < entries.length; j++) {
-          const child = entries[j];
-          if (child.level <= lvl) break;
-          if (child.level === lvl + 1) {
-            sum = r4(sum + child.total);
+        for (let j = i + 1; j < entries.length; j++) {
+          if (entries[j].level <= e.level) break; // Salimos si llegamos a otro grupo del mismo nivel
+          if (entries[j].level === e.level + 1) {
+            sum += entries[j].total;
           }
         }
-
         e.total = sum;
+        set(e.ri, 'total', mkNum(sum));
         e.row.total = sum;
-        set(e.ri, 'total', styledNum(sum, groupStyle(lvl)));
-      });
+      }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PASE 5 — FLUSH
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // Pase 5 — Limpiar filas vacías (quitar estilos y datos huérfanos)
+    for (let r = 1; r < data.length; r++) {
+      const row = readDataRow(data, r);
+      const hasVisibleData = VISIBLE_COLS.some((col) => !blank(row[col.key]));
+
+      if (!hasVisibleData) {
+        BASE_COLS.forEach((_, ci) => {
+          const cell = data[r]?.[ci];
+          // Si la celda tiene rastro de color o valor, la reseteamos
+          if (cell && (cell.bg || cell.v !== null)) {
+            ls.setCellValue(r, ci, null, { order: sheetOrder });
+            // Estas 2 líneas eliminan el color de fondo y fuente
+            ls.setCellFormat(r, ci, "bg", null, { order: sheetOrder });
+            ls.setCellFormat(r, ci, "fc", null, { order: sheetOrder });
+          }
+        });
+      }
+    }
+    // Pase 5 — Flush
     if (updates.length === 0) return;
-    if (updates.length > 10000) return;
-
     progUpdateCount.current++;
-
     updates.forEach((u, idx) => {
       ls.setCellValue(u.r, u.c, u.v, {
-        order:     sheetOrder,
+        order: sheetOrder,
         isRefresh: idx === updates.length - 1,
       });
     });
-
     setTimeout(() => {
       progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
       const all = ls.getAllSheets?.() ?? [];
-      if (all.length > 0) {
-        scheduleSave(all);
-        handleSyncResumen();
-      }
-    }, 120);
+      if (all.length > 0) scheduleSave(all);
+    }, 0);
   }, [scheduleSave]);
 
-  // ── Handlers Luckysheet ────────────────────────────────────────────────
-  const afterChange = useCallback((data: any) => {
-    if (!data) return;
-    setTimeout(() => {
-      recalcActiveSheet();
-    }, 80);
+  // ── Handlers ───────────────────────────────────────────────────────────
+  const afterChange = useCallback(() => {
+    if (progUpdateCount.current > 0) return;
+    recalcActiveSheet();
+  }, [recalcActiveSheet]);
+
+  const handleCellUpdated = useCallback((r: number, c: number) => {
+    if (progUpdateCount.current > 0) return;
+
+    const triggerCols = new Set([
+      COL['descripcion'],
+      COL['unidad'], // Detecta cuando cambias a m3
+      COL['elsim'],
+      COL['largo'],
+      COL['ancho'],
+      COL['alto'],
+      COL['nveces'],
+      COL['partida']
+    ]);
+
+    if (triggerCols.has(c)) {
+      recalcActiveSheet(); // Esto dispara el proceso de cálculo
+    }
   }, [recalcActiveSheet]);
 
   const handleDataChange = useCallback((sheets: any[]) => {
     scheduleSave(sheets);
   }, [scheduleSave]);
+
+  //Limpiar hoja
+ const limpiarHojaCompletamente = useCallback(() => {
+  const ls = (window as any).luckysheet;
+  if (!ls) return;
+
+  // Confirmación para seguridad
+  if (!window.confirm("¿Deseas borrar todo el contenido y formatos de esta hoja?")) return;
+
+  const sheets = ls.getAllSheets?.() ?? [];
+  const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
+  if (!active) return;
+  const sheetOrder = active.order ?? 0;
+
+  // IMPORTANTE: Limpiamos un rango controlado (100 filas y 15 columnas)
+  // Asegúrate de que el segundo bucle use c++ y no r++
+  for (let r = 1; r <= 100; r++) {
+    for (let c = 0; c <= 15; c++) { 
+      // Usamos una validación para evitar el error de lectura '0'
+      ls.setCellValue(r, c, null, { order: sheetOrder, isRefresh: false });
+      ls.setCellFormat(r, c, "bg", null, { order: sheetOrder }); // Quita fondo
+      ls.setCellFormat(r, c, "fc", "#000000", { order: sheetOrder }); // Texto negro
+      ls.setCellFormat(r, c, "bl", 0, { order: sheetOrder }); // Quita negrita
+    }
+  }
+
+  // Refrescar al final para desbloquear la interfaz
+  setTimeout(() => {
+    recalcActiveSheet();
+    ls.refresh(); 
+  }, 100);
+}, [recalcActiveSheet]);
+
 
   // ═══════════════════════════════════════════════════════════════════════
   // MOVER BLOQUE
@@ -679,30 +798,26 @@ export default function GasIndex() {
 
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1);
-    if (!active || active.name === 'Resumen') return;
+    if (!active) return;
 
     const range = ls.getRange?.();
     if (!range?.length) return;
-
     const selRow = range[0].row[0];
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
     type RI = { ri: number; level: number; kind: EntryKind };
     const riList: RI[] = [];
-
     for (let r = 1; r < data.length; r++) {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
-
       const { level, kind } = rowMeta(row);
       riList.push({ ri: r, level, kind });
     }
 
     const selIdx = riList.findIndex((e) => e.ri === selRow);
     if (selIdx === -1) return;
-
     const selLevel = riList[selIdx].level;
 
     let blockEnd = selRow;
@@ -710,17 +825,13 @@ export default function GasIndex() {
       if (riList[i].level <= selLevel) break;
       blockEnd = riList[i].ri;
     }
-
     const blockEndIdx = riList.findIndex((e) => e.ri === blockEnd);
 
     const readBlock = (from: number, to: number): any[][] => {
       const out: any[][] = [];
-      for (let r = from; r <= to; r++) {
-        out.push(data[r] ? [...data[r]] : []);
-      }
+      for (let r = from; r <= to; r++) out.push(data[r] ? [...data[r]] : []);
       return out;
     };
-
     const writeBlock = (rows: any[][], startRow: number, isLast: boolean) => {
       rows.forEach((rowData, i) => {
         const r = startRow + i;
@@ -728,8 +839,7 @@ export default function GasIndex() {
           const val = rowData[ci] ?? null;
           const isLastCell = isLast && i === rows.length - 1 && ci === BASE_COLS.length - 1;
           ls.setCellValue(r, ci, blank(val) ? '' : val, {
-            order: sheetOrder,
-            isRefresh: isLastCell,
+            order: sheetOrder, isRefresh: isLastCell,
           });
         });
       });
@@ -741,22 +851,17 @@ export default function GasIndex() {
         if (riList[i].level < selLevel) break;
         if (riList[i].level === selLevel) { prevSibIdx = i; break; }
       }
-
       if (prevSibIdx === -1) return;
-
       const prevStart = riList[prevSibIdx].ri;
       let prevEnd = prevStart;
-
       for (let i = prevSibIdx + 1; i < selIdx; i++) {
         if (riList[i].level <= selLevel) break;
         prevEnd = riList[i].ri;
       }
-
       const prevBlock = readBlock(prevStart, prevEnd);
-      const ourBlock  = readBlock(selRow, blockEnd);
-
+      const ourBlock = readBlock(selRow, blockEnd);
       progUpdateCount.current++;
-      writeBlock(ourBlock,  prevStart,               false);
+      writeBlock(ourBlock, prevStart, false);
       writeBlock(prevBlock, prevStart + ourBlock.length, true);
     } else {
       let nextSibIdx = -1;
@@ -764,29 +869,25 @@ export default function GasIndex() {
         if (riList[i].level < selLevel) break;
         if (riList[i].level === selLevel) { nextSibIdx = i; break; }
       }
-
       if (nextSibIdx === -1) return;
-
       const nextStart = riList[nextSibIdx].ri;
       let nextEnd = nextStart;
-
       for (let i = nextSibIdx + 1; i < riList.length; i++) {
         if (riList[i].level <= selLevel) break;
         nextEnd = riList[i].ri;
       }
-
       const nextBlock = readBlock(nextStart, nextEnd);
-      const ourBlock  = readBlock(selRow, blockEnd);
-
+      const ourBlock = readBlock(selRow, blockEnd);
       progUpdateCount.current++;
-      writeBlock(nextBlock, selRow,                   false);
-      writeBlock(ourBlock,  selRow + nextBlock.length, true);
+      writeBlock(nextBlock, selRow, false);
+      writeBlock(ourBlock, selRow + nextBlock.length, true);
     }
 
     setTimeout(() => {
       progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
-    }, 100);
-  }, [recalcActiveSheet]);
+      afterChange();
+    }, 150);
+  }, [afterChange]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // AGREGAR FILAS
@@ -797,86 +898,59 @@ export default function GasIndex() {
 
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
-    if (!active || active.name === 'Resumen') return;
+    if (!active) return;
 
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
-
-    const range    = ls.getRange?.();
-    const selRow   = range?.[0]?.row?.[1] ?? range?.[0]?.row?.[0] ?? 1;
-    const selData  = readDataRow(data, selRow);
+    const range = ls.getRange?.();
+    const selRow = range?.[0]?.row?.[0] ?? 1;
+    const selData = readDataRow(data, selRow);
     const { level: selLevel, kind: selKind } = rowMeta(selData);
 
     let newLevel: number;
     if (kind === 'leaf') {
-      newLevel = (selKind === 'group' ? selLevel + 1 : selLevel);
+      newLevel = selKind === 'group' ? selLevel + 1 : selLevel;
     } else {
-      newLevel = sameLevelAsSelected
-        ? selLevel
-        : Math.min(selLevel + 1, MAX_LEVELS);
+      newLevel = sameLevelAsSelected ? selLevel : Math.min(selLevel + 1, MAX_LEVELS);
     }
 
-    let insertAfter = selRow;
-    if (!sameLevelAsSelected || kind === 'leaf') {
-      insertAfter = selRow;
-    } else {
-      for (let r = selRow + 1; r < data.length; r++) {
-        const rd = readDataRow(data, r);
-        const hasData = BASE_COLS.some((col) => !blank(rd[col.key]));
-        if (!hasData) break;
-
-        const { level } = rowMeta(rd);
-        if (level <= selLevel) break;
-        insertAfter = r;
-      }
-    }
+    // Siempre insertar justo después de la fila seleccionada
+    const insertAfter = selRow;
 
     ls.insertRow(insertAfter + 1, 1);
-
     const r = insertAfter + 1;
     ls.setCellValue(r, COL['_level'], newLevel, { order: sheetOrder });
-    ls.setCellValue(r, COL['_kind'],  kind,     { order: sheetOrder });
+    ls.setCellValue(r, COL['_kind'], kind, { order: sheetOrder });
+    ls.setCellValue(r, COL['descripcion'], kind === 'group' ? DEFAULT_DESC_GROUP : DEFAULT_DESC_LEAF, { order: sheetOrder });
 
     if (kind === 'group') {
-      ['elsim','largo','ancho','alto','nveces','lon','area','vol','kg','und','total']
+      ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'und', 'total']
         .forEach((key) => ls.setCellValue(r, COL[key], '', { order: sheetOrder }));
     }
 
-    if (kind === 'group') {
-      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_GROUP, { order: sheetOrder });
-    } else {
-      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
-    }
-
-    setTimeout(() => recalcActiveSheet(), 120);
-  }, [recalcActiveSheet]);
+    setTimeout(() => afterChange(), 120);
+  }, [afterChange]);
 
   // ── Dropdown de unidades ───────────────────────────────────────────────
   useEffect(() => {
     let attempts = 0;
-    const MAX_ATTEMPTS = 40;
     let timer: ReturnType<typeof setTimeout>;
 
     const applyVerification = () => {
       const ls = (window as any).luckysheet;
       const sheets = ls?.getAllSheets?.() ?? [];
-
       if (!ls || typeof ls.setDataVerification !== 'function' || sheets.length === 0) {
-        if (++attempts < MAX_ATTEMPTS) timer = setTimeout(applyVerification, 250);
+        if (++attempts < 40) timer = setTimeout(applyVerification, 250);
         return;
       }
-
       const ci = COL['unidad'];
       if (ci === undefined) return;
-
       const range = colLetter(ci) + '2:' + colLetter(ci) + '3000';
       const opt = {
         type: 'dropdown', value1: UNIDAD_OPTIONS.join(','),
         prohibitInput: false, hint: 'Seleccione una unidad',
       };
-
       sheets.forEach((s: any) => {
-        if (s.name === 'Resumen') return;
         ls.setDataVerification(opt, { range, order: s.order ?? 0 });
       });
     };
@@ -885,107 +959,36 @@ export default function GasIndex() {
     return () => clearTimeout(timer);
   }, [initialSheets]);
 
-  useEffect(() => {
-    let intentos = 0;
-    const ejecutar = () => {
-      const ls = (window as any).luckysheet;
-      if (!ls || typeof ls.getAllSheets !== 'function') {
-        if (intentos < 20) {
-          intentos++;
-          setTimeout(ejecutar, 300);
-        }
-        return;
-      }
-      recalcActiveSheet();
-    };
-    ejecutar();
-  }, [recalcActiveSheet]);
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // SINCRONIZAR RESUMEN
-  // ═══════════════════════════════════════════════════════════════════════
-  const handleSyncResumen = useCallback(() => {
-    setIsSyncing(true);
-
-    setTimeout(() => {
-      const ls = (window as any).luckysheet;
-      if (!ls) { setIsSyncing(false); return; }
-
-      const all: any[] = ls.getAllSheets();
-      let metradoData: Record<string, any>[] = [];
-      let resIdx = -1;
-
-      all.forEach((sheet: any, idx: number) => {
-        if (sheet.name === 'Metrado') {
-          metradoData = sheetToRows(sheet, BASE_COLS);
-        } else if (sheet.name === 'Resumen') {
-          resIdx = idx;
-        }
-      });
-
-      if (resIdx === -1) { setIsSyncing(false); return; }
-
-      const newRows = buildResumenRows(metradoData);
-      const currentSheet = ls.getSheet().order;
-
-      ls.setSheetActive(resIdx);
-      ls.clearRange({ row: [0, 500], column: [0, 20] });
-
-      newRows.forEach((row, r) => {
-        RESUMEN_BASE.forEach((col, c) => {
-          const val = row[col.key as keyof typeof row] ?? '';
-          ls.setCellValue(r + 1, c, val, { isRefresh: false });
-        });
-      });
-
-      RESUMEN_BASE.forEach((col, c) => {
-        ls.setCellValue(0, c, col.label, { isRefresh: false });
-      });
-
-      ls.refresh();
-      ls.setSheetActive(currentSheet);
-      doSave(all);
-      setIsSyncing(false);
-    }, 400);
-  }, [buildResumenRows, doSave]);
-
-  const triggerRecalc = () => {
-    setTimeout(() => {
-      recalcActiveSheet();
-    }, 0);
-  };
-
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
+
         {/* ━━━━━━━━━━━━━━━━━━━━━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━ */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
-          gap-2 border-b border-slate-200/80 bg-white/92 px-4 py-2 shadow-sm
-          backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/92">
+                    gap-2 border-b border-slate-200/80 bg-white/92 px-4 py-2 shadow-sm
+                    backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/92">
 
-          {/* Izquierda */}
           <div className="flex items-center gap-2.5">
             <button type="button"
-              onClick={() => router.get(`/costos/${project.id}`)}
+              onClick={() => router.get(GAS_BASE_URL)}
               className="flex h-7 w-7 items-center justify-center rounded-full
-                text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700
-                dark:hover:bg-gray-800 dark:hover:text-gray-200">
+                                text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700
+                                dark:hover:bg-gray-800 dark:hover:text-gray-200">
               <ChevronLeft className="h-4 w-4" />
             </button>
 
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Gas  {/* ✅ TÍTULO CORREGIDO */}
+                Metrado Gas
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                {project.nombre}
+                {spreadsheet.name}
               </p>
             </div>
 
-            {/* Leyenda visual de niveles */}
             <div className="hidden items-center gap-1 xl:flex">
               {GROUP_PALETTE.slice(0, 4).map((p, i) => (
                 <span key={i}
@@ -1001,13 +1004,11 @@ export default function GasIndex() {
             </div>
           </div>
 
-          {/* Derecha */}
           <div className="flex flex-wrap items-center gap-1.5">
             <SaveStatus saving={saving} error={saveError} lastSaved={lastSaved} />
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
-            {/* ── Botones de inserción ── */}
             <div className="flex items-center gap-1">
               <ActionBtn
                 icon={<FolderPlus className="h-3 w-3" />}
@@ -1016,7 +1017,6 @@ export default function GasIndex() {
                 style={{ background: GROUP_PALETTE[0].bg, color: '#fff' }}
                 onClick={() => addRow('group', true)}
               />
-
               <ActionBtn
                 icon={<Folder className="h-3 w-3" />}
                 label="Sub-grupo"
@@ -1024,7 +1024,6 @@ export default function GasIndex() {
                 style={{ background: GROUP_PALETTE[2].bg, color: '#fff' }}
                 onClick={() => addRow('group', false)}
               />
-
               <ActionBtn
                 icon={<FileText className="h-3 w-3" />}
                 label="Partida"
@@ -1036,7 +1035,6 @@ export default function GasIndex() {
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
-            {/* ── Mover bloque ── */}
             <ActionBtn
               icon={<ArrowUp className="h-3 w-3" />}
               label="↑ Bloque"
@@ -1044,7 +1042,6 @@ export default function GasIndex() {
               style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
               onClick={() => moveBlock('up')}
             />
-
             <ActionBtn
               icon={<ArrowDown className="h-3 w-3" />}
               label="↓ Bloque"
@@ -1055,7 +1052,16 @@ export default function GasIndex() {
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
 
-            {/* ── Acciones generales ── */}
+            <ActionBtn
+              icon={<AlertCircle className="h-3 w-3" />}
+              label="Limpiar Hoja"
+              title="Borra todo el contenido y formatos de la hoja actual"
+              style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' }}
+              onClick={limpiarHojaCompletamente}
+            />
+
+            <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
+
             <Button variant="outline" size="sm"
               onClick={() => doSave(latestSheets.current)}
               disabled={saving}
@@ -1064,14 +1070,6 @@ export default function GasIndex() {
                 ? <Loader2 className="h-3 w-3 animate-spin" />
                 : <Save className="h-3 w-3" />}
               {saving ? 'Guardando…' : 'Guardar'}
-            </Button>
-
-            <Button variant="outline" size="sm"
-              onClick={handleSyncResumen}
-              disabled={isSyncing || saving}
-              className="h-7 gap-1 text-[11px]">
-              <RefreshCcw className={cn('h-3 w-3', isSyncing && 'animate-spin')} />
-              {isSyncing ? 'Sincronizando…' : 'Sync Resumen'}
             </Button>
           </div>
         </header>
@@ -1083,27 +1081,23 @@ export default function GasIndex() {
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Gas',  // ✅ TÍTULO CORREGIDO
-              showinfobar:      false,
-              sheetFormulaBar:  true,
+              title: 'Metrado Gas',
+              showinfobar: false,
+              sheetFormulaBar: true,
               showstatisticBar: true,
-              afterChange:      afterChange,
+              hook: {
+                cellUpdated: handleCellUpdated,
+              },
+              afterChange,
+              updated: afterChange,
               contextMenu: {
                 row: [
-                  ctxItem('Insertar Grupo al mismo nivel', 'group', true,  triggerRecalc, addRow),
-                  ctxItem('Insertar Sub-grupo (N+1)',       'group', false, triggerRecalc, addRow),
-                  ctxItem('Insertar Partida (hoja)',        'leaf',  false, triggerRecalc, addRow),
+                  ctxItem('Insertar Grupo al mismo nivel', 'group', true, afterChange, addRow),
+                  ctxItem('Insertar Sub-grupo (N+1)', 'group', false, afterChange, addRow),
+                  ctxItem('Insertar Partida (hoja)', 'leaf', false, afterChange, addRow),
                   { type: 'separator' },
-                  {
-                    text: '↑ Mover bloque arriba',
-                    type: 'button',
-                    onClick: () => moveBlock('up'),
-                  },
-                  {
-                    text: '↓ Mover bloque abajo',
-                    type: 'button',
-                    onClick: () => moveBlock('down'),
-                  },
+                  { text: '↑ Mover bloque arriba', type: 'button', onClick: () => moveBlock('up') },
+                  { text: '↓ Mover bloque abajo', type: 'button', onClick: () => moveBlock('down') },
                   { type: 'separator' },
                   {
                     text: 'Eliminar fila',
@@ -1111,10 +1105,16 @@ export default function GasIndex() {
                     onClick: () => {
                       const ls = (window as any).luckysheet;
                       if (!ls) return;
-                      const r = ls.getRange?.();
-                      if (!r?.length) return;
-                      ls.deleteRow(r[0].row[0], 1);
-                      triggerRecalc();
+                      const range = ls.getRange?.();
+                      if (!range?.length) return;
+
+                      // Eliminamos la fila físicamente
+                      ls.deleteRow(range[0].row[0], 1);
+
+                      // Forzamos el recálculo para re-numerar y limpiar colores
+                      setTimeout(() => {
+                        recalcActiveSheet();
+                      }, 150);
                     },
                   },
                 ],
@@ -1122,20 +1122,19 @@ export default function GasIndex() {
             }}
           />
         </main>
+
       </div>
     </AppLayout>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// SUBCOMPONENTES
-// ═══════════════════════════════════════════════════════════════════════
+// ─── SUBCOMPONENTES ───────────────────────────────────────────────────────────
 function SaveStatus({ saving, error, lastSaved }: {
   saving: boolean; error: string | null; lastSaved: Date | null;
 }) {
   return (
     <div className="flex items-center rounded-full bg-slate-100/80 px-2.5 py-1
-      text-[10px] font-semibold dark:bg-gray-800/60">
+            text-[10px] font-semibold dark:bg-gray-800/60">
       {saving ? (
         <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
           <Loader2 className="h-2.5 w-2.5 animate-spin" /> Guardando…
@@ -1165,7 +1164,7 @@ function ActionBtn({ icon, label, title, style, onClick }: {
   return (
     <button type="button" onClick={onClick} title={title}
       className="inline-flex h-7 items-center gap-1 rounded-md px-2
-        text-[10px] font-bold transition-all hover:opacity-85 active:scale-95"
+                text-[10px] font-bold transition-all hover:opacity-85 active:scale-95"
       style={style}>
       {icon} {label}
     </button>
@@ -1176,15 +1175,8 @@ function ctxItem(
   text: string,
   kind: EntryKind,
   sameLevelAsSelected: boolean,
-  triggerRecalc: () => void,
+  afterChange: () => void,
   addRow: (k: EntryKind, same: boolean) => void,
 ) {
-  return {
-    text,
-    type: 'button',
-    onClick: () => {
-      addRow(kind, sameLevelAsSelected);
-      triggerRecalc();
-    },
-  };
+  return { text, type: 'button', onClick: () => addRow(kind, sameLevelAsSelected) };
 }
