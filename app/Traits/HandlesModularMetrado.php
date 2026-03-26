@@ -85,10 +85,16 @@ trait HandlesModularMetrado
         $connection->beginTransaction();
 
         try {
-            $connection->table(static::TABLE_MODULOS)
-                ->where('presupuesto_id', $presupuestoId)
-                ->where('modulo_numero', $moduloNumero)
-                ->delete();
+            $scope = [
+                'presupuesto_id' => $presupuestoId,
+                'modulo_numero' => $moduloNumero,
+            ];
+            $existingIds = $connection->table(static::TABLE_MODULOS)
+                ->where($scope)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+            $touchedIds = [];
 
             foreach ($rows as $index => $row) {
                 $data = [
@@ -96,8 +102,6 @@ trait HandlesModularMetrado
                     'modulo_numero' => $moduloNumero,
                     'modulo_nombre' => $moduloNombre,
                     'item_order' => $index,
-                    'created_at' => now(),
-                    'updated_at' => now(),
                 ];
 
                 if ($hasColumn('node_type')) {
@@ -138,8 +142,42 @@ trait HandlesModularMetrado
                     $data['nivel'] = $row['nivel'] ?? $row['_level'] ?? 0;
                 }
 
-                $connection->table(static::TABLE_MODULOS)->insert($data);
+                $rowId = $this->extractIncomingRowId($row);
+
+                if ($rowId && in_array($rowId, $existingIds, true)) {
+                    $connection->table(static::TABLE_MODULOS)
+                        ->where($scope)
+                        ->where('id', $rowId)
+                        ->update($data + ['updated_at' => now()]);
+
+                    $touchedIds[] = $rowId;
+                    continue;
+                }
+
+                $existingByIndex = $connection->table(static::TABLE_MODULOS)
+                    ->where($scope)
+                    ->where('item_order', $index)
+                    ->first();
+
+                if ($existingByIndex) {
+                    $connection->table(static::TABLE_MODULOS)
+                        ->where('id', $existingByIndex->id)
+                        ->update($data + ['updated_at' => now()]);
+                    $touchedIds[] = $existingByIndex->id;
+                    continue;
+                }
+
+                $touchedIds[] = (int) $connection->table(static::TABLE_MODULOS)->insertGetId($data + [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
+
+            $deleteQuery = $connection->table(static::TABLE_MODULOS)->where($scope);
+            if (!empty($touchedIds)) {
+                $deleteQuery->whereNotIn('id', $touchedIds);
+            }
+            $deleteQuery->delete();
 
             $connection->commit();
 
