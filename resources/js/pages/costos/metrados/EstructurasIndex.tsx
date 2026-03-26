@@ -1024,8 +1024,6 @@ export default function EstructurasIndex() {
             
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
             
-            <ActionBtn icon={<ArrowUp className="h-3 w-3" />} label="↑ Bloque" onClick={() => moveBlock('up')} style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }} />
-            <ActionBtn icon={<ArrowDown className="h-3 w-3" />} label="↓ Bloque" onClick={() => moveBlock('down')} style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }} />
             
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
             

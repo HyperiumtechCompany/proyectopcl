@@ -7,7 +7,7 @@ use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
-use App\Http\Controllers\MetradoComunicacionController;
+use App\Http\Controllers\MetradoComunicacionesController;
 use App\Http\Controllers\MetradoEstructurasController;
 use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradosController;
@@ -244,7 +244,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     //metrado comunicaciones
     Route::middleware([SetCostosDatabase::class])
     ->prefix('/{costoProject}/metrado-comunicaciones')
-    ->name('metrado-comunicaciones.')
+    ->name('costos.metrado-comunicaciones.')
     ->group(function () {
 
         Route::get('/', [MetradoComunicacionesController::class, 'index'])
