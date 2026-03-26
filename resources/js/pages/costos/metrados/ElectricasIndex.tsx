@@ -1,16 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// ElectricasIndex.tsx — Página principal refactorizada
-//
-// Estructura de archivos:
-//   electricas/
-//     types.ts          → interfaces TypeScript
-//     constants.ts      → columnas, perfiles de unidad, paleta
-//     utils.ts          → helpers puros + buildRecalcUpdates
-//     CalcModal.tsx     → modal calculadora (campos por unidad)
-//     NumberingModal.tsx → modal numeración + buildNumberingUpdates
-//     ElectricasIndex.tsx ← ESTE ARCHIVO
-// ═══════════════════════════════════════════════════════════════
-
 import { router, usePage } from '@inertiajs/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -35,9 +22,7 @@ import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectri
 import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
 
-// ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
-// ═══════════════════════════════════════════════════════════════
 
 function Divider() {
   return <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />;
@@ -86,10 +71,7 @@ function SaveIndicator({ saving, error, lastSaved }: {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
 // HOOK: useLuckysheet
-// Encapsula toda la interacción con window.luckysheet
-// ═══════════════════════════════════════════════════════════════
 
 function useLuckysheet() {
   const ls = () => (window as any).luckysheet as any;
@@ -119,9 +101,7 @@ function useLuckysheet() {
   return { ls, getActive, getAllSheets, setCells };
 }
 
-// ═══════════════════════════════════════════════════════════════
 // HOOK: useAutoSave
-// ═══════════════════════════════════════════════════════════════
 
 function useAutoSave(projectId: number) {
   const [saving,    setSaving]    = useState(false);
@@ -180,10 +160,7 @@ function useAutoSave(projectId: number) {
   return { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets };
 }
 
-// ═══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
-// ═══════════════════════════════════════════════════════════════
-
 export default function ElectricasIndex() {
   const { project, metrado, resumen } = usePage<ElectricasPageProps>().props;
 
@@ -193,12 +170,12 @@ export default function ElectricasIndex() {
     { title: 'Metrado Eléctricas', href: '#' },
   ];
 
-  // ── Hooks ──────────────────────────────────────────────────
+  // Hooks
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
   const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } =
     useAutoSave(project.id);
 
-  // ── UI State ───────────────────────────────────────────────
+  //  UI State 
   const [syncing,  setSyncing]  = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [numOpen,  setNumOpen]  = useState(false);
@@ -206,10 +183,9 @@ export default function ElectricasIndex() {
     ri: 0, rowData: {},
   });
 
-  // ── Guard de recálculo (evita bucles) ──────────────────────
   const progCount = useRef(0);
 
-  // ── Datos iniciales ────────────────────────────────────────
+  // Datos iniciales 
   const resumenRows = useMemo(() =>
     buildResumenRows(metrado?.length ? metrado : (resumen ?? [])),
   []);// eslint-disable-line
@@ -219,10 +195,7 @@ export default function ElectricasIndex() {
     rowsToSheet(resumenRows,   RESUMEN_COLS, 'Resumen', 1),
   ], []);// eslint-disable-line
 
-  // ═══════════════════════════════════════════════════════════
   // RECÁLCULO PRINCIPAL
-  // Llama a buildRecalcUpdates (utils.ts) y aplica en Luckysheet
-  // ═══════════════════════════════════════════════════════════
 
   const recalc = useCallback(() => {
     if (progCount.current > 2) return;
@@ -245,22 +218,29 @@ export default function ElectricasIndex() {
     }, 120);
   }, [ls, getActive, setCells, getAllSheets, scheduleSave]);
 
-  // ═══════════════════════════════════════════════════════════
   // APLICAR RESULTADO DEL MODAL DE CÁLCULO
-  // Escribe inputs + output en la fila y re-recalcula
-  // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, inputs, outputs }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, inputs, outputs, total, descripcion }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
     const sheetOrder = active.order ?? 0;
     const ups: Array<{ r: number; c: number; v: any }> = [];
 
+    if (unidad && unidad.trim() !== '') {
+      const cUnidad = CI.unidad;
+      if (cUnidad !== undefined) {
+        ups.push({ r: ri, c: cUnidad, v: mkTxt(unidad.trim()) });
+      }
+    }
+
     // Inputs
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
       const c = CI[k];
-      if (c !== undefined) ups.push({ c, v: mkNum(inputs[k]) });
+      if (c !== undefined) ups.push({
+        c, v: mkNum(inputs[k]),
+        r: ri
+      });
     });
 
     // Outputs (solo los que tienen valor)
@@ -268,9 +248,28 @@ export default function ElectricasIndex() {
       const val = outputs[k];
       if (val !== undefined) {
         const c = CI[k];
-        if (c !== undefined) ups.push({ c, v: mkNum(r4(val)) });
+        if (c !== undefined) ups.push({
+          c, v: mkNum(r4(val)),
+          r: ri
+        });
       }
     });
+
+    if (descripcion !== undefined && descripcion !== '') {
+      const cDesc = CI.descripcion;
+      if (cDesc !== undefined) {
+        ups.push({ r: ri, c: cDesc, v: mkTxt(descripcion) });
+      }
+    }
+
+    const cTotal = CI.total;
+    if (cTotal !== undefined) {
+      ups.push({
+        c: cTotal,
+        v: mkNum(r4(total)),
+        r: ri
+      });
+    }
 
     progCount.current++;
     ups.forEach(({ c, v }, i) => {
@@ -286,9 +285,7 @@ export default function ElectricasIndex() {
     }, 120);
   }, [getActive, ls, recalc]);
 
-  // ═══════════════════════════════════════════════════════════
   // ABRIR CALCULADORA (lee fila seleccionada en Luckysheet)
-  // ═══════════════════════════════════════════════════════════
 
   const openCalc = useCallback(() => {
     const inst   = ls();
@@ -303,10 +300,7 @@ export default function ElectricasIndex() {
     setCalcOpen(true);
   }, [ls, getActive]);
 
-  // ═══════════════════════════════════════════════════════════
   // NUMERACIÓN JERÁRQUICA
-  // Usa buildNumberingUpdates de NumberingModal.tsx
-  // ═══════════════════════════════════════════════════════════
 
   const applyNumbering = useCallback((base: number) => {
     const active = getActive();
@@ -328,10 +322,7 @@ export default function ElectricasIndex() {
     }, 200);
   }, [getActive, setCells, recalc]);
 
-  // ═══════════════════════════════════════════════════════════
   // SINCRONIZAR RESUMEN
-  // Copia filas con ítem desde Metrado hacia la hoja Resumen
-  // ═══════════════════════════════════════════════════════════
 
   const syncResumen = useCallback(() => {
     setSyncing(true);
@@ -397,9 +388,7 @@ export default function ElectricasIndex() {
     }, 400);
   }, [ls, saveNow]);
 
-  // ═══════════════════════════════════════════════════════════
   // EFECTOS
-  // ═══════════════════════════════════════════════════════════
 
   // Dropdown de unidades en columna "Und"
   useEffect(() => {
@@ -571,7 +560,6 @@ export default function ElectricasIndex() {
               showstatisticBar: true,
               // Recalcular tras cada edición manual
               afterChange: () => setTimeout(recalc, 80),
-              // Menú contextual simplificado (sin botones de fila que ya no existen)
               contextMenu: {
                 row: [
                   {

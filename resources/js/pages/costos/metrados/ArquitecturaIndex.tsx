@@ -7,22 +7,13 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  ChevronLeft, Save, RefreshCcw,
+  ChevronLeft, Settings2, Save, RefreshCcw,
   CheckCircle2, AlertCircle, Loader2,
-  ArrowUp, ArrowDown, Plus, FolderPlus, Folder, FileText,
+  ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,19 +21,22 @@ import { cn } from '@/lib/utils';
 // TIPOS
 // ═══════════════════════════════════════════════════════════════════════
 interface ColumnDef { key: string; label: string; width: number }
-interface ComunicacionesPageProps {
+
+interface ArquitecturaPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
   [key: string]: unknown;
 }
+
 type EntryKind = 'group' | 'leaf';
+
 interface Entry {
-  ri: number;
-  row: Record<string, any>;
-  level: number;
+  ri: number;              // row index en la hoja (1-based, 0 = cabecera)
+  row: Record<string, any>; // datos de la fila (mutables durante recálculo)
+  level: number;           // profundidad 1–MAX_LEVELS
   kind: EntryKind;
-  total: number;
+  total: number;           // calculado durante recálculo
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -66,6 +60,7 @@ const VISIBLE_COLS: ColumnDef[] = [
   { key: 'observacion', label: 'Observaciones', width: 148 },
 ];
 
+/** Columnas internas — ocultas en Luckysheet */
 const HIDDEN_COLS: ColumnDef[] = [
   { key: '_level', label: '', width: 1 },
   { key: '_kind',  label: '', width: 1 },
@@ -73,6 +68,7 @@ const HIDDEN_COLS: ColumnDef[] = [
 
 const BASE_COLS: ColumnDef[] = [...VISIBLE_COLS, ...HIDDEN_COLS];
 
+/** Lookup estático key → índice de columna */
 const COL: Record<string, number> = Object.fromEntries(
   BASE_COLS.map((c, i) => [c.key, i]),
 );
@@ -90,10 +86,18 @@ const RESUMEN_BASE: ColumnDef[] = [
 // ═══════════════════════════════════════════════════════════════════════
 const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza'];
 
+const UNIT_TOTAL_COL: Record<string, string> = {
+  und: 'und', pza: 'und',
+  m:   'lon', ml:  'lon',
+  m2:  'area',
+  m3:  'vol', lt: 'vol', gl: 'vol',
+  kg:  'kg',
+};
+
 // ═══════════════════════════════════════════════════════════════════════
-// NUMERACIÓN BASE PARA METRADO
+// NUMERACIÓN BASE PARA METRADO ARQUITECTURA
 // ═══════════════════════════════════════════════════════════════════════
-const TOP_LEVEL_START = 6;
+const TOP_LEVEL_START = 3; 
 const DEFAULT_DESC_GROUP = 'Nuevo grupo';
 const DEFAULT_DESC_LEAF = 'Nueva partida';
 
@@ -101,6 +105,7 @@ const DEFAULT_DESC_LEAF = 'Nueva partida';
 // ESTILOS VISUALES — 10 niveles de azul degradado
 // ═══════════════════════════════════════════════════════════════════════
 const MAX_LEVELS = 10;
+
 const GROUP_PALETTE: { bg: string; fc: string; bl: number }[] = [
   { bg: '#0c1e3a', fc: '#ffffff', bl: 1 },
   { bg: '#133163', fc: '#ffffff', bl: 1 },
@@ -115,7 +120,9 @@ const GROUP_PALETTE: { bg: string; fc: string; bl: number }[] = [
 ];
 
 const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 };
+
 const groupStyle = (level: number) => GROUP_PALETTE[Math.min(level - 1, MAX_LEVELS - 1)];
+
 const NBSP = '\u00A0\u00A0\u00A0';
 const indent = (level: number, isLeaf: boolean) =>
   NBSP.repeat(isLeaf ? level : Math.max(0, level - 1));
@@ -129,25 +136,31 @@ const toNum  = (v: unknown) => { const n = Number(v); return Number.isFinite(n) 
 const r4     = (n: number)  => Math.round(n * 10000) / 10000;
 const trim0  = (v: unknown) => String(v ?? '').trimStart();
 const blank  = (v: any)     => v === null || v === undefined || v === '';
+
 const cellRaw = (cell: any): any => {
   if (!cell) return null;
   const r = cell.v;
   return r && typeof r === 'object' && 'v' in r ? r.v ?? null : r ?? null;
 };
+
 const mkNum = (v: number): Record<string, any> => ({
   v, m: v === 0 ? '' : String(v), ct: { fa: '#,##0.0000', t: 'n' },
 });
+
 const mkTxt = (v: string, extra: Record<string, any> = {}): Record<string, any> => ({
   v, m: v, ct: { fa: 'General', t: 'g' }, ...extra,
 });
+
 const styledNum = (v: number, st: { bg: string; fc: string; bl: number }) => ({
   ...mkNum(v), bl: st.bl, fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
+
 const styledTxt = (v: string, disp: string, st: { bg: string; fc: string; bl: number }) => ({
   ...mkTxt(v), m: disp, bl: st.bl, fs: 10,
   ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
 });
+
 const colLetter = (i: number) => {
   let r = '', t = i;
   while (t >= 0) { r = String.fromCharCode((t % 26) + 65) + r; t = Math.floor(t / 26) - 1; }
@@ -168,25 +181,32 @@ function rowsToSheet(
     v: { v: col.label, m: col.label, ct: { fa: 'General', t: 'g' },
       bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10 },
   }));
+
   const cells: any[] = [];
   rows.forEach((row, ri) => {
     const kind  = String(row['_kind']  ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
     const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
     const rIdx  = ri + 1;
+
     cols.forEach((col, ci) => {
       let val = blank(row[col.key])
         ? (col.key === '_level' ? level : col.key === '_kind' ? kind : null)
         : row[col.key];
+
       if (blank(val)) return;
+
       let store: any = val;
       let display    = String(val);
+
       if (col.key === 'descripcion' && typeof val === 'string') {
         store   = val.trimStart();
         display = indent(level, kind === 'leaf') + store;
       }
+
       const isNum = typeof store === 'number' ||
         (store !== '' && !isNaN(Number(store)));
+
       const cell: Record<string, any> = {
         v:  isNum ? Number(store) : store,
         m:  display,
@@ -194,16 +214,19 @@ function rowsToSheet(
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
       };
+
       if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
       cells.push({ r: rIdx, c: ci, v: cell });
     });
   });
+
   const columnlen: Record<number, number> = {};
   const colhidden: Record<number, number> = {};
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
     if (col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
   });
+
   return {
     name, status: order === 0 ? 1 : 0, order,
     row:    Math.max(rows.length + 50, 100),
@@ -218,9 +241,11 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
   if (!sheet) return [];
   const data: any[][] = sheet.data || [];
   const rows: Record<string, any>[] = [];
+
   for (let r = 1; r < data.length; r++) {
     const row: Record<string, any> = {};
     let hasData = false;
+
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
       if (!blank(raw)) {
@@ -230,8 +255,10 @@ function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[] {
         row[col.key] = null;
       }
     });
+
     if (hasData) rows.push(row);
   }
+
   return rows;
 }
 
@@ -254,66 +281,20 @@ function rowMeta(row: Record<string, any>): { level: number; kind: EntryKind } {
 // ═══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════
-export default function ComunicacionesIndex() {
-  const { project, metrado, resumen } = usePage<ComunicacionesPageProps>().props;
+export default function ArquitecturaIndex() {
+  const { project, metrado, resumen } = usePage<ArquitecturaPageProps>().props;
+
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',               href: '/costos' },
-    { title: project.nombre,         href: (`/costos/${project.id}`) },
-    { title: 'Metrado Comunicaciones', href: '#' },
+    { title: project.nombre,         href: `/costos/${project.id}` },
+    { title: 'Metrado Arquitectura', href: '#' },
   ];
 
-  // ── State ─────────────────────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────────────
   const [saving,    setSaving]    = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  
-  // Estados para el diálogo Agregar
-  const [openAgregar, setOpenAgregar] = useState(false);
-  useEffect(() => {
-    if (openAgregar) {
-      setTimeout(() => {
-        document.getElementById('largo')?.focus();
-      }, 100);
-    }
-  }, [openAgregar]);
-  const [nivelBase, setNivelBase] = useState<string>('1');
-  const [unidadMedida, setUnidadMedida] = useState('UND');
-  const [tipoFila, setTipoFila] = useState<'group' | 'leaf'>('group');
-
-  const [elemValor, setElemValor] = useState<string>('');
-  const [largoValor, setLargoValor] = useState<string>('');
-  const [anchoValor, setAnchoValor] = useState<string>('');
-  const [altoValor, setAltoValor] = useState<string>('');
-  const [nvecesValor, setNvecesValor] = useState<string>('');
-  const preview = useMemo(() => {
-    const L = parseFloat(largoValor) || 0;
-    const A = parseFloat(anchoValor) || 0;
-    const H = parseFloat(altoValor) || 0;
-    const N = parseFloat(nvecesValor) || 1;
-    const E = parseFloat(elemValor) || 0;
-
-    const u = unidadMedida.toLowerCase();
-
-    if (['m', 'ml'].includes(u)) return (L + A) * N;
-    if (u === 'm2') return L * A * N;
-    if (['m3', 'lt', 'gl'].includes(u)) return L * A * H * N;
-    if (['und', 'pza'].includes(u)) return E * N;
-    if (u === 'kg') return E;
-
-    return 0;
-  }, [largoValor, anchoValor, altoValor, nvecesValor, elemValor, unidadMedida]);
-  const formulaTexto = useMemo(() => {
-    const u = unidadMedida.toLowerCase();
-
-    if (['m', 'ml'].includes(u)) return 'Lon = (Largo + Ancho) × N';
-    if (u === 'm2') return 'Área = Largo × Ancho × N';
-    if (['m3', 'lt', 'gl'].includes(u)) return 'Vol = Largo × Ancho × Alto × N';
-    if (['und', 'pza'].includes(u)) return 'Und = Elem × N';
-    if (u === 'kg') return 'Total = Kg';
-
-    return '';
-  }, [unidadMedida]);
 
   // ── Refs ───────────────────────────────────────────────────────────────
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -330,8 +311,10 @@ export default function ComunicacionesIndex() {
     type Agg = {
       code: string; desc: string; und: string; level: number; total: number;
     };
+
     const byCode: Record<string, Agg> = {};
     const codeOrder: string[] = [];
+
     const ensure = (code: string, desc: string, und: string, level: number) => {
       if (!byCode[code]) {
         byCode[code] = { code, desc, und, level, total: 0 };
@@ -339,14 +322,18 @@ export default function ComunicacionesIndex() {
       }
       return byCode[code];
     };
+
     metradoData.forEach((row) => {
       const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
       if (kind !== 'group') return;
-      const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
+
+     const code = String(row.partida ?? '').trim() || `${row._level}|${String(row.descripcion ?? '').trim()}`;
       if (!code) return;
+
       const e = ensure(code, String(row.descripcion ?? ''), String(row.unidad ?? ''), toNum(row['_level']) || 1);
       e.total += toNum(row.total);
     });
+
     return codeOrder.map((code) => {
       const v = byCode[code];
       return {
@@ -362,7 +349,7 @@ export default function ComunicacionesIndex() {
     return c.length > 0 ? c : (resumen ?? []);
   }, [buildResumenRows, metrado, resumen]);
 
-  // ── Hojas iniciales ───────────────────────────────────────────────────
+  // ── Hojas iniciales (SOLO 2: Metrado y Resumen) ───────────────────────
   const initialSheets = useMemo(() => {
     const sheets: any[] = [];
     sheets.push(rowsToSheet(metrado ?? [], BASE_COLS, 'Metrado', 0));
@@ -376,27 +363,31 @@ export default function ComunicacionesIndex() {
   const doSave = useCallback(async (sheets: any[]) => {
     setSaving(true);
     setSaveError(null);
+
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
     const headers = {
       'Content-Type': 'application/json',
       'X-CSRF-TOKEN': csrf,
       'X-Requested-With': 'XMLHttpRequest',
     };
+
     const reqs: Array<{ url: string; body: any }> = [];
+
     sheets.forEach((sheet: any) => {
       const name = String(sheet?.name ?? '');
       if (name === 'Metrado') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-comunicaciones/metrado`,
+          url: `/costos/${project.id}/metrado-arquitectura/metrado`,
           body: { rows: sheetToRows(sheet, BASE_COLS) },
         });
       } else if (name === 'Resumen') {
         reqs.push({
-          url: `/costos/${project.id}/metrado-comunicaciones/resumen`,
+          url: `/costos/${project.id}/metrado-arquitectura/resumen`,
           body: { rows: sheetToRows(sheet, RESUMEN_BASE) },
         });
       }
     });
+
     try {
       const results = await Promise.all(
         reqs.map((r) =>
@@ -404,6 +395,7 @@ export default function ComunicacionesIndex() {
             .then((res) => ({ ok: res.ok, status: res.status })),
         ),
       );
+
       const bad = results.find((r) => !r.ok);
       if (bad) setSaveError(`Error ${bad.status} al guardar`);
       else setLastSaved(new Date());
@@ -421,71 +413,94 @@ export default function ComunicacionesIndex() {
   }, [doSave]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // RECÁLCULO AUTOMÁTICO
+  // RECÁLCULO AUTOMÁTICO — N NIVELES
   // ═══════════════════════════════════════════════════════════════════════
   const recalcActiveSheet = useCallback(() => {
     if (progUpdateCount.current > 2) return;
+
     const ls = (window as any).luckysheet;
     if (!ls) return;
+
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
+
     if (!active || active.name === 'Resumen') return;
+
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
+    // ── Leer todas las filas con datos ──────────────────────────────────
     const entries: Entry[] = [];
     for (let r = 1; r < data.length; r++) {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
+
       const { level, kind } = rowMeta(row);
       entries.push({ ri: r, row, level, kind, total: 0 });
     }
+
     if (entries.length === 0) return;
 
+    // ── Acumular cambios para un único flush ────────────────────────────
     const updates: Array<{ r: number; c: number; v: any }> = [];
     const set = (r: number, key: string, v: any) => {
       const c = COL[key];
       if (c !== undefined) updates.push({ r, c, v });
     };
 
-    // PASE 1 — NUMERACIÓN AUTOMÁTICA
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 1 — NUMERACIÓN AUTOMÁTICA (BASE 3)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const counters = new Array(MAX_LEVELS + 1).fill(0);
-    counters[1] = Math.max(0, TOP_LEVEL_START - 1);
+    counters[1] = Math.max(0, TOP_LEVEL_START - 1); // ⚡ INICIA EN 3
+
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'leaf') {
         if (!blank(row.partida)) {
           set(ri, 'partida', mkTxt(''));
           row.partida = '';
         }
+
         const desc = trim0(row.descripcion);
         if (desc) {
           set(ri, 'descripcion', styledTxt(desc, indent(level, true) + desc, LEAF_STYLE));
           row.descripcion = desc;
         }
+
         if (row['_kind'] !== 'leaf') set(ri, '_kind', 'leaf');
         return;
       }
+
+      // GRUPO: incrementar contador en este nivel, resetear los más profundos
       for (let i = level + 1; i <= MAX_LEVELS; i++) counters[i] = 0;
       counters[level]++;
+
       const code = counters.slice(1, level + 1)
         .map((n) => String(n).padStart(2, '0'))
         .join('.');
+
       const st = groupStyle(level);
+
       if (row.partida !== code) {
         set(ri, 'partida', styledTxt(code, code, st));
         row.partida = code;
       }
+
       const desc = trim0(row.descripcion);
       if (desc) {
         set(ri, 'descripcion', styledTxt(desc, indent(level, false) + desc, st));
         row.descripcion = desc;
       }
+
       if (row['_kind'] !== 'group') set(ri, '_kind', 'group');
     });
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // PASE 2 — PROPAGACIÓN DE UNIDAD
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const unitStack: Array<string> = new Array(MAX_LEVELS + 1).fill('');
+
     entries.forEach(({ ri, row, level, kind }) => {
       if (kind === 'group') {
         for (let i = level; i <= MAX_LEVELS; i++) unitStack[i] = '';
@@ -502,80 +517,85 @@ export default function ComunicacionesIndex() {
       }
     });
 
-    // PASE 3 — CÁLCULO NUMÉRICO
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     entries.forEach((e) => {
-      if (e.kind !== 'leaf') {
+      if (e.kind !== 'leaf') return;
 
-        set(e.ri, 'elsim', '');
-        set(e.ri, 'largo', '');
-        set(e.ri, 'ancho', '');
-        set(e.ri, 'alto', '');
-        set(e.ri, 'nveces', '');
-        set(e.ri, 'lon', '');
-        set(e.ri, 'area', '');
-        set(e.ri, 'vol', '');
-        set(e.ri, 'und', '');
-        return;
-      }
       const { row, ri } = e;
       const elsim  = toNum(row.elsim);
-      const nveces = toNum(row.nveces) || 1;
+      const nveces = toNum(row.nveces);
       const largo  = toNum(row.largo);
       const ancho  = toNum(row.ancho);
       const alto   = toNum(row.alto);
+
       const newUnd  = r4(elsim * nveces);
-      const newLon = r4((largo + ancho) * nveces);
+      const newLon  = r4((largo + ancho) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
+
       const upd = (key: string, val: number) => {
         if (toNum(row[key]) !== val) { set(ri, key, mkNum(val)); row[key] = val; }
       };
+
       upd('lon', newLon);
       upd('area', newArea);
       upd('vol', newVol);
       upd('und', newUnd);
+
       const unidad = String(row.unidad ?? '').trim().toLowerCase();
       let tVal = 0;
+
       if (unidad === 'm' || unidad === 'ml') tVal = newLon;
       else if (unidad === 'm2') tVal = newArea;
       else if (unidad === 'm3' || unidad === 'lt' || unidad === 'gl') tVal = newVol;
       else if (unidad === 'kg') tVal = toNum(row.kg);
       else if (unidad === 'und' || unidad === 'pza') tVal = newUnd;
+
       e.total = tVal;
       set(ri, 'total', mkNum(tVal));
     });
 
-    // PASE 4 — ROLL-UP
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASE 4 — ROLL-UP: de la profundidad máxima hasta el nivel 1
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const maxLevel = entries.reduce((m, e) => Math.max(m, e.level), 1);
+
     for (let lvl = maxLevel; lvl >= 1; lvl--) {
       entries.forEach((e, idx) => {
         if (e.kind !== 'group' || e.level !== lvl) return;
+
         let sum = 0;
         for (let j = idx + 1; j < entries.length; j++) {
           const child = entries[j];
           if (child.level <= lvl) break;
-          if (child.level > lvl) {
-            if (child.kind === 'leaf') {
-              sum = r4(sum + child.total);
-            }
+          if (child.level === lvl + 1) {
+            sum = r4(sum + child.total);
           }
         }
+
         e.total = sum;
         e.row.total = sum;
         set(e.ri, 'total', styledNum(sum, groupStyle(lvl)));
       });
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // PASE 5 — FLUSH
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (updates.length === 0) return;
     if (updates.length > 10000) return;
+
     progUpdateCount.current++;
+
     updates.forEach((u, idx) => {
       ls.setCellValue(u.r, u.c, u.v, {
         order:     sheetOrder,
         isRefresh: idx === updates.length - 1,
       });
     });
+
     setTimeout(() => {
       progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
       const all = ls.getAllSheets?.() ?? [];
@@ -604,32 +624,41 @@ export default function ComunicacionesIndex() {
   const moveBlock = useCallback((direction: 'up' | 'down') => {
     const ls = (window as any).luckysheet;
     if (!ls) return;
+
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1);
     if (!active || active.name === 'Resumen') return;
+
     const range = ls.getRange?.();
     if (!range?.length) return;
+
     const selRow = range[0].row[0];
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
 
     type RI = { ri: number; level: number; kind: EntryKind };
     const riList: RI[] = [];
+
     for (let r = 1; r < data.length; r++) {
       const row = readDataRow(data, r);
       const hasData = BASE_COLS.some((col) => !blank(row[col.key]));
       if (!hasData) continue;
+
       const { level, kind } = rowMeta(row);
       riList.push({ ri: r, level, kind });
     }
+
     const selIdx = riList.findIndex((e) => e.ri === selRow);
     if (selIdx === -1) return;
+
     const selLevel = riList[selIdx].level;
+
     let blockEnd = selRow;
     for (let i = selIdx + 1; i < riList.length; i++) {
       if (riList[i].level <= selLevel) break;
       blockEnd = riList[i].ri;
     }
+
     const blockEndIdx = riList.findIndex((e) => e.ri === blockEnd);
 
     const readBlock = (from: number, to: number): any[][] => {
@@ -660,15 +689,20 @@ export default function ComunicacionesIndex() {
         if (riList[i].level < selLevel) break;
         if (riList[i].level === selLevel) { prevSibIdx = i; break; }
       }
+
       if (prevSibIdx === -1) return;
+
       const prevStart = riList[prevSibIdx].ri;
       let prevEnd = prevStart;
+
       for (let i = prevSibIdx + 1; i < selIdx; i++) {
         if (riList[i].level <= selLevel) break;
         prevEnd = riList[i].ri;
       }
+
       const prevBlock = readBlock(prevStart, prevEnd);
       const ourBlock  = readBlock(selRow, blockEnd);
+
       progUpdateCount.current++;
       writeBlock(ourBlock,  prevStart,               false);
       writeBlock(prevBlock, prevStart + ourBlock.length, true);
@@ -678,116 +712,91 @@ export default function ComunicacionesIndex() {
         if (riList[i].level < selLevel) break;
         if (riList[i].level === selLevel) { nextSibIdx = i; break; }
       }
+
       if (nextSibIdx === -1) return;
+
       const nextStart = riList[nextSibIdx].ri;
       let nextEnd = nextStart;
+
       for (let i = nextSibIdx + 1; i < riList.length; i++) {
         if (riList[i].level <= selLevel) break;
         nextEnd = riList[i].ri;
       }
+
       const nextBlock = readBlock(nextStart, nextEnd);
       const ourBlock  = readBlock(selRow, blockEnd);
+
       progUpdateCount.current++;
       writeBlock(nextBlock, selRow,                   false);
       writeBlock(ourBlock,  selRow + nextBlock.length, true);
     }
+
     setTimeout(() => {
       progUpdateCount.current = Math.max(0, progUpdateCount.current - 1);
     }, 100);
   }, [recalcActiveSheet]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // AGREGAR FILAS CON NIVEL PERSONALIZADO
+  // AGREGAR FILAS
   // ═══════════════════════════════════════════════════════════════════════
-  const addRowWithLevel = useCallback((
-    kind: EntryKind, 
-    customLevel: number,
-    valores?: {
-      elem: string;
-      largo: string;
-      ancho: string;
-      alto: string;
-      nveces: string;
-      unidad: string;
-    }
-  ) => {
+  const addRow = useCallback((kind: EntryKind, sameLevelAsSelected = true) => {
     const ls = (window as any).luckysheet;
     if (!ls) return;
-    
+
     const sheets = ls.getAllSheets?.() ?? [];
     const active = sheets.find((s: any) => s.status === 1) ?? sheets[0];
     if (!active || active.name === 'Resumen') return;
-    
+
     const data: any[][] = active.data || [];
     const sheetOrder = active.order ?? 0;
-    
-    const range = ls.getRange?.();
-    const selRow = range?.[0]?.row?.[1] ?? range?.[0]?.row?.[0] ?? 1;
-    
-    // Insertar nueva fila
-    ls.insertRow(selRow + 1, 1);
-    const r = selRow + 1;
 
-    // DETECTAR NIVEL REAL SEGÚN CONTEXTO
-    const currentRow = readDataRow(data, selRow);
-    const parentMeta = rowMeta(currentRow);
+    const range    = ls.getRange?.();
+    const selRow   = range?.[0]?.row?.[1] ?? range?.[0]?.row?.[0] ?? 1;
+    const selData  = readDataRow(data, selRow);
+    const { level: selLevel, kind: selKind } = rowMeta(selData);
 
-    let finalLevel = customLevel;
+    let newLevel: number;
+    if (kind === 'leaf') {
+      newLevel = (selKind === 'group' ? selLevel + 1 : selLevel);
+    } else {
+      newLevel = sameLevelAsSelected
+        ? selLevel
+        : Math.min(selLevel + 1, MAX_LEVELS);
+    }
 
-    if (!customLevel || customLevel === 1) {
-      if (kind === 'leaf') {
-        // Partida siempre va como hijo
-        finalLevel = parentMeta.level + 1;
-      } else {
-        // Grupo por defecto al mismo nivel
-        finalLevel = parentMeta.level;
+    let insertAfter = selRow;
+    if (!sameLevelAsSelected || kind === 'leaf') {
+      insertAfter = selRow;
+    } else {
+      for (let r = selRow + 1; r < data.length; r++) {
+        const rd = readDataRow(data, r);
+        const hasData = BASE_COLS.some((col) => !blank(rd[col.key]));
+        if (!hasData) break;
+
+        const { level } = rowMeta(rd);
+        if (level <= selLevel) break;
+        insertAfter = r;
       }
     }
-    
-    // Establecer nivel y tipo
-    ls.setCellValue(r, COL['_level'], finalLevel, { order: sheetOrder });
-    ls.setCellValue(r, COL['_kind'], kind, { order: sheetOrder });
-    
-    // Si es partida (leaf), establecer valores
-    if (kind === 'leaf') {
-      // Unidad de medida
-      if (valores?.unidad && valores.unidad !== 'UND') {
-        ls.setCellValue(r, COL['unidad'], valores.unidad.toLowerCase(), { order: sheetOrder });
-      }
-      
-      // Campos numéricos
-      if (valores?.elem) {
-        ls.setCellValue(r, COL['elsim'], parseFloat(valores.elem) || 0, { order: sheetOrder });
-      }
-      if (valores?.largo) {
-        ls.setCellValue(r, COL['largo'], parseFloat(valores.largo) || 0, { order: sheetOrder });
-      }
-      if (valores?.ancho) {
-        ls.setCellValue(r, COL['ancho'], parseFloat(valores.ancho) || 0, { order: sheetOrder });
-      }
-      if (valores?.alto) {
-        ls.setCellValue(r, COL['alto'], parseFloat(valores.alto) || 0, { order: sheetOrder });
-      }
-      if (valores?.nveces) {
-        ls.setCellValue(r, COL['nveces'], parseFloat(valores.nveces) || 0, { order: sheetOrder });
-      }
-    } else {
-      // Si es grupo, limpiar campos numéricos
+
+    ls.insertRow(insertAfter + 1, 1);
+
+    const r = insertAfter + 1;
+    ls.setCellValue(r, COL['_level'], newLevel, { order: sheetOrder });
+    ls.setCellValue(r, COL['_kind'],  kind,     { order: sheetOrder });
+
+    if (kind === 'group') {
       ['elsim','largo','ancho','alto','nveces','lon','area','vol','kg','und','total']
         .forEach((key) => ls.setCellValue(r, COL[key], '', { order: sheetOrder }));
     }
-    
-    // Descripción por defecto
-    ls.setCellValue(r, COL['descripcion'], 
-      kind === 'group' ? DEFAULT_DESC_GROUP : DEFAULT_DESC_LEAF, 
-      { order: sheetOrder }
-    );
-    
-    // Forzar refresh y recálculo
-    setTimeout(() => {
-      ls.refresh();
-      recalcActiveSheet();
-    }, 200);
+
+    if (kind === 'group') {
+      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_GROUP, { order: sheetOrder });
+    } else {
+      ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
+    }
+
+    setTimeout(() => recalcActiveSheet(), 120);
   }, [recalcActiveSheet]);
 
   // ── Dropdown de unidades ───────────────────────────────────────────────
@@ -795,25 +804,31 @@ export default function ComunicacionesIndex() {
     let attempts = 0;
     const MAX_ATTEMPTS = 40;
     let timer: ReturnType<typeof setTimeout>;
+
     const applyVerification = () => {
       const ls = (window as any).luckysheet;
       const sheets = ls?.getAllSheets?.() ?? [];
+
       if (!ls || typeof ls.setDataVerification !== 'function' || sheets.length === 0) {
         if (++attempts < MAX_ATTEMPTS) timer = setTimeout(applyVerification, 250);
         return;
       }
+
       const ci = COL['unidad'];
       if (ci === undefined) return;
+
       const range = colLetter(ci) + '2:' + colLetter(ci) + '3000';
       const opt = {
         type: 'dropdown', value1: UNIDAD_OPTIONS.join(','),
         prohibitInput: false, hint: 'Seleccione una unidad',
       };
+
       sheets.forEach((s: any) => {
         if (s.name === 'Resumen') return;
         ls.setDataVerification(opt, { range, order: s.order ?? 0 });
       });
     };
+
     timer = setTimeout(applyVerification, 400);
     return () => clearTimeout(timer);
   }, [initialSheets]);
@@ -839,12 +854,15 @@ export default function ComunicacionesIndex() {
   // ═══════════════════════════════════════════════════════════════════════
   const handleSyncResumen = useCallback(() => {
     setIsSyncing(true);
+
     setTimeout(() => {
       const ls = (window as any).luckysheet;
       if (!ls) { setIsSyncing(false); return; }
+
       const all: any[] = ls.getAllSheets();
       let metradoData: Record<string, any>[] = [];
       let resIdx = -1;
+
       all.forEach((sheet: any, idx: number) => {
         if (sheet.name === 'Metrado') {
           metradoData = sheetToRows(sheet, BASE_COLS);
@@ -852,20 +870,26 @@ export default function ComunicacionesIndex() {
           resIdx = idx;
         }
       });
+
       if (resIdx === -1) { setIsSyncing(false); return; }
+
       const newRows = buildResumenRows(metradoData);
       const currentSheet = ls.getSheet().order;
+
       ls.setSheetActive(resIdx);
       ls.clearRange({ row: [0, 500], column: [0, 20] });
+
       newRows.forEach((row, r) => {
         RESUMEN_BASE.forEach((col, c) => {
           const val = row[col.key as keyof typeof row] ?? '';
           ls.setCellValue(r + 1, c, val, { isRefresh: false });
         });
       });
+
       RESUMEN_BASE.forEach((col, c) => {
         ls.setCellValue(0, c, col.label, { isRefresh: false });
       });
+
       ls.refresh();
       ls.setSheetActive(currentSheet);
       doSave(all);
@@ -889,24 +913,26 @@ export default function ComunicacionesIndex() {
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
           gap-2 border-b border-slate-200/80 bg-white/92 px-4 py-2 shadow-sm
           backdrop-blur-md dark:border-gray-800/60 dark:bg-gray-900/92">
-          
+
           {/* Izquierda */}
           <div className="flex items-center gap-2.5">
             <button type="button"
-              onClick={() => router.get(`/costos/${project.id}/metrado-comunicaciones`)}
+              onClick={() => router.get(`/costos/${project.id}`)}
               className="flex h-7 w-7 items-center justify-center rounded-full
                 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700
                 dark:hover:bg-gray-800 dark:hover:text-gray-200">
               <ChevronLeft className="h-4 w-4" />
             </button>
+
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Comunicaciones
+                Metrado Arquitectura
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
               </p>
             </div>
+
             {/* Leyenda visual de niveles */}
             <div className="hidden items-center gap-1 xl:flex">
               {GROUP_PALETTE.slice(0, 4).map((p, i) => (
@@ -926,249 +952,38 @@ export default function ComunicacionesIndex() {
           {/* Derecha */}
           <div className="flex flex-wrap items-center gap-1.5">
             <SaveStatus saving={saving} error={saveError} lastSaved={lastSaved} />
-            <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
-            
-            {/* ── Botón Agregar con Diálogo ── */}
-            <Dialog open={openAgregar} onOpenChange={setOpenAgregar}>
-              <DialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="h-7 gap-1 text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700"
-                >
-                  <Plus className="h-3 w-3" />
-                  Agregar
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[650px]">
-                <DialogHeader>
-                  <DialogTitle>Agregar Nueva Fila</DialogTitle>
-                  <DialogDescription>
-                    Configure el nivel de base y las unidades de medida
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-6 py-4">
-                  {/* Tipo de Fila y Nivel de Base */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-3">
-                      <Label className="text-sm font-semibold">Tipo de Fila</Label>
-                      <div className="flex gap-3">
-                        <div className="flex gap-3">
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="tipoFila"
-                              checked={tipoFila === 'group'}
-                              onChange={() => setTipoFila('group')}
-                            />
-                            Grupo
-                          </label>
-
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="tipoFila"
-                              checked={tipoFila === 'leaf'}
-                              onChange={() => setTipoFila('leaf')}
-                            />
-                            Partida
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3">
-                      <Label htmlFor="nivelBase" className="text-sm font-semibold">
-                        N° Base (Nivel)
-                      </Label>
-                      <Input
-                        id="nivelBase"
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={nivelBase}
-                        onChange={(e) => setNivelBase(e.target.value)}
-                        placeholder="Ej: 1, 2, 3..."
-                        className="h-9"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {nivelBase === '1' && 'Numeración: 01, 02, 03...'}
-                        {nivelBase === '2' && 'Numeración: 01.01, 01.02...'}
-                        {nivelBase === '3' && 'Numeración: 01.01.01, 01.01.02...'}
-                        {nivelBase === '4' && 'Numeración: 01.01.01.01...'}
-                        {['1','2','3','4'].includes(nivelBase) === false && 'Ingrese un nivel del 1 al 10'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Unidades de Medida */}
-                    <div className="grid gap-3">
-                      <Label className="text-sm font-semibold">Unidades de Medida</Label>
-                      <Select value={unidadMedida} onValueChange={setUnidadMedida}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione unidad" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="UND">und (Unidad)</SelectItem>
-                          <SelectItem value="M">m (Metro)</SelectItem>
-                          <SelectItem value="ML">ml (Metro Lineal)</SelectItem>
-                          <SelectItem value="m2">m2 (Metro Cuadrado)</SelectItem>
-                          <SelectItem value="m3">m3 (Metro Cúbico)</SelectItem>
-                          <SelectItem value="Kg">Kg (Kilogramo)</SelectItem>
-                          <SelectItem value="lt">lt (Litro)</SelectItem>
-                          <SelectItem value="gl">gl (Galón)</SelectItem>
-                          <SelectItem value="pza">pza (Pieza)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Versiones de Medida */}
-                    <div className="grid gap-3">
-                      <Label className="text-sm font-semibold">Fórmula de Cálculo</Label>
-                      <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md text-sm font-mono">
-                        {formulaTexto || 'Seleccione una unidad'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ingresar Valores - Campos dinámicos según versión */}
-                  <div className="grid gap-3">
-                    <div className="text-right text-sm font-semibold text-emerald-600">
-                      Resultado: {preview.toFixed(4)}
-                    </div>
-                    <Label className="text-sm font-semibold">
-                      Ingresar Valores
-                    </Label>
-                    <div className="grid grid-cols-5 gap-2 p-3 border rounded-md bg-slate-50 dark:bg-slate-900">
-                      <div className="grid gap-1.5">
-                        <Label htmlFor="elem" className="text-[10px]">Elem</Label>
-                        <Input 
-                          id="elem"
-                          disabled={tipoFila !== 'leaf'} 
-                          type="number" 
-                          className="h-8 text-sm" 
-                          placeholder="0"
-                          value={elemValor}
-                          onChange={(e) => setElemValor(e.target.value)}
-                        />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label htmlFor="largo" className="text-[10px]">Largo</Label>
-                        <Input 
-                          id="largo"
-                          disabled={tipoFila !== 'leaf'} 
-                          type="number" 
-                          className="h-8 text-sm" 
-                          placeholder="0"
-                          value={largoValor}
-                          onChange={(e) => setLargoValor(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Versiones de Medida */}
-                      {['m', 'ml', 'm2', 'm3', 'lt', 'gl'].includes(unidadMedida.toLowerCase()) && (
-                        <div className="grid gap-1.5">
-                          <Label htmlFor="ancho" className="text-[10px]">Ancho</Label>
-                          <Input 
-                            id="ancho"
-                            disabled={tipoFila !== 'leaf'} 
-                            type="number" 
-                            className="h-8 text-sm" 
-                            placeholder="0"
-                            value={anchoValor}
-                            onChange={(e) => setAnchoValor(e.target.value)}
-                          />
-                        </div>
-                      )}
-
-                      {['m3', 'lt', 'gl'].includes(unidadMedida.toLowerCase()) && (
-                        <div className="grid gap-1.5">
-                          <Label htmlFor="alto" className="text-[10px]">Alto</Label>
-                          <Input 
-                            id="alto" 
-                            disabled={tipoFila !== 'leaf'}
-                            type="number" 
-                            className="h-8 text-sm" 
-                            placeholder="0"
-                            value={altoValor}
-                            onChange={(e) => setAltoValor(e.target.value)}
-                          />
-                        </div>
-                      )}
-
-                      {['und', 'pza', 'kg'].includes(unidadMedida.toLowerCase()) && (
-                        <div className="grid gap-1.5">
-                          <Label className="text-[10px]">Elem. Simil.</Label>
-                          <Input
-                            type="number"
-                            value={elemValor}
-                            onChange={(e) => setElemValor(e.target.value)}
-                          />
-                        </div>
-                      )}
-                      
-                        <div className="grid gap-1.5">
-                          <Label htmlFor="nveces" className="text-[10px]">N° Veces</Label>
-                          <Input 
-                            id="nveces" 
-                            disabled={tipoFila !== 'leaf'}
-                            type="number" 
-                            className="h-8 text-sm" 
-                            placeholder="0"
-                            value={nvecesValor}
-                            onChange={(e) => setNvecesValor(e.target.value)}
-                          />
-                        </div>
-                    </div>
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setOpenAgregar(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      const level = parseInt(nivelBase) || 1;
-
-                      if (level < 1 || level > 10) {
-                        return; // luego ponemos mensaje 
-                      }
-
-                      addRowWithLevel(tipoFila, level, {
-                        elem: elemValor,
-                        largo: largoValor,
-                        ancho: anchoValor,
-                        alto: altoValor,
-                        nveces: nvecesValor,
-                        unidad: unidadMedida,
-                      });
-
-                      setOpenAgregar(false);
-
-                      // 🔥 RESET INTELIGENTE
-                      setNivelBase('1');
-                      setElemValor('');
-                      setLargoValor('');
-                      setAnchoValor('');
-                      setAltoValor('');
-                      setNvecesValor('');
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    Agregar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
 
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
-            
+
+            {/* ── Botones de inserción ── */}
+            <div className="flex items-center gap-1">
+              <ActionBtn
+                icon={<FolderPlus className="h-3 w-3" />}
+                label="Grupo"
+                title="Insertar grupo al mismo nivel que la fila seleccionada"
+                style={{ background: GROUP_PALETTE[0].bg, color: '#fff' }}
+                onClick={() => addRow('group', true)}
+              />
+
+              <ActionBtn
+                icon={<Folder className="h-3 w-3" />}
+                label="Sub-grupo"
+                title="Insertar grupo un nivel más profundo"
+                style={{ background: GROUP_PALETTE[2].bg, color: '#fff' }}
+                onClick={() => addRow('group', false)}
+              />
+
+              <ActionBtn
+                icon={<FileText className="h-3 w-3" />}
+                label="Partida"
+                title="Insertar hoja de cálculo bajo el grupo activo"
+                style={{ background: LEAF_STYLE.bg, color: '#1e3a5f', border: '1px solid #cbd5e1' }}
+                onClick={() => addRow('leaf', false)}
+              />
+            </div>
+
+            <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
+
             {/* ── Mover bloque ── */}
             <ActionBtn
               icon={<ArrowUp className="h-3 w-3" />}
@@ -1177,6 +992,7 @@ export default function ComunicacionesIndex() {
               style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
               onClick={() => moveBlock('up')}
             />
+
             <ActionBtn
               icon={<ArrowDown className="h-3 w-3" />}
               label="↓ Bloque"
@@ -1184,8 +1000,9 @@ export default function ComunicacionesIndex() {
               style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
               onClick={() => moveBlock('down')}
             />
+
             <div className="h-5 w-px bg-slate-200 dark:bg-gray-700" />
-            
+
             {/* ── Acciones generales ── */}
             <Button variant="outline" size="sm"
               onClick={() => doSave(latestSheets.current)}
@@ -1196,6 +1013,7 @@ export default function ComunicacionesIndex() {
                 : <Save className="h-3 w-3" />}
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
+
             <Button variant="outline" size="sm"
               onClick={handleSyncResumen}
               disabled={isSyncing || saving}
@@ -1213,12 +1031,41 @@ export default function ComunicacionesIndex() {
             onDataChange={handleDataChange}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Comunicaciones',
+              title:            'Metrado Arquitectura',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,
               afterChange:      afterChange,
               contextMenu: {
+                row: [
+                  ctxItem('Insertar Grupo al mismo nivel', 'group', true,  triggerRecalc, addRow),
+                  ctxItem('Insertar Sub-grupo (N+1)',       'group', false, triggerRecalc, addRow),
+                  ctxItem('Insertar Partida (hoja)',        'leaf',  false, triggerRecalc, addRow),
+                  { type: 'separator' },
+                  {
+                    text: '↑ Mover bloque arriba',
+                    type: 'button',
+                    onClick: () => moveBlock('up'),
+                  },
+                  {
+                    text: '↓ Mover bloque abajo',
+                    type: 'button',
+                    onClick: () => moveBlock('down'),
+                  },
+                  { type: 'separator' },
+                  {
+                    text: 'Eliminar fila',
+                    type: 'button',
+                    onClick: () => {
+                      const ls = (window as any).luckysheet;
+                      if (!ls) return;
+                      const r = ls.getRange?.();
+                      if (!r?.length) return;
+                      ls.deleteRow(r[0].row[0], 1);
+                      triggerRecalc();
+                    },
+                  },
+                ],
               },
             }}
           />

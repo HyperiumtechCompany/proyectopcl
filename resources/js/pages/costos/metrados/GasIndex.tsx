@@ -86,9 +86,6 @@ const UNIT_TOTAL_COL: Record<string, string> = {
 };
 
 
-// ─── CONSTANTES ───────────────────────────────────────────────────────────────
-const TOP_LEVEL_START = 1;
-
 // ═══════════════════════════════════════════════════════════════════════
 // NUMERACIÓN BASE PARA METRADO GAS
 // ═══════════════════════════════════════════════════════════════════════
@@ -224,7 +221,6 @@ function rowsToSheet(
   // DATA (empieza en fila 2 ⚡)
   // ─────────────────────────────────────────
   const cells: any[] = [];
-
   rows.forEach((row, ri) => {
 
     const kind = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf' as EntryKind;
@@ -235,8 +231,7 @@ function rowsToSheet(
     const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
     const level = Math.max(1, Math.min(MAX_LEVELS, toNum(row['_level']) || 1));
     const st    = kind === 'group' ? groupStyle(level) : LEAF_STYLE;
-
-    const rIdx = ri + 2; // 🔥 IMPORTANTE
+    const rIdx  = ri + 1;
 
 
     cols.forEach((col, ci) => {
@@ -260,7 +255,8 @@ function rowsToSheet(
 
       }
 
-      const isNum = typeof val === 'number' || (!isNaN(Number(val)) && val !== '');
+      const isNum = typeof store === 'number' ||
+        (store !== '' && !isNaN(Number(store)));
 
 
       const cell: Record<string, any> = {
@@ -273,7 +269,6 @@ function rowsToSheet(
         ct: { fa: isNum ? '#,##0.0000' : 'General', t: isNum ? 'n' : 'g' },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
         fs: 10,
-        ...(st.bg ? { bg: st.bg, fc: st.fc } : {}),
       };
 
       if (st.bg) { cell.bg = st.bg; cell.fc = st.fc; }
@@ -284,12 +279,8 @@ function rowsToSheet(
     });
   });
 
-  // ─────────────────────────────────────────
-  // CONFIG
-  // ─────────────────────────────────────────
   const columnlen: Record<number, number> = {};
   const colhidden: Record<number, number> = {};
-
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
     if (col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
@@ -306,16 +297,8 @@ function rowsToSheet(
     row: Math.max(rows.length + 50, 100),
     column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
-    config: {
-      columnlen,
-      colhidden,
-      rowlen: { 0: 28, 1: 28 },
-      merge: merges,
-    },
-    frozen: {
-      type: 'range',
-      range: { row_focus: 2, column_focus: 0 },
-    },
+    config: { columnlen, colhidden, rowlen: { 0: 30 } },
+    frozen: { type: 'row', range: { row_focus: 0 } },
   };
 }
 
@@ -651,7 +634,7 @@ entries.forEach((e) => {
   let finalTotal = 0;
 
       const newUnd  = r4(elsim * nveces);
-      const newLon  = r4((largo + ancho) * (nveces || 1));
+      const newLon  = r4((ancho + alto) * (nveces || 1));
       const newArea = r4(largo * ancho * nveces);
       const newVol  = r4(largo * ancho * alto * nveces);
 

@@ -46,15 +46,14 @@ export interface MeasureOutputs {
 }
 
 /** Perfil de una unidad: qué inputs necesita y qué columna produce */
+// electricas_types.ts
 export interface UnitProfile {
-  /** Inputs relevantes para esta unidad (en orden de aparición) */
+  key: string;
+  label: string;
   activeInputs: (keyof MeasureInputs)[];
-  /** Columna de resultado */
   outputKey: keyof MeasureOutputs;
-  /** Descripción legible de la fórmula */
   formula: string;
-  /** Función de cálculo */
-  fn: (v: MeasureInputs) => MeasureOutputs;
+  fn: (vals: MeasureInputs) => MeasureOutputs;
 }
 
 /** Payload que devuelve el CalcModal al confirmar */
@@ -62,6 +61,9 @@ export interface CalcPayload {
   ri: number;
   inputs: MeasureInputs;
   outputs: MeasureOutputs;
+  total: number;
+  unidad: string
+  descripcion: string;
 }
 
 // ── Guardado ─────────────────────────────────────────────────

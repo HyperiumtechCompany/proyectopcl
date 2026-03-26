@@ -369,9 +369,12 @@ export default function ModularIndex() {
                 const kind  = String(row['_kind'] ?? 'leaf') === 'group' ? 'group' : 'leaf';
                 if (kind !== 'group') return;
                 const fullCode = String(row.partida ?? '').trim();
-                if (!fullCode) return;
-                const code = fullCode;
-                if (!code) return;
+
+                const code = fullCode
+                    .split('.')
+                    .map(n => String(Number(n))) 
+                    .map(n => n.padStart(2, '0')) 
+                    .join('.');
                 const e = ensure(
                     code,
                     byCode[code]?.desc || String(row.descripcion ?? ''),
@@ -587,27 +590,41 @@ export default function ModularIndex() {
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS 
+        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         entries.forEach((e) => {
         if (e.kind !== 'leaf') return;
         const { row, ri } = e;
         
+        // 1. OBTENER VALORES (Si está vacío, toNum lo hace 0)
         const elsim  = toNum(row.elsim);
-        const nveces = toNum(row.nveces);
+        
+        // 2. CORRECCIÓN CRÍTICA: Si N° Veces está vacío, asumimos 1 (para no anular el cálculo)
+        const nvecesRaw = toNum(row.nveces);
+        const nveces = nvecesRaw === 0 ? 1 : nvecesRaw; 
+        
         const largo  = toNum(row.largo);
         const ancho  = toNum(row.ancho);
         const alto   = toNum(row.alto);
-        
+        const kg     = toNum(row.kg);
+
+        // Unidades = Elementos Similares * Veces
         const newUnd  = r4(elsim * nveces);
-        const newLon  = r4(largo * nveces);
-        const newArea = r4(largo * ancho * nveces);
-        const newVol  = r4(largo * ancho * alto * nveces);
         
+        // Longitud (m, ml) = Largo * Veces
+        const newLon  = r4(largo * nveces);
+        
+        // Área (m2) = Largo * Ancho * Veces
+        const newArea = r4(largo * ancho * nveces);
+        
+        // Volumen (m3) = Largo * Ancho * Alto * Veces
+        const newVol  = r4(largo * ancho * alto * nveces);
+
+        // 4. ACTUALIZAR CELDAS SOLO SI CAMBIÓ EL VALOR
         const upd = (key: string, val: number) => {
-            if (toNum(row[key]) !== val) { 
-            set(ri, key, mkNum(val)); 
-            row[key] = val; 
+            if (toNum(row[key]) !== val) {
+            set(ri, key, mkNum(val));
+            row[key] = val;
             }
         };
 
@@ -615,20 +632,20 @@ export default function ModularIndex() {
         upd('area', newArea);
         upd('vol', newVol);
         upd('und', newUnd);
-        
-        const unidadRaw = String(row.unidad ?? '').trim().toLowerCase();
-        const unidad = unidadRaw.replace(/\s+/g, ''); 
-        
 
+        // 5. DETERMINAR EL TOTAL SEGÚN LA UNIDAD
+        const unidadRaw = String(row.unidad ?? '').trim().toLowerCase();
+        const unidad = unidadRaw.replace(/\s+/g, ''); // Eliminar espacios por seguridad
+        
         let tVal = 0;
         const totalCol = UNIT_TOTAL_COL[unidad];
         
+        // Asignación directa sin condiciones complejas
         if (totalCol === 'lon') tVal = newLon;
         else if (totalCol === 'area') tVal = newArea;
         else if (totalCol === 'vol') tVal = newVol;
-        else if (totalCol === 'kg') tVal = toNum(row.kg);
+        else if (totalCol === 'kg') tVal = kg;
         else if (totalCol === 'und') tVal = newUnd;
-        
         
         e.total = tVal;
         set(ri, 'total', mkNum(tVal));
@@ -996,11 +1013,9 @@ export default function ModularIndex() {
             const resumenSheet = all[resIdx];
 
             ls.clearRange({
-                range: {
-                    row: [1, 2000],
-                    column: [0, resumenCols.length],
-                },
-                order: resumenSheet.order
+                row: [1, 2000],
+                column: [0, resumenCols.length - 1],
+                order: resumenSheet.order,
             });
 
             // ✅ LLENAR DATOS
@@ -1008,6 +1023,7 @@ export default function ModularIndex() {
                 resumenCols.forEach((col, c) => {
                     const val = row[col.key as keyof typeof row] ?? '';
                     ls.setCellValue(r + 1, c, val, {
+                        order: resumenSheet.order,
                         isRefresh: false
                     });
                 });
@@ -1482,4 +1498,5 @@ function ctxItem(
         },
     };
 }
+
 
