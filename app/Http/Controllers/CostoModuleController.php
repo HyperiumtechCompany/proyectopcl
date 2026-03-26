@@ -90,12 +90,12 @@ class CostoModuleController extends Controller
 
         // Eléctricas has a specialized controller with modular structure
         if ($moduleType === 'metrado_electricas') {
-            return redirect()->route('costos.metrado-electricas.index', ['costoProject' => $costoProject->id]);
+            return redirect()->route('metrado-electricas.index', ['costoProject' => $costoProject->id]);
         }
 
         // Comunicaciones has a specialized controller with modular structure
         if ($moduleType === 'metrado_comunicaciones') {
-            return redirect()->route('costos.metrado-comunicaciones.index', ['costoProject' => $costoProject->id]);
+            return redirect()->route('metrado-comunicaciones.index', ['costoProject' => $costoProject->id]);
         }
 
         // Arquitectura has a specialized controller with modular structure
