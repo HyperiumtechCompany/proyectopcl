@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════
-// constants.ts — Constantes del módulo Eléctricas
+// estructuras_constants.ts — Constantes del módulo Estructuras
 // ═══════════════════════════════════════════════════
 
-import type { ColumnDef, MeasureInputs, UnitProfile } from './electricas_types';
+import type { ColumnDef, MeasureInputs, UnitProfile } from './estructuras_types';
 
 // ── Unidades disponibles ──────────────────────────────────────
 export const UNITS = ['und', 'm', 'm2', 'm3', 'kg', 'glb', 'pto', 'pza', 'ml'] as const;
 export type Unit = (typeof UNITS)[number];
 
-// ── Columnas visibles de la hoja Metrado ─────────────────────
+// ── Columnas visibles de las hojas Metrado ─────────────────────
 export const MAIN_COLS: ColumnDef[] = [
   { key: 'partida',     label: 'Ítem',          width: 110 },
   { key: 'descripcion', label: 'Descripción',   width: 300 },
@@ -40,27 +40,15 @@ export const ALL_COLS: ColumnDef[] = [...MAIN_COLS, ...META_COLS];
 export const CI = Object.fromEntries(ALL_COLS.map((c, i) => [c.key, i]));
 
 // ── Columnas de la hoja Resumen ───────────────────────────────
-export const RESUMEN_COLS: ColumnDef[] = [
+export const RESUMEN_BASE_COLS: ColumnDef[] = [
   { key: '_dbid',       label: '',             width: 1   },
   { key: 'partida',     label: 'Ítem',         width: 120 },
   { key: 'descripcion', label: 'Descripción',  width: 360 },
   { key: 'unidad',      label: 'Und',          width: 65  },
-  { key: 'total',       label: 'Total',        width: 115 },
 ];
 
 // ── Perfiles de unidad ────────────────────────────────────────
-/**
- * Cada unidad define:
- *  - activeInputs: qué campos se ingresan
- *  - outputKey: a qué columna va el resultado
- *  - formula: descripción legible
- *  - fn: función de cálculo
- *
- * Esto se usa tanto en CalcModal (mostrar solo campos activos)
- * como en recalc() (solo escribir la columna de resultado).
- */
 export const UNIT_PROFILES: Record<string, UnitProfile> = {
-  // Unidades de conteo
   und: {
     activeInputs: ['elsim', 'nveces'],
     outputKey:    'und',
@@ -85,8 +73,6 @@ export const UNIT_PROFILES: Record<string, UnitProfile> = {
     formula:      'Parcial = Elem.Simil × N° Veces',
     fn: (v) => ({ und: v.elsim * v.nveces }),
   },
-
-  // Longitud
   m: {
     activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
     outputKey:    'lon',
@@ -99,24 +85,18 @@ export const UNIT_PROFILES: Record<string, UnitProfile> = {
     formula:      'Long. = Elem.Simil × (Largo + Ancho + Alto) × N° Veces',
     fn: (v) => ({ lon: v.elsim * (v.largo + v.ancho + v.alto) * v.nveces }),
   },
-
-  // Área
   m2: {
     activeInputs: ['elsim', 'largo', 'ancho', 'nveces'],
     outputKey:    'area',
     formula:      'Área = Elem.Simil × Largo × Ancho × N° Veces',
     fn: (v) => ({ area: v.elsim * v.largo * v.ancho * v.nveces }),
   },
-
-  // Volumen
   m3: {
     activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
     outputKey:    'vol',
     formula:      'Vol. = Elem.Simil × Largo × Ancho × Alto × N° Veces',
     fn: (v) => ({ vol: v.elsim * v.largo * v.ancho * v.alto * v.nveces }),
   },
-
-  // Peso
   kg: {
     activeInputs: ['elsim', 'largo', 'ancho', 'nveces'],
     outputKey:    'kg',
@@ -125,7 +105,6 @@ export const UNIT_PROFILES: Record<string, UnitProfile> = {
   },
 };
 
-/** Fallback cuando la unidad no está registrada */
 export const DEFAULT_PROFILE: UnitProfile = {
   activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
   outputKey:    'und',
@@ -133,10 +112,8 @@ export const DEFAULT_PROFILE: UnitProfile = {
   fn: (v) => ({ und: v.elsim * v.nveces }),
 };
 
-// ── Columnas de OUTPUT (para limpiar al recalcular) ───────────
 export const OUTPUT_KEYS = ['lon', 'area', 'vol', 'kg', 'und'] as const;
 
-// ── Etiquetas de columnas de salida ──────────────────────────
 export const OUTPUT_LABELS: Record<string, string> = {
   lon:  'Long.',
   area: 'Área',
@@ -145,7 +122,6 @@ export const OUTPUT_LABELS: Record<string, string> = {
   und:  'Parcial',
 };
 
-// ── Paleta de niveles (Luckysheet no usa Tailwind CSS) ────────
 export const LEVEL_PALETTE = [
   { bg: '#ffffff', fc: '#7e22ce', bl: 1 }, // L1: Morado
   { bg: '#ffffff', fc: '#dc2626', bl: 1 }, // L2: Rojo
@@ -165,7 +141,6 @@ export const MAX_LEVELS = 10;
 export const SAVE_DEBOUNCE = 1800;
 export const NBSP = '\u00A0\u00A0\u00A0';
 
-// ── Nombres de campos de entrada ─────────────────────────────
 export const INPUT_LABELS: Record<keyof MeasureInputs, string> = {
   elsim:  'Elem.Simil.',
   largo:  'Largo',

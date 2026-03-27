@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as XLSX from "xlsx";
+import { detectDiscipline, injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // TIPOS
 interface ColumnDef { key: string; label: string; width: number }
@@ -303,6 +304,9 @@ export default function ModularIndex() {
 
     const moduleCount = Math.max(1, Number(config?.cantidad_modulos ?? 1));
 
+    // Detectar la disciplina a partir del título para las plantillas
+    const discipline = detectDiscipline(titulo);
+
     // ── State ──────────────────────────────────────────────────────────────
     const [isConfigOpen,     setIsConfigOpen]     = useState(false);
     const [newModuleCount,   setNewModuleCount]   = useState(moduleCount);
@@ -421,10 +425,10 @@ export default function ModularIndex() {
         const sheets: any[] = [];
         let order = 0;
         for (let i = 1; i <= moduleCount; i++) {
-            sheets.push(rowsToSheet(modulos?.[String(i)] ?? [], BASE_COLS, `Módulo ${i}`, order++));
+            sheets.push(rowsToSheet(injectTemplateIfEmpty(modulos?.[String(i)] ?? [], discipline), BASE_COLS, `Módulo ${i}`, order++));
         }
-        sheets.push(rowsToSheet(exterior  ?? [], BASE_COLS,   `Exterior`, order++));
-        sheets.push(rowsToSheet(cisterna  ?? [], BASE_COLS,   `Cisterna`, order++));
+        sheets.push(rowsToSheet(injectTemplateIfEmpty(exterior  ?? [], discipline), BASE_COLS,   `Exterior`, order++));
+        sheets.push(rowsToSheet(injectTemplateIfEmpty(cisterna  ?? [], discipline), BASE_COLS,   `Cisterna`, order++));
         sheets.push(rowsToSheet(resumenRows,     resumenCols, `Resumen`,  order++));
         return sheets;
     }, [moduleCount, modulos, exterior, cisterna, resumenRows, resumenCols]);
