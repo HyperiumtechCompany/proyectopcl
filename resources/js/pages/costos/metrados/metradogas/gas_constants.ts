@@ -147,16 +147,16 @@ export const OUTPUT_LABELS: Record<string, string> = {
 
 // ── Paleta de niveles (Luckysheet no usa Tailwind CSS) ────────
 export const LEVEL_PALETTE = [
-  { bg: '#0c1e3a', fc: '#ffffff', bl: 1 },
-  { bg: '#133163', fc: '#ffffff', bl: 1 },
-  { bg: '#1a4480', fc: '#ffffff', bl: 1 },
-  { bg: '#1d5fa8', fc: '#ffffff', bl: 1 },
-  { bg: '#2563eb', fc: '#ffffff', bl: 1 },
-  { bg: '#3b82f6', fc: '#ffffff', bl: 1 },
-  { bg: '#60a5fa', fc: '#0f172a', bl: 0 },
-  { bg: '#93c5fd', fc: '#0f172a', bl: 0 },
-  { bg: '#bfdbfe', fc: '#0f172a', bl: 0 },
-  { bg: '#dbeafe', fc: '#0f172a', bl: 0 },
+  { bg: '#ffffff', fc: '#7e22ce', bl: 1 },
+  { bg: '#ffffff', fc: '#dc2626', bl: 1 },
+  { bg: '#ffffff', fc: '#2563eb', bl: 1 },
+  { bg: '#ffffff', fc: '#000000', bl: 1 },
+  { bg: '#ffffff', fc: '#000000', bl: 1 },
+  { bg: '#ffffff', fc: '#000000', bl: 0 },
+  { bg: '#ffffff', fc: '#000000', bl: 0 },
+  { bg: '#ffffff', fc: '#000000', bl: 0 },
+  { bg: '#ffffff', fc: '#000000', bl: 0 },
+  { bg: '#ffffff', fc: '#000000', bl: 0 },
 ] as const;
 
 export const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 } as const;
