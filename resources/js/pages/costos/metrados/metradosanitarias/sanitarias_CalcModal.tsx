@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════
+// sanitarias_CalcModal.tsx — Modal de Calculadora de Metrado
+// ═══════════════════════════════════════════════════════════════
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -96,249 +100,245 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="z-[9999] w-[95vw] max-w-[900px] max-h-[90vh] overflow-y-auto gap-0 rounded-2xl border-0 bg-slate-900 p-0 shadow-2xl">
+      {/* ✅ MODAL MUY ANCHO HORIZONTAL - Casi toda la pantalla */}
+      <DialogContent className={cn(
+        "z-[9999] w-[95vw] max-w-[1800px] min-w-[1200px]",
+        "max-h-[70vh] h-auto",
+        "gap-0 rounded-lg border-0 bg-slate-900 shadow-2xl",
+        "flex flex-col overflow-hidden"
+      )}>
         
         {/* HEADER */}
-        <DialogHeader className="border-b border-slate-700 bg-blue-700 px-5 py-4">
+        <DialogHeader className="border-b border-slate-700 bg-blue-700 px-8 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-white">
-              <Calculator className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-white">
+              <Calculator className="h-6 w-6" />
               Calculadora de Metrado
-              <span className="rounded bg-blue-800 px-2.5 py-0.5 text-xs font-bold uppercase text-blue-100">
+              <span className="rounded bg-blue-800 px-3 py-1 text-sm font-bold uppercase text-blue-100">
                 {unit}
               </span>
             </DialogTitle>
-            <button onClick={onClose} className="text-blue-200 hover:text-white">
-              <X className="h-5 w-5" />
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="text-blue-200 hover:text-white hover:bg-blue-800 rounded-md p-1 transition-colors"
+            >
+              <X className="h-6 w-6" strokeWidth={2} />
             </button>
           </div>
-          {rowData.descripcion && (
-            <DialogDescription className="truncate text-sm text-blue-200">
-              {String(rowData.descripcion).trim()}
-            </DialogDescription>
-          )}
         </DialogHeader>
 
-        <div className="space-y-4 bg-slate-900 px-5 py-5">
-          
-          {/* DESCRIPCIÓN */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Descripción
-            </Label>
-            <Input
-              value={descripcion}
-              placeholder="Descripción del ítem"
-              onChange={(e) => setDescripcion(e.target.value)}
-              className="h-10 border-slate-600 bg-slate-800 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+        {/* CONTENIDO - Layout horizontal */}
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="space-y-6">
+            
+            {/* PRIMERA FILA: Descripción + Unidad + Versión */}
+            <div className="grid grid-cols-12 gap-4">
+              <div className="col-span-5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">
+                  Descripción
+                </Label>
+                <Input
+                  value={descripcion}
+                  placeholder="Descripción del ítem"
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  className="h-11 border-slate-600 bg-slate-800 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="col-span-3">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">
+                  Unidad
+                </Label>
+                <select
+                  value={unidad}
+                  onChange={(e) => { setUnidad(e.target.value); setUseCustom(false); }}
+                  className="flex h-11 w-full rounded-md border border-slate-600 bg-slate-800 px-4 py-2 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {UNITS.map((u) => (
+                    <option key={u} value={u}>{u.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* UNIDAD */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Unidad
-              </Label>
-              <select
-                value={unidad}
-                onChange={(e) => { setUnidad(e.target.value); setUseCustom(false); }}
-                className="flex h-10 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {UNITS.map((u) => (
-                  <option key={u} value={u}>{u.toUpperCase()}</option>
-                ))}
-              </select>
+              <div className="col-span-4">
+                {!useCustom && unitProfiles.length > 1 && (
+                  <>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">
+                      Versión
+                    </Label>
+                    <div className="flex gap-2">
+                      {unitProfiles.slice(0, 5).map((p, idx) => {
+                        const versionNum = idx + 1;
+                        const isActive = selectedVersion === p.key;
+                        return (
+                          <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => setSelectedVersion(p.key)}
+                            className={cn(
+                              'flex-1 rounded-md px-3 py-2.5 text-sm font-bold transition-colors',
+                              isActive
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                            )}
+                          >
+                            V{versionNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* VERSIÓN - TABS */}
-            {!useCustom && unitProfiles.length > 1 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Versión
+            {/* SEGUNDA FILA: Fórmula */}
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <div className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                {profile.label || 'Fórmula'}
+              </div>
+              <div className="mt-1 text-base font-medium text-blue-300">
+                {profile.formula}
+              </div>
+            </div>
+
+            {/* TERCERA FILA: Inputs en una sola línea horizontal */}
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-6">
+              <div className="mb-4">
+                <Label className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                  Valores de Entrada
                 </Label>
-                <div className="flex gap-1">
-                  {unitProfiles.slice(0, 5).map((p, idx) => {
-                    const versionNum = idx + 1;
-                    const isActive = selectedVersion === p.key;
-                    return (
-                      <button
-                        key={p.key}
-                        type="button"
-                        onClick={() => setSelectedVersion(p.key)}
+                <div className="text-xs text-slate-500 mt-1">
+                  {activeInputs.map(k => INPUT_LABELS[k]).join(' • ')}
+                </div>
+              </div>
+              
+              {/* Grid de 6 columnas para los inputs */}
+              <div className="grid grid-cols-6 gap-4">
+                {ALL_INPUTS.map((key) => {
+                  const isActive = activeInputs.includes(key);
+                  return (
+                    <div key={key} className={cn('space-y-2', !isActive && 'opacity-30')}>
+                      <Label className="text-xs font-medium uppercase text-slate-500 text-center block">
+                        {INPUT_LABELS[key]}
+                      </Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        disabled={!isActive}
+                        value={vals[key] === 0 ? '' : vals[key]}
+                        placeholder="0"
+                        onChange={(e) => setVals((v) => ({ ...v, [key]: toNum(e.target.value) }))}
                         className={cn(
-                          'flex-1 rounded-md px-2 py-2 text-xs font-bold transition-colors',
+                          'h-12 text-center font-mono text-xl font-bold',
                           isActive
+                            ? 'border-slate-600 bg-slate-800 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                            : 'cursor-not-allowed border-slate-700 bg-slate-800/50 text-slate-500',
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Fórmula personalizada (si está activa) */}
+            {useCustom && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <Label className="text-xs text-slate-400 mb-2 block">Expresión</Label>
+                  <Input
+                    className="border-slate-600 bg-slate-800 font-mono text-sm text-slate-100"
+                    placeholder="ej: elsim * (largo + ancho) * nveces"
+                    value={customExpr}
+                    onChange={(e) => setCustomExpr(e.target.value)}
+                  />
+                  {customErr && (
+                    <p className="mt-2 flex items-center gap-1 text-xs text-red-400">
+                      <TriangleAlert className="h-3 w-3" /> {customErr}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <Label className="text-xs text-slate-400 mb-2 block">Resultado en:</Label>
+                  <div className="flex gap-2">
+                    {OUTPUT_COLUMNS.map((col) => (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => setCustomOut(col)}
+                        className={cn(
+                          'flex-1 rounded px-3 py-2 text-sm font-bold uppercase transition-colors',
+                          customOut === col
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
                         )}
                       >
-                        V{versionNum}
+                        {OUTPUT_LABELS[col]}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* FÓRMULA */}
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {profile.label || 'Fórmula'}
-            </div>
-            <div className="mt-1 text-sm font-medium text-blue-300">
-              {profile.formula}
-            </div>
-          </div>
+            {/* RESULTADO - Grande y destacado */}
+            <div className={cn(
+              'rounded-lg border-2 p-6',
+              hasResult 
+                ? 'border-emerald-500/40 bg-emerald-950/20'
+                : 'border-slate-700 bg-slate-800/50',
+            )}>
+              <div className="flex items-center justify-center gap-8">
+                <div className="text-center">
+                  <Label className="mb-2 block text-sm font-bold uppercase tracking-wider text-slate-400">
+                    Resultado
+                  </Label>
+                  {hasResult ? (
+                    <div className="text-center">
+                      <div className="mb-3 text-sm font-bold uppercase text-emerald-400">
+                        {OUTPUT_LABELS[activeOut] ?? activeOut}
+                      </div>
+                      <div className="rounded-xl bg-emerald-950/40 px-8 py-4 text-5xl font-bold text-emerald-400 shadow-lg shadow-emerald-900/30">
+                        {outVal.toLocaleString('es-PE', { maximumFractionDigits: 4 })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-4 text-base text-slate-500">
+                      Ingresa valores para calcular
+                    </div>
+                  )}
+                </div>
 
-          {/* VALORES */}
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Valores {activeInputs.map(k => `(${INPUT_LABELS[k]})`).join(' • ')}
-              </Label>
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-              {ALL_INPUTS.map((key) => {
-                const isActive = activeInputs.includes(key);
-                return (
-                  <div key={key} className={cn('space-y-1', !isActive && 'opacity-40')}>
-                    <Label className="text-[10px] font-medium uppercase text-slate-500">
-                      {INPUT_LABELS[key]}
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      disabled={!isActive}
-                      value={vals[key] === 0 ? '' : vals[key]}
-                      placeholder="0"
-                      onChange={(e) => setVals((v) => ({ ...v, [key]: toNum(e.target.value) }))}
-                      className={cn(
-                        'h-10 text-right font-mono text-sm',
-                        isActive
-                          ? 'border-slate-600 bg-slate-800 text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                          : 'cursor-not-allowed border-slate-700 bg-slate-800/50 text-slate-500',
-                      )}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* FÓRMULA PERSONALIZADA */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="custom-formula"
-              checked={useCustom}
-              onChange={(e) => setUseCustom(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="custom-formula" className="text-sm font-medium text-slate-300">
-              Fórmula personalizada
-            </label>
-          </div>
-
-          {useCustom && (
-            <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-              <div>
-                <Label className="text-xs text-slate-400">Expresión</Label>
-                <Input
-                  className="mt-1 border-slate-600 bg-slate-800 font-mono text-sm text-slate-100"
-                  placeholder="ej: elsim * (largo + ancho) * nveces"
-                  value={customExpr}
-                  onChange={(e) => setCustomExpr(e.target.value)}
-                />
-                {customErr && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-red-400">
-                    <TriangleAlert className="h-3 w-3" /> {customErr}
-                  </p>
+                {hasResult && (
+                  <>
+                    <div className="h-20 w-px bg-slate-600" />
+                    <div className="text-center">
+                      <div className="mb-2 text-sm font-bold uppercase tracking-wider text-slate-400">
+                        Operación
+                      </div>
+                      <div className="rounded-lg bg-slate-800 px-6 py-4 text-lg text-slate-300 font-mono">
+                        {(useCustom ? ALL_INPUTS : profile.activeInputs)
+                          .filter((key) => vals[key] !== 0)
+                          .map((key) => `${r4(vals[key])}`)
+                          .join(' × ')}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
-              <div>
-                <Label className="text-xs text-slate-400">Resultado en:</Label>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {OUTPUT_COLUMNS.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setCustomOut(col)}
-                      className={cn(
-                        'rounded px-2.5 py-1 text-xs font-bold uppercase transition-colors',
-                        customOut === col
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
-                      )}
-                    >
-                      {OUTPUT_LABELS[col]}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
-          )}
-
-          {/* RESULTADO */}
-          <div className={cn(
-            'rounded-lg border-2 p-4',
-            hasResult 
-              ? 'border-emerald-500/40 bg-emerald-950/20'
-              : 'border-slate-700 bg-slate-800/50',
-          )}>
-            <Label className="mb-3 block text-xs font-bold uppercase tracking-wider text-slate-400">
-              Resultado
-            </Label>
-            {hasResult ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                {/* Inputs activos con sus valores */}
-                {(useCustom ? ALL_INPUTS : profile.activeInputs)
-                  .filter((key) => vals[key] !== 0)
-                  .map((key, idx, arr) => (
-                    <React.Fragment key={key}>
-                      <div className="text-center">
-                        <div className="mb-1 text-[10px] font-medium uppercase text-slate-400">
-                          {INPUT_LABELS[key]}
-                        </div>
-                        <div className="rounded bg-slate-800 px-2.5 py-1.5 font-mono text-sm font-semibold text-slate-200">
-                          {r4(vals[key]).toLocaleString('es-PE', { maximumFractionDigits: 4 })}
-                        </div>
-                      </div>
-                      {idx < arr.length - 1 && (
-                        <span className="mt-4 text-lg font-bold text-slate-500">×</span>
-                      )}
-                    </React.Fragment>
-                  ))}
-                
-                {/* Signo igual */}
-                <span className="mt-4 text-lg font-bold text-slate-500">=</span>
-                
-                {/* Resultado final */}
-                <div className="text-center">
-                  <div className="mb-1 text-[10px] font-bold uppercase text-emerald-400">
-                    {OUTPUT_LABELS[activeOut] ?? activeOut}
-                  </div>
-                  <div className="rounded-lg bg-emerald-950/40 px-4 py-2 text-3xl font-bold text-emerald-400 shadow-lg shadow-emerald-900/30">
-                    {outVal.toLocaleString('es-PE', { maximumFractionDigits: 4 })}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-6 text-sm text-slate-500">
-                Ingresa valores para calcular
-              </div>
-            )}
           </div>
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="flex gap-2 border-t border-slate-700 bg-slate-800/50 px-5 py-4">
-          <Button variant="outline" size="sm" onClick={onClose} className="border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700">
+        <DialogFooter className="flex gap-3 border-t border-slate-700 bg-slate-800/50 px-8 py-4 flex-shrink-0">
+          <Button variant="outline" size="lg" onClick={onClose} className="border-slate-600 bg-slate-800 px-6 text-base text-slate-200 hover:bg-slate-700">
             Cancelar
           </Button>
           <Button
-            size="sm"
+            size="lg"
             disabled={!hasResult}
             onClick={() => {
               onApply({
@@ -351,10 +351,10 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
               });
               onClose();
             }}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40"
+            className="bg-blue-600 px-8 text-base hover:bg-blue-700 disabled:opacity-40"
           >
-            <Calculator className="mr-1.5 h-4 w-4" />
-            Aplicar
+            <Calculator className="mr-2 h-5 w-5" />
+            Aplicar Cálculo
           </Button>
         </DialogFooter>
       </DialogContent>
