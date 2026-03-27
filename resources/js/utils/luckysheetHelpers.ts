@@ -1,4 +1,4 @@
-import { ColumnDef, ColumnType } from '@/types/presupuestos';
+import type { ColumnDef, ColumnType } from '@/types/presupuestos';
 
 export function getExcelColumnName(colIndex: number): string {
     let result = '';
@@ -110,7 +110,7 @@ export function generateNextWbsCode(
 
     if (!prevCode) {
         // No hay hermanos ni padres arriba, iniciar desde 1
-        let parts = Array(targetLevel).fill('01');
+        const parts = Array(targetLevel).fill('01');
         return parts.join('.');
     }
 
@@ -138,7 +138,7 @@ export function generateNextWbsCode(
             return parts.slice(0, targetLevel).join('.');
         } else if (prevLevel < targetLevel) {
             // Hijo: "01" -> "01.01", "01.01" -> "01.01.01"
-            let newParts = [...parts];
+            const newParts = [...parts];
             // Rellenar hasta el nivel objetivo
             while (newParts.length < targetLevel) {
                 newParts.push('01');
@@ -146,7 +146,7 @@ export function generateNextWbsCode(
             return newParts.join('.');
         } else {
             // Hermano del ancestro: "01.01.01" -> (targetLevel 2) "01.02"
-            let newParts = parts.slice(0, targetLevel);
+            const newParts = parts.slice(0, targetLevel);
             newParts[targetLevel - 1] = String(parseInt(newParts[targetLevel - 1], 10) + 1).padStart(2, '0');
             return newParts.join('.');
         }

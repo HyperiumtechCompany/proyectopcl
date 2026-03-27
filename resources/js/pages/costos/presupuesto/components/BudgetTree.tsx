@@ -1,13 +1,14 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
     useReactTable,
     getCoreRowModel,
     flexRender,
-    ColumnDef,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import { useBudgetStore, BudgetItemRow } from '../stores/budgetStore';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { BudgetItemRow } from '../stores/budgetStore';
+import { useBudgetStore } from '../stores/budgetStore';
 
 const fmt = (n: number, d = 2) =>
     n?.toLocaleString('es-PE', {
@@ -261,7 +262,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({
                                 <span className="w-[14px] shrink-0" />
                             )}
 
-                            {isTitle ? ( 
+                            {isTitle ? (
                                 <span className="flex min-w-0 shrink items-center text-xs font-semibold tracking-wide text-sky-300">
                                     <span className="mr-1 shrink-0">
                                         {item.partida} -

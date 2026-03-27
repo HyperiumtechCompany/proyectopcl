@@ -77,6 +77,7 @@ class CostoProjectController extends Controller
             'centro_poblado' => 'nullable|string|max:255',
             'modules' => 'required|array|min:1',
             'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
+            'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
         ]);
 
         $dbName = CostoProject::generateDatabaseName(Auth::id());
@@ -103,16 +104,39 @@ class CostoProjectController extends Controller
             ]);
 
             // 2. Crear registros de módulos seleccionados
+            $cantidadModulos = $validated['sanitarias_cantidad_modulos'] ?? 1;
+
             foreach ($validated['modules'] as $moduleType) {
+                $moduleConfig = null;
+
+                // Store sanitarias-specific config
+                if ($moduleType === 'metrado_sanitarias') {
+                    $moduleConfig = ['cantidad_modulos' => $cantidadModulos];
+                }
+
                 CostoProjectModule::create([
                     'costo_project_id' => $project->id,
                     'module_type' => $moduleType,
                     'enabled' => true,
+                    'config' => $moduleConfig,
                 ]);
             }
 
             // 3. Crear la BD aislada y ejecutar migraciones tenant
             $this->dbService->createDatabase($project);
+
+            // 4. Initialize sanitarias config in tenant DB if module is enabled
+            if (in_array('metrado_sanitarias', $validated['modules'])) {
+                $this->dbService->setTenantConnection($dbName);
+                DB::connection('costos_tenant')
+                    ->table('metrado_sanitarias_config')
+                    ->insert([
+                        'cantidad_modulos' => $cantidadModulos,
+                        'nombre_proyecto'  => $validated['nombre'],
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+            }
 
             return redirect()->route('costos.show', $project)
                 ->with('success', 'Proyecto de costos creado exitosamente.');

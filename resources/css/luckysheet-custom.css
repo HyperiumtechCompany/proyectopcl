@@ -84,3 +84,44 @@
     flex-shrink: 1;
     min-width: 60px;
 }
+
+/* Ensure text is visible while editing a cell */
+#luckysheet-input-box,
+#luckysheet-rich-text-editor,
+.luckysheet-input-box,
+.luckysheet-input-box textarea,
+.luckysheet-input-box input {
+    color: #111111 !important;
+    background-color: #ffffff !important;
+    caret-color: #111111 !important;
+}
+
+/* Ensure formula bar, selects, and other Luckysheet inputs are readable */
+.luckysheet-container input,
+.luckysheet-container textarea,
+.luckysheet-container select,
+.luckysheet-container option,
+.luckysheet-container [contenteditable="true"] {
+    color: #111111 !important;
+    background-color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* Ensure data validation dropdown is visible and readable */
+#luckysheet-dataVerification-dropdown-btn {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #ffffff !important;
+}
+
+#luckysheet-dataVerification-dropdown-List {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    font-weight: 700 !important;
+}
+
+#luckysheet-dataVerification-dropdown-List .dropdown-List-item {
+    color: #111111 !important;
+    font-weight: 700 !important;
+}

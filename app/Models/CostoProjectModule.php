@@ -13,12 +13,14 @@ class CostoProjectModule extends Model
         'costo_project_id',
         'module_type',
         'enabled',
+        'config',
     ];
 
     protected function casts(): array
     {
         return [
             'enabled' => 'boolean',
+            'config'  => 'array',
         ];
     }
 

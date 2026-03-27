@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Luckysheet.tsx — Wrapper React para la hoja de cálculo Luckysheet
  *
  * ── POR QUÉ CARGA DINÁMICA Y NO ESM IMPORT ──────────────────────────────────
@@ -212,7 +212,7 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
             }
         };
         // Solo ejecutar al montar
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
     // ── Paso 2: Inicializar Luckysheet cuando el script esté listo ────────────
