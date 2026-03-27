@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
-// gasIndex.tsx — Página principal refactorizada
+// GasIndex.tsx — Página principal refactorizada
 //
 // Estructura de archivos:
-//   gas/
+//   electricas/
 //     types.ts          → interfaces TypeScript
 //     constants.ts      → columnas, perfiles de unidad, paleta
 //     utils.ts          → helpers puros + buildRecalcUpdates
 //     CalcModal.tsx     → modal calculadora (campos por unidad)
 //     NumberingModal.tsx → modal numeración + buildNumberingUpdates
-//     gasIndex.tsx ← ESTE ARCHIVO
+//     GasIndex.tsx ← ESTE ARCHIVO
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
@@ -21,6 +21,7 @@ import {
   AlertCircle, Calculator, CheckCircle2,
   ChevronLeft, Hash, Loader2, RefreshCcw, Save,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Módulo local
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
@@ -30,7 +31,7 @@ import {
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
   levelStyle,
 } from './metradogas/gas_utils';
-import type { CalcPayload, gasPageProps, RowKind } from './metradogas/gas_types';
+import type { CalcPayload, GasPageProps, RowKind } from './metradogas/gas_types';
 import { CalcModal }     from './metradogas/gas_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradogas/gas_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
@@ -222,8 +223,8 @@ function useAutoSave(projectId: number) {
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 
-export default function gasIndex() {
-  const { project, metrado, resumen } = usePage<gasPageProps>().props;
+export default function GasIndex() {
+  const { project, metrado, resumen } = usePage<GasPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',             href: '/costos' },
@@ -321,6 +322,7 @@ export default function gasIndex() {
         isRefresh: i === ups.length - 1,
       });
     });
+
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       recalc();
@@ -513,10 +515,10 @@ export default function gasIndex() {
             {/* Título */}
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Eléctricas
+                Metrado Gas
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                {spreadsheet.name}
+                {project.nombre}
               </p>
             </div>
 
@@ -606,7 +608,7 @@ export default function gasIndex() {
             onDataChange={scheduleSave}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Eléctricas',
+              title:            'Metrado Gas',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,
@@ -643,7 +645,6 @@ export default function gasIndex() {
             }}
           />
         </main>
-
       </div>
 
       {/* ━━━━━━ MODALES ━━━━━━ */}
