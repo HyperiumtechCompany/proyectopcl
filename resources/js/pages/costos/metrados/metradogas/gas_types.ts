@@ -8,7 +8,7 @@ export interface ColumnDef {
   width: number;
 }
 
-export interface gasPageProps {
+export interface GasPageProps {
   project: { id: number; nombre: string };
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
