@@ -21,7 +21,6 @@ import {
   AlertCircle, Calculator, CheckCircle2,
   ChevronLeft, Hash, Loader2, RefreshCcw, Save,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 // Módulo local
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
@@ -322,7 +321,6 @@ export default function gasIndex() {
         isRefresh: i === ups.length - 1,
       });
     });
-
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       recalc();
@@ -518,7 +516,7 @@ export default function gasIndex() {
                 Metrado Eléctricas
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                {project.nombre}
+                {spreadsheet.name}
               </p>
             </div>
 
@@ -645,6 +643,7 @@ export default function gasIndex() {
             }}
           />
         </main>
+
       </div>
 
       {/* ━━━━━━ MODALES ━━━━━━ */}
