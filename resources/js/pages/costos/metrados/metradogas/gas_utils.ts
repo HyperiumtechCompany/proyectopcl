@@ -5,8 +5,8 @@
 import {
   ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, MAIN_COLS,
   MAX_LEVELS, NBSP, RESUMEN_COLS, UNIT_PROFILES, OUTPUT_KEYS,
-} from './electricas_constants';
-import type { ColumnDef, MeasureInputs, RowEntry, RowKind } from './electricas_types';
+} from './gas_constants';
+import type { ColumnDef, MeasureInputs, RowEntry, RowKind } from './gas_types';
 
 export const toNum = (v: unknown): number => {
   const n = Number(v);
@@ -384,3 +384,4 @@ export function buildResumenRows(src: Record<string, any>[]): Record<string, any
       _kind:       row._kind,
     }));
 }
+

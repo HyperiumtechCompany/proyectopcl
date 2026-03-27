@@ -18,11 +18,11 @@ import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
 import { Hash }   from 'lucide-react';
 
-import { LEAF_STYLE, LEVEL_PALETTE, MAX_LEVELS } from './electricas_constants';
-import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './electricas_utils';
-import type { RowKind } from './electricas_types';
-import { ALL_COLS, CI } from './electricas_constants';
-import { levelStyle } from './electricas_utils';
+import { LEAF_STYLE, LEVEL_PALETTE, MAX_LEVELS } from './gas_constants';
+import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './gas_utils';
+import type { RowKind } from './gas_types';
+import { ALL_COLS, CI } from './gas_constants';
+import { levelStyle } from './gas_utils';
 
 // ── Props ─────────────────────────────────────────────────────
 export interface NumberingModalProps {
@@ -43,7 +43,7 @@ const hasDescription = (desc: string): boolean =>
 // NumberingModal
 // ══════════════════════════════════════════════════════════════
 export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) {
-  const [baseStr, setBaseStr] = useState('5');
+  const [baseStr, setBaseStr] = useState('7');
   const base = Math.max(1, Math.min(99, toNum(baseStr) || 1));
 
   // Vista previa de la jerarquía usando el mismo algoritmo que applyNumbering()
@@ -174,7 +174,7 @@ export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) 
 
 // ══════════════════════════════════════════════════════════════
 // applyNumbering — función pura que ejecuta la numeración
-// Se exporta para usarla desde ElectricasIndex.tsx
+// Se exporta para usarla desde gasIndex.tsx
 // ══════════════════════════════════════════════════════════════
 export function buildNumberingUpdates(
   data:       any[][],
@@ -226,3 +226,4 @@ export function buildNumberingUpdates(
 
   return updates;
 }
+

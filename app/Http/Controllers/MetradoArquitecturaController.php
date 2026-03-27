@@ -34,7 +34,7 @@ class MetradoArquitecturaController extends Controller
             $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
         }
 
-        return Inertia::render('costos/metrados/ModularIndex', [
+        return Inertia::render('costos/metrados/ArquitecturaIndex', [
             'project' => [
                 'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,
