@@ -1,4 +1,3 @@
-// database/migrations/xxxx_xx_xx_create_especificaciones_tecnicas_table.php
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -11,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('especificaciones_tecnicas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('proyecto_id')->nullable();
+            $table->foreignId('proyecto_id')->constrained()->onDelete('cascade');
             $table->json('data')->nullable();
             $table->timestamps();
         });

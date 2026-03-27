@@ -16,4 +16,9 @@ class EspecificacionTecnica extends Model
     protected $casts = [
         'data' => 'array',
     ];
+    
+    public function proyecto()
+    {
+        return $this->belongsTo(Proyecto::class);
+    }
 }

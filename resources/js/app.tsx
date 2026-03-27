@@ -9,12 +9,22 @@ import { initializeTheme } from './hooks/use-appearance';
 //import Pusher from 'pusher-js';
 import $ from 'jquery';
 import 'jquery-mousewheel';
+import 'tabulator-tables/dist/css/tabulator.min.css';
+import 'tabulator-tables/dist/css/tabulator_simple.min.css'; // Estilo alternativo más limpio
 
 // ── jQuery globals (deben estar antes que Luckysheet) ───────────────────────
 // Luckysheet (cargado como UMD via script tag dinámico en Luckysheet.tsx)
 // accede a window.$ y window.jQuery al inicializarse.
 (window as any).$ = $;
 (window as any).jQuery = $;
+
+// Agrega esta línea al inicio del archivo
+import 'tabulator-tables/dist/css/tabulator.min.css';
+
+// También asegúrate de cargar el script de Tabulator
+const tabulatorScript = document.createElement('script');
+tabulatorScript.src = 'https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js';
+document.head.appendChild(tabulatorScript);
 
 // NOTA: El CSS de Luckysheet se inyecta dinámicamente en Luckysheet.tsx
 // junto al script UMD desde public/luckysheet/. No se importa aquí.
