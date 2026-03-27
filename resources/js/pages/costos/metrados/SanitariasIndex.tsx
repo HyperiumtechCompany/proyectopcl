@@ -17,6 +17,7 @@ import { buildRecalcUpdates, buildResumenRows, buildSanitariasResumenRows, colLe
 import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
+import { injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -268,16 +269,16 @@ export default function SanitariasIndex() {
 
     // Modulos 1..N
     for (let i = 1; i <= moduleCount; i++) {
-      const data = modulos[i] || [];
+      const data = injectTemplateIfEmpty(modulos[i] || [], 'sanitarias');
       const sheet = rowsToSheet(data, ALL_COLS, `Módulo ${i}`, currentOrder++);
       sheets.push(sheet);
     }
 
     // Exterior
-    sheets.push(rowsToSheet(exterior || [], ALL_COLS, 'Exterior', currentOrder++));
+    sheets.push(rowsToSheet(injectTemplateIfEmpty(exterior || [], 'sanitarias'), ALL_COLS, 'Exterior', currentOrder++));
     
     // Cisterna
-    sheets.push(rowsToSheet(cisterna || [], ALL_COLS, 'Cisterna', currentOrder++));
+    sheets.push(rowsToSheet(injectTemplateIfEmpty(cisterna || [], 'sanitarias'), ALL_COLS, 'Cisterna', currentOrder++));
 
     sheets.push(rowsToSheet(resumenRows, resumenCols, 'Resumen', currentOrder++));
 

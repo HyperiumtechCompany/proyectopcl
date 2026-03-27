@@ -25,7 +25,7 @@ const hasDescription = (desc: string): boolean =>
   desc.trim() !== '' && desc.trim() !== '0';
 
 export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) {
-  const [baseStr, setBaseStr] = useState('5');
+  const [baseStr, setBaseStr] = useState('4');
   const base = Math.max(1, Math.min(99, toNum(baseStr) || 1));
 
   const preview = useMemo(() => {
@@ -53,9 +53,9 @@ export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent
-        className="z-[9999] max-w-sm gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-2xl"
+        className="z-9999 max-w-sm gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-2xl"
         style={{ zIndex: 9999 }}>
-        <DialogHeader className="border-b border-slate-100 bg-gradient-to-r
+        <DialogHeader className="border-b border-slate-100 bg-linear-to-r
           from-violet-600 to-violet-700 px-5 py-4 dark:border-slate-800">
           <DialogTitle className="flex items-center gap-2 text-[14px] font-bold text-white">
             <Hash className="h-4.5 w-4.5" />

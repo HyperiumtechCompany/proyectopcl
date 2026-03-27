@@ -141,6 +141,7 @@ Route::middleware(['auth', 'verified'])->prefix('spatt-pararrayos')->name('spatt
 Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->group(function () {
     Route::get('/', [CostoProjectController::class, 'index'])->name('index');
     Route::get('/create', [CostoProjectController::class, 'create'])->name('create');
+    Route::get('/{costoProject}/edit', [CostoProjectController::class, 'edit'])->name('edit');
     Route::post('/', [CostoProjectController::class, 'store'])->name('store');
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
@@ -236,6 +237,10 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::patch('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'updateModulo'])->name('modulo.update');
             Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
             Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
+            Route::get('/exterior', [MetradoEstructurasController::class, 'getExterior'])->name('exterior.show');
+            Route::patch('/exterior', [MetradoEstructurasController::class, 'updateExterior'])->name('exterior.update');
+            Route::get('/cisterna', [MetradoEstructurasController::class, 'getCisterna'])->name('cisterna.show');
+            Route::patch('/cisterna', [MetradoEstructurasController::class, 'updateCisterna'])->name('cisterna.update');
             Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
         });
 
@@ -302,6 +307,18 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 
         Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
             ->name('resumen.update');
+
+        Route::get('/exterior', [MetradoArquitecturaController::class, 'getExterior'])
+            ->name('exterior.show');
+
+        Route::patch('/exterior', [MetradoArquitecturaController::class, 'updateExterior'])
+            ->name('exterior.update');
+
+        Route::get('/cisterna', [MetradoArquitecturaController::class, 'getCisterna'])
+            ->name('cisterna.show');
+
+        Route::patch('/cisterna', [MetradoArquitecturaController::class, 'updateCisterna'])
+            ->name('cisterna.update');
 
         Route::post('/resumen/sync', [MetradoArquitecturaController::class, 'syncResumen'])
             ->name('resumen.sync');

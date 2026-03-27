@@ -2,7 +2,7 @@
 // constants.ts — Constantes del módulo Eléctricas
 // ═══════════════════════════════════════════════════
 
-import type { ColumnDef, MeasureInputs, UnitProfile } from './electricas_types';
+import type { ColumnDef, MeasureInputs, UnitProfile } from './comunicaciones_types';
 
 // ── Unidades disponibles ──────────────────────────────────────
 export const UNITS = ['und', 'm', 'm2', 'm3', 'kg', 'glb', 'pto', 'pza', 'ml'] as const;
@@ -147,16 +147,16 @@ export const OUTPUT_LABELS: Record<string, string> = {
 
 // ── Paleta de niveles (Luckysheet no usa Tailwind CSS) ────────
 export const LEVEL_PALETTE = [
-  { bg: '#ffffff', fc: '#7e22ce', bl: 1 }, // L1: Morado
-  { bg: '#ffffff', fc: '#dc2626', bl: 1 }, // L2: Rojo
-  { bg: '#ffffff', fc: '#2563eb', bl: 1 }, // L3: Azul
-  { bg: '#ffffff', fc: '#000000', bl: 1 }, // L4: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 1 }, // L5: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L6: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L7: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L8: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L9: Negro
-  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L10: Negro
+  { bg: '#ffffff', fc: '#0f2d5c', bl: 1 },
+  { bg: '#ffffff', fc: '#1a4480', bl: 1 },
+  { bg: '#ffffff', fc: '#1d5fa8', bl: 1 },
+  { bg: '#ffffff', fc: '#2563eb', bl: 1 },
+  { bg: '#ffffff', fc: '#3b82f6', bl: 1 },
+  { bg: '#ffffff', fc: '#0369a1', bl: 0 },
+  { bg: '#ffffff', fc: '#0284c7', bl: 0 },
+  { bg: '#ffffff', fc: '#0ea5e9', bl: 0 },
+  { bg: '#ffffff', fc: '#38bdf8', bl: 0 },
+  { bg: '#ffffff', fc: '#7dd3fc', bl: 0 },
 ] as const;
 
 export const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 } as const;
@@ -178,3 +178,4 @@ export const INPUT_LABELS: Record<keyof MeasureInputs, string> = {
 export const ALL_INPUTS: (keyof MeasureInputs)[] = [
   'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg',
 ];
+
