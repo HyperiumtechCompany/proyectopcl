@@ -25,7 +25,7 @@ class CostoModuleController extends Controller
         'crono_general'          => 'cronograma_general',
         'crono_valorizado'       => 'cronograma_valorizado',
         'crono_materiales'       => 'cronograma_materiales',
-        'etts'                   => 'especificaciones_tecnicas',
+        'etts'                   => 'ettp_partidas',
     ];
 
 

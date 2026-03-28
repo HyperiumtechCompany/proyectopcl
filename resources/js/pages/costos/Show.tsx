@@ -61,11 +61,62 @@ const GROUP_CONFIG: Record<ModuleGroup, { label: string }> = {
     etts:        { label: 'ETTs' },
 };
 
+// Helper para obtener ícono de módulo (para la sección duplicada que eliminamos)
+// Mantenemos esta función por si acaso, pero no se usa en la versión final
+function getIcon(module: string): string {
+    const icons: Record<string, string> = {
+        presupuesto: '💰',
+        metrado_arquitectura: '🏛️',
+        metrado_estructura: '🏗️',
+        metrado_sanitarias: '🚰',
+        metrado_electricas: '⚡',
+        metrado_comunicaciones: '📡',
+        metrado_gas: '🔥',
+        presupuesto_gg: '📊',
+        presupuesto_insumos: '📦',
+        presupuesto_remuneraciones: '👥',
+        presupuesto_acus: '📄',
+        presupuesto_indice: '📚',
+        crono_general: '📅',
+        crono_valorizado: '📈',
+        crono_materiales: '📦',
+        etts: '📋',
+    };
+    return icons[module] || '📄';
+}
+
+const MODULE_LABELS: Record<string, string> = {
+    presupuesto: 'Presupuesto',
+    metrado_arquitectura: 'Arquitectura',
+    metrado_estructura: 'Estructuras',
+    metrado_sanitarias: 'Sanitarias',
+    metrado_electricas: 'Eléctricas',
+    metrado_comunicaciones: 'Comunicaciones',
+    metrado_gas: 'Gas',
+    presupuesto_gg: 'Gastos Generales',
+    presupuesto_insumos: 'Insumos',
+    presupuesto_remuneraciones: 'Remuneraciones',
+    presupuesto_acus: 'ACUs',
+    presupuesto_indice: 'Índice',
+    crono_general: 'Cronograma General',
+    crono_valorizado: 'Cronograma Valorizado',
+    crono_materiales: 'Cronograma Materiales',
+    etts: 'ETTs',
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function moduleHref(project_id: number, m: string): string {
     if (m === 'presupuesto')        return `/costos/proyectos/${project_id}/presupuesto`;
-    if (m === 'metrado_sanitarias') return `/costos/${project_id}/metrado-sanitarias`;
+    if (m === 'metrado_arquitectura') return `/costos/${project_id}/metrado-arquitectura`;
     if (m === 'metrado_estructura') return `/costos/${project_id}/metrado-estructuras`;
+    if (m === 'metrado_sanitarias') return `/costos/${project_id}/metrado-sanitarias`;
+    if (m === 'metrado_electricas') return `/costos/${project_id}/metrado-electricas`;
+    if (m === 'metrado_comunicaciones') return `/costos/${project_id}/metrado-comunicaciones`;
+    if (m === 'metrado_gas') return `/costos/${project_id}/metrado-gas`;
+    if (m === 'crono_general' || m === 'crono_valorizado' || m === 'crono_materiales') {
+        return `/module/${m}?project=${project_id}`;
+    }
+    if (m === 'etts') return `/module/etts?project=${project_id}`;
     return `/costos/${project_id}/module/${m}`;
 }
 
@@ -219,7 +270,9 @@ export default function Show() {
                         </span>
                     </p>
                 </div>
-                <div className="flex flex-row gap-3 items-center justify-center">
+
+                {/* ── Grid de Información y Módulos ───────────────────────────── */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {/* ── Información General ─────────────────────────────────── */}
                     {(identificationFields.length > 0 || locationFields.length > 0) && (
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
@@ -239,7 +292,7 @@ export default function Show() {
                                     <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                                         <MapPin size={10} /> Ubicación
                                     </p>
-                                    <dl className="grid grid-rows-2 gap-x-8 gap-y-4 sm:grid-rows-4">
+                                    <dl className="grid grid-rows-1 gap-x-8 gap-y-4 sm:grid-rows-2">
                                         {locationFields.map(i => (
                                             <InfoField key={i.label} label={i.label} value={i.value} icon={i.icon} />
                                         ))}
@@ -269,7 +322,7 @@ export default function Show() {
                         </section>
                     )}
 
-                    {/* ── Módulos ─────────────────────────────────────────────── */}
+                    {/* ── Módulos Habilitados ─────────────────────────────────── */}
                     <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
                         <SectionTitle icon={Layers}>Módulos Habilitados</SectionTitle>
 
@@ -285,7 +338,7 @@ export default function Show() {
                                                 {mods.length}
                                             </span>
                                         </p>
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                             {mods.map(m => (
                                                 <ModuleCard key={m} module={m} projectId={project.id} />
                                             ))}
@@ -340,56 +393,7 @@ export default function Show() {
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Modules */}
-                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                    <h2 className="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Módulos Habilitados</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {project.modules.map(m => {
-                            let href: string;
-
-                            if (m === 'presupuesto') {
-                                href = `/costos/proyectos/${project.id}/presupuesto`;
-                            } else if (m === 'metrado_sanitarias') {
-                                href = `/costos/${project.id}/metrado-sanitarias`;
-                            } else if (m === 'metrado_estructura') {
-                                href = `/costos/${project.id}/metrado-estructuras`;
-                            } else if (m === 'metrado_gas') {
-                                // ── Gas tiene su propio controlador y componente ──
-                                href = '/metrados/gas';
-                            }
-                            // ─── NUEVA LÓGICA PARA CRONOGRAMAS (GANTT) ───
-                            else if (m === 'crono_general' || m === 'crono_valorizado' || m === 'crono_materiales') {
-                                // Redirige al nuevo controlador de Gantt pasando el ID del proyecto
-                                href = `/module/crono_general?project=${project.id}`;
-                            }
-
-                            // ─── AGREGAR CONDICIÓN PARA ETTS ───
-                            else if (m === 'etts') {
-                                href = `/module/etts?project=${project.id}`;
-                            }
-                            // ──────────────────────────────────────────────
-                            else {
-                                // Cualquier otro módulo sigue usando la ruta genérica (Luckysheet)
-                                href = `/costos/${project.id}/module/${m}`;
-                            }
-
-                            return (
-                                <Link
-                                    key={m}
-                                    href={href}
-                                    className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer"
-                                >
-                                    <span className="text-lg">{getIcon(m)}</span>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        {MODULE_LABELS[m] || m}
-                                    </span>
-                                </Link>
-                            );
-                        })}
+                        </div>
                     </div>
                 </section>
 
