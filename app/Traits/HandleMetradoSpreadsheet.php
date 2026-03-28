@@ -27,62 +27,59 @@ trait HandleMetradoSpreadsheet
 
         $connection->beginTransaction();
         try {
-            $connection->table($table)
-                ->where('presupuesto_id', $presupuestoId)
-                ->delete();
+            $scope = ['presupuesto_id' => $presupuestoId];
+            $existingIds = $connection->table($table)
+                ->where($scope)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+            $touchedIds = [];
 
             foreach ($rows as $index => $row) {
-                $data = [
-                    'presupuesto_id' => $presupuestoId,
-                    'item_order'     => $index,
-                    'created_at'     => now(),
-                    'updated_at'     => now(),
-                ];
+                $rowId = $this->extractIncomingRowId($row);
+                $data = $this->buildSheetRowPayload($row, $index, $presupuestoId, $table, $hasColumn);
 
-                // Structural mappings
-                if ($hasColumn('node_type'))   $data['node_type']   = $row['node_type'] ?? 'partida';
-                if ($hasColumn('titulo'))      $data['titulo']      = $row['titulo'] ?? null;
-                if ($hasColumn('partida'))     $data['partida']     = $row['partida'] ?? ($row['item'] ?? null);
-                if ($hasColumn('item'))        $data['item']        = $row['partida'] ?? ($row['item'] ?? null);
-                if ($hasColumn('descripcion')) $data['descripcion'] = $row['descripcion'] ?? null;
-                
-                // Unit handling (resumen/metrado mismatch)
-                if ($hasColumn('unidad'))      $data['unidad']      = $row['unidad'] ?? ($row['und'] ?? null);
-                if ($hasColumn('und')) {
-                     // In some tables 'und' is a string (unit), in others it is a decimal (partial).
-                     if (str_contains($table, 'resumen')) {
-                         $data['und'] = $row['unidad'] ?? ($row['und'] ?? null);
-                     } else {
-                         $data['und'] = $this->toDecimalValue($row['und'] ?? 0);
-                     }
+                if ($rowId && in_array($rowId, $existingIds, true)) {
+                    $connection->table($table)
+                        ->where($scope)
+                        ->where('id', $rowId)
+                        ->update($data + ['updated_at' => now()]);
+
+                    $touchedIds[] = $rowId;
+                    continue;
                 }
 
-                // Decimal fields (Metrado)
-                $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
-                foreach ($decimalFields as $field) {
-                    if ($hasColumn($field)) {
-                        // Support alternative keys from different frontends
-                        $val = $row[$field] ?? 0;
-                        if ($field === 'elsim' && !isset($row['elsim'])) $val = $row['elem_simil'] ?? 0;
-                        if ($field === 'lon'   && !isset($row['lon']))   $val = $row['long'] ?? 0;
-                        if ($field === 'total' && !isset($row['total'])) $val = $row['parcial'] ?? 0;
-                        
-                        $data[$field] = $this->toDecimalValue($val);
-                    }
+                $existingByIndex = $connection->table($table)
+                    ->where($scope)
+                    ->where('item_order', $index)
+                    ->first();
+
+                if ($existingByIndex) {
+                    $connection->table($table)
+                        ->where('id', $existingByIndex->id)
+                        ->update($data + ['updated_at' => now()]);
+                    $touchedIds[] = $existingByIndex->id;
+                    continue;
                 }
 
-                if ($hasColumn('observacion')) $data['observacion'] = $row['observacion'] ?? ($row['obs'] ?? null);
-                if ($hasColumn('nivel'))       $data['nivel']       = $row['nivel'] ?? ($row['_level'] ?? 0);
-                if ($hasColumn('parent_id'))   $data['parent_id']   = $row['parent_id'] ?? null;
-
-                $connection->table($table)->insert($data);
+                $touchedIds[] = (int) $connection->table($table)->insertGetId($data + [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
+
+            $deleteQuery = $connection->table($table)->where($scope);
+            if (!empty($touchedIds)) {
+                $deleteQuery->whereNotIn('id', $touchedIds);
+            }
+            $deleteQuery->delete();
 
             $connection->commit();
 
             return response()->json([
                 'success' => true,
                 'count'   => count($rows),
+                'rows'    => $this->queryRows($costoProject, $table),
             ]);
         } catch (\Exception $e) {
             $connection->rollBack();
@@ -96,6 +93,61 @@ trait HandleMetradoSpreadsheet
     protected function toDecimalValue(mixed $value): float
     {
         return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    protected function extractIncomingRowId(array $row): ?int
+    {
+        $id = $row['_dbid'] ?? $row['id'] ?? null;
+
+        return is_numeric($id) && (int) $id > 0 ? (int) $id : null;
+    }
+
+    protected function buildSheetRowPayload(
+        array $row,
+        int $index,
+        int $presupuestoId,
+        string $table,
+        callable $hasColumn
+    ): array {
+        $data = [
+            'presupuesto_id' => $presupuestoId,
+            'item_order' => $index,
+        ];
+
+        if ($hasColumn('node_type'))   $data['node_type']   = $row['node_type'] ?? 'partida';
+        if ($hasColumn('titulo'))      $data['titulo']      = $row['titulo'] ?? null;
+        if ($hasColumn('partida'))     $data['partida']     = $row['partida'] ?? ($row['item'] ?? null);
+        if ($hasColumn('item'))        $data['item']        = $row['partida'] ?? ($row['item'] ?? null);
+        if ($hasColumn('descripcion')) $data['descripcion'] = $row['descripcion'] ?? null;
+
+        if ($hasColumn('unidad'))      $data['unidad']      = $row['unidad'] ?? ($row['und'] ?? null);
+        if ($hasColumn('und')) {
+            if (str_contains($table, 'resumen')) {
+                $data['und'] = $row['unidad'] ?? ($row['und'] ?? null);
+            } else {
+                $data['und'] = $this->toDecimalValue($row['und'] ?? 0);
+            }
+        }
+
+        $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
+        foreach ($decimalFields as $field) {
+            if (!$hasColumn($field)) {
+                continue;
+            }
+
+            $val = $row[$field] ?? 0;
+            if ($field === 'elsim' && !isset($row['elsim'])) $val = $row['elem_simil'] ?? 0;
+            if ($field === 'lon'   && !isset($row['lon']))   $val = $row['long'] ?? 0;
+            if ($field === 'total' && !isset($row['total'])) $val = $row['parcial'] ?? 0;
+
+            $data[$field] = $this->toDecimalValue($val);
+        }
+
+        if ($hasColumn('observacion')) $data['observacion'] = $row['observacion'] ?? ($row['obs'] ?? null);
+        if ($hasColumn('nivel'))       $data['nivel']       = $row['nivel'] ?? ($row['_level'] ?? 0);
+        if ($hasColumn('parent_id'))   $data['parent_id']   = $row['parent_id'] ?? null;
+
+        return $data;
     }
 
     protected function queryRows(CostoProject $project, string $table): array

@@ -1,34 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import * as toastr from 'toastr';
 import 'toastr/build/toastr.min.css';
+
 import WordExportModal from './exportado/exportado';
 import templatesData from './componente/descriptivos-templates.json';  // <-- IMPORTACIÓN DEL JSON
 
 declare const Tabulator: any;
 
+
+// Componentes
+import EttpHeader from './components/EttpHeader';
+import EttpTable, { EttpTableRef } from './components/EttpTable';
+import EttpDetailsPanel from './components/EttpDetailsPanel';
+import EttpMetradosPanel from './components/EttpMetradosPanel';
+import EttpWordModal from './components/EttpWordModal';
+import { useEttpTemplates } from './components/useEttpTemplates';
+import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
+import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
+import AppLayout from '@/layouts/app-layout';
+import { BreadcrumbItem } from '@/types';
+
+
 // ─────────────────────────────────────────────
-// TIPOS
+// DATOS POR DEFECTO
 // ─────────────────────────────────────────────
 
-interface Props {
-    especificacionesId?: number;
-    initialData?: any;
-    proyecto?: any;
-}
-
-interface Section {
-    title: string;
-    content: string;
-}
-
-// ─────────────────────────────────────────────
-// DATOS POR DEFECTO (cuando no hay datos del servidor)
-// ─────────────────────────────────────────────
-
-const DEFAULT_DATA = [
+const DEFAULT_DATA: EttpPartidaData[] = [
     {
         id: 1,
         item: '05',
@@ -41,18 +41,8 @@ const DEFAULT_DATA = [
                 descripcion: 'CONEXION A LA RED EXTERNA DE SUMINISTRO DE ENERGIA ELECTRICA',
                 unidad: '',
                 _children: [
-                    {
-                        id: 3,
-                        item: '05.01.01',
-                        descripcion: 'ACOMETIDA MONO.FÁSICA DE ENERGÍA ELÉCTRICA DE RED SECUNDARIA CON MEDIDOR.',
-                        unidad: 'GLB',
-                    },
-                    {
-                        id: 4,
-                        item: '05.01.02',
-                        descripcion: 'Acondicionamiento de tubo de FG, tubo PVC y baston para acometida.',
-                        unidad: 'GLB',
-                    },
+                    { id: 3, item: '05.01.01', descripcion: 'ACOMETIDA MONO.FÁSICA DE ENERGÍA ELÉCTRICA DE RED SECUNDARIA CON MEDIDOR.', unidad: 'GLB' },
+                    { id: 4, item: '05.01.02', descripcion: 'Acondicionamiento de tubo de FG, tubo PVC y baston para acometida.', unidad: 'GLB' },
                 ],
             },
         ],
@@ -60,6 +50,7 @@ const DEFAULT_DATA = [
 ];
 
 // ─────────────────────────────────────────────
+
 // CAMPOS DEL JSON DE TEMPLATES QUE SE EXCLUYEN
 // ─────────────────────────────────────────────
 
@@ -74,25 +65,35 @@ const CAMPOS_EXCLUIDOS_TEMPLATE = [
 ];
 
 // ─────────────────────────────────────────────
+
+
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
 
-const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
-
+const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     // ── Refs ──────────────────────────────────
+
     const tableRef = useRef<HTMLDivElement>(null);
     const tabulatorRef = useRef<any>(null);
     const templatesRef = useRef<any[]>([]);
-    
+
+    const tableRef = useRef<EttpTableRef>(null);
+
+
     // ── Estado ────────────────────────────────
-    const [datosBase, setDatosBase] = useState(initialData || DEFAULT_DATA);
+    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(partidas || DEFAULT_DATA);
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [currentData, setCurrentData] = useState<any>(null);
     const [currentSections, setCurrentSections] = useState<Section[]>([]);
     const [showDetailsPanel, setShowDetailsPanel] = useState(false);
     const [showMetradosPanel, setShowMetradosPanel] = useState(false);
     const [showWordModal, setShowWordModal] = useState(false);
+
     const [selectedSectionsMetrados, setSelectedSectionsMetrados] = useState({
+    const [saving, setSaving] = useState(false);
+    const [loadingMetrados, setLoadingMetrados] = useState(false);
+    const [selectedSections, setSelectedSections] = useState<SelectedSections>({
+
         estructura: false,
         arquitectura: false,
         sanitarias: false,
@@ -100,6 +101,9 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
         comunicaciones: false,
         gas: false,
     });
+
+    // ── Hook de templates ─────────────────────
+    const { buscarTemplate, extraerDetalles, buildSections, templatesCount } = useEttpTemplates();
 
     // ─────────────────────────────────────────
     // UTILIDADES
@@ -121,6 +125,7 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
         document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // ─────────────────────────────────────────
+
     // BÚSQUEDA DE TEMPLATES
     // ─────────────────────────────────────────
 
@@ -223,9 +228,17 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
     };
 
     const showDescription = (row: any) => {
+
+    // PANEL DE DETALLES TÉCNICOS
+    // ─────────────────────────────────────────
+
+    /** Abre el panel lateral al hacer click en 📋 */
+    const handleRowClick = (row: any) => {
+
         const data = row.getData();
         setSelectedRow(row);
         setCurrentData(data);
+
 
         console.log(`[Detalles] Item seleccionado: ${data.item}`);
         console.log(`[Detalles] Templates disponibles: ${templatesRef.current.length}`);
@@ -233,23 +246,36 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
         if (!templatesRef.current.length) {
             console.warn('[Detalles] No hay templates cargados aún');
             setCurrentSections(buildSections(data.detallesTecnicos || {}));
+
+        // Caso 1: Ya tiene secciones grabadas en la base de datos
+        if (data.secciones && data.secciones.length > 0) {
+            setCurrentSections(data.secciones);
+
             setShowDetailsPanel(true);
             return;
         }
 
-        const template = buscarTemplateRecursivo(templatesRef.current, data.item);
-        console.log(`[Detalles] Template encontrado: ${template ? 'SÍ' : 'NO'}`);
+        // Caso 2: No tiene secciones (partida nueva o recién importada sin contenido)
+        if (!templatesCount()) {
+            console.warn('[Detalles] No hay templates cargados aún');
+            setCurrentSections(buildSections({}));
+            setShowDetailsPanel(true);
+            return;
+        }
+
+        const template = buscarTemplate(data.item);
 
         if (template) {
             Swal.fire({
                 title: '¡Plantilla encontrada!',
-                text: `Se encontró una plantilla para "${data.item}". ¿Desea cargar los detalles?`,
+                text: `Se encontró una plantilla para "${data.item}". ¿Desea cargar los detalles predefinidos?`,
                 icon: 'info',
                 showCancelButton: true,
                 confirmButtonText: 'Sí, cargar',
-                cancelButtonText: 'No',
+                cancelButtonText: 'No, dejar vacío',
             }).then(result => {
                 if (result.isConfirmed) {
+
                     const detallesTecnicos: Record<string, any> = {};
                     Object.keys(template).forEach(campo => {
                         if (!CAMPOS_EXCLUIDOS_TEMPLATE.includes(campo)) {
@@ -258,42 +284,60 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
                     });
                     data.detallesTecnicos = detallesTecnicos;
                     row.update(data);
+
+                    const detallesTecnicos = extraerDetalles(template);
+                    const sections = buildSections(detallesTecnicos);
+                    setCurrentSections(sections);
+                } else {
+                    setCurrentSections(buildSections({}));
+
                 }
-                setCurrentSections(buildSections(data.detallesTecnicos || {}));
                 setShowDetailsPanel(true);
             });
         } else {
+
             setCurrentSections(buildSections(data.detallesTecnicos || {}));
+
+            setCurrentSections(buildSections({}));
+
             setShowDetailsPanel(true);
         }
     };
 
+
     const saveDescription = () => {
         if (!selectedRow) {
             showNotification('error', 'No hay una fila seleccionada');
+
+    /** Guarda las secciones editadas en el servidor y sincroniza la tabla */
+    const handleSaveDescription = async () => {
+        if (!selectedRow || !currentData) {
+            showNotification('error', 'No hay una partida seleccionada');
+
             return;
         }
 
-        const detallesTecnicos: Record<string, string> = {};
-        currentSections.forEach(section => {
-            const key = section.title.toLowerCase().replace(/ /g, '_');
-            detallesTecnicos[key] = section.content;
-        });
+        Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-        const rowData = selectedRow.getData();
-        rowData.detallesTecnicos = detallesTecnicos;
-        selectedRow.update(rowData);
+        try {
+            await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
+                secciones: currentSections
+            }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
-        Swal.fire({
-            title: '¡Guardado!',
-            text: 'Los detalles técnicos se actualizaron correctamente',
-            icon: 'success',
-            timer: 2000,
-            showConfirmButton: false,
-        });
+            // Actualizar la fila en Tabulator para reflejar que tiene datos (y por si cambió algo)
+            const rowData = selectedRow.getData();
+            rowData.secciones = currentSections;
+            rowData.estado = 'en_progreso';
+            selectedRow.update(rowData);
 
-        setShowDetailsPanel(false);
-    };
+            Swal.fire({
+                title: '¡Guardado!',
+                text: 'Las especificaciones se guardaron correctamente',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+            });
+
 
     const insertImage = (sectionIdx: number) => {
         const input = document.createElement('input');
@@ -313,11 +357,23 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
             }
         };
         input.click();
+
+            setShowDetailsPanel(false);
+        } catch (error: any) {
+            console.error('[Guardar Secciones] Error:', error);
+            Swal.fire({
+                title: 'Error',
+                text: error.response?.data?.error || 'No se pudieron guardar las secciones',
+                icon: 'error'
+            });
+        }
+
     };
 
     // ─────────────────────────────────────────
     // CARGA DE METRADOS
     // ─────────────────────────────────────────
+
 
     const fetchMetradosData = async (proyectoId: string, options: Record<string, number>) => {
         try {
@@ -339,6 +395,9 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
             setTimeout(handleLoadMetrados, 500);
             return;
         }
+
+
+    const handleLoadMetrados = async () => {
 
         const proyectoId = (document.getElementById('proyecto_id') as HTMLInputElement)?.value
             || proyecto?.id;
@@ -362,11 +421,21 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
             return;
         }
 
+        setLoadingMetrados(true);
         Swal.fire({ title: 'Cargando datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
-            const rawData = await fetchMetradosData(proyectoId, options);
+            const response = await axios.post(
+                `/costos/${proyectoId}/ettp/importar-metrados`,
+                { ...options },
+                { headers: { 'X-CSRF-TOKEN': getCsrfToken(), 'Content-Type': 'application/json' } }
+            );
+
+
+
             Swal.close();
+            const rawData = response.data;
+
 
             if (!rawData?.length) {
                 showNotification('warning', 'No se encontraron datos para las especialidades seleccionadas');
@@ -375,11 +444,12 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
 
             setDatosBase(rawData);
             showNotification('success', `✅ Se cargaron ${rawData.length} registros`);
-
         } catch (error) {
             Swal.close();
             console.error('[Metrados] Error:', error);
             showNotification('error', 'Error al cargar los datos');
+        } finally {
+            setLoadingMetrados(false);
         }
     };
 
@@ -387,21 +457,25 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
     // GUARDAR EN SERVIDOR
     // ─────────────────────────────────────────
 
+
     const handleSaveData = async () => {
         const idProyecto = especificacionesId || proyecto?.id;
+
+    const handleSave = async () => {
+        const idProyecto = proyecto?.id;
+
 
         if (!idProyecto) {
             showNotification('error', 'ID de proyecto no encontrado');
             return;
         }
 
-        if (!tabulatorRef.current) return;
+        const datosGenerales = tableRef.current?.getData() || [];
 
-        const datosGenerales = tabulatorRef.current.getData();
-
+        setSaving(true);
         try {
             await axios.post(
-                `/guardar-especificaciones-tecnicas/${idProyecto}`,
+                `/costos/${idProyecto}/ettp/guardar-general`,
                 { especificaciones_tecnicas: datosGenerales },
                 { headers: { 'X-CSRF-TOKEN': getCsrfToken() } }
             );
@@ -409,8 +483,11 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
         } catch (error: any) {
             console.error('[Guardar] Error:', error.response?.data);
             Swal.fire({ title: 'Error', text: error.response?.data?.error || 'No se pudieron guardar los datos', icon: 'error' });
+        } finally {
+            setSaving(false);
         }
     };
+
 
     // ─────────────────────────────────────────
     // CARGAR DATOS DEL SERVIDOR
@@ -533,13 +610,22 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
         if (especificacionesId) loadDataFromServer();
     }, [especificacionesId]);
 
+      const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Costos',             href: '/costos' },
+        { title: proyecto?.nombre,       href: `/costos/${proyecto?.id}` },
+        { title: 'ETTP', href: '#' },
+      ];
+
+
     // ─────────────────────────────────────────
     // RENDER
     // ─────────────────────────────────────────
 
     return (
         <>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
+
             <style>{`
                 .tabulator{font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
                 .tabulator .tabulator-header{background-color:#f3f4f6;border-bottom:1px solid #e5e7eb}
@@ -611,8 +697,31 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
                     </div>
                 )}
 
+
+            <div className="h-full bg-gray-100 flex flex-col">
+
+                {/* Header */}
+                <EttpHeader
+                    onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}
+                    onSave={handleSave}
+                    onShowWordModal={() => setShowWordModal(true)}
+                    saving={saving}
+                />
+
+                {/* Panel de selección de metrados */}
+                <EttpMetradosPanel
+                    show={showMetradosPanel}
+                    selectedSections={selectedSections}
+                    onSelectedChange={setSelectedSections}
+                    onLoadMetrados={handleLoadMetrados}
+                    loading={loadingMetrados}
+                />
+
+                {/* Layout: Tabla + Panel lateral */}
+
                 <div className="flex flex-1 px-4 py-6 gap-4">
                     <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-2/3' : 'w-full'}`}>
+
                         <div ref={tableRef} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200" style={{ height: 'calc(100vh - 180px)' }} />
                     </div>
 
@@ -674,9 +783,39 @@ const EttpIndex = ({ especificacionesId, initialData, proyecto }: Props) => {
                     isOpen={showWordModal}
                     onClose={() => setShowWordModal(false)}
                     getData={getTableData}
+
+                        <EttpTable
+                            ref={tableRef}
+                            data={datosBase}
+                            onRowClick={handleRowClick}
+                        />
+                    </div>
+
+                    {/* Panel lateral de detalles técnicos */}
+                    <EttpDetailsPanel
+                        show={showDetailsPanel}
+                        currentData={currentData}
+                        sections={currentSections}
+                        onSectionsChange={setCurrentSections}
+                        onClose={() => setShowDetailsPanel(false)}
+                        onSave={handleSaveDescription}
+                        showNotification={showNotification}
+                        proyectoId={proyecto?.id}
+                    />
+                </div>
+
+                {/* Modal Word */}
+                <EttpWordModal
+                    show={showWordModal}
+                    selectedSections={selectedSections}
+                    onSelectedChange={setSelectedSections}
+                    onClose={() => setShowWordModal(false)}
+                    getData={() => tableRef.current?.getData() || datosBase}
+
                     showNotification={showNotification}
                 />
             </div>
+        </AppLayout>
         </>
     );
 };
