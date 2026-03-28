@@ -1,29 +1,18 @@
 import ExcelJS from 'exceljs';
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// TIPOS
+// ═══════════════════════════════════════════════════════════════════════════
 interface DosisReduccion {
-    rInicial: number;
-    reduccion: number;
-    rFinal: number;
-    descripcion: string;
+    rInicial: number; reduccion: number; rFinal: number; descripcion: string;
 }
-
 interface PozoData {
-    L: number;
-    a: number;
-    resistividad: number;
-    tipoTerreno: string;
-    isCustomA: boolean;
-    dosisReduccion: DosisReduccion[];
+    L: number; a: number; resistividad: number; tipoTerreno: string;
+    isCustomA: boolean; dosisReduccion: DosisReduccion[];
     resultados: { calculado: boolean; resistencia: number } | null;
 }
-
 interface PararrayoData {
-    td: number;
-    L: number;
-    W: number;
-    H: number;
-    h: number;
+    td: number; L: number; W: number; H: number; h: number;
     c1: number; c2: number; c3: number; c4: number; c5: number;
     resultados: {
         calculado: boolean; nkng: number; areaEquivalente: number;
@@ -31,428 +20,605 @@ interface PararrayoData {
         eficienciaRequerida: number; nivelProteccion: number;
     } | null;
 }
-
 interface HeaderData {
     proyecto: string; cui: string; codigoModular: string; codigoLocal: string;
     unidadEjecutora: string; distrito: string; provincia: string; departamento: string;
 }
-
-// Valores numéricos editables sobre la imagen real (cotas y profundidad)
-export interface PozoImagenNumeros {
-    cotaSuperiorTotal: string;
-    cotaSuperiorSmall: string;
-    cotaSuperiorMid: string;
-    cotaVerticalTop: string;
-    cotaVerticalMid: string;
-    profundidadTotal: string;
-}
-
 export interface ExportPararrayosParams {
     logo1: File; logo2: File;
     exportOption: 'both' | 'pozo' | 'pararrayo';
-    header: HeaderData;
-    pozo: PozoData;
-    pararrayo: PararrayoData;
+    header: HeaderData; pozo: PozoData; pararrayo: PararrayoData;
     spreadsheetName: string;
-    pozoImagenNumeros?: PozoImagenNumeros;      // valores editables de la imagen
-    pozoImagenUrl?: string;                     // URL de la imagen real
+    compositeImageBase64?: string;
 }
 
-// ─── Datos de terreno ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// DATOS ESTÁTICOS
+// ═══════════════════════════════════════════════════════════════════════════
 const terrainDescs: Record<string, string> = {
-    GW: 'Grava de buen grado, mezcla de grava y arena',
-    GP: 'Grava de bajo grado, mezcla de grava y arena',
-    GC: 'Grava con arcilla, mezcla de grava y arcilla',
-    SM: 'Arena con limo, mezcla de bajo grado de arena con limo',
-    SC: 'Arena con arcilla, mezcla de bajo grado de arena con arcilla',
-    ML: 'Arena fina con arcilla de ligera plasticidad',
-    MH: 'Arena fina o terreno con limo, terrenos elásticos',
-    CL: 'Arcilla pobre con grava, arena, limo',
-    CH: 'Arcilla inorgánica de alta plasticidad',
+    GW:'Grava de buen grado, mezcla de grava y arena',
+    GP:'Grava de bajo grado, mezcla de grava y arena',
+    GC:'Grava con arcilla, mezcla de grava y arcilla',
+    SM:'Arena con limo, mezcla de bajo grado de arena con limo',
+    SC:'Arena con arcilla, mezcla de bajo grado de arena con arcilla',
+    ML:'Arena fina con arcilla de ligera plasticidad',
+    MH:'Arena fina o terreno con limo, terrenos elásticos',
+    CL:'Arcilla pobre con grava, arena, limo',
+    CH:'Arcilla inorgánica de alta plasticidad',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const fileToBuffer = (file: File): Promise<ArrayBuffer> =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+const fileBuf = (f: File): Promise<ArrayBuffer> =>
+    new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target?.result as ArrayBuffer);
+        r.onerror = rej;
+        r.readAsArrayBuffer(f);
     });
 
-const fetchImageBuffer = async (url: string): Promise<ArrayBuffer> => {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return await blob.arrayBuffer();
+const bT = { style: 'thin'   as ExcelJS.BorderStyle };
+const bM = { style: 'medium' as ExcelJS.BorderStyle };
+const bTG= { style: 'thin'   as ExcelJS.BorderStyle, color:{ argb:'FF888888' } };
+const allT : Partial<ExcelJS.Borders> = { top:bT,  left:bT,  bottom:bT,  right:bT  };
+const allM : Partial<ExcelJS.Borders> = { top:bM,  left:bM,  bottom:bM,  right:bM  };
+const allTG: Partial<ExcelJS.Borders> = { top:bTG, left:bTG, bottom:bTG, right:bTG };
+
+type SCOpts = {
+    bold?:boolean; size?:number; italic?:boolean; underline?:boolean;
+    color?:string; bg?:string; halign?:ExcelJS.Alignment['horizontal'];
+    valign?:ExcelJS.Alignment['vertical']; wrap?:boolean;
+    border?:'T'|'M'|'TG'|false; numFmt?:string;
 };
+function sc(cell: ExcelJS.Cell, val: any, o: SCOpts = {}) {
+    if (val !== undefined) cell.value = (val === '' ? null : val);
+    cell.font = { name:'Arial', bold:o.bold??false, italic:o.italic??false,
+        underline:o.underline??false, size:o.size??9,
+        color:{ argb: o.color??'FF000000' } };
+    if (o.bg) cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:o.bg } };
+    cell.alignment = { horizontal:o.halign??'left', vertical:o.valign??'middle',
+        wrapText:o.wrap??false };
+    if (o.border==='T')  cell.border = allT;
+    if (o.border==='M')  cell.border = allM;
+    if (o.border==='TG') cell.border = allTG;
+    if (o.border===false) cell.border = {};
+    if (o.numFmt) cell.numFmt = o.numFmt;
+}
 
-const addEncabezado = (
-    sheet: ExcelJS.Worksheet, workbook: ExcelJS.Workbook,
-    l1Buf: ArrayBuffer, l1Ext: string, l2Buf: ArrayBuffer, l2Ext: string,
-    header: HeaderData,
-) => {
-    sheet.getRow(1).height = 100;
-    const img1 = workbook.addImage({ buffer: l1Buf, extension: l1Ext as any });
-    const img2 = workbook.addImage({ buffer: l2Buf, extension: l2Ext as any });
-    sheet.addImage(img1, { tl: { col: 0, row: 0 }, ext: { width: 90, height: 90 } });
-    sheet.addImage(img2, { tl: { col: 13, row: 0 }, ext: { width: 90, height: 90 } });
-    sheet.mergeCells('B1:M1');
-    const cell = sheet.getCell('B1');
-    cell.value = `${header.proyecto}\n${header.cui}; ${header.codigoModular}; ${header.codigoLocal}\n${header.unidadEjecutora}`;
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.font = { bold: true, size: 11, name: 'Calibri' };
-    sheet.getColumn('A').width = 13;
-    sheet.getColumn('N').width = 13;
-};
+// Encabezado con logos — igual a la imagen de referencia
+async function addHeader(
+    ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook,
+    l1: ArrayBuffer, l1e: string, l2buf: ArrayBuffer, l2ext: string,
+    hdr: HeaderData, lastCol: number,
+) {
+    ws.getRow(1).height = 90;
+    ws.addImage(wb.addImage({ buffer: l1 as any, extension: l1e as any }),
+        { tl:{ col:0, row:0 }, ext:{ width:90, height:86 } });
+    ws.addImage(wb.addImage({ buffer: l2buf as any, extension: l2ext as any }),
+        { tl:{ col: lastCol - 1, row:0 }, ext:{ width:90, height:86 } });
+    ws.mergeCells(1, 2, 1, lastCol - 1);
+    const cell = ws.getCell(1, 2);
+    const p  = (hdr.proyecto || '').toUpperCase();
+    const l2text = [hdr.cui, hdr.codigoModular, hdr.codigoLocal].filter(s=>s&&s.trim()&&!s.match(/^[A-Z]+ *: *$/)).join(';  ')
+             || [hdr.cui, hdr.codigoModular, hdr.codigoLocal].join(';  ');
+    const l3 = hdr.unidadEjecutora || '';
+    cell.value = [p, l2text, l3].filter(Boolean).join('\n');
+    sc(cell, undefined, { bold:true, size:10, halign:'center', wrap:true });
+    cell.border = allT;
+    for (let c = 3; c <= lastCol - 1; c++) {
+        ws.getCell(1, c).border = { top:bT, bottom:bT, right: c===lastCol-1?bT:undefined };
+        ws.getCell(1, c).fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFFFFF' } };
+    }
+}
 
-const styleSeccion = (cell: ExcelJS.Cell) => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '002060' } };
-    cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 12 };
-    cell.alignment = { horizontal: 'left', vertical: 'middle' };
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// HOJA 1 — POZO A TIERRA
+// Igual a Imagen 1: contenido izquierdo + imagen real del pozo a la derecha
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildPozo(
+    wb: ExcelJS.Workbook, pozo: PozoData, hdr: HeaderData,
+    l1:ArrayBuffer, l1e:string, l2b:ArrayBuffer, l2e:string,
+    compositeBase64?: string,
+) {
+    const ws = wb.addWorksheet('Pozo a Tierra');
 
-const styleHeader = (cell: ExcelJS.Cell) => {
-    cell.font = { bold: true, size: 11 };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D9E1F2' } };
-    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-};
+    // Cols: A spacer | B-F contenido izq | G gap | H-O imagen | P logo der
+    ws.columns = [
+        { width: 3  }, // 1 A spacer
+        { width: 20 }, // 2 B label
+        { width: 12 }, // 3 C valor
+        { width: 10 }, // 4 D extra
+        { width: 20 }, // 5 E descripción
+        { width: 3  }, // 6 F gap
+        { width: 12 }, // 7 G imagen
+        { width: 12 }, // 8 H
+        { width: 12 }, // 9 I
+        { width: 12 }, // 10 J
+        { width: 12 }, // 11 K
+        { width: 12 }, // 12 L
+        { width: 12 }, // 13 M
+        { width: 12 }, // 14 N
+        { width: 3  }, // 15 O logo der
+    ];
+    const LAST = 15;
+    const IMG_COL_START = 8;  // col H (índice 8 = nativeCol 7)
+    const IMG_COL_END   = 15; // col O
+    const TXT_LAST = 5;
 
-const styleDato = (cell: ExcelJS.Cell, highlight = false) => {
-    cell.font = { bold: true, size: 11 };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: highlight ? 'FFC000' : 'FFFFFF' } };
-    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-};
+    await addHeader(ws, wb, l1, l1e, l2b, l2e, hdr, LAST);
 
-// ─── FUNCIÓN PRINCIPAL ────────────────────────────────────────────────────────
-export const exportToExcel = async ({
-    logo1, logo2, exportOption, header, pozo, pararrayo, spreadsheetName,
-    pozoImagenNumeros, pozoImagenUrl,
-}: ExportPararrayosParams): Promise<void> => {
+    let r = 2;
+    const blk = (h=7) => { ws.getRow(r).height = h; r++; };
+    const mT  = (c1:number,c2:number,row:number,h=15) => {
+        ws.getRow(row).height = h;
+        if (c1 !== c2) ws.mergeCells(row, c1, row, c2);
+    };
+    // Rellena celdas de imagen con blanco para evitar tinte gris
+    const clearImgRow = (row:number) => {
+        for (let c = IMG_COL_START; c <= IMG_COL_END; c++) {
+            ws.getCell(row, c).fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFFFFF' } };
+        }
+    };
 
-    const l1Buf = await fileToBuffer(logo1);
-    const l2Buf = await fileToBuffer(logo2);
-    const l1Ext = logo1.name.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') || 'png';
-    const l2Ext = logo2.name.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') || 'png';
+    blk();
 
-    const workbook = new ExcelJS.Workbook();
-    const exportPozo = exportOption === 'both' || exportOption === 'pozo';
-    const exportParaRayo = exportOption === 'both' || exportOption === 'pararrayo';
+    // ── TÍTULO ─────────────────────────────────────────────────────────────
+    mT(2, TXT_LAST, r, 26);
+    sc(ws.getCell(r,2), 'CALCULO DE LA RESISTENCIA DE PUESTA A TIERRA:',
+        { bold:true, size:13, halign:'center' });
+    clearImgRow(r); r++;
+    blk();
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  HOJA 1 — POZO A TIERRA
-    // ══════════════════════════════════════════════════════════════════════════
-    if (exportPozo) {
-        const sheet = workbook.addWorksheet('Pozo a Tierra');
-        addEncabezado(sheet, workbook, l1Buf, l1Ext, l2Buf, l2Ext, header);
+    // ── Electrodos Verticales ─────────────────────────────────────────────
+    mT(2, TXT_LAST, r, 18);
+    sc(ws.getCell(r,2), 'Electrodos Verticales ó Jabalinas', { italic:true, size:10 });
+    clearImgRow(r); r++;
+    mT(2, TXT_LAST, r, 16);
+    sc(ws.getCell(r,2), '    a.  Al nivel del Ancho', { italic:true, size:10 });
+    clearImgRow(r); r++;
+    blk();
 
-        sheet.getColumn('A').width = 6;
-        sheet.getColumn('B').width = 30;
-        sheet.getColumn('C').width = 22;
-        sheet.getColumn('D').width = 50;
-        sheet.getColumn('E').width = 30;
+    // ── Fórmula grande ────────────────────────────────────────────────────
+    mT(2, TXT_LAST, r, 52);
+    const fc = ws.getCell(r,2);
+    fc.value = 'R = ρ/(2πL) × [ Ln(4L/a) - 1 ]';
+    sc(fc, undefined, { bold:true, size:24, halign:'center' });
+    fc.border = { bottom: bT };
+    clearImgRow(r); r++;
+    blk();
 
-        sheet.addRow([]);
-        sheet.addRow([]);
+    // ── Donde ─────────────────────────────────────────────────────────────
+    mT(2, TXT_LAST, r, 14);
+    sc(ws.getCell(r,2), 'Donde:', { bold:true, size:9 });
+    clearImgRow(r); r++;
+    const aInch = pozo.a > 0 ? (pozo.a * 39.3701).toFixed(5) : '0.015875';
+    [
+        `L:  Longitud de la varilla de puesta a tierra (electrodos  L = ${pozo.L} Mts)`,
+        `d:  Diámetro de la varilla de puesta a tierra Ø=5/8" = ${aInch} mts`,
+        `ρ:  Resistividad en ohmios-metro para tipos de terreno, la resistividad del terreno.`,
+    ].forEach(txt => {
+        mT(2, TXT_LAST, r, 13);
+        sc(ws.getCell(r,2), '    ' + txt, { italic:true, size:9, wrap:true });
+        clearImgRow(r); r++;
+    });
+    blk();
 
-        // Título (Sin subrayado azul, solo texto)
-        const titleRow = sheet.addRow(['', 'CÁLCULO DE LA RESISTENCIA DE PUESTA A TIERRA']);
-        sheet.mergeCells(`B${titleRow.number}:E${titleRow.number}`);
-        titleRow.getCell(2).font = { bold: true, size: 16, color: { argb: '002060' } };
-        titleRow.getCell(2).alignment = { horizontal: 'center' };
-        titleRow.height = 28;
-        sheet.addRow([]);
+    // ── Tabla terreno ─────────────────────────────────────────────────────
+    ws.getRow(r).height = 20;
+    ['I.E. N°','Tipo de Terreno','(Ohm-m)','R(Ohm)','Descripción'].forEach((h,i) => {
+        sc(ws.getCell(r,i+2), h, { bold:i===3, italic:i===3, size:9,
+            halign:'center', border:'TG', bg:'FFF5F5F5' });
+    });
+    clearImgRow(r); r++;
 
-        // Ecuación
-        const eqRow = sheet.addRow(['', 'Ecuación de cálculo:']);
-        eqRow.getCell(2).font = { bold: true, italic: true, size: 12 };
-        const formulaRow = sheet.addRow(['', 'R = (ρ / 2πL) × [ ln(4L / a) – 1 ]']);
-        formulaRow.getCell(2).font = { name: 'Courier New', size: 13, bold: true, color: { argb: '002060' } };
-        sheet.addRow([]);
-        sheet.addRow([]);
+    ws.getRow(r).height = 20;
+    [
+        { v:'64193' }, { v: pozo.tipoTerreno },
+        { v: pozo.resistividad, nf:'0' },
+        { v: pozo.resultados?.calculado ? pozo.resultados.resistencia : '-',
+          nf: pozo.resultados?.calculado ? '0.00' : undefined, bold:true, italic:true },
+        { v: terrainDescs[pozo.tipoTerreno] || '' },
+    ].forEach(({ v, nf, bold, italic }:any, i) => {
+        sc(ws.getCell(r,i+2), v, { bold:bold??false, italic:italic??false, size:8,
+            halign:i<4?'center':'left', border:'TG', numFmt:nf });
+    });
+    clearImgRow(r); r++;
 
-        if (pozoImagenUrl) {
-            try {
-                const imgBuffer = await fetchImageBuffer(pozoImagenUrl);
-                const imgId = workbook.addImage({
-                    buffer: imgBuffer,
-                    extension: 'png',
-                });
-                const imageRow = sheet.addRow([]);
-                imageRow.height = 300;
-                sheet.mergeCells(`B${imageRow.number}:E${imageRow.number}`);
-                sheet.addImage(imgId, {
-                    tl: { col: 1, row: imageRow.number - 1 },
-                    ext: { width: 600, height: 400 },
-                });
-                sheet.addRow([]);
-                sheet.addRow([]);
-            } catch (err) {
-                console.error('Error al cargar la imagen del pozo:', err);
+    // Nota
+    mT(2, TXT_LAST, r, 12);
+    sc(ws.getCell(r,2),
+        'Nota: la resistencia de terreno es de acuerdo al estudio de Suelos de perfil estratigráfico Tabla N°1',
+        { italic:true, size:7, wrap:true, color:'FF555555' });
+    clearImgRow(r); r++;
+    blk(10);
+
+    // ── CONSIDERACIONES DE DISEÑO ─────────────────────────────────────────
+    mT(2, TXT_LAST, r, 20);
+    sc(ws.getCell(r,2), 'CONSIDERACIONES DE DISEÑO', { bold:true, size:11 });
+    clearImgRow(r); r++;
+    const eSuffix = pozo.a > 0 ? `${(pozo.a*39.3701).toFixed(2)}" x ${pozo.L} m` : `5/8" x ${pozo.L} m`;
+    mT(2, TXT_LAST, r, 14);
+    sc(ws.getCell(r,2), `Con electrodo de ${eSuffix}.`, { size:8 });
+    clearImgRow(r); r++;
+    blk();
+
+    // Tabla resultado pequeña
+    ws.getRow(r).height = 17;
+    ['','Terreno','(Ohm-m)','R(Ohm)'].forEach((h,i) => {
+        sc(ws.getCell(r,i+2), h, { bold:i===3, italic:i===3, size:8,
+            halign:'center', border:'TG', bg:'FFF5F5F5' });
+    });
+    clearImgRow(r); r++;
+    ws.getRow(r).height = 22;
+    [
+        { v:'64193' }, { v: pozo.tipoTerreno },
+        { v: pozo.resistividad, nf:'0' },
+        { v: pozo.resultados?.calculado ? pozo.resultados.resistencia : '-',
+          nf: pozo.resultados?.calculado ? '0.00' : undefined, bold:true, italic:true },
+    ].forEach(({ v, nf, bold, italic }:any, i) => {
+        sc(ws.getCell(r,i+2), v, { bold:bold??false, italic:italic??false,
+            size:8, halign:'center', border:'TG', numFmt:nf });
+    });
+    clearImgRow(r); r++;
+    blk(8);
+
+    // ── Tabla Reducción ───────────────────────────────────────────────────
+    ws.getRow(r).height = 20;
+    ['R Inicial (Ohm)','% Reducción','R Final (Ohm)','Descripción'].forEach((h,i) => {
+        sc(ws.getCell(r,i+2), h, { bold:true, size:9, halign:'center',
+            bg:'FFF5F5F5', border:'TG' });
+    });
+    clearImgRow(r); r++;
+    pozo.dosisReduccion.forEach((d, idx) => {
+        ws.getRow(r).height = 20;
+        const bg = idx%2===0 ? 'FFFFFFFF' : 'FFFAFAFA';
+        [
+            { v: d.rInicial>0 ? d.rInicial : '', nf:'0.00' },
+            { v: d.reduccion>0 ? d.reduccion : '', nf:'0.00' },
+            { v: d.rFinal>0 ? d.rFinal : '', nf:'0.00' },
+            { v: d.descripcion || '' },
+        ].forEach(({ v, nf }:any, i) => {
+            sc(ws.getCell(r,i+2), v, { size:9, halign:i<3?'center':'left',
+                bg, border:'TG', numFmt:nf });
+        });
+        clearImgRow(r); r++;
+    });
+
+    // Fuente
+    mT(2, TXT_LAST, r, 14);
+    sc(ws.getCell(r,2), 'Fuente: Catálogo de CEMENTO CONDUCTIVO', { italic:true, size:8 });
+    clearImgRow(r); r++;
+    blk(10);
+
+    // ── Notas * ───────────────────────────────────────────────────────────
+    ['* Para Sistema de Tensión Normal.', '* Para Sistema de Comunicaciones'].forEach(n => {
+        mT(2, TXT_LAST, r, 12);
+        sc(ws.getCell(r,2), n, { italic:true, size:8 });
+        clearImgRow(r); r++;
+    });
+    blk(10);
+
+    // ── Nota CNE final ────────────────────────────────────────────────────
+    mT(2, TXT_LAST, r, 24);
+    sc(ws.getCell(r,2),
+        'Estos dos últimos resultados R(Ohms) de las resistencias de puesta a tierra están dentro de lo permisible para este tipo de línea  según el C.N.E. SUMINISTRO.',
+        { italic:true, size:7, wrap:true });
+    clearImgRow(r);
+    const contentEndRow = r;
+    r++;
+
+    // ── IMAGEN DEL POZO (cols G-N = 7-14, desde fila 3) ───────────────────
+    // La imagen flota sobre las celdas de la derecha sin tocar el contenido izquierdo
+    if (compositeBase64) {
+        try {
+            // Calcular alto de la imagen para que cubra el contenido
+            const imgStartRow = 3;
+            const imgEndRow   = contentEndRow;
+            const rowCount    = Math.max(imgEndRow - imgStartRow + 1, 28);
+
+            // Ancho controlado para que no tape columnas de texto
+            // 8 cols × 12pt × 7px/pt = 672px, reducimos a 620 para margen
+            const imgW = 580;
+            const imgH = Math.round(imgW * (760 / 980));
+
+            // Asegurar filas suficientes con altura apropiada
+            for (let i = imgStartRow; i <= imgStartRow + rowCount + 2; i++) {
+                if (!ws.getRow(i).height || ws.getRow(i).height < 15) {
+                    ws.getRow(i).height = 17;
+                }
             }
-        }
 
-        // ── COTAS EDITABLES (valores numéricos) ──
-        if (pozoImagenNumeros) {
-            const cotasTitleRow = sheet.addRow(['', 'COTAS DEL DIAGRAMA (editables)']);
-            sheet.mergeCells(`B${cotasTitleRow.number}:E${cotasTitleRow.number}`);
-            cotasTitleRow.getCell(2).font = { bold: true, size: 12, italic: true };
-            cotasTitleRow.height = 24;
-            sheet.addRow([]);
-
-            const hCotas = sheet.addRow(['', 'Descripción', 'Valor (m)', '', '']);
-            hCotas.height = 28;
-            [2, 3].forEach(i => styleHeader(hCotas.getCell(i)));
-
-            const cotasList = [
-                { label: 'Cota superior total', value: pozoImagenNumeros.cotaSuperiorTotal },
-                { label: 'Cota superior pequeña (0.075)', value: pozoImagenNumeros.cotaSuperiorSmall },
-                { label: 'Cota superior media (0.45)', value: pozoImagenNumeros.cotaSuperiorMid },
-                { label: 'Cota vertical superior (0.30)', value: pozoImagenNumeros.cotaVerticalTop },
-                { label: 'Cota vertical media (0.10)', value: pozoImagenNumeros.cotaVerticalMid },
-                { label: 'Profundidad total', value: pozoImagenNumeros.profundidadTotal },
-            ];
-
-            cotasList.forEach(({ label, value }) => {
-                const row = sheet.addRow(['', label, value, '', '']);
-                row.height = 24;
-                row.getCell(2).font = { size: 11 };
-                const valCell = row.getCell(3);
-                valCell.value = value;
-                valCell.font = { bold: true, size: 11, color: { argb: '000000' } }; // texto negro
-                valCell.alignment = { horizontal: 'center' };
-                valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E9F0FF' } };
-                valCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-            });
-            sheet.addRow([]);
-            sheet.addRow([]);
-        }
-
-        // ── CARACTERÍSTICAS DEL TERRENO ──
-        const tRow = sheet.addRow(['', 'CARACTERÍSTICAS DEL TERRENO']);
-        sheet.mergeCells(`B${tRow.number}:E${tRow.number}`);
-        // ELIMINADO: styleSeccion(tRow.getCell(2)); 
-        tRow.getCell(2).font = { bold: true, size: 12 };
-        tRow.height = 28;
-        sheet.addRow([]);
-
-        const hTer = sheet.addRow(['', 'I.E. N°', 'Tipo de Terreno', 'ρ (Ω·m)', 'Descripción']);
-        hTer.height = 30;
-        [2, 3, 4, 5].forEach(i => styleHeader(hTer.getCell(i)));
-
-        const dataTer = sheet.addRow(['', '64193', pozo.tipoTerreno, pozo.resistividad, terrainDescs[pozo.tipoTerreno]]);
-        dataTer.height = 28;
-        [2, 3, 4, 5].forEach(i => styleDato(dataTer.getCell(i), true));
-
-        sheet.addRow([]);
-        const notaRow = sheet.addRow(['', 'Nota: la resistencia de terreno es de acuerdo al estudio de Suelos de perfil estratigráfico Tabla N°1']);
-        sheet.mergeCells(`B${notaRow.number}:E${notaRow.number}`);
-        notaRow.getCell(2).font = { italic: true, size: 9, color: { argb: '666666' } };
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── PARÁMETROS DE DISEÑO ──
-        const paramRow = sheet.addRow(['', 'PARÁMETROS DE DISEÑO']);
-        sheet.mergeCells(`B${paramRow.number}:E${paramRow.number}`);
-        // ELIMINADO: styleSeccion(paramRow.getCell(2));
-        paramRow.getCell(2).font = { bold: true, size: 12 };
-        paramRow.height = 28;
-        sheet.addRow([]);
-
-        const hParam = sheet.addRow(['', 'Construir', 'Longitud L (m)', 'Diámetro Varilla a (m)', '']);
-        hParam.height = 30;
-        [2, 3, 4].forEach(i => styleHeader(hParam.getCell(i)));
-
-        const dataParam = sheet.addRow(['', 'Pozo a Tierra', pozo.L, pozo.a, '']);
-        dataParam.height = 28;
-        [2, 3, 4].forEach(i => styleDato(dataParam.getCell(i), true));
-
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── RESULTADOS DE CÁLCULO ──
-        const resTR = sheet.addRow(['', 'RESULTADOS DE CÁLCULO']);
-        sheet.mergeCells(`B${resTR.number}:E${resTR.number}`);
-        // ELIMINADO: styleSeccion(resTR.getCell(2));
-        resTR.getCell(2).font = { bold: true, size: 12 };
-        resTR.height = 28;
-        sheet.addRow([]);
-
-        const hRes = sheet.addRow(['', 'I.E. N°', 'Terreno', 'ρ (Ω·m)', 'R (Ω)']);
-        hRes.height = 30;
-        [2, 3, 4, 5].forEach(i => styleHeader(hRes.getCell(i)));
-
-        const dataRes = sheet.addRow(['', '64193', pozo.tipoTerreno, pozo.resistividad, pozo.resultados!.resistencia]);
-        dataRes.height = 30;
-        [2, 3, 4].forEach(i => styleDato(dataRes.getCell(i), true));
-        const rCell = dataRes.getCell(5);
-        rCell.value = pozo.resultados!.resistencia;
-        rCell.font = { bold: true, size: 14, color: { argb: '002060' } };
-        rCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
-        rCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        rCell.border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
-
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── REDUCCIÓN DE LA RESISTENCIA ──
-        const redTR = sheet.addRow(['', 'REDUCCIÓN DE LA RESISTENCIA DE PUESTA A TIERRA']);
-        sheet.mergeCells(`B${redTR.number}:E${redTR.number}`);
-        // ELIMINADO: styleSeccion(redTR.getCell(2));
-        redTR.getCell(2).font = { bold: true, size: 12 };
-        redTR.height = 28;
-        sheet.addRow([]);
-
-        const hRed = sheet.addRow(['', 'R Inicial (Ω)', '% Reducción', 'R Final (Ω)', 'Descripción']);
-        hRed.height = 30;
-        [2, 3, 4, 5].forEach(i => styleHeader(hRed.getCell(i)));
-
-        pozo.dosisReduccion.forEach((d: DosisReduccion) => {
-            const row = sheet.addRow(['', d.rInicial, d.reduccion, d.rFinal, d.descripcion]);
-            row.height = 28;
-            [2, 3].forEach(i => styleDato(row.getCell(i), false));
-            const rfCell = row.getCell(4);
-            rfCell.value = d.rFinal;
-            rfCell.font = { bold: true, size: 12, color: { argb: '00703C' } };
-            rfCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2EFDA' } };
-            rfCell.alignment = { horizontal: 'center', vertical: 'middle' };
-            rfCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-            styleDato(row.getCell(5), false);
-        });
+            const imgId = wb.addImage({ base64: compositeBase64, extension: 'png' });
+            ws.addImage(imgId, {
+                tl: { nativeCol: IMG_COL_START - 1, nativeRow: imgStartRow - 1 },
+                ext: { width: imgW, height: imgH },
+                br: { nativeCol: IMG_COL_START + 7, nativeRow: imgStartRow + rowCount },
+                editAs: 'oneCell',
+            } as any);
+        } catch(e) { console.warn('Image error:', e); }
     }
+}
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  HOJA 2 — PARARRAYO
-    // ══════════════════════════════════════════════════════════════════════════
-    if (exportParaRayo) {
-        const sheet = workbook.addWorksheet('Pararrayo');
-        addEncabezado(sheet, workbook, l1Buf, l1Ext, l2Buf, l2Ext, header);
+// ═══════════════════════════════════════════════════════════════════════════
+// HOJA 2 — PARARRAYO
+// Igual a Imagen 2: secciones 1-5 con celdas amarillas para valores
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildPararrayo(
+    wb: ExcelJS.Workbook, par: PararrayoData, hdr: HeaderData,
+    l1:ArrayBuffer, l1e:string, l2b:ArrayBuffer, l2e:string,
+) {
+    const ws = wb.addWorksheet('Pararrayo');
 
-        sheet.getColumn('A').width = 6;
-        sheet.getColumn('B').width = 30;
-        sheet.getColumn('C').width = 22;
-        sheet.getColumn('D').width = 50;
+    ws.columns = [
+        { width: 3  }, // 1 A spacer
+        { width: 28 }, // 2 B label
+        { width: 16 }, // 3 C valor amarillo
+        { width: 14 }, // 4 D unidad/extra
+        { width: 30 }, // 5 E fórmula/descripción
+        { width: 20 }, // 6 F extra derecha
+        { width: 3  }, // 7 G logo der
+    ];
+    const LAST = 7;
+    const YELLOW = 'FFFFFF00'; // amarillo puro como imagen
+    const LYELL  = 'FFFFF2CC'; // amarillo suave
 
-        sheet.addRow([]);
-        sheet.addRow([]);
+    await addHeader(ws, wb, l1, l1e, l2b, l2e, hdr, LAST);
 
-        // Título (Sin subrayados ni colores azules)
-        const titleRow = sheet.addRow(['', 'CÁLCULO DEL PARARRAYO']);
-        sheet.mergeCells(`B${titleRow.number}:D${titleRow.number}`);
-        titleRow.getCell(2).font = { bold: true, size: 16, color: { argb: '002060' } };
-        titleRow.getCell(2).alignment = { horizontal: 'center' };
-        titleRow.height = 28;
-        sheet.addRow([]);
+    let r = 2;
+    const blk = (h=8) => { ws.getRow(r).height=h; r++; };
+    const sectionTitle = (row:number, txt:string, h=18) => {
+        ws.getRow(row).height=h;
+        ws.mergeCells(row,2,row,6);
+        sc(ws.getCell(row,2), txt, { bold:true, size:10 });
+    };
+    // Celda label + celda valor amarillo en la misma fila
+    const kvRow = (row:number, label:string, val:any, unit:string,
+                   valBg=YELLOW, nf?:string, extraLabel?:string, extraVal?:any) => {
+        ws.getRow(row).height=20;
+        sc(ws.getCell(row,2), label, { size:9 });
+        sc(ws.getCell(row,3), val,   { bold:true, size:10, halign:'center',
+            bg: valBg, border:'T', numFmt:nf });
+        sc(ws.getCell(row,4), unit,  { size:9 });
+        if (extraLabel) {
+            sc(ws.getCell(row,5), extraLabel, { size:9 });
+            if (extraVal !== undefined)
+                sc(ws.getCell(row,6), extraVal, { bold:true, size:10, halign:'center', bg:valBg });
+        }
+    };
+    blk();
 
-        // ── SECCIÓN 1 ──
-        const s1 = sheet.addRow(['', '1 Frecuencia anual de caída de rayos y Dimensiones']);
-        sheet.mergeCells(`B${s1.number}:D${s1.number}`);
-        // ELIMINADO: styleSeccion(s1.getCell(2)); <- Esto era lo que pintaba azul
-        s1.getCell(2).font = { bold: true, size: 12 }; 
-        s1.height = 28;
-        sheet.addRow([]);
+    // ══════════════════════════════════════════════════════
+    // 1. Frecuencia anual de caída de rayos
+    // ══════════════════════════════════════════════════════
+    sectionTitle(r, '1   Frecuencia anual de caída de rayos'); r++;
+    blk(5);
 
-        const tdRow = sheet.addRow(['', 'Td =', pararrayo.td, 'isocerauno']);
-        const nkRow = sheet.addRow(['', 'Nk = Ng =', pararrayo.resultados?.nkng ?? '-', 'rayos/km² año']);
-        const rowL = sheet.addRow(['', 'Longitud (L) =', pararrayo.L, 'm']);
-        const rowW = sheet.addRow(['', 'Ancho (W) =', pararrayo.W, 'm']);
-        const rowH = sheet.addRow(['', 'Altura Estruct. (H) =', pararrayo.H, 'm']);
+    kvRow(r, 'Td=', par.td, 'isocerauno', YELLOW, '0');
+    r++;
+    kvRow(r, 'Nk=Ng=',
+        par.resultados?.calculado ? par.resultados.nkng : '-',
+        'rayos/km² año', YELLOW, '0.000');
+    r++;
+    blk();
 
-        [tdRow, nkRow, rowL, rowW, rowH].forEach(row => {
-            row.height = 28;
-            row.getCell(2).font = { size: 12, bold: true };
-            const vc = row.getCell(3);
-            vc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC000' } };
-            vc.font = { bold: true, size: 12 };
-            vc.alignment = { horizontal: 'center', vertical: 'middle' };
-            vc.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    // ══════════════════════════════════════════════════════
+    // 2. Cálculo de Área Equivalente
+    // ══════════════════════════════════════════════════════
+    sectionTitle(r, '2   Cálculo de Área Equivalente'); r++;
+    blk(5);
+
+    // Fórmula Ae
+    ws.getRow(r).height=18;
+    ws.mergeCells(r,2,r,4);
+    sc(ws.getCell(r,2),'A=LW+6H(L+W)+π9H²',{ size:10, italic:true });
+    ws.mergeCells(r,5,r,6);
+    sc(ws.getCell(r,5),'Ae = LW + 6H(L+W) + π9H²',{ bold:true, size:10 });
+    r++;
+    blk(4);
+
+    // Tabla L, W, H, Ae
+    [
+        { k:'L:', v: par.L,                                    nf:'0.00' },
+        { k:'W:', v: par.W,                                    nf:'0.00' },
+        { k:'H:', v: par.H,                                    nf:'0.00' },
+        { k:'A=', v: par.resultados?.calculado
+                     ? par.resultados.areaEquivalente : '-',   nf:'0.00' },
+    ].forEach(({ k, v, nf }) => {
+        ws.getRow(r).height = 20;
+        sc(ws.getCell(r,2), k, { size:10, bold:true });
+        sc(ws.getCell(r,3), v, { bold:true, size:11, halign:'center',
+            bg: k==='A=' ? LYELL : YELLOW, border:'TG', numFmt:nf });
+        // Col 4-6: descripción solo para A=
+        sc(ws.getCell(r,4), k==='A=' ? 'Área equivalente (Fuente: Norma NFPA 780)' : '',
+            { italic:true, size:8 });
+        r++;
+    });
+    blk();
+
+    // ══════════════════════════════════════════════════════
+    // 3. Coeficientes de frecuencia relámpago "Nd"
+    // ══════════════════════════════════════════════════════
+    sectionTitle(r, '3   COEFICIENTES DE FRECUENCIA RELÁMPAGO  "Nd"'); r++;
+    blk(5);
+
+    const nkng = par.resultados?.calculado ? par.resultados.nkng : 0;
+    const ae   = par.resultados?.calculado ? par.resultados.areaEquivalente : 0;
+    const Nd   = par.resultados?.calculado ? par.resultados.Nd : 0;
+
+    [
+        { k:'Ng=',  v: nkng, nf:'0.000', extra:'N° de impactos por año' },
+        { k:'Ac=',  v: ae,   nf:'0.00',  extra:'' },
+        { k:'C1=',  v: par.c1, nf:'0.0', extra:'' },
+        { k:'Nd=',  v: Nd,   nf:'0.0000000', extra:'N° de Impactos por año *' },
+    ].forEach(({ k, v, nf, extra }) => {
+        ws.getRow(r).height = 20;
+        sc(ws.getCell(r,2), k, { size:10, bold:true });
+        sc(ws.getCell(r,3), v, { bold:true, size:11, halign:'center',
+            bg: YELLOW, border:'TG', numFmt:nf });
+        if (extra) {
+            ws.mergeCells(r,4,r,6);
+            sc(ws.getCell(r,4), extra, { italic:true, size:8 });
+        }
+        r++;
+    });
+
+    // Fórmula Nd
+    ws.getRow(r).height = 22;
+    ws.mergeCells(r,4,r,6);
+    sc(ws.getCell(r,4),'Nd = Ng × Ae × C1 × 10⁻⁶',
+        { bold:true, size:11, halign:'center' });
+    r++;
+    blk(5);
+
+    // Textos descriptivos
+    [
+        'Nd: Coeficientes de Frecuencia del relámpago.',
+        'Ng: Densidad de la descarga atmosférica anual en la estructura.',
+        'Ac: Área equivalente de la estructura a proteger.',
+        'C1: Coeficiente de localización.',
+        'Ng=9.57 es un valor que expresa el número de relámpagos por kilómetro cuadrado por año de la zona a analizar',
+        'obtenida del mapa del nivel isoceráunico del Perú.',
+    ].forEach(txt => {
+        ws.getRow(r).height = 13;
+        ws.mergeCells(r,2,r,6);
+        sc(ws.getCell(r,2), txt, { size:7, italic:true });
+        r++;
+    });
+    blk();
+
+    // ══════════════════════════════════════════════════════
+    // 4. Coeficientes de frecuencia relámpago tolerable "Nc"
+    // ══════════════════════════════════════════════════════
+    sectionTitle(r, '4   COEFICIENTES DE FRECUENCIA RELÁMPAGO TOLERABLE  "Nc"'); r++;
+    blk(5);
+
+    const nc = par.resultados?.calculado ? par.resultados.nc : 0;
+
+    [
+        { k:'C2=', v: par.c2, nf:'0.0' },
+        { k:'C3=', v: par.c3, nf:'0.0' },
+        { k:'C4=', v: par.c4, nf:'0.0' },
+        { k:'C5=', v: par.c5, nf:'0.0' },
+        { k:'NC=', v: nc,     nf:'0.0000' },
+    ].forEach(({ k, v, nf }, idx) => {
+        ws.getRow(r).height = 20;
+        sc(ws.getCell(r,2), k, { size:10, bold:true });
+        sc(ws.getCell(r,3), v, { bold:true, size:11, halign:'center',
+            bg: YELLOW, border:'TG', numFmt:nf });
+        if (idx === 2) {
+            // Fórmula a la derecha
+            ws.mergeCells(r,4,r,6);
+            sc(ws.getCell(r,4),'Nc = 1.5 × 10⁻³ / (C2 × C3 × C4 × C5)',
+                { bold:true, size:11, halign:'center' });
+        }
+        r++;
+    });
+
+    ws.getRow(r).height = 13;
+    ws.mergeCells(r,2,r,6);
+    sc(ws.getCell(r,2),
+        'Coeficiente de frecuencia de relámpago tolerable (Fuente: Norma NFPA 780)',
+        { italic:true, size:7 });
+    r++;
+    blk();
+
+    // ══════════════════════════════════════════════════════
+    // 5. Evaluación y comparación de riesgos "Nd" vs "Nc"
+    // ══════════════════════════════════════════════════════
+    sectionTitle(r, 'ok5   EVALUACIÓN Y COMPARACIÓN DE LOS RIESGOS "Nd" CON LOS RIESGOS TOLERABLES "Nc"'); r++;
+    blk(5);
+
+    // Si Nd>Nc / Si Nd<Nc
+    ws.getRow(r).height=14;
+    ws.mergeCells(r,2,r,4);
+    sc(ws.getCell(r,2),'Si Nd > Nc: Requiere Protección.',{ size:8 }); r++;
+    ws.getRow(r).height=14;
+    ws.mergeCells(r,2,r,4);
+    sc(ws.getCell(r,2),'Si Nd < Nc: Protección opcional.',{ size:8 }); r++;
+    blk(5);
+
+    // Tabla evaluación
+    ws.getRow(r).height=20;
+    ['AREA','Nd','Nc','REQUIERE PROTECCION'].forEach((h,i) => {
+        sc(ws.getCell(r,i+2), h, { bold:true, size:9, halign:'center',
+            bg:'FFF5F5F5', border:'TG' });
+    });
+    r++;
+
+    ws.getRow(r).height=24;
+    if (par.resultados?.calculado) {
+        const req = par.resultados.requiereProteccion;
+        [
+            { v: par.resultados.areaEquivalente, nf:'0.00',      bg:'FFFFFFFF' },
+            { v: par.resultados.Nd,              nf:'0.0000000', bg:'FFFFFFFF' },
+            { v: par.resultados.nc,              nf:'0.0000',    bg:'FFFFFFFF' },
+            { v: req ? 'SI' : 'NO',              nf:undefined,
+              bg: req ? YELLOW : 'FFE2EFDA' },
+        ].forEach(({ v, nf, bg }, i) => {
+            sc(ws.getCell(r,i+2), v, { bold:i===3, size:i===3?12:9,
+                halign:'center', bg, border:'TG', numFmt:nf });
         });
-
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── SECCIÓN 2 ──
-        const s2 = sheet.addRow(['', '2 Cálculo de Área Equivalente']);
-        sheet.mergeCells(`B${s2.number}:D${s2.number}`);
-        // ELIMINADO: styleSeccion(s2.getCell(2));
-        s2.getCell(2).font = { bold: true, size: 12 };
-        s2.height = 28;
-        sheet.addRow([]);
-
-        const formulaAe = sheet.addRow(['', 'Ae = LW + 6H(L + W) + π9H²']);
-        formulaAe.getCell(2).font = { name: 'Courier New', size: 12, bold: true, color: { argb: '002060' } };
-
-        const rowAe = sheet.addRow(['', 'Ae =', pararrayo.resultados?.areaEquivalente ?? '-', 'm²']);
-        rowAe.height = 28;
-        rowAe.getCell(2).font = { size: 12, bold: true };
-        const aeCell = rowAe.getCell(3);
-        aeCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC000' } };
-        aeCell.font = { bold: true, size: 14 };
-        aeCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        aeCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── SECCIÓN 3 ──
-        const s3 = sheet.addRow(['', '3 Coeficientes de Riesgo']);
-        sheet.mergeCells(`B${s3.number}:D${s3.number}`);
-        // ELIMINADO: styleSeccion(s3.getCell(2));
-        s3.getCell(2).font = { bold: true, size: 12 };
-        s3.height = 28;
-        sheet.addRow([]);
-
-        const coefRow = sheet.addRow(['', 'c1', 'c2', 'c3', 'c4', 'c5']);
-        coefRow.height = 28;
-        [2, 3, 4, 5, 6].forEach(i => styleHeader(coefRow.getCell(i)));
-
-        const valRow = sheet.addRow(['', pararrayo.c1, pararrayo.c2, pararrayo.c3, pararrayo.c4, pararrayo.c5]);
-        valRow.height = 28;
-        [2, 3, 4, 5, 6].forEach(i => styleDato(valRow.getCell(i), true));
-
-        sheet.addRow([]);
-        sheet.addRow([]);
-        sheet.addRow([]);
-
-        // ── EVALUACIÓN ──
-        const s4 = sheet.addRow(['', 'EVALUACIÓN Y COMPARACIÓN DE RIESGOS']);
-        sheet.mergeCells(`B${s4.number}:E${s4.number}`);
-        // ELIMINADO: styleSeccion(s4.getCell(2));
-        s4.getCell(2).font = { bold: true, size: 12 };
-        s4.height = 28;
-        sheet.addRow([]);
-
-        const hEv = sheet.addRow(['', 'ÁREA (Ae)', 'Nd', 'Nc', 'REQUIERE PROTECCIÓN']);
-        hEv.height = 35;
-        [2, 3, 4, 5].forEach(i => styleHeader(hEv.getCell(i)));
-
-        const dataEv = sheet.addRow(['', pararrayo.resultados?.areaEquivalente, pararrayo.resultados?.Nd, pararrayo.resultados?.nc, pararrayo.resultados?.requiereProteccion ? 'SI' : 'NO']);
-        dataEv.height = 40;
-        [2, 3, 4].forEach(i => styleDato(dataEv.getCell(i), false));
-        const protCell = dataEv.getCell(5);
-        protCell.value = pararrayo.resultados?.requiereProteccion ? 'SI' : 'NO';
-        protCell.font = { bold: true, size: 15, color: { argb: pararrayo.resultados?.requiereProteccion ? 'C00000' : '00703C' } };
-        protCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
-        protCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        protCell.border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
-
-        sheet.addRow([]);
-        const efRow = sheet.addRow(['', '', '', '', '', '', 'EFICIENCIA REQUERIDA:', pararrayo.resultados?.eficienciaRequerida ?? '-']);
-        const nvRow = sheet.addRow(['', '', '', '', '', '', 'NIVEL DE PROTECCIÓN:', pararrayo.resultados?.nivelProteccion ?? '-']);
-        [efRow, nvRow].forEach(row => {
-            row.getCell(7).font = { bold: true, size: 12 };
-            row.getCell(8).font = { bold: true, size: 13, color: { argb: '0070C0' } };
-        });
+    } else {
+        ws.mergeCells(r,2,r,5);
+        sc(ws.getCell(r,2),'Sin resultados calculados',{ italic:true, halign:'center' });
     }
+    r++;
+    blk(8);
 
-    // ── Descarga ──────────────────────────────────────────────────────────────
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    // Eficiencia y Nivel de protección
+    if (par.resultados?.calculado && par.resultados.requiereProteccion) {
+        ws.getRow(r).height=20;
+        sc(ws.getCell(r,2),'EFICIENCIA REQUERIDA  E=',{ bold:true, size:9 });
+        sc(ws.getCell(r,3), par.resultados.eficienciaRequerida,
+            { bold:true, size:11, halign:'center', bg:YELLOW, border:'TG', numFmt:'0.000000' });
+        r++;
+        ws.getRow(r).height=20;
+        sc(ws.getCell(r,2),'NIVEL DE PROTECCION',{ bold:true, size:9 });
+        sc(ws.getCell(r,3), par.resultados.nivelProteccion,
+            { bold:true, size:14, halign:'center', bg:YELLOW, border:'TG' });
+        r++;
+    } else if (par.resultados?.calculado) {
+        ws.getRow(r).height=18;
+        ws.mergeCells(r,2,r,5);
+        sc(ws.getCell(r,2),'La estructura NO requiere sistema de protección contra rayos.',
+            { bold:true, size:9, color:'FF00703C' });
+        r++;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FUNCIÓN PRINCIPAL EXPORTADA
+// ═══════════════════════════════════════════════════════════════════════════
+export const exportToExcel = async ({
+    logo1, logo2, exportOption, header, pozo, pararrayo,
+    spreadsheetName, compositeImageBase64,
+}: ExportPararrayosParams): Promise<void> => {
+    const l1  = await fileBuf(logo1);
+    const l2  = await fileBuf(logo2);
+    const l1e = logo1.name.split('.').pop()?.toLowerCase().replace('jpg','jpeg') || 'png';
+    const l2e = logo2.name.split('.').pop()?.toLowerCase().replace('jpg','jpeg') || 'png';
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Sistema de Cálculo';
+    wb.created  = new Date();
+
+    // Hoja 1: Pozo a Tierra (con imagen del diagrama a la derecha)
+    if (exportOption === 'both' || exportOption === 'pozo')
+        await buildPozo(wb, pozo, header, l1, l1e, l2, l2e, compositeImageBase64);
+
+    // Hoja 2: Pararrayo
+    if (exportOption === 'both' || exportOption === 'pararrayo')
+        await buildPararrayo(wb, pararrayo, header, l1, l1e, l2, l2e);
+
+    const buf  = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href = url;
     a.download = `CÁLCULO SPAT PARARRAYOS - ${spreadsheetName}.xlsx`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
