@@ -76,38 +76,10 @@ return new class extends Migration
                 $table->index('presupuesto_id');
             });
         }
-
-        // ══════════════════════════════════════════════════════════════════════
-        // 4. ESPECIFICACIONES TÉCNICAS — vinculadas a presupuestos
-        // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('especificaciones_tecnicas')) {
-            Schema::connection($this->connection)->create('especificaciones_tecnicas', function (Blueprint $table) {
-                $table->id();
-                $table->unsignedBigInteger('presupuesto_id')->nullable();
-                $table->foreign('presupuesto_id')->references('id')->on('presupuestos')->nullOnDelete();
-
-                $table->integer('item_order')->default(0);
-                $table->string('partida', 50)->nullable();
-                $table->text('titulo')->nullable();
-                $table->longText('descripcion')->nullable();
-                $table->longText('materiales')->nullable();
-                $table->longText('procedimiento')->nullable();
-                $table->longText('medicion')->nullable();
-                $table->longText('forma_pago')->nullable();
-                $table->string('unidad', 20)->nullable();
-                $table->string('especialidad', 30)->nullable();
-                $table->unsignedBigInteger('parent_id')->nullable();
-                $table->integer('nivel')->default(0);
-                $table->timestamps();
-
-                $table->index('presupuesto_id');
-            });
-        }
     }
 
     public function down(): void
     {
-        Schema::connection($this->connection)->dropIfExists('especificaciones_tecnicas');
         Schema::connection($this->connection)->dropIfExists('cronograma_materiales');
         Schema::connection($this->connection)->dropIfExists('cronograma_valorizado');
         Schema::connection($this->connection)->dropIfExists('cronograma_general');
