@@ -324,7 +324,8 @@ export default function SanitariasIndex() {
     const descripcionLimpia = descripcion.trim();
 
     if (CI.descripcion !== undefined) {
-      ups.push({
+      ups.push({ 
+        r:ri,
         c: CI.descripcion,
         v: styledTxt(
           descripcionLimpia,
@@ -335,12 +336,12 @@ export default function SanitariasIndex() {
     }
 
     if (CI.unidad !== undefined) {
-      ups.push({ c: CI.unidad, v: mkTxt(unidad) });
+      ups.push({ r:ri, c: CI.unidad, v: mkTxt(unidad) });
     }
 
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
       const c = CI[k];
-      if (c !== undefined) ups.push({ c, v: mkNum(inputs[k]) });
+      if (c !== undefined) ups.push({ r:ri, c, v: mkNum(inputs[k]) });
     });
 
     (['lon', 'area', 'vol', 'kg', 'und'] as const).forEach((k) => {
@@ -348,15 +349,15 @@ export default function SanitariasIndex() {
       if (c === undefined) return;
 
       if (k === outputKey) {
-        ups.push({ c, v: mkNum(r4(outputs[k] ?? 0)) });
+        ups.push({ r:ri, c, v: mkNum(r4(outputs[k] ?? 0)) });
         return;
       }
 
-      ups.push({ c, v: mkBlank() });
+      ups.push({ r:ri, c, v: mkBlank() });
     });
 
     if (CI.total !== undefined) {
-      ups.push({ c: CI.total, v: mkBlank() });
+      ups.push({ r:ri, c: CI.total, v: mkBlank() });
     }
 
     progCount.current++;
@@ -537,7 +538,6 @@ export default function SanitariasIndex() {
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
         
-        {/* ━━━━━━ BARRA SUPERIOR ━━━━━━ */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
           gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-md
           dark:border-gray-800/60 dark:bg-gray-900/90">
@@ -551,7 +551,7 @@ export default function SanitariasIndex() {
             </button>
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Sanitarias
+                Metrado Estructuras
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -589,7 +589,7 @@ export default function SanitariasIndex() {
 
             <Divider />
 
-            <Button variant="outline" size="sm" onClick={saveNow} disabled={saving} className="h-7 gap-1.5 text-[11px]">
+            <Button variant="outline" size="sm" onClick={() => saveNow()} disabled={saving} className="h-7 gap-1.5 text-[11px]">
               {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
@@ -601,7 +601,6 @@ export default function SanitariasIndex() {
           </div>
         </header>
 
-        {/* ━━━━━━ HOJA LUCKYSHEET ━━━━━━ */}
         <main className="relative flex-1 overflow-hidden">
           <Luckysheet
             data={initialSheets}
@@ -611,7 +610,7 @@ export default function SanitariasIndex() {
             }}
             height="calc(100vh - 112px)"
             options={{
-              title: 'Metrado Sanitarias',
+              title: 'Metrado Estructuras',
               showinfobar: false,
               sheetFormulaBar: true,
               showstatisticBar: true,

@@ -1,10 +1,10 @@
-// ═══════════════════════════════════════════════════
-// utils.ts — Helpers puros + conversión Luckysheet
-// ═══════════════════════════════════════════════════
+// ===================================================
+// sanitarias_utils.ts - Helpers puros + conversion Luckysheet
+// ===================================================
 
 import {
-  ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, MAIN_COLS,
-  MAX_LEVELS, NBSP, RESUMEN_COLS, UNIT_PROFILES, OUTPUT_KEYS,
+  ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE,
+  MAX_LEVELS, NBSP, UNIT_PROFILES, OUTPUT_KEYS,
 } from './comunicaciones_constants';
 import type { ColumnDef, MeasureInputs, RowEntry, RowKind } from './comunicaciones_types';
 
@@ -14,6 +14,13 @@ export const toNum = (v: unknown): number => {
 };
 
 export const r4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+export const formatNumber = (n: number): string => {
+  if (isZeroLike(n)) return '';
+  const rounded = Math.round(n * 100) / 100; // Redondea a 2 decimales
+  return Number.isInteger(rounded) 
+    ? String(rounded) 
+    : rounded.toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+};
 export const blank = (v: any): boolean => v === null || v === undefined || v === '' || v === 0;
 export const trim0 = (v: unknown): string => String(v ?? '').trimStart();
 export const isZeroLike = (v: unknown): boolean => {
@@ -24,9 +31,31 @@ export const isZeroLike = (v: unknown): boolean => {
 
 export const pad2 = (n: number): string => String(Math.floor(n)).padStart(2, '0');
 
+export const toRoman = (n: number): string => {
+  if (!Number.isFinite(n) || n <= 0) return String(n);
+  const map: Array<[number, string]> = [
+    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
+    [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+    [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ];
+  let value = Math.floor(n);
+  let out = '';
+  for (const [num, roman] of map) {
+    while (value >= num) {
+      out += roman;
+      value -= num;
+    }
+  }
+  return out;
+};
+
 export const colLetter = (i: number): string => {
-  let r = '', t = i;
-  while (t >= 0) { r = String.fromCharCode((t % 26) + 65) + r; t = Math.floor(t / 26) - 1; }
+  let r = '';
+  let t = i;
+  while (t >= 0) {
+    r = String.fromCharCode((t % 26) + 65) + r;
+    t = Math.floor(t / 26) - 1;
+  }
   return r;
 };
 
@@ -47,27 +76,54 @@ export const mkNum = (v: number, keepZero = false) => {
   if (!keepZero && isZeroLike(v)) {
     return mkBlank();
   }
+
+  const display = formatNumber(v);
+  
+  if (!display) return mkBlank();
+
   return {
     v,
-    m: String(v),
-    ct: { fa: '#,##0.0000', t: 'n' },
+    m: display,
+    ct: { fa: 'General', t: 'n' }, 
   };
 };
 
 export const mkTxt = (v: string, extra: Record<string, any> = {}) => ({
-  v, m: v,
+  v,
+  m: v,
   ct: { fa: '@', t: 'g' },
   ...extra,
 });
 
-export const styledNum = (v: number, st: { bg: string; fc: string; bl: number }, keepZero = false) => ({
-  ...mkNum(v, keepZero), bl: st.bl, fs: 10, bg: st.bg, fc: st.fc,
-});
+export const styledNum = (v: number, st: { bg: string; fc: string; bl: number }, keepZero = false) => {
+  if (!keepZero && isZeroLike(v)) {
+    return { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+  }
+
+  const display = formatNumber(v);
+  if (!display) {
+    return { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+  }
+
+  return {
+    v,
+    m: display,
+    ct: { fa: 'General', t: 'n' }, 
+    bl: st.bl,
+    fs: 10,
+    bg: st.bg,
+    fc: st.fc,
+  };
+};
 
 export const styledTxt = (v: string, display: string, st: { bg: string; fc: string; bl: number }) => ({
-  v, m: display,
+  v,
+  m: display,
   ct: { fa: '@', t: 'g' },
-  bl: st.bl, fs: 10, bg: st.bg, fc: st.fc,
+  bl: st.bl,
+  fs: 10,
+  bg: st.bg,
+  fc: st.fc,
 });
 
 export const levelStyle = (l: number) =>
@@ -88,7 +144,7 @@ export function readRow(data: any[][], ri: number): Record<string, any> {
 export function rowMeta(row: Record<string, any>): { level: number; kind: RowKind } {
   return {
     level: Math.max(1, Math.min(MAX_LEVELS, toNum(row._level) || 1)),
-    kind:  String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf',
+    kind: String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf',
   };
 }
 
@@ -114,11 +170,16 @@ export function rowsToSheet(
   order = 0,
 ) {
   const header = cols.map((col, ci) => ({
-    r: 0, c: ci,
+    r: 0,
+    c: ci,
     v: {
-      v: col.label, m: col.label,
+      v: col.label,
+      m: col.label,
       ct: { fa: 'General', t: 'g' },
-      bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+      bg: '#0f172a',
+      fc: '#94a3b8',
+      bl: 1,
+      fs: 10,
     },
   }));
 
@@ -152,20 +213,25 @@ export function rowsToSheet(
       );
 
       if (isBlankNumeric) {
-        const cell: Record<string, any> = { ...mkBlank(), fs: 10 };
-        if (st.bg) {
-          cell.bg = st.bg;
-          cell.fc = st.fc;
-        }
+        const cell: Record<string, any> = {
+          v: '',  
+          m: '',  
+          ct: {
+            fa: 'General',  
+            t: isNum ? 'n' : 'g',
+          },
+          bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
+          fs: 10,
+        };
         cells.push({ r: rIdx, c: ci, v: cell });
         return;
       }
 
       const cell: Record<string, any> = {
         v: isNum ? Number(store) : String(store),
-        m: display,
+        m: isNum ? formatNumber(Number(store)) : display,
         ct: {
-          fa: isNum ? '#,##0.0000' : '@',
+          fa: 'General',
           t: isNum ? 'n' : 'g',
         },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
@@ -188,13 +254,13 @@ export function rowsToSheet(
 
   return {
     name,
-    status:   order === 0 ? 1 : 0,
+    status: order === 0 ? 1 : 0,
     order,
-    row:      Math.max(rows.length + 50, 100),
-    column:   Math.max(cols.length + 5, 26),
+    row: Math.max(rows.length + 50, 100),
+    column: Math.max(cols.length + 5, 26),
     celldata: [...header, ...cells],
-    config:   { columnlen, colhidden, rowlen: { 0: 30 } },
-    frozen:   { type: 'row', range: { row_focus: 0 } },
+    config: { columnlen, colhidden, rowlen: { 0: 30 } },
+    frozen: { type: 'row', range: { row_focus: 0 } },
   };
 }
 
@@ -329,11 +395,20 @@ export function buildRecalcUpdates(
       kg: toNum(row.kg),
     };
 
-    const outputs = profile.fn(inputs);
-    const outVal = r4(outputs[profile.outputKey] ?? 0);
+    const activeProfile = Array.isArray(profile) ? profile[0] : profile;
+    const outputs = activeProfile.fn(inputs); 
 
-    row[profile.outputKey] = outVal;
-    set(ri, profile.outputKey, isAnchor ? styledNum(outVal, st) : mkNum(outVal));
+    // Mostrar TODOS los valores de salida calculados
+    OUTPUT_KEYS.forEach((key) => {
+      if (outputs[key] !== undefined && !isZeroLike(outputs[key])) {
+        const val = r4(outputs[key]);
+        row[key] = val;
+        set(ri, key, isAnchor ? styledNum(val, st) : mkNum(val));
+      }
+    });
+
+    // El valor principal para el total
+    const outVal = r4(outputs[activeProfile.outputKey] ?? 0);
     entry.total = isAnchor ? 0 : outVal;
   });
 
@@ -375,13 +450,126 @@ export function buildResumenRows(src: Record<string, any>[]): Record<string, any
       return p !== '' && p !== '0' && p !== 'null';
     })
     .map((row) => ({
-      _dbid:       row._dbid ?? row.id ?? null,
-      partida:     String(row.partida ?? ''),
+      _dbid: row._dbid ?? row.id ?? null,
+      partida: String(row.partida ?? ''),
       descripcion: trim0(row.descripcion),
-      unidad:      String(row.unidad ?? ''),
-      total:       toNum(row.total),
-      _level:      row._level,
-      _kind:       row._kind,
+      unidad: String(row.unidad ?? ''),
+      total: toNum(row.total),
+      _level: row._level,
+      _kind: row._kind,
     }));
 }
 
+export function buildComunicacionesResumenRows(
+  modulos: Record<number, Record<string, any>[]>,
+  exterior: Record<string, any>[],
+  cisterna: Record<string, any>[],
+  moduleCount: number,
+  previousResumen: Record<string, any>[] = [],
+): Record<string, any>[] {
+  type Agg = {
+    partida: string;
+    descripcion: string;
+    unidad: string;
+    level: number;
+    kind: RowKind;
+    modulos: Record<number, number>;
+    exterior: number;
+    cisterna: number;
+  };
+
+  const byKey: Record<string, Agg> = {};
+  const orderedKeys: string[] = [];
+  const previousByKey: Record<string, Record<string, any>> = {};
+
+  const makeKey = (row: Record<string, any>) => [
+    String(row.partida ?? '').trim(),
+    String(row.descripcion ?? '').trim(),
+    String(row.unidad ?? '').trim(),
+  ].join('|');
+
+  previousResumen.forEach((row) => {
+    previousByKey[makeKey(row)] = row;
+  });
+
+  const ensure = (row: Record<string, any>) => {
+    const partida = String(row.partida ?? '').trim();
+    if (!partida || partida === '0' || partida === 'null') return null;
+
+    const key = partida;
+    if (!byKey[key]) {
+      byKey[key] = {
+        partida,
+        descripcion: trim0(row.descripcion),
+        unidad: String(row.unidad ?? ''),
+        level: Math.max(1, toNum(row._level) || 1),
+        kind: String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf',
+        modulos: {},
+        exterior: 0,
+        cisterna: 0,
+      };
+      orderedKeys.push(key);
+    }
+
+    const current = byKey[key];
+    if (!current.descripcion) current.descripcion = trim0(row.descripcion);
+    if (!current.unidad) current.unidad = String(row.unidad ?? '');
+    current.level = Math.min(current.level, Math.max(1, toNum(row._level) || 1));
+    if (String(row._kind ?? 'leaf') === 'group') current.kind = 'group';
+    return current;
+  };
+
+  const accumulate = (
+    rows: Record<string, any>[],
+    source: 'modulo' | 'exterior' | 'cisterna',
+    moduloNumber?: number,
+  ) => {
+    rows.forEach((row) => {
+      const entry = ensure(row);
+      if (!entry) return;
+
+      const total = r4(toNum(row.total));
+      if (source === 'modulo' && moduloNumber !== undefined) {
+        entry.modulos[moduloNumber] = r4((entry.modulos[moduloNumber] || 0) + total);
+      } else if (source === 'exterior') {
+        entry.exterior = r4(entry.exterior + total);
+      } else {
+        entry.cisterna = r4(entry.cisterna + total);
+      }
+    });
+  };
+
+  for (let i = 1; i <= moduleCount; i++) {
+    accumulate(modulos[i] || [], 'modulo', i);
+  }
+  accumulate(exterior || [], 'exterior');
+  accumulate(cisterna || [], 'cisterna');
+
+  orderedKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  return orderedKeys.map((key) => {
+    const item = byKey[key];
+    const previousRow = previousByKey[makeKey(item)] ?? null;
+    const row: Record<string, any> = {
+      _dbid: previousRow?._dbid ?? previousRow?.id ?? null,
+      partida: item.partida,
+      descripcion: item.descripcion,
+      unidad: item.unidad,
+      exterior: r4(item.exterior),
+      cisterna: r4(item.cisterna),
+      _level: item.level,
+      _kind: item.kind,
+    };
+
+    let total = r4(item.exterior + item.cisterna);
+    for (let i = 1; i <= moduleCount; i++) {
+      const columnKey = `modulo_${i}`;
+      const value = r4(item.modulos[i] || 0);
+      row[columnKey] = value;
+      total = r4(total + value);
+    }
+    row.total = total;
+
+    return row;
+  });
+}

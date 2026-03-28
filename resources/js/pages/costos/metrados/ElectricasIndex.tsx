@@ -289,12 +289,24 @@ export default function ElectricasIndex() {
   // Escribe inputs + output en la fila y re-recalcula
   // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, inputs, outputs, outputKey }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
     const sheetOrder = active.order ?? 0;
     const ups: Array<{ r: number; c: number; v: any }> = [];
+
+  if (descripcion && CI.descripcion !== undefined) {
+      ups.push({
+        r: ri,
+        c: CI.descripcion,
+        v: mkTxt(descripcion.trim())
+      });
+    }  
+
+    if (CI.unidad !== undefined) {
+      ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
+    }
 
     // Inputs
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {

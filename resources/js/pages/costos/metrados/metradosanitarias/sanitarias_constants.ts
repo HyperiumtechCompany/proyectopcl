@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════
-// sanitarias_constants.ts — Constantes del módulo Sanitarias
-// ═══════════════════════════════════════════════════
-
 import type { ColumnDef, MeasureInputs, UnitProfile } from './sanitarias_types';
 
 // ── Unidades disponibles ──────────────────────────────────────
@@ -410,6 +406,8 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
 
 /** Fallback cuando la unidad no está registrada */
 export const DEFAULT_PROFILE: UnitProfile = {
+  key: 'default_v1',        
+  label: 'Fórmula Genérica', 
   activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
   outputKey:    'und',
   formula:      'Ingresa los valores y selecciona fórmula personalizada',
