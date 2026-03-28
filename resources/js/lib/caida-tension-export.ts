@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { addProjectHeaderAndFooter } from './excel-export-utils';
 
 export interface TGRow {
     id: string;
@@ -46,7 +47,8 @@ export async function exportCaidaTensionToExcel(
     tdTree: any[],
     tgState: CaidaTensionState,
     selectionData: SelectionData,
-    fileName: string = 'Caida_Tension'
+    fileName: string = 'Caida_Tension',
+    proyecto?: any
 ) {
     try {
         const workbook = new ExcelJS.Workbook();
@@ -251,6 +253,12 @@ export async function exportCaidaTensionToExcel(
         });
 
         // Descarga
+        if (proyecto) {
+            for (const sheet of workbook.worksheets) {
+                const numCols = sheet.columns?.length || sheet.columnCount || 5;
+                await addProjectHeaderAndFooter(workbook, sheet, proyecto, numCols, 'CÁLCULO DE CAÍDA DE TENSIÓN');
+            }
+        }
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

@@ -267,11 +267,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-      const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Costos',             href: '/costos' },
-        { title: proyecto?.nombre,       href: `/costos/${proyecto?.id}` },
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Costos', href: '/costos' },
+        { title: proyecto?.nombre ?? 'Proyecto', href: `/costos/${proyecto?.id}` },
         { title: 'ETTP', href: '#' },
-      ];
+    ];
 
     // ─────────────────────────────────────────
     // RENDER
@@ -333,6 +333,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     onClose={() => setShowWordModal(false)}
                     getData={() => tableRef.current?.getData() || datosBase}
                     showNotification={showNotification}
+                    proyecto={proyecto}
                 />
             </div>
         </AppLayout>

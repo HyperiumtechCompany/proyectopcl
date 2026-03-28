@@ -9,6 +9,7 @@ interface Props {
     onClose: () => void;
     getData: () => any[];
     showNotification: (type: 'success' | 'error' | 'warning', msg: string) => void;
+    proyecto?: any;
 }
 
 const EttpWordModal: React.FC<Props> = ({
@@ -18,6 +19,7 @@ const EttpWordModal: React.FC<Props> = ({
     onClose,
     getData,
     showNotification,
+    proyecto,
 }) => {
     const [generating, setGenerating] = useState(false);
 
@@ -185,6 +187,22 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── GENERACIÓN PRINCIPAL ─────
+    const fetchImageAsDataURL = async (url: string): Promise<string | null> => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            console.error("Error obteniendo imagen de proyecto:", e);
+            return null;
+        }
+    };
+
     const generarWordParaSeccion = async (docx: any, datosFiltrados: any[], nombreArchivo: string) => {
         const logoFile = (document.getElementById('logoFile') as HTMLInputElement)?.files?.[0] || null;
         const escudoFile = (document.getElementById('escudoFile') as HTMLInputElement)?.files?.[0] || null;
@@ -195,16 +213,33 @@ const EttpWordModal: React.FC<Props> = ({
         let principalUrl: string | null = null, firmaUrl: string | null = null;
 
         try {
-            if (logoFile) logoUrl = await readFileAsDataURL(logoFile);
-            if (escudoFile) escudoUrl = await readFileAsDataURL(escudoFile);
-            if (principalFile) principalUrl = await readFileAsDataURL(principalFile);
-            if (firmaFile) firmaUrl = await readFileAsDataURL(firmaFile);
+            if (proyecto?.plantilla_logo_izq_url) {
+                logoUrl = await fetchImageAsDataURL(proyecto.plantilla_logo_izq_url);
+            } else if (logoFile) {
+                logoUrl = await readFileAsDataURL(logoFile);
+            }
+
+            if (proyecto?.plantilla_logo_der_url) {
+                escudoUrl = await fetchImageAsDataURL(proyecto.plantilla_logo_der_url);
+            } else if (escudoFile) {
+                escudoUrl = await readFileAsDataURL(escudoFile);
+            }
+
+            if (principalFile) {
+                principalUrl = await readFileAsDataURL(principalFile);
+            }
+
+            if (proyecto?.plantilla_firma_url) {
+                firmaUrl = await fetchImageAsDataURL(proyecto.plantilla_firma_url);
+            } else if (firmaFile) {
+                firmaUrl = await readFileAsDataURL(firmaFile);
+            }
         } catch (err) { console.error("Error procesando imágenes:", err); }
 
-        const logoRun = logoUrl ? new docx.ImageRun({ data: logoUrl, transformation: { width: 70, height: 70 } }) : null;
-        const escudoRun = escudoUrl ? new docx.ImageRun({ data: escudoUrl, transformation: { width: 70, height: 70 } }) : null;
-        const principalRun = principalUrl ? new docx.ImageRun({ data: principalUrl, transformation: { width: 300, height: 400 } }) : null;
-        const firmaRun = firmaUrl ? new docx.ImageRun({ data: firmaUrl, transformation: { width: 70, height: 70 } }) : null;
+        const logoRun = logoUrl ? new docx.ImageRun({ data: logoUrl.split(',').length > 1 ? logoUrl.split(',')[1] : logoUrl, transformation: { width: 70, height: 70 } }) : null;
+        const escudoRun = escudoUrl ? new docx.ImageRun({ data: escudoUrl.split(',').length > 1 ? escudoUrl.split(',')[1] : escudoUrl, transformation: { width: 70, height: 70 } }) : null;
+        const principalRun = principalUrl ? new docx.ImageRun({ data: principalUrl.split(',').length > 1 ? principalUrl.split(',')[1] : principalUrl, transformation: { width: 300, height: 400 } }) : null;
+        const firmaRun = firmaUrl ? new docx.ImageRun({ data: firmaUrl.split(',').length > 1 ? firmaUrl.split(',')[1] : firmaUrl, transformation: { width: 70, height: 70 } }) : null;
 
         const header = new docx.Header({
             children: [
@@ -368,14 +403,28 @@ const EttpWordModal: React.FC<Props> = ({
                     {/* Imágenes */}
                     <div className="border-t border-gray-200 pt-3">
                         <p className="text-sm font-medium text-gray-700 mb-2">Imágenes para el documento:</p>
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Logo izquierdo (header)</label>
-                                <input type="file" id="logoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                {proyecto?.plantilla_logo_izq_url ? (
+                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Usando imagen del proyecto
+                                    </div>
+                                ) : (
+                                    <input type="file" id="logoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Logo derecho / Escudo (header)</label>
-                                <input type="file" id="escudoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                {proyecto?.plantilla_logo_der_url ? (
+                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Usando imagen del proyecto
+                                    </div>
+                                ) : (
+                                    <input type="file" id="escudoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Imagen principal (portada)</label>
@@ -383,7 +432,14 @@ const EttpWordModal: React.FC<Props> = ({
                             </div>
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Firma (footer)</label>
-                                <input type="file" id="firmaFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                {proyecto?.plantilla_firma_url ? (
+                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Usando firma del proyecto
+                                    </div>
+                                ) : (
+                                    <input type="file" id="firmaFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                )}
                             </div>
                         </div>
                     </div>
