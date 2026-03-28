@@ -340,9 +340,9 @@ export default function Show() {
                                     </div>
                                 )}
                             </div>
-                        )}
+                        </div>
                     </div>
-                )}
+                </section>
 
                 {/* Modules */}
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -377,6 +377,31 @@ export default function Show() {
                                 href = `/costos/${project.id}/module/${m}`;
                             }
 
+                            const MODULE_LABELS: Record<string, string> = {
+                                metrado_arquitectura: '2: Arquitectura',
+                                metrado_estructura: '3: Estructuras',
+                                metrado_sanitarias: '4: Sanitarias',
+                                metrado_electricas: '5: Eléctricas',
+                                metrado_comunicaciones: '6: Comunicaciones',
+                                metrado_gas: '7: Gas',
+                                presupuesto: 'Presupuesto',
+                                presupuesto_gg: 'Gastos Generales',
+                                presupuesto_insumos: 'Insumos',
+                                presupuesto_remuneraciones: 'Remuneraciones',
+                                presupuesto_acus: 'ACUs',
+                                presupuesto_indice: 'Índice',
+                                crono_general: 'Cronograma General',
+                                crono_valorizado: 'Cronograma Valorizado',
+                                crono_materiales: 'Cron. Materiales',
+                                etts: 'ETTs',
+                            };
+
+                            function getIcon(m: string): React.ReactNode {
+                                const meta = MODULE_MAP[m];
+                                if (!meta) return '📋';
+                                const Icon = meta.icon;
+                                return <Icon size={18} />;
+                            }
                             return (
                                 <Link
                                     key={m}
@@ -391,7 +416,7 @@ export default function Show() {
                             );
                         })}
                     </div>
-                </section>
+                </div>
 
             </div>
         </AppLayout>

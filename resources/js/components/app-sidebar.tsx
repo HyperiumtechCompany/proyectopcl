@@ -67,10 +67,6 @@ export function AppSidebar() {
             href: '/costos',
             icon: PanelsLeftBottomIcon,
         },
-<<<<<<< HEAD
-        
-=======
->>>>>>> 7bfb935c1ec78d1a390e5fd8df69ec3116cae35f
     ];
 
     return (
