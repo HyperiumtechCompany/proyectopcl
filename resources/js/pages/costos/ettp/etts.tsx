@@ -14,6 +14,8 @@ import EttpWordModal from './components/EttpWordModal';
 import { useEttpTemplates } from './components/useEttpTemplates';
 import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
 import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
+import AppLayout from '@/layouts/app-layout';
+import { BreadcrumbItem } from '@/types';
 
 // ─────────────────────────────────────────────
 // DATOS POR DEFECTO
@@ -265,14 +267,21 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
+      const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Costos',             href: '/costos' },
+        { title: proyecto?.nombre,       href: `/costos/${proyecto?.id}` },
+        { title: 'ETTP', href: '#' },
+      ];
+
     // ─────────────────────────────────────────
     // RENDER
     // ─────────────────────────────────────────
 
     return (
         <>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
-            <div className="min-h-screen bg-gray-100 flex flex-col">
+            <div className="h-full bg-gray-100 flex flex-col">
 
                 {/* Header */}
                 <EttpHeader
@@ -326,6 +335,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     showNotification={showNotification}
                 />
             </div>
+        </AppLayout>
         </>
     );
 };
