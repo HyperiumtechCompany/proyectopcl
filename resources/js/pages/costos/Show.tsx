@@ -395,7 +395,7 @@ export default function Show() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
             </div>
         </AppLayout>
