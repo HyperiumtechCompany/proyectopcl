@@ -1,11 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import toastr from 'toastr';
+import * as toastr from 'toastr';
 import 'toastr/build/toastr.min.css';
+import AppLayout from '@/layouts/app-layout';
+import { BreadcrumbItem } from '@/types';
 
-// Componentes
+import WordExportModal from './exportado/exportado';
+import templatesData from './components/data/descriptivos-templates.json';
+
+// Componentes modulares
 import EttpHeader from './components/EttpHeader';
 import EttpTable, { EttpTableRef } from './components/EttpTable';
 import EttpDetailsPanel from './components/EttpDetailsPanel';
@@ -14,13 +19,10 @@ import EttpWordModal from './components/EttpWordModal';
 import { useEttpTemplates } from './components/useEttpTemplates';
 import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
 import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
-import AppLayout from '@/layouts/app-layout';
-import { BreadcrumbItem } from '@/types';
 
-// ─────────────────────────────────────────────
-// DATOS POR DEFECTO
-// ─────────────────────────────────────────────
+declare const Tabulator: any;
 
+// Datos por defecto (cuando no vienen del servidor)
 const DEFAULT_DATA: EttpPartidaData[] = [
     {
         id: 1,
@@ -42,15 +44,12 @@ const DEFAULT_DATA: EttpPartidaData[] = [
     },
 ];
 
-// ─────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────
-
 const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
-    // ── Refs ──────────────────────────────────
+    // Refs
     const tableRef = useRef<EttpTableRef>(null);
+    const templatesRef = useRef<any[]>(templatesData);  // Usamos el JSON importado directamente
 
-    // ── Estado ────────────────────────────────
+    // Estado
     const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(partidas || DEFAULT_DATA);
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [currentData, setCurrentData] = useState<any>(null);
@@ -69,13 +68,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         gas: false,
     });
 
-    // ── Hook de templates ─────────────────────
+    // Hook de templates (provee buscarTemplate, extraerDetalles, buildSections, templatesCount)
     const { buscarTemplate, extraerDetalles, buildSections, templatesCount } = useEttpTemplates();
 
-    // ─────────────────────────────────────────
-    // UTILIDADES
-    // ─────────────────────────────────────────
-
+    // Utilidades
     const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
         if (toastr) {
             toastr[type](message);
@@ -91,33 +87,30 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const getCsrfToken = (): string =>
         document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    // ─────────────────────────────────────────
-    // PANEL DE DETALLES TÉCNICOS
-    // ─────────────────────────────────────────
-
-    /** Abre el panel lateral al hacer click en 📋 */
+    // Manejo de clic en fila para mostrar detalles
     const handleRowClick = (row: any) => {
         const data = row.getData();
         setSelectedRow(row);
         setCurrentData(data);
 
-        // Caso 1: Ya tiene secciones grabadas en la base de datos
+        console.log(`[Detalles] Partida seleccionada: ${data.item}`);
+
+        // Si la partida ya tiene secciones guardadas, mostrarlas
         if (data.secciones && data.secciones.length > 0) {
             setCurrentSections(data.secciones);
             setShowDetailsPanel(true);
             return;
         }
 
-        // Caso 2: No tiene secciones (partida nueva o recién importada sin contenido)
+        // Si no hay plantillas cargadas, mostrar paneles vacíos
         if (!templatesCount()) {
-            console.warn('[Detalles] No hay templates cargados aún');
             setCurrentSections(buildSections({}));
             setShowDetailsPanel(true);
             return;
         }
 
+        // Buscar plantilla por código de partida
         const template = buscarTemplate(data.item);
-
         if (template) {
             Swal.fire({
                 title: '¡Plantilla encontrada!',
@@ -142,7 +135,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-    /** Guarda las secciones editadas en el servidor y sincroniza la tabla */
+    // Guardar secciones de una partida
     const handleSaveDescription = async () => {
         if (!selectedRow || !currentData) {
             showNotification('error', 'No hay una partida seleccionada');
@@ -156,7 +149,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                 secciones: currentSections
             }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
-            // Actualizar la fila en Tabulator para reflejar que tiene datos (y por si cambió algo)
+            // Actualizar la fila en la tabla
             const rowData = selectedRow.getData();
             rowData.secciones = currentSections;
             rowData.estado = 'en_progreso';
@@ -181,14 +174,9 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-    // ─────────────────────────────────────────
-    // CARGA DE METRADOS
-    // ─────────────────────────────────────────
-
+    // Carga de metrados desde el servidor
     const handleLoadMetrados = async () => {
-        const proyectoId = (document.getElementById('proyecto_id') as HTMLInputElement)?.value
-            || proyecto?.id;
-
+        const proyectoId = proyecto?.id;
         if (!proyectoId) {
             showNotification('error', 'Debe seleccionar un proyecto');
             return;
@@ -237,13 +225,9 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-    // ─────────────────────────────────────────
-    // GUARDAR EN SERVIDOR
-    // ─────────────────────────────────────────
-
+    // Guardar todos los datos generales (tabla completa)
     const handleSave = async () => {
         const idProyecto = proyecto?.id;
-
         if (!idProyecto) {
             showNotification('error', 'ID de proyecto no encontrado');
             return;
@@ -267,23 +251,46 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-      const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Costos',             href: '/costos' },
-        { title: proyecto?.nombre,       href: `/costos/${proyecto?.id}` },
-        { title: 'ETTP', href: '#' },
-      ];
+    // Obtener datos para el modal de Word
+    const getTableData = () => {
+        return tableRef.current?.getData() || datosBase;
+    };
 
-    // ─────────────────────────────────────────
-    // RENDER
-    // ─────────────────────────────────────────
+    // Breadcrumbs para el layout
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Costos', href: '/costos' },
+        { title: proyecto?.nombre, href: `/costos/${proyecto?.id}` },
+        { title: 'ETTP', href: '#' },
+    ];
 
     return (
-        <>
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
-            <div className="h-full bg-gray-100 flex flex-col">
+            <style>{`
+                .tabulator{font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+                .tabulator .tabulator-header{background-color:#f3f4f6;border-bottom:1px solid #e5e7eb}
+                .tabulator .tabulator-header .tabulator-col{background-color:#f3f4f6;font-weight:600;color:#1f2937;border-right:none}
+                .tabulator .tabulator-row{border-bottom:1px solid #f3f4f6}
+                .tabulator .tabulator-row:hover{background-color:#f9fafb}
+                .tabulator .tabulator-cell{padding:10px 8px;border-right:none;color:#1f2937}
+                .tabulator .tabulator-cell .btn-details:hover{background:#2563eb!important}
+                .tabulator .tabulator-editing{border:2px solid #3b82f6!important}
+                textarea{color:#1f2937!important;background-color:#fff!important}
+                .bg-gray-50 textarea,.bg-gray-50 p,.bg-gray-50 div{color:#1f2937!important}
+                @media (max-width: 768px) {
+                    .tabulator .tabulator-cell {padding:6px 4px !important;font-size:11px !important}
+                    .tabulator .tabulator-col-title {font-size:10px !important}
+                    .tabulator .tabulator-cell .btn-details {padding:4px 6px !important;font-size:12px !important}
+                    .w-1\\/3,.w-2\\/3 {width:100% !important}
+                }
+                @media (min-width:769px) and (max-width:1024px) {
+                    .tabulator .tabulator-cell {padding:8px 6px !important}
+                    .tabulator .tabulator-col-title {font-size:11px !important}
+                }
+            `}</style>
 
-                {/* Header */}
+            <div className="min-h-screen bg-gray-50">
+                {/* Header con botones */}
                 <EttpHeader
                     onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}
                     onSave={handleSave}
@@ -291,7 +298,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     saving={saving}
                 />
 
-                {/* Panel de selección de metrados */}
+                {/* Panel de metrados */}
                 <EttpMetradosPanel
                     show={showMetradosPanel}
                     selectedSections={selectedSections}
@@ -300,10 +307,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     loading={loadingMetrados}
                 />
 
-                {/* Layout: Tabla + Panel lateral */}
+                {/* Área principal: tabla y panel lateral */}
                 <div className="flex flex-1 px-4 py-6 gap-4">
-
-                    {/* Tabla */}
                     <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-2/3' : 'w-full'}`}>
                         <EttpTable
                             ref={tableRef}
@@ -312,7 +317,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                         />
                     </div>
 
-                    {/* Panel lateral de detalles técnicos */}
+                    {/* Panel de detalles técnicos */}
                     <EttpDetailsPanel
                         show={showDetailsPanel}
                         currentData={currentData}
@@ -325,18 +330,17 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     />
                 </div>
 
-                {/* Modal Word */}
+                {/* Modal de generación de Word */}
                 <EttpWordModal
                     show={showWordModal}
                     selectedSections={selectedSections}
                     onSelectedChange={setSelectedSections}
                     onClose={() => setShowWordModal(false)}
-                    getData={() => tableRef.current?.getData() || datosBase}
+                    getData={getTableData}
                     showNotification={showNotification}
                 />
             </div>
         </AppLayout>
-        </>
     );
 };
 
