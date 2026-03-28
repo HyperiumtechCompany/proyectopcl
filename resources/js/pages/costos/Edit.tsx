@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
-interface PageProps { moduleTypes: string[]; [key: string]: unknown; }
+interface ProjectDetail { id: number; nombre: string; uei: string | null; unidad_ejecutora: string | null; codigo_snip: string | null; codigo_cui: string | null; codigo_local: string | null; fecha_inicio: string | null; fecha_fin: string | null; codigos_modulares: Record<string, string> | null; departamento_id: string | null; provincia_id: string | null; distrito_id: string | null; departamento_nombre?: string | null; provincia_nombre?: string | null; distrito_nombre?: string | null; centro_poblado: string | null; status: string; modules: string[]; }
+interface PageProps { moduleTypes: string[]; project: ProjectDetail; [key: string]: unknown; }
 interface UbigeoItem { id: string; nombre: string; }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -68,42 +69,42 @@ const DEMO = {
     fechaFin: new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0],
 };
 
-export default function Create() {
-    const { moduleTypes } = usePage<PageProps>().props;
+export default function Edit() {
+    const { moduleTypes, project } = usePage<PageProps>().props;
     const [step, setStep] = useState(1);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isDemoLoaded, setIsDemoLoaded] = useState(false);
 
     // Step 1 fields
-    const [nombre, setNombre] = useState('');
-    const [uei, setUei] = useState('');
-    const [unidadEjecutora, setUnidadEjecutora] = useState('');
-    const [codigoSnip, setCodigoSnip] = useState('');
-    const [codigoCui, setCodigoCui] = useState('');
-    const [codigoLocal, setCodigoLocal] = useState('');
-    const [fechaInicio, setFechaInicio] = useState('');
-    const [fechaFin, setFechaFin] = useState('');
+    const [nombre, setNombre] = useState(project.nombre || '');
+    const [uei, setUei] = useState(project.uei || '');
+    const [unidadEjecutora, setUnidadEjecutora] = useState(project.unidad_ejecutora || '');
+    const [codigoSnip, setCodigoSnip] = useState(project.codigo_snip || '');
+    const [codigoCui, setCodigoCui] = useState(project.codigo_cui || '');
+    const [codigoLocal, setCodigoLocal] = useState(project.codigo_local || '');
+    const [fechaInicio, setFechaInicio] = useState(project.fecha_inicio || '');
+    const [fechaFin, setFechaFin] = useState(project.fecha_fin || '');
 
     // Códigos modulares
-    const [cmInicial, setCmInicial] = useState(false);
-    const [cmPrimaria, setCmPrimaria] = useState(false);
-    const [cmSecundaria, setCmSecundaria] = useState(false);
-    const [cmInicialVal, setCmInicialVal] = useState('');
-    const [cmPrimariaVal, setCmPrimariaVal] = useState('');
-    const [cmSecundariaVal, setCmSecundariaVal] = useState('');
+    const [cmInicial, setCmInicial] = useState(!!project.codigos_modulares?.inicial);
+    const [cmPrimaria, setCmPrimaria] = useState(!!project.codigos_modulares?.primaria);
+    const [cmSecundaria, setCmSecundaria] = useState(!!project.codigos_modulares?.secundaria);
+    const [cmInicialVal, setCmInicialVal] = useState(project.codigos_modulares?.inicial || '');
+    const [cmPrimariaVal, setCmPrimariaVal] = useState(project.codigos_modulares?.primaria || '');
+    const [cmSecundariaVal, setCmSecundariaVal] = useState(project.codigos_modulares?.secundaria || '');
 
     // Ubicación
     const [departamentos, setDepartamentos] = useState<UbigeoItem[]>([]);
     const [provincias, setProvincias] = useState<UbigeoItem[]>([]);
     const [distritos, setDistritos] = useState<UbigeoItem[]>([]);
-    const [depId, setDepId] = useState('');
-    const [provId, setProvId] = useState('');
-    const [distId, setDistId] = useState('');
-    const [centroPoblado, setCentroPoblado] = useState('');
+    const [depId, setDepId] = useState(project.departamento_id || '');
+    const [provId, setProvId] = useState(project.provincia_id || '');
+    const [distId, setDistId] = useState(project.distrito_id || '');
+    const [centroPoblado, setCentroPoblado] = useState(project.centro_poblado || '');
 
     // Step 2 fields
-    const [selectedModules, setSelectedModules] = useState<string[]>([]);
+    const [selectedModules, setSelectedModules] = useState<string[]>(project.modules || []);
     const [sanitariasModulos, setSanitariasModulos] = useState(3);
 
     useEffect(() => {
@@ -111,12 +112,12 @@ export default function Create() {
     }, []);
 
     useEffect(() => {
-        setProvincias([]); setDistritos([]); setProvId(''); setDistId('');
+        if (!depId) { setProvincias([]); return; }
         if (depId) fetch(`/api/ubigeo/provincias/${depId}`).then(r => r.json()).then(setProvincias).catch(() => { });
     }, [depId]);
 
     useEffect(() => {
-        setDistritos([]); setDistId('');
+        if (!provId) { setDistritos([]); return; }
         if (provId) fetch(`/api/ubigeo/distritos/${provId}`).then(r => r.json()).then(setDistritos).catch(() => { });
     }, [provId]);
 
@@ -167,7 +168,7 @@ export default function Create() {
             selectedModules.includes('metrado_estructura') ||
             selectedModules.includes('metrado_sanitarias');
 
-        router.post('/costos', {
+        router.put('/costos/' + project.id, {
             nombre, uei, unidad_ejecutora: unidadEjecutora,
             codigo_snip: codigoSnip, codigo_cui: codigoCui, codigo_local: codigoLocal,
             fecha_inicio: fechaInicio || null, fecha_fin: fechaFin || null,
@@ -184,7 +185,7 @@ export default function Create() {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
-        { title: 'Nuevo Proyecto', href: '/costos/create' },
+        { title: 'Editar Proyecto', href: '/costos/create' },
     ];
 
     const inputCls = "w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-blue-400";
@@ -231,28 +232,13 @@ export default function Create() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                 </span>
-                                <span className="text-xs font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">Nuevo Proyecto</span>
+                                <span className="text-xs font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">Editar Proyecto</span>
                             </div>
-                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Registro de Proyecto de Costos</h1>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Modificar Proyecto de Costos</h1>
                             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Complete los datos del expediente técnico para continuar.</p>
                         </div>
 
                         {/* Demo data button */}
-                        {step === 1 && (
-                            <button
-                                onClick={loadDemo}
-                                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition
-                                    ${isDemoLoaded
-                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}
-                            >
-                                {isDemoLoaded ? (
-                                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Datos cargados</>
-                                ) : (
-                                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Cargar datos de ejemplo</>
-                                )}
-                            </button>
-                        )}
                     </div>
 
                     {/* ── STEPPER ─────────────────────────────────────────── */}
@@ -377,14 +363,14 @@ export default function Create() {
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
                                             <label className={labelCls}>Departamento</label>
-                                            <select value={depId} onChange={e => setDepId(e.target.value)} className={selectCls}>
+                                            <select value={depId} onChange={e => { setDepId(e.target.value); setProvId(''); setDistId(''); }} className={selectCls}>
                                                 <option value="">Seleccionar…</option>
                                                 {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
                                             </select>
                                         </div>
                                         <div>
                                             <label className={labelCls}>Provincia</label>
-                                            <select value={provId} onChange={e => setProvId(e.target.value)} className={selectCls} disabled={!depId}>
+                                            <select value={provId} onChange={e => { setProvId(e.target.value); setDistId(''); }} className={selectCls} disabled={!depId}>
                                                 <option value="">Seleccionar…</option>
                                                 {provincias.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                                             </select>

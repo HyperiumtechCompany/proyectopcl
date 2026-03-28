@@ -1,14 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// GasIndex.tsx — Página principal refactorizada
-//
-// Estructura de archivos:
-//   electricas/
-//     types.ts          → interfaces TypeScript
-//     constants.ts      → columnas, perfiles de unidad, paleta
-//     utils.ts          → helpers puros + buildRecalcUpdates
-//     CalcModal.tsx     → modal calculadora (campos por unidad)
-//     NumberingModal.tsx → modal numeración + buildNumberingUpdates
-//     GasIndex.tsx ← ESTE ARCHIVO
+// EstructurasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
@@ -17,23 +8,15 @@ import AppLayout from '@/layouts/app-layout';
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
 import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
-import {
-  AlertCircle, Calculator, CheckCircle2,
-  ChevronLeft, Hash, Loader2, RefreshCcw, Save,
-} from 'lucide-react';
+import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Módulo local
-import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
-import {
-  buildRecalcUpdates, buildResumenRows, colLetter, mkBlank,
-  mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
-  sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
-  levelStyle,
-} from './metradogas/gas_utils';
-import type { CalcPayload, GasPageProps, RowKind } from './metradogas/gas_types';
-import { CalcModal }     from './metradogas/gas_CalcModal';
-import { NumberingModal, buildNumberingUpdates } from './metradogas/gas_NumberingModal';
+// Módulo local Estructuras
+import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoestructuras/estructuras_constants';
+import { buildRecalcUpdates, buildResumenRows, buildEstructurasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoestructuras/estructuras_utils';
+import type { CalcPayload, EstructurasPageProps, RowKind } from './metradoestructuras/estructuras_types';
+import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
+import { NumberingModal, buildNumberingUpdates } from './metradoestructuras/estructuras_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // ═══════════════════════════════════════════════════════════════
@@ -44,27 +27,18 @@ function Divider() {
   return <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />;
 }
 
-function HeaderBadge({ children, style }: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
+function HeaderBadge({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <span
-      className="rounded px-1.5 py-0.5 text-[9px] font-bold"
-      style={style}
-    >
+    <span className="rounded px-1.5 py-0.5 text-[9px] font-bold" style={style}>
       {children}
     </span>
   );
 }
 
-function SaveIndicator({ saving, error, lastSaved }: {
-  saving: boolean; error: string | null; lastSaved: Date | null;
-}) {
+function SaveIndicator({ saving, error, lastSaved }: { saving: boolean; error: string | null; lastSaved: Date | null }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1
-      text-[10px] font-semibold
-      bg-slate-100 dark:bg-slate-800">
+      text-[10px] font-semibold bg-slate-100 dark:bg-slate-800">
       {saving ? (
         <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
           <Loader2 className="h-2.5 w-2.5 animate-spin" /> Guardando…
@@ -89,9 +63,7 @@ function SaveIndicator({ saving, error, lastSaved }: {
 
 // ═══════════════════════════════════════════════════════════════
 // HOOK: useLuckysheet
-// Encapsula toda la interacción con window.luckysheet
 // ═══════════════════════════════════════════════════════════════
-
 function useLuckysheet() {
   const ls = () => (window as any).luckysheet as any;
 
@@ -100,13 +72,9 @@ function useLuckysheet() {
     return sheets.find((s: any) => s.status === 1) ?? sheets[0] ?? null;
   };
 
-  const getAllSheets = (): any[] =>
-    ls()?.getAllSheets?.() ?? [];
+  const getAllSheets = (): any[] => ls()?.getAllSheets?.() ?? [];
 
-  const setCells = (
-    updates: Array<{ r: number; c: number; v: any }>,
-    order:   number,
-  ) => {
+  const setCells = (updates: Array<{ r: number; c: number; v: any }>, order: number) => {
     const inst = ls();
     if (!inst || !updates.length) return;
     updates.forEach((u, i) => {
@@ -123,47 +91,73 @@ function useLuckysheet() {
 // ═══════════════════════════════════════════════════════════════
 // HOOK: useAutoSave
 // ═══════════════════════════════════════════════════════════════
-
-function useAutoSave(projectId: number) {
+function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label: string; width: number }>) {
   const [saving,    setSaving]    = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSheets = useRef<any[]>([]);
+  const dirtySheetNames = useRef<Set<string>>(new Set());
 
-  const doSave = useCallback(async (sheets: any[]) => {
+  const doSave = useCallback(async (sheets: any[], targetSheetNames?: string[]) => {
     setSaving(true);
     setSaveError(null);
 
-    const csrf    = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+    const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
     const headers = {
-      'Content-Type':     'application/json',
-      'X-CSRF-TOKEN':     csrf,
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrf,
       'X-Requested-With': 'XMLHttpRequest',
     };
 
     try {
-      const results = await Promise.all(
-        sheets
-          .filter((s) => s?.name === 'Metrado' || s?.name === 'Resumen')
-          .map((s) => {
-            const isMet = s.name === 'Metrado';
-            return fetch(
-              `/costos/${projectId}/metrado-gas/${isMet ? 'metrado' : 'resumen'}`,
-              {
-                method:  'PATCH',
-                headers,
-                body:    JSON.stringify({
-                  rows: sheetToRows(s, isMet ? ALL_COLS : RESUMEN_COLS),
-                }),
-              },
-            ).then(async (r) => {
-              const json = await r.json().catch(() => null);
-              return { ok: r.ok, status: r.status, sheet: s, json, isRes: !isMet };
-            });
-          }),
+      const targetNames = new Set(
+        targetSheetNames?.length
+          ? targetSheetNames
+          : dirtySheetNames.current.size
+            ? Array.from(dirtySheetNames.current)
+            : sheets.map((s) => String(s?.name ?? ''))
       );
-      
+      const sheetsToSave = sheets.filter((s) => targetNames.has(String(s?.name ?? '')));
+
+      if (!sheetsToSave.length) {
+        setSaving(false);
+        return;
+      }
+
+      const results = await Promise.all(
+        sheetsToSave.map((s) => {
+          let url = '';
+          const isRes = s.name === 'Resumen';
+          const isExt = s.name === 'Exterior';
+          const isCis = s.name === 'Cisterna';
+          
+          if (isRes) url = `/costos/${projectId}/metrado-estructuras/resumen`;
+          else if (isExt) url = `/costos/${projectId}/metrado-estructuras/exterior`;
+          else if (isCis) url = `/costos/${projectId}/metrado-estructuras/cisterna`;
+          else {
+            const match = s.name.match(/Módulo (\d+)/i);
+            if (match) {
+              const num = match[1];
+              url = `/costos/${projectId}/metrado-estructuras/modulo/${num}`;
+            } else {
+              return Promise.resolve({ ok: true, status: 200, sheet: s, json: null, isRes: false });
+            }
+          }
+
+          return fetch(url, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({
+              rows: sheetToRows(s, isRes ? resumenCols : ALL_COLS),
+            }),
+          }).then(async (r) => {
+            const json = await r.json().catch(() => null);
+            return { ok: r.ok, status: r.status, sheet: s, json, isRes };
+          });
+        })
+      );
+
       const good = results.filter((r) => r.ok);
       const bad = results.find((r) => !r.ok);
       
@@ -172,7 +166,6 @@ function useAutoSave(projectId: number) {
       } else {
         setLastSaved(new Date());
 
-        // Inyectar IDs devueltos por la BD en Luckysheet para no duplicar filas
         const inst = (window as any).luckysheet;
         if (inst && typeof inst.getFile === 'function') {
           good.forEach(({ sheet, json, isRes }) => {
@@ -185,7 +178,7 @@ function useAutoSave(projectId: number) {
                 
                 if (sheetData && dbIdColIdx !== undefined && dbIdColIdx >= 0) {
                   json.rows.forEach((dbRow: any, i: number) => {
-                    const r = i + 1; // Fila 0 es cabecera
+                    const r = i + 1; 
                     if (sheetData[r]) {
                       if (!sheetData[r][dbIdColIdx]) {
                         sheetData[r][dbIdColIdx] = { v: dbRow.id, m: String(dbRow.id) };
@@ -200,68 +193,84 @@ function useAutoSave(projectId: number) {
             }
           });
         }
+
+        targetNames.forEach((name) => dirtySheetNames.current.delete(name));
       }
     } catch (e: any) {
       setSaveError(e.message ?? 'Error de red');
     } finally {
       setSaving(false);
     }
-  }, [projectId]);
+  }, [projectId, resumenCols]);
 
-  const scheduleSave = useCallback((sheets: any[]) => {
+  const scheduleSave = useCallback((sheets: any[], changedSheetNames?: string[]) => {
     latestSheets.current = sheets;
+    (changedSheetNames ?? []).forEach((name) => dirtySheetNames.current.add(name));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => doSave(latestSheets.current), SAVE_DEBOUNCE);
   }, [doSave]);
 
-  const saveNow = useCallback(() => doSave(latestSheets.current), [doSave]);
+  const saveNow = useCallback((targetSheetNames?: string[]) => doSave(latestSheets.current, targetSheetNames), [doSave]);
 
   return { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets };
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL (EstructurasIndex)
 // ═══════════════════════════════════════════════════════════════
-
-export default function GasIndex() {
-  const { project, metrado, resumen } = usePage<GasPageProps>().props;
+export default function EstructurasIndex() {
+  const { project, config, modulos, exterior, cisterna, resumen } = usePage<EstructurasPageProps>().props;
+  const moduleCount = Math.max(1, Number(config?.cantidad_modulos ?? 1));
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',             href: '/costos' },
-    { title: project.nombre,       href: `/costos/${project.id}` },
-    { title: 'Metrado Gas', href: '#' },
+    { title: 'Costos',               href: '/costos' },
+    { title: project.nombre,         href: `/costos/${project.id}` },
+    { title: 'Metrado Estructuras',   href: '#' },
   ];
 
-  // ── Hooks ──────────────────────────────────────────────────
-  const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
-  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } =
-    useAutoSave(project.id);
+  const resumenCols = useMemo(() => ([
+    ...RESUMEN_BASE_COLS,
+    ...Array.from({ length: moduleCount }, (_, idx) => ({
+      key: `modulo_${idx + 1}`,
+      label: `Módulo ${toRoman(idx + 1)}`,
+      width: 110,
+    })),
+    { key: 'exterior', label: 'Exterior', width: 110 },
+    { key: 'cisterna', label: 'Cisterna', width: 110 },
+    { key: 'total', label: 'Total', width: 115 },
+  ]), [moduleCount]);
 
-  // ── UI State ───────────────────────────────────────────────
+  const resumenRows = useMemo(() => {
+    const generated = buildEstructurasResumenRows(modulos, exterior, cisterna, moduleCount, resumen ?? []);
+    return generated.length ? generated : (resumen?.length ? resumen : buildResumenRows(modulos[1] || []));
+  }, [modulos, exterior, cisterna, moduleCount, resumen]);
+
+  const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
+  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project.id, resumenCols);
+
   const [syncing,  setSyncing]  = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [numOpen,  setNumOpen]  = useState(false);
-  const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({
-    ri: 0, rowData: {},
-  });
+  const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
-  // ── Guard de recálculo (evita bucles) ──────────────────────
   const progCount = useRef(0);
 
-  // ── Datos iniciales ────────────────────────────────────────
-  const resumenRows = useMemo(() =>
-    buildResumenRows(metrado?.length ? metrado : (resumen ?? [])),
-  []);// eslint-disable-line
+  const initialSheets = useMemo(() => {
+    const sheets = [];
+    let currentOrder = 0;
 
-  const initialSheets = useMemo(() => [
-    rowsToSheet(injectTemplateIfEmpty(metrado ?? [], 'gas'), ALL_COLS,     'Metrado', 0),
-    rowsToSheet(resumenRows,   RESUMEN_COLS, 'Resumen', 1),
-  ], []);// eslint-disable-line
+    for (let i = 1; i <= moduleCount; i++) {
+      const data = injectTemplateIfEmpty(modulos[i] || [], 'estructuras');
+      const sheet = rowsToSheet(data, ALL_COLS, `Módulo ${i}`, currentOrder++);
+      sheets.push(sheet);
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  // RECÁLCULO PRINCIPAL
-  // Llama a buildRecalcUpdates (utils.ts) y aplica en Luckysheet
-  // ═══════════════════════════════════════════════════════════
+    sheets.push(rowsToSheet(injectTemplateIfEmpty(exterior || [], 'estructuras'), ALL_COLS, 'Exterior', currentOrder++));
+    sheets.push(rowsToSheet(injectTemplateIfEmpty(cisterna || [], 'estructuras'), ALL_COLS, 'Cisterna', currentOrder++));
+    sheets.push(rowsToSheet(resumenRows, resumenCols, 'Resumen', currentOrder++));
+
+    return sheets;
+  }, [moduleCount, modulos, exterior, cisterna, resumenRows, resumenCols]);
 
   const recalc = useCallback(() => {
     if (progCount.current > 2) return;
@@ -280,29 +289,42 @@ export default function GasIndex() {
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       const all = getAllSheets();
-      if (all.length) scheduleSave(all);
+      if (all.length) scheduleSave(all, active?.name ? [String(active.name)] : undefined);
     }, 120);
   }, [ls, getActive, setCells, getAllSheets, scheduleSave]);
 
-  // ═══════════════════════════════════════════════════════════
-  // APLICAR RESULTADO DEL MODAL DE CÁLCULO
-  // Escribe inputs + output en la fila y re-recalcula
-  // ═══════════════════════════════════════════════════════════
-
-  const applyCalc = useCallback(({ ri, inputs, outputs, outputKey }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, outputKey, inputs, outputs }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
     const sheetOrder = active.order ?? 0;
     const ups: Array<{ r: number; c: number; v: any }> = [];
+    const currentRow = readRow(active.data || [], ri);
+    const { level, kind } = rowMeta(currentRow);
+    const rowStyle = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+    const descripcionLimpia = descripcion.trim();
 
-    // Inputs
+    if (CI.descripcion !== undefined) {
+      ups.push({
+        r: ri,
+        c: CI.descripcion,
+        v: styledTxt(
+          descripcionLimpia,
+          indent(level, kind === 'leaf') + descripcionLimpia,
+          rowStyle,
+        ),
+      });
+    }
+
+    if (CI.unidad !== undefined) {
+      ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
+    }
+
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
       const c = CI[k];
       if (c !== undefined) ups.push({ r: ri, c, v: mkNum(inputs[k]) });
     });
 
-    // Outputs (solo los que tienen valor)
     (['lon', 'area', 'vol', 'kg', 'und'] as const).forEach((k) => {
       const c = CI[k];
       if (c === undefined) return;
@@ -315,10 +337,14 @@ export default function GasIndex() {
       ups.push({ r: ri, c, v: mkBlank() });
     });
 
+    if (CI.total !== undefined) {
+      ups.push({ r: ri, c: CI.total, v: mkBlank() });
+    }
+
     progCount.current++;
     ups.forEach(({ r, c, v }, i) => {
       ls()?.setCellValue(r, c, v, {
-        order:     sheetOrder,
+        order: sheetOrder,
         isRefresh: i === ups.length - 1,
       });
     });
@@ -329,13 +355,9 @@ export default function GasIndex() {
     }, 120);
   }, [getActive, ls, recalc]);
 
-  // ═══════════════════════════════════════════════════════════
-  // ABRIR CALCULADORA (lee fila seleccionada en Luckysheet)
-  // ═══════════════════════════════════════════════════════════
-
   const openCalc = useCallback(() => {
-    const inst   = ls();
-    const range  = inst?.getRange?.();
+    const inst = ls();
+    const range = inst?.getRange?.();
     if (!range?.length) return;
 
     const active = getActive();
@@ -346,20 +368,11 @@ export default function GasIndex() {
     setCalcOpen(true);
   }, [ls, getActive]);
 
-  // ═══════════════════════════════════════════════════════════
-  // NUMERACIÓN JERÁRQUICA
-  // Usa buildNumberingUpdates de NumberingModal.tsx
-  // ═══════════════════════════════════════════════════════════
-
   const applyNumbering = useCallback((base: number) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
-    const updates = buildNumberingUpdates(
-      active.data || [],
-      active.order ?? 0,
-      base,
-    );
+    const updates = buildNumberingUpdates(active.data || [], active.order ?? 0, base);
     if (!updates.length) return;
 
     progCount.current++;
@@ -371,36 +384,49 @@ export default function GasIndex() {
     }, 200);
   }, [getActive, setCells, recalc]);
 
-  // ═══════════════════════════════════════════════════════════
-  // SINCRONIZAR RESUMEN
-  // Copia filas con ítem desde Metrado hacia la hoja Resumen
-  // ═══════════════════════════════════════════════════════════
-
   const syncResumen = useCallback(() => {
     setSyncing(true);
     setTimeout(() => {
       const inst = ls();
       if (!inst) { setSyncing(false); return; }
 
-      const all        = inst.getAllSheets() as any[];
-      let metradoRows: Record<string, any>[] = [];
-      let resIdx       = -1;
+      const all = inst.getAllSheets() as any[];
+      const mods: Record<number, Record<string, any>[]> = {};
+      let ext: Record<string, any>[] = [];
+      let cis: Record<string, any>[] = [];
+      let resIdx = -1;
 
       all.forEach((sheet: any, idx: number) => {
-        if (sheet.name === 'Metrado') metradoRows = sheetToRows(sheet, ALL_COLS);
-        if (sheet.name === 'Resumen') resIdx      = idx;
+        if (sheet.name === 'Resumen') {
+          resIdx = idx;
+        } else {
+          const rows = sheetToRows(sheet, ALL_COLS);
+          if (sheet.name === 'Exterior') {
+            ext = rows;
+            return;
+          }
+          if (sheet.name === 'Cisterna') {
+            cis = rows;
+            return;
+          }
+
+          const match = String(sheet.name ?? '').match(/Módulo (\d+)/i);
+          if (match) {
+            mods[Number(match[1])] = rows;
+          }
+        }
       });
 
       if (resIdx === -1) { setSyncing(false); return; }
 
-      const newRows   = buildResumenRows(metradoRows);
+      const previousResumenRows = resIdx >= 0 ? sheetToRows(all[resIdx], resumenCols) : [];
+      const newRows = buildEstructurasResumenRows(mods, ext, cis, moduleCount, previousResumenRows);
       const prevOrder = inst.getSheet().order;
 
       inst.setSheetActive(resIdx);
-      inst.clearRange({ row: [0, 600], column: [0, RESUMEN_COLS.length + 1] });
+      inst.clearRange({ row: [0, 6000], column: [0, resumenCols.length + 1] });
 
-      // Cabecera
-      RESUMEN_COLS.forEach((col, c) => {
+      resumenCols.forEach((col, c) => {
         inst.setCellValue(0, c, {
           v: col.label, m: col.label,
           ct: { fa: 'General', t: 'g' },
@@ -408,17 +434,16 @@ export default function GasIndex() {
         }, { isRefresh: false });
       });
 
-      // Filas
       newRows.forEach((row, ri) => {
         const level = toNum(row._level) || 1;
         const kind  = String(row._kind ?? 'leaf') as RowKind;
         const st    = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
 
-        RESUMEN_COLS.forEach((col, c) => {
+        resumenCols.forEach((col, c) => {
           const raw = (row as any)[col.key] ?? '';
           let cell: any;
 
-          if (col.key === 'total') {
+          if (col.key === 'total' || col.key === 'exterior' || col.key === 'cisterna' || col.key.startsWith('modulo_')) {
             cell = styledNum(toNum(raw), st);
           } else if (col.key === 'partida') {
             cell = styledTxt(String(raw), String(raw), st);
@@ -435,29 +460,26 @@ export default function GasIndex() {
 
       inst.refresh();
       inst.setSheetActive(prevOrder);
-      saveNow();
+      const refreshedSheets = inst.getAllSheets() as any[];
+      scheduleSave(refreshedSheets, ['Resumen']);
+      saveNow(['Resumen']);
       setSyncing(false);
     }, 400);
-  }, [ls, saveNow]);
+  }, [ls, moduleCount, resumenCols, saveNow, scheduleSave]);
 
-  // ═══════════════════════════════════════════════════════════
-  // EFECTOS
-  // ═══════════════════════════════════════════════════════════
-
-  // Dropdown de unidades en columna "Und"
   useEffect(() => {
     let attempts = 0;
     let t: ReturnType<typeof setTimeout>;
 
     const apply = () => {
-      const inst   = ls();
+      const inst = ls();
       const sheets = inst?.getAllSheets?.() ?? [];
       if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length) {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
       const ci  = CI['unidad'];
-      const rng = `${colLetter(ci)}2:${colLetter(ci)}3000`;
+      const rng = `${colLetter(ci)}2:${colLetter(ci)}6000`; 
       const opt = { type: 'dropdown', value1: UNITS.join(','), prohibitInput: false };
 
       sheets
@@ -469,7 +491,6 @@ export default function GasIndex() {
     return () => clearTimeout(t);
   }, []); // eslint-disable-line
 
-  // Recálculo inicial al montar
   useEffect(() => {
     let attempts = 0;
     const run = () => {
@@ -483,156 +504,97 @@ export default function GasIndex() {
     run();
   }, [recalc]);
 
-  // ═══════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════
-
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden
-        bg-slate-50 dark:bg-gray-950">
-
-        {/* ━━━━━━ BARRA SUPERIOR ━━━━━━ */}
+      <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
+        
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
-          gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm
-          backdrop-blur-md
+          gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-md
           dark:border-gray-800/60 dark:bg-gray-900/90">
-
-          {/* ── Izquierda ── */}
+          
           <div className="flex items-center gap-2.5">
-            {/* Botón volver */}
-            <button
-              type="button"
-              onClick={() => router.get(`/costos/${project.id}`)}
-              className="flex h-7 w-7 items-center justify-center rounded-full
-                text-slate-400 transition-colors
-                hover:bg-slate-100 hover:text-slate-700
-                dark:hover:bg-gray-800 dark:hover:text-gray-200"
-            >
+            <button type="button" onClick={() => router.get(`/costos/${project.id}`)}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400
+                transition-colors hover:bg-slate-100 hover:text-slate-700
+                dark:hover:bg-gray-800 dark:hover:text-gray-200">
               <ChevronLeft className="h-4 w-4" />
             </button>
-
-            {/* Título */}
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Gas
+                Metrado Estructuras
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
               </p>
             </div>
-
-            {/* Leyenda de niveles */}
             <div className="hidden items-center gap-1 xl:flex">
               {LEVEL_PALETTE.slice(0, 4).map((p, i) => (
                 <HeaderBadge key={i} style={{ background: p.bg, color: p.fc }}>
                   N{i + 1}
                 </HeaderBadge>
               ))}
-              <HeaderBadge
-                style={{
-                  background: LEAF_STYLE.bg,
-                  color:      LEAF_STYLE.fc,
-                  border:     '1px solid #e2e8f0',
-                }}
-              >
+              <HeaderBadge style={{ background: LEAF_STYLE.bg, color: LEAF_STYLE.fc, border: '1px solid #e2e8f0' }}>
                 Hoja
               </HeaderBadge>
             </div>
           </div>
 
-          {/* ── Derecha ── */}
           <div className="flex flex-wrap items-center gap-1.5">
             <SaveIndicator saving={saving} error={saveError} lastSaved={lastSaved} />
-
             <Divider />
 
-            {/* Calculadora */}
-            <button
-              type="button"
-              title="Abre la calculadora para la fila seleccionada (Ctrl+K)"
-              onClick={openCalc}
+            <button type="button" title="Abre la calculadora para la fila seleccionada (Ctrl+K)" onClick={openCalc}
               className="inline-flex h-7 items-center gap-1.5 rounded-md
                 bg-blue-600 px-3 text-[10px] font-bold text-white
-                transition-all hover:bg-blue-700 active:scale-95"
-            >
+                transition-all hover:bg-blue-700 active:scale-95">
               <Calculator className="h-3 w-3" /> Calcular
             </button>
 
-            {/* Numeración */}
-            <button
-              type="button"
-              title="Numeración jerárquica automática"
-              onClick={() => setNumOpen(true)}
+            <button type="button" title="Numeración jerárquica automática" onClick={() => setNumOpen(true)}
               className="inline-flex h-7 items-center gap-1.5 rounded-md
                 bg-violet-600 px-3 text-[10px] font-bold text-white
-                transition-all hover:bg-violet-700 active:scale-95"
-            >
+                transition-all hover:bg-violet-700 active:scale-95">
               <Hash className="h-3 w-3" /> Numerar
             </button>
 
             <Divider />
 
-            {/* Guardar manual */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={saveNow}
-              disabled={saving}
-              className="h-7 gap-1.5 text-[11px]"
-            >
-              {saving
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <Save className="h-3 w-3" />}
+            <Button variant="outline" size="sm" onClick={() => saveNow()} disabled={saving} className="h-7 gap-1.5 text-[11px]">
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
 
-            {/* Sincronizar Resumen */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={syncResumen}
-              disabled={syncing || saving}
-              className="h-7 gap-1.5 text-[11px]"
-            >
+            <Button variant="outline" size="sm" onClick={syncResumen} disabled={syncing || saving} className="h-7 gap-1.5 text-[11px]">
               <RefreshCcw className={cn('h-3 w-3', syncing && 'animate-spin')} />
               {syncing ? 'Sincronizando…' : 'Sync Resumen'}
             </Button>
           </div>
         </header>
 
-        {/* ━━━━━━ HOJA LUCKYSHEET ━━━━━━ */}
         <main className="relative flex-1 overflow-hidden">
           <Luckysheet
             data={initialSheets}
-            onDataChange={scheduleSave}
+            onDataChange={(sheets) => {
+              const active = getActive();
+              scheduleSave(sheets, active?.name ? [String(active.name)] : undefined);
+            }}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Gas',
-              showinfobar:      false,
-              sheetFormulaBar:  true,
+              title: 'Metrado Estructuras',
+              showinfobar: false,
+              sheetFormulaBar: true,
               showstatisticBar: true,
-              // Recalcular tras cada edición manual
               afterChange: () => setTimeout(recalc, 80),
-              // Menú contextual simplificado (sin botones de fila que ya no existen)
               contextMenu: {
                 row: [
-                  {
-                    text:    '🔢  Calculadora de metrado',
-                    type:    'button',
-                    onClick: openCalc,
-                  },
-                  {
-                    text:    '#   Numeración jerárquica',
-                    type:    'button',
-                    onClick: () => setNumOpen(true),
-                  },
+                  { text: '🔢  Calculadora de metrado', type: 'button', onClick: openCalc },
+                  { text: '#   Numeración jerárquica', type: 'button', onClick: () => setNumOpen(true) },
                   { type: 'separator' },
                   {
-                    text:    'Eliminar fila',
-                    type:    'button',
+                    text: 'Eliminar fila',
+                    type: 'button',
                     onClick: () => {
-                      const inst  = ls();
+                      const inst = ls();
                       const range = inst?.getRange?.();
                       if (range?.length) {
                         inst.deleteRow(range[0].row[0], 1);
@@ -647,21 +609,9 @@ export default function GasIndex() {
         </main>
       </div>
 
-      {/* ━━━━━━ MODALES ━━━━━━ */}
-      <CalcModal
-        open    ={calcOpen}
-        ri      ={calcRow.ri}
-        rowData ={calcRow.rowData}
-        onClose ={() => setCalcOpen(false)}
-        onApply ={applyCalc}
-      />
+      <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc}/>
 
-      <NumberingModal
-        open    ={numOpen}
-        onClose ={() => setNumOpen(false)}
-        onApply ={applyNumbering}
-      />
+      <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering}/>
     </AppLayout>
   );
 }
-

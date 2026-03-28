@@ -1,0 +1,155 @@
+// ═══════════════════════════════════════════════════
+// estructuras_constants.ts — Constantes del módulo Estructuras
+// ═══════════════════════════════════════════════════
+
+import type { ColumnDef, MeasureInputs, UnitProfile } from './estructuras_types';
+
+// ── Unidades disponibles ──────────────────────────────────────
+export const UNITS = ['und', 'm', 'm2', 'm3', 'kg', 'glb', 'pto', 'pza', 'ml'] as const;
+export type Unit = (typeof UNITS)[number];
+
+// ── Columnas visibles de las hojas Metrado ─────────────────────
+export const MAIN_COLS: ColumnDef[] = [
+  { key: 'partida',     label: 'Ítem',          width: 110 },
+  { key: 'descripcion', label: 'Descripción',   width: 300 },
+  { key: 'unidad',      label: 'Und',           width: 60  },
+  { key: 'elsim',       label: 'Elem.Simil.',   width: 82  },
+  { key: 'largo',       label: 'Largo',         width: 70  },
+  { key: 'ancho',       label: 'Ancho',         width: 70  },
+  { key: 'alto',        label: 'Alto',          width: 70  },
+  { key: 'nveces',      label: 'N° Veces',      width: 72  },
+  { key: 'lon',         label: 'Long.',         width: 76  },
+  { key: 'area',        label: 'Área',          width: 76  },
+  { key: 'vol',         label: 'Vol.',          width: 76  },
+  { key: 'kg',          label: 'Kg.',           width: 76  },
+  { key: 'und',         label: 'Parcial',       width: 76  },
+  { key: 'total',       label: 'Total',         width: 95  },
+  { key: 'observacion', label: 'Observaciones', width: 148 },
+];
+
+// ── Columnas de metadatos ocultas ─────────────────────────────
+export const META_COLS: ColumnDef[] = [
+  { key: '_dbid',  label: '', width: 1 },
+  { key: '_level', label: '', width: 1 },
+  { key: '_kind',  label: '', width: 1 },
+];
+
+export const ALL_COLS: ColumnDef[] = [...MAIN_COLS, ...META_COLS];
+
+/** Índice columna-key → posición numérica */
+export const CI = Object.fromEntries(ALL_COLS.map((c, i) => [c.key, i]));
+
+// ── Columnas de la hoja Resumen ───────────────────────────────
+export const RESUMEN_BASE_COLS: ColumnDef[] = [
+  { key: '_dbid',       label: '',             width: 1   },
+  { key: 'partida',     label: 'Ítem',         width: 120 },
+  { key: 'descripcion', label: 'Descripción',  width: 360 },
+  { key: 'unidad',      label: 'Und',          width: 65  },
+];
+
+// ── Perfiles de unidad ────────────────────────────────────────
+export const UNIT_PROFILES: Record<string, UnitProfile> = {
+  und: {
+    activeInputs: ['elsim', 'nveces'],
+    outputKey:    'und',
+    formula:      'Parcial = Elem.Simil × N° Veces',
+    fn: (v) => ({ und: v.elsim * v.nveces }),
+  },
+  pza: {
+    activeInputs: ['elsim', 'nveces'],
+    outputKey:    'und',
+    formula:      'Parcial = Elem.Simil × N° Veces',
+    fn: (v) => ({ und: v.elsim * v.nveces }),
+  },
+  glb: {
+    activeInputs: ['elsim', 'nveces'],
+    outputKey:    'und',
+    formula:      'Parcial = Elem.Simil × N° Veces',
+    fn: (v) => ({ und: v.elsim * v.nveces }),
+  },
+  pto: {
+    activeInputs: ['elsim', 'nveces'],
+    outputKey:    'und',
+    formula:      'Parcial = Elem.Simil × N° Veces',
+    fn: (v) => ({ und: v.elsim * v.nveces }),
+  },
+  m: {
+    activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
+    outputKey:    'lon',
+    formula:      'Long. = Elem.Simil × (Largo + Ancho + Alto) × N° Veces',
+    fn: (v) => ({ lon: v.elsim * (v.largo + v.ancho + v.alto) * v.nveces }),
+  },
+  ml: {
+    activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
+    outputKey:    'lon',
+    formula:      'Long. = Elem.Simil × (Largo + Ancho + Alto) × N° Veces',
+    fn: (v) => ({ lon: v.elsim * (v.largo + v.ancho + v.alto) * v.nveces }),
+  },
+  m2: {
+    activeInputs: ['elsim', 'largo', 'ancho', 'nveces'],
+    outputKey:    'area',
+    formula:      'Área = Elem.Simil × Largo × Ancho × N° Veces',
+    fn: (v) => ({ area: v.elsim * v.largo * v.ancho * v.nveces }),
+  },
+  m3: {
+    activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
+    outputKey:    'vol',
+    formula:      'Vol. = Elem.Simil × Largo × Ancho × Alto × N° Veces',
+    fn: (v) => ({ vol: v.elsim * v.largo * v.ancho * v.alto * v.nveces }),
+  },
+  kg: {
+    activeInputs: ['elsim', 'largo', 'ancho', 'nveces'],
+    outputKey:    'kg',
+    formula:      'Kg = Elem.Simil × Largo × Ancho × N° Veces',
+    fn: (v) => ({ kg: v.elsim * v.largo * v.ancho * v.nveces }),
+  },
+};
+
+export const DEFAULT_PROFILE: UnitProfile = {
+  activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
+  outputKey:    'und',
+  formula:      'Ingresa los valores y selecciona fórmula personalizada',
+  fn: (v) => ({ und: v.elsim * v.nveces }),
+};
+
+export const OUTPUT_KEYS = ['lon', 'area', 'vol', 'kg', 'und'] as const;
+
+export const OUTPUT_LABELS: Record<string, string> = {
+  lon:  'Long.',
+  area: 'Área',
+  vol:  'Vol.',
+  kg:   'Kg.',
+  und:  'Parcial',
+};
+
+export const LEVEL_PALETTE = [
+  { bg: '#ffffff', fc: '#7e22ce', bl: 1 }, // L1: Morado
+  { bg: '#ffffff', fc: '#dc2626', bl: 1 }, // L2: Rojo
+  { bg: '#ffffff', fc: '#2563eb', bl: 1 }, // L3: Azul
+  { bg: '#ffffff', fc: '#000000', bl: 1 }, // L4: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 1 }, // L5: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L6: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L7: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L8: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L9: Negro
+  { bg: '#ffffff', fc: '#000000', bl: 0 }, // L10: Negro
+] as const;
+
+export const LEAF_STYLE = { bg: '#f8fafc', fc: '#374151', bl: 0 } as const;
+
+export const MAX_LEVELS = 10;
+export const SAVE_DEBOUNCE = 1800;
+export const NBSP = '\u00A0\u00A0\u00A0';
+
+export const INPUT_LABELS: Record<keyof MeasureInputs, string> = {
+  elsim:  'Elem.Simil.',
+  largo:  'Largo',
+  ancho:  'Ancho',
+  alto:   'Alto',
+  nveces: 'N° Veces',
+  kg:     'Kg.',
+};
+
+export const ALL_INPUTS: (keyof MeasureInputs)[] = [
+  'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg',
+];
