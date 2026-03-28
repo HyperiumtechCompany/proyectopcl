@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves } from 'lucide-react';
+import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves, PanelsLeftBottomIcon } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -65,25 +65,8 @@ export function AppSidebar() {
         {
             title: 'Costos',
             href: '/costos',
-            icon: Folder,
+            icon: PanelsLeftBottomIcon,
         },
-        
-
-    
-        {
-        title: 'Estructura',
-        href: '/metrados/estructura',
-        icon: Folder, // o el ícono que corresponda, podrías importar otro como "HardHat" o "Building"
-    },
-     {
-            title: 'Gas',
-            href: '/metrados/gas',
-            icon: Folder,
-        },
-
-        // { title: 'Eléctricas', href: '/metrados/electricas', icon: Zap },
-        // { title: 'Arquitectura', href: '/metrados/arquitectura', icon: BookOpen },
-
     ];
 
     return (
