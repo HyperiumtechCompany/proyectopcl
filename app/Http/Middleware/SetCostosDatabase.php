@@ -13,13 +13,23 @@ class SetCostosDatabase
     public function __construct(protected CostoDatabaseService $dbService) {}
 
     /**
-     * Read the {costoProject} route parameter,
+     * Read the {costoProject} route parameter or other inputs,
      * resolve its database_name and configure the costos_tenant connection.
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Support both route parameter names used in costos routes.
-        $project = $request->route('costoProject') ?? $request->route('project');
+        // Búsqueda flexible de ID de proyecto o instancia
+        $project = $request->route('costoProject') 
+            ?? $request->route('project') 
+            ?? $request->route('proyectoId') 
+            ?? $request->route('presupuestoId') 
+            ?? $request->query('project') 
+            ?? $request->input('proyecto_id')
+            ?? $request->input('project_id');
+
+        if (empty($project)) {
+            abort(500, "Error de configuración multi-tenant: No se encontró el contexto del proyecto (ID).");
+        }
 
         if (! $project instanceof CostoProject) {
             $project = CostoProject::findOrFail($project);

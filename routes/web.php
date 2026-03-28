@@ -277,6 +277,23 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::patch('/presupuesto/{subsection}', [PresupuestoController::class, 'update'])->name('proyectos.presupuesto.update');
             Route::delete('/presupuesto/{subsection}/delete-row', [PresupuestoController::class, 'deleteRow'])->name('proyectos.presupuesto.delete-row');
         }); // Cierre de proyectos/{project}
+
+    // ─── ETTP — Especificaciones Técnicas (con middleware de BD dinámica) ────
+    Route::middleware([SetCostosDatabase::class])
+        ->prefix('/{costoProject}/ettp')
+        ->name('ettp.')
+        ->group(function () {
+            Route::get('/', [EttpController::class, 'show'])->name('index');
+            Route::post('/importar-metrados', [EttpController::class, 'importarMetrados'])->name('importar');
+            Route::post('/guardar-general', [EttpController::class, 'guardarEspecificaciones'])->name('guardar');
+            Route::get('/partida/{partidaId}/secciones', [EttpController::class, 'getSecciones'])->name('secciones');
+            Route::put('/partida/{partidaId}/secciones', [EttpController::class, 'guardarSecciones'])->name('secciones.guardar');
+            Route::delete('/seccion/{id}', [EttpController::class, 'eliminarSeccion'])->name('seccion.eliminar');
+            Route::post('/seccion/{id}/imagen', [EttpController::class, 'subirImagen'])->name('imagen.subir');
+            Route::delete('/imagen/{id}', [EttpController::class, 'eliminarImagen'])->name('imagen.eliminar');
+            Route::get('/huerfanas', [EttpController::class, 'getHuerfanas'])->name('huerfanas');
+            Route::post('/eliminar-huerfanas', [EttpController::class, 'eliminarHuerfanas'])->name('huerfanas.eliminar');
+        });
 }); // Cierre de costos
 
 // ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
@@ -284,11 +301,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
-    // ETTS
-    Route::get('/module/etts', [EttpController::class, 'show'])->name('module.etts');
-    Route::post('/obtener-especificaciones-tecnicas', [EttpController::class, 'obtenerEspecificaciones']);
-    Route::post('/obtener-metrados-ettp', [EttpController::class, 'obtenerMetrados']);
-    Route::post('/guardar-especificaciones-tecnicas/{proyectoId}', [EttpController::class, 'guardarEspecificaciones']);
+    // ETTS — Redirecciones heredadas (opcional)
+    Route::get('/module/etts', function() {
+        return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);
+    })->name('module.etts');
 });
 
 // ─── METRADOS MODULARES (Sanitarias y Estructuras) ─────────────────────────────
