@@ -1,6 +1,3 @@
-// ═══════════════════════════════════════════════════
-// types.ts — Tipos compartidos del módulo Eléctricas
-// ═══════════════════════════════════════════════════
 
 export interface ColumnDef {
   key: string;
@@ -8,8 +5,10 @@ export interface ColumnDef {
   width: number;
 }
 
-export interface comunicacionesPageProps {
+export interface ComunicacionesPageProps {
   project: { id: number; nombre: string };
+  titulo: string;
+  baseURL: string;
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
   [key: string]: unknown;
@@ -47,23 +46,23 @@ export interface MeasureOutputs {
 
 /** Perfil de una unidad: qué inputs necesita y qué columna produce */
 export interface UnitProfile {
-  /** Inputs relevantes para esta unidad (en orden de aparición) */
+  key: string;           
+  label: string;        
   activeInputs: (keyof MeasureInputs)[];
-  /** Columna de resultado */
   outputKey: keyof MeasureOutputs;
-  /** Descripción legible de la fórmula */
   formula: string;
-  /** Función de cálculo */
-  fn: (v: MeasureInputs) => MeasureOutputs;
+  fn: (vals: MeasureInputs) => MeasureOutputs;
 }
 
 /** Payload que devuelve el CalcModal al confirmar */
 export interface CalcPayload {
   ri: number;
+  descripcion: string;
+  unidad: string;
+  outputKey: keyof MeasureOutputs;
   inputs: MeasureInputs;
   outputs: MeasureOutputs;
 }
 
 // ── Guardado ─────────────────────────────────────────────────
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-

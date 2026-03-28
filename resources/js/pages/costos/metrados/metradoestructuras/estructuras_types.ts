@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// estructuras_types.ts — Tipos compartidos del módulo Estructuras
+// sanitarias_types.ts — Tipos compartidos del módulo Sanitarias
 // ═══════════════════════════════════════════════════
 
 export interface ColumnDef {
@@ -55,14 +55,12 @@ export interface MeasureOutputs {
 
 /** Perfil de una unidad: qué inputs necesita y qué columna produce */
 export interface UnitProfile {
-  /** Inputs relevantes para esta unidad (en orden de aparición) */
+  key: string;           
+  label: string;        
   activeInputs: (keyof MeasureInputs)[];
-  /** Columna de resultado */
   outputKey: keyof MeasureOutputs;
-  /** Descripción legible de la fórmula */
   formula: string;
-  /** Función de cálculo */
-  fn: (v: MeasureInputs) => MeasureOutputs;
+  fn: (vals: MeasureInputs) => MeasureOutputs;
 }
 
 /** Payload que devuelve el CalcModal al confirmar */
