@@ -116,7 +116,7 @@ function moduleHref(project_id: number, m: string): string {
     if (m === 'crono_general' || m === 'crono_valorizado' || m === 'crono_materiales') {
         return `/module/${m}?project=${project_id}`;
     }
-    if (m === 'etts') return `/module/etts?project=${project_id}`;
+    if (m === 'etts') return `/costos/${project_id}/ettp`;
     return `/costos/${project_id}/module/${m}`;
 }
 
