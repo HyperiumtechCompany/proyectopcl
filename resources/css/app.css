@@ -173,3 +173,123 @@
         background: transparent;
     }
 }
+/* Estilos para Tabulator - Colores notables y profesionales */
+.tabulator {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Header de la tabla - Azul vibrante */
+.tabulator .tabulator-header {
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+    border-bottom: 2px solid #f97316 !important;
+}
+
+.tabulator .tabulator-header .tabulator-col {
+    background: transparent !important;
+    border-right: none !important;
+}
+
+.tabulator .tabulator-header .tabulator-col-title {
+    color: white !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    letter-spacing: 0.5px !important;
+    text-transform: uppercase !important;
+}
+
+/* Filas - Efecto hover naranja */
+.tabulator .tabulator-row {
+    border-bottom: 1px solid #e5e7eb !important;
+    transition: all 0.2s ease !important;
+}
+
+.tabulator .tabulator-row:hover {
+    background: linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%) !important;
+    transform: translateX(2px) !important;
+}
+
+/* Celdas */
+.tabulator .tabulator-cell {
+    padding: 14px 12px !important;
+    color: #1f2937 !important;
+    font-size: 13px !important;
+}
+
+.tabulator .tabulator-cell:first-child {
+    font-weight: 600 !important;
+    color: #1e40af !important;
+}
+
+/* Botón de detalles - Naranja vibrante */
+.tabulator .tabulator-cell button {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 6px 14px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+.tabulator .tabulator-cell button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 6px rgba(249, 115, 22, 0.3) !important;
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+}
+
+/* Iconos del árbol (expandir/colapsar) */
+.tabulator .tabulator-tree-control {
+    background-color: #f97316 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+}
+
+.tabulator .tabulator-tree-control:hover {
+    background-color: #ea580c !important;
+    transform: scale(1.05) !important;
+}
+
+/* Editor inline */
+.tabulator .tabulator-editing {
+    border: 2px solid #f97316 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1) !important;
+    background-color: #fffbeb !important;
+}
+
+/* Scrollbar personalizada */
+.tabulator::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.tabulator::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+.tabulator::-webkit-scrollbar-thumb {
+    background: #f97316;
+    border-radius: 4px;
+}
+
+.tabulator::-webkit-scrollbar-thumb:hover {
+    background: #ea580c;
+}
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}

@@ -205,142 +205,35 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/{subsection}/data', [PresupuestoController::class, 'show'])->name('proyectos.presupuesto.show');
             Route::patch('/presupuesto/{subsection}', [PresupuestoController::class, 'update'])->name('proyectos.presupuesto.update');
             Route::delete('/presupuesto/{subsection}/delete-row', [PresupuestoController::class, 'deleteRow'])->name('proyectos.presupuesto.delete-row');
-        });
+        }); // Cierre de proyectos/{project}
+}); // Cierre de costos
 
-    // ─── Metrado Sanitarias Modular (con middleware de BD dinámica) ────
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-sanitarias')
-        ->name('metrado-sanitarias.')
-        ->group(function () {
-            Route::get('/', [MetradoSanitariasController::class, 'index'])->name('index');
-            Route::get('/config', [MetradoSanitariasController::class, 'getConfig'])->name('config.show');
-            Route::patch('/config', [MetradoSanitariasController::class, 'updateConfig'])->name('config.update');
-            Route::get('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'getModulo'])->name('modulo.show');
-            Route::patch('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'updateModulo'])->name('modulo.update');
-            Route::get('/exterior', [MetradoSanitariasController::class, 'getExterior'])->name('exterior.show');
-            Route::patch('/exterior', [MetradoSanitariasController::class, 'updateExterior'])->name('exterior.update');
-            Route::get('/cisterna', [MetradoSanitariasController::class, 'getCisterna'])->name('cisterna.show');
-            Route::patch('/cisterna', [MetradoSanitariasController::class, 'updateCisterna'])->name('cisterna.update');
-            Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
-            Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
-        });
+// ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
+    Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
+    Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
-    // ─── Metrado Estructuras (con middleware de BD dinámica) ────
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-estructuras')
-        ->name('metrado-estructuras.')
-        ->group(function () {
-            Route::get('/', [MetradoEstructurasController::class, 'index'])->name('index');
-            Route::get('/config', [MetradoEstructurasController::class, 'getConfig'])->name('config.show');
-            Route::patch('/config', [MetradoEstructurasController::class, 'updateConfig'])->name('config.update');
-            Route::get('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'getModulo'])->name('modulo.show');
-            Route::patch('/modulo/{moduloNumero}', [MetradoEstructurasController::class, 'updateModulo'])->name('modulo.update');
-            Route::get('/resumen', [MetradoEstructurasController::class, 'getResumen'])->name('resumen.show');
-            Route::patch('/resumen', [MetradoEstructurasController::class, 'updateResumen'])->name('resumen.update');
-            Route::get('/exterior', [MetradoEstructurasController::class, 'getExterior'])->name('exterior.show');
-            Route::patch('/exterior', [MetradoEstructurasController::class, 'updateExterior'])->name('exterior.update');
-            Route::get('/cisterna', [MetradoEstructurasController::class, 'getCisterna'])->name('cisterna.show');
-            Route::patch('/cisterna', [MetradoEstructurasController::class, 'updateCisterna'])->name('cisterna.update');
-            Route::post('/resumen/sync', [MetradoEstructurasController::class, 'syncResumen'])->name('resumen.sync');
-        });
+    // ETTS
+    Route::get('/module/etts', [\App\Http\Controllers\EttpController::class, 'show'])->name('module.etts');
+    Route::post('/obtener-especificaciones-tecnicas', [\App\Http\Controllers\EttpController::class, 'obtenerEspecificaciones']);
+    Route::post('/obtener-metrados-ettp', [\App\Http\Controllers\EttpController::class, 'obtenerMetrados']);
+    Route::post('/guardar-especificaciones-tecnicas/{proyectoId}', [\App\Http\Controllers\EttpController::class, 'guardarEspecificaciones']);
+});
 
-    // metrado electricas
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-electricas')
-        ->name('metrado-electricas.')
-        ->group(function () {
+// ─── METRADOS MODULARES (Sanitarias y Estructuras) ─────────────────────────────
+Route::middleware(['auth', 'verified', SetCostosDatabase::class])->group(function () {
+    Route::prefix('/{costoProject}/metrado-sanitarias')->name('metrado-sanitarias.')->group(function () {
+        Route::get('/', [MetradoSanitariasController::class, 'index'])->name('index');
+        Route::get('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'getModulo'])->name('modulo.show');
+        Route::patch('/modulo/{moduloNumero}', [MetradoSanitariasController::class, 'updateModulo'])->name('modulo.update');
+        Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
+    });
 
-            Route::get('/', [MetradoElectricasController::class, 'index'])
-                ->name('index');
-
-            Route::patch('/metrado', [MetradoElectricasController::class, 'updateMetrado'])
-                ->name('metrado.update');
-
-            Route::patch('/resumen', [MetradoElectricasController::class, 'updateResumen'])
-                ->name('resumen.update');
-
-            Route::post('/resumen/sync', [MetradoElectricasController::class, 'syncResumen'])
-                ->name('resumen.sync');
-        });
-
-    //metrado comunicaciones
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-comunicaciones')
-        ->name('metrado-comunicaciones.')
-        ->group(function () {
-
-            Route::get('/', [MetradoComunicacionesController::class, 'index'])
-                ->name('index');
-
-            Route::patch('/metrado', [MetradoComunicacionesController::class, 'updateMetrado'])
-                ->name('metrado.update');
-
-            Route::patch('/resumen', [MetradoComunicacionesController::class, 'updateResumen'])
-                ->name('resumen.update');
-
-            Route::post('/resumen/sync', [MetradoComunicacionesController::class, 'syncResumen'])
-                ->name('resumen.sync');
-        });
-
-    //metrado arquitectura
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-arquitectura')
-        ->name('metrado-arquitectura.')
-        ->group(function () {
-            Route::get('/', [MetradoArquitecturaController::class, 'index'])
-                ->name('index');
-
-            Route::get('/config', [MetradoArquitecturaController::class, 'getConfig'])
-                ->name('config.show');
-
-            Route::patch('/config', [MetradoArquitecturaController::class, 'updateConfig'])
-                ->name('config.update');
-
-            Route::get('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'getModulo'])
-                ->name('modulo.show');
-
-            Route::patch('/modulo/{moduloNumero}', [MetradoArquitecturaController::class, 'updateModulo'])
-                ->name('modulo.update');
-
-            Route::get('/resumen', [MetradoArquitecturaController::class, 'getResumen'])
-                ->name('resumen.show');
-
-            Route::patch('/resumen', [MetradoArquitecturaController::class, 'updateResumen'])
-                ->name('resumen.update');
-
-            Route::get('/exterior', [MetradoArquitecturaController::class, 'getExterior'])
-                ->name('exterior.show');
-
-            Route::patch('/exterior', [MetradoArquitecturaController::class, 'updateExterior'])
-                ->name('exterior.update');
-
-            Route::get('/cisterna', [MetradoArquitecturaController::class, 'getCisterna'])
-                ->name('cisterna.show');
-
-            Route::patch('/cisterna', [MetradoArquitecturaController::class, 'updateCisterna'])
-                ->name('cisterna.update');
-
-            Route::post('/resumen/sync', [MetradoArquitecturaController::class, 'syncResumen'])
-                ->name('resumen.sync');
-        });
-
-    //metrado gas
-    Route::middleware([SetCostosDatabase::class])
-        ->prefix('/{costoProject}/metrado-gas')
-        ->name('metrado-gas.')
-        ->group(function () {
-            Route::get('/', [MetradoGasController::class, 'index'])
-                ->name('index');
-
-            Route::patch('/metrado', [MetradoGasController::class, 'updateMetrado'])
-                ->name('metrado.update');
-
-            Route::patch('/resumen', [MetradoGasController::class, 'updateResumen'])
-                ->name('resumen.update');
-
-            Route::post('/resumen/sync', [MetradoGasController::class, 'syncResumen'])
-                ->name('resumen.sync');
-        });
+    Route::prefix('/{costoProject}/metrado-estructuras')->name('metrado-estructuras.')->group(function () {
+        Route::get('/', [MetradoEstructurasController::class, 'index'])->name('index');
+        Route::get('/metrado', [MetradoEstructurasController::class, 'getMetrado'])->name('metrado.show');
+        Route::patch('/metrado', [MetradoEstructurasController::class, 'updateMetrado'])->name('metrado.update');
+    });
 });
 
 // ─── API Ubigeo (cascada departamento → provincia → distrito) ────────────────
