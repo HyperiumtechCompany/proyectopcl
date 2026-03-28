@@ -27,10 +27,7 @@ tabulatorScript.src = 'https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulato
 document.head.appendChild(tabulatorScript);
 
 // Cargar docx.js para generación de Word
-const docxScript = document.createElement('script');
-docxScript.src = 'https://unpkg.com/docx@8.5.0/build/index.js';
-docxScript.async = true;
-document.head.appendChild(docxScript);
+
 
 // Cargar FileSaver.js para guardar archivos
 const fileSaverScript = document.createElement('script');
