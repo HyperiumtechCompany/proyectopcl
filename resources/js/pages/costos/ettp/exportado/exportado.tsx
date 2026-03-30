@@ -6,7 +6,6 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 
-// Tipos
 interface WordExportProps {
     isOpen: boolean;
     onClose: () => void;
@@ -16,156 +15,112 @@ interface WordExportProps {
     showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void;
 }
 
-// ─────────────────────────────────────────────
-// FUNCIONES DE UTILIDAD PARA WORD
-// ─────────────────────────────────────────────
-
-const crearParrafoDetalle = (titulo: string, descripcion: string) => {
-    return new Paragraph({
+const crearParrafoDetalle = (titulo: string, descripcion: string) =>
+    new Paragraph({
         children: [
             new TextRun({ text: `${titulo} `, bold: true, font: "Arial", color: "#000000" }),
             new TextRun({ text: descripcion, font: "Arial", color: "#000000" }),
         ],
         spacing: { after: 100, line: 750, lineRule: LineRuleType.AUTO },
     });
-};
 
-const sinBordes = () => {
-    return {
-        top: { style: BorderStyle.NONE },
-        bottom: { style: BorderStyle.NONE },
-        left: { style: BorderStyle.NONE },
-        right: { style: BorderStyle.NONE },
-    };
-};
+const sinBordes = () => ({
+    top: { style: BorderStyle.NONE },
+    bottom: { style: BorderStyle.NONE },
+    left: { style: BorderStyle.NONE },
+    right: { style: BorderStyle.NONE },
+});
 
-const addTechnicalDetailsToWord = (detallesTecnicos: any, sections: any[]) => {
-    if (!detallesTecnicos || typeof detallesTecnicos !== 'object') return;
+// Procesa contenido HTML a elementos docx (versión robusta)
+const procesarContenido = (contenido: string): any[] => {
+    if (!contenido) return [];
 
-    const procesarContenido = (contenido: string) => {
-        if (!contenido) return [];
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = contenido;
+    const elementos: any[] = [];
 
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = contenido;
-
-        const elementos: any[] = [];
-
-        tempDiv.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                if (node.textContent?.trim()) {
+    const procesarNodo = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const text = node.textContent?.trim();
+            if (text) {
+                elementos.push(new Paragraph({
+                    children: [new TextRun({ text, font: "Arial Narrow", size: 24, color: "#000000" })],
+                    spacing: { after: 200, line: 480 },
+                    indent: { left: 720, firstLine: 0 },
+                }));
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as HTMLElement;
+            const tag = element.tagName;
+            if (tag === 'IMG') {
+                const src = element.getAttribute('src') || '';
+                if (src.startsWith('data:image')) {
+                    const base64Data = src.split(',')[1];
                     elementos.push(new Paragraph({
-                        children: [new TextRun({ text: node.textContent, font: "Arial Narrow", size: 24, color: "#000000" })],
+                        alignment: AlignmentType.CENTER,
+                        children: [new ImageRun({
+                            data: base64Data,
+                            transformation: { width: 400, height: 300 },
+                        })],
+                        spacing: { after: 200 },
+                    }));
+                }
+            } else if (tag === 'P' || tag === 'DIV') {
+                const texto = element.innerText?.trim();
+                if (texto) {
+                    elementos.push(new Paragraph({
+                        children: [new TextRun({ text: texto, font: "Arial Narrow", size: 24, color: "#000000" })],
                         spacing: { after: 200, line: 480 },
                         indent: { left: 720, firstLine: 0 },
                     }));
                 }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const element = node as HTMLElement;
-                if (element.tagName === 'IMG') {
-                    const src = element.getAttribute('src');
-                    if (src && src.startsWith('data:image')) {
-                        const base64Data = src.split(',')[1];
-                        elementos.push(new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [new ImageRun({
-                                data: base64Data,
-                                transformation: { width: 400, height: 300 },
-                            })],
-                            spacing: { after: 200 },
-                        }));
-                    }
-                } else if (element.tagName === 'P' || element.tagName === 'DIV') {
-                    const texto = element.innerText;
-                    if (texto.trim()) {
-                        elementos.push(new Paragraph({
-                            children: [new TextRun({ text: texto, font: "Arial Narrow", size: 24, color: "#000000" })],
-                            spacing: { after: 200, line: 480 },
-                            indent: { left: 720, firstLine: 0 },
-                        }));
-                    }
-                }
+            } else {
+                // Para cualquier otra etiqueta (STRONG, SPAN, etc.), procesar sus hijos
+                element.childNodes.forEach(child => procesarNodo(child));
             }
-        });
-
-        return elementos;
+        }
     };
 
-    if (detallesTecnicos.descripcion) {
-        sections.push(new Paragraph({
-            children: [new TextRun({ text: "DESCRIPCIÓN:", bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
-            spacing: { after: 200, line: 480 },
-            indent: { left: 720, firstLine: 0 },
-        }));
-        sections.push(...procesarContenido(detallesTecnicos.descripcion));
-    }
+    tempDiv.childNodes.forEach(node => procesarNodo(node));
+    return elementos;
+};
 
-    const materialesKey = Object.keys(detallesTecnicos).find(key =>
-        key.toLowerCase().includes('material') || key.toLowerCase().includes('herramienta')
-    );
-    if (materialesKey) {
-        sections.push(new Paragraph({
-            children: [new TextRun({ text: "MATERIALES:", bold: true, size: 24, font: "Arial Narrow", color: "#000000" })],
+const addSectionsToWord = (sections: any[], docSections: any[]) => {
+    if (!sections || !Array.isArray(sections) || sections.length === 0) return;
+
+    sections.forEach(section => {
+        const titulo = (section.titulo || section.title || 'DETALLE').toUpperCase();
+        const contenido = section.contenido || section.content || '';
+
+        docSections.push(new Paragraph({
+            children: [new TextRun({ text: `${titulo}:`, bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
             spacing: { after: 200, line: 480 },
             indent: { left: 720, firstLine: 0 },
         }));
 
-        const materiales = detallesTecnicos[materialesKey];
-        if (typeof materiales === 'string') {
-            sections.push(...procesarContenido(materiales));
-        } else if (Array.isArray(materiales)) {
-            materiales.forEach(material => {
-                sections.push(new Paragraph({
-                    children: [new TextRun({ text: "- " + material, font: "Arial Narrow", size: 24, color: "#000000" })],
-                    spacing: { after: 200, line: 480 },
-                    indent: { left: 720, firstLine: 0 },
-                }));
-            });
+        const procesado = procesarContenido(contenido);
+        if (procesado.length > 0) {
+            docSections.push(...procesado);
+        } else if (contenido) {
+            // Fallback texto plano
+            docSections.push(new Paragraph({
+                children: [new TextRun({ text: contenido, font: "Arial Narrow", size: 24, color: "#000000" })],
+                spacing: { after: 200, line: 480 },
+                indent: { left: 720, firstLine: 0 },
+            }));
         }
-        sections.push(new Paragraph({ text: "", spacing: { after: 100 } }));
-    }
-
-    const metodoEjecucionKey = Object.keys(detallesTecnicos).find(key =>
-        key.toLowerCase().includes('ejecucion') || key.toLowerCase().includes('ejecución')
-    );
-    if (metodoEjecucionKey) {
-        sections.push(new Paragraph({
-            children: [new TextRun({ text: "MÉTODO DE EJECUCIÓN:", bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
-            spacing: { after: 200, line: 480 },
-            indent: { left: 720, firstLine: 0 },
-        }));
-        sections.push(...procesarContenido(detallesTecnicos[metodoEjecucionKey]));
-    }
-
-    const metodoMedicionKey = Object.keys(detallesTecnicos).find(key =>
-        key.toLowerCase().includes('medicion') || key.toLowerCase().includes('medición')
-    );
-    if (metodoMedicionKey) {
-        sections.push(new Paragraph({
-            children: [new TextRun({ text: "MÉTODO DE MEDICIÓN:", bold: true, size: 24, font: "Arial Narrow", color: "#000000" })],
-            spacing: { after: 200, line: 480 },
-            indent: { left: 720, firstLine: 0 },
-        }));
-        sections.push(...procesarContenido(detallesTecnicos[metodoMedicionKey]));
-    }
-
-    const condicionesPagoKey = Object.keys(detallesTecnicos).find(key =>
-        key.toLowerCase().includes('pago')
-    );
-    if (condicionesPagoKey) {
-        sections.push(new Paragraph({
-            children: [new TextRun({ text: "CONDICIONES DE PAGO:", bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
-            spacing: { after: 200, line: 480 },
-            indent: { left: 720, firstLine: 0 },
-        }));
-        sections.push(...procesarContenido(detallesTecnicos[condicionesPagoKey]));
-    }
+    });
 };
 
 const processHierarchicalItemsToWord = (items: any[], sections: any[], level: number) => {
+    console.log(`🔍 Item ${item.item} - secciones:`, item.secciones);
     if (!items || !Array.isArray(items) || items.length === 0) return;
 
     items.forEach(item => {
         if (!item) return;
+
+        // Este console.log está bien aquí (dentro del forEach)
+        console.log(`Item ${item.item} - tiene secciones:`, item.secciones);
 
         let headingLevel;
         switch (level) {
@@ -201,8 +156,8 @@ const processHierarchicalItemsToWord = (items: any[], sections: any[], level: nu
             }));
         }
 
-        if (item.detallesTecnicos) {
-            addTechnicalDetailsToWord(item.detallesTecnicos, sections);
+        if (item.secciones && item.secciones.length > 0) {
+            addSectionsToWord(item.secciones, sections);
         }
 
         if (item._children && item._children.length > 0) {
@@ -211,6 +166,9 @@ const processHierarchicalItemsToWord = (items: any[], sections: any[], level: nu
     });
 };
 
+// ─────────────────────────────────────────────
+// GENERAR SECCIONES DEL WORD
+// ─────────────────────────────────────────────
 const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
     if (!data || !Array.isArray(data) || data.length === 0) {
         return [new Paragraph({ text: "No se encontraron datos para esta sección." })];
@@ -227,10 +185,12 @@ const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
     }));
 
     processHierarchicalItemsToWord(data, sections, 1);
-
     return sections;
 };
 
+// ─────────────────────────────────────────────
+// FILTRADO DE DATOS POR SECCIÓN (original)
+// ─────────────────────────────────────────────
 const filterTreeData = (data: any[], sectionName: string): any[] => {
     if (!data || !Array.isArray(data)) return [];
 
@@ -247,7 +207,6 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
 
     const filterItems = (items: any[]): any[] => {
         if (!items) return [];
-
         return items.reduce((acc: any[], item: any) => {
             const descripcion = (item.descripcion || '').toLowerCase();
             const itemCode = (item.item || '').toLowerCase();
@@ -258,17 +217,18 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
             );
 
             if (matches) {
+                // Mantener las secciones
                 acc.push({ ...item });
             } else if (item._children && item._children.length > 0) {
                 const filteredChildren = filterItems(item._children);
                 if (filteredChildren.length > 0) {
+                    // Mantener las secciones del padre si tiene hijos filtrados
                     acc.push({
                         ...item,
                         _children: filteredChildren
                     });
                 }
             }
-
             return acc;
         }, []);
     };
@@ -276,24 +236,27 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
     return filterItems(data);
 };
 
-const generarWordParaSeccion = async (datosFiltrados: any[], nombreArchivoBase: string, showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void) => {
+// ─────────────────────────────────────────────
+// GENERAR UN DOCUMENTO PARA UNA SECCIÓN
+// ─────────────────────────────────────────────
+const generarWordParaSeccion = async (
+    datosFiltrados: any[],
+    nombreArchivoBase: string,
+    showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void
+) => {
     const logoFile = (document.getElementById('logoFile') as HTMLInputElement)?.files?.[0] || null;
     const escudoFile = (document.getElementById('escudoFile') as HTMLInputElement)?.files?.[0] || null;
     const principalFile = (document.getElementById('logoPrinFile') as HTMLInputElement)?.files?.[0] || null;
     const firmaFile = (document.getElementById('firmaFile') as HTMLInputElement)?.files?.[0] || null;
 
-    const readFileAsDataURL = (file: File): Promise<string | null> => {
-        return new Promise((resolve, reject) => {
-            if (!file) {
-                resolve(null);
-                return;
-            }
+    const readFileAsDataURL = (file: File): Promise<string | null> =>
+        new Promise((resolve, reject) => {
+            if (!file) { resolve(null); return; }
             const reader = new FileReader();
             reader.onload = (event) => resolve(event.target?.result as string);
-            reader.onerror = (error) => reject(error);
+            reader.onerror = reject;
             reader.readAsDataURL(file);
         });
-    };
 
     let logoDataUrl = null;
     let escudoDataUrl = null;
@@ -329,18 +292,12 @@ const generarWordParaSeccion = async (datosFiltrados: any[], nombreArchivoBase: 
         transformation: { width: 70, height: 70 },
     }) : null;
 
+    // Header y Footer con porcentajes (estilo original) — no provocan error verticalFillMode
     const header = new Header({
         children: [
             new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
-                borders: {
-                    top: { style: BorderStyle.NONE },
-                    bottom: { style: BorderStyle.NONE },
-                    left: { style: BorderStyle.NONE },
-                    right: { style: BorderStyle.NONE },
-                    insideHorizontal: { style: BorderStyle.NONE },
-                    insideVertical: { style: BorderStyle.NONE },
-                },
+                borders: sinBordes(),
                 rows: [
                     new TableRow({
                         children: [
@@ -468,18 +425,18 @@ const generarWordParaSeccion = async (datosFiltrados: any[], nombreArchivoBase: 
 
     try {
         const blob = await Packer.toBlob(doc);
-        saveAs(blob, `especificaciones_tecnicas_${nombreArchivoBase.replace(/ /g, '_')}.docx`);
-        if (showNotification) showNotification('success', `Documento para ${nombreArchivoBase} generado con éxito`);
+        const safeName = nombreArchivoBase.replace(/[^a-z0-9]/gi, '_');
+        saveAs(blob, `especificaciones_tecnicas_${safeName}.docx`);
+        showNotification?.('success', `Documento para ${nombreArchivoBase} generado con éxito`);
     } catch (error) {
         console.error("Error al generar el documento:", error);
-        if (showNotification) showNotification('error', "Error al generar el documento Word");
+        showNotification?.('error', "Error al generar el documento Word");
     }
 };
 
 // ─────────────────────────────────────────────
-// COMPONENTE PRINCIPAL DE EXPORTACIÓN
+// COMPONENTE MODAL
 // ─────────────────────────────────────────────
-
 const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, onGenerateStart, onGenerateEnd, showNotification }) => {
     const [generatingWord, setGeneratingWord] = useState(false);
     const [selectedSections, setSelectedSections] = useState({
@@ -503,22 +460,23 @@ const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, 
     const handleGenerateWord = async () => {
         const data = getData();
 
+        console.log('Datos en modal (primer nivel):', data);
+
         const selectedSecciones = Object.entries(selectedSections)
             .filter(([_, value]) => value)
             .map(([key]) => sectionLabels[key]);
 
         if (selectedSecciones.length === 0) {
-            if (showNotification) showNotification('error', 'Debe seleccionar al menos una sección');
+            showNotification?.('error', 'Debe seleccionar al menos una sección');
             return;
         }
-
         if (!data || data.length === 0) {
-            if (showNotification) showNotification('warning', 'No hay datos para generar el documento');
+            showNotification?.('warning', 'No hay datos para generar el documento');
             return;
         }
 
         setGeneratingWord(true);
-        if (onGenerateStart) onGenerateStart();
+        onGenerateStart?.();
 
         try {
             for (const seccion of selectedSecciones) {
@@ -526,20 +484,20 @@ const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, 
                 if (datosFiltrados.length > 0) {
                     await generarWordParaSeccion(datosFiltrados, seccion, showNotification);
                 } else {
-                    if (showNotification) showNotification('warning', `No se encontraron datos para la sección ${seccion}`);
+                    showNotification?.('warning', `No se encontraron datos para la sección ${seccion}`);
                 }
             }
+            onClose();
         } finally {
             setGeneratingWord(false);
-            if (onGenerateEnd) onGenerateEnd();
-            onClose();
+            onGenerateEnd?.();
         }
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
                 <div className="bg-gray-100 px-6 py-4 rounded-t-lg border-b">
                     <h2 className="text-lg font-bold text-gray-800">Generar Documento Word</h2>

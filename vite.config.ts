@@ -21,7 +21,13 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
+
     esbuild: {
         jsx: 'automatic',
+    },
+
+    // 🔥 AGREGA ESTO
+    optimizeDeps: {
+        include: ['docx'],
     },
 });
