@@ -17,6 +17,7 @@ import {
 import type { CalcPayload, MeasureInputs, MeasureOutputs } from './gas_types';
 import { r4, toNum } from './gas_utils';
 
+
 const FORMULA_VARIABLES = [
   { key: 'elsim', label: 'Elem.Sim.', desc: 'Elemento Similar' },
   { key: 'largo', label: 'Largo', desc: 'Largo' },
