@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { addProjectHeaderAndFooter } from './excel-export-utils';
 
 interface AguaData {
     tables: {};
@@ -103,8 +104,7 @@ function applyRowStyle(row: ExcelJS.Row, colCount: number, integerCols: number[]
     }
 }
 // Función principal de exportación
-// Cambia la definición de la función así:
-export async function exportAguaToExcel(dataSheet: any, fileName: string = 'Calculo_Agua') {
+export async function exportAguaToExcel(dataSheet: AguaData, fileName: string = 'Calculo_Agua', proyecto?: any) {
     const workbook = new ExcelJS.Workbook();
 
     // HOJA 1: DEMANDA DIARIA
@@ -5677,6 +5677,16 @@ rrSelectedGrades.forEach((grade, idx) => {
 rrSep(rr7, 16); rr7++;
  
     // GENERAR ARCHIVO
+    // =========================================================================
+    // Exportación y descargas
+    // Add headers/footers BEFORE write buffer
+    if (proyecto) {
+        for (const sheet of workbook.worksheets) {
+            const numCols = sheet.columns?.length || sheet.columnCount || 5;
+            await addProjectHeaderAndFooter(workbook, sheet, proyecto, numCols, 'MEMORIA DE CÁLCULO DE AGUA');
+        }
+    }
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { addProjectHeaderAndFooter } from './excel-export-utils';
 
 interface DesagueData {
     ud?: any;
@@ -97,7 +98,7 @@ function applyRowStyle(row: ExcelJS.Row, colCount: number, integerCols: number[]
     }
 }
 
-export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileName: string = 'Calculo_Desague') {
+export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileName: string = 'Calculo_Desague', proyecto?: any) {
     try {
         const workbook = new ExcelJS.Workbook();
 
@@ -1327,6 +1328,12 @@ export async function exportDesagueToExcel(dataSheet: Record<string, any>, fileN
 
 
         // ========== GENERAR ARCHIVO ==========
+        if (proyecto) {
+            for (const sheet of workbook.worksheets) {
+                const numCols = sheet.columns?.length || sheet.columnCount || 5;
+                await addProjectHeaderAndFooter(workbook, sheet, proyecto, numCols, 'CÁLCULO DE DESAGÜE Y VENTILACIÓN');
+            }
+        }
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

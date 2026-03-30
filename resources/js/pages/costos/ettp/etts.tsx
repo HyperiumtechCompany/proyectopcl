@@ -351,42 +351,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
-    const getTableData = () => {
-        if (isWordModalOpen) return datosBase;
-        // Si no está abierto el modal, puedes devolver los datos de la tabla
-        return tabulatorRef.current?.getData() || datosBase;
-    };
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
-        { title: proyecto?.nombre, href: `/costos/${proyecto?.id}` },
-        { title: 'ETTP', href: '#' }
+        { title: proyecto?.nombre ?? 'Proyecto', href: `/costos/${proyecto?.id}` },
+        { title: 'ETTP', href: '#' },
     ];
-
-    // ─────────────────────────────────────────────
-    // INICIALIZACIÓN DE TABULATOR
-    // ─────────────────────────────────────────────
-
-    useEffect(() => {
-        if (!tableContainerRef.current) return;
-        let isMounted = true;
-        let retryCount = 0;
-        const MAX_RETRIES = 30;
-
-        const initTabulator = () => {
-            const TabulatorClass = (window as any).Tabulator;
-            if (!TabulatorClass || !tableContainerRef.current) {
-                retryCount++;
-                if (retryCount < MAX_RETRIES) { setTimeout(initTabulator, 200); }
-                else { console.error('[Tabulator] No se pudo inicializar'); }
-                return;
-            }
-            if (!isMounted) return;
-
-            const container = tableContainerRef.current;
-            if (container.clientHeight === 0) {
-                setTimeout(initTabulator, 100);
-                return;
-            }
 
             try {
                 const table = new TabulatorClass(container, {
@@ -510,6 +479,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     }}
                     getData={getTableData}
                     showNotification={showNotification}
+                    proyecto={proyecto}
                 />
             </div>
         </AppLayout>

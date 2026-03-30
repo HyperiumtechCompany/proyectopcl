@@ -27,6 +27,10 @@ class CostoProject extends Model
         'centro_poblado',
         'database_name',
         'status',
+        'plantilla_logo_izq',
+        'plantilla_logo_der',
+        'portada_logo_center',
+        'plantilla_firma',
     ];
 
     protected function casts(): array

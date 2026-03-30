@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class CostoProjectController extends Controller
@@ -79,6 +80,10 @@ class CostoProjectController extends Controller
             'modules' => 'required|array|min:1',
             'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
+            'plantilla_logo_izq' => 'nullable|image|max:2048',
+            'plantilla_logo_der' => 'nullable|image|max:2048',
+            'portada_logo_center' => 'nullable|image|max:2048',
+            'plantilla_firma' => 'nullable|image|max:2048',
         ]);
 
         $dbName = CostoProject::generateDatabaseName(Auth::id());
@@ -104,6 +109,10 @@ class CostoProjectController extends Controller
                 'distrito_id' => $validated['distrito_id'] ?? null,
                 'centro_poblado' => $validated['centro_poblado'] ?? null,
                 'database_name' => $dbName,
+                'plantilla_logo_izq' => $request->hasFile('plantilla_logo_izq') ? $request->file('plantilla_logo_izq')->store('costos/templates', 'public') : null,
+                'plantilla_logo_der' => $request->hasFile('plantilla_logo_der') ? $request->file('plantilla_logo_der')->store('costos/templates', 'public') : null,
+                'portada_logo_center' => $request->hasFile('portada_logo_center') ? $request->file('portada_logo_center')->store('costos/templates', 'public') : null,
+                'plantilla_firma' => $request->hasFile('plantilla_firma') ? $request->file('plantilla_firma')->store('costos/templates', 'public') : null,
             ]);
 
             // 2️⃣ Crear módulos seleccionados
@@ -217,6 +226,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
                 'created_at' => $costoProject->created_at->format('d/m/Y'),
             ],
@@ -253,6 +266,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
             ],
         ]);
@@ -285,6 +302,10 @@ class CostoProjectController extends Controller
             'modules' => 'required|array|min:1',
             'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
+            'plantilla_logo_izq' => 'nullable|image|max:2048',
+            'plantilla_logo_der' => 'nullable|image|max:2048',
+            'portada_logo_center' => 'nullable|image|max:2048',
+            'plantilla_firma' => 'nullable|image|max:2048',
         ]);
 
         try {
@@ -305,6 +326,32 @@ class CostoProjectController extends Controller
                 'distrito_id' => $validated['distrito_id'] ?? null,
                 'centro_poblado' => $validated['centro_poblado'] ?? null,
             ]);
+
+            if ($request->hasFile('plantilla_logo_izq')) {
+                if ($costoProject->plantilla_logo_izq) {
+                    Storage::disk('public')->delete($costoProject->plantilla_logo_izq);
+                }
+                $costoProject->plantilla_logo_izq = $request->file('plantilla_logo_izq')->store('costos/templates', 'public');
+            }
+            if ($request->hasFile('plantilla_logo_der')) {
+                if ($costoProject->plantilla_logo_der) {
+                    Storage::disk('public')->delete($costoProject->plantilla_logo_der);
+                }
+                $costoProject->plantilla_logo_der = $request->file('plantilla_logo_der')->store('costos/templates', 'public');
+            }
+            if ($request->hasFile('portada_logo_center')) {
+                if ($costoProject->portada_logo_center) {
+                    Storage::disk('public')->delete($costoProject->portada_logo_center);
+                }
+                $costoProject->portada_logo_center = $request->file('portada_logo_center')->store('costos/templates', 'public');
+            }
+            if ($request->hasFile('plantilla_firma')) {
+                if ($costoProject->plantilla_firma) {
+                    Storage::disk('public')->delete($costoProject->plantilla_firma);
+                }
+                $costoProject->plantilla_firma = $request->file('plantilla_firma')->store('costos/templates', 'public');
+            }
+            $costoProject->save();
 
             $currentModules = $costoProject->enabledModules()->pluck('module_type')->toArray();
             $newModules = $validated['modules'];
