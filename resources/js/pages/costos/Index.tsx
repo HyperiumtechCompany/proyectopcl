@@ -6,6 +6,7 @@ import {
     Layers, Clock, CheckCircle2, Archive,
     FileX, SlidersHorizontal, TrendingUp,
 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
