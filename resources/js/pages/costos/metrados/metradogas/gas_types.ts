@@ -9,6 +9,7 @@ export interface GasPageProps {
   project: { id: number; nombre: string };
   titulo: string;
   baseURL: string;
+  modulos: Record<number, Record<string, any>[]>;
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
   [key: string]: unknown;
@@ -33,6 +34,7 @@ export interface MeasureInputs {
   alto: number;
   nveces: number;
   kg: number;
+  kgm: number;
 }
 
 /** Columnas de resultado (solo una se activa según la unidad) */

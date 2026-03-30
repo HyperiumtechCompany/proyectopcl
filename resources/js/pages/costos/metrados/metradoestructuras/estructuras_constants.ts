@@ -1,8 +1,5 @@
-// ═══════════════════════════════════════════════════
-// sanitarias_constants.ts — Constantes del módulo Sanitarias
-// ═══════════════════════════════════════════════════
-
 import type { ColumnDef, MeasureInputs, UnitProfile } from './estructuras_types';
+import { r4, toNum, isZeroLike } from './estructuras_utils';
 
 // ── Unidades disponibles ──────────────────────────────────────
 export const UNITS = ['und', 'm', 'm2', 'm3', 'kg', 'glb', 'pto', 'pza', 'ml'] as const;
@@ -63,11 +60,11 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
   m2: [
     {
       key: 'm2_v1',
-      label: 'Largo × Ancho × Veces',
-      activeInputs: ['largo', 'ancho', 'nveces'],
-      outputKey: 'area',
-      formula: 'Área = Largo × Ancho × N° Veces',
-      fn: (v) => ({ area: v.largo * v.ancho * v.nveces }),
+      label: '(Largo + Ancho) × Veces × Elem',
+      activeInputs: ['largo', 'ancho', 'nveces', 'elsim'],
+      outputKey: 'lon',
+      formula: 'Lon. = (Largo + Ancho) × N° Veces × Elem. Similar',
+      fn: (v) => ({ lon: (v.largo + v.ancho) * v.nveces * v.elsim }),
     },
     {
       key: 'm2_v2',
@@ -170,6 +167,26 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
   // ─────────────────────────────────────────────────────────────
   kg: [
     {
+      key: 'kg_vbase',
+      label: 'Simil × (L+A+H) × Veces × kg/m',
+      activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm'],
+      outputKey: 'kg',
+      formula: 'Kg = [Elsim × (Largo + Ancho + Alto) × Veces] × kg/m',
+
+      fn: (v) => {
+        const lon = v.elsim * (v.largo + v.ancho + v.alto) * v.nveces;
+        const kg = lon * v.kgm;
+
+        if (!v.kgm) {
+          return {
+            lon: r4(lon),
+            kg: 0, 
+          };
+        }
+        return { lon: r4(lon), kg: r4(kg) };
+      },
+    },
+    {
       key: 'kg_v1',
       label: 'Longitud × kg/m',
       activeInputs: ['largo', 'kg'],
@@ -225,11 +242,11 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
     },
     {
       key: 'm_v2',
-      label: '(Largo + Ancho) × Veces',
-      activeInputs: ['largo', 'ancho', 'nveces'],
+      label: '(Largo + Ancho) × Veces × Elem',
+      activeInputs: ['largo', 'ancho', 'nveces', 'elsim'],
       outputKey: 'lon',
-      formula: 'Lon. = (Largo + Ancho) × N° Veces',
-      fn: (v) => ({ lon: (v.largo + v.ancho) * v.nveces }),
+      formula: 'Lon. = (Largo + Ancho) × N° Veces × Elem. Similar',
+      fn: (v) => ({ lon: (v.largo + v.ancho) * v.nveces * v.elsim }),
     },
     {
       key: 'm_v3',
@@ -458,8 +475,9 @@ export const INPUT_LABELS: Record<keyof MeasureInputs, string> = {
   alto:   'Alto',
   nveces: 'N° Veces',
   kg:     'Kg.',
+  kgm: 'kg/m',
 };
 
 export const ALL_INPUTS: (keyof MeasureInputs)[] = [
-  'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg',
+  'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'
 ];

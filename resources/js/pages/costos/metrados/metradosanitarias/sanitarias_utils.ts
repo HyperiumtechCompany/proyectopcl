@@ -374,10 +374,22 @@ export function buildRecalcUpdates(
     const st = isAnchor ? levelStyle(entry.level) : LEAF_STYLE;
 
     OUTPUT_KEYS.forEach((key) => {
-      row[key] = null;
-      setBlank(ri, key, st);
+      const val = toNum(row[key]);
+
+      // SOLO limpiar si está vacío
+      if (isZeroLike(val)) {
+        row[key] = null;
+        setBlank(ri, key, st);
+      }
     });
-    setBlank(ri, 'total', st);
+
+    // conservar total manual si existe
+    const manualTotal = toNum(row.total);
+
+    // Solo limpiar total si NO hay valor manual
+    if (isZeroLike(manualTotal)) {
+      setBlank(ri, 'total', st);
+    }
 
     const unit = String(row.unidad ?? '').trim().toLowerCase();
     const profile = UNIT_PROFILES[unit];
@@ -393,10 +405,11 @@ export function buildRecalcUpdates(
       alto: toNum(row.alto),
       nveces: toNum(row.nveces),
       kg: toNum(row.kg),
+      kgm: toNum(row.kgm),
     };
 
     const activeProfile = Array.isArray(profile) ? profile[0] : profile;
-    const outputs = activeProfile.fn(inputs); 
+    let outputs = activeProfile.fn(inputs);
 
     // Mostrar TODOS los valores de salida calculados
     OUTPUT_KEYS.forEach((key) => {
@@ -407,9 +420,22 @@ export function buildRecalcUpdates(
       }
     });
 
-    // El valor principal para el total
+    const manualFromOutputs =
+      OUTPUT_KEYS
+        .map((k) => toNum(row[k]))
+        .find((v) => !isZeroLike(v)) ?? 0;
+
     const outVal = r4(outputs[activeProfile.outputKey] ?? 0);
-    entry.total = isAnchor ? 0 : outVal;
+
+    entry.total = isAnchor
+      ? 0
+      : (
+          !isZeroLike(manualTotal)
+            ? manualTotal
+            : (!isZeroLike(manualFromOutputs)
+                ? manualFromOutputs
+                : outVal)
+        );
   });
 
   let currentAnchor: RowEntry | null = null;
@@ -439,6 +465,37 @@ export function buildRecalcUpdates(
 
     set(entry.ri, 'total', styledNum(entry.total, st));
   });
+
+  return updates;
+}
+
+// SOLO TOTALES (modo manual + modal)
+export function buildTotalUpdates(data: any[][]) {
+  const updates: Array<{ r: number; c: number; v: any }> = [];
+
+  for (let r = 1; r < data.length; r++) {
+    const row = readRow(data, r);
+
+    // Ignorar filas vacías
+    if (!ALL_COLS.some((col) => row[col.key] !== null && row[col.key] !== '')) continue;
+
+    const totalCol = CI.total;
+    if (totalCol === undefined) continue;
+
+    const lon  = toNum(row.lon);
+    const area = toNum(row.area);
+    const vol  = toNum(row.vol);
+    const kg   = toNum(row.kg);
+    const und  = toNum(row.und);
+
+    const total = lon || area || vol || kg || und;
+
+    updates.push({
+      r,
+      c: totalCol,
+      v: mkNum(total),
+    });
+  }
 
   return updates;
 }
