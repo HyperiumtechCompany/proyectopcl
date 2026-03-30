@@ -1,6 +1,3 @@
-// ===================================================
-// estructuras_utils.ts - Helpers puros + conversion Luckysheet
-// ===================================================
 
 import {
   ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE,
@@ -14,6 +11,13 @@ export const toNum = (v: unknown): number => {
 };
 
 export const r4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+export const formatNumber = (n: number): string => {
+  if (isZeroLike(n)) return '';
+  const rounded = Math.round(n * 100) / 100; // Redondea a 2 decimales
+  return Number.isInteger(rounded) 
+    ? String(rounded) 
+    : rounded.toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+};
 export const blank = (v: any): boolean => v === null || v === undefined || v === '' || v === 0;
 export const trim0 = (v: unknown): string => String(v ?? '').trimStart();
 export const isZeroLike = (v: unknown): boolean => {
@@ -70,10 +74,14 @@ export const mkNum = (v: number, keepZero = false) => {
     return mkBlank();
   }
 
+  const display = formatNumber(v);
+  
+  if (!display) return mkBlank();
+
   return {
     v,
-    m: String(v),
-    ct: { fa: '#,##0.0000', t: 'n' },
+    m: display,
+    ct: { fa: 'General', t: 'n' }, 
   };
 };
 
@@ -84,13 +92,26 @@ export const mkTxt = (v: string, extra: Record<string, any> = {}) => ({
   ...extra,
 });
 
-export const styledNum = (v: number, st: { bg: string; fc: string; bl: number }, keepZero = false) => ({
-  ...mkNum(v, keepZero),
-  bl: st.bl,
-  fs: 10,
-  bg: st.bg,
-  fc: st.fc,
-});
+export const styledNum = (v: number, st: { bg: string; fc: string; bl: number }, keepZero = false) => {
+  if (!keepZero && isZeroLike(v)) {
+    return { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+  }
+
+  const display = formatNumber(v);
+  if (!display) {
+    return { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+  }
+
+  return {
+    v,
+    m: display,
+    ct: { fa: 'General', t: 'n' }, 
+    bl: st.bl,
+    fs: 10,
+    bg: st.bg,
+    fc: st.fc,
+  };
+};
 
 export const styledTxt = (v: string, display: string, st: { bg: string; fc: string; bl: number }) => ({
   v,
@@ -189,20 +210,25 @@ export function rowsToSheet(
       );
 
       if (isBlankNumeric) {
-        const cell: Record<string, any> = { ...mkBlank(), fs: 10 };
-        if (st.bg) {
-          cell.bg = st.bg;
-          cell.fc = st.fc;
-        }
+        const cell: Record<string, any> = {
+          v: '',  
+          m: '',  
+          ct: {
+            fa: 'General',  
+            t: isNum ? 'n' : 'g',
+          },
+          bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
+          fs: 10,
+        };
         cells.push({ r: rIdx, c: ci, v: cell });
         return;
       }
 
       const cell: Record<string, any> = {
         v: isNum ? Number(store) : String(store),
-        m: display,
+        m: isNum ? formatNumber(Number(store)) : display,
         ct: {
-          fa: isNum ? '#,##0.0000' : '@',
+          fa: 'General',
           t: isNum ? 'n' : 'g',
         },
         bl: (col.key === 'descripcion' || col.key === 'partida') ? st.bl : 0,
@@ -345,10 +371,22 @@ export function buildRecalcUpdates(
     const st = isAnchor ? levelStyle(entry.level) : LEAF_STYLE;
 
     OUTPUT_KEYS.forEach((key) => {
-      row[key] = null;
-      setBlank(ri, key, st);
+      const val = toNum(row[key]);
+
+      // SOLO limpiar si está vacío
+      if (isZeroLike(val)) {
+        row[key] = null;
+        setBlank(ri, key, st);
+      }
     });
-    setBlank(ri, 'total', st);
+
+    // conservar total manual si existe
+    const manualTotal = toNum(row.total);
+
+    // Solo limpiar total si NO hay valor manual
+    if (isZeroLike(manualTotal)) {
+      setBlank(ri, 'total', st);
+    }
 
     const unit = String(row.unidad ?? '').trim().toLowerCase();
     const profile = UNIT_PROFILES[unit];
@@ -364,14 +402,37 @@ export function buildRecalcUpdates(
       alto: toNum(row.alto),
       nveces: toNum(row.nveces),
       kg: toNum(row.kg),
+      kgm: toNum(row.kgm),
     };
 
-    const outputs = profile.fn(inputs);
-    const outVal = r4(outputs[profile.outputKey] ?? 0);
+    const activeProfile = Array.isArray(profile) ? profile[0] : profile;
+    let outputs = activeProfile.fn(inputs);
 
-    row[profile.outputKey] = outVal;
-    set(ri, profile.outputKey, isAnchor ? styledNum(outVal, st) : mkNum(outVal));
-    entry.total = isAnchor ? 0 : outVal;
+    // Mostrar TODOS los valores de salida calculados
+    OUTPUT_KEYS.forEach((key) => {
+      if (outputs[key] !== undefined && !isZeroLike(outputs[key])) {
+        const val = r4(outputs[key]);
+        row[key] = val;
+        set(ri, key, isAnchor ? styledNum(val, st) : mkNum(val));
+      }
+    });
+
+    const manualFromOutputs =
+      OUTPUT_KEYS
+        .map((k) => toNum(row[k]))
+        .find((v) => !isZeroLike(v)) ?? 0;
+
+    const outVal = r4(outputs[activeProfile.outputKey] ?? 0);
+
+    entry.total = isAnchor
+      ? 0
+      : (
+          !isZeroLike(manualTotal)
+            ? manualTotal
+            : (!isZeroLike(manualFromOutputs)
+                ? manualFromOutputs
+                : outVal)
+        );
   });
 
   let currentAnchor: RowEntry | null = null;
@@ -401,6 +462,37 @@ export function buildRecalcUpdates(
 
     set(entry.ri, 'total', styledNum(entry.total, st));
   });
+
+  return updates;
+}
+
+// SOLO TOTALES (modo manual + modal)
+export function buildTotalUpdates(data: any[][]) {
+  const updates: Array<{ r: number; c: number; v: any }> = [];
+
+  for (let r = 1; r < data.length; r++) {
+    const row = readRow(data, r);
+
+    // Ignorar filas vacías
+    if (!ALL_COLS.some((col) => row[col.key] !== null && row[col.key] !== '')) continue;
+
+    const totalCol = CI.total;
+    if (totalCol === undefined) continue;
+
+    const lon  = toNum(row.lon);
+    const area = toNum(row.area);
+    const vol  = toNum(row.vol);
+    const kg   = toNum(row.kg);
+    const und  = toNum(row.und);
+
+    const total = lon || area || vol || kg || und;
+
+    updates.push({
+      r,
+      c: totalCol,
+      v: mkNum(total),
+    });
+  }
 
   return updates;
 }

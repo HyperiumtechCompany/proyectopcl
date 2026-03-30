@@ -1,6 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
-import Swal from 'sweetalert2';
 import {
     FolderOpen, Plus, Pencil, Trash2, ChevronRight,
     LayoutGrid, List, Search, Building2, Hash,

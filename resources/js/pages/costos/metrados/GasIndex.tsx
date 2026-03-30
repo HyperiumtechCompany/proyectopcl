@@ -289,12 +289,24 @@ export default function GasIndex() {
   // Escribe inputs + output en la fila y re-recalcula
   // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, inputs, outputs, outputKey }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
     const sheetOrder = active.order ?? 0;
     const ups: Array<{ r: number; c: number; v: any }> = [];
+
+  if (descripcion && CI.descripcion !== undefined) {
+    ups.push({
+      r: ri,
+      c: CI.descripcion,
+      v: mkTxt(descripcion.trim())
+    });
+  }
+
+    if (CI.unidad !== undefined) {
+      ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
+    }
 
     // Inputs
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
@@ -614,7 +626,14 @@ export default function GasIndex() {
               showstatisticBar: true,
               // Recalcular tras cada edición manual
               afterChange: () => setTimeout(recalc, 80),
-              // Menú contextual simplificado (sin botones de fila que ya no existen)
+
+              defaultCellStyle: {
+                bg: '#ffffff',
+                fc: '#000000',
+                bl: 1,  // Borde visible
+                bc: '#d1d5db',  // Color del borde (gris)
+              },
+
               contextMenu: {
                 row: [
                   {

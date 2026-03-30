@@ -31,7 +31,7 @@ import {
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
   levelStyle,
 } from './metradocomunicaciones/comunicaciones_utils';
-import type { CalcPayload, comunicacionesPageProps, RowKind } from './metradocomunicaciones/comunicaciones_types';
+import type { CalcPayload, ComunicacionesPageProps, RowKind } from './metradocomunicaciones/comunicaciones_types';
 import { CalcModal }     from './metradocomunicaciones/comunicaciones_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradocomunicaciones/comunicaciones_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
@@ -224,7 +224,7 @@ function useAutoSave(projectId: number) {
 // ═══════════════════════════════════════════════════════════════
 
 export default function comunicacionesIndex() {
-  const { project, metrado, resumen } = usePage<comunicacionesPageProps>().props;
+  const { project, metrado, resumen } = usePage<ComunicacionesPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',             href: '/costos' },
@@ -289,12 +289,24 @@ export default function comunicacionesIndex() {
   // Escribe inputs + output en la fila y re-recalcula
   // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, inputs, outputs, outputKey }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
     const sheetOrder = active.order ?? 0;
     const ups: Array<{ r: number; c: number; v: any }> = [];
+
+  if (descripcion && CI.descripcion !== undefined) {
+        ups.push({
+          r: ri,
+          c: CI.descripcion,
+          v: mkTxt(descripcion.trim())
+        });
+      }  
+  
+      if (CI.unidad !== undefined) {
+        ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
+      }
 
     // Inputs
     (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
