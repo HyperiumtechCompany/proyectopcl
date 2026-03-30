@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 
 // Módulo local Sanitarias
 import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradosanitarias/sanitarias_constants';
-import { buildRecalcUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
+import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
 import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
@@ -261,6 +261,7 @@ export default function SanitariasIndex() {
   const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
   const progCount = useRef(0);
+  const isProgrammaticChange = useRef(false);
 
   // ── Datos iniciales (N hojas dynamically generadas) ─────────
   const initialSheets = useMemo(() => {
@@ -360,6 +361,8 @@ export default function SanitariasIndex() {
       ups.push({ r:ri, c: CI.total, v: mkBlank() });
     }
 
+    isProgrammaticChange.current = true;
+    
     progCount.current++;
     ups.forEach(({ c, v }, i) => {
       ls()?.setCellValue(ri, c, v, {
@@ -371,6 +374,11 @@ export default function SanitariasIndex() {
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       recalc();
+
+      setTimeout(() => {
+        isProgrammaticChange.current = false;
+      }, 50);
+
     }, 120);
   }, [getActive, ls, recalc]);
 
