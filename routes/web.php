@@ -293,7 +293,6 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::delete('/imagen/{id}', [EttpController::class, 'eliminarImagen'])->name('imagen.eliminar');
             Route::get('/huerfanas', [EttpController::class, 'getHuerfanas'])->name('huerfanas');
             Route::post('/eliminar-huerfanas', [EttpController::class, 'eliminarHuerfanas'])->name('huerfanas.eliminar');
-            Route::put('/costos/{proyectoId}/ettp/partida/{partidaId}/secciones', [EttpController::class, 'updateSecciones']);
         });
 }); // Cierre de costos
 

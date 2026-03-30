@@ -45,6 +45,10 @@ export interface EttpPageProps {
     proyecto?: {
         id: number;
         nombre: string;
+        plantilla_logo_izq_url?: string | null;
+        plantilla_logo_der_url?: string | null;
+        portada_logo_center_url?: string | null;
+        plantilla_firma_url?: string | null;
     };
     partidas?: EttpPartidaData[];
     especialidades?: EspecialidadInfo[];

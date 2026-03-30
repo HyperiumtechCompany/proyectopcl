@@ -39,9 +39,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const tabulatorRef = useRef<any>(null);
     const templatesRef = useRef<any[]>(templatesData);
 
-    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(
-        partidas && partidas.length > 0 ? partidas : DEFAULT_DATA
-    );
+    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(partidas && partidas.length > 0 ? partidas : DEFAULT_DATA);
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [currentData, setCurrentData] = useState<any>(null);
     const [currentSections, setCurrentSections] = useState<Section[]>([]);
@@ -73,6 +71,37 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     };
 
     const getCsrfToken = (): string => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    /** Mapea secciones del formato frontend (title/content) al formato backend (titulo/contenido) */
+    const mapSectionsForBackend = (sections: Section[]): any[] => {
+        return sections.map(s => ({
+            id: s.id,
+            titulo: s.title,
+            slug: s.slug,
+            contenido: s.content,
+            origen: s.origen,
+            orden: s.orden,
+        }));
+    };
+
+    /** Mapea recursivamente el árbol de partidas para el backend */
+    const mapTreeForBackend = (nodes: any[]): any[] => {
+        return nodes.map(node => {
+            const mapped: any = { ...node };
+            if (mapped.secciones && Array.isArray(mapped.secciones)) {
+                mapped.secciones = mapSectionsForBackend(mapped.secciones);
+            }
+            if (mapped._children && Array.isArray(mapped._children)) {
+                mapped._children = mapTreeForBackend(mapped._children);
+            }
+            return mapped;
+        });
+    };
+
+    // Obtener datos de la tabla para exportar
+    const getTableData = (): any[] => {
+        return tabulatorRef.current?.getData() || [];
+    };
 
     // ─────────────────────────────────────────────
     // FUNCIONES DE TRANSFORMACIÓN DE DATOS
@@ -120,7 +149,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                 id: parseInt(node.codigo.replace(/\./g, '')) || Math.random(),
                 item: node.codigo,
                 descripcion: node.titulo || node.descripcion || node.codigo_completo || '',
-                // Solo asignar unidad si existe y no está vacía
                 unidad: node.unidad_medida && node.unidad_medida !== '' ? node.unidad_medida : '',
                 secciones: sections,
             };
@@ -135,6 +163,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         return templates.map(processNode);
     };
+
     // ─────────────────────────────────────────────
     // MANEJADORES DE EVENTOS
     // ─────────────────────────────────────────────
@@ -150,14 +179,12 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             return;
         }
 
-        // Buscar plantilla y cargar automáticamente (sin guardar)
         const template = buscarTemplate(data.item);
         if (template) {
             const detallesTecnicos = extraerDetalles(template);
             const sections = buildSections(detallesTecnicos);
             setCurrentSections(sections);
             setShowDetailsPanel(true);
-            // ELIMINADO: axios.put... (no se guarda automáticamente)
         } else {
             setCurrentSections(buildSections({}));
             setShowDetailsPanel(true);
@@ -174,7 +201,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         try {
             await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
-                secciones: currentSections
+                secciones: mapSectionsForBackend(currentSections)
             }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
             const rowData = selectedRow.getData();
@@ -182,7 +209,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             rowData.estado = 'en_progreso';
             selectedRow.update(rowData);
 
-            // Actualizar datosBase
             const newData = [...datosBase];
             const updateItem = (items: any[]): boolean => {
                 for (let i = 0; i < items.length; i++) {
@@ -283,7 +309,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                 return;
             }
 
-            // Enriquecer datos del servidor con plantillas
             const enrichWithTemplate = (item: any): any => {
                 if (item.secciones && item.secciones.length > 0) return item;
 
@@ -339,7 +364,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         try {
             await axios.post(
                 `/costos/${idProyecto}/ettp/guardar-general`,
-                { especificaciones_tecnicas: datosGenerales },
+                { especificaciones_tecnicas: mapTreeForBackend(datosGenerales) },
                 { headers: { 'X-CSRF-TOKEN': getCsrfToken() } }
             );
             Swal.fire({ title: 'Éxito', text: 'Datos guardados correctamente', icon: 'success', timer: 1500, showConfirmButton: false });
@@ -357,7 +382,24 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         { title: 'ETTP', href: '#' },
     ];
 
+    // ─────────────────────────────────────────────
+    // EFECTOS
+    // ─────────────────────────────────────────────
+
+    // Inicializar Tabulator
+    useEffect(() => {
+        let isMounted = true;
+        const container = tableContainerRef.current;
+        
+        if (!container) return;
+
+        const initTabulator = () => {
+            if (!isMounted || !container) return;
+            
             try {
+                // @ts-ignore
+                const TabulatorClass = window.Tabulator || Tabulator;
+                
                 const table = new TabulatorClass(container, {
                     data: datosBase,
                     dataTree: true,
@@ -388,15 +430,20 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             }
         };
 
-        setTimeout(initTabulator, 100);
+        const timeoutId = setTimeout(initTabulator, 100);
 
         return () => {
             isMounted = false;
+            clearTimeout(timeoutId);
             if (tabulatorRef.current) {
-                try { tabulatorRef.current.destroy(); } catch (e) { console.warn('[Tabulator] Error al destruir:', e); }
+                try { 
+                    tabulatorRef.current.destroy(); 
+                } catch (e) { 
+                    console.warn('[Tabulator] Error al destruir:', e); 
+                }
             }
         };
-    }, []);
+    }, []); // Dependencia vacía, se inicializa una sola vez
 
     // Sincronizar datos externos con Tabulator
     useEffect(() => {
