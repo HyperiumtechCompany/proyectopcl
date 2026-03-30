@@ -29,6 +29,7 @@ class CostoProject extends Model
         'status',
         'plantilla_logo_izq',
         'plantilla_logo_der',
+        'portada_logo_center',
         'plantilla_firma',
     ];
 

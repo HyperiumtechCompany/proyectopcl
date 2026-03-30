@@ -82,6 +82,7 @@ class CostoProjectController extends Controller
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
             'plantilla_logo_izq' => 'nullable|image|max:2048',
             'plantilla_logo_der' => 'nullable|image|max:2048',
+            'portada_logo_center' => 'nullable|image|max:2048',
             'plantilla_firma' => 'nullable|image|max:2048',
         ]);
 
@@ -110,6 +111,7 @@ class CostoProjectController extends Controller
                 'database_name' => $dbName,
                 'plantilla_logo_izq' => $request->hasFile('plantilla_logo_izq') ? $request->file('plantilla_logo_izq')->store('costos/templates', 'public') : null,
                 'plantilla_logo_der' => $request->hasFile('plantilla_logo_der') ? $request->file('plantilla_logo_der')->store('costos/templates', 'public') : null,
+                'portada_logo_center' => $request->hasFile('portada_logo_center') ? $request->file('portada_logo_center')->store('costos/templates', 'public') : null,
                 'plantilla_firma' => $request->hasFile('plantilla_firma') ? $request->file('plantilla_firma')->store('costos/templates', 'public') : null,
             ]);
 
@@ -224,9 +226,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
-                'plantilla_logo_izq' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
-                'plantilla_firma' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
                 'created_at' => $costoProject->created_at->format('d/m/Y'),
             ],
@@ -263,9 +266,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
-                'plantilla_logo_izq' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
-                'plantilla_firma' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
             ],
         ]);
@@ -300,6 +304,7 @@ class CostoProjectController extends Controller
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
             'plantilla_logo_izq' => 'nullable|image|max:2048',
             'plantilla_logo_der' => 'nullable|image|max:2048',
+            'portada_logo_center' => 'nullable|image|max:2048',
             'plantilla_firma' => 'nullable|image|max:2048',
         ]);
 
@@ -333,6 +338,12 @@ class CostoProjectController extends Controller
                     Storage::disk('public')->delete($costoProject->plantilla_logo_der);
                 }
                 $costoProject->plantilla_logo_der = $request->file('plantilla_logo_der')->store('costos/templates', 'public');
+            }
+            if ($request->hasFile('portada_logo_center')) {
+                if ($costoProject->portada_logo_center) {
+                    Storage::disk('public')->delete($costoProject->portada_logo_center);
+                }
+                $costoProject->portada_logo_center = $request->file('portada_logo_center')->store('costos/templates', 'public');
             }
             if ($request->hasFile('plantilla_firma')) {
                 if ($costoProject->plantilla_firma) {

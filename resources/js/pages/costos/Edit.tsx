@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
-interface ProjectDetail { id: number; nombre: string; uei: string | null; unidad_ejecutora: string | null; codigo_snip: string | null; codigo_cui: string | null; codigo_local: string | null; fecha_inicio: string | null; fecha_fin: string | null; codigos_modulares: Record<string, string> | null; departamento_id: string | null; provincia_id: string | null; distrito_id: string | null; departamento_nombre?: string | null; provincia_nombre?: string | null; distrito_nombre?: string | null; centro_poblado: string | null; status: string; modules: string[]; plantilla_logo_izq_url?: string | null; plantilla_logo_der_url?: string | null; plantilla_firma_url?: string | null; }
+interface ProjectDetail { id: number; nombre: string; uei: string | null; unidad_ejecutora: string | null; codigo_snip: string | null; codigo_cui: string | null; codigo_local: string | null; fecha_inicio: string | null; fecha_fin: string | null; codigos_modulares: Record<string, string> | null; departamento_id: string | null; provincia_id: string | null; distrito_id: string | null; departamento_nombre?: string | null; provincia_nombre?: string | null; distrito_nombre?: string | null; centro_poblado: string | null; status: string; modules: string[]; plantilla_logo_izq_url?: string | null; plantilla_logo_der_url?: string | null; portada_logo_center_url?: string|null; plantilla_firma_url?: string | null; }
 interface PageProps { moduleTypes: string[]; project: ProjectDetail; [key: string]: unknown; }
 interface UbigeoItem { id: string; nombre: string; }
 
@@ -111,6 +111,7 @@ export default function Edit() {
     // Step 3 fields (Exportación)
     const [plantillaLogoIzq, setPlantillaLogoIzq] = useState<File | null>(null);
     const [plantillaLogoDer, setPlantillaLogoDer] = useState<File | null>(null);
+    const [plantillaPortada, setPlantillaPortada] = useState<File | null>(null);
     const [plantillaFirma, setPlantillaFirma] = useState<File | null>(null);
 
     useEffect(() => {
@@ -191,6 +192,7 @@ export default function Edit() {
             sanitarias_cantidad_modulos: needsModulosConfig ? sanitariasModulos : null,
             plantilla_logo_izq: plantillaLogoIzq,
             plantilla_logo_der: plantillaLogoDer,
+            portada_logo_center: plantillaPortada,
             plantilla_firma: plantillaFirma,
         }, {
             onFinish: () => setProcessing(false),
@@ -674,33 +676,53 @@ export default function Edit() {
                                     </div>
 
                                     <div className="space-y-6">
-                                        <div>
-                                            <label className={labelCls}>Logo Izquierdo (Cabecera)</label>
-                                            <div className="flex gap-4 items-center">
-                                                {project.plantilla_logo_izq_url && (
-                                                    <img src={project.plantilla_logo_izq_url} alt="Logo Izquierdo" className="h-12 w-auto object-contain bg-gray-50 rounded border p-1 dark:bg-gray-800 dark:border-gray-700" />
-                                                )}
-                                                <input type="file" accept="image/*" onChange={e => setPlantillaLogoIzq(e.target.files?.[0] || null)} className={inputCls} />
+                                        {[
+                                            { label: 'Logo Izquierdo (Cabecera)', state: plantillaLogoIzq, setState: setPlantillaLogoIzq, id: 'logo_izq', url: project.plantilla_logo_izq_url, desc: 'Aparece en la parte superior izquierda.' },
+                                            { label: 'Logo Derecho / Escudo (Cabecera)', state: plantillaLogoDer, setState: setPlantillaLogoDer, id: 'logo_der', url: project.plantilla_logo_der_url, desc: 'Aparece en la parte superior derecha.' },
+                                            { label: 'Portada (Imagen Principal)', state: plantillaPortada, setState: setPlantillaPortada, id: 'portada', url: project.portada_logo_center_url, desc: 'Imagen central para la portada.' },
+                                            { label: 'Firma (Pie de página)', state: plantillaFirma, setState: setPlantillaFirma, id: 'firma', url: project.plantilla_firma_url, desc: 'Firma digital para el pie de página.' },
+                                        ].map((item) => (
+                                            <div key={item.id} className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className={labelCls}>{item.label}</label>
+                                                    <span className="text-[10px] text-gray-400 italic">{item.desc}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                    <div className="relative flex-1">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={e => item.setState(e.target.files?.[0] || null)}
+                                                            className={`${inputCls} py-2!`}
+                                                            id={item.id}
+                                                        />
+                                                        {item.state && (
+                                                            <button
+                                                                onClick={() => item.setState(null)}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {(item.state || item.url) && (
+                                                        <div className={`relative h-16 w-32 shrink-0 overflow-hidden rounded-lg border-2 ${item.state ? 'border-dashed border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20' : 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800'}`}>
+                                                            <img
+                                                                src={item.state ? URL.createObjectURL(item.state) : item.url!}
+                                                                alt="Preview"
+                                                                className="h-full w-full object-contain p-1"
+                                                            />
+                                                            {!item.state && item.url && (
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/5 pointer-events-none">
+                                                                    <span className="bg-white/90 px-1 py-0.5 rounded text-[10px] font-bold text-gray-500 shadow-sm border border-gray-200 dark:bg-gray-900/90 dark:text-gray-400 dark:border-gray-700">ACTUAL</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <label className={labelCls}>Logo Derecho / Escudo (Cabecera)</label>
-                                            <div className="flex gap-4 items-center">
-                                                {project.plantilla_logo_der_url && (
-                                                    <img src={project.plantilla_logo_der_url} alt="Logo Derecho" className="h-12 w-auto object-contain bg-gray-50 rounded border p-1 dark:bg-gray-800 dark:border-gray-700" />
-                                                )}
-                                                <input type="file" accept="image/*" onChange={e => setPlantillaLogoDer(e.target.files?.[0] || null)} className={inputCls} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className={labelCls}>Firma (Pie de página)</label>
-                                            <div className="flex gap-4 items-center">
-                                                {project.plantilla_firma_url && (
-                                                    <img src={project.plantilla_firma_url} alt="Firma" className="h-12 w-12 object-contain bg-gray-50 rounded border p-1 dark:bg-gray-800 dark:border-gray-700" />
-                                                )}
-                                                <input type="file" accept="image/*" onChange={e => setPlantillaFirma(e.target.files?.[0] || null)} className={inputCls} />
-                                            </div>
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -709,18 +731,19 @@ export default function Edit() {
                                 <div className="sticky top-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                                     <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Resumen Imágenes</h3>
                                     <div className="space-y-3 text-sm">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Logo Izquierdo</span>
-                                            <span className={`font-bold ${plantillaLogoIzq || project.plantilla_logo_izq_url ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaLogoIzq ? 'Nuevo' : (project.plantilla_logo_izq_url ? 'Actual' : 'Sin Imagen')}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Logo Derecho</span>
-                                            <span className={`font-bold ${plantillaLogoDer || project.plantilla_logo_der_url ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaLogoDer ? 'Nuevo' : (project.plantilla_logo_der_url ? 'Actual' : 'Sin Imagen')}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Firma Pie pág.</span>
-                                            <span className={`font-bold ${plantillaFirma || project.plantilla_firma_url ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaFirma ? 'Nuevo' : (project.plantilla_firma_url ? 'Actual' : 'Sin Imagen')}</span>
-                                        </div>
+                                        {[
+                                            { label: 'Logo Izquierdo', state: plantillaLogoIzq, url: project.plantilla_logo_izq_url },
+                                            { label: 'Logo Derecho', state: plantillaLogoDer, url: project.plantilla_logo_der_url },
+                                            { label: 'Portada', state: plantillaPortada, url: project.portada_logo_center_url },
+                                            { label: 'Firma Pie pág.', state: plantillaFirma, url: project.plantilla_firma_url },
+                                        ].map((img) => (
+                                            <div key={img.label} className="flex items-center justify-between">
+                                                <span className="text-gray-600 dark:text-gray-400">{img.label}</span>
+                                                <span className={`font-bold ${img.state || img.url ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                    {img.state ? 'Nuevo' : (img.url ? 'Actual' : 'Sin Imagen')}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                                 

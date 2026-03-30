@@ -110,6 +110,7 @@ export default function Create() {
     // Step 3 fields (Exportación)
     const [plantillaLogoIzq, setPlantillaLogoIzq] = useState<File | null>(null);
     const [plantillaLogoDer, setPlantillaLogoDer] = useState<File | null>(null);
+    const [plantillaPortada, setPlantillaPortada] = useState<File | null>(null);
     const [plantillaFirma, setPlantillaFirma] = useState<File | null>(null);
 
     useEffect(() => {
@@ -189,6 +190,7 @@ export default function Create() {
             sanitarias_cantidad_modulos: needsModulosConfig ? sanitariasModulos : null,
             plantilla_logo_izq: plantillaLogoIzq,
             plantilla_logo_der: plantillaLogoDer,
+            portada_logo_center: plantillaPortada,
             plantilla_firma: plantillaFirma,
         }, {
             onFinish: () => setProcessing(false),
@@ -687,18 +689,48 @@ export default function Create() {
                                     </div>
 
                                     <div className="space-y-6">
-                                        <div>
-                                            <label className={labelCls}>Logo Izquierdo (Cabecera)</label>
-                                            <input type="file" accept="image/*" onChange={e => setPlantillaLogoIzq(e.target.files?.[0] || null)} className={inputCls} />
-                                        </div>
-                                        <div>
-                                            <label className={labelCls}>Logo Derecho / Escudo (Cabecera)</label>
-                                            <input type="file" accept="image/*" onChange={e => setPlantillaLogoDer(e.target.files?.[0] || null)} className={inputCls} />
-                                        </div>
-                                        <div>
-                                            <label className={labelCls}>Firma (Pie de página)</label>
-                                            <input type="file" accept="image/*" onChange={e => setPlantillaFirma(e.target.files?.[0] || null)} className={inputCls} />
-                                        </div>
+                                        {[
+                                            { label: 'Logo Izquierdo (Cabecera)', state: plantillaLogoIzq, setState: setPlantillaLogoIzq, id: 'logo_izq', desc: 'Aparece en la parte superior izquierda de los reportes.' },
+                                            { label: 'Logo Derecho / Escudo (Cabecera)', state: plantillaLogoDer, setState: setPlantillaLogoDer, id: 'logo_der', desc: 'Aparece en la parte superior derecha (opcional).' },
+                                            { label: 'Portada (Imagen Principal)', state: plantillaPortada, setState: setPlantillaPortada, id: 'portada', desc: 'Imagen central para la portada del proyecto.' },
+                                            { label: 'Firma (Pie de página)', state: plantillaFirma, setState: setPlantillaFirma, id: 'firma', desc: 'Firma digital para el pie de página de los documentos.' },
+                                        ].map((item) => (
+                                            <div key={item.id} className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className={labelCls}>{item.label}</label>
+                                                    <span className="text-[10px] text-gray-400 italic">{item.desc}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                    <div className="relative flex-1">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={e => item.setState(e.target.files?.[0] || null)}
+                                                            className={`${inputCls} py-2!`}
+                                                            id={item.id}
+                                                        />
+                                                        {item.state && (
+                                                            <button
+                                                                onClick={() => item.setState(null)}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {item.state && (
+                                                        <div className="relative h-16 w-32 shrink-0 overflow-hidden rounded-lg border-2 border-dashed border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20">
+                                                            <img
+                                                                src={URL.createObjectURL(item.state)}
+                                                                alt="Preview"
+                                                                className="h-full w-full object-contain p-1"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -707,18 +739,19 @@ export default function Create() {
                                 <div className="sticky top-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
                                     <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Resumen Imágenes</h3>
                                     <div className="space-y-3 text-sm">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Logo Izquierdo</span>
-                                            <span className={`font-bold ${plantillaLogoIzq ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaLogoIzq ? 'Adjunto' : 'Pendiente'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Logo Derecho/Escudo</span>
-                                            <span className={`font-bold ${plantillaLogoDer ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaLogoDer ? 'Adjunto' : 'Pendiente'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Firma Pie pág.</span>
-                                            <span className={`font-bold ${plantillaFirma ? 'text-emerald-600' : 'text-gray-400'}`}>{plantillaFirma ? 'Adjunto' : 'Pendiente'}</span>
-                                        </div>
+                                        {[
+                                            { label: 'Logo Izquierdo', state: plantillaLogoIzq },
+                                            { label: 'Logo Derecho/Escudo', state: plantillaLogoDer },
+                                            { label: 'Portada', state: plantillaPortada },
+                                            { label: 'Firma Pie pág.', state: plantillaFirma },
+                                        ].map((img) => (
+                                            <div key={img.label} className="flex items-center justify-between">
+                                                <span className="text-gray-600 dark:text-gray-400">{img.label}</span>
+                                                <span className={`font-bold ${img.state ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                    {img.state ? 'Adjunto' : 'Pendiente'}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                                 
@@ -851,6 +884,47 @@ export default function Create() {
                                             </div>
                                         </div>
                                     )}
+                                </div>
+
+                                {/* Images summary */}
+                                <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/40">
+                                                <svg className="h-4 w-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                            </div>
+                                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Imágenes de Exportación</h3>
+                                        </div>
+                                        <button onClick={() => setStep(3)} className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400">Editar</button>
+                                    </div>
+
+                                    <div className="p-6">
+                                        {!(plantillaLogoIzq || plantillaLogoDer || plantillaPortada || plantillaFirma) ? (
+                                            <div className="flex flex-col items-center justify-center py-4 text-center">
+                                                <p className="text-xs text-gray-500 italic">No se han seleccionado imágenes opcionales.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                                {[
+                                                    { label: 'Logo Izquierdo', state: plantillaLogoIzq },
+                                                    { label: 'Logo Derecho', state: plantillaLogoDer },
+                                                    { label: 'Portada', state: plantillaPortada },
+                                                    { label: 'Firma', state: plantillaFirma },
+                                                ].map((img, i) => img.state && (
+                                                    <div key={i} className="space-y-2">
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 text-center">{img.label}</p>
+                                                        <div className="relative h-24 w-full overflow-hidden rounded-xl border border-gray-100 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-800/50">
+                                                            <img
+                                                                src={URL.createObjectURL(img.state)}
+                                                                alt={img.label}
+                                                                className="h-full w-full object-contain"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
