@@ -464,18 +464,33 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                 accessorKey: 'unidad',
                 header: 'Und.',
                 size: 60,
-                cell: ({ row: { original: item } }) => (
-                    <div className="text-center text-xs text-slate-400">
-                        {item._level! > 0 && !item._hasChildren ? (
-                            <UnitSelectCell
-                                value={item.unidad}
-                                isEditable={true}
-                                onUpdate={(val) => updateCell(item.partida, 'unidad', val)}/>
-                        ) : (
-                            item.unidad
-                        )}
-                    </div>
-                ),
+                cell: ({ row: { original: item } }) => {
+                    const isPartida = item._level! > 0 && !item._hasChildren;
+                    const missingUnit = isPartida && (!item.unidad || item.unidad.trim() === '');
+                    return (
+                        <div className={`text-center text-xs ${missingUnit ? 'relative' : 'text-slate-400'}`}>
+                            {isPartida ? (
+                                <>
+                                    <UnitSelectCell
+                                        value={item.unidad}
+                                        isEditable={true}
+                                        onUpdate={(val) => updateCell(item.partida, 'unidad', val)}/>
+                                    {missingUnit && (
+                                        <span
+                                            className="absolute -top-0.5 -right-0.5 flex h-2 w-2"
+                                            title="⚠ Unidad requerida para generar ACU"
+                                        >
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                                        </span>
+                                    )}
+                                </>
+                            ) : (
+                                item.unidad
+                            )}
+                        </div>
+                    );
+                },
             },
             {
                 accessorKey: 'metrado',
@@ -636,6 +651,17 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                 <div className="flex items-center gap-3 px-3 py-0.5 text-[10px] text-slate-600">
                     <span>Ctrl+Click: multi-sel. | Shift+Click: rango | Click derecho: menú</span>
                     <div className="flex-1" />
+                    {(() => {
+                        const missingCount = storeRows.filter(
+                            (r) => r._level! > 0 && !r._hasChildren && (!r.unidad || r.unidad.trim() === '')
+                        ).length;
+                        return missingCount > 0 ? (
+                            <span className="flex items-center gap-1 text-red-400 font-semibold" title="Partidas sin unidad definida — necesaria para el ACU">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                {missingCount} sin unidad
+                            </span>
+                        ) : null;
+                    })()}
                     <span>{visibleRows.length} visibles · {storeRows.length} total</span>
                 </div>
             </div>

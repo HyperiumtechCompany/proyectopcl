@@ -4,6 +4,7 @@ import { useGGVariablesStore, GGVariableNode } from '../stores/ggVariablesStore'
 import { useRemuneracionesStore } from '../stores/remuneracionesStore';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
 import { GGVARIABLES_TEMPLATES } from '../utils/ggTemplates';
+import { PlazoDisplay } from './PlazoDisplay';
 
 interface GGVariablesPanelProps {
     loading: boolean;
@@ -142,14 +143,7 @@ export function GGVariablesPanel({ loading, nodes, onSave, projectId }: GGVariab
                     </p>
                 </div>
                 <div className="flex items-center gap-6">
-                    <div className="flex flex-col items-center px-4 py-1 border-x border-slate-700/50">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5 text-sky-400" /> Tiempo Proyecto
-                        </span>
-                        <span className="font-mono text-sm font-black text-sky-400">
-                            {duracionMeses} Meses
-                        </span>
-                    </div>
+                    <PlazoDisplay variant="compact" color="amber" />
 
                     <div className="flex flex-col items-end">
                         <span className="text-[10px] font-semibold text-slate-500 uppercase">Total G.G. Variables</span>

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Loader2, Plus, Trash2, Save, Lock, ChevronDown, ChevronRight, MoreVertical } from 'lucide-react';
 import { useGGFijosStore, GGFijoNode, TipoFilaFijo } from '../stores/ggFijosStore';
+import { PlazoDisplay } from './PlazoDisplay';
 
 interface GGFijosPanelProps {
     loading: boolean;
@@ -117,6 +118,7 @@ export function GGFijosPanel({ loading, nodes, onSave, projectId, totalBudget = 
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <PlazoDisplay variant="compact" color="sky" />
                     <div className="flex flex-col items-end">
                         <span className="text-[10px] font-semibold text-slate-500 uppercase">Total G.G. Fijos</span>
                         <span className="font-mono text-sm font-bold text-sky-400">S/. {fmt(total)}</span>

@@ -2,6 +2,7 @@ import React from 'react';
 import { useSupervisionStore, SupervisionRow } from '../stores/supervisionStore';
 import { useSupervisionGGDetalleStore } from '../stores/supervisionGGDetalleStore';
 import { SupervisionGGDetalleModal } from './SupervisionGGDetalleModal';
+import { PlazoDisplay } from './PlazoDisplay';
 import {
     ChevronRight,
     ChevronDown,
@@ -266,6 +267,11 @@ export function SupervisionPanel({ projectId, onSaveSupervision }: SupervisionPa
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Plazo del proyecto */}
+            <div className="border-b border-slate-800 bg-slate-900/50 px-6 py-2">
+                <PlazoDisplay variant="compact" color="sky" />
             </div>
 
             {/* Calculations Quick Stats */}
