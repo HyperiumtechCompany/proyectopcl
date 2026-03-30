@@ -34,8 +34,17 @@ class EttpController extends Controller
         $arbol = $this->buildTree($partidas, $proyectoId);
 
         return Inertia::render('costos/ettp/etts', [
-            'proyecto'   => $costoProject,
-            'partidas'   => $arbol,
+            'proyecto'   => array_merge($costoProject->toArray(), [
+                'plantilla_logo_izq_url'  => $costoProject->plantilla_logo_izq
+                    ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url'  => $costoProject->plantilla_logo_der
+                    ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center
+                    ? asset('storage/' . $costoProject->portada_logo_center) : null,
+                'plantilla_firma_url'     => $costoProject->plantilla_firma
+                    ? asset('storage/' . $costoProject->plantilla_firma) : null,
+            ]),
+            'partidas'       => $arbol,
             'especialidades' => $this->getEspecialidadesDisponibles($proyectoId),
         ]);
     }
@@ -85,8 +94,10 @@ class EttpController extends Controller
             'nivel'         => $partida->nivel,
             'secciones'     => $partida->secciones->map(fn($s) => [
                 'id'        => $s->id,
+                'title'     => $s->titulo,
                 'titulo'    => $s->titulo,
                 'slug'      => $s->slug,
+                'content'   => $s->contenido,
                 'contenido' => $s->contenido,
                 'origen'    => $s->origen,
                 'orden'     => $s->orden,
@@ -401,8 +412,10 @@ class EttpController extends Controller
             ],
             'secciones' => $partida->secciones->map(fn($s) => [
                 'id'        => $s->id,
+                'title'     => $s->titulo,
                 'titulo'    => $s->titulo,
                 'slug'      => $s->slug,
+                'content'   => $s->contenido,
                 'contenido' => $s->contenido,
                 'origen'    => $s->origen,
                 'orden'     => $s->orden,
@@ -431,14 +444,17 @@ class EttpController extends Controller
 
         try {
             foreach ($secciones as $seccionData) {
+                $titulo    = $seccionData['titulo'] ?? $seccionData['title'] ?? '';
+                $contenido = $seccionData['contenido'] ?? $seccionData['content'] ?? null;
+
                 if (isset($seccionData['id'])) {
                     // Actualizar sección existente
                     $seccion = EttpSeccion::find($seccionData['id']);
                     if ($seccion) {
                         $seccion->update([
-                            'titulo'    => $seccionData['titulo'],
-                            'slug'      => EttpSeccion::generarSlug($seccionData['titulo']),
-                            'contenido' => $seccionData['contenido'] ?? null,
+                            'titulo'    => $titulo,
+                            'slug'      => EttpSeccion::generarSlug($titulo),
+                            'contenido' => $contenido,
                             'orden'     => $seccionData['orden'] ?? $seccion->orden,
                         ]);
                     }
@@ -446,9 +462,9 @@ class EttpController extends Controller
                     // Crear nueva sección
                     EttpSeccion::create([
                         'ettp_partida_id' => $partida->id,
-                        'titulo'          => $seccionData['titulo'],
-                        'slug'            => EttpSeccion::generarSlug($seccionData['titulo']),
-                        'contenido'       => $seccionData['contenido'] ?? null,
+                        'titulo'          => $titulo,
+                        'slug'            => EttpSeccion::generarSlug($titulo),
+                        'contenido'       => $contenido,
                         'origen'          => 'manual',
                         'orden'           => $seccionData['orden'] ?? 0,
                     ]);
