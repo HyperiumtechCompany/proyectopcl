@@ -84,7 +84,6 @@ const procesarContenido = (contenido: string): any[] => {
     tempDiv.childNodes.forEach(node => procesarNodo(node));
     return elementos;
 };
-
 const addSectionsToWord = (sections: any[], docSections: any[]) => {
     if (!sections || !Array.isArray(sections) || sections.length === 0) return;
 
@@ -204,7 +203,6 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
     };
 
     const keywords = sectionKeywords[sectionName] || [];
-
     const filterItems = (items: any[]): any[] => {
         if (!items) return [];
         return items.reduce((acc: any[], item: any) => {

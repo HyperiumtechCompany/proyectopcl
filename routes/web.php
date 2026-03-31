@@ -303,6 +303,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
     // ETTS — Redirecciones heredadas (opcional)
+    Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
     Route::get('/module/etts', function() {
         return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);
     })->name('module.etts');

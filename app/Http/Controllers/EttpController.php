@@ -167,133 +167,95 @@ class EttpController extends Controller
      * Importa partidas desde un resumen de metrados al sistema ETTP.
      * POST /ettp/importar-metrados
      */
-    public function importarMetrados(CostoProject $costoProject, Request $request)
-    {
-        $presupuestoId = $costoProject->id;
-        
-        $flags = [
-            'arquitectura'   => $request->input('arquitectura', 0),
-            'estructura'     => $request->input('estructura', 0),
-            'sanitarias'     => $request->input('sanitarias', 0),
-            'electricas'     => $request->input('electricas', 0),
-            'comunicacion'   => $request->input('comunicacion', 0),
-            'gas'            => $request->input('gas', 0),
-        ];
+public function importarMetrados(CostoProject $costoProject, Request $request)
+{
+    $presupuestoId = $costoProject->id;
 
-        $especialidadesAImportar = [];
-        foreach ($flags as $key => $value) {
-            if ($value == 1) {
-                // Ajuste de nombres internos (frontend comunicacion -> backend comunicaciones)
-                $name = ($key === 'estructura') ? 'estructuras' : (($key === 'comunicacion') ? 'comunicaciones' : $key);
-                $especialidadesAImportar[] = $name;
-            }
-        }
+    $tablaMap = [
+        'arquitectura'   => 'metrado_arquitectura_resumen',
+        'estructuras'    => 'metrado_estructura_resumen',
+        'sanitarias'     => 'metrado_sanitarias_resumen',
+        'electricas'     => 'metrado_electricas_resumen',
+        'comunicacion'   => 'metrado_comunicaciones_resumen',
+        'gas'            => 'metrado_gas_resumen',
+    ];
 
-        if (empty($especialidadesAImportar)) {
-            return response()->json(['error' => 'No se seleccionó ninguna especialidad'], 422);
-        }
+    $seleccionadas = array_keys(array_filter([
+        'arquitectura'  => (bool) $request->input('arquitectura', 0),
+        'estructuras'   => (bool) $request->input('estructuras', 0),
+        'sanitarias'    => (bool) $request->input('sanitarias', 0),
+        'electricas'    => (bool) $request->input('electricas', 0),
+        'comunicacion'  => (bool) $request->input('comunicacion', 0),
+        'gas'           => (bool) $request->input('gas', 0),
+    ]));
 
-        DB::connection('costos_tenant')->beginTransaction();
+    if (empty($seleccionadas)) {
+        return response()->json(['error' => 'Seleccione al menos una especialidad'], 422);
+    }
+
+    $todosLosItems = [];
+
+    foreach ($seleccionadas as $especialidad) {
+        $tabla = $tablaMap[$especialidad];
 
         try {
-            foreach ($especialidadesAImportar as $especialidad) {
-                $tablaResumen = $this->getTablaResumen($especialidad);
-                if (!$tablaResumen) continue;
-
-                $resumen = DB::connection('costos_tenant')
-                    ->table($tablaResumen)
-                    ->where('presupuesto_id', $presupuestoId)
-                    ->orderBy('item_order')
-                    ->get();
-
-                if ($resumen->isEmpty()) continue;
-
-                // Obtener ETTP existentes de esta especialidad
-                $ettpExistentes = EttpPartida::where('presupuesto_id', $presupuestoId)
-                    ->where('especialidad', $especialidad)
-                    ->get()
-                    ->keyBy('resumen_source_id');
-
-                $idsResumen = $resumen->pluck('id')->toArray();
-                $ettpIds = $ettpExistentes->pluck('resumen_source_id')->filter()->toArray();
-                $idsEliminados = array_diff($ettpIds, $idsResumen);
-
-                // Marcar huérfanas
-                if (!empty($idsEliminados)) {
-                    EttpPartida::where('presupuesto_id', $presupuestoId)
-                        ->where('especialidad', $especialidad)
-                        ->whereIn('resumen_source_id', $idsEliminados)
-                        ->update(['huerfano' => true]);
-                }
-
-                // Desmarcar las que volvieron
-                EttpPartida::where('presupuesto_id', $presupuestoId)
-                    ->where('especialidad', $especialidad)
-                    ->whereIn('resumen_source_id', $idsResumen)
-                    ->where('huerfano', true)
-                    ->update(['huerfano' => false]);
-
-                // Importar
-                foreach ($resumen as $index => $fila) {
-                    $existente = $ettpExistentes->get($fila->id);
-                    $descripcion = $fila->descripcion ?? $fila->titulo ?? 'Sin descripción';
-
-                    if ($existente) {
-                        $existente->update([
-                            'item'        => $fila->item ?? $existente->item,
-                            'descripcion' => $descripcion,
-                            'unidad'      => $fila->und ?? $fila->unidad ?? $existente->unidad,
-                            'item_order'  => $index,
-                            'nivel'       => $fila->nivel ?? 0,
-                            'huerfano'    => false,
-                        ]);
-                    } else {
-                        $partida = EttpPartida::create([
-                            'presupuesto_id'      => $presupuestoId,
-                            'especialidad'        => $especialidad,
-                            'item'                => $fila->item ?? '',
-                            'partida'             => $fila->partida ?? null,
-                            'descripcion'         => $descripcion,
-                            'unidad'              => $fila->und ?? $fila->unidad ?? '',
-                            'resumen_source_id'   => $fila->id,
-                            'resumen_source_table' => $tablaResumen,
-                            'nivel'               => $fila->nivel ?? 0,
-                            'item_order'          => $index,
-                            'estado'              => 'pendiente',
-                        ]);
-
-                        foreach (EttpSeccion::seccionesDefault() as $seccion) {
-                            EttpSeccion::create([
-                                'ettp_partida_id' => $partida->id,
-                                'titulo'          => $seccion['titulo'],
-                                'slug'            => $seccion['slug'],
-                                'origen'          => 'manual',
-                                'orden'           => $seccion['orden'],
-                            ]);
-                        }
-                    }
-                }
-
-                $this->resolverJerarquia($presupuestoId, $especialidad, $resumen);
-            }
-
-            DB::connection('costos_tenant')->commit();
-
-            // Retornar el árbol actualizado para el frontend
-            $partidasImportadas = EttpPartida::where('presupuesto_id', $presupuestoId)
-                ->with(['secciones.imagenes'])
-                ->raices()
+            $datos = DB::connection('costos_tenant')
+                ->table($tabla)
+                ->where('presupuesto_id', $presupuestoId)
                 ->orderBy('item_order')
                 ->get();
-            
-            return response()->json($this->buildTree($partidasImportadas, $presupuestoId));
+
+            if ($datos->isEmpty()) continue;
+
+            // Construir árbol jerárquico por especialidad
+            $itemsPorCodigo = [];
+
+            foreach ($datos as $item) {
+                $itemsPorCodigo[$item->item] = [
+                    'id'          => $item->id,
+                    'item'        => $item->item,
+                    'descripcion' => $item->descripcion,
+                    'unidad'      => $item->und ?? '',
+                    'especialidad'=> $especialidad,
+                    '_children'   => [],
+                ];
+            }
+
+            $raices = [];
+            foreach ($itemsPorCodigo as $codigo => &$node) {
+                $partes = explode('.', $codigo);
+                if (count($partes) > 1) {
+                    $parentCode = implode('.', array_slice($partes, 0, -1));
+                    if (isset($itemsPorCodigo[$parentCode])) {
+                        $itemsPorCodigo[$parentCode]['_children'][] = &$node;
+                    } else {
+                        $raices[] = &$node;
+                    }
+                } else {
+                    $raices[] = &$node;
+                }
+            }
+            unset($node);
+
+            foreach ($raices as $raiz) {
+                $todosLosItems[] = $raiz;
+            }
 
         } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error('Error batch import ETTP', ['error' => $e->getMessage()]);
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error("Error importando especialidad {$especialidad}: " . $e->getMessage());
+            continue;
         }
     }
+
+    if (empty($todosLosItems)) {
+        return response()->json(
+            ['error' => 'No se encontraron datos para las especialidades seleccionadas'],
+            404
+        );
+    }
+
+    return response()->json($todosLosItems);
+}
 
     /**
      * Resuelve la jerarquía padre-hijo de las partidas ETTP
@@ -301,7 +263,6 @@ class EttpController extends Controller
      */
     private function resolverJerarquia($presupuestoId, $especialidad, $resumen): void
     {
-        // Mapa: resumen_source_id → ettp_partida_id
         $mapaIds = EttpPartida::where('presupuesto_id', $presupuestoId)
             ->where('especialidad', $especialidad)
             ->whereNotNull('resumen_source_id')
@@ -381,10 +342,6 @@ class EttpController extends Controller
     // API: CRUD DE SECCIONES
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Obtiene las secciones de una partida con sus imágenes.
-     * GET /ettp/partida/{id}/secciones
-     */
     public function getSecciones(CostoProject $costoProject, $partidaId)
     {
         $partida = EttpPartida::where('presupuesto_id', $costoProject->id)
@@ -418,10 +375,6 @@ class EttpController extends Controller
         ]);
     }
 
-    /**
-     * Guarda/actualiza las secciones de una partida.
-     * PUT /ettp/partida/{id}/secciones
-     */
     public function guardarSecciones(CostoProject $costoProject, Request $request, $partidaId)
     {
         $partida = EttpPartida::where('presupuesto_id', $costoProject->id)->findOrFail($partidaId);
@@ -432,7 +385,6 @@ class EttpController extends Controller
         try {
             foreach ($secciones as $seccionData) {
                 if (isset($seccionData['id'])) {
-                    // Actualizar sección existente
                     $seccion = EttpSeccion::find($seccionData['id']);
                     if ($seccion) {
                         $seccion->update([
@@ -443,7 +395,6 @@ class EttpController extends Controller
                         ]);
                     }
                 } else {
-                    // Crear nueva sección
                     EttpSeccion::create([
                         'ettp_partida_id' => $partida->id,
                         'titulo'          => $seccionData['titulo'],
@@ -455,7 +406,6 @@ class EttpController extends Controller
                 }
             }
 
-            // Actualizar estado de la partida
             $partida->update(['estado' => 'en_progreso']);
 
             DB::connection('costos_tenant')->commit();
@@ -467,10 +417,6 @@ class EttpController extends Controller
         }
     }
 
-    /**
-     * Elimina una sección específica.
-     * DELETE /ettp/seccion/{id}
-     */
     public function eliminarSeccion(CostoProject $costoProject, $seccionId)
     {
         $seccion = EttpSeccion::with('partida')->findOrFail($seccionId);
@@ -479,7 +425,6 @@ class EttpController extends Controller
             abort(403, 'No tienes permiso para eliminar esta sección');
         }
 
-        // Las imágenes se eliminan por cascade + el model event borra archivos
         $seccion->delete();
 
         return response()->json(['success' => true]);
@@ -489,19 +434,14 @@ class EttpController extends Controller
     // API: IMÁGENES
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Sube una imagen a una sección.
-     * POST /ettp/seccion/{id}/imagen
-     */
     public function subirImagen(CostoProject $costoProject, Request $request, $seccionId)
     {
         $request->validate([
-            'imagen' => 'required|image|max:5120', // 5MB max
+            'imagen' => 'required|image|max:5120',
         ]);
 
         $seccion = EttpSeccion::with('partida')->findOrFail($seccionId);
 
-        // Validar que la sección pertenece al proyecto
         if ($seccion->partida->presupuesto_id != $costoProject->id) {
             abort(403, 'No tienes permiso para subir imágenes a esta sección');
         }
@@ -513,13 +453,11 @@ class EttpController extends Controller
         $nombreOriginal = $file->getClientOriginalName();
         $nombreArchivo = Str::uuid() . '_' . Str::slug(pathinfo($nombreOriginal, PATHINFO_FILENAME)) . '.' . $extension;
 
-        // Guardar en storage local
         $path = $file->storeAs(
             "public/ettp/{$presupuestoId}",
             $nombreArchivo
         );
 
-        // Obtener dimensiones si es posible
         $dimensions = @getimagesize($file->getRealPath());
 
         $imagen = EttpImagen::create([
@@ -544,10 +482,6 @@ class EttpController extends Controller
         ]);
     }
 
-    /**
-     * Elimina una imagen (registro + archivo físico).
-     * DELETE /ettp/imagen/{id}
-     */
     public function eliminarImagen(CostoProject $costoProject, $imagenId)
     {
         $imagen = EttpImagen::with('seccion.partida')->findOrFail($imagenId);
@@ -555,21 +489,16 @@ class EttpController extends Controller
         if ($imagen->seccion->partida->presupuesto_id != $costoProject->id) {
             abort(403, 'No tienes permiso para eliminar esta imagen');
         }
-        // El model event `deleting` elimina el archivo físico
+        
         $imagen->delete();
 
         return response()->json(['success' => true]);
     }
 
-
     // ══════════════════════════════════════════════════════════════════════
     // API: GESTIÓN DE PARTIDAS HUÉRFANAS
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Obtiene las partidas huérfanas de un presupuesto.
-     * GET /ettp/huerfanas/{presupuestoId}
-     */
     public function getHuerfanas(CostoProject $costoProject)
     {
         $huerfanas = EttpPartida::where('presupuesto_id', $costoProject->id)
@@ -589,10 +518,6 @@ class EttpController extends Controller
         ]);
     }
 
-    /**
-     * Elimina partidas huérfanas seleccionadas.
-     * POST /ettp/eliminar-huerfanas
-     */
     public function eliminarHuerfanas(CostoProject $costoProject, Request $request)
     {
         $ids = $request->input('ids', []);
@@ -603,18 +528,57 @@ class EttpController extends Controller
             ->get();
 
         foreach ($partidas as $partida) {
-            // Eliminar imágenes físicas de todas las secciones
             foreach ($partida->secciones as $seccion) {
                 foreach ($seccion->imagenes as $imagen) {
-                    $imagen->delete(); // El model event elimina el archivo
+                    $imagen->delete();
                 }
             }
-            $partida->delete(); // Cascade elimina secciones
+            $partida->delete();
         }
 
         return response()->json([
             'success'    => true,
             'eliminadas' => $partidas->count(),
         ]);
+    }
+
+    public function testMetrados(CostoProject $costoProject)
+    {
+        $presupuestoId = $costoProject->id;
+        
+        $tabla = 'metrado_comunicaciones_resumen';
+        
+        try {
+            $datos = DB::connection('costos_tenant')
+                ->table($tabla)
+                ->where('presupuesto_id', $presupuestoId)
+                ->limit(5)
+                ->get();
+            
+            $total = DB::connection('costos_tenant')
+                ->table($tabla)
+                ->count();
+            
+            $presupuestos = DB::connection('costos_tenant')
+                ->table($tabla)
+                ->select('presupuesto_id')
+                ->distinct()
+                ->get();
+            
+            return response()->json([
+                'success' => true,
+                'presupuesto_id_buscado' => $presupuestoId,
+                'total_registros_en_tabla' => $total,
+                'registros_con_presupuesto_1' => $datos->count(),
+                'presupuestos_existentes' => $presupuestos,
+                'primeros_5_registros' => $datos
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
