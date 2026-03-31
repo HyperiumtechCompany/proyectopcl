@@ -68,6 +68,37 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
     const getCsrfToken = (): string => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+    /** Mapea secciones del formato frontend (title/content) al formato backend (titulo/contenido) */
+    const mapSectionsForBackend = (sections: Section[]): any[] => {
+        return sections.map(s => ({
+            id: s.id,
+            titulo: s.title,
+            slug: s.slug,
+            contenido: s.content,
+            origen: s.origen,
+            orden: s.orden,
+        }));
+    };
+
+    /** Mapea recursivamente el árbol de partidas para el backend */
+    const mapTreeForBackend = (nodes: any[]): any[] => {
+        return nodes.map(node => {
+            const mapped: any = { ...node };
+            if (mapped.secciones && Array.isArray(mapped.secciones)) {
+                mapped.secciones = mapSectionsForBackend(mapped.secciones);
+            }
+            if (mapped._children && Array.isArray(mapped._children)) {
+                mapped._children = mapTreeForBackend(mapped._children);
+            }
+            return mapped;
+        });
+    };
+
+    // Obtener datos de la tabla para exportar
+    const getTableData = (): any[] => {
+        return tabulatorRef.current?.getData() || [];
+    };
+
     // ─────────────────────────────────────────────
     // FUNCIONES DE TRANSFORMACIÓN DE DATOS
     // ─────────────────────────────────────────────
@@ -156,7 +187,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         try {
             await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
-                secciones: currentSections
+                secciones: mapSectionsForBackend(currentSections)
             }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
             const rowData = selectedRow.getData();
@@ -164,7 +195,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             rowData.estado = 'en_progreso';
             selectedRow.update(rowData);
 
-            // Actualizar datosBase
             const newData = [...datosBase];
             const updateItem = (items: any[]): boolean => {
                 for (let i = 0; i < items.length; i++) {
@@ -258,7 +288,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         try {
             await axios.post(
                 `/costos/${idProyecto}/ettp/guardar-general`,
-                { especificaciones_tecnicas: datosGenerales },
+                { especificaciones_tecnicas: mapTreeForBackend(datosGenerales) },
                 { headers: { 'X-CSRF-TOKEN': getCsrfToken() } }
             );
             Swal.fire({ title: 'Éxito', text: 'Datos guardados correctamente', icon: 'success', timer: 1500, showConfirmButton: false });
@@ -277,37 +307,28 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
-        { title: proyecto?.nombre, href: `/costos/${proyecto?.id}` },
-        { title: 'ETTP', href: '#' }
+        { title: proyecto?.nombre ?? 'Proyecto', href: `/costos/${proyecto?.id}` },
+        { title: 'ETTP', href: '#' },
     ];
 
     // ─────────────────────────────────────────────
-    // INICIALIZACIÓN DE TABULATOR
+    // EFECTOS
     // ─────────────────────────────────────────────
 
+    // Inicializar Tabulator
     useEffect(() => {
-        if (!tableContainerRef.current) return;
         let isMounted = true;
-        let retryCount = 0;
-        const MAX_RETRIES = 30;
+        const container = tableContainerRef.current;
+        
+        if (!container) return;
 
         const initTabulator = () => {
-            const TabulatorClass = (window as any).Tabulator;
-            if (!TabulatorClass || !tableContainerRef.current) {
-                retryCount++;
-                if (retryCount < MAX_RETRIES) { setTimeout(initTabulator, 200); }
-                else { console.error('[Tabulator] No se pudo inicializar'); }
-                return;
-            }
-            if (!isMounted) return;
-
-            const container = tableContainerRef.current;
-            if (container.clientHeight === 0) {
-                setTimeout(initTabulator, 100);
-                return;
-            }
-
+            if (!isMounted || !container) return;
+            
             try {
+                // @ts-ignore
+                const TabulatorClass = window.Tabulator || Tabulator;
+                
                 const table = new TabulatorClass(container, {
                     data: datosBase,
                     dataTree: true,
@@ -338,15 +359,20 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             }
         };
 
-        setTimeout(initTabulator, 100);
+        const timeoutId = setTimeout(initTabulator, 100);
 
         return () => {
             isMounted = false;
+            clearTimeout(timeoutId);
             if (tabulatorRef.current) {
-                try { tabulatorRef.current.destroy(); } catch (e) { console.warn('[Tabulator] Error al destruir:', e); }
+                try { 
+                    tabulatorRef.current.destroy(); 
+                } catch (e) { 
+                    console.warn('[Tabulator] Error al destruir:', e); 
+                }
             }
         };
-    }, []);
+    }, []); // Dependencia vacía, se inicializa una sola vez
 
     // Sincronizar datos externos con Tabulator
     useEffect(() => {
@@ -429,6 +455,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     }}
                     getData={getTableData}
                     showNotification={showNotification}
+                    proyecto={proyecto}
                 />
             </div>
         </AppLayout>

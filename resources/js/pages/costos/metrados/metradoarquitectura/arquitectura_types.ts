@@ -38,6 +38,7 @@ export interface MeasureInputs {
   alto: number;
   nveces: number;
   kg: number;
+  kgm: number;
 }
 
 /** Columnas de resultado (solo una se activa según la unidad) */

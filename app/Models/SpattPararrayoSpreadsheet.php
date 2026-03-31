@@ -64,13 +64,12 @@ class SpattPararrayoSpreadsheet extends Model
         return $pivot && $pivot->role === 'editor';
     }
 
-    public function generateCollabCode(): string
+    
+    public static function generateCollabCode(): string
     {
         do {
             $code = strtoupper(Str::random(8));
         } while (self::where('collab_code', $code)->exists());
-
-        $this->update(['collab_code' => $code, 'is_collaborative' => true]);
 
         return $code;
     }

@@ -272,7 +272,7 @@ export default function Show() {
                 </div>
 
                 {/* ── Grid de Información y Módulos ───────────────────────────── */}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {/* ── Información General ─────────────────────────────────── */}
                     {(identificationFields.length > 0 || locationFields.length > 0) && (
                         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
@@ -338,7 +338,7 @@ export default function Show() {
                                                 {mods.length}
                                             </span>
                                         </p>
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                                             {mods.map(m => (
                                                 <ModuleCard key={m} module={m} projectId={project.id} />
                                             ))}

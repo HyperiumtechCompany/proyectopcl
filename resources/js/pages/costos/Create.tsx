@@ -53,7 +53,8 @@ const GROUP_STYLES: Record<string, { header: string; badge: string; check: strin
 const STEPS = [
     { n: 1, label: 'Información General', desc: 'Datos del proyecto' },
     { n: 2, label: 'Módulos', desc: 'Selección de hojas' },
-    { n: 3, label: 'Resumen', desc: 'Revisión y creación' },
+    { n: 3, label: 'Exportación', desc: 'Logos y Firma' },
+    { n: 4, label: 'Resumen', desc: 'Revisión y creación' },
 ];
 
 // ── Pre-carga de datos de ejemplo ──────────────────────────────────────────
@@ -106,6 +107,12 @@ export default function Create() {
     const [selectedModules, setSelectedModules] = useState<string[]>([]);
     const [sanitariasModulos, setSanitariasModulos] = useState(3);
 
+    // Step 3 fields (Exportación)
+    const [plantillaLogoIzq, setPlantillaLogoIzq] = useState<File | null>(null);
+    const [plantillaLogoDer, setPlantillaLogoDer] = useState<File | null>(null);
+    const [plantillaPortada, setPlantillaPortada] = useState<File | null>(null);
+    const [plantillaFirma, setPlantillaFirma] = useState<File | null>(null);
+
     useEffect(() => {
         fetch('/api/ubigeo/departamentos').then(r => r.json()).then(setDepartamentos).catch(() => { });
     }, []);
@@ -155,6 +162,11 @@ export default function Create() {
         setStep(3);
     };
 
+    const goStep4 = () => {
+        setErrors({});
+        setStep(4);
+    };
+
     const handleSubmit = () => {
         setProcessing(true);
         const codigos_modulares: Record<string, string> = {};
@@ -176,6 +188,10 @@ export default function Create() {
             distrito_id: distId || null, centro_poblado: centroPoblado || null,
             modules: selectedModules,
             sanitarias_cantidad_modulos: needsModulosConfig ? sanitariasModulos : null,
+            plantilla_logo_izq: plantillaLogoIzq,
+            plantilla_logo_der: plantillaLogoDer,
+            portada_logo_center: plantillaPortada,
+            plantilla_firma: plantillaFirma,
         }, {
             onFinish: () => setProcessing(false),
             onError: (e) => { setErrors(e as Record<string, string>); setStep(1); },
@@ -263,7 +279,7 @@ export default function Create() {
                             {/* Progress line active */}
                             <div
                                 className="absolute left-0 top-5 h-0.5 bg-blue-600 transition-all duration-500 dark:bg-blue-500"
-                                style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}
+                                style={{ width: step === 1 ? '0%' : step === 2 ? '33.33%' : step === 3 ? '66.66%' : '100%' }}
                             />
                             {STEPS.map(s => (
                                 <div key={s.n} className="relative z-10 flex flex-col items-center gap-2">
@@ -632,7 +648,7 @@ export default function Create() {
                                         onClick={goStep3}
                                         className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-60 dark:shadow-blue-900/30"
                                     >
-                                        Ver Resumen
+                                        Continuar a Exportación
                                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                     </button>
                                     <button
@@ -647,8 +663,121 @@ export default function Create() {
                         </div>
                     )}
 
-                    {/* ── STEP 3: RESUMEN ─────────────────────────────────── */}
+                    {/* ── STEP 3: EXPORTACIÓN ─────────────────────────────────── */}
                     {step === 3 && (
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                            <div className="lg:col-span-2 space-y-5">
+                                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                    <div className="mb-4 flex items-center gap-3 border-b border-gray-100 pb-4 dark:border-gray-800">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/40">
+                                            <svg className="h-4 w-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Plantillas de Exportación</h3>
+                                            <p className="text-xs text-gray-500">Logos y firmas para Word, Excel y PDF</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-5 mb-5 dark:border-blue-900/50 dark:bg-blue-950/20">
+                                        <div className="flex gap-3">
+                                            <svg className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            <div>
+                                                <p className="text-xs font-bold text-blue-800 dark:text-blue-300 mb-1">Configura una vez, úsalo siempre</p>
+                                                <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">Estas imágenes se aplicarán de forma automática a todos los módulos de Excel, Word (ETTP), y PDF exportados del proyecto. Si no cuentas con ellas ahora, puedes configurarlas más tarde.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {[
+                                            { label: 'Logo Izquierdo (Cabecera)', state: plantillaLogoIzq, setState: setPlantillaLogoIzq, id: 'logo_izq', desc: 'Aparece en la parte superior izquierda de los reportes.' },
+                                            { label: 'Logo Derecho / Escudo (Cabecera)', state: plantillaLogoDer, setState: setPlantillaLogoDer, id: 'logo_der', desc: 'Aparece en la parte superior derecha (opcional).' },
+                                            { label: 'Portada (Imagen Principal)', state: plantillaPortada, setState: setPlantillaPortada, id: 'portada', desc: 'Imagen central para la portada del proyecto.' },
+                                            { label: 'Firma (Pie de página)', state: plantillaFirma, setState: setPlantillaFirma, id: 'firma', desc: 'Firma digital para el pie de página de los documentos.' },
+                                        ].map((item) => (
+                                            <div key={item.id} className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className={labelCls}>{item.label}</label>
+                                                    <span className="text-[10px] text-gray-400 italic">{item.desc}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                    <div className="relative flex-1">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={e => item.setState(e.target.files?.[0] || null)}
+                                                            className={`${inputCls} py-2!`}
+                                                            id={item.id}
+                                                        />
+                                                        {item.state && (
+                                                            <button
+                                                                onClick={() => item.setState(null)}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {item.state && (
+                                                        <div className="relative h-16 w-32 shrink-0 overflow-hidden rounded-lg border-2 border-dashed border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20">
+                                                            <img
+                                                                src={URL.createObjectURL(item.state)}
+                                                                alt="Preview"
+                                                                className="h-full w-full object-contain p-1"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div className="sticky top-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                    <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Resumen Imágenes</h3>
+                                    <div className="space-y-3 text-sm">
+                                        {[
+                                            { label: 'Logo Izquierdo', state: plantillaLogoIzq },
+                                            { label: 'Logo Derecho/Escudo', state: plantillaLogoDer },
+                                            { label: 'Portada', state: plantillaPortada },
+                                            { label: 'Firma Pie pág.', state: plantillaFirma },
+                                        ].map((img) => (
+                                            <div key={img.label} className="flex items-center justify-between">
+                                                <span className="text-gray-600 dark:text-gray-400">{img.label}</span>
+                                                <span className={`font-bold ${img.state ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                    {img.state ? 'Adjunto' : 'Pendiente'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                {/* Navigation */}
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={goStep4}
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-60 dark:shadow-blue-900/30"
+                                    >
+                                        Ver Resumen General
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                    </button>
+                                    <button
+                                        onClick={() => setStep(2)}
+                                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                        Volver a Módulos
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── STEP 4: RESUMEN ─────────────────────────────────── */}
+                    {step === 4 && (
                         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
                             {/* Summary */}
@@ -756,6 +885,47 @@ export default function Create() {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Images summary */}
+                                <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/40">
+                                                <svg className="h-4 w-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                            </div>
+                                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Imágenes de Exportación</h3>
+                                        </div>
+                                        <button onClick={() => setStep(3)} className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400">Editar</button>
+                                    </div>
+
+                                    <div className="p-6">
+                                        {!(plantillaLogoIzq || plantillaLogoDer || plantillaPortada || plantillaFirma) ? (
+                                            <div className="flex flex-col items-center justify-center py-4 text-center">
+                                                <p className="text-xs text-gray-500 italic">No se han seleccionado imágenes opcionales.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                                {[
+                                                    { label: 'Logo Izquierdo', state: plantillaLogoIzq },
+                                                    { label: 'Logo Derecho', state: plantillaLogoDer },
+                                                    { label: 'Portada', state: plantillaPortada },
+                                                    { label: 'Firma', state: plantillaFirma },
+                                                ].map((img, i) => img.state && (
+                                                    <div key={i} className="space-y-2">
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 text-center">{img.label}</p>
+                                                        <div className="relative h-24 w-full overflow-hidden rounded-xl border border-gray-100 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-800/50">
+                                                            <img
+                                                                src={URL.createObjectURL(img.state)}
+                                                                alt={img.label}
+                                                                className="h-full w-full object-contain"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* RIGHT: Action panel */}
@@ -822,11 +992,11 @@ export default function Create() {
                                             )}
                                         </button>
                                         <button
-                                            onClick={() => setStep(2)}
+                                            onClick={() => setStep(3)}
                                             className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                                         >
                                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                            Volver a Módulos
+                                            Volver a Exportación
                                         </button>
                                     </div>
                                 </div>

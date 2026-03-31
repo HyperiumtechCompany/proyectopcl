@@ -10,89 +10,74 @@ interface WordExportProps {
     isOpen: boolean;
     onClose: () => void;
     getData: () => any[];
+    proyecto?: any;
     onGenerateStart?: () => void;
     onGenerateEnd?: () => void;
     showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void;
 }
 
+// Función auxiliar para crear párrafos de detalle
 const crearParrafoDetalle = (titulo: string, descripcion: string) =>
     new Paragraph({
         children: [
-            new TextRun({ text: `${titulo} `, bold: true, font: "Arial", color: "#000000" }),
-            new TextRun({ text: descripcion, font: "Arial", color: "#000000" }),
+            new TextRun({ text: `${titulo} `, bold: true, font: "Arial", color: "#000000", size: 24 }),
+            new TextRun({ text: descripcion, font: "Arial", color: "#000000", size: 24 }),
         ],
         spacing: { after: 100, line: 750, lineRule: LineRuleType.AUTO },
     });
 
+// Configuración de sin bordes
 const sinBordes = () => ({
-    top: { style: BorderStyle.NONE },
-    bottom: { style: BorderStyle.NONE },
-    left: { style: BorderStyle.NONE },
-    right: { style: BorderStyle.NONE },
+    top: { style: BorderStyle.NONE, size: 0, color: "000000" },
+    bottom: { style: BorderStyle.NONE, size: 0, color: "000000" },
+    left: { style: BorderStyle.NONE, size: 0, color: "000000" },
+    right: { style: BorderStyle.NONE, size: 0, color: "000000" },
 });
 
-// Procesa contenido HTML a elementos docx (versión robusta)
-const procesarContenido = (contenido: string): any[] => {
-    if (!contenido) return [];
+// Procesa contenido HTML a elementos docx
+const procesarContenido = (contenido: string): Paragraph[] => {
+    if (!contenido || typeof contenido !== 'string') return [];
 
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = contenido;
-    const elementos: any[] = [];
+    const paragraphs: Paragraph[] = [];
 
-    const procesarNodo = (node: Node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-            const text = node.textContent?.trim();
-            if (text) {
-                elementos.push(new Paragraph({
-                    children: [new TextRun({ text, font: "Arial Narrow", size: 24, color: "#000000" })],
-                    spacing: { after: 200, line: 480 },
-                    indent: { left: 720, firstLine: 0 },
-                }));
-            }
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as HTMLElement;
-            const tag = element.tagName;
-            if (tag === 'IMG') {
-                const src = element.getAttribute('src') || '';
-                if (src.startsWith('data:image')) {
-                    const base64Data = src.split(',')[1];
-                    elementos.push(new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [new ImageRun({
-                            data: base64Data,
-                            transformation: { width: 400, height: 300 },
-                        })],
-                        spacing: { after: 200 },
-                    }));
-                }
-            } else if (tag === 'P' || tag === 'DIV') {
-                const texto = element.innerText?.trim();
-                if (texto) {
-                    elementos.push(new Paragraph({
-                        children: [new TextRun({ text: texto, font: "Arial Narrow", size: 24, color: "#000000" })],
-                        spacing: { after: 200, line: 480 },
-                        indent: { left: 720, firstLine: 0 },
-                    }));
-                }
-            } else {
-                // Para cualquier otra etiqueta (STRONG, SPAN, etc.), procesar sus hijos
-                element.childNodes.forEach(child => procesarNodo(child));
-            }
+    // Eliminar etiquetas HTML y obtener texto plano
+    const plainText = contenido.replace(/<[^>]*>/g, '');
+    const lines = plainText.split('\n').filter(line => line.trim());
+
+    lines.forEach(line => {
+        if (line.trim()) {
+            paragraphs.push(new Paragraph({
+                children: [new TextRun({
+                    text: line.trim(),
+                    font: "Arial Narrow",
+                    size: 24,
+                    color: "#000000"
+                })],
+                spacing: { after: 200, line: 480 },
+                indent: { left: 720, firstLine: 0 },
+            }));
         }
-    };
+    });
 
-    tempDiv.childNodes.forEach(node => procesarNodo(node));
-    return elementos;
+    return paragraphs;
 };
 const addSectionsToWord = (sections: any[], docSections: any[]) => {
     if (!sections || !Array.isArray(sections) || sections.length === 0) return;
 
     sections.forEach(section => {
+        if (!section) return;
+
         const titulo = (section.titulo || section.title || 'DETALLE').toUpperCase();
         const contenido = section.contenido || section.content || '';
 
         docSections.push(new Paragraph({
-            children: [new TextRun({ text: `${titulo}:`, bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
+            children: [new TextRun({
+                text: `${titulo}:`,
+                bold: true,
+                font: "Arial Narrow",
+                size: 24,
+                color: "#000000"
+            })],
             spacing: { after: 200, line: 480 },
             indent: { left: 720, firstLine: 0 },
         }));
@@ -100,10 +85,15 @@ const addSectionsToWord = (sections: any[], docSections: any[]) => {
         const procesado = procesarContenido(contenido);
         if (procesado.length > 0) {
             docSections.push(...procesado);
-        } else if (contenido) {
+        } else if (contenido && contenido.trim()) {
             // Fallback texto plano
             docSections.push(new Paragraph({
-                children: [new TextRun({ text: contenido, font: "Arial Narrow", size: 24, color: "#000000" })],
+                children: [new TextRun({
+                    text: contenido,
+                    font: "Arial Narrow",
+                    size: 24,
+                    color: "#000000"
+                })],
                 spacing: { after: 200, line: 480 },
                 indent: { left: 720, firstLine: 0 },
             }));
@@ -111,15 +101,12 @@ const addSectionsToWord = (sections: any[], docSections: any[]) => {
     });
 };
 
+// Procesar items jerárquicos
 const processHierarchicalItemsToWord = (items: any[], sections: any[], level: number) => {
-    console.log(`🔍 Item ${item.item} - secciones:`, item.secciones);
     if (!items || !Array.isArray(items) || items.length === 0) return;
 
     items.forEach(item => {
         if (!item) return;
-
-        // Este console.log está bien aquí (dentro del forEach)
-        console.log(`Item ${item.item} - tiene secciones:`, item.secciones);
 
         let headingLevel;
         switch (level) {
@@ -128,49 +115,69 @@ const processHierarchicalItemsToWord = (items: any[], sections: any[], level: nu
             default: headingLevel = HeadingLevel.HEADING_3; break;
         }
 
-        sections.push(new Paragraph({
-            children: [new TextRun({
-                text: `${item.item || ''} ${item.descripcion || ''}`.trim(),
-                bold: true,
-                font: "Arial Narrow",
-                color: "#000000",
-                size: 24,
-            })],
-            heading: headingLevel,
-            spacing: { before: 300, after: 100, line: 480 },
-        }));
-
-        if (item.unidad) {
+        // Título del item
+        const titulo = `${item.item || ''} ${item.descripcion || ''}`.trim();
+        if (titulo) {
             sections.push(new Paragraph({
-                children: [new TextRun({ text: `(Unidad de medida: ${item.unidad})`, font: "Arial Narrow", size: 22, color: "#000000" })],
-                spacing: { line: 480 },
+                children: [new TextRun({
+                    text: titulo,
+                    bold: true,
+                    font: "Arial Narrow",
+                    color: "#000000",
+                    size: 24,
+                })],
+                heading: headingLevel,
+                spacing: { before: 300, after: 100, line: 480 },
             }));
         }
 
+        // Unidad de medida
+        if (item.unidad && item.unidad.trim()) {
+            sections.push(new Paragraph({
+                children: [new TextRun({
+                    text: `(Unidad de medida: ${item.unidad})`,
+                    font: "Arial Narrow",
+                    size: 22,
+                    color: "#000000"
+                })],
+                spacing: { after: 100, line: 480 },
+                indent: { left: 360, firstLine: 0 },
+            }));
+        }
+
+        // Metrado
         if (item.metrado) {
             sections.push(new Paragraph({
-                children: [new TextRun({ text: `Metrado: ${item.metrado}`, font: "Arial Narrow", size: 24, color: "#000000" })],
+                children: [new TextRun({
+                    text: `Metrado: ${item.metrado}`,
+                    font: "Arial Narrow",
+                    size: 24,
+                    color: "#000000"
+                })],
                 spacing: { after: 200, line: 480 },
                 indent: { left: 720, firstLine: 0 },
             }));
         }
 
-        if (item.secciones && item.secciones.length > 0) {
+        // Secciones (descripción técnica)
+        if (item.secciones && Array.isArray(item.secciones) && item.secciones.length > 0) {
             addSectionsToWord(item.secciones, sections);
         }
 
-        if (item._children && item._children.length > 0) {
+        // Procesar hijos recursivamente
+        if (item._children && Array.isArray(item._children) && item._children.length > 0) {
             processHierarchicalItemsToWord(item._children, sections, level + 1);
         }
     });
 };
 
-// ─────────────────────────────────────────────
-// GENERAR SECCIONES DEL WORD
-// ─────────────────────────────────────────────
+// Generar secciones del documento
 const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
     if (!data || !Array.isArray(data) || data.length === 0) {
-        return [new Paragraph({ text: "No se encontraron datos para esta sección." })];
+        return [new Paragraph({
+            text: "No se encontraron datos para esta sección.",
+            children: [new TextRun({ text: "No se encontraron datos para esta sección." })]
+        })];
     }
 
     const sections: any[] = [];
@@ -179,7 +186,6 @@ const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
         text: sectionName.toUpperCase(),
         heading: HeadingLevel.HEADING_1,
         alignment: AlignmentType.CENTER,
-        bold: true,
         spacing: { before: 400, after: 200 },
     }));
 
@@ -187,9 +193,7 @@ const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
     return sections;
 };
 
-// ─────────────────────────────────────────────
-// FILTRADO DE DATOS POR SECCIÓN (original)
-// ─────────────────────────────────────────────
+// Filtrar datos por sección
 const filterTreeData = (data: any[], sectionName: string): any[] => {
     if (!data || !Array.isArray(data)) return [];
 
@@ -204,8 +208,11 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
 
     const keywords = sectionKeywords[sectionName] || [];
     const filterItems = (items: any[]): any[] => {
-        if (!items) return [];
+        if (!items || !Array.isArray(items)) return [];
+
         return items.reduce((acc: any[], item: any) => {
+            if (!item) return acc;
+
             const descripcion = (item.descripcion || '').toLowerCase();
             const itemCode = (item.item || '').toLowerCase();
 
@@ -215,12 +222,10 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
             );
 
             if (matches) {
-                // Mantener las secciones
                 acc.push({ ...item });
-            } else if (item._children && item._children.length > 0) {
+            } else if (item._children && Array.isArray(item._children) && item._children.length > 0) {
                 const filteredChildren = filterItems(item._children);
                 if (filteredChildren.length > 0) {
-                    // Mantener las secciones del padre si tiene hijos filtrados
                     acc.push({
                         ...item,
                         _children: filteredChildren
@@ -234,27 +239,50 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
     return filterItems(data);
 };
 
-// ─────────────────────────────────────────────
-// GENERAR UN DOCUMENTO PARA UNA SECCIÓN
-// ─────────────────────────────────────────────
+// Cargar imagen desde URL
+const loadImageFromUrl = async (url: string | null): Promise<string | null> => {
+    if (!url) return null;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("Error loading image:", error);
+        return null;
+    }
+};
+
+// Leer archivo como DataURL
+const readFileAsDataURL = (file: File): Promise<string | null> =>
+    new Promise((resolve) => {
+        if (!file) {
+            resolve(null);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target?.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+    });
+
+// Generar documento Word para una sección
 const generarWordParaSeccion = async (
     datosFiltrados: any[],
     nombreArchivoBase: string,
-    showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void
+    showNotification?: (type: 'success' | 'error' | 'warning', message: string) => void,
+    proyecto?: any
 ) => {
-    const logoFile = (document.getElementById('logoFile') as HTMLInputElement)?.files?.[0] || null;
-    const escudoFile = (document.getElementById('escudoFile') as HTMLInputElement)?.files?.[0] || null;
-    const principalFile = (document.getElementById('logoPrinFile') as HTMLInputElement)?.files?.[0] || null;
-    const firmaFile = (document.getElementById('firmaFile') as HTMLInputElement)?.files?.[0] || null;
-
-    const readFileAsDataURL = (file: File): Promise<string | null> =>
-        new Promise((resolve, reject) => {
-            if (!file) { resolve(null); return; }
-            const reader = new FileReader();
-            reader.onload = (event) => resolve(event.target?.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
+    // Obtener referencias a los inputs de archivo
+    const logoFile = (document.getElementById('logoFile') as HTMLInputElement)?.files?.[0];
+    const escudoFile = (document.getElementById('escudoFile') as HTMLInputElement)?.files?.[0];
+    const principalFile = (document.getElementById('logoPrinFile') as HTMLInputElement)?.files?.[0];
+    const firmaFile = (document.getElementById('firmaFile') as HTMLInputElement)?.files?.[0];
 
     let logoDataUrl = null;
     let escudoDataUrl = null;
@@ -262,14 +290,23 @@ const generarWordParaSeccion = async (
     let firmaDataUrl = null;
 
     try {
+        // Prioridad: archivo manual > imagen del proyecto
         if (logoFile) logoDataUrl = await readFileAsDataURL(logoFile);
+        else if (proyecto?.plantilla_logo_izq_url) logoDataUrl = await loadImageFromUrl(proyecto.plantilla_logo_izq_url);
+
         if (escudoFile) escudoDataUrl = await readFileAsDataURL(escudoFile);
+        else if (proyecto?.plantilla_logo_der_url) escudoDataUrl = await loadImageFromUrl(proyecto.plantilla_logo_der_url);
+
         if (principalFile) principalDataUrl = await readFileAsDataURL(principalFile);
+        else if (proyecto?.portada_logo_center_url) principalDataUrl = await loadImageFromUrl(proyecto.portada_logo_center_url);
+
         if (firmaFile) firmaDataUrl = await readFileAsDataURL(firmaFile);
+        else if (proyecto?.plantilla_firma_url) firmaDataUrl = await loadImageFromUrl(proyecto.plantilla_firma_url);
     } catch (error) {
         console.error("Error al procesar las imágenes:", error);
     }
 
+    // Crear ImageRuns solo si hay datos
     const logoImageRun = logoDataUrl ? new ImageRun({
         data: logoDataUrl,
         transformation: { width: 70, height: 70 },
@@ -290,7 +327,7 @@ const generarWordParaSeccion = async (
         transformation: { width: 70, height: 70 },
     }) : null;
 
-    // Header y Footer con porcentajes (estilo original) — no provocan error verticalFillMode
+    // Header
     const header = new Header({
         children: [
             new Table({
@@ -302,59 +339,135 @@ const generarWordParaSeccion = async (
                             new TableCell({
                                 width: { size: 15, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
-                                children: [new Paragraph({ alignment: AlignmentType.LEFT, children: logoImageRun ? [logoImageRun] : [] })],
+                                children: logoImageRun ? [new Paragraph({
+                                    alignment: AlignmentType.LEFT,
+                                    children: [logoImageRun]
+                                })] : [new Paragraph({ text: "" })],
                             }),
                             new TableCell({
                                 width: { size: 70, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
                                 children: [
-                                    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N° 358 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA- PROVINCIA DE UCAYALI – DEPARTAMENTO DE LORETO", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
-                                    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CUI: 2484411; CÓDIGO MODULAR: 0651216; CÓDIGO LOCAL: 390867", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
-                                    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "I.E.I:358; UNIDAD EJECUTORA: MUNICIPALIDAD PROVINCIAL DE UCAYALI", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
+                                    new Paragraph({
+                                        alignment: AlignmentType.CENTER,
+                                        children: [new TextRun({
+                                            text: "MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N° 358 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA- PROVINCIA DE UCAYALI – DEPARTAMENTO DE LORETO",
+                                            bold: true,
+                                            size: 16,
+                                            color: "#000000",
+                                            font: "Arial"
+                                        })]
+                                    }),
+                                    new Paragraph({
+                                        alignment: AlignmentType.CENTER,
+                                        children: [new TextRun({
+                                            text: "CUI: 2484411; CÓDIGO MODULAR: 0651216; CÓDIGO LOCAL: 390867",
+                                            bold: true,
+                                            size: 16,
+                                            color: "#000000",
+                                            font: "Arial"
+                                        })]
+                                    }),
+                                    new Paragraph({
+                                        alignment: AlignmentType.CENTER,
+                                        children: [new TextRun({
+                                            text: "I.E.I:358; UNIDAD EJECUTORA: MUNICIPALIDAD PROVINCIAL DE UCAYALI",
+                                            bold: true,
+                                            size: 16,
+                                            color: "#000000",
+                                            font: "Arial"
+                                        })]
+                                    }),
                                 ],
                             }),
                             new TableCell({
                                 width: { size: 15, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
-                                children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: escudoImageRun ? [escudoImageRun] : [] })],
+                                children: escudoImageRun ? [new Paragraph({
+                                    alignment: AlignmentType.RIGHT,
+                                    children: [escudoImageRun]
+                                })] : [new Paragraph({ text: "" })],
                             }),
                         ],
                     }),
                 ],
             }),
-            new Paragraph({ border: { bottom: { color: "#000000", space: 1, style: BorderStyle.SINGLE, size: 1 } }, children: [new TextRun("")] }),
+            new Paragraph({
+                border: {
+                    bottom: { color: "#000000", space: 1, style: BorderStyle.SINGLE, size: 1 }
+                },
+                children: [new TextRun({ text: "" })]
+            }),
         ],
     });
 
+    // Footer
     const footer = new Footer({
         children: [
-            new Paragraph({ alignment: AlignmentType.LEFT, children: firmaImageRun ? [firmaImageRun] : [] }),
+            firmaImageRun ? new Paragraph({
+                alignment: AlignmentType.LEFT,
+                children: [firmaImageRun]
+            }) : new Paragraph({ text: "" }),
             new Paragraph({
                 alignment: AlignmentType.RIGHT,
                 children: [
-                    new TextRun({ text: "Página ", bold: true, color: "#000000", font: "Arial" }),
-                    new TextRun({ children: [PageNumber.CURRENT], bold: true, color: "#000000", font: "Arial" }),
-                    new TextRun({ text: " | ", bold: true, color: "#000000", font: "Arial" }),
-                    new TextRun({ children: [PageNumber.TOTAL_PAGES], bold: true, color: "#000000", font: "Arial" }),
+                    new TextRun({ text: "Página ", bold: true, color: "#000000", font: "Arial", size: 20 }),
+                    new TextRun({ children: [PageNumber.CURRENT], bold: true, color: "#000000", font: "Arial", size: 20 }),
+                    new TextRun({ text: " | ", bold: true, color: "#000000", font: "Arial", size: 20 }),
+                    new TextRun({ children: [PageNumber.TOTAL_PAGES], bold: true, color: "#000000", font: "Arial", size: 20 }),
                 ],
             }),
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "MUNICIPALIDAD PROVINCIAL DE UCAYALI", bold: true, color: "#000000", font: "Arial" })] }),
-            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CENTRO POBLADO DE CONTAMANA", color: "#000000", font: "Arial" })] }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({
+                    text: "MUNICIPALIDAD PROVINCIAL DE UCAYALI",
+                    bold: true,
+                    color: "#000000",
+                    font: "Arial",
+                    size: 20
+                })]
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({
+                    text: "CENTRO POBLADO DE CONTAMANA",
+                    color: "#000000",
+                    font: "Arial",
+                    size: 18
+                })]
+            }),
         ],
     });
 
+    // Página de portada
     const coverPage = [
         new Paragraph({
-            children: [new TextRun({ text: `ESPECIFICACIONES TECNICAS-${nombreArchivoBase.toUpperCase()}`, bold: true, size: 44, font: "Arial", color: "#000000", underline: { type: UnderlineType.SINGLE } })],
+            children: [new TextRun({
+                text: `ESPECIFICACIONES TECNICAS-${nombreArchivoBase.toUpperCase()}`,
+                bold: true,
+                size: 44,
+                font: "Arial",
+                color: "#000000",
+                underline: { type: UnderlineType.SINGLE }
+            })],
             alignment: AlignmentType.CENTER,
             spacing: { after: 200 },
         }),
-        new Paragraph({ text: "", border: { bottom: { color: "#000000", space: 1, style: BorderStyle.SINGLE, size: 1 } }, spacing: { after: 400 } }),
+        new Paragraph({
+            text: "",
+            border: { bottom: { color: "#000000", space: 1, style: BorderStyle.SINGLE, size: 1 } },
+            spacing: { after: 400 }
+        }),
         new Paragraph({
             children: [
                 new TextRun({ text: "PROYECTO:", bold: true, font: "Arial", size: 28, color: "#000000" }),
                 new TextRun({ text: "\t", font: "Arial", size: 28 }),
-                new TextRun({ text: "MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N°558 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA-PROVINCIA DE UCAYALI - DEPARTAMENTO DE LORETO", font: "Arial", size: 28, color: "#000000" }),
+                new TextRun({
+                    text: "MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N°558 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA-PROVINCIA DE UCAYALI - DEPARTAMENTO DE LORETO",
+                    font: "Arial",
+                    size: 28,
+                    color: "#000000"
+                }),
             ],
             spacing: { after: 400, line: 360 },
             alignment: AlignmentType.JUSTIFIED,
@@ -383,7 +496,10 @@ const generarWordParaSeccion = async (
                         new TableCell({
                             width: { size: 40, type: WidthType.PERCENTAGE },
                             verticalAlign: VerticalAlign.CENTER,
-                            children: principalImageRun ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [principalImageRun] })] : [new Paragraph("")],
+                            children: principalImageRun ? [new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [principalImageRun]
+                            })] : [new Paragraph({ text: "" })],
                             borders: sinBordes(),
                         }),
                     ],
@@ -392,9 +508,16 @@ const generarWordParaSeccion = async (
         }),
     ];
 
+    // Tabla de contenido
     const tableOfContents = [
         new Paragraph({
-            children: [new TextRun({ text: "TABLA DE CONTENIDO", bold: true, font: "Arial", size: 24, color: "#000000" })],
+            children: [new TextRun({
+                text: "TABLA DE CONTENIDO",
+                bold: true,
+                font: "Arial",
+                size: 24,
+                color: "#000000"
+            })],
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.CENTER,
             spacing: { after: 400 },
@@ -404,18 +527,53 @@ const generarWordParaSeccion = async (
     const contentSections = generateSectionsForWord(datosFiltrados, nombreArchivoBase);
 
     const documentSections = [
-        { properties: { type: SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: coverPage },
-        { properties: { type: SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: tableOfContents },
-        { properties: { type: SectionType.CONTINUOUS }, headers: { default: header }, footers: { default: footer }, children: contentSections },
+        {
+            properties: { type: SectionType.NEW_PAGE },
+            headers: { default: header },
+            footers: { default: footer },
+            children: coverPage
+        },
+        {
+            properties: { type: SectionType.NEW_PAGE },
+            headers: { default: header },
+            footers: { default: footer },
+            children: tableOfContents
+        },
+        {
+            properties: { type: SectionType.CONTINUOUS },
+            headers: { default: header },
+            footers: { default: footer },
+            children: contentSections
+        },
     ];
 
     const doc = new Document({
         styles: {
-            default: { document: { run: { font: "Arial", color: "#000000", size: 24 } }, paragraph: { spacing: { line: 276 } } },
+            default: {
+                document: {
+                    run: { font: "Arial", color: "#000000", size: 24 }
+                },
+                paragraph: { spacing: { line: 276 } }
+            },
             paragraphStyles: [
-                { id: "Heading1", name: "Heading 1", run: { font: "Arial", size: 36, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                { id: "Heading2", name: "Heading 2", run: { font: "Arial", size: 30, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                { id: "Heading3", name: "Heading 3", run: { font: "Arial", size: 26, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
+                {
+                    id: "Heading1",
+                    name: "Heading 1",
+                    run: { font: "Arial", size: 36, bold: true, color: "#000000" },
+                    paragraph: { spacing: { before: 240, after: 120 } }
+                },
+                {
+                    id: "Heading2",
+                    name: "Heading 2",
+                    run: { font: "Arial", size: 30, bold: true, color: "#000000" },
+                    paragraph: { spacing: { before: 240, after: 120 } }
+                },
+                {
+                    id: "Heading3",
+                    name: "Heading 3",
+                    run: { font: "Arial", size: 26, bold: true, color: "#000000" },
+                    paragraph: { spacing: { before: 240, after: 120 } }
+                },
             ],
         },
         sections: documentSections,
@@ -429,13 +587,20 @@ const generarWordParaSeccion = async (
     } catch (error) {
         console.error("Error al generar el documento:", error);
         showNotification?.('error', "Error al generar el documento Word");
+        throw error;
     }
 };
 
-// ─────────────────────────────────────────────
-// COMPONENTE MODAL
-// ─────────────────────────────────────────────
-const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, onGenerateStart, onGenerateEnd, showNotification }) => {
+// Componente Modal
+const WordExportModal: React.FC<WordExportProps> = ({
+    isOpen,
+    onClose,
+    getData,
+    proyecto,
+    onGenerateStart,
+    onGenerateEnd,
+    showNotification
+}) => {
     const [generatingWord, setGeneratingWord] = useState(false);
     const [selectedSections, setSelectedSections] = useState({
         estructura: false,
@@ -468,6 +633,7 @@ const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, 
             showNotification?.('error', 'Debe seleccionar al menos una sección');
             return;
         }
+
         if (!data || data.length === 0) {
             showNotification?.('warning', 'No hay datos para generar el documento');
             return;
@@ -480,12 +646,15 @@ const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, 
             for (const seccion of selectedSecciones) {
                 const datosFiltrados = filterTreeData(data, seccion);
                 if (datosFiltrados.length > 0) {
-                    await generarWordParaSeccion(datosFiltrados, seccion, showNotification);
+                    await generarWordParaSeccion(datosFiltrados, seccion, showNotification, proyecto);
                 } else {
                     showNotification?.('warning', `No se encontraron datos para la sección ${seccion}`);
                 }
             }
             onClose();
+        } catch (error) {
+            console.error("Error generando documentos:", error);
+            showNotification?.('error', "Error al generar los documentos");
         } finally {
             setGeneratingWord(false);
             onGenerateEnd?.();
@@ -519,34 +688,79 @@ const WordExportModal: React.FC<WordExportProps> = ({ isOpen, onClose, getData, 
                     </div>
                     <div className="border-t border-gray-200 pt-3">
                         <p className="text-sm font-medium text-gray-700 mb-2">Imágenes para el documento:</p>
+                        {(proyecto?.plantilla_logo_izq_url || proyecto?.plantilla_logo_der_url ||
+                            proyecto?.portada_logo_center_url || proyecto?.plantilla_firma_url) ? (
+                            <p className="text-xs text-green-600 mb-2">
+                                ✅ Se usarán las imágenes configuradas en el proyecto. Suba archivos solo si desea sobreescribirlas.
+                            </p>
+                        ) : null}
                         <div className="space-y-2">
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Logo izquierdo (header)</label>
-                                <input type="file" id="logoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                <label className="block text-xs text-gray-500 mb-1">
+                                    Logo izquierdo (header) {proyecto?.plantilla_logo_izq_url &&
+                                        <span className="text-green-600">✅ Configurado</span>}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="logoFile"
+                                    accept="image/*"
+                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Logo derecho / Escudo (header)</label>
-                                <input type="file" id="escudoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                <label className="block text-xs text-gray-500 mb-1">
+                                    Logo derecho / Escudo (header) {proyecto?.plantilla_logo_der_url &&
+                                        <span className="text-green-600">✅ Configurado</span>}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="escudoFile"
+                                    accept="image/*"
+                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Imagen principal (portada)</label>
-                                <input type="file" id="logoPrinFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                <label className="block text-xs text-gray-500 mb-1">
+                                    Imagen principal (portada) {proyecto?.portada_logo_center_url &&
+                                        <span className="text-green-600">✅ Configurado</span>}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="logoPrinFile"
+                                    accept="image/*"
+                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Firma (footer)</label>
-                                <input type="file" id="firmaFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                <label className="block text-xs text-gray-500 mb-1">
+                                    Firma (footer) {proyecto?.plantilla_firma_url &&
+                                        <span className="text-green-600">✅ Configurado</span>}
+                                </label>
+                                <input
+                                    type="file"
+                                    id="firmaFile"
+                                    accept="image/*"
+                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                />
                             </div>
                         </div>
                     </div>
                 </div>
                 <div className="bg-gray-100 px-6 py-4 rounded-b-lg flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                        disabled={generatingWord}
+                    >
                         Cancelar
                     </button>
                     <button
                         onClick={handleGenerateWord}
                         disabled={generatingWord}
-                        className={`px-4 py-2 rounded-md text-sm font-medium ${generatingWord ? 'bg-gray-400 cursor-not-allowed text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                        className={`px-4 py-2 rounded-md text-sm font-medium ${generatingWord
+                                ? 'bg-gray-400 cursor-not-allowed text-white'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
                     >
                         {generatingWord ? 'Generando...' : 'Generar'}
                     </button>
