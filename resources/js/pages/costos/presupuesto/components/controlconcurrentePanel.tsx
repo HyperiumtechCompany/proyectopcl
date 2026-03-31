@@ -22,6 +22,7 @@ import {
     GastoGeneralRow,
 } from '../stores/gastosGeneralesStore';
 import { useConsolidado } from '../stores/consolidadoStore';
+import { PlazoDisplay } from './PlazoDisplay';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface ControlConcurrentePanelProps {
@@ -853,6 +854,11 @@ export function ControlConcurrentePanel({
                         {fmtCur(totalFilas)}
                     </span>
                 </div>
+            </div>
+
+            {/* ── Plazo del proyecto ── */}
+            <div className="border-b border-slate-700 bg-slate-800/30 px-4 py-2">
+                <PlazoDisplay variant="compact" color="emerald" />
             </div>
 
             {/* ── Panel resumen 2% ── */}

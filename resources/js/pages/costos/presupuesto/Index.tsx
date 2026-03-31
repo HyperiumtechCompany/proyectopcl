@@ -209,6 +209,13 @@ export default function Index() {
         if (!selectedId) return null;
         const row = storeRows.find((r) => r.partida === selectedId);
         if (!row) return null;
+
+        // Solo permitir abrir ACU si es una partida (no título) y tiene unidad
+        const isPartida = row._level! > 0 && !row._hasChildren;
+        const hasUnidad = row.unidad && row.unidad.trim() !== '';
+
+        if (!isPartida || !hasUnidad) return null;
+
         return { descripcion: row.descripcion, unidad: row.unidad };
     }, [selectedId, storeRows]);
 
@@ -221,7 +228,7 @@ export default function Index() {
         projectId: project.id,
         subsection,
         selectedCell: null, // Cell tracking is not needed in the same way for TanStack
-        selectedPartidaCode: selectedId,
+        selectedPartidaCode: selectedPartidaData ? selectedId : null,
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },

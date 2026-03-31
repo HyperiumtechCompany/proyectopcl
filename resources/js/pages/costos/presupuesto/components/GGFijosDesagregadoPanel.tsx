@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GGFijosDesagregadoEditor } from './GGFijosDesagregadoEditor';
+import { PlazoDisplay } from './PlazoDisplay';
 import {
     RefreshCw,
     Calendar,
@@ -220,23 +221,8 @@ export function GGFijosDesagregadoPanel({ projectId }: GGFijosPanelProps) {
                         {/* Separador */}
                         <div className="h-8 w-px bg-slate-700" />
 
-                        {/* Plazo */}
-                        <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-amber-500/10 p-2">
-                                <Calendar className="h-4 w-4 text-amber-500" />
-                            </div>
-                            <div>
-                                <p className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">
-                                    Plazo
-                                </p>
-                                <p className="text-base font-black text-white">
-                                    {duracionDias}{' '}
-                                    <span className="text-xs text-slate-500">
-                                        días
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
+                        {/* Plazo — usando PlazoDisplay */}
+                        <PlazoDisplay variant="cards" color="amber" />
                     </div>
 
                     {/* Lado derecho - Sueldos totales */}
