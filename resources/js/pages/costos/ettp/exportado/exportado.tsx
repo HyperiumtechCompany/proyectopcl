@@ -61,8 +61,6 @@ const procesarContenido = (contenido: string): Paragraph[] => {
 
     return paragraphs;
 };
-
-// Agregar secciones al documento
 const addSectionsToWord = (sections: any[], docSections: any[]) => {
     if (!sections || !Array.isArray(sections) || sections.length === 0) return;
 
@@ -209,7 +207,6 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
     };
 
     const keywords = sectionKeywords[sectionName] || [];
-
     const filterItems = (items: any[]): any[] => {
         if (!items || !Array.isArray(items)) return [];
 

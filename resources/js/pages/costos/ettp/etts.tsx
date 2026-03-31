@@ -6,10 +6,7 @@ import * as toastr from 'toastr';
 import 'toastr/build/toastr.min.css';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-
 import WordExportModal from './exportado/exportado';
-import templatesData from './components/data/descriptivos-templates.json';
-
 import EttpHeader from './components/EttpHeader';
 import EttpDetailsPanel from './components/EttpDetailsPanel';
 import EttpMetradosPanel from './components/EttpMetradosPanel';
@@ -37,9 +34,9 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const tabulatorRef = useRef<any>(null);
-    const templatesRef = useRef<any[]>(templatesData);
-
-    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(partidas && partidas.length > 0 ? partidas : DEFAULT_DATA);
+    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(
+        partidas && partidas.length > 0 ? partidas : DEFAULT_DATA
+    );
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [currentData, setCurrentData] = useState<any>(null);
     const [currentSections, setCurrentSections] = useState<Section[]>([]);
@@ -58,13 +55,12 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         gas: false,
     });
 
-    // Hook de templates
+    // Hook de templates (solo para enriquecer descripciones si es necesario)
     const { buscarTemplate, extraerDetalles, buildSections, templatesCount } = useEttpTemplates();
 
     // ─────────────────────────────────────────────
     // FUNCIONES DE UTILIDAD
     // ─────────────────────────────────────────────
-
     const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
         if (toastr) toastr[type](message);
         else Swal.fire({ title: type === 'error' ? 'Error' : type === 'warning' ? 'Advertencia' : 'Éxito', text: message, icon: type });
@@ -106,7 +102,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     // ─────────────────────────────────────────────
     // FUNCIONES DE TRANSFORMACIÓN DE DATOS
     // ─────────────────────────────────────────────
-
     const mergeSections = (newData: any[], oldData: any[]): any[] => {
         const oldMap = new Map();
         const buildMap = (items: any[]) => {
@@ -130,44 +125,35 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         return process(newData);
     };
 
-    const buildTreeFromTemplates = (templates: any[]): any[] => {
-        const processNode = (node: any): any => {
-            const detallesTecnicos: Record<string, any> = {};
-            Object.keys(node).forEach(campo => {
-                if (!CAMPOS_EXCLUIDOS_TEMPLATE.includes(campo) && typeof node[campo] === 'string') {
-                    detallesTecnicos[campo] = node[campo];
-                }
-            });
+    // ✅ Función para enriquecer con plantillas SOLO desde BD (sin JSON local)
+    const enrichWithTemplate = (item: any): any => {
+        // Si ya tiene secciones, mantenerlas
+        if (item.secciones && item.secciones.length > 0) return item;
 
-            console.log(`📝 Procesando plantilla ${node.codigo} - ${node.titulo || node.descripcion || ''}`);
-            console.log(`   Campos encontrados:`, Object.keys(detallesTecnicos));
-
+        // Buscar plantilla en el hook (que debería obtener datos de BD)
+        const template = buscarTemplate(item.item);
+        if (template) {
+            console.log(`📚 Encontré plantilla para ${item.item}: ${item.descripcion}`);
+            const detallesTecnicos = extraerDetalles(template);
             const sections = buildSections(detallesTecnicos);
-            console.log(`   Secciones creadas: ${sections.length}`);
+            return { ...item, secciones: sections };
+        }
+        return { ...item, secciones: [] };
+    };
 
-            const item: any = {
-                id: parseInt(node.codigo.replace(/\./g, '')) || Math.random(),
-                item: node.codigo,
-                descripcion: node.titulo || node.descripcion || node.codigo_completo || '',
-                unidad: node.unidad_medida && node.unidad_medida !== '' ? node.unidad_medida : '',
-                secciones: sections,
-            };
-            console.log(`📦 Item ${item.item} - secciones:`, item.secciones.length);
-
-            if (node.subpartidas && node.subpartidas.length > 0) {
-                item._children = node.subpartidas.map(processNode);
+    const enrichTree = (items: any[]): any[] => {
+        return items.map(item => {
+            const enriched = enrichWithTemplate(item);
+            if (enriched._children) {
+                enriched._children = enrichTree(enriched._children);
             }
-
-            return item;
-        };
-
-        return templates.map(processNode);
+            return enriched;
+        });
     };
 
     // ─────────────────────────────────────────────
     // MANEJADORES DE EVENTOS
     // ─────────────────────────────────────────────
-
     const handleRowClick = (row: any) => {
         const data = row.getData();
         setSelectedRow(row);
@@ -242,6 +228,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
+    // ✅ FUNCIÓN CORREGIDA - SOLO BASE DE DATOS, SIN JSON LOCAL
     const handleLoadMetrados = async () => {
         const proyectoId = proyecto?.id;
         if (!proyectoId) {
@@ -267,92 +254,29 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         Swal.fire({ title: 'Cargando datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
+    
             const response = await axios.post(
                 `/costos/${proyectoId}/ettp/importar-metrados`,
-                { ...options },
+                options,
                 { headers: { 'X-CSRF-TOKEN': getCsrfToken(), 'Content-Type': 'application/json' } }
             );
+
             Swal.close();
-            let rawData = response.data;
 
-            if (!rawData?.length) {
-                console.log('⚠️ No hay datos del servidor, usando plantillas');
-                const treeData = buildTreeFromTemplates(templatesData);
-
-                const filterBySpeciality = (items: any[]): any[] => {
-                    return items.reduce((acc: any[], item: any) => {
-                        const desc = (item.descripcion || '').toLowerCase();
-                        let matches = false;
-
-                        if (selectedSections.estructura && (desc.includes('estructura') || desc.includes('concreto') || desc.includes('acero'))) matches = true;
-                        if (selectedSections.arquitectura && (desc.includes('arquitectura') || desc.includes('acabado') || desc.includes('piso'))) matches = true;
-                        if (selectedSections.sanitarias && (desc.includes('sanitaria') || desc.includes('agua') || desc.includes('desagüe'))) matches = true;
-                        if (selectedSections.electricas && (desc.includes('eléctrica') || desc.includes('eléctrico') || desc.includes('electricas') || desc.includes('alumbrado'))) matches = true;
-                        if (selectedSections.comunicaciones && (desc.includes('comunicacion') || desc.includes('datos') || desc.includes('telefonía'))) matches = true;
-                        if (selectedSections.gas && (desc.includes('gas'))) matches = true;
-
-                        if (matches) {
-                            acc.push(item);
-                        } else if (item._children) {
-                            const filteredChildren = filterBySpeciality(item._children);
-                            if (filteredChildren.length > 0) {
-                                acc.push({ ...item, _children: filteredChildren });
-                            }
-                        }
-                        return acc;
-                    }, []);
-                };
-
-                const filteredData = filterBySpeciality(treeData);
-                setDatosBase(filteredData);
-                showNotification('success', `✅ Se cargaron ${filteredData.length} partidas desde plantillas`);
-                return;
+            if (response.data && response.data.length > 0) {
+                setDatosBase(response.data);
+                showNotification('success', `✅ Se cargaron ${response.data.length} partidas`);
+            } else {
+                showNotification('warning', 'No se encontraron datos');
             }
-
-            const enrichWithTemplate = (item: any): any => {
-                if (item.secciones && item.secciones.length > 0) return item;
-
-                const template = buscarTemplate(item.item);
-                if (template) {
-                    console.log(`📚 Encontré plantilla para ${item.item}: ${item.descripcion}`);
-                    const detallesTecnicos = extraerDetalles(template);
-                    const sections = buildSections(detallesTecnicos);
-                    return { ...item, secciones: sections };
-                }
-                return { ...item, secciones: [] };
-            };
-
-            const enrichTree = (items: any[]): any[] => {
-                return items.map(item => {
-                    const enriched = enrichWithTemplate(item);
-                    if (enriched._children) {
-                        enriched._children = enrichTree(enriched._children);
-                    }
-                    return enriched;
-                });
-            };
-
-            const enrichedData = enrichTree(rawData);
-            const mergedData = mergeSections(enrichedData, datosBase);
-
-            setDatosBase(mergedData);
-            console.log('✅ datosBase después de cargar metrados:', JSON.parse(JSON.stringify(mergedData)));
-            showNotification('success', `✅ Se cargaron ${rawData.length} registros con sus plantillas`);
-
-        } catch (error) {
+        } catch (error: any) {
             Swal.close();
             console.error('[Metrados] Error:', error);
-
-            console.log('⚠️ Error en API, usando plantillas');
-            const treeData = buildTreeFromTemplates(templatesData);
-            setDatosBase(treeData);
-            showNotification('warning', 'Usando datos de plantillas (error de conexión)');
-
+            showNotification('error', error.response?.data?.error || 'Error al cargar datos');
         } finally {
             setLoadingMetrados(false);
         }
     };
-
     const handleSave = async () => {
         const idProyecto = proyecto?.id;
         if (!idProyecto) {
@@ -374,6 +298,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         } finally {
             setSaving(false);
         }
+    };
+
+    const getTableData = () => {
+        if (isWordModalOpen) return datosBase;
+        return tabulatorRef.current?.getData() || datosBase;
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
