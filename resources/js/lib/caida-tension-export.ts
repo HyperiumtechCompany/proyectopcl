@@ -586,7 +586,7 @@ export async function exportCaidaTensionToExcel(
         const fc2       = selectionData?.factorCarga2   ?? 0.80;
         const resultFc1 = fc1 !== 0 ? Number((maxDemKW / fc1).toFixed(3)) : 0;
         const resultFc2 = fc2 !== 0 ? Number((maxDemKW / fc2).toFixed(3)) : 0;
-        const standby   = resultFc2;
+        const standby = fc2 !== 0 ? resultFc2 / fc2: 0;
         const potEstabilizada = selectionData?.potenciaEstabilizadaStandby ?? 0;
         const NF3 = '#,##0.00';
 
@@ -708,7 +708,17 @@ export async function exportCaidaTensionToExcel(
         sc(ws3, 16, 8, '',                      { bg: CLR.white });
         sc(ws3, 16, 9, fc2,                     { bg: CLR.white, numFmt: '0.00' });
         ws3.mergeCells('J16:K16');
-        sc(ws3, 16,10, resultFc2,               { bold: true, bg: CLR.white, numFmt: NF3 });
+        const cellJ16 = ws3.getCell('J16');
+
+        cellJ16.value = {
+            formula: 'J15/I16'
+        };
+
+        cellJ16.font = { name: 'Arial', bold: true, size: 9 };
+        cellJ16.alignment = { horizontal: 'center', vertical: 'middle' };
+        cellJ16.numFmt = NF3;
+        fill(cellJ16, CLR.white);
+        bAll(cellJ16, T);
 
         // Fila 17: Potencia STAND BY en kW a X m.s.n.m
         ws3.getRow(17).height = 22;
@@ -718,7 +728,17 @@ export async function exportCaidaTensionToExcel(
         sc(ws3, 17, 8, '',                      { bg: CLR.white });
         sc(ws3, 17, 9, '',                      { bg: CLR.white });
         ws3.mergeCells('J17:K17');
-        sc(ws3, 17,10, standby,                 { bold: true, bg: CLR.white, numFmt: NF3 });
+        const cellJ17 = ws3.getCell('J17');
+
+        cellJ17.value = {
+            formula: 'J16'
+        };
+
+        cellJ17.font = { name: 'Arial', bold: true, size: 9 };
+        cellJ17.alignment = { horizontal: 'center', vertical: 'middle' };
+        cellJ17.numFmt = NF3;
+        fill(cellJ17, CLR.white);
+        bAll(cellJ17, T);
 
         ws3.getRow(18).height = 8;
 
