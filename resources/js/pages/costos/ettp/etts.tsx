@@ -267,6 +267,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             setShowDetailsPanel(false);
         } catch (error: any) {
             console.error('[Guardar Secciones] Error:', error);
+            console.error('[Guardar Secciones] Response:', error?.response?.data);
             Swal.fire({
                 title: 'Error',
                 text: error.response?.data?.error || 'No se pudieron guardar las secciones',
