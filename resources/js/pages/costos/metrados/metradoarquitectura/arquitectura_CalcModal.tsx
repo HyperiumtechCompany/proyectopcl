@@ -6,14 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Calculator, TriangleAlert, X, Save, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-import {
-  ALL_INPUTS,
-  DEFAULT_PROFILE,
-  INPUT_LABELS,
-  OUTPUT_LABELS,
-  UNITS,
-  UNIT_PROFILES,
-} from './arquitectura_constants';
+import {ALL_INPUTS,DEFAULT_PROFILE,INPUT_LABELS,OUTPUT_LABELS,UNITS,UNIT_PROFILES} from './arquitectura_constants';
 import type { CalcPayload, MeasureInputs, MeasureOutputs, UnitProfile } from './arquitectura_types';
 import { r4, toNum } from './arquitectura_utils';
 
@@ -23,11 +16,12 @@ const FORMULA_VARIABLES = [
   { key: 'ancho', label: 'Ancho', desc: 'Ancho' },
   { key: 'alto', label: 'Alto', desc: 'Alto' },
   { key: 'nveces', label: 'N°Veces', desc: 'Número de veces' },
-  { key: 'long', label: 'Long.', desc: 'Longitud' },
+  { key: 'kgm', label: 'kg/m', desc: 'Peso por metro (kg/m)' },
+  { key: 'kg', label: 'Kg.', desc: 'Kilogramos' },
+  { key: 'lon', label: 'Long.', desc: 'Longitud' },
   { key: 'area', label: 'Área', desc: 'Área' },
   { key: 'vol', label: 'Vol.', desc: 'Volumen' },
-  { key: 'kg', label: 'Kg.', desc: 'Kilogramos' },
-  { key: 'parcial', label: 'Parcial', desc: 'Parcial' },
+  { key: 'und', label: 'Und.', desc: 'Unidad/Parcial' },
 ];
 
 const OPERATORS = [
@@ -73,12 +67,9 @@ const createCustomProfile = (
     formula: formula.expression,
     fn: (v) => {
       try {
-        const { elsim, largo, ancho, alto, nveces, kg } = v;
+        const { elsim, largo, ancho, alto, nveces, kg, kgm } = v;
         // eslint-disable-next-line no-new-func
-        const result = new Function(
-          'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'Math',
-          `"use strict"; return (${formula.expression});`
-        )(elsim, largo, ancho, alto, nveces, kg, Math);
+        const result = new Function('elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',`"use strict"; return (${formula.expression});`)(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
         return { und: Number(result) };
       } catch {
         return { und: 0 };
@@ -87,22 +78,14 @@ const createCustomProfile = (
   };
 };
 
-export interface CalcModalProps {
-  open: boolean;
-  ri: number;
-  rowData: Record<string, any>;
-  onClose: () => void;
-  onApply: (payload: CalcPayload) => void;
-}
+export interface CalcModalProps { open: boolean; ri: number; rowData: Record<string, any>; onClose: () => void; onApply: (payload: CalcPayload) => void;}
 
 const OUTPUT_COLUMNS: (keyof MeasureOutputs)[] = ['lon', 'area', 'vol', 'kg', 'und'];
 
 export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProps) {
   const [descripcion, setDescripcion] = useState('');
   const [unidad, setUnidad] = useState('und');
-  const [vals, setVals] = useState<MeasureInputs>({
-    elsim: 0, largo: 0, ancho: 0, alto: 0, nveces: 1, kg: 0, kgm: 0,
-  });
+  const [vals, setVals] = useState<MeasureInputs>({elsim: 0, largo: 0, ancho: 0, alto: 0, nveces: 1, kg: 0, kgm: 0,});
   const [customExpr, setCustomExpr] = useState('');
   const [customErr, setCustomErr] = useState('');
   const [useCustom, setUseCustom] = useState(false);
@@ -157,7 +140,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
     setUnidad(incomingUnit || 'und');
     setVals({
       elsim: toNum(rowData.elsim), largo: toNum(rowData.largo), ancho: toNum(rowData.ancho),
-      alto: toNum(rowData.alto), nveces: toNum(rowData.nveces) || 1, kg: toNum(rowData.kg), kgm: 0,
+      alto: toNum(rowData.alto), nveces: toNum(rowData.nveces) || 1, kg: toNum(rowData.kg), kgm: toNum(rowData.kgm),
     });
     setCustomExpr(''); 
     setCustomErr('');
@@ -262,11 +245,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1 block">
                 Descripción
               </Label>
-              <Input
-                value={descripcion}
-                placeholder="Descripción del ítem"
-                onChange={(e) => setDescripcion(e.target.value)}
-                className="h-8 border-slate-600 bg-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              <Input value={descripcion} placeholder="Descripción del ítem" onChange={(e) => setDescripcion(e.target.value)} className="h-8 border-slate-600 bg-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
             
@@ -274,15 +253,13 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1 block">
                 Unidad
               </Label>
-              <select
-                value={unidad}
+              <select value={unidad}
                 onChange={(e) => { 
                   setUnidad(e.target.value); 
                   const profiles = UNIT_PROFILES[e.target.value];
                   setSelectedVersion(profiles?.[0]?.key ?? '');
                 }}
-                className="flex h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+                className="flex h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
                 {UNITS.map((u) => (
                   <option key={u} value={u}>{u.toUpperCase()}</option>
                 ))}
@@ -667,29 +644,95 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
               Resultado
             </Label>
             {hasResult ? (
-              <div className="flex items-center justify-center gap-6">
-                <div className="text-center">
-                  <div className="mb-1 text-[10px] font-bold uppercase text-emerald-400">
-                    {OUTPUT_LABELS[activeOut] ?? activeOut}
+              <div className="space-y-3">
+                {/* Para unidad KG: mostrar cálculo paso a paso */}
+                {unit === 'kg' && preview.lon !== undefined && preview.lon !== 0 ? (
+                  <div className="space-y-3">
+                    {/* PASO 1: Longitud Parcial */}
+                    <div className="rounded-lg border border-blue-600/40 bg-blue-950/30 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-bold uppercase text-blue-400">
+                          Paso 1: Longitud Parcial
+                        </div>
+                        <div className="text-[9px] text-blue-300/60">
+                          (Elem.Sim. × (L+A+H) × N°Veces)
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {(() => {
+                            const inputs = profile.activeInputs.filter(k => k !== 'kgm');
+                            return inputs.map((key, idx) => (
+                              <React.Fragment key={key}>
+                                <span className="px-2 py-1 rounded bg-blue-900/50 text-blue-300 text-xs font-mono">
+                                  {INPUT_LABELS[key]}: {r4(vals[key])}
+                                </span>
+                                {idx < inputs.length - 1 && (
+                                  <span className="text-blue-400 font-bold">×</span>
+                                )}
+                              </React.Fragment>
+                            ));
+                          })()}
+                        </div>
+                        <div className="text-2xl font-bold text-blue-400">
+                          = {r4(preview.lon).toLocaleString('es-PE', { maximumFractionDigits: 4 })} m
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* PASO 2: KG Final */}
+                    <div className="rounded-lg border border-emerald-600/40 bg-emerald-950/30 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-bold uppercase text-emerald-400">
+                          Paso 2: Peso KG
+                        </div>
+                        <div className="text-[9px] text-emerald-300/60">
+                          (Long.Parcial × kg/m)
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 rounded bg-emerald-900/50 text-emerald-300 text-xs font-mono">
+                            Long: {r4(preview.lon)}
+                          </span>
+                          <span className="text-emerald-400 font-bold">×</span>
+                          <span className="px-2 py-1 rounded bg-emerald-900/50 text-emerald-300 text-xs font-mono">
+                            kg/m: {r4(vals.kgm)}
+                          </span>
+                        </div>
+                        <div className="text-3xl font-bold text-emerald-400">
+                          {outVal.toLocaleString('es-PE', { maximumFractionDigits: 4 })} kg
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-emerald-950/40 px-5 py-2.5 text-3xl font-bold text-emerald-400">
-                    {outVal.toLocaleString('es-PE', { maximumFractionDigits: 4 })}
+                ) : (
+                  /* Para otras unidades: mostrar resultado normal */
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="text-center">
+                      <div className="mb-1 text-[10px] font-bold uppercase text-emerald-400">
+                        {OUTPUT_LABELS[activeOut] ?? activeOut}
+                      </div>
+                      <div className="rounded-lg bg-emerald-950/40 px-5 py-2.5 text-3xl font-bold text-emerald-400">
+                        {outVal.toLocaleString('es-PE', { maximumFractionDigits: 4 })}
+                      </div>
+                    </div>
+                    
+                    <div className="h-14 w-px bg-slate-600" />
+                    
+                    <div className="text-center">
+                      <div className="mb-1 text-[10px] font-bold uppercase text-slate-400">
+                        Operación
+                      </div>
+                      <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300 font-mono">
+                        {(useCustom ? ALL_INPUTS : profile.activeInputs)
+                          .filter((key) => vals[key] !== 0)
+                          .map((key) => `${r4(vals[key])}`)
+                          .join(' × ')}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="h-12 w-px bg-slate-600" />
-                
-                <div className="text-center">
-                  <div className="mb-1 text-[10px] font-bold uppercase text-slate-400">
-                    Operación
-                  </div>
-                  <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300 font-mono">
-                    {(useCustom ? ALL_INPUTS : profile.activeInputs)
-                      .filter((key) => vals[key] !== 0)
-                      .map((key) => `${r4(vals[key])}`)
-                      .join(' × ')}
-                  </div>
-                </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-2 text-xs text-slate-500 text-center">
