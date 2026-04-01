@@ -14,7 +14,7 @@ import {
   UNITS,
   UNIT_PROFILES,
 } from './arquitectura_constants';
-import type { CalcPayload, MeasureInputs, MeasureOutputs } from './arquitectura_types';
+import type { CalcPayload, MeasureInputs, MeasureOutputs, UnitProfile } from './arquitectura_types';
 import { r4, toNum } from './arquitectura_utils';
 
 const FORMULA_VARIABLES = [
@@ -39,6 +39,54 @@ const OPERATORS = [
   { symbol: ')', label: 'Paréntesis cierre' },
 ];
 
+//detectar variables se usan en una fórmula personalizada
+const detectVariablesInFormula = (expression: string): (keyof MeasureInputs)[] => {
+  const variables: (keyof MeasureInputs)[] = [];
+  const allVars: (keyof MeasureInputs)[] = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'];
+  
+  allVars.forEach(variable => {
+    const regex = new RegExp(`\\b${variable}\\b`, 'g');
+    if (regex.test(expression)) {
+      variables.push(variable);
+    }
+  });
+  
+  return variables.length > 0 ? variables : ALL_INPUTS;
+};
+
+const createCustomProfile = (
+  formula: { 
+    id: string; 
+    name: string; 
+    expression: string;
+    activeInputs?: (keyof MeasureInputs)[]; 
+  },
+  unit: string
+): UnitProfile => {
+  const activeInputs = formula.activeInputs || detectVariablesInFormula(formula.expression);
+  
+  return {
+    key: `custom_${formula.id}`,
+    label: `★ ${formula.name.slice(0, 20)}${formula.name.length > 20 ? '...' : ''}`,
+    activeInputs,
+    outputKey: 'und', 
+    formula: formula.expression,
+    fn: (v) => {
+      try {
+        const { elsim, largo, ancho, alto, nveces, kg } = v;
+        // eslint-disable-next-line no-new-func
+        const result = new Function(
+          'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'Math',
+          `"use strict"; return (${formula.expression});`
+        )(elsim, largo, ancho, alto, nveces, kg, Math);
+        return { und: Number(result) };
+      } catch {
+        return { und: 0 };
+      }
+    },
+  };
+};
+
 export interface CalcModalProps {
   open: boolean;
   ri: number;
@@ -61,24 +109,49 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
   const [customOut, setCustomOut] = useState<keyof MeasureOutputs>('und');
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [formulaName, setFormulaName] = useState('');
-  const [savedFormulas, setSavedFormulas] = useState<Array<{ id: string; name: string; expression: string }>>([]);
+  
+  // Cargar fórmulas guardadas 
+  const [savedFormulas, setSavedFormulas] = useState<Array<{ 
+    id: string; 
+    name: string; 
+    expression: string;
+    activeInputs?: (keyof MeasureInputs)[]; 
+  }>>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('customFormulas');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+
+  // Guardar fórmulas en localStorage 
+  useEffect(() => {
+    localStorage.setItem('customFormulas', JSON.stringify(savedFormulas));
+  }, [savedFormulas]);
 
   const unit = unidad.trim().toLowerCase();
   const unitProfiles = UNIT_PROFILES[unit] ?? [DEFAULT_PROFILE];
   const known = !!UNIT_PROFILES[unit];
 
-  const profile = useMemo(() => {
-    if (useCustom) return DEFAULT_PROFILE;
-    const selected = selectedVersion 
-      ? unitProfiles.find(p => p.key === selectedVersion) 
-      : unitProfiles[0];
-    return selected ?? DEFAULT_PROFILE;
-  }, [unitProfiles, selectedVersion, useCustom]);
+  // Fusiona perfiles nativos + fórmulas guardadas para la unidad actual
+  const mergedProfiles = useMemo(() => {
+    const base = UNIT_PROFILES[unit] ?? [DEFAULT_PROFILE];
+    const customs = savedFormulas.map(f => createCustomProfile(f, unit));
+    return [...base, ...customs];
+  }, [unit, savedFormulas]);
 
-  const activeOut = useCustom ? customOut : profile.outputKey;
+  const profile = useMemo(() => {
+    const selected = selectedVersion 
+      ? mergedProfiles.find(p => p.key === selectedVersion) 
+      : mergedProfiles[0];
+    return selected ?? DEFAULT_PROFILE;
+  }, [mergedProfiles, selectedVersion]);
+
+  const activeOut = profile.outputKey;
 
   useEffect(() => {
     if (!open) return;
+    
     const incomingUnit = String(rowData.unidad ?? '').trim().toLowerCase();
     setDescripcion(String(rowData.descripcion ?? '').trim());
     setUnidad(incomingUnit || 'und');
@@ -86,32 +159,31 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
       elsim: toNum(rowData.elsim), largo: toNum(rowData.largo), ancho: toNum(rowData.ancho),
       alto: toNum(rowData.alto), nveces: toNum(rowData.nveces) || 1, kg: toNum(rowData.kg), kgm: 0,
     });
-    setCustomExpr(''); setCustomErr('');
+    setCustomExpr(''); 
+    setCustomErr('');
     const hasProfiles = !!UNIT_PROFILES[incomingUnit];
     setUseCustom(incomingUnit ? !hasProfiles : false);
+    
+    // Selecciona primera versión disponible (nativa o custom)
     const profiles = UNIT_PROFILES[incomingUnit];
-    setSelectedVersion(profiles?.[0]?.key ?? '');
+    const availableProfiles = profiles ?? [DEFAULT_PROFILE];
+    const customs = savedFormulas.map(f => createCustomProfile(f, incomingUnit));
+    const allProfiles = [...availableProfiles, ...customs];
+    
+    if (allProfiles[0]?.key && !selectedVersion) {
+      setSelectedVersion(allProfiles[0].key);
+    }
     setCustomOut('und');
-  }, [open, rowData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, rowData]); 
 
   const preview = useMemo((): MeasureOutputs => {
-    if (!useCustom) {
-      try { return profile.fn(vals); } catch { return {}; }
+    try { 
+      return profile.fn(vals); 
+    } catch { 
+      return {}; 
     }
-    if (!customExpr.trim()) return {};
-    try {
-      const { elsim, largo, ancho, alto, nveces, kg } = vals;
-      // eslint-disable-next-line no-new-func
-      const result = new Function('elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'Math',
-        `"use strict"; return (${customExpr});`,
-      )(elsim, largo, ancho, alto, nveces, kg, Math);
-      setCustomErr('');
-      return { [customOut]: Number(result) };
-    } catch (e: any) {
-      setCustomErr(e.message ?? 'Error en expresión');
-      return {};
-    }
-  }, [customExpr, customOut, profile, useCustom, vals]);
+  }, [profile, vals]);
 
   const outVal = r4((preview[activeOut] ?? 0) as number);
   const hasResult = outVal !== 0;
@@ -124,10 +196,14 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
 
   const saveFormula = () => {
     if (!formulaName.trim() || !customExpr.trim()) return;
+    
+    const activeInputs = detectVariablesInFormula(customExpr);
+    
     const newFormula = {
       id: Date.now().toString(),
       name: formulaName,
       expression: customExpr,
+      activeInputs, // ← Guarda los inputs activos
     };
     setSavedFormulas(prev => [...prev, newFormula]);
     setFormulaName('');
@@ -141,11 +217,19 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
   const loadFormula = (formula: { id: string; name: string; expression: string }) => {
     setCustomExpr(formula.expression);
     setFormulaName(formula.name);
+    setUseCustom(true);
+    const customKey = `custom_${formula.id}`;
+    setSelectedVersion(customKey);
   };
 
   const deleteFormula = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSavedFormulas(prev => prev.filter(f => f.id !== id));
+    // Si la fórmula eliminada está seleccionada, limpiar selección
+    if (selectedVersion === `custom_${id}`) {
+      setSelectedVersion('');
+      setUseCustom(false);
+    }
   };
 
   return (
@@ -166,13 +250,6 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 {unit}
               </span>
             </DialogTitle>
-            <button 
-              type="button" 
-              onClick={onClose} 
-              className="text-blue-200 hover:text-white hover:bg-blue-800 rounded-md p-1 transition-colors"
-            >
-              <X className="h-5 w-5" strokeWidth={2} />
-            </button>
           </div>
         </DialogHeader>
 
@@ -213,25 +290,30 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
             </div>
 
             <div className="col-span-4">
-              {!useCustom && unitProfiles.length > 1 && (
+              {/* Versiones nativas (botones) */}
+              {!useCustom && unitProfiles.length > 0 && (
                 <>
                   <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1 block">
                     Versión
                   </Label>
-                  <div className="flex gap-1">
-                    {unitProfiles.slice(0, 5).map((p, idx) => {
+                  <div className="flex gap-1 flex-wrap">
+                    {unitProfiles.slice(0, 8).map((p, idx) => {
                       const isActive = selectedVersion === p.key;
                       return (
                         <button
                           key={p.key}
                           type="button"
-                          onClick={() => setSelectedVersion(p.key)}
+                          onClick={() => {
+                            setSelectedVersion(p.key);
+                            setUseCustom(false);
+                          }}
                           className={cn(
-                            'flex-1 rounded px-1.5 py-1.5 text-[10px] font-bold transition-colors',
+                            'flex-1 min-w-[40px] rounded px-1.5 py-1.5 text-[9px] font-bold transition-all border',
                             isActive
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600',
                           )}
+                          title={p.label}
                         >
                           V{idx + 1}
                         </button>
@@ -239,6 +321,41 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                     })}
                   </div>
                 </>
+              )}
+
+              {/* Select de Fórmulas Guardadas */}
+              {savedFormulas.length > 0 && (
+                <div className="mt-2">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1 block">
+                    Fórmulas Guardadas
+                  </Label>
+                  <select
+                    value={selectedVersion.startsWith('custom_') ? selectedVersion : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value) {
+                        setSelectedVersion(value);
+                        const formula = savedFormulas.find(f => `custom_${f.id}` === value);
+                        if (formula) {
+                          setCustomExpr(formula.expression);
+                          setFormulaName(formula.name);
+                          setUseCustom(false);
+                        }
+                      }
+                    }}
+                    className="flex h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">Seleccionar fórmula...</option>
+                    {savedFormulas.map((formula) => (
+                      <option 
+                        key={formula.id} 
+                        value={`custom_${formula.id}`}
+                      >
+                        {formula.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
           </div>
@@ -321,10 +438,15 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 <div className="flex gap-1.5">
                   <Input
                     value={formulaName}
-                    onChange={(e) => setFormulaName(e.target.value)}
+                    onChange={(e) => setFormulaName(e.target.value.slice(0, 50))}
                     placeholder="Nombre fórmula..."
+                    maxLength={50} 
                     className="h-7 border-slate-600 bg-slate-800 text-xs text-slate-100 placeholder:text-slate-500 w-40"
                   />
+                  {/* Contador visual opcional */}
+                  <div className="text-[8px] text-slate-500 text-right mt-0.5">
+                    {formulaName.length}/50
+                  </div>
                   <Button
                     size="sm"
                     onClick={saveFormula}
@@ -400,7 +522,30 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                   </div>
                 </div>
               </div>
-              {/* FILA 2: Valores de Entrada + Inputs */}
+
+              {/* FILA : Expresión construida */}
+              <div className="rounded-lg border border-blue-600/50 bg-slate-900 p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[9px] font-bold uppercase text-slate-400">
+                    Expresión construida :
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomExpr('')}
+                    className="text-[9px] text-red-400 hover:text-red-300 transition-colors px-2 py-0.5 rounded hover:bg-red-950/30"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                <Input
+                  value={customExpr}
+                  onChange={(e) => setCustomExpr(e.target.value)}
+                  placeholder="Click en variables y operadores o escribe directamente..."
+                  className="font-mono text-sm text-blue-300 bg-slate-800 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10"
+                />
+              </div>
+
+              {/* FILA : Valores de Entrada + Inputs */}
               <div className="rounded-lg border border-slate-600 bg-slate-800 p-2">
                 <div className="text-[9px] font-bold uppercase text-emerald-400 mb-2">
                   Valores de Entrada:
@@ -424,29 +569,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 </div>
               </div>
 
-              {/* FILA 4: Expresión construida */}
-              <div className="rounded-lg border border-blue-600/50 bg-slate-900 p-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-[9px] font-bold uppercase text-slate-400">
-                    Expresión construida :
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCustomExpr('')}
-                    className="text-[9px] text-red-400 hover:text-red-300 transition-colors px-2 py-0.5 rounded hover:bg-red-950/30"
-                  >
-                    Limpiar
-                  </button>
-                </div>
-                <Input
-                  value={customExpr}
-                  onChange={(e) => setCustomExpr(e.target.value)}
-                  placeholder="Click en variables y operadores o escribe directamente..."
-                  className="font-mono text-sm text-blue-300 bg-slate-800 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10"
-                />
-              </div>
-
-              {/* FILA 5: Resultado en */}
+              {/* FILA : Resultado en */}
               <div className="rounded-lg border border-slate-600 bg-slate-800 p-2">
                 <div className="text-[9px] font-bold uppercase text-slate-400 mb-2">
                   Resultado en:
@@ -491,7 +614,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 </div>
               </div>
 
-              {/* FILA 6: Fórmulas guardadas */}
+              {/* FILA : Fórmulas guardadas */}
               {savedFormulas.length > 0 && (
                 <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-2">
                   <div className="text-[9px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-600 pb-1">

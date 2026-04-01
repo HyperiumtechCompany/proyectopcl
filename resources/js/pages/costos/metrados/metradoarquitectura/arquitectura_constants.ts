@@ -174,17 +174,27 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
       formula: 'Kg = [Elsim × (Largo + Ancho + Alto) × Veces] × kg/m',
 
       fn: (v) => {
-        const lon = v.elsim * (v.largo + v.ancho + v.alto) * v.nveces;
-        const kg = lon * v.kgm;
+        const elsim  = toNum(v.elsim);
+        const largo  = toNum(v.largo);
+        const ancho  = toNum(v.ancho);
+        const alto   = toNum(v.alto);
+        const nveces = toNum(v.nveces);
+        const kgm    = toNum(v.kgm);
 
-        if (!v.kgm) {
-          return {
-            lon: r4(lon),
-            kg: 0, 
-          };
-        }
-        return { lon: r4(lon), kg: r4(kg) };
-      },
+        const lon = elsim * (largo + ancho + alto) * nveces;
+        const kg  = lon * kgm;
+
+        const detalle = [
+          `Long. = ${elsim} × (${largo} + ${ancho} + ${alto}) × ${nveces} = ${r4(lon)}`,
+          `Kg = ${r4(lon)} × ${kgm} = ${r4(kg)}`
+        ].join('\n');
+
+        return {
+          lon: r4(lon),
+          kg: r4(kg),
+          detalle, 
+        };
+      }
     },
     {
       key: 'kg_v1',
