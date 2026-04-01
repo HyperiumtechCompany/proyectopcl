@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { ColumnDef, ColumnType } from '@/types/presupuestos';
-=======
 import type { ColumnDef, ColumnType } from '@/types/presupuestos';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 export function getExcelColumnName(colIndex: number): string {
     let result = '';

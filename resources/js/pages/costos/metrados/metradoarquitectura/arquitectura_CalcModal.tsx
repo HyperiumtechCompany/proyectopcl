@@ -203,7 +203,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
       id: Date.now().toString(),
       name: formulaName,
       expression: customExpr,
-      activeInputs, // ← Guarda los inputs activos
+      activeInputs,
     };
     setSavedFormulas(prev => [...prev, newFormula]);
     setFormulaName('');
@@ -681,13 +681,13 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 
                 <div className="text-center">
                   <div className="mb-1 text-[10px] font-bold uppercase text-slate-400">
-                    Operación
+                    Datos de Entrada
                   </div>
                   <div className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300 font-mono">
                     {(useCustom ? ALL_INPUTS : profile.activeInputs)
                       .filter((key) => vals[key] !== 0)
                       .map((key) => `${r4(vals[key])}`)
-                      .join(' × ')}
+                      .join(' - ')}
                   </div>
                 </div>
               </div>
