@@ -89,4 +89,69 @@ class EttpPartida extends Model
     {
         return $query->whereNull('parent_id');
     }
+
+    /**
+     * Compara códigos de item jerárquicos como 01, 01.02, 08.10.03.
+     */
+    public static function compareItemCodes(?string $left, ?string $right): int
+    {
+        $leftParts = self::splitItemCode($left);
+        $rightParts = self::splitItemCode($right);
+        $maxParts = max(count($leftParts), count($rightParts));
+
+        for ($index = 0; $index < $maxParts; $index++) {
+            $leftPart = $leftParts[$index] ?? null;
+            $rightPart = $rightParts[$index] ?? null;
+
+            if ($leftPart === $rightPart) {
+                continue;
+            }
+
+            if ($leftPart === null) {
+                return -1;
+            }
+
+            if ($rightPart === null) {
+                return 1;
+            }
+
+            $leftIsNumeric = ctype_digit($leftPart);
+            $rightIsNumeric = ctype_digit($rightPart);
+
+            if ($leftIsNumeric && $rightIsNumeric) {
+                $comparison = (int) $leftPart <=> (int) $rightPart;
+                if ($comparison !== 0) {
+                    return $comparison;
+                }
+
+                continue;
+            }
+
+            $comparison = strnatcasecmp($leftPart, $rightPart);
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+        }
+
+        return strnatcasecmp((string) $left, (string) $right);
+    }
+
+    /**
+     * Divide un código jerárquico respetando cada nivel.
+     *
+     * @return array<int, string>
+     */
+    private static function splitItemCode(?string $item): array
+    {
+        $item = trim((string) $item);
+
+        if ($item === '') {
+            return [];
+        }
+
+        return array_values(array_filter(
+            preg_split('/\s*\.\s*/', $item) ?: [],
+            static fn ($part) => $part !== null && $part !== ''
+        ));
+    }
 }

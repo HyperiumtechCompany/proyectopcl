@@ -45,6 +45,8 @@ class EttpController extends Controller
             ->orderBy('item_order')
             ->get();
 
+        $partidas = $this->sortPartidasByItem($partidas);
+
         // Construir árbol jerárquico
         $arbol = $this->buildTree($partidas, $proyectoId);
 
@@ -73,8 +75,9 @@ class EttpController extends Controller
         $todas = EttpPartida::where('presupuesto_id', $presupuestoId)
             ->with(['secciones.imagenes'])
             ->orderBy('item_order')
-            ->get()
-            ->keyBy('id');
+            ->get();
+
+        $todas = $this->sortPartidasByItem($todas)->keyBy('id');
 
         $tree = [];
 
@@ -135,13 +138,22 @@ class EttpController extends Controller
     private function attachChildren(array $tree, $todas): array
     {
         foreach ($tree as &$node) {
-            $children = $todas->where('parent_id', $node['id'])->values();
+            $children = $this->sortPartidasByItem(
+                $todas->where('parent_id', $node['id'])->values()
+            );
             if ($children->isNotEmpty()) {
                 $childNodes = $children->map(fn($p) => $this->formatPartida($p))->toArray();
                 $node['_children'] = $this->attachChildren($childNodes, $todas);
             }
         }
         return $tree;
+    }
+
+    private function sortPartidasByItem($partidas)
+    {
+        return $partidas
+            ->sort(static fn ($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
+            ->values();
     }
 
     /**
@@ -221,8 +233,8 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
 
             foreach ($datos as $item) {
                 // Manejar discrepancia de nombres de columnas (base vs modular)
-                $codigo = $item->item ?? $item->partida ?? '';
-                $unidad = $item->und ?? $item->unidad ?? '';
+                $codigo = trim((string)($item->item ?? $item->partida ?? ''));
+                $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
 
                 if (empty($codigo)) continue;
 
@@ -244,14 +256,19 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
                 );
             }
 
-            // Resolver jerarquía basada en ítems (01 -> 01.01)
+            // 1. Intentar resolver jerarquía exacta usando la BD origen
+            $this->resolverJerarquia($presupuestoId, $especialidad, $datos);
+
+            // 2. Fallback: Para los que aún no tengan parent_id, resolver por código de ítem (01 -> 01.01)
             $todasSpecialidad = EttpPartida::where('presupuesto_id', $presupuestoId)
                 ->where('especialidad', $especialidad)
                 ->get()
                 ->keyBy('item');
 
             foreach ($todasSpecialidad as $item) {
-                $codigo = $item->item;
+                if ($item->parent_id) continue; // Ya fue resuelto por BD origen
+                
+                $codigo = trim((string)$item->item);
                 $partes = explode('.', $codigo);
                 if (count($partes) > 1) {
                     $parentCode = implode('.', array_slice($partes, 0, -1));
@@ -273,6 +290,8 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
         ->raices()
         ->orderBy('item_order')
         ->get();
+
+    $partidas = $this->sortPartidasByItem($partidas);
 
     return response()->json($this->buildTree($partidas, $presupuestoId));
 }
@@ -399,20 +418,28 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
         $partida = EttpPartida::where('presupuesto_id', $presupuestoId)->findOrFail($partidaId);
         $secciones = $request->input('secciones', []);
 
-        DB::connection('costos_tenant')->beginTransaction();
-
         try {
+            DB::connection('costos_tenant')->beginTransaction();
+
+            if (!is_array($secciones)) {
+                $secciones = [];
+            }
+
             // Recopilar IDs válidos recibidos
             $idsRecibidos = collect($secciones)
                 ->pluck('id')
                 ->filter(fn($id) => !empty($id) && is_numeric($id))
+                ->map(fn($id) => (int) $id)
                 ->toArray();
 
             // Eliminar secciones omitidas (junto a sus imágenes atadas)
-            $seccionesAEliminar = EttpSeccion::where('ettp_partida_id', $partida->id)
-                ->whereNotIn('id', $idsRecibidos)
-                ->with('imagenes')
-                ->get();
+            $seccionesAEliminarQuery = EttpSeccion::where('ettp_partida_id', $partida->id)->with('imagenes');
+
+            if (!empty($idsRecibidos)) {
+                $seccionesAEliminarQuery->whereNotIn('id', $idsRecibidos);
+            }
+
+            $seccionesAEliminar = $seccionesAEliminarQuery->get();
 
             foreach ($seccionesAEliminar as $sD) {
                 foreach ($sD->imagenes as $img) {
@@ -422,49 +449,83 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
             }
 
             // Procesar guardado/actualización
-            foreach ($secciones as $seccionData) {
-                $titulo    = $seccionData['titulo'] ?? $seccionData['title'] ?? '';
-                $contenido = $seccionData['contenido'] ?? $seccionData['content'] ?? null;
+            foreach ($secciones as $index => $seccionData) {
+                if (!is_array($seccionData)) {
+                    continue;
+                }
+
+                $tituloBruto = $seccionData['titulo'] ?? $seccionData['title'] ?? '';
+                $titulo = trim((string) $tituloBruto);
+                if ($titulo === '') {
+                    $titulo = 'Sección ' . ($index + 1);
+                }
+
+                $titulo = Str::limit($titulo, 150, '');
+                $slug = Str::limit(EttpSeccion::generarSlug($titulo), 100, '');
+                $contenidoRaw = $seccionData['contenido'] ?? $seccionData['content'] ?? null;
+                $contenido = is_string($contenidoRaw) ? $contenidoRaw : (is_null($contenidoRaw) ? null : (string) $contenidoRaw);
+                $orden = isset($seccionData['orden']) && is_numeric($seccionData['orden'])
+                    ? (int) $seccionData['orden']
+                    : ($index + 1);
                 $seccion   = null;
 
                 if (!empty($seccionData['id']) && is_numeric($seccionData['id'])) {
-                    $seccion = EttpSeccion::find($seccionData['id']);
+                    $seccion = EttpSeccion::where('ettp_partida_id', $partida->id)->find($seccionData['id']);
                     if ($seccion) {
                         $seccion->update([
                             'titulo'    => $titulo,
-                            'slug'      => EttpSeccion::generarSlug($titulo),
+                            'slug'      => $slug,
                             'contenido' => $contenido,
-                            'orden'     => $seccionData['orden'] ?? $seccion->orden,
+                            'orden'     => $orden,
                         ]);
                     }
                 } else {
                     $seccion = EttpSeccion::create([
                         'ettp_partida_id' => $partida->id,
                         'titulo'          => $titulo,
-                        'slug'            => EttpSeccion::generarSlug($titulo),
+                        'slug'            => $slug,
                         'contenido'       => $contenido,
                         'origen'          => 'manual',
-                        'orden'           => $seccionData['orden'] ?? 0,
+                        'orden'           => $orden,
                     ]);
                 }
 
                 if ($seccion) {
                     // Procesar imágenes en base64 insertadas offline/manual
                     if (!empty($contenido)) {
-                        $contenidoModificado = preg_replace_callback('/src="data:image\/(.*?);base64,([^"]*?)"/', function($matches) use ($seccion, $presupuestoId) {
-                            $extension = explode(';', $matches[1])[0];
-                            $base64_str = $matches[2];
-                            $image_data = base64_decode($base64_str);
+                        $contenidoModificado = preg_replace_callback('/src="data:image\/([a-zA-Z0-9.+-]+);base64,([^"]*?)"/', function ($matches) use ($seccion, $presupuestoId) {
+                            $extension = strtolower($matches[1]);
+                            $extension = match ($extension) {
+                                'jpeg' => 'jpg',
+                                'svg+xml' => 'svg',
+                                default => preg_replace('/[^a-z0-9]+/', '', $extension),
+                            };
+
+                            if ($extension === '') {
+                                $extension = 'png';
+                            }
+
+                            $base64Str = preg_replace('/\s+/', '', $matches[2]);
+                            $imageData = base64_decode($base64Str, true);
+
+                            if ($imageData === false) {
+                                return $matches[0];
+                            }
+
                             $nombreArchivo = Str::uuid() . '.' . $extension;
                             $path = "ettp/{$presupuestoId}/{$nombreArchivo}";
-                            
-                            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $image_data);
-                            $dimensions = @getimagesizefromstring($image_data);
-                            
+
+                            $stored = Storage::disk('public')->put($path, $imageData);
+                            if ($stored === false) {
+                                throw new \RuntimeException("No se pudo almacenar la imagen {$nombreArchivo}");
+                            }
+
+                            $dimensions = @getimagesizefromstring($imageData);
+                             
                             $imagen = EttpImagen::create([
                                 'ettp_seccion_id' => $seccion->id,
                                 'nombre_archivo'  => $nombreArchivo,
-                                'nombre_original' => 'imagen_insertada.'.$extension,
+                                'nombre_original' => 'imagen_insertada.' . $extension,
                                 'caption'         => null,
                                 'orden'           => EttpImagen::where('ettp_seccion_id', $seccion->id)->count(),
                                 'ancho'           => $dimensions ? $dimensions[0] : null,
@@ -521,8 +582,17 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
                 'success'   => true,
                 'secciones' => $seccionesActualizadas
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::connection('costos_tenant')->rollBack();
+            Log::error('ETTP guardarSecciones error', [
+                'costo_project_id' => $costoProject->id,
+                'presupuesto_id' => $presupuestoId,
+                'partida_id' => $partidaId,
+                'payload' => $request->input('secciones', []),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
