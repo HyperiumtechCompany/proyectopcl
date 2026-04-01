@@ -42,6 +42,7 @@ export const RESUMEN_COLS: ColumnDef[] = [
   { key: 'partida',     label: 'Ítem',         width: 120 },
   { key: 'descripcion', label: 'Descripción',  width: 360 },
   { key: 'unidad',      label: 'Und',          width: 65  },
+  { key: 'total',       label: 'Total',         width: 95  },
 ];
 
 // ── Perfiles de unidad ────────────────────────────────────────
