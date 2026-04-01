@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-import {
-    Document, Paragraph, TextRun, ImageRun, Header, Footer, Table, TableRow, TableCell,
-    AlignmentType, HeadingLevel, BorderStyle, WidthType, VerticalAlign, UnderlineType,
-    LineRuleType, PageNumber, SectionType, Packer
-} from 'docx';
+import {Document, Paragraph, TextRun, ImageRun, Header, Footer, Table, TableRow, TableCell,AlignmentType, HeadingLevel, BorderStyle, WidthType, VerticalAlign, UnderlineType,LineRuleType, PageNumber, SectionType, Packer} from 'docx';
 import { saveAs } from 'file-saver';
 
 interface WordExportProps {
@@ -26,6 +22,15 @@ const crearParrafoDetalle = (titulo: string, descripcion: string) =>
         spacing: { after: 100, line: 750, lineRule: LineRuleType.AUTO },
     });
 
+const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binaryString = window.atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+};
+
 // Configuración de sin bordes
 const sinBordes = () => ({
     top: { style: BorderStyle.NONE, size: 0, color: "000000" },
@@ -34,40 +39,108 @@ const sinBordes = () => ({
     right: { style: BorderStyle.NONE, size: 0, color: "000000" },
 });
 
-// Procesa contenido HTML a elementos docx
-const procesarContenido = (contenido: string): Paragraph[] => {
+// Procesa contenido HTML a elementos docx de modo asíncrono soportando imágenes
+const procesarContenido = async (contenido: string): Promise<Paragraph[]> => {
     if (!contenido || typeof contenido !== 'string') return [];
 
-    const paragraphs: Paragraph[] = [];
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = contenido;
+    const elementos: Paragraph[] = [];
 
-    // Eliminar etiquetas HTML y obtener texto plano
-    const plainText = contenido.replace(/<[^>]*>/g, '');
-    const lines = plainText.split('\n').filter(line => line.trim());
+    const procesarBloque = async (nodoBloque: HTMLElement) => {
+        const runs: any[] = [];
+        
+        const procesarInline = async (nodo: Node) => {
+            if (nodo.nodeType === Node.TEXT_NODE) {
+                if (nodo.textContent?.trim() !== '') {
+                    runs.push(new TextRun({ text: nodo.textContent?.replace(/\s+/g, ' ') || '', font: "Arial Narrow", size: 24, color: "#000000" }));
+                }
+            } else if (nodo.nodeType === Node.ELEMENT_NODE) {
+                const el = nodo as HTMLElement;
+                if (el.tagName === 'IMG') {
+                    const src = el.getAttribute('src');
+                    if (src) {
+                        let dataStr = "";
+                        if (src.startsWith('data:image')) {
+                            const partes = src.split(',');
+                            if (partes.length > 1) dataStr = partes[1];
+                        } else {
+                            try {
+                                let fetchSrc = src;
+                                // Asegurar CORS redirigiendo IP local fija al dominio de la ventana actual
+                                if (fetchSrc.includes('127.0.0.1:8000') || fetchSrc.includes('localhost:8000')) {
+                                    fetchSrc = fetchSrc.replace(/http(s)?:\/\/(127\.0\.0\.1|localhost):8000/, window.location.origin);
+                                }
 
-    lines.forEach(line => {
-        if (line.trim()) {
-            paragraphs.push(new Paragraph({
-                children: [new TextRun({
-                    text: line.trim(),
-                    font: "Arial Narrow",
-                    size: 24,
-                    color: "#000000"
-                })],
+                                const response = await fetch(fetchSrc);
+                                const blob = await response.blob();
+                                const base64Data = await new Promise<string>((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result as string);
+                                    reader.onerror = reject;
+                                    reader.readAsDataURL(blob);
+                                });
+                                const partesUrl = base64Data.split(',');
+                                if (partesUrl.length > 1) dataStr = partesUrl[1];
+                            } catch (err) {
+                                console.error("Error fetching image for docx:", err);
+                            }
+                        }
+                        if (dataStr) {
+                            runs.push(new ImageRun({
+                                data: base64ToUint8Array(dataStr),
+                                transformation: { width: 300, height: 200 },
+                            } as any));
+                        }
+                    }
+                } else if (el.tagName === 'BR') {
+                    // BR tags ignored since Word handles paragraphs naturally
+                } else {
+                    for (const child of Array.from(nodo.childNodes)) {
+                        await procesarInline(child);
+                    }
+                }
+            }
+        };
+
+        // Si el propio nivel raíz es una imagen, evitar buscar "hijos" de él mismo.
+        if (nodoBloque.tagName === 'IMG') {
+            await procesarInline(nodoBloque);
+        } else {
+            for (const child of Array.from(nodoBloque.childNodes)) {
+                await procesarInline(child);
+            }
+        }
+
+        if (runs.length > 0) {
+            const tieneImagen = runs.some(r => r instanceof ImageRun || r.constructor.name === 'ImageRun' || (r.options && r.options.data));
+            elementos.push(new Paragraph({
+                alignment: tieneImagen ? AlignmentType.CENTER : AlignmentType.JUSTIFIED,
+                children: runs,
                 spacing: { after: 200, line: 480 },
-                indent: { left: 720, firstLine: 0 },
+                indent: tieneImagen ? {} : { left: 720, firstLine: 0 },
             }));
         }
-    });
+    };
 
-    return paragraphs;
+    for (const child of Array.from(tempDiv.childNodes)) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+            await procesarBloque(child as HTMLElement);
+        } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+            const fakeP = document.createElement('p');
+            fakeP.textContent = child.textContent;
+            await procesarBloque(fakeP);
+        }
+    }
+
+    return elementos;
 };
 
-// Agregar secciones al documento
-const addSectionsToWord = (sections: any[], docSections: any[]) => {
+const addSectionsToWord = async (sections: any[], docSections: any[]) => {
     if (!sections || !Array.isArray(sections) || sections.length === 0) return;
 
-    sections.forEach(section => {
-        if (!section) return;
+    for (const section of sections) {
+        if (!section) continue;
 
         const titulo = (section.titulo || section.title || 'DETALLE').toUpperCase();
         const contenido = section.contenido || section.content || '';
@@ -84,31 +157,33 @@ const addSectionsToWord = (sections: any[], docSections: any[]) => {
             indent: { left: 720, firstLine: 0 },
         }));
 
-        const procesado = procesarContenido(contenido);
+        const procesado = await procesarContenido(contenido);
         if (procesado.length > 0) {
             docSections.push(...procesado);
         } else if (contenido && contenido.trim()) {
-            // Fallback texto plano
-            docSections.push(new Paragraph({
-                children: [new TextRun({
-                    text: contenido,
-                    font: "Arial Narrow",
-                    size: 24,
-                    color: "#000000"
-                })],
-                spacing: { after: 200, line: 480 },
-                indent: { left: 720, firstLine: 0 },
-            }));
+            const plainText = contenido.replace(/<[^>]*>/g, '');
+            if (plainText.trim()) {
+                docSections.push(new Paragraph({
+                    children: [new TextRun({
+                        text: plainText,
+                        font: "Arial Narrow",
+                        size: 24,
+                        color: "#000000"
+                    })],
+                    spacing: { after: 200, line: 480 },
+                    indent: { left: 720, firstLine: 0 },
+                }));
+            }
         }
-    });
+    }
 };
 
 // Procesar items jerárquicos
-const processHierarchicalItemsToWord = (items: any[], sections: any[], level: number) => {
+const processHierarchicalItemsToWord = async (items: any[], sections: any[], level: number) => {
     if (!items || !Array.isArray(items) || items.length === 0) return;
 
-    items.forEach(item => {
-        if (!item) return;
+    for (const item of items) {
+        if (!item) continue;
 
         let headingLevel;
         switch (level) {
@@ -163,18 +238,18 @@ const processHierarchicalItemsToWord = (items: any[], sections: any[], level: nu
 
         // Secciones (descripción técnica)
         if (item.secciones && Array.isArray(item.secciones) && item.secciones.length > 0) {
-            addSectionsToWord(item.secciones, sections);
+            await addSectionsToWord(item.secciones, sections);
         }
 
         // Procesar hijos recursivamente
         if (item._children && Array.isArray(item._children) && item._children.length > 0) {
-            processHierarchicalItemsToWord(item._children, sections, level + 1);
+            await processHierarchicalItemsToWord(item._children, sections, level + 1);
         }
-    });
+    }
 };
 
 // Generar secciones del documento
-const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
+const generateSectionsForWord = async (data: any[], sectionName: string): Promise<any[]> => {
     if (!data || !Array.isArray(data) || data.length === 0) {
         return [new Paragraph({
             text: "No se encontraron datos para esta sección.",
@@ -191,7 +266,7 @@ const generateSectionsForWord = (data: any[], sectionName: string): any[] => {
         spacing: { before: 400, after: 200 },
     }));
 
-    processHierarchicalItemsToWord(data, sections, 1);
+    await processHierarchicalItemsToWord(data, sections, 1);
     return sections;
 };
 
@@ -209,7 +284,6 @@ const filterTreeData = (data: any[], sectionName: string): any[] => {
     };
 
     const keywords = sectionKeywords[sectionName] || [];
-
     const filterItems = (items: any[]): any[] => {
         if (!items || !Array.isArray(items)) return [];
 
@@ -311,24 +385,24 @@ const generarWordParaSeccion = async (
 
     // Crear ImageRuns solo si hay datos
     const logoImageRun = logoDataUrl ? new ImageRun({
-        data: logoDataUrl,
+        data: base64ToUint8Array(logoDataUrl.split(',').length > 1 ? logoDataUrl.split(',')[1] : logoDataUrl),
         transformation: { width: 70, height: 70 },
-    }) : null;
+    } as any) : null;
 
     const escudoImageRun = escudoDataUrl ? new ImageRun({
-        data: escudoDataUrl,
+        data: base64ToUint8Array(escudoDataUrl.split(',').length > 1 ? escudoDataUrl.split(',')[1] : escudoDataUrl),
         transformation: { width: 70, height: 70 },
-    }) : null;
+    } as any) : null;
 
     const principalImageRun = principalDataUrl ? new ImageRun({
-        data: principalDataUrl,
+        data: base64ToUint8Array(principalDataUrl.split(',').length > 1 ? principalDataUrl.split(',')[1] : principalDataUrl),
         transformation: { width: 300, height: 400 },
-    }) : null;
+    } as any) : null;
 
     const firmaImageRun = firmaDataUrl ? new ImageRun({
-        data: firmaDataUrl,
+        data: base64ToUint8Array(firmaDataUrl.split(',').length > 1 ? firmaDataUrl.split(',')[1] : firmaDataUrl),
         transformation: { width: 70, height: 70 },
-    }) : null;
+    } as any) : null;
 
     // Header
     const header = new Header({
@@ -527,17 +601,17 @@ const generarWordParaSeccion = async (
         }),
     ];
 
-    const contentSections = generateSectionsForWord(datosFiltrados, nombreArchivoBase);
+    const contentSections = await generateSectionsForWord(datosFiltrados, nombreArchivoBase);
 
     const documentSections = [
         {
-            properties: { type: SectionType.NEW_PAGE },
+            properties: { type: SectionType.NEXT_PAGE },
             headers: { default: header },
             footers: { default: footer },
             children: coverPage
         },
         {
-            properties: { type: SectionType.NEW_PAGE },
+            properties: { type: SectionType.NEXT_PAGE },
             headers: { default: header },
             footers: { default: footer },
             children: tableOfContents
@@ -554,9 +628,9 @@ const generarWordParaSeccion = async (
         styles: {
             default: {
                 document: {
-                    run: { font: "Arial", color: "#000000", size: 24 }
-                },
-                paragraph: { spacing: { line: 276 } }
+                    run: { font: "Arial", color: "#000000", size: 24 },
+                    paragraph: { spacing: { line: 276 } }
+                }
             },
             paragraphStyles: [
                 {
@@ -667,105 +741,153 @@ const WordExportModal: React.FC<WordExportProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
-                <div className="bg-gray-100 px-6 py-4 rounded-t-lg border-b">
-                    <h2 className="text-lg font-bold text-gray-800">Generar Documento Word</h2>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm transition-colors duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md mx-4 shadow-xl transition-colors duration-200" onClick={e => e.stopPropagation()}>
+                <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 rounded-t-lg border-b border-gray-200 dark:border-gray-600">
+                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">Generar Documento Word</h2>
                 </div>
+                
                 <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
                     <div>
-                        <p className="text-sm text-gray-600 mb-2">Seleccione las secciones a incluir:</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Seleccione las secciones a incluir:</p>
                         <div className="space-y-2">
                             {Object.entries(selectedSections).map(([key, value]) => (
-                                <label key={key} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <label key={key} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg cursor-pointer transition-colors duration-150">
                                     <input
                                         type="checkbox"
                                         checked={value}
                                         onChange={e => setSelectedSections(prev => ({ ...prev, [key]: e.target.checked }))}
-                                        className="w-4 h-4 text-blue-600 rounded"
+                                        className="w-4 h-4 text-blue-600 dark:text-blue-500 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-blue-500 dark:focus:ring-blue-400"
                                     />
-                                    <span className="text-sm text-gray-700 capitalize">{key}</span>
+                                    <span className="text-sm text-gray-700 dark:text-gray-200 capitalize">{key}</span>
                                 </label>
                             ))}
                         </div>
                     </div>
-                    <div className="border-t border-gray-200 pt-3">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Imágenes para el documento:</p>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Imágenes para el documento:</p>
                         {(proyecto?.plantilla_logo_izq_url || proyecto?.plantilla_logo_der_url ||
                             proyecto?.portada_logo_center_url || proyecto?.plantilla_firma_url) ? (
-                            <p className="text-xs text-green-600 mb-2">
+                            <p className="text-xs text-green-600 dark:text-green-400 mb-2 bg-green-50 dark:bg-green-900/20 p-2 rounded-md">
                                 ✅ Se usarán las imágenes configuradas en el proyecto. Suba archivos solo si desea sobreescribirlas.
                             </p>
                         ) : null}
-                        <div className="space-y-2">
+                        
+                        <div className="space-y-3">
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">
-                                    Logo izquierdo (header) {proyecto?.plantilla_logo_izq_url &&
-                                        <span className="text-green-600">✅ Configurado</span>}
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">
+                                    Logo izquierdo (header) 
+                                    {proyecto?.plantilla_logo_izq_url && (
+                                        <span className="text-green-600 dark:text-green-400 ml-1">✅ Configurado</span>
+                                    )}
                                 </label>
                                 <input
                                     type="file"
                                     id="logoFile"
                                     accept="image/*"
-                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                    className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md p-1.5 
+                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                                            file:mr-2 file:py-1 file:px-3 file:rounded-md file:text-sm
+                                            file:bg-gray-50 dark:file:bg-gray-600 file:text-gray-700 dark:file:text-gray-200
+                                            file:border-0 hover:file:bg-gray-100 dark:hover:file:bg-gray-500
+                                            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
+                            
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">
-                                    Logo derecho / Escudo (header) {proyecto?.plantilla_logo_der_url &&
-                                        <span className="text-green-600">✅ Configurado</span>}
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">
+                                    Logo derecho / Escudo (header) 
+                                    {proyecto?.plantilla_logo_der_url && (
+                                        <span className="text-green-600 dark:text-green-400 ml-1">✅ Configurado</span>
+                                    )}
                                 </label>
                                 <input
                                     type="file"
                                     id="escudoFile"
                                     accept="image/*"
-                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                    className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md p-1.5 
+                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                                            file:mr-2 file:py-1 file:px-3 file:rounded-md file:text-sm
+                                            file:bg-gray-50 dark:file:bg-gray-600 file:text-gray-700 dark:file:text-gray-200
+                                            file:border-0 hover:file:bg-gray-100 dark:hover:file:bg-gray-500
+                                            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
+                            
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">
-                                    Imagen principal (portada) {proyecto?.portada_logo_center_url &&
-                                        <span className="text-green-600">✅ Configurado</span>}
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">
+                                    Imagen principal (portada) 
+                                    {proyecto?.portada_logo_center_url && (
+                                        <span className="text-green-600 dark:text-green-400 ml-1">✅ Configurado</span>
+                                    )}
                                 </label>
                                 <input
                                     type="file"
                                     id="logoPrinFile"
                                     accept="image/*"
-                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                    className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md p-1.5 
+                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                                            file:mr-2 file:py-1 file:px-3 file:rounded-md file:text-sm
+                                            file:bg-gray-50 dark:file:bg-gray-600 file:text-gray-700 dark:file:text-gray-200
+                                            file:border-0 hover:file:bg-gray-100 dark:hover:file:bg-gray-500
+                                            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
+                            
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">
-                                    Firma (footer) {proyecto?.plantilla_firma_url &&
-                                        <span className="text-green-600">✅ Configurado</span>}
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">
+                                    Firma (footer) 
+                                    {proyecto?.plantilla_firma_url && (
+                                        <span className="text-green-600 dark:text-green-400 ml-1">✅ Configurado</span>
+                                    )}
                                 </label>
                                 <input
                                     type="file"
                                     id="firmaFile"
                                     accept="image/*"
-                                    className="w-full text-sm border border-gray-300 rounded-md p-1.5"
+                                    className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md p-1.5 
+                                            bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                                            file:mr-2 file:py-1 file:px-3 file:rounded-md file:text-sm
+                                            file:bg-gray-50 dark:file:bg-gray-600 file:text-gray-700 dark:file:text-gray-200
+                                            file:border-0 hover:file:bg-gray-100 dark:hover:file:bg-gray-500
+                                            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="bg-gray-100 px-6 py-4 rounded-b-lg flex justify-end gap-3">
+                
+                <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 rounded-b-lg flex justify-end gap-3 border-t border-gray-200 dark:border-gray-600">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                         disabled={generatingWord}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 
+                                hover:text-gray-800 dark:hover:text-gray-100 
+                                hover:bg-gray-100 dark:hover:bg-gray-600 
+                                rounded-md transition-colors duration-150
+                                disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleGenerateWord}
                         disabled={generatingWord}
-                        className={`px-4 py-2 rounded-md text-sm font-medium ${generatingWord
-                                ? 'bg-gray-400 cursor-not-allowed text-white'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-150 shadow-sm
+                            ${generatingWord 
+                                ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-white dark:text-gray-200 opacity-50'
+                                : 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 hover:shadow-md'
                             }`}
                     >
-                        {generatingWord ? 'Generando...' : 'Generar'}
+                        {generatingWord ? (
+                            <span className="flex items-center gap-2">
+                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Generando...
+                            </span>
+                        ) : 'Generar'}
                     </button>
                 </div>
             </div>

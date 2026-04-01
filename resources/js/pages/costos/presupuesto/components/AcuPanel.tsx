@@ -1489,6 +1489,9 @@ export function AcuPanel({
                 <p className="text-sm">
                     Seleccione una partida para ver el ACU
                 </p>
+                <p className="text-xs text-slate-600 max-w-xs text-center">
+                    (Asegúrese de que la partida tenga una <strong>unidad asignada</strong> en el presupuesto general)
+                </p>
             </div>
         );
     }

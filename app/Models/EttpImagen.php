@@ -48,7 +48,7 @@ class EttpImagen extends Model
     public function getStoragePathAttribute(): string
     {
         $presupuestoId = $this->seccion?->partida?->presupuesto_id ?? 'sin_presupuesto';
-        return "public/ettp/{$presupuestoId}";
+        return "ettp/{$presupuestoId}";
     }
 
     /**
@@ -74,8 +74,8 @@ class EttpImagen extends Model
     {
         // Eliminar archivo físico al eliminar el registro
         static::deleting(function (EttpImagen $imagen) {
-            if (Storage::exists($imagen->full_path)) {
-                Storage::delete($imagen->full_path);
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($imagen->full_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($imagen->full_path);
             }
         });
     }

@@ -527,7 +527,7 @@ export default function comunicacionesIndex() {
             {/* Título */}
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Eléctricas
+                Metrado Comunicaciones
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}
@@ -620,7 +620,7 @@ export default function comunicacionesIndex() {
             onDataChange={scheduleSave}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Eléctricas',
+              title:            'Metrado Comunicaciones',
               showinfobar:      false,
               sheetFormulaBar:  true,
               showstatisticBar: true,

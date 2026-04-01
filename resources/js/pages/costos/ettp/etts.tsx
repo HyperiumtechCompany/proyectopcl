@@ -6,10 +6,7 @@ import * as toastr from 'toastr';
 import 'toastr/build/toastr.min.css';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-
 import WordExportModal from './exportado/exportado';
-import templatesData from './components/data/descriptivos-templates.json';
-
 import EttpHeader from './components/EttpHeader';
 import EttpDetailsPanel from './components/EttpDetailsPanel';
 import EttpMetradosPanel from './components/EttpMetradosPanel';
@@ -17,7 +14,9 @@ import { useEttpTemplates } from './components/useEttpTemplates';
 import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
 import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
 
-declare const Tabulator: any;
+// @ts-ignore
+import { TabulatorFull as Tabulator } from 'tabulator-tables';
+import 'tabulator-tables/dist/css/tabulator.min.css';
 
 const DEFAULT_DATA: EttpPartidaData[] = [
     {
@@ -37,9 +36,9 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const tabulatorRef = useRef<any>(null);
-    const templatesRef = useRef<any[]>(templatesData);
-
-    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(partidas && partidas.length > 0 ? partidas : DEFAULT_DATA);
+    const [datosBase, setDatosBase] = useState<EttpPartidaData[]>(
+        partidas && partidas.length > 0 ? partidas : DEFAULT_DATA
+    );
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [currentData, setCurrentData] = useState<any>(null);
     const [currentSections, setCurrentSections] = useState<Section[]>([]);
@@ -49,6 +48,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const [saving, setSaving] = useState(false);
     const [loadingMetrados, setLoadingMetrados] = useState(false);
     const [isWordModalOpen, setIsWordModalOpen] = useState(false);
+    const [isTreeExpanded, setIsTreeExpanded] = useState(false);
     const [selectedSections, setSelectedSections] = useState<SelectedSections>({
         estructura: false,
         arquitectura: false,
@@ -58,13 +58,12 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         gas: false,
     });
 
-    // Hook de templates
+    // Hook de templates (solo para enriquecer descripciones si es necesario)
     const { buscarTemplate, extraerDetalles, buildSections, templatesCount } = useEttpTemplates();
 
     // ─────────────────────────────────────────────
     // FUNCIONES DE UTILIDAD
     // ─────────────────────────────────────────────
-
     const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
         if (toastr) toastr[type](message);
         else Swal.fire({ title: type === 'error' ? 'Error' : type === 'warning' ? 'Advertencia' : 'Éxito', text: message, icon: type });
@@ -98,15 +97,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         });
     };
 
-    // Obtener datos de la tabla para exportar
-    const getTableData = (): any[] => {
-        return tabulatorRef.current?.getData() || [];
-    };
 
     // ─────────────────────────────────────────────
     // FUNCIONES DE TRANSFORMACIÓN DE DATOS
     // ─────────────────────────────────────────────
-
     const mergeSections = (newData: any[], oldData: any[]): any[] => {
         const oldMap = new Map();
         const buildMap = (items: any[]) => {
@@ -130,43 +124,63 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         return process(newData);
     };
 
-    const buildTreeFromTemplates = (templates: any[]): any[] => {
-        const processNode = (node: any): any => {
-            const detallesTecnicos: Record<string, any> = {};
-            Object.keys(node).forEach(campo => {
-                if (!CAMPOS_EXCLUIDOS_TEMPLATE.includes(campo) && typeof node[campo] === 'string') {
-                    detallesTecnicos[campo] = node[campo];
-                }
-            });
+    // ✅ Función para enriquecer con plantillas SOLO desde BD (sin JSON local)
+    const enrichWithTemplate = (item: any): any => {
+        // Si ya tiene secciones, mantenerlas
+        if (item.secciones && item.secciones.length > 0) return item;
 
-            console.log(`📝 Procesando plantilla ${node.codigo} - ${node.titulo || node.descripcion || ''}`);
-            console.log(`   Campos encontrados:`, Object.keys(detallesTecnicos));
-
+        // Buscar plantilla en el hook (que debería obtener datos de BD)
+        const template = buscarTemplate(item.item);
+        if (template) {
+            console.log(`📚 Encontré plantilla para ${item.item}: ${item.descripcion}`);
+            const detallesTecnicos = extraerDetalles(template);
             const sections = buildSections(detallesTecnicos);
-            console.log(`   Secciones creadas: ${sections.length}`);
+            return { ...item, secciones: sections };
+        }
+        return { ...item, secciones: [] };
+    };
 
-            const item: any = {
-                id: parseInt(node.codigo.replace(/\./g, '')) || Math.random(),
-                item: node.codigo,
-                descripcion: node.titulo || node.descripcion || node.codigo_completo || '',
-                unidad: node.unidad_medida && node.unidad_medida !== '' ? node.unidad_medida : '',
-                secciones: sections,
-            };
-            console.log(`📦 Item ${item.item} - secciones:`, item.secciones.length);
-
-            if (node.subpartidas && node.subpartidas.length > 0) {
-                item._children = node.subpartidas.map(processNode);
+    const enrichTree = (items: any[]): any[] => {
+        return items.map(item => {
+            const enriched = enrichWithTemplate(item);
+            if (enriched._children) {
+                enriched._children = enrichTree(enriched._children);
             }
-
-            return item;
-        };
-
-        return templates.map(processNode);
+            return enriched;
+        });
     };
 
     // ─────────────────────────────────────────────
     // MANEJADORES DE EVENTOS
     // ─────────────────────────────────────────────
+    const handleToggleExpand = () => {
+        if (!tabulatorRef.current) return;
+
+        const expandNode = (row: any) => {
+            row.treeExpand();
+            const children = row.getTreeChildren() || [];
+            children.forEach(expandNode);
+        };
+
+        const collapseNode = (row: any) => {
+            row.treeCollapse();
+            const children = row.getTreeChildren() || [];
+            children.forEach(collapseNode);
+        };
+
+        // Pause redraw for performance
+        tabulatorRef.current.blockRedraw();
+
+        const rows = tabulatorRef.current.getRows();
+        if (isTreeExpanded) {
+            rows.forEach(collapseNode);
+        } else {
+            rows.forEach(expandNode);
+        }
+        
+        tabulatorRef.current.restoreRedraw();
+        setIsTreeExpanded(!isTreeExpanded);
+    };
 
     const handleRowClick = (row: any) => {
         const data = row.getData();
@@ -181,10 +195,25 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         const template = buscarTemplate(data.item);
         if (template) {
-            const detallesTecnicos = extraerDetalles(template);
-            const sections = buildSections(detallesTecnicos);
-            setCurrentSections(sections);
-            setShowDetailsPanel(true);
+            Swal.fire({
+                title: 'Detalles Técnicos',
+                text: 'Esta partida no tiene detalles técnicos guardados. ¿Desea llenarlos desde la plantilla o crear secciones en blanco?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Llenar desde Plantilla',
+                cancelButtonText: 'En Blanco'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const detallesTecnicos = extraerDetalles(template);
+                    const sections = buildSections(detallesTecnicos);
+                    setCurrentSections(sections);
+                } else {
+                    setCurrentSections(buildSections({}));
+                }
+                setShowDetailsPanel(true);
+            });
         } else {
             setCurrentSections(buildSections({}));
             setShowDetailsPanel(true);
@@ -200,12 +229,15 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
-            await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
+            const response = await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
                 secciones: mapSectionsForBackend(currentSections)
             }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
+            // Recuperamos las secciones actualizadas con sus nuevos IDs de DB
+            const updatedSections = response.data.secciones || currentSections;
+
             const rowData = selectedRow.getData();
-            rowData.secciones = currentSections;
+            rowData.secciones = updatedSections;
             rowData.estado = 'en_progreso';
             selectedRow.update(rowData);
 
@@ -222,7 +254,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             };
             updateItem(newData);
             setDatosBase(newData);
-            console.log('✅ datosBase después de guardar (con secciones):', newData);
+            setCurrentSections(updatedSections);
+            console.log('✅ datosBase después de guardar (con secciones reales referenciadas):', newData);
 
             Swal.fire({
                 title: '¡Guardado!',
@@ -242,6 +275,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
+    // ✅ FUNCIÓN CORREGIDA - SOLO BASE DE DATOS, SIN JSON LOCAL
     const handleLoadMetrados = async () => {
         const proyectoId = proyecto?.id;
         if (!proyectoId) {
@@ -250,11 +284,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
 
         const options = {
-            estructura: selectedSections.estructura ? 1 : 0,
+            estructuras: selectedSections.estructura ? 1 : 0,
             arquitectura: selectedSections.arquitectura ? 1 : 0,
             sanitarias: selectedSections.sanitarias ? 1 : 0,
             electricas: selectedSections.electricas ? 1 : 0,
-            comunicacion: selectedSections.comunicaciones ? 1 : 0,
+            comunicaciones: selectedSections.comunicaciones ? 1 : 0,
             gas: selectedSections.gas ? 1 : 0,
         };
 
@@ -267,92 +301,29 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         Swal.fire({ title: 'Cargando datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
+    
             const response = await axios.post(
                 `/costos/${proyectoId}/ettp/importar-metrados`,
-                { ...options },
+                options,
                 { headers: { 'X-CSRF-TOKEN': getCsrfToken(), 'Content-Type': 'application/json' } }
             );
+
             Swal.close();
-            let rawData = response.data;
 
-            if (!rawData?.length) {
-                console.log('⚠️ No hay datos del servidor, usando plantillas');
-                const treeData = buildTreeFromTemplates(templatesData);
-
-                const filterBySpeciality = (items: any[]): any[] => {
-                    return items.reduce((acc: any[], item: any) => {
-                        const desc = (item.descripcion || '').toLowerCase();
-                        let matches = false;
-
-                        if (selectedSections.estructura && (desc.includes('estructura') || desc.includes('concreto') || desc.includes('acero'))) matches = true;
-                        if (selectedSections.arquitectura && (desc.includes('arquitectura') || desc.includes('acabado') || desc.includes('piso'))) matches = true;
-                        if (selectedSections.sanitarias && (desc.includes('sanitaria') || desc.includes('agua') || desc.includes('desagüe'))) matches = true;
-                        if (selectedSections.electricas && (desc.includes('eléctrica') || desc.includes('eléctrico') || desc.includes('electricas') || desc.includes('alumbrado'))) matches = true;
-                        if (selectedSections.comunicaciones && (desc.includes('comunicacion') || desc.includes('datos') || desc.includes('telefonía'))) matches = true;
-                        if (selectedSections.gas && (desc.includes('gas'))) matches = true;
-
-                        if (matches) {
-                            acc.push(item);
-                        } else if (item._children) {
-                            const filteredChildren = filterBySpeciality(item._children);
-                            if (filteredChildren.length > 0) {
-                                acc.push({ ...item, _children: filteredChildren });
-                            }
-                        }
-                        return acc;
-                    }, []);
-                };
-
-                const filteredData = filterBySpeciality(treeData);
-                setDatosBase(filteredData);
-                showNotification('success', `✅ Se cargaron ${filteredData.length} partidas desde plantillas`);
-                return;
+            if (response.data && response.data.length > 0) {
+                setDatosBase(response.data);
+                showNotification('success', `✅ Se cargaron ${response.data.length} partidas`);
+            } else {
+                showNotification('warning', 'No se encontraron datos');
             }
-
-            const enrichWithTemplate = (item: any): any => {
-                if (item.secciones && item.secciones.length > 0) return item;
-
-                const template = buscarTemplate(item.item);
-                if (template) {
-                    console.log(`📚 Encontré plantilla para ${item.item}: ${item.descripcion}`);
-                    const detallesTecnicos = extraerDetalles(template);
-                    const sections = buildSections(detallesTecnicos);
-                    return { ...item, secciones: sections };
-                }
-                return { ...item, secciones: [] };
-            };
-
-            const enrichTree = (items: any[]): any[] => {
-                return items.map(item => {
-                    const enriched = enrichWithTemplate(item);
-                    if (enriched._children) {
-                        enriched._children = enrichTree(enriched._children);
-                    }
-                    return enriched;
-                });
-            };
-
-            const enrichedData = enrichTree(rawData);
-            const mergedData = mergeSections(enrichedData, datosBase);
-
-            setDatosBase(mergedData);
-            console.log('✅ datosBase después de cargar metrados:', JSON.parse(JSON.stringify(mergedData)));
-            showNotification('success', `✅ Se cargaron ${rawData.length} registros con sus plantillas`);
-
-        } catch (error) {
+        } catch (error: any) {
             Swal.close();
             console.error('[Metrados] Error:', error);
-
-            console.log('⚠️ Error en API, usando plantillas');
-            const treeData = buildTreeFromTemplates(templatesData);
-            setDatosBase(treeData);
-            showNotification('warning', 'Usando datos de plantillas (error de conexión)');
-
+            showNotification('error', error.response?.data?.error || 'Error al cargar datos');
         } finally {
             setLoadingMetrados(false);
         }
     };
-
     const handleSave = async () => {
         const idProyecto = proyecto?.id;
         if (!idProyecto) {
@@ -376,6 +347,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
     };
 
+    const getTableData = () => {
+        if (isWordModalOpen) return datosBase;
+        return tabulatorRef.current?.getData() || datosBase;
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
         { title: proyecto?.nombre ?? 'Proyecto', href: `/costos/${proyecto?.id}` },
@@ -395,12 +371,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         const initTabulator = () => {
             if (!isMounted || !container) return;
-            
             try {
-                // @ts-ignore
-                const TabulatorClass = window.Tabulator || Tabulator;
-                
-                const table = new TabulatorClass(container, {
+                const table = new Tabulator(container, {
                     data: datosBase,
                     dataTree: true,
                     dataTreeStartExpanded: false,
@@ -411,15 +383,23 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     responsiveLayout: "collapse",
                     responsiveLayoutCollapseStartOpen: false,
                     columns: [
-                        { title: 'Items', field: 'item', width: 150, responsive: 0, editor: 'input' },
-                        { title: 'Descripción', field: 'descripcion', width: 300, responsive: 1, editor: 'input' },
-                        { title: 'Und', field: 'unidad', width: 70, responsive: 2, editor: 'input' },
+                        { title: 'Items', field: 'item', width: 120, minWidth: 100, responsive: 0 },
+                        { title: 'Descripción', field: 'descripcion', minWidth: 300, widthGrow: 2, formatter: 'textarea', responsive: 1 },
+                        { title: 'Und', field: 'unidad', width: 70, responsive: 2 },
                         {
                             title: '', width: 60, responsive: 0,
-                            formatter: () => {
+                            formatter: (_cell: any, _formatterParams: any, onRendered: any) => {
+                                const data = _cell.getRow().getData();
+                                const unidad = (data.unidad || '').toString().trim();
+                                if (!unidad) return '';
                                 return '<button class="btn-details" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:14px;">📋</button>';
                             },
-                            cellClick: (_e: any, cell: any) => handleRowClick(cell.getRow()),
+                            cellClick: (_e: any, cell: any) => {
+                                const data = cell.getRow().getData();
+                                const unidad = (data.unidad || '').toString().trim();
+                                if (!unidad) return; // No hacer nada si no tiene unidad
+                                handleRowClick(cell.getRow());
+                            },
                         },
                     ],
                 });
@@ -455,30 +435,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
-            <style>{`
-                .tabulator{font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
-                .tabulator .tabulator-header{background-color:#f3f4f6;border-bottom:1px solid #e5e7eb}
-                .tabulator .tabulator-header .tabulator-col{background-color:#f3f4f6;font-weight:600;color:#1f2937;border-right:none}
-                .tabulator .tabulator-row{border-bottom:1px solid #f3f4f6}
-                .tabulator .tabulator-row:hover{background-color:#f9fafb}
-                .tabulator .tabulator-cell{padding:10px 8px;border-right:none;color:#1f2937}
-                .tabulator .tabulator-cell .btn-details:hover{background:#2563eb!important}
-                .tabulator .tabulator-editing{border:2px solid #3b82f6!important}
-                textarea{color:#1f2937!important;background-color:#fff!important}
-                .bg-gray-50 textarea,.bg-gray-50 p,.bg-gray-50 div{color:#1f2937!important}
-                @media (max-width: 768px) {
-                    .tabulator .tabulator-cell {padding:6px 4px !important;font-size:11px !important}
-                    .tabulator .tabulator-col-title {font-size:10px !important}
-                    .tabulator .tabulator-cell .btn-details {padding:4px 6px !important;font-size:12px !important}
-                    .w-1\\/3,.w-2\\/3 {width:100% !important}
-                }
-                @media (min-width:769px) and (max-width:1024px) {
-                    .tabulator .tabulator-cell {padding:8px 6px !important}
-                    .tabulator .tabulator-col-title {font-size:11px !important}
-                }
-            `}</style>
-
-            <div className="min-h-screen bg-gray-50">
+       
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
                 <EttpHeader
                     onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}
                     onSave={handleSave}
@@ -486,6 +444,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                         setShowWordModal(true);
                         setIsWordModalOpen(true);
                     }}
+                    onToggleExpand={handleToggleExpand}
+                    isExpanded={isTreeExpanded}
                     saving={saving}
                 />
 
@@ -498,10 +458,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                 />
 
                 <div className="flex flex-1 px-4 py-6 gap-4">
-                    <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-2/3' : 'w-full'}`}>
+                    <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-full md:w-1/3 lg:w-2/4' : 'w-full'}`}>
                         <div
                             ref={tableContainerRef}
-                            className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200"
+                            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700"
                             style={{ height: 'calc(100vh - 180px)' }}
                         />
                     </div>
