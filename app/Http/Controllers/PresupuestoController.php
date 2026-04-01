@@ -592,7 +592,7 @@ class PresupuestoController extends Controller
 
             $rowIndex = 0;
             foreach ($metradoRows as $metradoRow) {
-                $codigo = $metradoRow->item ?? $metradoRow->partida;
+                $codigo = trim((string)($metradoRow->item ?? $metradoRow->partida ?? ''));
                 if (!$codigo) {
                     // Saltamos filas sin código de ítem
                     continue;
@@ -752,7 +752,7 @@ class PresupuestoController extends Controller
 
                 $rowIndex = 0;
                 foreach ($metradoRows as $metradoRow) {
-                    $codigo = $metradoRow->item ?? $metradoRow->partida;
+                    $codigo = trim((string)($metradoRow->item ?? $metradoRow->partida ?? ''));
                     if (!$codigo) {
                         continue;
                     }
