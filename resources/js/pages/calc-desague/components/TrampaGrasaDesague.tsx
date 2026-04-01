@@ -173,7 +173,7 @@ export default function TrampaGrasaDesague({ editMode, canEdit, initialData, onC
     const computed = useMemo(() => computeAll(aparatos, params), [aparatos, params]);
 
     // Apply computed values to params (derived, synchronised every render cycle)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     const derivedParams = useMemo(() => applyComputed(params, computed), [params, computed]);
 
     // Sync medidas from computed

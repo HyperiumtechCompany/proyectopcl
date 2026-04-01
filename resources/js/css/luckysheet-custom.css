@@ -1,0 +1,117 @@
+/* Luckysheet Custom Styles for Responsivity and Text Wrapping */
+
+.luckysheet-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Enable word-wrap and text wrapping in Luckysheet cells */
+.luckysheet-container .luckysheet-cell {
+    word-break: break-word;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    vertical-align: top;
+    padding: 4px 6px;
+}
+
+/* Improve cell content visibility */
+.luckysheet-container .luckysheet-cell-content {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    max-height: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Adjust row height for better text display */
+.luckysheet-container .luckysheet-row {
+    min-height: 24px;
+}
+
+/* Improve column header styling */
+.luckysheet-container .luckysheet-colheader {
+    word-break: break-word;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+/* Ensure proper scrolling on smaller screens */
+@media (max-width: 768px) {
+    .luckysheet-container {
+        font-size: 0.875rem; /* Tailwind's sm size */
+    }
+
+    .luckysheet-container .luckysheet-cell {
+        padding: 3px 4px;
+        font-size: 0.75rem; /* Smaller text on mobile */
+    }
+
+    .luckysheet-container .luckysheet-row {
+        min-height: 20px;
+    }
+}
+
+/* Ensure proper scrolling on very small screens */
+@media (max-width: 480px) {
+    .luckysheet-container {
+        font-size: 0.75rem;
+    }
+
+    .luckysheet-container .luckysheet-cell {
+        padding: 2px 3px;
+    }
+}
+
+/* Focus state for selected cells */
+.luckysheet-container .luckysheet-cell.selected {
+    background-color: #dbeafe;
+    border: 1px solid #3b82f6;
+}
+
+/* Toolbar responsivity */
+.luckysheet-container .luckysheet-toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* Sheet tabs responsivity */
+.luckysheet-container .luckysheet-sheet-tab {
+    flex-shrink: 1;
+    min-width: 60px;
+}
+
+/* Ensure text is black when editing a cell */
+#luckysheet-input-box,
+#luckysheet-rich-text-editor,
+.luckysheet-input-box {
+    color: #000000 !important;
+}
+
+/* Ensure formula bar and other text inputs in Luckysheet have black text */
+.luckysheet-container input,
+.luckysheet-container textarea,
+.luckysheet-container [contenteditable="true"] {
+    color: #000000;
+}
+
+/* Force bold black text for cells, edit mode, selects, and other Luckysheet text elements */
+.luckysheet-container .luckysheet-cell,
+.luckysheet-container .luckysheet-cell-content,
+.luckysheet-container .luckysheet-colheader,
+.luckysheet-container input,
+.luckysheet-container textarea,
+.luckysheet-container select,
+.luckysheet-container option,
+#luckysheet-input-box,
+#luckysheet-rich-text-editor,
+.luckysheet-input-box,
+.luckysheet-container [contenteditable="true"] {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+

@@ -10,16 +10,18 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "barryvdh/laravel-dompdf": "^3.1",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^12.0",
         "laravel/reverb": "*",
         "laravel/tinker": "^2.10.1",
-        "laravel/wayfinder": "^0.1.9",
+        "laravel/wayfinder": "^0.1.14",
         "spatie/laravel-permission": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "giorgiosironi/eris": "^1.0",
         "laravel/boost": "2.0",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
@@ -46,7 +48,8 @@
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
-            "@php artisan migrate --force",
+            "@php artisan migrate --seed --force",
+            "@php artisan storage:link --force",
             "npm install",
             "npm run build"
         ],

@@ -1,7 +1,7 @@
 import type { TableRowNode, TGRow, ATSRow, TGTableRow } from '@/types/caida-tension';
 import { evalFormula } from './tdTreeManager';
 
-// ─── Cálculos eléctricos TG/ATS ──────────────────────────────────────────────
+// Cálculos eléctricos TG/ATS 
 
 export function calcCorriente(maxDemanda: number, sistema: string): number {
     const v = parseFloat(sistema) || 380;
@@ -24,7 +24,7 @@ export function calcCaidaTension(corrienteDiseno: number, longitud: number, secc
     };
 }
 
-// ─── Construir lista de filas TG desde el árbol TD ───────────────────────────
+// Construir lista de filas TG desde el árbol TD 
 
 export function buildTGRowsFromTree(tree: TableRowNode[]): TGRow[] {
     const rows: TGRow[] = [buildStaticTGRow()];
@@ -119,7 +119,7 @@ function buildStaticTGRow(): TGRow {
     };
 }
 
-// ─── Recalcular todas las filas TG ───────────────────────────────────────────
+// Recalcular todas las filas TG 
 
 export function recalculateAllTGRows(flattenedData: TGRow[], atsData: ATSRow[], tgData: TGTableRow[]): { flattenedData: TGRow[]; atsData: ATSRow[]; tgData: TGTableRow[]; totals: { potenciaInstalada: number; maximaDemanda: number } } {
     // 1. Calcular tgData primero para obtener tgCaidaPct
@@ -190,7 +190,7 @@ function recalcTGTableRow(row: TGTableRow): TGTableRow {
     return { ...row, longitudConductor: longitud, corrienteA: ia, corrienteDiseno: id_, caidaTension, caidaTensionPorcentaje };
 }
 
-// ─── Datos iniciales ATS y TG ────────────────────────────────────────────────
+// Datos iniciales ATS y TG 
 
 export function buildInitialATSData(totalMaxDemanda = 0): ATSRow[] {
     return [{
