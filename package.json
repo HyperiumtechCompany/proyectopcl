@@ -76,6 +76,7 @@
         "lucide-react": "^0.475.0",
         "luckysheet": "^2.1.13",
         "react": "^19.2.0",
+        "react-devtools": "^7.0.1",
         "react-dom": "^19.2.0",
         "react-resizable-panels": "^4.7.2",
         "sweetalert2": "^11.26.24",
