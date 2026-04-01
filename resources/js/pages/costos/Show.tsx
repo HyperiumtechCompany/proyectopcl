@@ -338,7 +338,7 @@ export default function Show() {
                                                 {mods.length}
                                             </span>
                                         </p>
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-3">
                                             {mods.map(m => (
                                                 <ModuleCard key={m} module={m} projectId={project.id} />
                                             ))}

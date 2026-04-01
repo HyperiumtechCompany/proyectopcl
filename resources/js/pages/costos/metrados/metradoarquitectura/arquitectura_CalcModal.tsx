@@ -14,7 +14,7 @@ import {
   UNITS,
   UNIT_PROFILES,
 } from './arquitectura_constants';
-import type { CalcPayload, MeasureInputs, MeasureOutputs } from './arquitectura_types';
+import type { CalcPayload, MeasureInputs, MeasureOutputs, UnitProfile } from './arquitectura_types';
 import { r4, toNum } from './arquitectura_utils';
 
 const FORMULA_VARIABLES = [
@@ -38,6 +38,30 @@ const OPERATORS = [
   { symbol: '(', label: 'Paréntesis apertura' },
   { symbol: ')', label: 'Paréntesis cierre' },
 ];
+
+const createCustomProfile = (
+  formula: { id: string; name: string; expression: string },
+  unit: string
+): UnitProfile => ({
+  key: `custom_${formula.id}`,
+  label: `★ ${formula.name.slice(0, 20)}${formula.name.length > 20 ? '...' : ''}`,
+  activeInputs: ALL_INPUTS,
+  outputKey: 'und', // Se sobrescribe con customOut al cargar
+  formula: formula.expression,
+  fn: (v) => {
+    try {
+      const { elsim, largo, ancho, alto, nveces, kg } = v;
+      // eslint-disable-next-line no-new-func
+      const result = new Function(
+        'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'Math',
+        `"use strict"; return (${formula.expression});`
+      )(elsim, largo, ancho, alto, nveces, kg, Math);
+      return { und: Number(result) };
+    } catch {
+      return { und: 0 };
+    }
+  },
+});
 
 export interface CalcModalProps {
   open: boolean;
@@ -67,13 +91,20 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
   const unitProfiles = UNIT_PROFILES[unit] ?? [DEFAULT_PROFILE];
   const known = !!UNIT_PROFILES[unit];
 
-  const profile = useMemo(() => {
+  // Fusiona perfiles nativos + fórmulas guardadas para la unidad actual
+  const mergedProfiles = useMemo(() => {
+    const base = UNIT_PROFILES[unit] ?? [DEFAULT_PROFILE];
+    const customs = savedFormulas.map(f => createCustomProfile(f, unit));
+    return [...base, ...customs];
+  }, [unit, savedFormulas]);
+
+    const profile = useMemo(() => {
     if (useCustom) return DEFAULT_PROFILE;
     const selected = selectedVersion 
-      ? unitProfiles.find(p => p.key === selectedVersion) 
-      : unitProfiles[0];
+      ? mergedProfiles.find(p => p.key === selectedVersion) 
+      : mergedProfiles[0];
     return selected ?? DEFAULT_PROFILE;
-  }, [unitProfiles, selectedVersion, useCustom]);
+  }, [mergedProfiles, selectedVersion, useCustom]);
 
   const activeOut = useCustom ? customOut : profile.outputKey;
 
@@ -89,10 +120,18 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
     setCustomExpr(''); setCustomErr('');
     const hasProfiles = !!UNIT_PROFILES[incomingUnit];
     setUseCustom(incomingUnit ? !hasProfiles : false);
+    
+    // Selecciona primera versión disponible (nativa o custom)
     const profiles = UNIT_PROFILES[incomingUnit];
-    setSelectedVersion(profiles?.[0]?.key ?? '');
+    const availableProfiles = profiles ?? [DEFAULT_PROFILE];
+    const customs = savedFormulas.map(f => createCustomProfile(f, incomingUnit));
+    const allProfiles = [...availableProfiles, ...customs];
+    
+    if (allProfiles[0]?.key && !selectedVersion) {
+      setSelectedVersion(allProfiles[0].key);
+    }
     setCustomOut('und');
-  }, [open, rowData]);
+  }, [open, rowData, savedFormulas, selectedVersion]); 
 
   const preview = useMemo((): MeasureOutputs => {
     if (!useCustom) {
@@ -166,13 +205,6 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 {unit}
               </span>
             </DialogTitle>
-            <button 
-              type="button" 
-              onClick={onClose} 
-              className="text-blue-200 hover:text-white hover:bg-blue-800 rounded-md p-1 transition-colors"
-            >
-              <X className="h-5 w-5" strokeWidth={2} />
-            </button>
           </div>
         </DialogHeader>
 
@@ -213,30 +245,52 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
             </div>
 
             <div className="col-span-4">
-              {!useCustom && unitProfiles.length > 1 && (
+              {!useCustom && mergedProfiles.length > 1 && (
                 <>
                   <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1 block">
                     Versión
                   </Label>
-                  <div className="flex gap-1">
-                    {unitProfiles.slice(0, 5).map((p, idx) => {
+                  <div className="flex gap-1 flex-wrap">
+                    {mergedProfiles.slice(0, 8).map((p, idx) => {
                       const isActive = selectedVersion === p.key;
+                      const isCustom = p.key.startsWith('custom_');
                       return (
                         <button
                           key={p.key}
                           type="button"
-                          onClick={() => setSelectedVersion(p.key)}
+                          onClick={() => {
+                            setSelectedVersion(p.key);
+                            // Si es fórmula custom, cargar su expresión y activar modo custom
+                            if (isCustom) {
+                              const formula = savedFormulas.find(f => `custom_${f.id}` === p.key);
+                              if (formula) {
+                                setCustomExpr(formula.expression);
+                                setFormulaName(formula.name);
+                                setUseCustom(true);
+                              }
+                            }
+                          }}
                           className={cn(
-                            'flex-1 rounded px-1.5 py-1.5 text-[10px] font-bold transition-colors',
+                            'flex-1 min-w-[40px] rounded px-1.5 py-1.5 text-[9px] font-bold transition-all border',
                             isActive
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                              ? isCustom
+                                ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-500/30'
+                                : 'bg-blue-600 text-white border-blue-400'
+                              : isCustom
+                                ? 'bg-slate-700/80 text-emerald-300 border-emerald-600/50 hover:bg-emerald-900/40 hover:text-emerald-200'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600',
                           )}
+                          title={p.label}
                         >
-                          V{idx + 1}
+                          {isCustom ? '★' : `V${idx + 1}`}
                         </button>
                       );
                     })}
+                    {mergedProfiles.length > 8 && (
+                      <span className="text-[8px] text-slate-500 self-center px-1">
+                        +{mergedProfiles.length - 8} más
+                      </span>
+                    )}
                   </div>
                 </>
               )}
@@ -321,10 +375,15 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 <div className="flex gap-1.5">
                   <Input
                     value={formulaName}
-                    onChange={(e) => setFormulaName(e.target.value)}
+                    onChange={(e) => setFormulaName(e.target.value.slice(0, 50))}
                     placeholder="Nombre fórmula..."
+                    maxLength={50} 
                     className="h-7 border-slate-600 bg-slate-800 text-xs text-slate-100 placeholder:text-slate-500 w-40"
                   />
+                  {/* Contador visual opcional */}
+                  <div className="text-[8px] text-slate-500 text-right mt-0.5">
+                    {formulaName.length}/50
+                  </div>
                   <Button
                     size="sm"
                     onClick={saveFormula}
@@ -400,7 +459,30 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                   </div>
                 </div>
               </div>
-              {/* FILA 2: Valores de Entrada + Inputs */}
+
+              {/* FILA : Expresión construida */}
+              <div className="rounded-lg border border-blue-600/50 bg-slate-900 p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[9px] font-bold uppercase text-slate-400">
+                    Expresión construida :
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomExpr('')}
+                    className="text-[9px] text-red-400 hover:text-red-300 transition-colors px-2 py-0.5 rounded hover:bg-red-950/30"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                <Input
+                  value={customExpr}
+                  onChange={(e) => setCustomExpr(e.target.value)}
+                  placeholder="Click en variables y operadores o escribe directamente..."
+                  className="font-mono text-sm text-blue-300 bg-slate-800 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10"
+                />
+              </div>
+
+              {/* FILA : Valores de Entrada + Inputs */}
               <div className="rounded-lg border border-slate-600 bg-slate-800 p-2">
                 <div className="text-[9px] font-bold uppercase text-emerald-400 mb-2">
                   Valores de Entrada:
@@ -424,29 +506,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 </div>
               </div>
 
-              {/* FILA 4: Expresión construida */}
-              <div className="rounded-lg border border-blue-600/50 bg-slate-900 p-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-[9px] font-bold uppercase text-slate-400">
-                    Expresión construida :
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCustomExpr('')}
-                    className="text-[9px] text-red-400 hover:text-red-300 transition-colors px-2 py-0.5 rounded hover:bg-red-950/30"
-                  >
-                    Limpiar
-                  </button>
-                </div>
-                <Input
-                  value={customExpr}
-                  onChange={(e) => setCustomExpr(e.target.value)}
-                  placeholder="Click en variables y operadores o escribe directamente..."
-                  className="font-mono text-sm text-blue-300 bg-slate-800 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10"
-                />
-              </div>
-
-              {/* FILA 5: Resultado en */}
+              {/* FILA : Resultado en */}
               <div className="rounded-lg border border-slate-600 bg-slate-800 p-2">
                 <div className="text-[9px] font-bold uppercase text-slate-400 mb-2">
                   Resultado en:
@@ -491,7 +551,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 </div>
               </div>
 
-              {/* FILA 6: Fórmulas guardadas */}
+              {/* FILA : Fórmulas guardadas */}
               {savedFormulas.length > 0 && (
                 <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-2">
                   <div className="text-[9px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-600 pb-1">
