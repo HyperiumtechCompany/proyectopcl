@@ -80,68 +80,106 @@ const EttpWordModal: React.FC<Props> = ({
         right: { style: docx.BorderStyle.NONE },
     });
 
-    const procesarContenido = (docx: any, contenido: string) => {
+    const procesarContenido = async (docx: any, contenido: string) => {
         if (!contenido) return [];
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = contenido;
         const elementos: any[] = [];
 
-        tempDiv.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                if (node.textContent?.trim()) {
-                    elementos.push(new docx.Paragraph({
-                        children: [new docx.TextRun({ text: node.textContent, font: "Arial Narrow", size: 24, color: "#000000" })],
-                        spacing: { after: 200, line: 480 },
-                        indent: { left: 720, firstLine: 0 },
-                    }));
-                }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const el = node as HTMLElement;
-                if (el.tagName === 'IMG') {
-                    const src = el.getAttribute('src');
-                    if (src?.startsWith('data:image')) {
-                        elementos.push(new docx.Paragraph({
-                            alignment: docx.AlignmentType.CENTER,
-                            children: [new docx.ImageRun({
-                                data: src.split(',')[1],
-                                transformation: { width: 400, height: 300 },
-                            })],
-                            spacing: { after: 200 },
-                        }));
+        const procesarBloque = async (nodoBloque: HTMLElement) => {
+            const runs: any[] = [];
+            
+            const procesarInline = async (nodo: Node) => {
+                if (nodo.nodeType === Node.TEXT_NODE) {
+                    if (nodo.textContent?.trim() !== '') {
+                        runs.push(new docx.TextRun({ text: nodo.textContent?.replace(/\s+/g, ' ') || '', font: "Arial Narrow", size: 24, color: "#000000" }));
                     }
-                } else if (['P', 'DIV'].includes(el.tagName)) {
-                    if (el.innerText.trim()) {
-                        elementos.push(new docx.Paragraph({
-                            children: [new docx.TextRun({ text: el.innerText, font: "Arial Narrow", size: 24, color: "#000000" })],
-                            spacing: { after: 200, line: 480 },
-                            indent: { left: 720, firstLine: 0 },
-                        }));
+                } else if (nodo.nodeType === Node.ELEMENT_NODE) {
+                    const el = nodo as HTMLElement;
+                    if (el.tagName === 'IMG') {
+                        const src = el.getAttribute('src');
+                        if (src) {
+                            let dataStr = "";
+                            if (src.startsWith('data:image')) {
+                                const partes = src.split(',');
+                                if (partes.length > 1) dataStr = partes[1];
+                            } else {
+                                try {
+                                    const response = await fetch(src);
+                                    const blob = await response.blob();
+                                    const base64Data = await new Promise<string>((resolve, reject) => {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => resolve(reader.result as string);
+                                        reader.onerror = reject;
+                                        reader.readAsDataURL(blob);
+                                    });
+                                    const partesUrl = base64Data.split(',');
+                                    if (partesUrl.length > 1) dataStr = partesUrl[1];
+                                } catch (err) {}
+                            }
+                            if (dataStr) {
+                                runs.push(new docx.ImageRun({
+                                    data: dataStr,
+                                    transformation: { width: 200, height: 200 },
+                                }));
+                            }
+                        }
+                    } else if (el.tagName !== 'BR') {
+                        for (const child of Array.from(nodo.childNodes)) {
+                            await procesarInline(child);
+                        }
                     }
                 }
+            };
+
+            for (const child of Array.from(nodoBloque.childNodes)) {
+                await procesarInline(child);
             }
-        });
+
+            if (runs.length > 0) {
+                const tieneImagen = runs.some(r => r.constructor.name === 'ImageRun' || (r.options && r.options.data));
+                elementos.push(new docx.Paragraph({
+                    alignment: tieneImagen ? docx.AlignmentType.CENTER : docx.AlignmentType.BOTH,
+                    children: runs,
+                    spacing: { after: 200, line: 480 },
+                    indent: tieneImagen ? {} : { left: 720, firstLine: 0 },
+                }));
+            }
+        };
+
+        for (const child of Array.from(tempDiv.childNodes)) {
+            if (child.nodeType === Node.ELEMENT_NODE) {
+                await procesarBloque(child as HTMLElement);
+            } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+                const fakeP = document.createElement('p');
+                fakeP.textContent = child.textContent;
+                await procesarBloque(fakeP);
+            }
+        }
+
         return elementos;
     };
 
-    const addTechnicalDetails = (docx: any, sectionsData: any[], sections: any[]) => {
+    const addTechnicalDetails = async (docx: any, sectionsData: any[], sections: any[]) => {
         if (!sectionsData || !Array.isArray(sectionsData)) return;
 
-        sectionsData.forEach(section => {
-            if (!section.titulo || !section.contenido) return;
+        for (const section of sectionsData) {
+            if (!section.titulo || !section.contenido) continue;
 
             sections.push(new docx.Paragraph({
                 children: [new docx.TextRun({ text: `${section.titulo.toUpperCase()}:`, bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
                 spacing: { after: 200, line: 480 }, indent: { left: 720, firstLine: 0 },
             }));
 
-            sections.push(...procesarContenido(docx, section.contenido));
-        });
+            const elementosParsed = await procesarContenido(docx, section.contenido);
+            sections.push(...elementosParsed);
+        }
     };
 
-    const processHierarchicalItems = (docx: any, items: any[], sections: any[], level: number) => {
+    const processHierarchicalItems = async (docx: any, items: any[], sections: any[], level: number) => {
         if (!items?.length) return;
-        items.forEach(item => {
-            if (!item) return;
+        for (const item of items) {
+            if (!item) continue;
 
             let headingLevel;
             switch (level) {
@@ -167,13 +205,13 @@ const EttpWordModal: React.FC<Props> = ({
             }
 
             if (item.secciones && item.secciones.length > 0) {
-                addTechnicalDetails(docx, item.secciones, sections);
+                await addTechnicalDetails(docx, item.secciones, sections);
             }
 
             if (item._children?.length) {
-                processHierarchicalItems(docx, item._children, sections, level + 1);
+                await processHierarchicalItems(docx, item._children, sections, level + 1);
             }
-        });
+        }
     };
 
     const readFileAsDataURL = (file: File): Promise<string | null> => {
@@ -297,7 +335,7 @@ const EttpWordModal: React.FC<Props> = ({
         // Contenido
         const contentSections: any[] = [];
         contentSections.push(new docx.Paragraph({ text: nombreArchivo.toUpperCase(), heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER, bold: true, spacing: { before: 400, after: 200 } }));
-        processHierarchicalItems(docx, datosFiltrados, contentSections, 1);
+        await processHierarchicalItems(docx, datosFiltrados, contentSections, 1);
 
         const doc = new docx.Document({
             styles: {
