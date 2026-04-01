@@ -728,7 +728,7 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                         {(useCustom ? ALL_INPUTS : profile.activeInputs)
                           .filter((key) => vals[key] !== 0)
                           .map((key) => `${r4(vals[key])}`)
-                          .join(' × ')}
+                          .join(' - ')}
                       </div>
                     </div>
                   </div>
