@@ -14,7 +14,9 @@ import { useEttpTemplates } from './components/useEttpTemplates';
 import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
 import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
 
-declare const Tabulator: any;
+// @ts-ignore
+import { TabulatorFull as Tabulator } from 'tabulator-tables';
+import 'tabulator-tables/dist/css/tabulator.min.css';
 
 const DEFAULT_DATA: EttpPartidaData[] = [
     {
@@ -46,6 +48,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const [saving, setSaving] = useState(false);
     const [loadingMetrados, setLoadingMetrados] = useState(false);
     const [isWordModalOpen, setIsWordModalOpen] = useState(false);
+    const [isTreeExpanded, setIsTreeExpanded] = useState(false);
     const [selectedSections, setSelectedSections] = useState<SelectedSections>({
         estructura: false,
         arquitectura: false,
@@ -94,10 +97,6 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         });
     };
 
-    // Obtener datos de la tabla para exportar
-    const getTableData = (): any[] => {
-        return tabulatorRef.current?.getData() || [];
-    };
 
     // ─────────────────────────────────────────────
     // FUNCIONES DE TRANSFORMACIÓN DE DATOS
@@ -154,6 +153,35 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     // ─────────────────────────────────────────────
     // MANEJADORES DE EVENTOS
     // ─────────────────────────────────────────────
+    const handleToggleExpand = () => {
+        if (!tabulatorRef.current) return;
+
+        const expandNode = (row: any) => {
+            row.treeExpand();
+            const children = row.getTreeChildren() || [];
+            children.forEach(expandNode);
+        };
+
+        const collapseNode = (row: any) => {
+            row.treeCollapse();
+            const children = row.getTreeChildren() || [];
+            children.forEach(collapseNode);
+        };
+
+        // Pause redraw for performance
+        tabulatorRef.current.blockRedraw();
+
+        const rows = tabulatorRef.current.getRows();
+        if (isTreeExpanded) {
+            rows.forEach(collapseNode);
+        } else {
+            rows.forEach(expandNode);
+        }
+        
+        tabulatorRef.current.restoreRedraw();
+        setIsTreeExpanded(!isTreeExpanded);
+    };
+
     const handleRowClick = (row: any) => {
         const data = row.getData();
         setSelectedRow(row);
@@ -167,10 +195,25 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         const template = buscarTemplate(data.item);
         if (template) {
-            const detallesTecnicos = extraerDetalles(template);
-            const sections = buildSections(detallesTecnicos);
-            setCurrentSections(sections);
-            setShowDetailsPanel(true);
+            Swal.fire({
+                title: 'Detalles Técnicos',
+                text: 'Esta partida no tiene detalles técnicos guardados. ¿Desea llenarlos desde la plantilla o crear secciones en blanco?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Llenar desde Plantilla',
+                cancelButtonText: 'En Blanco'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const detallesTecnicos = extraerDetalles(template);
+                    const sections = buildSections(detallesTecnicos);
+                    setCurrentSections(sections);
+                } else {
+                    setCurrentSections(buildSections({}));
+                }
+                setShowDetailsPanel(true);
+            });
         } else {
             setCurrentSections(buildSections({}));
             setShowDetailsPanel(true);
@@ -186,12 +229,15 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
-            await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
+            const response = await axios.put(`/costos/${proyecto?.id}/ettp/partida/${currentData.id}/secciones`, {
                 secciones: mapSectionsForBackend(currentSections)
             }, { headers: { 'X-CSRF-TOKEN': getCsrfToken() } });
 
+            // Recuperamos las secciones actualizadas con sus nuevos IDs de DB
+            const updatedSections = response.data.secciones || currentSections;
+
             const rowData = selectedRow.getData();
-            rowData.secciones = currentSections;
+            rowData.secciones = updatedSections;
             rowData.estado = 'en_progreso';
             selectedRow.update(rowData);
 
@@ -208,7 +254,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             };
             updateItem(newData);
             setDatosBase(newData);
-            console.log('✅ datosBase después de guardar (con secciones):', newData);
+            setCurrentSections(updatedSections);
+            console.log('✅ datosBase después de guardar (con secciones reales referenciadas):', newData);
 
             Swal.fire({
                 title: '¡Guardado!',
@@ -237,11 +284,11 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         }
 
         const options = {
-            estructura: selectedSections.estructura ? 1 : 0,
+            estructuras: selectedSections.estructura ? 1 : 0,
             arquitectura: selectedSections.arquitectura ? 1 : 0,
             sanitarias: selectedSections.sanitarias ? 1 : 0,
             electricas: selectedSections.electricas ? 1 : 0,
-            comunicacion: selectedSections.comunicaciones ? 1 : 0,
+            comunicaciones: selectedSections.comunicaciones ? 1 : 0,
             gas: selectedSections.gas ? 1 : 0,
         };
 
@@ -324,12 +371,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
         const initTabulator = () => {
             if (!isMounted || !container) return;
-            
             try {
-                // @ts-ignore
-                const TabulatorClass = window.Tabulator || Tabulator;
-                
-                const table = new TabulatorClass(container, {
+                const table = new Tabulator(container, {
                     data: datosBase,
                     dataTree: true,
                     dataTreeStartExpanded: false,
@@ -340,15 +383,23 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     responsiveLayout: "collapse",
                     responsiveLayoutCollapseStartOpen: false,
                     columns: [
-                        { title: 'Items', field: 'item', width: 150, responsive: 0, editor: 'input' },
-                        { title: 'Descripción', field: 'descripcion', width: 300, responsive: 1, editor: 'input' },
-                        { title: 'Und', field: 'unidad', width: 70, responsive: 2, editor: 'input' },
+                        { title: 'Items', field: 'item', width: 120, minWidth: 100, responsive: 0 },
+                        { title: 'Descripción', field: 'descripcion', minWidth: 300, widthGrow: 2, formatter: 'textarea', responsive: 1 },
+                        { title: 'Und', field: 'unidad', width: 70, responsive: 2 },
                         {
                             title: '', width: 60, responsive: 0,
-                            formatter: () => {
+                            formatter: (_cell: any, _formatterParams: any, onRendered: any) => {
+                                const data = _cell.getRow().getData();
+                                const unidad = (data.unidad || '').toString().trim();
+                                if (!unidad) return '';
                                 return '<button class="btn-details" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:14px;">📋</button>';
                             },
-                            cellClick: (_e: any, cell: any) => handleRowClick(cell.getRow()),
+                            cellClick: (_e: any, cell: any) => {
+                                const data = cell.getRow().getData();
+                                const unidad = (data.unidad || '').toString().trim();
+                                if (!unidad) return; // No hacer nada si no tiene unidad
+                                handleRowClick(cell.getRow());
+                            },
                         },
                     ],
                 });
@@ -384,30 +435,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
-            <style>{`
-                .tabulator{font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
-                .tabulator .tabulator-header{background-color:#f3f4f6;border-bottom:1px solid #e5e7eb}
-                .tabulator .tabulator-header .tabulator-col{background-color:#f3f4f6;font-weight:600;color:#1f2937;border-right:none}
-                .tabulator .tabulator-row{border-bottom:1px solid #f3f4f6}
-                .tabulator .tabulator-row:hover{background-color:#f9fafb}
-                .tabulator .tabulator-cell{padding:10px 8px;border-right:none;color:#1f2937}
-                .tabulator .tabulator-cell .btn-details:hover{background:#2563eb!important}
-                .tabulator .tabulator-editing{border:2px solid #3b82f6!important}
-                textarea{color:#1f2937!important;background-color:#fff!important}
-                .bg-gray-50 textarea,.bg-gray-50 p,.bg-gray-50 div{color:#1f2937!important}
-                @media (max-width: 768px) {
-                    .tabulator .tabulator-cell {padding:6px 4px !important;font-size:11px !important}
-                    .tabulator .tabulator-col-title {font-size:10px !important}
-                    .tabulator .tabulator-cell .btn-details {padding:4px 6px !important;font-size:12px !important}
-                    .w-1\\/3,.w-2\\/3 {width:100% !important}
-                }
-                @media (min-width:769px) and (max-width:1024px) {
-                    .tabulator .tabulator-cell {padding:8px 6px !important}
-                    .tabulator .tabulator-col-title {font-size:11px !important}
-                }
-            `}</style>
-
-            <div className="min-h-screen bg-gray-50">
+       
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
                 <EttpHeader
                     onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}
                     onSave={handleSave}
@@ -415,6 +444,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                         setShowWordModal(true);
                         setIsWordModalOpen(true);
                     }}
+                    onToggleExpand={handleToggleExpand}
+                    isExpanded={isTreeExpanded}
                     saving={saving}
                 />
 
@@ -427,10 +458,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                 />
 
                 <div className="flex flex-1 px-4 py-6 gap-4">
-                    <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-2/3' : 'w-full'}`}>
+                    <div className={`transition-all duration-300 ${showDetailsPanel ? 'w-full md:w-1/3 lg:w-2/4' : 'w-full'}`}>
                         <div
                             ref={tableContainerRef}
-                            className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200"
+                            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700"
                             style={{ height: 'calc(100vh - 180px)' }}
                         />
                     </div>

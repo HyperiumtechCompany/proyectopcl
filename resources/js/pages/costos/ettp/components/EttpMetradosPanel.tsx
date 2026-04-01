@@ -20,20 +20,20 @@ const EttpMetradosPanel: React.FC<Props> = ({
     if (!show) return null;
 
     return (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 shadow-sm">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
             <div className="max-w-7xl mx-auto px-6 py-5">
                 <div className="flex items-center gap-2 mb-4">
-                    <span className="text-sm font-bold text-blue-800 uppercase tracking-wide">
+                    <span className="text-sm font-bold text-blue-800 dark:text-blue-400 uppercase tracking-wide">
                         📋 ESPECIALIDADES
                     </span>
-                    <div className="flex-1 h-px bg-blue-200" />
+                    <div className="flex-1 h-px bg-blue-200 dark:bg-gray-700" />
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {ESPECIALIDADES_CONFIG.map(({ key, label, desc }) => (
                         <label
                             key={key}
-                            className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
+                            className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group"
                         >
                             <input
                                 type="checkbox"
@@ -41,19 +41,19 @@ const EttpMetradosPanel: React.FC<Props> = ({
                                 onChange={e =>
                                     onSelectedChange({ ...selectedSections, [key]: e.target.checked })
                                 }
-                                className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                className="w-5 h-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-blue-500"
                             />
                             <div className="flex flex-col">
-                                <span className="text-sm font-semibold text-gray-800 group-hover:text-blue-600">
+                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
                                     {label}
                                 </span>
-                                <span className="text-xs text-gray-500">{desc}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">{desc}</span>
                             </div>
                         </label>
                     ))}
                 </div>
 
-                <div className="flex justify-end mt-5 pt-3 border-t border-blue-200">
+                <div className="flex justify-end mt-5 pt-3 border-t border-blue-200 dark:border-gray-700">
                     <button
                         onClick={onLoadMetrados}
                         disabled={loading}
