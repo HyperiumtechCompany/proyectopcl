@@ -68,7 +68,7 @@ const createCustomProfile = (
     fn: (v) => {
       try {
         const { elsim, largo, ancho, alto, nveces, kg, kgm } = v;
-        // eslint-disable-next-line no-new-func
+         
         const result = new Function('elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',`"use strict"; return (${formula.expression});`)(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
         return { und: Number(result) };
       } catch {

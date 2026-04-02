@@ -38,9 +38,9 @@ document.head.appendChild(fileSaverScript);
 // junto al script UMD desde public/luckysheet/. No se importa aquí.
 
 // ── Laravel Echo (Reverb via Pusher protocol) ─────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 //(window as any).Pusher = Pusher;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 //(window as any).Echo = new Echo({
    // broadcaster: 'reverb',
     //key: import.meta.env.VITE_REVERB_APP_KEY,

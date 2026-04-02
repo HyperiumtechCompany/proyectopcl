@@ -29,17 +29,17 @@ import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { GGFijosPanel } from './components/GGFijosPanel';
 import { GGVariablesPanel } from './components/GGVariablesPanel';
 import { ImportMetradosModal } from './components/ImportMetradosModal';
+import { InsumosPanel } from './components/InsumosPanel';
 import { RemuneracionesPanel } from './components/RemuneracionesPanel';
 import { SubsectionNav } from './components/SubsectionNav';
-import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
-import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
+import { SupervisionPanel } from './components/SupervisionPanel';
 import { useGGFijos } from './hooks/useGGFijos';
 import { useGGVariables } from './hooks/useGGVariables';
+import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
 import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
+import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
 import { useBudgetStore } from './stores/budgetStore';
 import { useProjectParamsStore } from './stores/projectParamsStore';
-import { SupervisionPanel } from './components/SupervisionPanel';
-import { InsumosPanel } from './components/InsumosPanel';
 
 interface PageProps {
     project: {

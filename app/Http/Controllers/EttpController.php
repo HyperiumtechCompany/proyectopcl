@@ -152,7 +152,7 @@ class EttpController extends Controller
     private function sortPartidasByItem($partidas)
     {
         return $partidas
-            ->sort(static fn ($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
+            ->sort(static fn($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
             ->values();
     }
 
@@ -266,7 +266,7 @@ class EttpController extends Controller
 
                 foreach ($todasSpecialidad as $item) {
                     if ($item->parent_id) continue; // Ya fue resuelto por BD origen
-                    
+
                     $codigo = trim((string)$item->item);
                     $partes = explode('.', $codigo);
                     if (count($partes) > 1) {
@@ -519,7 +519,7 @@ class EttpController extends Controller
                             }
 
                             $dimensions = @getimagesizefromstring($imageData);
-                             
+
                             $imagen = EttpImagen::create([
                                 'ettp_seccion_id' => $seccion->id,
                                 'nombre_archivo'  => $nombreArchivo,

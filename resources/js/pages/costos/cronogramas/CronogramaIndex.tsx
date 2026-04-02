@@ -747,7 +747,7 @@ const CronogramaIndex = ({ project, initialData, cronogramaId = 1 }: Props) => {
         setTimeout(() => gantt.render(), 50);
 
         return () => { gantt.clearAll(); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [initialData]);
 
     // Exponer abridor del modal al DOM (onclick inline en template de columna)
