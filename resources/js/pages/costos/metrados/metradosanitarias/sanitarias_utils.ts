@@ -1,6 +1,3 @@
-// ===================================================
-// sanitarias_utils.ts - Helpers puros + conversion Luckysheet
-// ===================================================
 
 import {
   ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE,
@@ -29,7 +26,10 @@ export const isZeroLike = (v: unknown): boolean => {
   return Number.isFinite(n) && Math.abs(n) < 0.0000001;
 };
 
-export const pad2 = (n: number): string => String(Math.floor(n)).padStart(2, '0');
+export const pad2 = (n: number | string): string => {
+  const num = Number(n) || 0;
+  return num.toString().padStart(2, '0');
+};
 
 export const toRoman = (n: number): string => {
   if (!Number.isFinite(n) || n <= 0) return String(n);
@@ -163,6 +163,16 @@ const getDepthFromItem = (value: unknown): number => {
   return Math.max(1, Math.min(MAX_LEVELS, parts.length || 1));
 };
 
+const normalizeCode = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  return raw
+    .split('.')
+    .map((part) => pad2(part))
+    .join('.');
+};
+
 export function rowsToSheet(
   rows: Record<string, any>[],
   cols: ColumnDef[],
@@ -200,6 +210,12 @@ export function rowsToSheet(
       let store: any = val;
       let display = String(val);
 
+      if (col.key === 'item' && val !== null && val !== '') {
+        const formatted = pad2(val);
+        store = formatted;
+        display = formatted;
+      }
+
       if (col.key === 'descripcion' && typeof val === 'string') {
         store = val.trimStart();
         display = indent(level, kind === 'leaf') + store;
@@ -211,6 +227,16 @@ export function rowsToSheet(
         typeof store === 'number' ||
         (store !== '' && !Number.isNaN(Number(store)) && store !== '')
       );
+
+      if (col.key === 'partida' && val) {
+        const normalized = String(val)
+          .split('.')
+          .map((p) => pad2(p))
+          .join('.');
+
+        store = normalized;
+        display = normalized;
+      }
 
       if (isBlankNumeric) {
         const cell: Record<string, any> = {
@@ -275,7 +301,13 @@ export function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[
 
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
-      row[col.key] = raw === null ? null : (col.key === 'descripcion' ? String(raw).trimStart() : raw);
+      if (col.key === 'partida' && raw !== null && raw !== '') {
+        row[col.key] = normalizeCode(raw); 
+      } else {
+        row[col.key] = raw === null 
+          ? null 
+          : (col.key === 'descripcion' ? String(raw).trimStart() : raw);
+      }
       if (raw !== null && raw !== '') hasData = true;
     });
 
@@ -310,7 +342,11 @@ export function buildRecalcUpdates(
 
   entries.forEach((entry) => {
     const { ri, row } = entry;
-    const rawPartida = String(row.partida ?? '').trim();
+    let rawPartida = String(row.partida ?? '').trim();
+
+    if (rawPartida) {
+      rawPartida = normalizeCode(rawPartida);
+    }
 
     if (hasItemCode(rawPartida)) {
       entry.kind = 'group';
