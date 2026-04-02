@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 
 // Módulo local Sanitarias
 import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradosanitarias/sanitarias_constants';
-import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
+import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt,mkFormula, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
 import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
@@ -392,7 +392,7 @@ export default function SanitariasIndex() {
       ups.push({
         r: ri,
         c: CI.total,
-        v: mkFormula(formula, 0),
+        v: mkFormula(formula),
       });
     }
 

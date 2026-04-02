@@ -88,6 +88,16 @@ export const mkNum = (v: number, keepZero = false) => {
   };
 };
 
+// fórmula tipo Excel (fx)
+export const mkFormula = (formula: string, value: number | string = '') => {
+  return {
+    f: formula,
+    v: value === '' ? '' : value,
+    m: value !== undefined ? String(value) : formula,
+    ct: { fa: 'General', t: typeof value === 'number' ? 'n' : 'g' },
+  };
+};
+
 export const mkTxt = (v: string, extra: Record<string, any> = {}) => ({
   v,
   m: v,
@@ -447,12 +457,56 @@ export function buildRecalcUpdates(
     const activeProfile = Array.isArray(profile) ? profile[0] : profile;
     let outputs = activeProfile.fn(inputs);
 
-    // Mostrar TODOS los valores de salida calculados
     OUTPUT_KEYS.forEach((key) => {
-      if (outputs[key] !== undefined && !isZeroLike(outputs[key])) {
-        const val = r4(outputs[key]);
-        row[key] = val;
-        set(ri, key, isAnchor ? styledNum(val, st) : mkNum(val));
+      const out = outputs[key];
+
+      // ignorar si no hay valor
+      if (out === undefined || isZeroLike(out)) return;
+
+      const val = r4(out);
+      row[key] = val;
+
+      let formula = '';
+
+      const rowIndex = ri + 1;
+
+      const L = colLetter(CI.largo);
+      const A = colLetter(CI.ancho);
+      const H = colLetter(CI.alto);
+      const N = colLetter(CI.nveces);
+      const K = colLetter(CI.kg);
+
+      // 🔹 fórmulas bien construidas
+      if (key === 'area') {
+        formula = `=${L}${rowIndex}*${A}${rowIndex}`;
+      }
+
+      else if (key === 'vol') {
+        formula = `=${L}${rowIndex}*${A}${rowIndex}*${H}${rowIndex}`;
+      }
+
+      else if (key === 'lon') {
+        formula = `=${L}${rowIndex}`;
+      }
+
+      else if (key === 'und') {
+        formula = `=${N}${rowIndex}`;
+      }
+
+      else if (key === 'kg') {
+        formula = `=${K}${rowIndex}`;
+      }
+
+      if (formula) {
+        set(ri, key, {
+          f: formula,
+          v: val,
+          m: formatNumber(val),
+          ct: { fa: 'General', t: 'n' },
+        });
+      } else {
+        // fallback limpio
+        set(ri, key, mkNum(val, true));
       }
     });
 
