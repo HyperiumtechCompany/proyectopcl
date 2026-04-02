@@ -152,7 +152,7 @@ class EttpController extends Controller
     private function sortPartidasByItem($partidas)
     {
         return $partidas
-            ->sort(static fn($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
+            ->sort(static fn ($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
             ->values();
     }
 
@@ -222,59 +222,51 @@ class EttpController extends Controller
         foreach ($seleccionadas as $especialidad) {
             $tabla = $tablaMap[$especialidad];
 
-            try {
-                $datos = DB::connection('costos_tenant')
-                    ->table($tabla)
-                    ->where('presupuesto_id', $presupuestoId)
-                    ->orderBy('item_order')
-                    ->get();
+            if ($datos->isEmpty()) continue;
 
-                if ($datos->isEmpty()) continue;
+            foreach ($datos as $item) {
+                // Manejar discrepancia de nombres de columnas (base vs modular)
+                $codigo = trim((string)($item->item ?? $item->partida ?? ''));
+                $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
 
-                foreach ($datos as $item) {
-                    // Manejar discrepancia de nombres de columnas (base vs modular)
-                    $codigo = trim((string)($item->item ?? $item->partida ?? ''));
-                    $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
+                if (empty($codigo)) continue;
 
-                    if (empty($codigo)) continue;
+                // Sincronizar con tabla maestros de especificaciones
+                EttpPartida::updateOrCreate(
+                    [
+                        'presupuesto_id' => $presupuestoId,
+                        'especialidad'   => $especialidad,
+                        'item'           => $codigo,
+                    ],
+                    [
+                        'descripcion'          => $item->descripcion,
+                        'unidad'               => $unidad,
+                        'resumen_source_id'    => $item->id,
+                        'resumen_source_table' => $tabla,
+                        'nivel'                => $item->nivel ?? 0,
+                        'item_order'           => $item->item_order ?? 0,
+                    ]
+                );
+            }
 
-                    // Sincronizar con tabla maestros de especificaciones
-                    EttpPartida::updateOrCreate(
-                        [
-                            'presupuesto_id' => $presupuestoId,
-                            'especialidad'   => $especialidad,
-                            'item'           => $codigo,
-                        ],
-                        [
-                            'descripcion'          => $item->descripcion,
-                            'unidad'               => $unidad,
-                            'resumen_source_id'    => $item->id,
-                            'resumen_source_table' => $tabla,
-                            'nivel'                => $item->nivel ?? 0,
-                            'item_order'           => $item->item_order ?? 0,
-                        ]
-                    );
-                }
+            // 1. Intentar resolver jerarquía exacta usando la BD origen
+            $this->resolverJerarquia($presupuestoId, $especialidad, $datos);
 
-                // 1. Intentar resolver jerarquía exacta usando la BD origen
-                $this->resolverJerarquia($presupuestoId, $especialidad, $datos);
+            // 2. Fallback: Para los que aún no tengan parent_id, resolver por código de ítem (01 -> 01.01)
+            $todasSpecialidad = EttpPartida::where('presupuesto_id', $presupuestoId)
+                ->where('especialidad', $especialidad)
+                ->get()
+                ->keyBy('item');
 
-                // 2. Fallback: Para los que aún no tengan parent_id, resolver por código de ítem (01 -> 01.01)
-                $todasSpecialidad = EttpPartida::where('presupuesto_id', $presupuestoId)
-                    ->where('especialidad', $especialidad)
-                    ->get()
-                    ->keyBy('item');
-
-                foreach ($todasSpecialidad as $item) {
-                    if ($item->parent_id) continue; // Ya fue resuelto por BD origen
-
-                    $codigo = trim((string)$item->item);
-                    $partes = explode('.', $codigo);
-                    if (count($partes) > 1) {
-                        $parentCode = implode('.', array_slice($partes, 0, -1));
-                        if (isset($todasSpecialidad[$parentCode])) {
-                            $item->update(['parent_id' => $todasSpecialidad[$parentCode]->id]);
-                        }
+            foreach ($todasSpecialidad as $item) {
+                if ($item->parent_id) continue; // Ya fue resuelto por BD origen
+                
+                $codigo = trim((string)$item->item);
+                $partes = explode('.', $codigo);
+                if (count($partes) > 1) {
+                    $parentCode = implode('.', array_slice($partes, 0, -1));
+                    if (isset($todasSpecialidad[$parentCode])) {
+                        $item->update(['parent_id' => $todasSpecialidad[$parentCode]->id]);
                     }
                 }
             } catch (\Exception $e) {
@@ -290,10 +282,10 @@ class EttpController extends Controller
             ->orderBy('item_order')
             ->get();
 
-        $partidas = $this->sortPartidasByItem($partidas);
+    $partidas = $this->sortPartidasByItem($partidas);
 
-        return response()->json($this->buildTree($partidas, $presupuestoId));
-    }
+    return response()->json($this->buildTree($partidas, $presupuestoId));
+}
 
     /**
      * Resuelve la jerarquía padre-hijo de las partidas ETTP
@@ -520,7 +512,7 @@ class EttpController extends Controller
                             }
 
                             $dimensions = @getimagesizefromstring($imageData);
-
+                             
                             $imagen = EttpImagen::create([
                                 'ettp_seccion_id' => $seccion->id,
                                 'nombre_archivo'  => $nombreArchivo,
