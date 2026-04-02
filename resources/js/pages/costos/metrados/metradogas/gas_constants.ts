@@ -45,6 +45,7 @@ export const RESUMEN_COLS: ColumnDef[] = [
   { key: 'total',       label: 'Total',         width: 95  },
 ];
 
+
 // ── Perfiles de unidad ────────────────────────────────────────
 /**
  * Cada unidad define:
