@@ -1,23 +1,5 @@
 import { router, usePage, Head } from '@inertiajs/react';
 import axios from 'axios';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Panel, Group, Separator } from 'react-resizable-panels';
-import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem } from '@/types';
-import type { PresupuestoSubsection } from '@/types/presupuestos';
-import { AcuPanel } from './components/AcuPanel';
-import { BudgetTree } from './components/BudgetTree';
-import { SubsectionNav } from './components/SubsectionNav';
-import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
-import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
-import { useGGFijos } from './hooks/useGGFijos';
-import { useGGVariables } from './hooks/useGGVariables';
-import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
-import { useBudgetStore } from './stores/budgetStore';
-import { RemuneracionesPanel } from './components/RemuneracionesPanel';
-import { GGFijosPanel } from './components/GGFijosPanel';
-import { GGVariablesPanel } from './components/GGVariablesPanel';
-import { useProjectParamsStore } from './stores/projectParamsStore';
 import {
     Building2,
     Calculator,
@@ -32,14 +14,32 @@ import {
     FileSpreadsheet,
     X,
 } from 'lucide-react';
-import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
-import { SupervisionPanel } from './components/SupervisionPanel';
+import { Download } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Panel, Group, Separator } from 'react-resizable-panels';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem } from '@/types';
+import type { PresupuestoSubsection } from '@/types/presupuestos';
+import { AcuPanel } from './components/AcuPanel';
+import { BudgetTree } from './components/BudgetTree';
 import { ConsolidadoPanel } from './components/ConsolidadoPanel';
 import { ControlConcurrentePanel } from './components/controlconcurrentePanel';
-import { ImportMetradosModal } from './components/ImportMetradosModal';
-import { Download } from 'lucide-react';
-import { InsumosPanel } from './components/InsumosPanel';
 import { FormulaPolinomica } from './components/formula_polinomica';
+import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
+import { GGFijosPanel } from './components/GGFijosPanel';
+import { GGVariablesPanel } from './components/GGVariablesPanel';
+import { ImportMetradosModal } from './components/ImportMetradosModal';
+import { RemuneracionesPanel } from './components/RemuneracionesPanel';
+import { SubsectionNav } from './components/SubsectionNav';
+import { usePresupuestoAcu } from './hooks/usePresupuestoAcu';
+import { usePresupuestoRemuneraciones } from './hooks/usePresupuestoRemuneraciones';
+import { useGGFijos } from './hooks/useGGFijos';
+import { useGGVariables } from './hooks/useGGVariables';
+import { usePresupuestoGastosGenerales } from './hooks/usePresupuestoGastosGenerales';
+import { useBudgetStore } from './stores/budgetStore';
+import { useProjectParamsStore } from './stores/projectParamsStore';
+import { SupervisionPanel } from './components/SupervisionPanel';
+import { InsumosPanel } from './components/InsumosPanel';
 
 interface PageProps {
     project: {
@@ -424,6 +424,10 @@ export default function Index() {
                                             <button title="Colapsar todo" onClick={collapseAll}
                                                 className="flex items-center gap-1 rounded bg-slate-700/60 px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-600 hover:text-slate-200">
                                                 <ChevronsDownUp size={11} /> colap.
+                                            </button>
+                                            <button title="Generar Ítems (Renumerar)" onClick={() => useBudgetStore.getState().renumberItems()}
+                                                className="flex items-center gap-1 rounded bg-amber-900/40 px-2 py-1 text-[10px] font-semibold text-amber-500 transition-colors hover:bg-amber-800 hover:text-amber-300">
+                                                <span>🔢 Numerar</span>
                                             </button>
                                             <div className="flex-1" />
                                             <button title="Exportar a Excel" onClick={() => handleExport('excel')} disabled={exportLoading === 'excel'}

@@ -1,8 +1,8 @@
 // components/PlazoDisplay.tsx
 // Componente reutilizable que muestra visualmente el plazo del proyecto
 // en diferentes unidades: días, semanas, meses, año.
-import React from 'react';
 import { Calendar, Clock, CalendarDays, CalendarRange } from 'lucide-react';
+import React from 'react';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 interface PlazoDisplayProps {

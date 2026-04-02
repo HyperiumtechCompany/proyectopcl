@@ -12,29 +12,29 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import Luckysheet from '@/components/costos/tablas/Luckysheet';
-import type { BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
 import {
   AlertCircle, Calculator, CheckCircle2,
   ChevronLeft, Hash, Loader2, RefreshCcw, Save,
 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Luckysheet from '@/components/costos/tablas/Luckysheet';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import type { BreadcrumbItem } from '@/types';
 
 // Módulo local
+import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNITS} from './metradoelectricas/electricas_constants';
+import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
+import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectricas/electricas_types';
 import {
   buildRecalcUpdates, buildResumenRows, colLetter, mkBlank,
   mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
   levelStyle,
 } from './metradoelectricas/electricas_utils';
-import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectricas/electricas_types';
-import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
-import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
-import { injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES

@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { GGFijosDesagregadoEditor } from './GGFijosDesagregadoEditor';
-import { PlazoDisplay } from './PlazoDisplay';
+import axios from 'axios';
 import {
     RefreshCw,
     Calendar,
@@ -10,10 +8,12 @@ import {
     Calculator,
     TrendingUp,
 } from 'lucide-react';
-import { useProjectParamsStore } from '../stores/projectParamsStore';
-import { useGGVariablesStore } from '../stores/ggVariablesStore';
+import React, { useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import axios from 'axios';
+import { useGGVariablesStore } from '../stores/ggVariablesStore';
+import { useProjectParamsStore } from '../stores/projectParamsStore';
+import { GGFijosDesagregadoEditor } from './GGFijosDesagregadoEditor';
+import { PlazoDisplay } from './PlazoDisplay';
 
 interface GGFijosPanelProps {
     projectId: number;

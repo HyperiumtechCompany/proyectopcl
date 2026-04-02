@@ -3,21 +3,21 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import Luckysheet from '@/components/costos/tablas/Luckysheet';
-import type { BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Luckysheet from '@/components/costos/tablas/Luckysheet';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import type { BreadcrumbItem } from '@/types';
 
 // Módulo local Sanitarias
-import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradosanitarias/sanitarias_constants';
-import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
-import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
-import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
-import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
+import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradosanitarias/sanitarias_constants';
+import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
+import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
+import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES

@@ -191,7 +191,7 @@ export function rowsToSheet(
     const rIdx = ri + 1;
 
     cols.forEach((col, ci) => {
-      let val = (row[col.key] === null || row[col.key] === undefined)
+      const val = (row[col.key] === null || row[col.key] === undefined)
         ? (col.key === '_dbid' ? row.id ?? null : col.key === '_level' ? level : col.key === '_kind' ? kind : null)
         : row[col.key];
 
@@ -409,7 +409,7 @@ export function buildRecalcUpdates(
     };
 
     const activeProfile = Array.isArray(profile) ? profile[0] : profile;
-    let outputs = activeProfile.fn(inputs);
+    const outputs = activeProfile.fn(inputs);
 
     // Mostrar TODOS los valores de salida calculados
     OUTPUT_KEYS.forEach((key) => {

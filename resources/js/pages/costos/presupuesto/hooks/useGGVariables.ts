@@ -1,7 +1,8 @@
 // hooks/useGGVariables.ts
-import { useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useGGVariablesStore, GGVariableNode } from '../stores/ggVariablesStore';
+import { useEffect, useCallback } from 'react';
+import type { GGVariableNode } from '../stores/ggVariablesStore';
+import { useGGVariablesStore } from '../stores/ggVariablesStore';
 
 interface UseGGVariablesProps {
     projectId: number;

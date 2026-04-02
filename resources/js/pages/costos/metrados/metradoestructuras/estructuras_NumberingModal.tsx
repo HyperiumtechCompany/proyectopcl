@@ -2,17 +2,17 @@
 // estructuras_NumberingModal.tsx — Numeración jerárquica
 // ═══════════════════════════════════════════════════
 
+import { Hash }   from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
-import { Hash }   from 'lucide-react';
 
 import { LEAF_STYLE, LEVEL_PALETTE, MAX_LEVELS } from './estructuras_constants';
-import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './estructuras_utils';
-import type { RowKind } from './estructuras_types';
 import { ALL_COLS, CI } from './estructuras_constants';
+import type { RowKind } from './estructuras_types';
+import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './estructuras_utils';
 import { levelStyle } from './estructuras_utils';
 
 export interface NumberingModalProps {

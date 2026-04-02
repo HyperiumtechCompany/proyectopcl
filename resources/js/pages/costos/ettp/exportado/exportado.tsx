@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
 import {Document, Paragraph, TextRun, ImageRun, Header, Footer, Table, TableRow, TableCell,AlignmentType, HeadingLevel, BorderStyle, WidthType, VerticalAlign, UnderlineType,LineRuleType, PageNumber, SectionType, Packer} from 'docx';
 import { saveAs } from 'file-saver';
+import React, { useState } from 'react';
 
 interface WordExportProps {
     isOpen: boolean;

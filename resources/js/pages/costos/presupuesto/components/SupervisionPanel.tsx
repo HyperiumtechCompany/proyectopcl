@@ -1,8 +1,3 @@
-import React from 'react';
-import { useSupervisionStore, SupervisionRow } from '../stores/supervisionStore';
-import { useSupervisionGGDetalleStore } from '../stores/supervisionGGDetalleStore';
-import { SupervisionGGDetalleModal } from './SupervisionGGDetalleModal';
-import { PlazoDisplay } from './PlazoDisplay';
 import {
     ChevronRight,
     ChevronDown,
@@ -16,6 +11,12 @@ import {
     ExternalLink,
     Loader2,
 } from 'lucide-react';
+import React from 'react';
+import { useSupervisionGGDetalleStore } from '../stores/supervisionGGDetalleStore';
+import type { SupervisionRow } from '../stores/supervisionStore';
+import { useSupervisionStore } from '../stores/supervisionStore';
+import { PlazoDisplay } from './PlazoDisplay';
+import { SupervisionGGDetalleModal } from './SupervisionGGDetalleModal';
 
 interface RowProps {
     row: SupervisionRow;

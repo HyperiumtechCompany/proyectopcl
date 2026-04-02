@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import { Loader2, Package, Users, Wrench, Briefcase, Layers, Search, Edit3 } from 'lucide-react';
+import type {
+    SortingState
+} from '@tanstack/react-table';
 import {
     createColumnHelper,
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
     getSortedRowModel,
-    useReactTable,
-    SortingState
+    useReactTable
 } from '@tanstack/react-table';
+import axios from 'axios';
+import { Loader2, Package, Users, Wrench, Briefcase, Layers, Search, Edit3 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ReemplazarInsumoModal } from './ReemplazarInsumoModal';
 
 interface InsumosPanelProps {
@@ -30,6 +32,7 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
     const [loading, setLoading] = useState(false);
     const [usadosOnly, setUsadosOnly] = useState(true);
     const [especialidad, setEspecialidad] = useState('todas');
+    const [especialidadesList, setEspecialidadesList] = useState<{value: string, label: string}[]>([]);
 
     const [globalFilter, setGlobalFilter] = useState('');
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -62,6 +65,18 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
     useEffect(() => {
         fetchInsumos();
     }, [projectId, activeTab, usadosOnly, especialidad]);
+
+    useEffect(() => {
+        let isMounted = true;
+        axios.get(`/costos/proyectos/${projectId}/presupuesto/insumos/especialidades`)
+            .then(res => {
+                if (isMounted && res.data?.success) {
+                    setEspecialidadesList(res.data.especialidades || []);
+                }
+            })
+            .catch(err => console.error(err));
+        return () => { isMounted = false; };
+    }, [projectId]);
 
     const columnHelper = createColumnHelper<any>();
 
@@ -224,12 +239,9 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
                                     onChange={(e) => setEspecialidad(e.target.value)}
                                 >
                                     <option value="todas">Todas las Especialidades</option>
-                                    <option value="02">02 Arquitectura</option>
-                                    <option value="03">03 Estructuras</option>
-                                    <option value="04">04 Sanitarias</option>
-                                    <option value="05">05 Eléctricas</option>
-                                    <option value="06">06 Comunicaciones</option>
-                                    <option value="07">07 Gas</option>
+                                    {especialidadesList.map((esp, i) => (
+                                        <option key={i} value={esp.value}>{esp.label}</option>
+                                    ))}
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>

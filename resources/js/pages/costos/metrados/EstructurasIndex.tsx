@@ -3,21 +3,21 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import Luckysheet from '@/components/costos/tablas/Luckysheet';
-import type { BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Luckysheet from '@/components/costos/tablas/Luckysheet';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import type { BreadcrumbItem } from '@/types';
 
 // Módulo local Estructuras
-import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoestructuras/estructuras_constants';
-import { buildRecalcUpdates, buildResumenRows, buildEstructurasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoestructuras/estructuras_utils';
-import type { CalcPayload, EstructurasPageProps, RowKind } from './metradoestructuras/estructuras_types';
-import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
-import { NumberingModal, buildNumberingUpdates } from './metradoestructuras/estructuras_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
+import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoestructuras/estructuras_constants';
+import { NumberingModal, buildNumberingUpdates } from './metradoestructuras/estructuras_NumberingModal';
+import type { CalcPayload, EstructurasPageProps, RowKind } from './metradoestructuras/estructuras_types';
+import { buildRecalcUpdates, buildResumenRows, buildEstructurasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoestructuras/estructuras_utils';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
