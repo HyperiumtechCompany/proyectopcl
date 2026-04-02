@@ -57,6 +57,7 @@ class InsumoProductoController extends Controller
         $tipo = $request->query('tipo');
         $search = $request->query('q');
         $usadosOnly = $request->boolean('usados_only');
+        $especialidad = $request->query('especialidad');
 
         $connection = DB::connection('costos_tenant');
 
@@ -135,6 +136,10 @@ class InsumoProductoController extends Controller
                       ->orWhere('p.descripcion', 'like', "%{$search}%")
                       ->orWhere('p.codigo_producto', 'like', "%{$search}%");
                 });
+            }
+
+            if ($especialidad && $especialidad !== 'todas') {
+                $query->where('g.partida', 'like', "{$especialidad}%");
             }
 
             $rows = $query
