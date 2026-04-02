@@ -758,6 +758,11 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
                 outputKey: activeOut,
                 inputs: vals,
                 outputs: useCustom ? { [activeOut]: outVal } : profile.fn(vals),
+
+                formula: useCustom
+                  ? customExpr
+                  : (profile.formula || ''),
+
               });
               onClose();
             }}
