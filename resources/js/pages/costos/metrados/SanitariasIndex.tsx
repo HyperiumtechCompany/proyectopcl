@@ -392,7 +392,7 @@ export default function SanitariasIndex() {
       ups.push({
         r: ri,
         c: CI.total,
-        v: mkFormula(formula),
+        v: mkFormula(formula, 0),
       });
     }
 

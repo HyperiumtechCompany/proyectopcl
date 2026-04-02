@@ -94,7 +94,7 @@ export const mkFormula = (formula: string, value: number | string = '') => {
     f: formula,
     v: value === '' ? '' : value,
     m: value !== undefined ? String(value) : formula,
-    ct: { fa: 'General', t: typeof value === 'number' ? 'n' : 'g' },
+    ct: { fa: 'General', t:'f' },
   };
 };
 
@@ -460,7 +460,6 @@ export function buildRecalcUpdates(
     OUTPUT_KEYS.forEach((key) => {
       const out = outputs[key];
 
-      // ignorar si no hay valor
       if (out === undefined || isZeroLike(out)) return;
 
       const val = r4(out);
@@ -476,11 +475,9 @@ export function buildRecalcUpdates(
       const N = colLetter(CI.nveces);
       const K = colLetter(CI.kg);
 
-      // 🔹 fórmulas bien construidas
       if (key === 'area') {
         formula = `=${L}${rowIndex}*${A}${rowIndex}`;
       }
-
       else if (key === 'vol') {
         formula = `=${L}${rowIndex}*${A}${rowIndex}*${H}${rowIndex}`;
       }
@@ -505,27 +502,10 @@ export function buildRecalcUpdates(
           ct: { fa: 'General', t: 'n' },
         });
       } else {
-        // fallback limpio
         set(ri, key, mkNum(val, true));
       }
     });
 
-    const manualFromOutputs =
-      OUTPUT_KEYS
-        .map((k) => toNum(row[k]))
-        .find((v) => !isZeroLike(v)) ?? 0;
-
-    const outVal = r4(outputs[activeProfile.outputKey] ?? 0);
-
-    entry.total = isAnchor
-      ? 0
-      : (
-          !isZeroLike(manualTotal)
-            ? manualTotal
-            : (!isZeroLike(manualFromOutputs)
-                ? manualFromOutputs
-                : outVal)
-        );
   });
 
   let currentAnchor: RowEntry | null = null;
