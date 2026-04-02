@@ -8,20 +8,20 @@
 //  2. Omite filas cuya descripción sea: vacía | null | '0' | undefined
 //  3. Preview fiel al algoritmo real (counters[1] = base - 1, luego ++)
 
+import { Hash }   from 'lucide-react';
 import React, { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input }  from '@/components/ui/input';
 import { Label }  from '@/components/ui/label';
-import { Hash }   from 'lucide-react';
 
 import { LEAF_STYLE, LEVEL_PALETTE, MAX_LEVELS } from './comunicaciones_constants';
-import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './comunicaciones_utils';
-import type { RowKind } from './comunicaciones_types';
 import { ALL_COLS, CI } from './comunicaciones_constants';
+import type { RowKind } from './comunicaciones_types';
+import { mkTxt, pad2, r4, readRow, rowMeta, toNum, trim0 } from './comunicaciones_utils';
 import { levelStyle } from './comunicaciones_utils';
 
 // ── Props ─────────────────────────────────────────────────────

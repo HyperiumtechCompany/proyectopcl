@@ -256,6 +256,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 
             // ─── Insumos Catálogo (por proyecto, en tenant DB) ────
             Route::get('/presupuesto/insumos/search', [InsumoProductoController::class, 'search'])->name('proyectos.presupuesto.insumos.search');
+            Route::get('/presupuesto/insumos/especialidades', [InsumoProductoController::class, 'especialidades'])->name('proyectos.presupuesto.insumos.especialidades');
             Route::get('/presupuesto/insumos/diccionarios', [InsumoProductoController::class, 'diccionarios'])->name('proyectos.presupuesto.insumos.diccionarios');
             Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');

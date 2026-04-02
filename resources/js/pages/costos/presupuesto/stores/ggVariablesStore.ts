@@ -1,8 +1,8 @@
 // stores/ggVariablesStore.ts
-import { create } from 'zustand';
 import { produce } from 'immer';
-import { useRemuneracionesStore } from './remuneracionesStore';
+import { create } from 'zustand';
 import { useProjectParamsStore } from './projectParamsStore';
+import { useRemuneracionesStore } from './remuneracionesStore';
 
 export type TipoFilaVariable = 'seccion' | 'grupo' | 'detalle';
 

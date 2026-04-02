@@ -1,8 +1,12 @@
 import { router, usePage } from '@inertiajs/react';
+import {
+    ChevronLeft, Settings2, Save, RefreshCcw,
+    CheckCircle2, AlertCircle, Loader2,
+    ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
+} from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import AppLayout from '@/layouts/app-layout';
+import * as XLSX from "xlsx";
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
-import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
     Dialog, DialogContent, DialogDescription,
@@ -10,13 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    ChevronLeft, Settings2, Save, RefreshCcw,
-    CheckCircle2, AlertCircle, Loader2,
-    ArrowUp, ArrowDown, FolderPlus, Folder, FileText,
-} from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import * as XLSX from "xlsx";
+import type { BreadcrumbItem } from '@/types';
 import { detectDiscipline, injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // TIPOS
@@ -191,7 +191,7 @@ function rowsToSheet(
         const rIdx  = ri + 1;
 
         cols.forEach((col, ci) => {
-            let val = blank(row[col.key])
+            const val = blank(row[col.key])
                 ? (col.key === '_level' ? level : col.key === '_kind' ? kind : null)
                 : row[col.key];
             if (blank(val)) return;

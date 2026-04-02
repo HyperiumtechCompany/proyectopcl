@@ -1,7 +1,4 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import React, { useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem } from '@/types';
 import {
     ArrowLeft, Building2, Calendar, Code2, Hash, Layers,
     MapPin, AlertTriangle, Trash2, ChevronRight, Ruler,
@@ -9,6 +6,9 @@ import {
     Flame, BarChart3, TrendingUp, Package, BookOpen,
     CheckCircle2, Clock, Shield, Map, Home, Droplets,
 } from 'lucide-react';
+import React, { useState } from 'react';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem } from '@/types';
 
 interface ProjectDetail {
     id: number; nombre: string; uei: string | null; unidad_ejecutora: string | null;

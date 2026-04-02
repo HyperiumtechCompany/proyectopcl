@@ -1,9 +1,9 @@
+import { Calculator, TriangleAlert, X, Save, Trash2 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calculator, TriangleAlert, X, Save, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import {ALL_INPUTS,DEFAULT_PROFILE,INPUT_LABELS,OUTPUT_LABELS,UNITS,UNIT_PROFILES} from './comunicaciones_constants';
@@ -68,7 +68,7 @@ const createCustomProfile = (
     fn: (v) => {
       try {
         const { elsim, largo, ancho, alto, nveces, kg, kgm } = v;
-        // eslint-disable-next-line no-new-func
+         
         const result = new Function('elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',`"use strict"; return (${formula.expression});`)(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
         return { und: Number(result) };
       } catch {

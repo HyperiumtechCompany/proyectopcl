@@ -240,6 +240,7 @@ const ContextMenu = ({
                 {divider('d5')}
 
                 {btn('⚡ Forzar Cálculo', () => calculateTree(), 'text-emerald-500 hover:text-emerald-400')}
+                {btn('🔢 Generar Ítems', () => useBudgetStore.getState().renumberItems(), 'text-amber-500 hover:text-amber-400')}
                 {btn('🗑  Eliminar rama', () => deleteRow(item.partida), 'text-red-500 hover:text-red-400')}
             </div>
         </>
@@ -417,7 +418,18 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
 
                             {isTitle ? (
                                 <span className="flex min-w-0 shrink items-center text-xs font-semibold tracking-wide text-sky-300">
-                                    <span className="mr-1 shrink-0 text-sky-500/70">{item.partida}</span>
+                                    <span className="mr-1 shrink-0 text-sky-500/70">
+                                        <StringEditableCell
+                                            value={item.partida}
+                                            isEditable={true}
+                                            onUpdate={(val) => {
+                                                if (val !== item.partida) {
+                                                    useBudgetStore.getState().editPartidaCode(item.partida, val);
+                                                }
+                                            }}
+                                            className="font-mono text-sky-400"
+                                        />
+                                    </span>
                                     <StringEditableCell
                                         value={item.descripcion}
                                         isEditable={true}
@@ -427,7 +439,18 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                 </span>
                             ) : (
                                 <span className="flex min-w-0 shrink items-center text-xs text-slate-300 transition-colors hover:text-sky-200" title={item.descripcion}>
-                                    <span className="mr-1 shrink-0 text-slate-500">{item.partida}</span>
+                                    <span className="mr-1 shrink-0 text-slate-500">
+                                        <StringEditableCell
+                                            value={item.partida}
+                                            isEditable={true}
+                                            onUpdate={(val) => {
+                                                if (val !== item.partida) {
+                                                    useBudgetStore.getState().editPartidaCode(item.partida, val);
+                                                }
+                                            }}
+                                            className="font-mono"
+                                        />
+                                    </span>
                                     <StringEditableCell
                                         value={item.descripcion}
                                         isEditable={true}

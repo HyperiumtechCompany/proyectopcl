@@ -1,21 +1,21 @@
-import React, { useRef, useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import React, { useRef, useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import * as toastr from 'toastr';
 import 'toastr/build/toastr.min.css';
 import AppLayout from '@/layouts/app-layout';
-import { BreadcrumbItem } from '@/types';
-import WordExportModal from './exportado/exportado';
-import EttpHeader from './components/EttpHeader';
+import type { BreadcrumbItem } from '@/types';
 import EttpDetailsPanel from './components/EttpDetailsPanel';
+import EttpHeader from './components/EttpHeader';
 import EttpMetradosPanel from './components/EttpMetradosPanel';
-import { useEttpTemplates } from './components/useEttpTemplates';
 import type { Section, SelectedSections, EttpPageProps, EttpPartidaData } from './components/types';
 import { CAMPOS_EXCLUIDOS_TEMPLATE } from './components/types';
+import { useEttpTemplates } from './components/useEttpTemplates';
+import WordExportModal from './exportado/exportado';
 
 // @ts-ignore
-import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 
 const DEFAULT_DATA: EttpPartidaData[] = [

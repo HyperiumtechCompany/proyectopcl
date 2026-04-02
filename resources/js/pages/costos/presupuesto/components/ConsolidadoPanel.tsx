@@ -1,5 +1,4 @@
-﻿import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+﻿import axios from 'axios';
 import {
     Calculator,
     FileText,
@@ -8,11 +7,12 @@ import {
     Trash2,
     Loader2,
 } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useBudgetStore } from '../stores/budgetStore';
+import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
 import { useGGFijosStore } from '../stores/ggFijosStore';
 import { useGGVariablesStore } from '../stores/ggVariablesStore';
 import { useSupervisionStore } from '../stores/supervisionStore';
-import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
 
 interface ConsolidadoPanelProps {
     projectId: number;

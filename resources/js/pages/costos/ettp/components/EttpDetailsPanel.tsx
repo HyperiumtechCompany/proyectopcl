@@ -1,6 +1,6 @@
+import axios from 'axios';
 import React from 'react';
 import type { Section } from './types';
-import axios from 'axios';
 
 interface Props {
     show: boolean;

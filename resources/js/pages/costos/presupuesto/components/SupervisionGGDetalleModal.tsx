@@ -1,4 +1,3 @@
-import React, { useEffect, useRef, useCallback } from 'react';
 import {
     X,
     Plus,
@@ -9,7 +8,9 @@ import {
     Loader2,
     Save,
 } from 'lucide-react';
-import { useSupervisionGGDetalleStore, SupervisionGGDetalleRow } from '../stores/supervisionGGDetalleStore';
+import React, { useEffect, useRef, useCallback } from 'react';
+import type { SupervisionGGDetalleRow } from '../stores/supervisionGGDetalleStore';
+import { useSupervisionGGDetalleStore } from '../stores/supervisionGGDetalleStore';
 
 const fmt = (n: number) => new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(n);
 

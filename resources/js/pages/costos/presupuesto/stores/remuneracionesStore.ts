@@ -1,7 +1,7 @@
-import { create } from 'zustand';
 import { produce } from 'immer';
+import { create } from 'zustand';
 
-import { Remuneracion } from '../../../../types/presupuestos';
+import type { Remuneracion } from '../../../../types/presupuestos';
 
 export type RemuneracionRow = Remuneracion;
 

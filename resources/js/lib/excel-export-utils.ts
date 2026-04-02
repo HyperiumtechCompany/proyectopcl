@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 
 const fetchImageAsBuffer = async (url: string): Promise<ArrayBuffer | null> => {
     try {

@@ -1,7 +1,8 @@
 // components/GGFijosPanel.tsx
-import React, { useState } from 'react';
 import { Loader2, Plus, Trash2, Save, Lock, ChevronDown, ChevronRight, MoreVertical } from 'lucide-react';
-import { useGGFijosStore, GGFijoNode, TipoFilaFijo } from '../stores/ggFijosStore';
+import React, { useState } from 'react';
+import type { GGFijoNode} from '../stores/ggFijosStore';
+import { useGGFijosStore, TipoFilaFijo } from '../stores/ggFijosStore';
 import { PlazoDisplay } from './PlazoDisplay';
 
 interface GGFijosPanelProps {
