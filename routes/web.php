@@ -147,6 +147,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::post('/', [CostoProjectController::class, 'store'])->name('store');
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
+    Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])

@@ -129,7 +129,7 @@ trait HandleMetradoSpreadsheet
             }
         }
 
-        $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
+        $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
         foreach ($decimalFields as $field) {
             if (!$hasColumn($field)) {
                 continue;
@@ -146,6 +146,10 @@ trait HandleMetradoSpreadsheet
         if ($hasColumn('observacion')) $data['observacion'] = $row['observacion'] ?? ($row['obs'] ?? null);
         if ($hasColumn('nivel'))       $data['nivel']       = $row['nivel'] ?? ($row['_level'] ?? 0);
         if ($hasColumn('parent_id'))   $data['parent_id']   = $row['parent_id'] ?? null;
+        if ($hasColumn('_formula_key'))    $data['_formula_key'] = $row['_formula_key'] ?? null;
+        if ($hasColumn('_formula_output')) $data['_formula_output'] = $row['_formula_output'] ?? null;
+        if ($hasColumn('_formula_expr'))   $data['_formula_expr'] = $row['_formula_expr'] ?? null;
+        if ($hasColumn('_formula_label'))  $data['_formula_label'] = $row['_formula_label'] ?? null;
 
         return $data;
     }
