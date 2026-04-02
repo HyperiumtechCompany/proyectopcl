@@ -1,6 +1,3 @@
-// ===================================================
-// sanitarias_utils.ts - Helpers puros + conversion Luckysheet
-// ===================================================
 
 import {
   ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE,
@@ -29,7 +26,10 @@ export const isZeroLike = (v: unknown): boolean => {
   return Number.isFinite(n) && Math.abs(n) < 0.0000001;
 };
 
-export const pad2 = (n: number): string => String(Math.floor(n)).padStart(2, '0');
+export const pad2 = (n: number | string): string => {
+  const num = Number(n) || 0;
+  return num.toString().padStart(2, '0');
+};
 
 export const toRoman = (n: number): string => {
   if (!Number.isFinite(n) || n <= 0) return String(n);
@@ -85,6 +85,16 @@ export const mkNum = (v: number, keepZero = false) => {
     v,
     m: display,
     ct: { fa: 'General', t: 'n' }, 
+  };
+};
+
+// fórmula tipo Excel (fx)
+export const mkFormula = (formula: string, value: number | string = '') => {
+  return {
+    f: formula,
+    v: value === '' ? '' : value,
+    m: value !== undefined ? String(value) : formula,
+    ct: { fa: 'General', t: typeof value === 'number' ? 'n' : 'g' },
   };
 };
 
@@ -163,6 +173,16 @@ const getDepthFromItem = (value: unknown): number => {
   return Math.max(1, Math.min(MAX_LEVELS, parts.length || 1));
 };
 
+const normalizeCode = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  return raw
+    .split('.')
+    .map((part) => pad2(part))
+    .join('.');
+};
+
 export function rowsToSheet(
   rows: Record<string, any>[],
   cols: ColumnDef[],
@@ -200,6 +220,12 @@ export function rowsToSheet(
       let store: any = val;
       let display = String(val);
 
+      if (col.key === 'item' && val !== null && val !== '') {
+        const formatted = pad2(val);
+        store = formatted;
+        display = formatted;
+      }
+
       if (col.key === 'descripcion' && typeof val === 'string') {
         store = val.trimStart();
         display = indent(level, kind === 'leaf') + store;
@@ -211,6 +237,16 @@ export function rowsToSheet(
         typeof store === 'number' ||
         (store !== '' && !Number.isNaN(Number(store)) && store !== '')
       );
+
+      if (col.key === 'partida' && val) {
+        const normalized = String(val)
+          .split('.')
+          .map((p) => pad2(p))
+          .join('.');
+
+        store = normalized;
+        display = normalized;
+      }
 
       if (isBlankNumeric) {
         const cell: Record<string, any> = {
@@ -275,7 +311,13 @@ export function sheetToRows(sheet: any, cols: ColumnDef[]): Record<string, any>[
 
     cols.forEach((col, ci) => {
       const raw = cellRaw(data[r]?.[ci]);
-      row[col.key] = raw === null ? null : (col.key === 'descripcion' ? String(raw).trimStart() : raw);
+      if (col.key === 'partida' && raw !== null && raw !== '') {
+        row[col.key] = normalizeCode(raw); 
+      } else {
+        row[col.key] = raw === null 
+          ? null 
+          : (col.key === 'descripcion' ? String(raw).trimStart() : raw);
+      }
       if (raw !== null && raw !== '') hasData = true;
     });
 
@@ -310,7 +352,11 @@ export function buildRecalcUpdates(
 
   entries.forEach((entry) => {
     const { ri, row } = entry;
-    const rawPartida = String(row.partida ?? '').trim();
+    let rawPartida = String(row.partida ?? '').trim();
+
+    if (rawPartida) {
+      rawPartida = normalizeCode(rawPartida);
+    }
 
     if (hasItemCode(rawPartida)) {
       entry.kind = 'group';
@@ -411,12 +457,56 @@ export function buildRecalcUpdates(
     const activeProfile = Array.isArray(profile) ? profile[0] : profile;
     const outputs = activeProfile.fn(inputs);
 
-    // Mostrar TODOS los valores de salida calculados
     OUTPUT_KEYS.forEach((key) => {
-      if (outputs[key] !== undefined && !isZeroLike(outputs[key])) {
-        const val = r4(outputs[key]);
-        row[key] = val;
-        set(ri, key, isAnchor ? styledNum(val, st) : mkNum(val));
+      const out = outputs[key];
+
+      // ignorar si no hay valor
+      if (out === undefined || isZeroLike(out)) return;
+
+      const val = r4(out);
+      row[key] = val;
+
+      let formula = '';
+
+      const rowIndex = ri + 1;
+
+      const L = colLetter(CI.largo);
+      const A = colLetter(CI.ancho);
+      const H = colLetter(CI.alto);
+      const N = colLetter(CI.nveces);
+      const K = colLetter(CI.kg);
+
+      // 🔹 fórmulas bien construidas
+      if (key === 'area') {
+        formula = `=${L}${rowIndex}*${A}${rowIndex}`;
+      }
+
+      else if (key === 'vol') {
+        formula = `=${L}${rowIndex}*${A}${rowIndex}*${H}${rowIndex}`;
+      }
+
+      else if (key === 'lon') {
+        formula = `=${L}${rowIndex}`;
+      }
+
+      else if (key === 'und') {
+        formula = `=${N}${rowIndex}`;
+      }
+
+      else if (key === 'kg') {
+        formula = `=${K}${rowIndex}`;
+      }
+
+      if (formula) {
+        set(ri, key, {
+          f: formula,
+          v: val,
+          m: formatNumber(val),
+          ct: { fa: 'General', t: 'n' },
+        });
+      } else {
+        // fallback limpio
+        set(ri, key, mkNum(val, true));
       }
     });
 

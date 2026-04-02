@@ -15,9 +15,11 @@ import type { BreadcrumbItem } from '@/types';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradosanitarias/sanitarias_constants';
-import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
-import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
 import { buildRecalcUpdates, buildTotalUpdates, buildResumenRows, buildSanitariasResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradosanitarias/sanitarias_utils';
+import type { CalcPayload, SanitariasPageProps, RowKind } from './metradosanitarias/sanitarias_types';
+import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
+import { NumberingModal, buildNumberingUpdates } from './metradosanitarias/sanitarias_NumberingModal';
+import { injectTemplateIfEmpty } from './lib/metrado_templates';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -350,7 +352,36 @@ export default function SanitariasIndex() {
       if (c === undefined) return;
 
       if (k === outputKey) {
-        ups.push({ r:ri, c, v: mkNum(r4(outputs[k] ?? 0)) });
+        const val = r4(outputs[k] ?? 0);
+        
+        let formula = '';
+
+        if (outputKey === 'area') {
+          formula = `=${colLetter(CI.largo)}${ri + 1}*${colLetter(CI.ancho)}${ri + 1}`;
+        }
+
+        if (outputKey === 'vol') {
+          formula = `=${colLetter(CI.largo)}${ri + 1}*${colLetter(CI.ancho)}${ri + 1}*${colLetter(CI.alto)}${ri + 1}`;
+        }
+
+        if (outputKey === 'lon') {
+          formula = `=${colLetter(CI.largo)}${ri + 1}`;
+        }
+
+        if (outputKey === 'und') {
+          formula = `=${colLetter(CI.nveces)}${ri + 1}`;
+        }
+
+        if (outputKey === 'kg') {
+          formula = `=${colLetter(CI.kg)}${ri + 1}`;
+        }
+
+        ups.push({
+          r: ri,
+          c,
+          v: mkFormula(formula, val),
+        });
+
         return;
       }
 
@@ -358,7 +389,13 @@ export default function SanitariasIndex() {
     });
 
     if (CI.total !== undefined) {
-      ups.push({ r:ri, c: CI.total, v: mkBlank() });
+      const formula = `=${colLetter(CI.lon)}${ri + 1}+${colLetter(CI.area)}${ri + 1}+${colLetter(CI.vol)}${ri + 1}+${colLetter(CI.kg)}${ri + 1}+${colLetter(CI.und)}${ri + 1}`;
+
+      ups.push({
+        r: ri,
+        c: CI.total,
+        v: mkFormula(formula),
+      });
     }
 
     isProgrammaticChange.current = true;
@@ -559,7 +596,7 @@ export default function SanitariasIndex() {
             </button>
             <div className="leading-tight">
               <p className="text-[13px] font-bold text-slate-900 dark:text-gray-100">
-                Metrado Estructuras
+                Metrado Sanitarias
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
                 {project.nombre}

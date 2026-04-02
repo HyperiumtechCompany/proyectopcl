@@ -8,6 +8,9 @@ declare module 'luckysheet' {
     }
 
     interface Luckysheet {
+        recalculate(): unknown;
+        setCellValue(r: number, c: number, f: any): unknown;
+        setCellValue(r: number, c: number, v: any): unknown;
         create(options: LuckysheetOptions): void;
         destroy(): void;
     }
