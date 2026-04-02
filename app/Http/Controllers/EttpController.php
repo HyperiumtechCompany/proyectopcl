@@ -152,7 +152,7 @@ class EttpController extends Controller
     private function sortPartidasByItem($partidas)
     {
         return $partidas
-            ->sort(static fn ($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
+            ->sort(static fn($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
             ->values();
     }
 
@@ -197,104 +197,103 @@ class EttpController extends Controller
      * Importa partidas desde un resumen de metrados al sistema ETTP.
      * POST /ettp/importar-metrados
      */
-public function importarMetrados(CostoProject $costoProject, Request $request)
-{
-    $dbService = app(\App\Services\CostoDatabaseService::class);
-    $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
+    public function importarMetrados(CostoProject $costoProject, Request $request)
+    {
+        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
-    // Usar el mapa constante unificado
-    $tablaMap = self::TABLA_RESUMEN_MAP;
+        // Usar el mapa constante unificado
+        $tablaMap = self::TABLA_RESUMEN_MAP;
 
-    // Claves consistentes con el frontend (todas en plural)
-    $seleccionadas = array_keys(array_filter([
-        'arquitectura'   => (bool) $request->input('arquitectura', 0),
-        'estructuras'    => (bool) $request->input('estructuras', 0),
-        'sanitarias'     => (bool) $request->input('sanitarias', 0),
-        'electricas'     => (bool) $request->input('electricas', 0),
-        'comunicaciones' => (bool) $request->input('comunicaciones', 0),
-        'gas'            => (bool) $request->input('gas', 0),
-    ]));
+        // Claves consistentes con el frontend (todas en plural)
+        $seleccionadas = array_keys(array_filter([
+            'arquitectura'   => (bool) $request->input('arquitectura', 0),
+            'estructuras'    => (bool) $request->input('estructuras', 0),
+            'sanitarias'     => (bool) $request->input('sanitarias', 0),
+            'electricas'     => (bool) $request->input('electricas', 0),
+            'comunicaciones' => (bool) $request->input('comunicaciones', 0),
+            'gas'            => (bool) $request->input('gas', 0),
+        ]));
 
-    if (empty($seleccionadas)) {
-        return response()->json(['error' => 'Seleccione al menos una especialidad'], 422);
-    }
+        if (empty($seleccionadas)) {
+            return response()->json(['error' => 'Seleccione al menos una especialidad'], 422);
+        }
 
-    foreach ($seleccionadas as $especialidad) {
-        $tabla = $tablaMap[$especialidad];
+        foreach ($seleccionadas as $especialidad) {
+            $tabla = $tablaMap[$especialidad];
 
-        try {
-            $datos = DB::connection('costos_tenant')
-                ->table($tabla)
-                ->where('presupuesto_id', $presupuestoId)
-                ->orderBy('item_order')
-                ->get();
+            try {
+                $datos = DB::connection('costos_tenant')
+                    ->table($tabla)
+                    ->where('presupuesto_id', $presupuestoId)
+                    ->orderBy('item_order')
+                    ->get();
 
-            if ($datos->isEmpty()) continue;
+                if ($datos->isEmpty()) continue;
 
-            foreach ($datos as $item) {
-                // Manejar discrepancia de nombres de columnas (base vs modular)
-                $codigo = trim((string)($item->item ?? $item->partida ?? ''));
-                $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
+                foreach ($datos as $item) {
+                    // Manejar discrepancia de nombres de columnas (base vs modular)
+                    $codigo = trim((string)($item->item ?? $item->partida ?? ''));
+                    $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
 
-                if (empty($codigo)) continue;
+                    if (empty($codigo)) continue;
 
-                // Sincronizar con tabla maestros de especificaciones
-                EttpPartida::updateOrCreate(
-                    [
-                        'presupuesto_id' => $presupuestoId,
-                        'especialidad'   => $especialidad,
-                        'item'           => $codigo,
-                    ],
-                    [
-                        'descripcion'          => $item->descripcion,
-                        'unidad'               => $unidad,
-                        'resumen_source_id'    => $item->id,
-                        'resumen_source_table' => $tabla,
-                        'nivel'                => $item->nivel ?? 0,
-                        'item_order'           => $item->item_order ?? 0,
-                    ]
-                );
-            }
+                    // Sincronizar con tabla maestros de especificaciones
+                    EttpPartida::updateOrCreate(
+                        [
+                            'presupuesto_id' => $presupuestoId,
+                            'especialidad'   => $especialidad,
+                            'item'           => $codigo,
+                        ],
+                        [
+                            'descripcion'          => $item->descripcion,
+                            'unidad'               => $unidad,
+                            'resumen_source_id'    => $item->id,
+                            'resumen_source_table' => $tabla,
+                            'nivel'                => $item->nivel ?? 0,
+                            'item_order'           => $item->item_order ?? 0,
+                        ]
+                    );
+                }
 
-            // 1. Intentar resolver jerarquía exacta usando la BD origen
-            $this->resolverJerarquia($presupuestoId, $especialidad, $datos);
+                // 1. Intentar resolver jerarquía exacta usando la BD origen
+                $this->resolverJerarquia($presupuestoId, $especialidad, $datos);
 
-            // 2. Fallback: Para los que aún no tengan parent_id, resolver por código de ítem (01 -> 01.01)
-            $todasSpecialidad = EttpPartida::where('presupuesto_id', $presupuestoId)
-                ->where('especialidad', $especialidad)
-                ->get()
-                ->keyBy('item');
+                // 2. Fallback: Para los que aún no tengan parent_id, resolver por código de ítem (01 -> 01.01)
+                $todasSpecialidad = EttpPartida::where('presupuesto_id', $presupuestoId)
+                    ->where('especialidad', $especialidad)
+                    ->get()
+                    ->keyBy('item');
 
-            foreach ($todasSpecialidad as $item) {
-                if ($item->parent_id) continue; // Ya fue resuelto por BD origen
-                
-                $codigo = trim((string)$item->item);
-                $partes = explode('.', $codigo);
-                if (count($partes) > 1) {
-                    $parentCode = implode('.', array_slice($partes, 0, -1));
-                    if (isset($todasSpecialidad[$parentCode])) {
-                        $item->update(['parent_id' => $todasSpecialidad[$parentCode]->id]);
+                foreach ($todasSpecialidad as $item) {
+                    if ($item->parent_id) continue; // Ya fue resuelto por BD origen
+
+                    $codigo = trim((string)$item->item);
+                    $partes = explode('.', $codigo);
+                    if (count($partes) > 1) {
+                        $parentCode = implode('.', array_slice($partes, 0, -1));
+                        if (isset($todasSpecialidad[$parentCode])) {
+                            $item->update(['parent_id' => $todasSpecialidad[$parentCode]->id]);
+                        }
                     }
                 }
+            } catch (\Exception $e) {
+                Log::error("Error importando especialidad {$especialidad}: " . $e->getMessage());
+                continue;
             }
-
-        } catch (\Exception $e) {
-            Log::error("Error importando especialidad {$especialidad}: " . $e->getMessage());
-            continue;
         }
+
+        // Retorna el árbol completo
+        $partidas = EttpPartida::where('presupuesto_id', $presupuestoId)
+            ->with(['secciones.imagenes'])
+            ->raices()
+            ->orderBy('item_order')
+            ->get();
+
+        $partidas = $this->sortPartidasByItem($partidas);
+
+        return response()->json($this->buildTree($partidas, $presupuestoId));
     }
-
-    // Retorna el árbol completo
-    $partidas = EttpPartida::where('presupuesto_id', $presupuestoId)
-        ->with(['secciones.imagenes'])
-        ->raices()
-        ->orderBy('item_order')
-        ->get();
-
-    $partidas = $this->sortPartidasByItem($partidas);
-
-    return response()->json($this->buildTree($partidas, $presupuestoId));
-}
 
     /**
      * Resuelve la jerarquía padre-hijo de las partidas ETTP
@@ -521,7 +520,7 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
                             }
 
                             $dimensions = @getimagesizefromstring($imageData);
-                             
+
                             $imagen = EttpImagen::create([
                                 'ettp_seccion_id' => $seccion->id,
                                 'nombre_archivo'  => $nombreArchivo,
@@ -670,7 +669,7 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
         if ($imagen->seccion->partida->presupuesto_id != $costoProject->id) {
             abort(403, 'No tienes permiso para eliminar esta imagen');
         }
-        
+
         $imagen->delete();
 
         return response()->json(['success' => true]);
@@ -732,26 +731,26 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
     public function testMetrados(CostoProject $costoProject)
     {
         $presupuestoId = $costoProject->id;
-        
+
         $tabla = 'metrado_comunicaciones_resumen';
-        
+
         try {
             $datos = DB::connection('costos_tenant')
                 ->table($tabla)
                 ->where('presupuesto_id', $presupuestoId)
                 ->limit(5)
                 ->get();
-            
+
             $total = DB::connection('costos_tenant')
                 ->table($tabla)
                 ->count();
-            
+
             $presupuestos = DB::connection('costos_tenant')
                 ->table($tabla)
                 ->select('presupuesto_id')
                 ->distinct()
                 ->get();
-            
+
             return response()->json([
                 'success' => true,
                 'presupuesto_id_buscado' => $presupuestoId,
@@ -760,7 +759,6 @@ public function importarMetrados(CostoProject $costoProject, Request $request)
                 'presupuestos_existentes' => $presupuestos,
                 'primeros_5_registros' => $datos
             ]);
-            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

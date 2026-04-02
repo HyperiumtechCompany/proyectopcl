@@ -29,6 +29,7 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
     const [insumos, setInsumos] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [usadosOnly, setUsadosOnly] = useState(true);
+    const [especialidad, setEspecialidad] = useState('todas');
 
     const [globalFilter, setGlobalFilter] = useState('');
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -40,7 +41,7 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
     const fetchInsumos = () => {
         let isMounted = true;
         setLoading(true);
-        const url = `/costos/proyectos/${projectId}/presupuesto/insumos/search?tipo=${activeTab}${usadosOnly ? '&usados_only=1' : ''}`;
+        const url = `/costos/proyectos/${projectId}/presupuesto/insumos/search?tipo=${activeTab}${usadosOnly ? '&usados_only=1' : ''}${usadosOnly && especialidad !== 'todas' ? `&especialidad=${especialidad}` : ''}`;
         axios.get(url)
             .then(res => {
                 if (isMounted && res.data?.success) {
@@ -60,7 +61,7 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
 
     useEffect(() => {
         fetchInsumos();
-    }, [projectId, activeTab, usadosOnly]);
+    }, [projectId, activeTab, usadosOnly, especialidad]);
 
     const columnHelper = createColumnHelper<any>();
 
@@ -214,15 +215,37 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
                         })}
                     </div>
 
-                    <div className="relative w-64 min-w-48">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                        <input
-                            type="text"
-                            value={globalFilter ?? ''}
-                            onChange={e => setGlobalFilter(e.target.value)}
-                            className="w-full bg-slate-950/50 border border-slate-700 rounded-md py-1.5 pl-8 pr-3 text-xs text-slate-200 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-medium placeholder-slate-600"
-                            placeholder="Buscar en columnas..."
-                        />
+                    <div className="flex items-center gap-2">
+                        {usadosOnly && (
+                            <div className="relative">
+                                <select 
+                                    className="appearance-none bg-slate-950/50 border border-slate-700 rounded-md py-1.5 pl-3 pr-8 text-[11px] text-slate-200 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-semibold uppercase min-w-[140px] cursor-pointer hover:bg-slate-900"
+                                    value={especialidad}
+                                    onChange={(e) => setEspecialidad(e.target.value)}
+                                >
+                                    <option value="todas">Todas las Especialidades</option>
+                                    <option value="02">02 Arquitectura</option>
+                                    <option value="03">03 Estructuras</option>
+                                    <option value="04">04 Sanitarias</option>
+                                    <option value="05">05 Eléctricas</option>
+                                    <option value="06">06 Comunicaciones</option>
+                                    <option value="07">07 Gas</option>
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+                        )}
+                        <div className="relative w-64 min-w-48">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                            <input
+                                type="text"
+                                value={globalFilter ?? ''}
+                                onChange={e => setGlobalFilter(e.target.value)}
+                                className="w-full bg-slate-950/50 border border-slate-700 rounded-md py-1.5 pl-8 pr-3 text-xs text-slate-200 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all font-medium placeholder-slate-600"
+                                placeholder="Buscar en columnas..."
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
