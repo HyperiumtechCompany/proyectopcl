@@ -432,7 +432,6 @@ const BLANKABLE_NUMERIC_KEYS = new Set([
     'ancho',
     'alto',
     'nveces',
-    'kgm',
     'lon',
     'area',
     'vol',
@@ -591,7 +590,6 @@ export function rowsToSheet(
             col.key === '_dbid' ||
             col.key === '_level' ||
             col.key === '_kind' ||
-            col.key === 'kgm' ||
             FORMULA_META_KEYS.has(col.key)
         )
             colhidden[ci] = 1;
@@ -865,11 +863,7 @@ export function buildRecalcUpdates(
                 : outVal;
 
         if (!isAnchor) {
-            if (!isZeroLike(entry.total)) {
-                set(ri, 'total', mkNum(entry.total, true));
-            } else {
-                setBlank(ri, 'total');
-            }
+            setBlank(ri, 'total');
         }
     });
 

@@ -525,6 +525,52 @@ export default function Show() {
                     </section>
                 </div>
 
+                {/* ── Sección de Migración ─────────────────────────────────── */}
+                <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
+                    <div className="flex items-start gap-3">
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-500 dark:bg-blue-900/40 dark:text-blue-400">
+                            <Database size={14} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                                Base de Datos
+                            </h3>
+                            <p className="mt-0.5 text-xs leading-relaxed text-blue-500/90 dark:text-blue-400/60">
+                                Ejecuta las migraciones en la base de datos del
+                                proyecto para actualizar la estructura de tablas
+                                y columnas.
+                            </p>
+                            <div className="mt-3">
+                                <button
+                                    onClick={() => {
+                                        setMigrating(true);
+                                        router.post(
+                                            `/costos/${project.id}/migrate`,
+                                            {},
+                                            {
+                                                onFinish: () =>
+                                                    setMigrating(false),
+                                            },
+                                        );
+                                    }}
+                                    disabled={migrating}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 shadow-sm transition-colors hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                >
+                                    <Play
+                                        size={12}
+                                        className={
+                                            migrating ? 'animate-spin' : ''
+                                        }
+                                    />
+                                    {migrating
+                                        ? 'Ejecutando...'
+                                        : 'Ejecutar Migraciones'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* ── Zona de Peligro ─────────────────────────────────────── */}
                 <section className="rounded-xl border border-red-100 bg-red-50/40 p-5 dark:border-red-900/40 dark:bg-red-950/20">
                     <div className="flex items-start gap-3">
@@ -577,52 +623,7 @@ export default function Show() {
                         </div>
                     </div>
                 </section>
-
-                {/* ── Sección de Migración ─────────────────────────────────── */}
-                <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
-                    <div className="flex items-start gap-3">
-                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-500 dark:bg-blue-900/40 dark:text-blue-400">
-                            <Database size={14} />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-                                Base de Datos
-                            </h3>
-                            <p className="mt-0.5 text-xs leading-relaxed text-blue-500/90 dark:text-blue-400/60">
-                                Ejecuta las migraciones en la base de datos del
-                                proyecto para actualizar la estructura de tablas
-                                y columnas.
-                            </p>
-                            <div className="mt-3">
-                                <button
-                                    onClick={() => {
-                                        setMigrating(true);
-                                        router.post(
-                                            `/costos/${project.id}/migrate`,
-                                            {},
-                                            {
-                                                onFinish: () =>
-                                                    setMigrating(false),
-                                            },
-                                        );
-                                    }}
-                                    disabled={migrating}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 shadow-sm transition-colors hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                                >
-                                    <Play
-                                        size={12}
-                                        className={
-                                            migrating ? 'animate-spin' : ''
-                                        }
-                                    />
-                                    {migrating
-                                        ? 'Ejecutando...'
-                                        : 'Ejecutar Migraciones'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                
             </div>
         </AppLayout>
     );
