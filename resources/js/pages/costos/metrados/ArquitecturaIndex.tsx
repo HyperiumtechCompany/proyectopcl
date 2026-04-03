@@ -3,21 +3,21 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { router, usePage } from '@inertiajs/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import Luckysheet from '@/components/costos/tablas/Luckysheet';
-import type { BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Luckysheet from '@/components/costos/tablas/Luckysheet';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
+import type { BreadcrumbItem } from '@/types';
 
 // Módulo local Arquitectura
-import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoarquitectura/arquitectura_constants';
-import { buildRecalcUpdates, buildResumenRows, buildArquitecturaResumenRows, colLetter, mkBlank, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoarquitectura/arquitectura_utils';
-import type { CalcPayload, ArquitecturaPageProps, RowKind } from './metradoarquitectura/arquitectura_types';
-import { CalcModal } from './metradoarquitectura/arquitectura_CalcModal';
-import { NumberingModal, buildNumberingUpdates } from './metradoarquitectura/arquitectura_NumberingModal';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { CalcModal } from './metradoarquitectura/arquitectura_CalcModal';
+import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoarquitectura/arquitectura_constants';
+import { NumberingModal, buildNumberingUpdates } from './metradoarquitectura/arquitectura_NumberingModal';
+import type { CalcPayload, ArquitecturaPageProps, RowKind } from './metradoarquitectura/arquitectura_types';
+import { buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, buildArquitecturaResumenRows, colLetter, mkBlank, mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoarquitectura/arquitectura_utils';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -293,7 +293,7 @@ export default function ArquitecturaIndex() {
     }, 120);
   }, [ls, getActive, setCells, getAllSheets, scheduleSave]);
 
-  const applyCalc = useCallback(({ ri, descripcion, unidad, outputKey, inputs, outputs }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, outputKey, inputs, outputs, formulaKey, formulaLabel, formulaExpression, formula }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
@@ -320,7 +320,19 @@ export default function ArquitecturaIndex() {
       ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
     }
 
-    (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
+    ([
+      ['_formula_key', formulaKey || ''],
+      ['_formula_output', outputKey || ''],
+      ['_formula_expr', formulaExpression || ''],
+      ['_formula_label', formulaLabel || formula || ''],
+    ] as const).forEach(([key, value]) => {
+      const c = CI[key];
+      if (c !== undefined) {
+        ups.push({ r: ri, c, v: value ? mkTxt(String(value)) : mkBlank() });
+      }
+    });
+
+    (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'] as const).forEach((k) => {
       const c = CI[k];
       if (c !== undefined) ups.push({ r: ri, c, v: mkNum(inputs[k]) });
     });
@@ -330,7 +342,15 @@ export default function ArquitecturaIndex() {
       if (c === undefined) return;
 
       if (k === outputKey) {
-        ups.push({ r: ri, c, v: mkNum(r4(outputs[k] ?? 0)) });
+        const { formula: cellFormula } = buildRowFormulaMeta({
+          rowIndex: ri + 1,
+          outputKey: k,
+          formulaKey,
+          formulaExpression,
+          formulaLabel: formulaLabel || formula,
+          value: r4(outputs[k] ?? 0),
+        });
+        ups.push({ r: ri, c, v: cellFormula ? mkFormula(cellFormula, r4(outputs[k] ?? 0)) : mkNum(r4(outputs[k] ?? 0), true) });
         return;
       }
 
@@ -338,7 +358,7 @@ export default function ArquitecturaIndex() {
     });
 
     if (CI.total !== undefined) {
-      ups.push({ r: ri, c: CI.total, v: mkBlank() });
+      ups.push({ r: ri, c: CI.total, v: mkNum(r4(outputs[outputKey] ?? 0), true) });
     }
 
     progCount.current++;

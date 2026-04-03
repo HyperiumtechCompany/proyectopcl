@@ -1,7 +1,8 @@
 // components/GastosGeneralesPanel.tsx
-import React from 'react';
 import { Loader2, Plus, Trash2, Save, Wallet } from 'lucide-react';
-import { useGastosGeneralesStore, GastoGeneralRow } from '../stores/gastosGeneralesStore';
+import React from 'react';
+import type { GastoGeneralRow } from '../stores/gastosGeneralesStore';
+import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
 
 interface GastosGeneralesPanelProps {
     loading: boolean;

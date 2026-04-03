@@ -124,7 +124,7 @@ trait HandlesModularMetrado
                     $data['unidad'] = $row['unidad'] ?? null;
                 }
 
-                foreach (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'und', 'total'] as $field) {
+                foreach (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'und', 'total'] as $field) {
                     if ($hasColumn($field)) {
                         $data[$field] = $this->toDecimalValue($row[$field] ?? 0);
                     }
@@ -140,6 +140,22 @@ trait HandlesModularMetrado
 
                 if ($hasColumn('nivel')) {
                     $data['nivel'] = $row['nivel'] ?? $row['_level'] ?? 0;
+                }
+
+                if ($hasColumn('_formula_key')) {
+                    $data['_formula_key'] = $row['_formula_key'] ?? null;
+                }
+
+                if ($hasColumn('_formula_output')) {
+                    $data['_formula_output'] = $row['_formula_output'] ?? null;
+                }
+
+                if ($hasColumn('_formula_expr')) {
+                    $data['_formula_expr'] = $row['_formula_expr'] ?? null;
+                }
+
+                if ($hasColumn('_formula_label')) {
+                    $data['_formula_label'] = $row['_formula_label'] ?? null;
                 }
 
                 $rowId = $this->extractIncomingRowId($row);

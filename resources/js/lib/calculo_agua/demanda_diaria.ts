@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 
 interface DemandaDiariaData {
     tabla1?: any[];

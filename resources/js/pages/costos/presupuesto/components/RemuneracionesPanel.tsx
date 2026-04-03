@@ -1,11 +1,12 @@
 // components/RemuneracionesPanel.tsx
-import React from 'react';
 import { Loader2, Plus, Trash2, Save, RefreshCw, Clock } from 'lucide-react';
-import {
-    useRemuneracionesStore,
-    RemuneracionRow,
-} from '../stores/remuneracionesStore';
+import React from 'react';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
+import type {
+    RemuneracionRow} from '../stores/remuneracionesStore';
+import {
+    useRemuneracionesStore
+} from '../stores/remuneracionesStore';
 
 interface RemuneracionesPanelProps {
     loading: boolean;

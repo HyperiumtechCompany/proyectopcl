@@ -426,6 +426,38 @@ class CostoProjectController extends Controller
     }
 
     /**
+     * Ejecutar migraciones en la base de datos del tenant.
+     */
+    public function runMigration(CostoProject $costoProject)
+    {
+        $this->authorizeProject($costoProject);
+
+        try {
+            $this->dbService->setTenantConnection($costoProject->database_name);
+
+            $exitCode = \Illuminate\Support\Facades\Artisan::call('migrate', [
+                '--database' => 'costos_tenant',
+                '--path' => 'database/migrations/costos_tenant',
+                '--force' => true,
+            ]);
+
+            $output = \Illuminate\Support\Facades\Artisan::output();
+
+            if ($exitCode === 0) {
+                return back()->with('success', 'Migraciones ejecutadas correctamente. ' . $output);
+            } else {
+                return back()->with('error', 'Error al ejecutar migraciones: ' . $output);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error running tenant migration', [
+                'project_id' => $costoProject->id,
+                'error' => $e->getMessage(),
+            ]);
+            return back()->with('error', 'Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Verificar dueño del proyecto.
      */
     protected function authorizeProject(CostoProject $project): void

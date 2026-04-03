@@ -29,6 +29,11 @@ export const META_COLS: ColumnDef[] = [
   { key: '_dbid',  label: '', width: 1 },
   { key: '_level', label: '', width: 1 },
   { key: '_kind',  label: '', width: 1 },
+  { key: 'kgm', label: '', width: 1 },
+  { key: '_formula_key', label: '', width: 1 },
+  { key: '_formula_output', label: '', width: 1 },
+  { key: '_formula_expr', label: '', width: 1 },
+  { key: '_formula_label', label: '', width: 1 },
 ];
 
 export const ALL_COLS: ColumnDef[] = [...MAIN_COLS, ...META_COLS];
