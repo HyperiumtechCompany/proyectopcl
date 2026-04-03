@@ -30,8 +30,8 @@ import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNI
 import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
 import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectricas/electricas_types';
 import {
-  buildRecalcUpdates, buildResumenRows, colLetter, mkBlank,
-  mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
+  buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, colLetter, mkBlank,
+  mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
   levelStyle,
 } from './metradoelectricas/electricas_utils';
@@ -289,7 +289,7 @@ export default function ElectricasIndex() {
   // Escribe inputs + output en la fila y re-recalcula
   // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey }: CalcPayload) => {
+  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey, formulaKey, formulaLabel, formulaExpression, formula }: CalcPayload) => {
     const active = getActive();
     if (!active || active.name === 'Resumen') return;
 
@@ -308,8 +308,20 @@ export default function ElectricasIndex() {
       ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
     }
 
+    ([
+      ['_formula_key', formulaKey || ''],
+      ['_formula_output', outputKey || ''],
+      ['_formula_expr', formulaExpression || ''],
+      ['_formula_label', formulaLabel || formula || ''],
+    ] as const).forEach(([key, value]) => {
+      const c = CI[key];
+      if (c !== undefined) {
+        ups.push({ r: ri, c, v: value ? mkTxt(String(value)) : mkBlank() });
+      }
+    });
+
     // Inputs
-    (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const).forEach((k) => {
+    (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'] as const).forEach((k) => {
       const c = CI[k];
       if (c !== undefined) ups.push({ r: ri, c, v: mkNum(inputs[k]) });
     });
@@ -320,7 +332,15 @@ export default function ElectricasIndex() {
       if (c === undefined) return;
 
       if (k === outputKey) {
-        ups.push({ r: ri, c, v: mkNum(r4(outputs[k] ?? 0)) });
+        const { formula: cellFormula } = buildRowFormulaMeta({
+          rowIndex: ri + 1,
+          outputKey: k,
+          formulaKey,
+          formulaExpression,
+          formulaLabel: formulaLabel || formula,
+          value: r4(outputs[k] ?? 0),
+        });
+        ups.push({ r: ri, c, v: cellFormula ? mkFormula(cellFormula, r4(outputs[k] ?? 0)) : mkNum(r4(outputs[k] ?? 0), true) });
         return;
       }
 
