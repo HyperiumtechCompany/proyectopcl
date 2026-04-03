@@ -569,7 +569,15 @@ export default function SanitariasIndex() {
             });
 
             (
-                ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg'] as const
+                [
+                    'elsim',
+                    'largo',
+                    'ancho',
+                    'alto',
+                    'nveces',
+                    'kg',
+                    'kgm',
+                ] as const
             ).forEach((k) => {
                 const c = CI[k];
                 if (c !== undefined)
@@ -607,23 +615,11 @@ export default function SanitariasIndex() {
 
             if (CI.total !== undefined) {
                 const totalValue = r4(outputs[outputKey] ?? 0);
-                const { formula: totalFormula } = buildRowFormulaMeta({
-                    rowIndex: rowNum,
-                    outputKey,
-                    formulaKey,
-                    formulaExpression,
-                    formulaLabel: formulaLabel || formula,
-                    value: totalValue,
-                });
 
                 ups.push({
                     r: ri,
                     c: CI.total,
-                    v: totalFormula
-                        ? mkFormula(totalFormula, totalValue)
-                        : mkFormula(
-                              `=${colLetter(CI.lon)}${ri + 1}+${colLetter(CI.area)}${ri + 1}+${colLetter(CI.vol)}${ri + 1}+${colLetter(CI.kg)}${ri + 1}+${colLetter(CI.und)}${ri + 1}`,
-                          ),
+                    v: mkNum(totalValue, true),
                 });
             }
 

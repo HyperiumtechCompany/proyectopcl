@@ -751,13 +751,21 @@ export function CalcModal({ open, ri, rowData, onClose, onApply }: CalcModalProp
             size="sm"
             disabled={!hasResult}
             onClick={() => {
+              const appliedOutputKey = useCustom ? customOut : activeOut;
+              const appliedFormulaKey = useCustom ? 'custom_inline' : selectedVersion || profile.key;
+              const appliedFormulaExpression = useCustom ? customExpr : selectedVersion.startsWith('custom_') ? profile.formula : '';
+              const appliedFormulaLabel = useCustom ? formulaName.trim() || customExpr : profile.formula || profile.label;
               onApply({
                 ri,
                 descripcion: descripcion.trim(),
                 unidad: unit,
-                outputKey: activeOut,
+                outputKey: appliedOutputKey,
                 inputs: vals,
-                outputs: useCustom ? { [activeOut]: outVal } : profile.fn(vals),
+                outputs: useCustom ? { [appliedOutputKey]: outVal } : profile.fn(vals),
+                formulaKey: appliedFormulaKey,
+                formulaLabel: appliedFormulaLabel,
+                formulaExpression: appliedFormulaExpression,
+                formula: useCustom ? customExpr : profile.formula || '',
               });
               onClose();
             }}

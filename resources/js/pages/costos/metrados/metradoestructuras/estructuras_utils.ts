@@ -3,7 +3,7 @@ import {
   ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE,
   MAX_LEVELS, NBSP, UNIT_PROFILES, OUTPUT_KEYS,
 } from './estructuras_constants';
-import type { ColumnDef, MeasureInputs, RowEntry, RowKind } from './estructuras_types';
+import type { ColumnDef, MeasureInputs, MeasureOutputs, RowEntry, RowKind, UnitProfile } from './estructuras_types';
 
 export const toNum = (v: unknown): number => {
   const n = Number(v);
@@ -59,6 +59,180 @@ export const colLetter = (i: number): string => {
   return r;
 };
 
+const FORMULA_META_KEYS = new Set([
+  '_formula_key',
+  '_formula_output',
+  '_formula_expr',
+  '_formula_label',
+]);
+const getCellRef = (key: string, rowIndex: number): string => {
+  const colIndex = CI[key];
+  return colIndex === undefined ? '' : ${colLetter(colIndex)};
+};
+const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): string => {
+  const E = getCellRef('elsim', rowIndex);
+  const L = getCellRef('largo', rowIndex);
+  const A = getCellRef('ancho', rowIndex);
+  const H = getCellRef('alto', rowIndex);
+  const N = getCellRef('nveces', rowIndex);
+  const K = getCellRef('kg', rowIndex);
+  const KGM = getCellRef('kgm', rowIndex);
+  switch (formulaKey) {
+    case 'm2_v1':
+    case 'm_v2':
+      return =(+)**;
+    case 'm2_v2':
+    case 'm3_v3':
+      return =(+)*2**;
+    case 'm2_v3':
+      return =**;
+    case 'm2_v4':
+    case 'und_v3':
+    case 'pza_v3':
+      return =**;
+    case 'm2_v5':
+      return =(+)*2*;
+    case 'm3_v1':
+    case 'm3_v2':
+    case 'm3_v4':
+    case 'm3_v7':
+      return =***;
+    case 'm3_v5':
+      return =**-;
+    case 'm3_v6':
+      return =***;
+    case 'kg_vbase':
+      return KGM ? =(*(++)*)* : =*(++)*;
+    case 'kg_v1':
+      return =*;
+    case 'kg_v2':
+      return =**;
+    case 'kg_v3':
+      return =(++)*;
+    case 'kg_v4':
+      return =**;
+    case 'kg_v5':
+      return K ? = : '';
+    case 'm_v1':
+    case 'ml_v1':
+      return =*;
+    case 'm_v3':
+    case 'ml_v3':
+      return =*;
+    case 'm_v4':
+    case 'ml_v4':
+      return =(+)*2*;
+    case 'ml_v2':
+      return =(+)*;
+    case 'und_v1':
+    case 'pza_v1':
+    case 'glb_v1':
+    case 'pto_v1':
+      return =*;
+    case 'und_v2':
+    case 'pza_v2':
+      return =;
+    case 'und_v4':
+    case 'und_v5':
+    case 'pza_v4':
+    case 'pza_v5':
+      return =;
+    default:
+      return '';
+  }
+};
+const buildFormulaExpressionFromCustom = (expression: string, rowIndex: number): string => {
+  if (!expression.trim()) return '';
+  const refs: Record<string, string> = {
+    elsim: getCellRef('elsim', rowIndex),
+    largo: getCellRef('largo', rowIndex),
+    ancho: getCellRef('ancho', rowIndex),
+    alto: getCellRef('alto', rowIndex),
+    nveces: getCellRef('nveces', rowIndex),
+    kg: getCellRef('kg', rowIndex),
+    kgm: getCellRef('kgm', rowIndex),
+    lon: getCellRef('lon', rowIndex),
+    area: getCellRef('area', rowIndex),
+    vol: getCellRef('vol', rowIndex),
+    und: getCellRef('und', rowIndex),
+  };
+  let translated = expression;
+  Object.entries(refs).forEach(([key, ref]) => {
+    if (!ref) return;
+    translated = translated.replace(new RegExp(\\b\\b, 'g'), ref);
+  });
+  return translated.startsWith('=') ? translated : =;
+};
+export const evaluateCustomFormula = (expression: string, inputs: MeasureInputs): number => {
+  try {
+    const { elsim, largo, ancho, alto, nveces, kg, kgm } = inputs;
+    const result = new Function(
+      'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',
+      "use strict"; return ();,
+    )(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
+    return toNum(result);
+  } catch {
+    return 0;
+  }
+};
+export const resolveUnitProfile = (
+  unit: string,
+  formulaKey?: string | null,
+  row?: Record<string, any> | null,
+): UnitProfile | null => {
+  const profiles = UNIT_PROFILES[String(unit ?? '').trim().toLowerCase()] ?? [];
+  if (!profiles.length) return null;
+  if (formulaKey) {
+    const match = profiles.find((profile) => profile.key === formulaKey);
+    if (match) return match;
+  }
+  if (row) {
+    const currentOutputKey = OUTPUT_KEYS.find((key) => !isZeroLike(row[key]));
+    const scored = profiles
+      .map((profile) => {
+        const activeCount = profile.activeInputs.filter((inputKey) => !isZeroLike(row[inputKey])).length;
+        const outputScore = currentOutputKey && profile.outputKey === currentOutputKey ? 10 : 0;
+        return { profile, score: outputScore + activeCount };
+      })
+      .sort((a, b) => b.score - a.score);
+    if (scored[0]?.score > 0) return scored[0].profile;
+  }
+  return profiles[0] ?? null;
+};
+export const buildRowFormulaMeta = ({
+  rowIndex,
+  outputKey,
+  formulaKey,
+  formulaExpression,
+  formulaLabel,
+  fallbackProfile,
+  value,
+}: {
+  rowIndex: number;
+  outputKey: keyof MeasureOutputs;
+  formulaKey?: string | null;
+  formulaExpression?: string | null;
+  formulaLabel?: string | null;
+  fallbackProfile?: UnitProfile | null;
+  value?: number;
+}): { formula: string; formulaDisplay: string } => {
+  const formula =
+    formulaExpression && formulaExpression.trim()
+      ? buildFormulaExpressionFromCustom(formulaExpression, rowIndex)
+      : buildFormulaExpressionFromKey(formulaKey ?? '', rowIndex);
+  const label =
+    formulaLabel?.trim() ||
+    fallbackProfile?.formula ||
+    fallbackProfile?.label ||
+    String(outputKey);
+  return {
+    formula,
+    formulaDisplay:
+      value === undefined || isZeroLike(value)
+        ? label
+        : ${label} = ,
+  };
+};
 export const cellRaw = (cell: any): any => {
   if (!cell) return null;
   const r = cell.v;
@@ -88,6 +262,20 @@ export const mkNum = (v: number, keepZero = false) => {
   };
 };
 
+export const mkFormula = (formula: string, value: number | string = '') => {
+  const numericDisplay =
+    value === '' || value === undefined
+      ? ''
+      : typeof value === 'number'
+        ? formatNumber(value) || String(value)
+        : String(value);
+  return {
+    f: formula,
+    v: value === '' ? '' : value,
+    m: numericDisplay,
+    ct: { fa: 'General', t: typeof value === 'number' ? 'n' : 'g' },
+  };
+};
 export const mkTxt = (v: string, extra: Record<string, any> = {}) => ({
   v,
   m: v,
@@ -149,7 +337,7 @@ export function rowMeta(row: Record<string, any>): { level: number; kind: RowKin
 }
 
 const BLANKABLE_NUMERIC_KEYS = new Set([
-  'elsim', 'largo', 'ancho', 'alto', 'nveces', 'lon', 'area', 'vol', 'kg', 'und', 'total',
+  'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'und', 'total',
 ]);
 
 const hasItemCode = (value: unknown): boolean => {
@@ -275,7 +463,7 @@ export function rowsToSheet(
   const colhidden: Record<number, number> = {};
   cols.forEach((col, ci) => {
     columnlen[ci] = col.width;
-    if (col.key === '_dbid' || col.key === '_level' || col.key === '_kind') colhidden[ci] = 1;
+    if (col.key === '_dbid' || col.key === '_level' || col.key === '_kind' || col.key === 'kgm' || FORMULA_META_KEYS.has(col.key)) colhidden[ci] = 1;
   });
 
   return {
@@ -428,8 +616,8 @@ export function buildRecalcUpdates(
     }
 
     const unit = String(row.unidad ?? '').trim().toLowerCase();
-    const profile = UNIT_PROFILES[unit];
-    if (!profile) {
+    const activeProfile = resolveUnitProfile(unit, row._formula_key);
+    if (!activeProfile && !row._formula_expr) {
       entry.total = 0;
       return;
     }
@@ -444,15 +632,30 @@ export function buildRecalcUpdates(
       kgm: toNum(row.kgm),
     };
 
-    const activeProfile = Array.isArray(profile) ? profile[0] : profile;
-    const outputs = activeProfile.fn(inputs);
+    const formulaOutputKey = String(
+      row._formula_output ?? activeProfile?.outputKey ?? '',
+    ) as keyof MeasureOutputs;
+    const outputs =
+      row._formula_expr && formulaOutputKey
+        ? { [formulaOutputKey]: evaluateCustomFormula(String(row._formula_expr), inputs) }
+        : (activeProfile?.fn(inputs) ?? {});
 
     // Mostrar TODOS los valores de salida calculados
     OUTPUT_KEYS.forEach((key) => {
       if (outputs[key] !== undefined && !isZeroLike(outputs[key])) {
         const val = r4(outputs[key]);
         row[key] = val;
-        set(ri, key, isAnchor ? styledNum(val, st) : mkNum(val));
+        const rowIndex = ri + 1;
+        const { formula } = buildRowFormulaMeta({
+          rowIndex,
+          outputKey: key,
+          formulaKey: row._formula_key,
+          formulaExpression: row._formula_expr,
+          formulaLabel: row._formula_label,
+          fallbackProfile: activeProfile,
+          value: val,
+        });
+        set(ri, key, isAnchor ? styledNum(val, st) : formula ? mkFormula(formula, val) : mkNum(val, true));
       }
     });
 
@@ -461,7 +664,8 @@ export function buildRecalcUpdates(
         .map((k) => toNum(row[k]))
         .find((v) => !isZeroLike(v)) ?? 0;
 
-    const outVal = r4(outputs[activeProfile.outputKey] ?? 0);
+    const resolvedOutputKey = formulaOutputKey || activeProfile?.outputKey || 'und';
+    const outVal = r4(outputs[resolvedOutputKey] ?? 0);
 
     entry.total = isAnchor
       ? 0
@@ -666,3 +870,4 @@ export function buildEstructurasResumenRows(
     return row;
   });
 }
+

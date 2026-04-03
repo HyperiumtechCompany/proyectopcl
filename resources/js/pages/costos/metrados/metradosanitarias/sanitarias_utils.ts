@@ -432,6 +432,7 @@ const BLANKABLE_NUMERIC_KEYS = new Set([
     'ancho',
     'alto',
     'nveces',
+    'kgm',
     'lon',
     'area',
     'vol',
@@ -590,6 +591,7 @@ export function rowsToSheet(
             col.key === '_dbid' ||
             col.key === '_level' ||
             col.key === '_kind' ||
+            col.key === 'kgm' ||
             FORMULA_META_KEYS.has(col.key)
         )
             colhidden[ci] = 1;
@@ -863,19 +865,7 @@ export function buildRecalcUpdates(
                 : outVal;
 
         if (!isAnchor) {
-            const { formula: totalFormula } = buildRowFormulaMeta({
-                rowIndex: ri + 1,
-                outputKey: resolvedOutputKey,
-                formulaKey: row._formula_key,
-                formulaExpression: row._formula_expr,
-                formulaLabel: row._formula_label,
-                fallbackProfile: activeProfile,
-                value: entry.total,
-            });
-
-            if (totalFormula && !isZeroLike(entry.total)) {
-                set(ri, 'total', mkFormula(totalFormula, entry.total));
-            } else if (!isZeroLike(entry.total)) {
+            if (!isZeroLike(entry.total)) {
                 set(ri, 'total', mkNum(entry.total, true));
             } else {
                 setBlank(ri, 'total');
