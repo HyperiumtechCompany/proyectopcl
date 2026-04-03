@@ -93,139 +93,114 @@ const FORMULA_META_KEYS = new Set([
 ]);
 
 const getCellRef = (key: string, rowIndex: number): string => {
-    const colIndex = CI[key];
-    return colIndex === undefined ? '' : `${colLetter(colIndex)}${rowIndex}`;
+  const colIndex = CI[key];
+  return colIndex === undefined ? '' : `${colLetter(colIndex)}`;
 };
-
-const buildFormulaExpressionFromKey = (
-    formulaKey: string,
-    rowIndex: number,
-): string => {
-    const E = getCellRef('elsim', rowIndex);
-    const L = getCellRef('largo', rowIndex);
-    const A = getCellRef('ancho', rowIndex);
-    const H = getCellRef('alto', rowIndex);
-    const N = getCellRef('nveces', rowIndex);
-    const K = getCellRef('kg', rowIndex);
-    const KGM = getCellRef('kgm', rowIndex);
-
-    switch (formulaKey) {
-        case 'm2_v1':
-        case 'm_v2':
-            return `=(${L}+${A})*${N}*${E}`;
-        case 'm2_v2':
-        case 'm3_v3':
-            return `=(${L}+${A})*2*${H}*${N}`;
-        case 'm2_v3':
-            return `=${L}*${H}*${N}`;
-        case 'm2_v4':
-        case 'und_v3':
-        case 'pza_v3':
-            return `=${L}*${A}*${E}`;
-        case 'm2_v5':
-            return `=(${L}+${A})*2*${H}`;
-        case 'm3_v1':
-        case 'm3_v2':
-        case 'm3_v4':
-        case 'm3_v7':
-            return `=${L}*${A}*${H}*${N}`;
-        case 'm3_v5':
-            return `=${L}*${A}*${H}-${E}`;
-        case 'm3_v6':
-            return `=${L}*${A}*${H}*${E}`;
-        case 'kg_vbase':
-            return KGM
-                ? `=(${E}*(${L}+${A}+${H})*${N})*${KGM}`
-                : `=${E}*(${L}+${A}+${H})*${N}`;
-        case 'kg_v1':
-            return `=${L}*${K}`;
-        case 'kg_v2':
-            return `=${L}*${E}*${N}`;
-        case 'kg_v3':
-            return `=(${L}+${A}+${H})*${N}`;
-        case 'kg_v4':
-            return `=${L}*${K}*${E}`;
-        case 'kg_v5':
-            return K ? `=${K}` : '';
-        case 'm_v1':
-        case 'ml_v1':
-            return `=${L}*${N}`;
-        case 'm_v3':
-        case 'ml_v3':
-            return `=${L}*${E}`;
-        case 'm_v4':
-        case 'ml_v4':
-            return `=(${L}+${A})*2*${N}`;
-        case 'ml_v2':
-            return `=(${L}+${A})*${N}`;
-        case 'und_v1':
-        case 'pza_v1':
-        case 'glb_v1':
-        case 'pto_v1':
-            return `=${E}*${N}`;
-        case 'und_v2':
-        case 'pza_v2':
-            return `=${N}`;
-        case 'und_v4':
-        case 'und_v5':
-        case 'pza_v4':
-        case 'pza_v5':
-            return `=${E}`;
-        default:
-            return '';
-    }
+const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): string => {
+  const E = getCellRef('elsim', rowIndex);
+  const L = getCellRef('largo', rowIndex);
+  const A = getCellRef('ancho', rowIndex);
+  const H = getCellRef('alto', rowIndex);
+  const N = getCellRef('nveces', rowIndex);
+  const K = getCellRef('kg', rowIndex);
+  const KGM = getCellRef('kgm', rowIndex);
+  switch (formulaKey) {
+    case 'm2_v1':
+    case 'm_v2':
+      return `=${L}+${A}*${N}*${H}`;
+    case 'm2_v2':
+    case 'm3_v3':
+      return `=(${L}+${A})*2*${N}*${H}`;
+    case 'm2_v3':
+      return `=${L}*${A}*${N}`;
+    case 'm2_v4':
+    case 'und_v3':
+    case 'pza_v3':
+      return `=${L}*${A}*${N}`;
+    case 'm2_v5':
+      return `=(${L}+${A})*2*${H}`;
+    case 'm3_v1':
+    case 'm3_v2':
+    case 'm3_v4':
+    case 'm3_v7':
+      return `=${L}*${A}*${H}`;
+    case 'm3_v5':
+      return `=${L}*${A}*${H}-${K}`;
+    case 'm3_v6':
+      return `=${L}*${A}*${H}`;
+    case 'kg_vbase':
+      return KGM ? `=${KGM}*(${L}+${A})*${H}*${N}` : `=${K}*(${L}+${A})*${H}*${N}`;
+    case 'kg_v1':
+      return `=${N}`;
+    case 'kg_v2':
+      return `=${L}*${A}*${N}`;
+    case 'kg_v3':
+      return `=(${L}+${A})*${N}`;
+    case 'kg_v4':
+      return `=${L}*${A}*${N}`;
+    case 'kg_v5':
+      return K ? `=${K}` : '';
+    case 'm_v1':
+    case 'ml_v1':
+      return `=${N}`;
+    case 'm_v3':
+    case 'ml_v3':
+      return `=${N}`;
+    case 'm_v4':
+    case 'ml_v4':
+      return `=(${L}+${A})*2*${H}`;
+    case 'ml_v2':
+      return `=(${L}+${A})*${N}`;
+    case 'und_v1':
+    case 'pza_v1':
+    case 'glb_v1':
+    case 'pto_v1':
+      return `=${N}`;
+    case 'und_v2':
+    case 'pza_v2':
+      return `=${N}`;
+    case 'und_v4':
+    case 'und_v5':
+    case 'pza_v4':
+    case 'pza_v5':
+      return `=${N}`;
+    default:
+      return '';
+  }
 };
-
-const buildFormulaExpressionFromCustom = (
-    expression: string,
-    rowIndex: number,
-): string => {
-    if (!expression.trim()) return '';
-
-    const refs: Record<string, string> = {
-        elsim: getCellRef('elsim', rowIndex),
-        largo: getCellRef('largo', rowIndex),
-        ancho: getCellRef('ancho', rowIndex),
-        alto: getCellRef('alto', rowIndex),
-        nveces: getCellRef('nveces', rowIndex),
-        kg: getCellRef('kg', rowIndex),
-        kgm: getCellRef('kgm', rowIndex),
-        lon: getCellRef('lon', rowIndex),
-        area: getCellRef('area', rowIndex),
-        vol: getCellRef('vol', rowIndex),
-        und: getCellRef('und', rowIndex),
-    };
-
-    let translated = expression;
-    Object.entries(refs).forEach(([key, ref]) => {
-        if (!ref) return;
-        translated = translated.replace(new RegExp(`\\b${key}\\b`, 'g'), ref);
-    });
-
+const buildFormulaExpressionFromCustom = (expression: string, rowIndex: number): string => {
+  if (!expression.trim()) return '';
+  const refs: Record<string, string> = {
+    elsim: getCellRef('elsim', rowIndex),
+    largo: getCellRef('largo', rowIndex),
+    ancho: getCellRef('ancho', rowIndex),
+    alto: getCellRef('alto', rowIndex),
+    nveces: getCellRef('nveces', rowIndex),
+    kg: getCellRef('kg', rowIndex),
+    kgm: getCellRef('kgm', rowIndex),
+    lon: getCellRef('lon', rowIndex),
+    area: getCellRef('area', rowIndex),
+    vol: getCellRef('vol', rowIndex),
+    und: getCellRef('und', rowIndex),
+  };
+  let translated = expression;
+  Object.entries(refs).forEach(([key, ref]) => {
+    if (!ref) return;
+    translated = translated.replace(new RegExp(`\\b${key}\\b`, 'g'), ref);
+  });
     return translated.startsWith('=') ? translated : `=${translated}`;
 };
-
-export const evaluateCustomFormula = (
-    expression: string,
-    inputs: MeasureInputs,
-): number => {
-    try {
-        const { elsim, largo, ancho, alto, nveces, kg, kgm } = inputs;
-        const result = new Function(
-            'elsim',
-            'largo',
-            'ancho',
-            'alto',
-            'nveces',
-            'kg',
-            'kgm',
-            'Math',
-            `"use strict"; return (${expression});`,
-        )(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
-        return toNum(result);
-    } catch {
-        return 0;
-    }
+export const evaluateCustomFormula = (expression: string, inputs: MeasureInputs): number => {
+  try {
+    const { elsim, largo, ancho, alto, nveces, kg, kgm } = inputs;
+    const result = new Function(
+      'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',
+      `"use strict"; return (${expression});`
+    )(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
+    return toNum(result);
+  } catch {
+    return 0;
+  }
 };
 
 export const resolveUnitProfile = (
@@ -284,24 +259,22 @@ export const buildRowFormulaMeta = ({
     fallbackProfile?: UnitProfile | null;
     value?: number;
 }): { formula: string; formulaDisplay: string } => {
-    const formula =
-        formulaExpression && formulaExpression.trim()
-            ? buildFormulaExpressionFromCustom(formulaExpression, rowIndex)
-            : buildFormulaExpressionFromKey(formulaKey ?? '', rowIndex);
-
-    const label =
-        formulaLabel?.trim() ||
-        fallbackProfile?.formula ||
-        fallbackProfile?.label ||
-        String(outputKey);
-
-    return {
-        formula,
-        formulaDisplay:
-            value === undefined || isZeroLike(value)
-                ? label
-                : `${label} = ${formatNumber(value) || value}`,
-    };
+  const formula =
+    formulaExpression && formulaExpression.trim()
+      ? buildFormulaExpressionFromCustom(formulaExpression, rowIndex)
+      : buildFormulaExpressionFromKey(formulaKey ?? '', rowIndex);
+  const label =
+    formulaLabel?.trim() ||
+    fallbackProfile?.formula ||
+    fallbackProfile?.label ||
+    String(outputKey);
+  return {
+    formula,
+    formulaDisplay:
+      value === undefined || isZeroLike(value)
+        ? label
+        : `${label} = ${value}`,
+  };
 };
 
 export const cellRaw = (cell: any): any => {
