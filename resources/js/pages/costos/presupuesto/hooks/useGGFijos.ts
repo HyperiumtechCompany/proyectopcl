@@ -1,7 +1,8 @@
 // hooks/useGGFijos.ts
-import { useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useGGFijosStore, GGFijoNode } from '../stores/ggFijosStore';
+import { useEffect, useCallback } from 'react';
+import type { GGFijoNode } from '../stores/ggFijosStore';
+import { useGGFijosStore } from '../stores/ggFijosStore';
 
 interface UseGGFijosProps {
     projectId: number;

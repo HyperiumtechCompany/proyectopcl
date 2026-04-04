@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Save, Loader2, Plus, Trash2, Info } from 'lucide-react';
-import { useProjectParamsStore } from '../stores/projectParamsStore';
+import React, { useState, useEffect } from 'react';
 import { useGGFijosStore } from '../stores/ggFijosStore';
+import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 interface GGFijosDesagregadoEditorProps {
     projectId: number;

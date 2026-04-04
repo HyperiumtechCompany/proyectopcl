@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Trash2, Save, RefreshCw, Users, Link2, CheckCircle2, Clock, LayoutTemplate, Zap } from 'lucide-react';
-import { useGGVariablesStore, GGVariableNode } from '../stores/ggVariablesStore';
-import { useRemuneracionesStore } from '../stores/remuneracionesStore';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { GGVariableNode } from '../stores/ggVariablesStore';
+import { useGGVariablesStore } from '../stores/ggVariablesStore';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
+import { useRemuneracionesStore } from '../stores/remuneracionesStore';
 import { GGVARIABLES_TEMPLATES } from '../utils/ggTemplates';
 import { PlazoDisplay } from './PlazoDisplay';
 

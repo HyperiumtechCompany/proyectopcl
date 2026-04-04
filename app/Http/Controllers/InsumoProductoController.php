@@ -243,6 +243,45 @@ class InsumoProductoController extends Controller
     }
 
     /**
+     * Listar especialidades del presupuesto general.
+     * GET /costos/proyectos/{project}/presupuesto/insumos/especialidades
+     */
+    public function especialidades(Request $request, $project): JsonResponse
+    {
+        $connection = DB::connection('costos_tenant');
+        
+        $projectModel = $project instanceof CostoProject 
+            ? $project 
+            : CostoProject::findOrFail($project);
+        $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
+
+        // Obtener todas y filtrar en memoria
+        $todas = $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->get(['partida', 'descripcion']);
+
+        // Filtrar estrictamente solo aquellas partidas que sean exactamente un par de números (ej. '01', '02', '10')
+        $especialidades = $todas->filter(function ($item) {
+            $cleanPartida = trim((string)$item->partida);
+            return preg_match('/^\d{2}$/', $cleanPartida);
+        })->sortBy('partida')->values();
+
+        // Formatear para el frontend listando "02 Estructuras"
+        $formatted = $especialidades->map(function($item) {
+            $cleanPartida = trim((string)$item->partida);
+            return [
+                'value' => $cleanPartida, // enviamos '02' para que en la búsqueda (like 02%) coincida perfectamente
+                'label' => $cleanPartida . ' ' . $item->descripcion
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'especialidades' => $formatted,
+        ]);
+    }
+
+    /**
      * Listar diccionarios.
      * GET /costos/proyectos/{project}/presupuesto/insumos/diccionarios
      */

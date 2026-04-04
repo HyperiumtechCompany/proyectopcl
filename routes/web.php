@@ -147,6 +147,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::post('/', [CostoProjectController::class, 'store'])->name('store');
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
+    Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])
@@ -256,6 +257,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 
             // ─── Insumos Catálogo (por proyecto, en tenant DB) ────
             Route::get('/presupuesto/insumos/search', [InsumoProductoController::class, 'search'])->name('proyectos.presupuesto.insumos.search');
+            Route::get('/presupuesto/insumos/especialidades', [InsumoProductoController::class, 'especialidades'])->name('proyectos.presupuesto.insumos.especialidades');
             Route::get('/presupuesto/insumos/diccionarios', [InsumoProductoController::class, 'diccionarios'])->name('proyectos.presupuesto.insumos.diccionarios');
             Route::get('/presupuesto/insumos/unidades', [InsumoProductoController::class, 'unidades'])->name('proyectos.presupuesto.insumos.unidades');
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');

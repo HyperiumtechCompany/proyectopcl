@@ -69,6 +69,10 @@ export interface CalcPayload {
   outputKey: keyof MeasureOutputs;
   inputs: MeasureInputs;
   outputs: MeasureOutputs;
+  formulaKey?: string;
+  formulaLabel?: string;
+  formulaExpression?: string;
+  formula: string;
 }
 
 // ── Guardado ─────────────────────────────────────────────────

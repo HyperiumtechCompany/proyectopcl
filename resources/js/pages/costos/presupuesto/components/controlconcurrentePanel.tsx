@@ -1,11 +1,4 @@
 // components/ControlConcurrentePanel.tsx
-import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from 'react';
 import axios from 'axios';
 import {
     Calculator,
@@ -17,11 +10,16 @@ import {
     Trash2,
     Users,
 } from 'lucide-react';
-import {
-    useGastosGeneralesStore,
-    GastoGeneralRow,
-} from '../stores/gastosGeneralesStore';
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { useConsolidado } from '../stores/consolidadoStore';
+import type { GastoGeneralRow } from '../stores/gastosGeneralesStore';
+import { useGastosGeneralesStore } from '../stores/gastosGeneralesStore';
 import { PlazoDisplay } from './PlazoDisplay';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -33,7 +31,7 @@ interface ControlConcurrentePanelProps {
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-const PCT_CC = 0.02;
+const DEFAULT_PCT_CC = 2;
 
 const ITEM_JEFE = '1.2';
 const ITEM_PROFESIONAL = '1.3';
@@ -385,6 +383,30 @@ const toPct = (v?: number) => {
     return Number.isFinite(n) ? n / 100 : 0;
 };
 
+const rowsEquivalent = (a: GastoGeneralRow[], b: GastoGeneralRow[]) => {
+    if (a.length !== b.length) return false;
+    return a.every((row, index) => {
+        const next = b[index];
+        return (
+            row.id === next.id &&
+            row.parent_id === next.parent_id &&
+            row.tipo_fila === next.tipo_fila &&
+            row.item_codigo === next.item_codigo &&
+            row.partida === next.partida &&
+            row.descripcion === next.descripcion &&
+            row.unidad === next.unidad &&
+            Number(row.cantidad ?? 0) === Number(next.cantidad ?? 0) &&
+            Number(row.periodo ?? 0) === Number(next.periodo ?? 0) &&
+            Number(row.participacion ?? 0) ===
+                Number(next.participacion ?? 0) &&
+            Number(row.porcentaje ?? 0) === Number(next.porcentaje ?? 0) &&
+            Number(row.precio_unitario ?? 0) ===
+                Number(next.precio_unitario ?? 0) &&
+            Number(row.parcial ?? 0) === Number(next.parcial ?? 0)
+        );
+    });
+};
+
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const fmt = (n: number) =>
@@ -433,9 +455,15 @@ export const recalculate = (source: GastoGeneralRow[]): GastoGeneralRow[] => {
     details('2').forEach((row) => {
         const pct = Number(row.porcentaje ?? 0);
         if (pct > 0) {
-            // Auto-calcula precio_unitario y parcial como fracción del personal total
+            // Auto-calcula precio_unitario como fracción del personal total
             row.precio_unitario = r2(totalPersonal * (pct / 100));
-            row.parcial = row.precio_unitario; // = totalPersonal × pct%
+            // Aseguramos que parcial considere cantidad, periodo y participación (por defecto 1,1,100)
+            row.parcial = r2(
+                (Number(row.cantidad) || 0) *
+                    (Number(row.periodo) || 0) *
+                    toFactor(row.participacion) *
+                    (Number(row.precio_unitario) || 0),
+            );
         } else {
             // Fórmula estándar para filas sin porcentaje automático
             row.parcial = r2(
@@ -469,7 +497,13 @@ export const recalculate = (source: GastoGeneralRow[]): GastoGeneralRow[] => {
         if (pct7 > 0) {
             // Auto-calcula precio_unitario como % de la suma secciones 1-6
             row.precio_unitario = r2(base16 * (pct7 / 100));
-            row.parcial = row.precio_unitario; // = base16 × pct7%
+            // Aseguramos que parcial considere factores (por defecto 1,1,100)
+            row.parcial = r2(
+                (Number(row.cantidad) || 0) *
+                    (Number(row.periodo) || 0) *
+                    toFactor(row.participacion) *
+                    (Number(row.precio_unitario) || 0),
+            );
         } else {
             // Precio manual: fórmula estándar
             row.parcial = r2(
@@ -547,9 +581,13 @@ export function ControlConcurrentePanel({
     const { setRows, setRowsCalculated, setDirty, isDirty } =
         useGastosGeneralesStore();
     const { consolidadoBase: consolidadoBaseLocal } = useConsolidado();
+
     const [consolidadoBaseSnapshot, setConsolidadoBaseSnapshot] = useState<
         number | null
     >(null);
+
+    // Traemos costo directo y utilidad para una base de inversion completa
+    const [extraBase, setExtraBase] = useState(0);
 
     // Estado local de filas (siempre editable, siempre calculado)
     const [localRows, setLocalRows] = useState<GastoGeneralRow[]>([]);
@@ -558,6 +596,9 @@ export function ControlConcurrentePanel({
     // Parametros del panel de visitas
     const [nVisitas, setNVisitas] = useState(3.1);
     const [duracionVisita, setDuracion] = useState(4);
+    const [pctCCInput, setPctCCInput] = useState<number | string>(
+        DEFAULT_PCT_CC,
+    );
 
     // Expansion del arbol
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -627,12 +668,8 @@ export function ControlConcurrentePanel({
             totalDias,
             nVisitas,
         );
+        if (rowsEquivalent(localRows, calc)) return;
         setLocalRows(calc);
-        setRows(calc);
-        setRowsCalculated(calc);
-        setDirty(true);
-        // Solo disparar cuando cambian los parametros, no cuando cambia localRows
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nVisitas, duracionVisita, nComisionados]);
 
     // ── Mutar una celda por ID de fila ────────────────────────────────────────
@@ -645,90 +682,70 @@ export function ControlConcurrentePanel({
                         (typeof rowKey === 'string' && getItem(r) === rowKey);
                     return keyMatch ? { ...r, [field]: value } : r;
                 });
-                const calc = recalculate(updated);
-                setRows(calc);
-                setRowsCalculated(calc);
-                setDirty(true);
-                return calc;
+                return recalculate(updated);
             });
         },
-        [setRows, setRowsCalculated, setDirty],
+        [],
     );
 
     // ── Agregar fila a una seccion especifica ─────────────────────────────────
-    const handleAddRow = useCallback(
-        (secCode: string) => {
-            setLocalRows((prev) => {
-                const sectionRow = prev.find(
-                    (r) => r.tipo_fila === 'seccion' && getSec(r) === secCode,
-                );
-                const parentId = sectionRow?.id ?? null;
-                const siblings = prev.filter(
-                    (r) => r.tipo_fila === 'detalle' && getSec(r) === secCode,
-                );
-                const nextNum =
-                    siblings.reduce((max, r) => {
-                        const item = getItem(r);
-                        const parts = item.split('.');
-                        const num = Number(parts[1]);
-                        return Number.isFinite(num) ? Math.max(max, num) : max;
-                    }, 0) + 1;
-                const newRow: GastoGeneralRow = {
-                    id: nextId(),
-                    parent_id: parentId,
-                    tipo_fila: 'detalle',
-                    item_codigo: `${secCode}.${nextNum}`,
-                    partida: `${secCode}.${nextNum}`,
-                    descripcion: '',
-                    unidad: '',
-                    cantidad: 1,
-                    participacion: 100,
-                    periodo: 1,
-                    precio_unitario: 0,
-                    parcial: 0,
-                };
-                // Insertar despues del ultimo hijo de esa seccion (o despues de la seccion si no hay hijos)
-                const sectionIdx = prev.findIndex(
-                    (r) => r.tipo_fila === 'seccion' && getSec(r) === secCode,
-                );
-                const lastIdx = prev.reduce((acc, r, i) => {
-                    if (r.tipo_fila === 'detalle' && getSec(r) === secCode)
-                        return i;
-                    return acc;
-                }, -1);
-                const insertAt =
-                    lastIdx >= 0 ? lastIdx + 1 : Math.max(sectionIdx + 1, 0);
-                const arr = [...prev];
-                arr.splice(insertAt, 0, newRow);
-                const calc = recalculate(arr);
-                setRows(calc);
-                setRowsCalculated(calc);
-                setDirty(true);
-                return calc;
-            });
-        },
-        [setRows, setRowsCalculated, setDirty],
-    );
+    const handleAddRow = useCallback((secCode: string) => {
+        setLocalRows((prev) => {
+            const sectionRow = prev.find(
+                (r) => r.tipo_fila === 'seccion' && getSec(r) === secCode,
+            );
+            const parentId = sectionRow?.id ?? null;
+            const siblings = prev.filter(
+                (r) => r.tipo_fila === 'detalle' && getSec(r) === secCode,
+            );
+            const nextNum =
+                siblings.reduce((max, r) => {
+                    const n = parseInt(r.partida?.split('.')[1] || '0', 10);
+                    return n > max ? n : max;
+                }, 0) + 1;
+            const newRow: GastoGeneralRow = {
+                id: Date.now(),
+                parent_id: parentId,
+                tipo_fila: 'detalle',
+                partida: `${secCode}.${nextNum}`,
+                descripcion: '',
+                unidad: '',
+                cantidad: 0,
+                periodo: 0,
+                participacion: 0,
+                porcentaje: undefined,
+                precio_unitario: 0,
+                parcial: 0,
+                item_codigo: '',
+            };
+            const sectionIdx = prev.findIndex(
+                (r) => r.tipo_fila === 'seccion' && getSec(r) === secCode,
+            );
+            const lastIdx = prev.reduce((acc, r, i) => {
+                if (r.tipo_fila === 'detalle' && getSec(r) === secCode)
+                    return i;
+                return acc;
+            }, -1);
+            const insertAt =
+                lastIdx >= 0 ? lastIdx + 1 : Math.max(sectionIdx + 1, 0);
+            const arr = [...prev];
+            arr.splice(insertAt, 0, newRow);
+            return recalculate(arr);
+        });
+    }, []);
 
-    // ── Eliminar fila ─────────────────────────────────────────────────────────
-    const handleRemove = useCallback(
-        (rowKey: number | string) => {
-            setLocalRows((prev) => {
-                const filtered = prev.filter((r) => {
-                    if (r.id === rowKey) return false;
-                    if (typeof rowKey === 'string' && getItem(r) === rowKey)
-                        return false;
-                    return true;
-                });
-                const calc = recalculate(filtered);
-                setRows(calc);
-                setRowsCalculated(calc);
-                setDirty(true);
-                return calc;
+    // ── Eliminar fila por ID ───────────────────────────────────────────────────
+    const handleRemove = useCallback((rowKey: number | string) => {
+        setLocalRows((prev) => {
+            const filtered = prev.filter((r) => {
+                const keyMatch =
+                    r.id === rowKey ||
+                    (typeof rowKey === 'string' && getItem(r) === rowKey);
+                return !keyMatch;
             });
-        },
-        [setRows, setRowsCalculated, setDirty],
-    );
+            return recalculate(filtered);
+        });
+    }, []);
 
     // ── Totales ───────────────────────────────────────────────────────────────
     const totalFilas = useMemo(
@@ -744,9 +761,12 @@ export function ControlConcurrentePanel({
     );
 
     const consolidadoBase = consolidadoBaseSnapshot ?? consolidadoBaseLocal;
-    const valorCC = r2(consolidadoBase * PCT_CC);
+    const baseInversionTotal = consolidadoBase + extraBase;
+
+    const pctCC = useMemo(() => toPct(Number(pctCCInput) || 0), [pctCCInput]);
+    const valorCC = r2(baseInversionTotal * pctCC);
     const porcentajeReal =
-        consolidadoBase > 0 ? totalFilas / consolidadoBase : 0;
+        baseInversionTotal > 0 ? totalFilas / baseInversionTotal : 0;
 
     useEffect(() => {
         let mounted = true;
@@ -758,12 +778,20 @@ export function ControlConcurrentePanel({
                 if (!mounted) return;
                 if (res.data?.success && res.data?.data) {
                     const data = res.data.data;
-                    const base =
+                    // Base completa: GGs + Supervision + Costo Directo + Utilidad (si vienen)
+                    const baseGG =
                         Number(data.total_gg_fijos || 0) +
                         Number(data.total_gg_variables || 0) +
                         Number(data.total_supervision || 0);
-                    if (Number.isFinite(base) && base > 0) {
-                        setConsolidadoBaseSnapshot(base);
+
+                    const cd = Number(data.total_costo_directo || 0);
+                    const ut = Number(data.total_utilidad || 0);
+
+                    if (Number.isFinite(baseGG) && baseGG > 0) {
+                        setConsolidadoBaseSnapshot(baseGG);
+                    }
+                    if (cd > 0 || ut > 0) {
+                        setExtraBase(cd + ut);
                     }
                 }
             })
@@ -815,7 +843,8 @@ export function ControlConcurrentePanel({
 
     // ── Flags de celdas auto-calculadas ──────────────────────────────────────
     const isAutoPrice = (row: GastoGeneralRow) =>
-        (getSec(row) === '2' || getSec(row) === '7') && row.porcentaje != null;
+        (getSec(row) === '2' || getSec(row) === '7') &&
+        Number(row.porcentaje ?? 0) > 0;
 
     const isAutoQty = (row: GastoGeneralRow) =>
         [ITEM_PASAJE, ITEM_VIATICO, ITEM_BOLSA, ITEM_CAMIONETA].includes(
@@ -861,13 +890,30 @@ export function ControlConcurrentePanel({
                 <PlazoDisplay variant="compact" color="emerald" />
             </div>
 
-            {/* ── Panel resumen 2% ── */}
+            {/* ── Panel resumen porcentaje dinámico ── */}
             <div className="border-b border-slate-700 bg-slate-800/40 px-4 py-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-800/60 px-4 py-2 text-xs">
-                    {/* Primera línea - Cálculo 2% */}
-                    <span className="text-[10px] font-bold tracking-wider whitespace-nowrap text-slate-400 uppercase">
-                        Calculo automatico — 2%
-                    </span>
+                    {/* Primera línea - Cálculo automático */}
+                    <label className="flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                            Calculo automatico
+                        </span>
+                        <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={pctCCInput}
+                            onChange={(e) =>
+                                setPctCCInput(
+                                    e.target.value === '' ? '' : e.target.value,
+                                )
+                            }
+                            className="w-16 rounded border border-slate-600 bg-slate-700/60 px-1.5 py-1 text-right font-mono text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
+                        />
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase">
+                            %
+                        </span>
+                    </label>
                     <span className="whitespace-nowrap">
                         <span className="text-slate-500">Consolidado: </span>
                         <span className="font-mono font-semibold text-slate-300">
@@ -889,7 +935,8 @@ export function ControlConcurrentePanel({
                     <span className="whitespace-nowrap">
                         <span className="text-slate-500">% Real: </span>
                         <span
-                            className={`font-mono font-semibold ${porcentajeReal > PCT_CC ? 'text-red-400' : 'text-amber-400'}`}>
+                            className={`font-mono font-semibold ${porcentajeReal > pctCC ? 'text-red-400' : 'text-amber-400'}`}
+                        >
                             {fmtPct(porcentajeReal)}
                         </span>
                     </span>
@@ -1017,7 +1064,8 @@ export function ControlConcurrentePanel({
                                 <React.Fragment
                                     key={
                                         sec.id ?? sec.item_codigo ?? sec.partida
-                                    }>
+                                    }
+                                >
                                     {/* Fila seccion */}
                                     <tr className="bg-slate-800/70">
                                         <td
@@ -1028,7 +1076,8 @@ export function ControlConcurrentePanel({
                                                     ...p,
                                                     [secCode]: !p[secCode],
                                                 }))
-                                            }>
+                                            }
+                                        >
                                             <div className="flex items-center gap-2">
                                                 {isExp ? (
                                                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
@@ -1059,7 +1108,8 @@ export function ControlConcurrentePanel({
                                             return (
                                                 <tr
                                                     key={rowKey}
-                                                    className="group transition-colors hover:bg-slate-800/40">
+                                                    className="group transition-colors hover:bg-slate-800/40"
+                                                >
                                                     {/* Descripcion */}
                                                     <td className="p-1 pl-10">
                                                         <input
@@ -1207,7 +1257,8 @@ export function ControlConcurrentePanel({
                                                                 )
                                                             }
                                                             title="Eliminar fila"
-                                                            className="rounded p-1 text-slate-700 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/30 hover:text-red-400">
+                                                            className="rounded p-1 text-slate-700 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/30 hover:text-red-400"
+                                                        >
                                                             <Trash2 className="h-3 w-3" />
                                                         </button>
                                                     </td>
@@ -1220,12 +1271,14 @@ export function ControlConcurrentePanel({
                                         <tr className="bg-slate-900/20">
                                             <td
                                                 colSpan={10}
-                                                className="py-1 pl-10">
+                                                className="py-1 pl-10"
+                                            >
                                                 <button
                                                     onClick={() =>
                                                         handleAddRow(secCode)
                                                     }
-                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400">
+                                                    className="flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 transition-all hover:bg-slate-700/40 hover:text-emerald-400"
+                                                >
                                                     <Plus className="h-3 w-3" />
                                                     Anadir item a esta seccion
                                                 </button>
@@ -1285,7 +1338,8 @@ export function ControlConcurrentePanel({
                             isDirty && !loading
                                 ? 'bg-emerald-600 shadow-emerald-900/30 hover:bg-emerald-500 active:scale-95'
                                 : 'cursor-not-allowed bg-slate-700 opacity-50',
-                        ].join(' ')}>
+                        ].join(' ')}
+                    >
                         <Save className="h-4 w-4" />
                         {loading
                             ? 'Guardando...'

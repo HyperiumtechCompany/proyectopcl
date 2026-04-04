@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 
 // Interfaz para mantener el tipado en tu ASUS TUF
 interface AguaData {

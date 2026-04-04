@@ -62,6 +62,10 @@ interface BudgetState {
   convertToTitle: (partida: string) => void;
   convertToPartida: (partida: string) => void;
 
+  // Edit Partida Code explicitly
+  editPartidaCode: (oldCode: string, newCode: string) => void;
+  renumberItems: () => void;
+
   // Delete
   deleteRow: (partida: string) => void;
   deleteMultiSelection: () => void;
@@ -392,6 +396,60 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
     }));
   },
 
+  editPartidaCode: (oldCode, newCode) => {
+    set(produce((state: BudgetState) => {
+      if (oldCode === newCode || !newCode.trim()) return;
+      if (state.rows.some(r => r.partida === newCode.trim())) {
+        alert("El código de ítem ya existe.");
+        return;
+      }
+
+      const cleanNewCode = newCode.trim();
+      const prefixOld = `${oldCode}.`;
+      const prefixNew = `${cleanNewCode}.`;
+
+      state.rows.forEach(r => {
+        if (r.partida === oldCode) {
+          r.partida = cleanNewCode;
+        } else if (r.partida.startsWith(prefixOld)) {
+          r.partida = prefixNew + r.partida.substring(prefixOld.length);
+        }
+      });
+
+      state.rows = rebuildHierarchy(state.rows);
+      performTreeCalculation(state.rows);
+
+      if (state.selectedId === oldCode) state.selectedId = cleanNewCode;
+      state.multiSelection = state.multiSelection.map(id => {
+        if (id === oldCode) return cleanNewCode;
+        if (id.startsWith(prefixOld)) return prefixNew + id.substring(prefixOld.length);
+        return id;
+      });
+
+      const newExpanded: Record<string, boolean> = {};
+      Object.keys(state.expandedMap).forEach(key => {
+        if (key === oldCode) {
+          newExpanded[cleanNewCode] = state.expandedMap[key];
+        } else if (key.startsWith(prefixOld)) {
+          newExpanded[prefixNew + key.substring(prefixOld.length)] = state.expandedMap[key];
+        } else {
+          newExpanded[key] = state.expandedMap[key];
+        }
+      });
+      state.expandedMap = newExpanded;
+      state.isDirty = true;
+    }));
+  },
+
+  renumberItems: () => {
+    set(produce((state: BudgetState) => {
+      state.rows = renumberWBS(state.rows);
+      state.rows = rebuildHierarchy(state.rows);
+      performTreeCalculation(state.rows);
+      state.isDirty = true;
+    }));
+  },
+
   // ── Insert actions ────────────────────────────────────────────────────────
 
   addNode: (parentId, type) => {
@@ -451,7 +509,6 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       };
 
       state.rows.push(newRow);
-      state.rows = renumberWBS(state.rows);
       state.rows = rebuildHierarchy(state.rows);
       performTreeCalculation(state.rows);
       state.isDirty = true;
@@ -563,7 +620,6 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       const remapped = remapBlock(block, partida, newBaseCode);
 
       state.rows.push(...remapped);
-      state.rows = renumberWBS(state.rows);
       state.rows = rebuildHierarchy(state.rows);
       performTreeCalculation(state.rows);
       state.isDirty = true;
@@ -590,11 +646,11 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       // Y getParentPartida('01.01/z') dividirá por el último punto, devolviendo '01', subiéndolo de nivel.
       const parts = row.partida.split('.');
       if (parts.length > 1) {
-        const parentCode = parts.slice(0, -1).join('.');
-        row.partida = `${parentCode}/OUTDENT_${Date.now()}`;
+        const grandParentCode = parts.slice(0, -2).join('.');
+        const newCode = grandParentCode === '' ? generateNextCode(null, state.rows) : generateNextCode(grandParentCode, state.rows);
+        row.partida = newCode;
       }
 
-      state.rows = renumberWBS(state.rows);
       state.rows = rebuildHierarchy(state.rows);
       performTreeCalculation(state.rows);
       state.isDirty = true;
@@ -748,7 +804,6 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       }
 
       state.rows.push(...newNodes);
-      state.rows = renumberWBS(state.rows);
       state.rows = rebuildHierarchy(state.rows);
       performTreeCalculation(state.rows);
       state.isDirty = true;
