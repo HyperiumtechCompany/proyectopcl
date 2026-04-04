@@ -35,50 +35,35 @@ const EttpDetailsPanel: React.FC<Props> = ({
             const file = e.target.files[0];
             if (!file) return;
 
-            const seccion = sections[sectionIdx];
-
-            // Si la sección tiene ID (ya guardada en BD), subir al servidor
-            if (seccion.id) {
-                try {
-                    const formData = new FormData();
-                    formData.append('imagen', file);
-
-                    const response = await axios.post(`/costos/${proyectoId}/ettp/seccion/${seccion.id}/imagen`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                    });
-
-                    if (response.data?.success) {
-                        const imgUrl = response.data.imagen.url;
-                        const imgHtml = `<img src="${imgUrl}" style="width:50px; height:50px; object-fit:cover; margin:10px auto; border-radius:8px; display:block;" alt="${response.data.imagen.nombre_original}" />`;
-                        const updated = [...sections];
-                        updated[sectionIdx] = { ...updated[sectionIdx], content: updated[sectionIdx].content + imgHtml };
-                        onSectionsChange(updated);
-                        showNotification('success', 'Imagen subida correctamente');
-                    }
-                } catch (err) {
-                    console.error('[Imagen] Error subiendo:', err);
-                    // Fallback: insertar como base64
-                    insertImageAsBase64(file, sectionIdx);
-                }
-            } else {
-                // Sin ID: insertar como base64 (modo offline/nuevo)
-                insertImageAsBase64(file, sectionIdx);
-            }
+            // 👇 SIEMPRE USAR BASE64 (ignorar subida al servidor)
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const imgHtml = `<img src="${event.target?.result}" style="max-width: 100%; width: 300px; height: auto; margin: 10px auto; display: block; border-radius: 4px;" />`;
+                const updated = [...sections];
+                updated[sectionIdx] = { ...updated[sectionIdx], content: updated[sectionIdx].content + imgHtml };
+                onSectionsChange(updated);
+                showNotification('success', 'Imagen insertada correctamente');
+            };
+            reader.readAsDataURL(file);
         };
         input.click();
     };
 
     /** Inserta imagen como base64 en el contenido HTML */
-    const insertImageAsBase64 = (file: File, sectionIdx: number) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const imgHtml = `<img src="${event.target?.result}" style="width:50px; height:50px; object-fit:cover; margin:10px auto; border-radius:8px; display:block;" />`;
-            const updated = [...sections];
-            updated[sectionIdx] = { ...updated[sectionIdx], content: updated[sectionIdx].content + imgHtml };
-            onSectionsChange(updated);
-        };
-        reader.readAsDataURL(file);
-    };
+    //const insertImageAsBase64 = (file: File, sectionIdx: number) => {
+      //  const reader = new FileReader();
+        //reader.onload = (event) => {
+          //  const imgHtml = `<img src="${event.target?.result}" style="max-width: 100%; width: 400px; height: auto; margin: 10px auto; display: block; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />`;
+            //const updated = [...sections];
+            //updated[sectionIdx] = { ...updated[sectionIdx], content: updated[sectionIdx].content + imgHtml };
+            //onSectionsChange(updated);
+            //showNotification('success', 'Imagen insertada correctamente');
+        //};
+        //reader.onerror = () => {
+          //  showNotification('error', 'Error al cargar la imagen');
+        //};
+        //reader.readAsDataURL(file);
+    //};
 
     /** Eliminar una sección */
     const removeSection = async (idx: number) => {
