@@ -343,6 +343,28 @@ class EttpController extends Controller
         }
     }
 
+    public function eliminarPartida(CostoProject $costoProject, $partidaId)
+    {
+        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
+
+        $partida = EttpPartida::where('presupuesto_id', $presupuestoId)
+            ->with(['secciones.imagenes', 'children.secciones.imagenes'])
+            ->findOrFail($partidaId);
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            $partida->delete();
+            DB::connection('costos_tenant')->commit();
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error('Error deleting ETTP partida', ['error' => $e->getMessage(), 'partida_id' => $partidaId]);
+            return response()->json(['error' => 'No se pudo eliminar la partida'], 500);
+        }
+    }
+
     /**
      * Guarda recursivamente las partidas del árbol.
      */

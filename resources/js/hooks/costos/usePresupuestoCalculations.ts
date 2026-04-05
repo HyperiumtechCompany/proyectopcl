@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { PresupuestoRow } from '@/types/presupuestos';
-=======
 import type { PresupuestoRow } from '@/types/presupuestos';
->>>>>>> 92a897fc3b1c7617dcab772f96239d84d45eb1a9
 
 interface PresupuestoCalculations {
     calculateParcial: (metrado: number, precioUnitario: number) => number;

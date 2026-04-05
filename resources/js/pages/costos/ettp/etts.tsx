@@ -124,6 +124,67 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         return process(newData);
     };
 
+    const removeTreeItemById = (items: any[], idToRemove: number | string): any[] => {
+        return items.reduce((acc: any[], item) => {
+            if (item.id === idToRemove) {
+                return acc;
+            }
+
+            const updatedItem = { ...item };
+            if (updatedItem._children) {
+                updatedItem._children = removeTreeItemById(updatedItem._children, idToRemove);
+                if (updatedItem._children.length === 0) {
+                    delete updatedItem._children;
+                }
+            }
+
+            acc.push(updatedItem);
+            return acc;
+        }, []);
+    };
+
+    const handleDeleteRow = async (row: any) => {
+        const data = row.getData();
+        if (!data || !proyecto?.id) return;
+
+        const result = await Swal.fire({
+            title: 'Eliminar partida',
+            text: `¿Eliminar "${data.item} ${data.descripcion}" y todas sus secciones e imágenes?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await axios.delete(`/costos/${proyecto.id}/ettp/partida/${data.id}`, {
+                headers: { 'X-CSRF-TOKEN': getCsrfToken() },
+            });
+
+            const newData = removeTreeItemById(datosBase, data.id);
+            setDatosBase(newData);
+            if (tabulatorRef.current) {
+                tabulatorRef.current.setData(newData);
+            }
+
+            if (selectedRow?.getData()?.id === data.id) {
+                setSelectedRow(null);
+                setCurrentData(null);
+                setCurrentSections([]);
+                setShowDetailsPanel(false);
+            }
+
+            showNotification('success', 'Partida eliminada correctamente.');
+        } catch (error: any) {
+            console.error('[Eliminar partida] Error:', error);
+            showNotification('error', error.response?.data?.error || 'Error al eliminar la partida');
+        }
+    };
+
     // ✅ Función para enriquecer con plantillas SOLO desde BD (sin JSON local)
     const enrichWithTemplate = (item: any): any => {
         // Si ya tiene secciones, mantenerlas
@@ -177,7 +238,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         } else {
             rows.forEach(expandNode);
         }
-        
+
         tabulatorRef.current.restoreRedraw();
         setIsTreeExpanded(!isTreeExpanded);
     };
@@ -302,7 +363,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
         Swal.fire({ title: 'Cargando datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         try {
-    
+
             const response = await axios.post(
                 `/costos/${proyectoId}/ettp/importar-metrados`,
                 options,
@@ -367,7 +428,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     useEffect(() => {
         let isMounted = true;
         const container = tableContainerRef.current;
-        
+
         if (!container) return;
 
         const initTabulator = () => {
@@ -386,22 +447,33 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     columns: [
                         { title: 'Items', field: 'item', width: 120, minWidth: 100, responsive: 0 },
                         { title: 'Descripción', field: 'descripcion', minWidth: 300, widthGrow: 2, formatter: 'textarea', responsive: 1 },
-                        { title: 'Und', field: 'unidad', width: 70, responsive: 2 },
-                        {
-                            title: '', width: 60, responsive: 0,
-                            formatter: (_cell: any, _formatterParams: any, onRendered: any) => {
-                                const data = _cell.getRow().getData();
-                                const unidad = (data.unidad || '').toString().trim();
-                                if (!unidad) return '';
-                                return '<button class="btn-details" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:14px;">📋</button>';
-                            },
-                            cellClick: (_e: any, cell: any) => {
-                                const data = cell.getRow().getData();
-                                const unidad = (data.unidad || '').toString().trim();
-                                if (!unidad) return; // No hacer nada si no tiene unidad
-                                handleRowClick(cell.getRow());
-                            },
+                    { title: 'Und', field: 'unidad', width: 70, responsive: 2 },
+                    {
+                        title: '',
+                        width: 110,
+                        hozAlign: 'center',
+                        headerSort: false,
+                        responsive: 0,
+                        formatter: () => '<button class="btn-delete" style="background:#FF2E2E;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:13px;">🗑️</button>',
+                        cellClick: (_e: any, cell: any) => {
+                            handleDeleteRow(cell.getRow());
                         },
+                    },
+                    {
+                        title: '', width: 60, responsive: 0,
+                        formatter: (_cell: any, _formatterParams: any, onRendered: any) => {
+                            const data = _cell.getRow().getData();
+                            const unidad = (data.unidad || '').toString().trim();
+                            if (!unidad) return '';
+                            return '<button class="btn-details" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:14px;">📋</button>';
+                        },
+                        cellClick: (_e: any, cell: any) => {
+                            const data = cell.getRow().getData();
+                            const unidad = (data.unidad || '').toString().trim();
+                            if (!unidad) return; // No hacer nada si no tiene unidad
+                            handleRowClick(cell.getRow());
+                        },
+                    },
                     ],
                 });
                 tabulatorRef.current = table;
@@ -417,10 +489,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
             isMounted = false;
             clearTimeout(timeoutId);
             if (tabulatorRef.current) {
-                try { 
-                    tabulatorRef.current.destroy(); 
-                } catch (e) { 
-                    console.warn('[Tabulator] Error al destruir:', e); 
+                try {
+                    tabulatorRef.current.destroy();
+                } catch (e) {
+                    console.warn('[Tabulator] Error al destruir:', e);
                 }
             }
         };
@@ -436,7 +508,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Especificaciones Técnicas" />
-       
+
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
                 <EttpHeader
                     onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}

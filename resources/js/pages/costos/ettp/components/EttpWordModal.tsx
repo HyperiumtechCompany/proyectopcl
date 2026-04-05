@@ -80,6 +80,103 @@ const EttpWordModal: React.FC<Props> = ({
         right: { style: docx.BorderStyle.NONE },
     });
 
+    // ─── DETECCIÓN DE NIVEL POR NUMERACIÓN ─────
+    const detectHeadingLevel = (itemNumber: string): number => {
+        if (!itemNumber) return 3;
+        const dotCount = (itemNumber.match(/\./g) || []).length;
+        switch (dotCount) {
+            case 0: return 1; // 01 = HEADING_1
+            case 1: return 2; // 01.01 = HEADING_2
+            default: return 3; // 01.01.01+ = HEADING_3
+        }
+    };
+
+    // ─── CONSTRUCCIÓN DE ÍNDICE INTELIGENTE ─────
+    const buildTableOfContents = (items: any[]): any[] => {
+        const sections: any[] = [];
+        const toc: { level: number; text: string; item: string }[] = [];
+
+        const traverse = (items: any[]) => {
+            items?.forEach((item) => {
+                if (item?.item && item?.descripcion) {
+                    const level = detectHeadingLevel(item.item);
+                    toc.push({
+                        level,
+                        text: `${item.item} ${item.descripcion}`.trim(),
+                        item: item.item,
+                    });
+                    if (item._children?.length) traverse(item._children);
+                }
+            });
+        };
+
+        traverse(items);
+
+        // Encabezado de tabla de contenido
+        sections.push(
+            new window.docx.Paragraph({
+                children: [new window.docx.TextRun({
+                    text: 'Contenido',
+                    bold: true,
+                    font: 'Arial',
+                    size: 28,
+                    color: '#000000',
+                })],
+                alignment: window.docx.AlignmentType.LEFT,
+                spacing: { after: 300, line: 480 },
+            })
+        );
+
+        // Contenido del índice con números de página
+        let pageCounter = 3; // Comienza en página 3 (portada, índice, luego contenido)
+        toc.forEach((entry, index) => {
+            const indent = (entry.level - 1) * 720;
+            const tabStopPosition = 9144; // Posición tab stop para números a la derecha
+
+            sections.push(
+                new window.docx.Paragraph({
+                    children: [
+                        new window.docx.TextRun({
+                            text: entry.text,
+                            font: 'Arial',
+                            size: entry.level === 1 ? 24 : 22,
+                            color: '#000000',
+                            bold: entry.level === 1,
+                        }),
+                        new window.docx.TextRun({
+                            text: '\t',
+                        }),
+                        new window.docx.TextRun({
+                            text: String(pageCounter),
+                            font: 'Arial',
+                            size: entry.level === 1 ? 24 : 22,
+                            color: '#000000',
+                            bold: entry.level === 1,
+                        }),
+                    ],
+                    indent: { left: indent, right: 0 },
+                    tabStops: [
+                        {
+                            type: window.docx.TabStopType.RIGHT,
+                            position: tabStopPosition,
+                            fill: window.docx.TabStopFillType.DOT,
+                        },
+                    ],
+                    spacing: { after: 80, line: 360 },
+                })
+            );
+
+            // Incrementar página
+            if (entry.level === 1 && index > 0) {
+                pageCounter += 1;
+            } else if (index > 0 && entry.level === 1) {
+                pageCounter += 1;
+            }
+        });
+
+        return sections;
+    };
+
     const procesarContenido = async (docx: any, contenido: string) => {
         if (!contenido) return [];
         const tempDiv = document.createElement('div');
@@ -88,7 +185,7 @@ const EttpWordModal: React.FC<Props> = ({
 
         const procesarBloque = async (nodoBloque: HTMLElement) => {
             const runs: any[] = [];
-            
+
             const procesarInline = async (nodo: Node) => {
                 if (nodo.nodeType === Node.TEXT_NODE) {
                     if (nodo.textContent?.trim() !== '') {
@@ -176,31 +273,37 @@ const EttpWordModal: React.FC<Props> = ({
         }
     };
 
-    const processHierarchicalItems = async (docx: any, items: any[], sections: any[], level: number) => {
+    const processHierarchicalItems = async (docx: any, items: any[], sections: any[]) => {
         if (!items?.length) return;
         for (const item of items) {
             if (!item) continue;
 
-            let headingLevel;
-            switch (level) {
-                case 1: headingLevel = docx.HeadingLevel.HEADING_1; break;
-                case 2: headingLevel = docx.HeadingLevel.HEADING_2; break;
-                default: headingLevel = docx.HeadingLevel.HEADING_3; break;
-            }
+            const headingLevel = detectHeadingLevel(item.item);
+            const headingLevelEnum = headingLevel === 1 ? docx.HeadingLevel.HEADING_1 :
+                                     headingLevel === 2 ? docx.HeadingLevel.HEADING_2 :
+                                     docx.HeadingLevel.HEADING_3;
 
             sections.push(new docx.Paragraph({
                 children: [new docx.TextRun({
                     text: `${item.item || ''} ${item.descripcion || ''}`.trim(),
-                    bold: true, font: "Arial Narrow", color: "#000000", size: 24,
+                    bold: true,
+                    font: 'Arial Narrow',
+                    color: '#000000',
+                    size: headingLevel === 1 ? 28 : headingLevel === 2 ? 26 : 24,
                 })],
-                heading: headingLevel,
+                heading: headingLevelEnum,
                 spacing: { before: 300, after: 100, line: 480 },
             }));
 
             if (item.unidad) {
                 sections.push(new docx.Paragraph({
-                    children: [new docx.TextRun({ text: `(Unidad de medida: ${item.unidad})`, font: "Arial Narrow", size: 22, color: "#000000" })],
-                    spacing: { line: 480 },
+                    children: [new docx.TextRun({
+                        text: `(Unidad de medida: ${item.unidad})`,
+                        font: 'Arial Narrow',
+                        size: 22,
+                        color: '#666666'
+                    })],
+                    spacing: { line: 480, after: 200 },
                 }));
             }
 
@@ -209,7 +312,7 @@ const EttpWordModal: React.FC<Props> = ({
             }
 
             if (item._children?.length) {
-                await processHierarchicalItems(docx, item._children, sections, level + 1);
+                await processHierarchicalItems(docx, item._children, sections);
             }
         }
     };
@@ -316,40 +419,99 @@ const EttpWordModal: React.FC<Props> = ({
         // Portada
         const coverPage = [
             new docx.Paragraph({
-                children: [new docx.TextRun({ text: `ESPECIFICACIONES TECNICAS-${nombreArchivo.toUpperCase()}`, bold: true, size: 44, font: "Arial", color: "#000000", underline: { type: docx.UnderlineType.SINGLE } })],
-                alignment: docx.AlignmentType.CENTER, spacing: { after: 200 },
+                children: [new docx.TextRun({
+                    text: `ESPECIFICACIONES TÉCNICAS - ${nombreArchivo.toUpperCase()}`,
+                    bold: true,
+                    size: 44,
+                    font: 'Arial',
+                    color: '#000000',
+                    underline: { type: docx.UnderlineType.SINGLE }
+                })],
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { after: 200 },
             }),
-            new docx.Paragraph({ text: "", border: { bottom: { color: "#000000", space: 1, style: docx.BorderStyle.SINGLE, size: 1 } }, spacing: { after: 400 } }),
+            new docx.Paragraph({
+                text: '',
+                border: { bottom: { color: '#000000', space: 1, style: docx.BorderStyle.SINGLE, size: 1 } },
+                spacing: { after: 400 }
+            }),
         ];
 
         if (principalRun) {
-            coverPage.push(new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [principalRun], spacing: { after: 400 } }));
+            coverPage.push(new docx.Paragraph({
+                alignment: docx.AlignmentType.CENTER,
+                children: [principalRun],
+                spacing: { after: 400 }
+            }));
         }
 
-        // Tabla de contenido
-        const toc = [
-            new docx.Paragraph({ children: [new docx.TextRun({ text: "TABLA DE CONTENIDO", bold: true, font: "Arial", size: 24, color: "#000000" })], heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER, spacing: { after: 400 } }),
-            new docx.TableOfContents("Tabla de Contenido", { hyperlink: true, headingStyleRange: "1-5", size: 24, color: "#000000" }),
-        ];
+        // Tabla de contenidos construida dinámicamente
+        const tocSections = buildTableOfContents(datosFiltrados);
 
         // Contenido
         const contentSections: any[] = [];
-        contentSections.push(new docx.Paragraph({ text: nombreArchivo.toUpperCase(), heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER, bold: true, spacing: { before: 400, after: 200 } }));
-        await processHierarchicalItems(docx, datosFiltrados, contentSections, 1);
+        contentSections.push(new docx.Paragraph({
+            children: [new docx.TextRun({
+                text: nombreArchivo.toUpperCase(),
+                bold: true,
+                size: 28,
+                color: '#000000',
+                font: 'Arial',
+            })],
+            heading: docx.HeadingLevel.HEADING_1,
+            alignment: docx.AlignmentType.CENTER,
+            spacing: { before: 400, after: 200 },
+        }));
+        await processHierarchicalItems(docx, datosFiltrados, contentSections);
 
         const doc = new docx.Document({
             styles: {
-                default: { document: { run: { font: "Arial", color: "#000000", size: 24 } }, paragraph: { spacing: { line: 276 } } },
+                default: {
+                    document: {
+                        run: { font: 'Arial', color: '#000000', size: 24 }
+                    },
+                    paragraph: { spacing: { line: 276 } }
+                },
                 paragraphStyles: [
-                    { id: "Heading1", name: "Heading 1", run: { font: "Arial", size: 36, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                    { id: "Heading2", name: "Heading 2", run: { font: "Arial", size: 30, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                    { id: "Heading3", name: "Heading 3", run: { font: "Arial", size: 26, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
+                    {
+                        id: 'Heading1',
+                        name: 'Heading 1',
+                        run: { font: 'Arial', size: 28, bold: true, color: '#000000' },
+                        paragraph: { spacing: { before: 300, after: 150 } }
+                    },
+                    {
+                        id: 'Heading2',
+                        name: 'Heading 2',
+                        run: { font: 'Arial', size: 26, bold: true, color: '#1f2937' },
+                        paragraph: { spacing: { before: 280, after: 120 } }
+                    },
+                    {
+                        id: 'Heading3',
+                        name: 'Heading 3',
+                        run: { font: 'Arial', size: 24, bold: true, color: '#374151' },
+                        paragraph: { spacing: { before: 240, after: 100 } }
+                    },
                 ],
             },
             sections: [
-                { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: coverPage },
-                { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: toc },
-                { properties: { type: docx.SectionType.CONTINUOUS }, headers: { default: header }, footers: { default: footer }, children: contentSections },
+                {
+                    properties: { type: docx.SectionType.NEW_PAGE },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: coverPage
+                },
+                {
+                    properties: { type: docx.SectionType.NEW_PAGE },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: tocSections
+                },
+                {
+                    properties: { type: docx.SectionType.CONTINUOUS },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: contentSections
+                },
             ],
         });
 

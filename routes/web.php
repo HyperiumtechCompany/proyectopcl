@@ -288,6 +288,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/', [EttpController::class, 'show'])->name('index');
             Route::post('/importar-metrados', [EttpController::class, 'importarMetrados'])->name('importar');
             Route::post('/guardar-general', [EttpController::class, 'guardarEspecificaciones'])->name('guardar');
+            Route::delete('/partida/{partidaId}', [EttpController::class, 'eliminarPartida'])->name('partida.eliminar');
             Route::get('/partida/{partidaId}/secciones', [EttpController::class, 'getSecciones'])->name('secciones');
             Route::put('/partida/{partidaId}/secciones', [EttpController::class, 'guardarSecciones'])->name('secciones.guardar');
             Route::delete('/seccion/{id}', [EttpController::class, 'eliminarSeccion'])->name('seccion.eliminar');
