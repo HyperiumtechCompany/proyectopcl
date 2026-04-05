@@ -183,6 +183,7 @@ const EttpWordModal: React.FC<Props> = ({
             if (!item) continue;
 
             // Calcular nivel por cantidad de puntos en item.item
+
             const itemCode = item.item || '';
             const dotCount = (itemCode.match(/\./g) || []).length;
 
@@ -236,6 +237,7 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── GENERACIÓN PRINCIPAL ─────
+    
     const fetchImageAsDataURL = async (url: string): Promise<string | null> => {
         try {
             const response = await fetch(url);
