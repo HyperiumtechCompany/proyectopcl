@@ -212,7 +212,7 @@ const EttpWordModal: React.FC<Props> = ({
                                     });
                                     const partesUrl = base64Data.split(',');
                                     if (partesUrl.length > 1) dataStr = partesUrl[1];
-                                } catch (err) {}
+                                } catch (err) { }
                             }
                             if (dataStr) {
                                 runs.push(new docx.ImageRun({
@@ -275,6 +275,7 @@ const EttpWordModal: React.FC<Props> = ({
 
     const processHierarchicalItems = async (docx: any, items: any[], sections: any[]) => {
         if (!items?.length) return;
+
         for (const item of items) {
             if (!item) continue;
 
@@ -316,7 +317,6 @@ const EttpWordModal: React.FC<Props> = ({
             }
         }
     };
-
     const readFileAsDataURL = (file: File): Promise<string | null> => {
         return new Promise((resolve, reject) => {
             if (!file) { resolve(null); return; }
@@ -328,6 +328,7 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── GENERACIÓN PRINCIPAL ─────
+    
     const fetchImageAsDataURL = async (url: string): Promise<string | null> => {
         try {
             const response = await fetch(url);
@@ -390,9 +391,11 @@ const EttpWordModal: React.FC<Props> = ({
                     rows: [new docx.TableRow({
                         children: [
                             new docx.TableCell({ width: { size: 15, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [new docx.Paragraph({ alignment: docx.AlignmentType.LEFT, children: logoRun ? [logoRun] : [] })] }),
-                            new docx.TableCell({ width: { size: 70, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [
-                                new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [new docx.TextRun({ text: "ESPECIFICACIONES TÉCNICAS", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
-                            ]}),
+                            new docx.TableCell({
+                                width: { size: 70, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [
+                                    new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [new docx.TextRun({ text: "ESPECIFICACIONES TÉCNICAS", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
+                                ]
+                            }),
                             new docx.TableCell({ width: { size: 15, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [new docx.Paragraph({ alignment: docx.AlignmentType.RIGHT, children: escudoRun ? [escudoRun] : [] })] }),
                         ],
                     })],
@@ -448,6 +451,31 @@ const EttpWordModal: React.FC<Props> = ({
         // Tabla de contenidos construida dinámicamente
         const tocSections = buildTableOfContents(datosFiltrados);
 
+                    const textoItem = `${item.item} ${item.descripcion || ''}`;
+                    const puntos = (item.item.match(/\./g) || []).length;
+                    const indent = puntos * 20;
+
+                    result.push(new docx.Paragraph({
+                        children: [
+                            new docx.TextRun({ text: textoItem, size: 22, font: "Arial" }),
+                            new docx.TextRun({ text: " .................................. ", size: 22, font: "Arial" }),
+                            new docx.TextRun({ text: "Pág.", size: 22, font: "Arial" })
+                        ],
+                        indent: { left: indent },
+                        spacing: { after: 60 }
+                    }));
+
+                    if (item._children?.length) {
+                        recorrer(item._children, nivel + 1);
+                    }
+                });
+            };
+
+            recorrer(items, 0);
+            return result;
+        };
+
+       
         // Contenido
         const contentSections: any[] = [];
         contentSections.push(new docx.Paragraph({
@@ -514,6 +542,8 @@ const EttpWordModal: React.FC<Props> = ({
                 },
             ],
         });
+
+        doc.Settings.updateFields = true;
 
         try {
             const blob = await docx.Packer.toBlob(doc);
@@ -651,11 +681,10 @@ const EttpWordModal: React.FC<Props> = ({
                     <button
                         onClick={handleGenerate}
                         disabled={generating}
-                        className={`px-4 py-2 rounded-md text-sm font-medium ${
-                            generating
+                        className={`px-4 py-2 rounded-md text-sm font-medium ${generating
                                 ? 'bg-gray-400 cursor-not-allowed text-white'
                                 : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+                            }`}
                     >
                         {generating ? 'Generando...' : 'Generar'}
                     </button>

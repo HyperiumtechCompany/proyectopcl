@@ -478,6 +478,8 @@ export default function Show() {
                                                     <strong className="font-semibold">
                                                         {v}
                                                     </strong>
+
+                                                    
                                                 </span>
                                             ))}
                                         </div>
