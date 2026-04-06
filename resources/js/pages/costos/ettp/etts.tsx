@@ -49,6 +49,8 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const [loadingMetrados, setLoadingMetrados] = useState(false);
     const [isWordModalOpen, setIsWordModalOpen] = useState(false);
     const [isTreeExpanded, setIsTreeExpanded] = useState(false);
+    const [savedScrollTop, setSavedScrollTop] = useState(0);
+    const [savedExpandedIds, setSavedExpandedIds] = useState<Array<number | string>>([]);
     const [selectedSections, setSelectedSections] = useState<SelectedSections>({
         estructura: false,
         arquitectura: false,
@@ -374,6 +376,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
 
             if (response.data && response.data.length > 0) {
                 setDatosBase(response.data);
+                setShowMetradosPanel(false);
                 showNotification('success', `✅ Se cargaron ${response.data.length} partidas`);
             } else {
                 showNotification('warning', 'No se encontraron datos');
@@ -412,6 +415,34 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
     const getTableData = () => {
         if (isWordModalOpen) return datosBase;
         return tabulatorRef.current?.getData() || datosBase;
+    };
+
+    const captureTableState = () => {
+        if (!tabulatorRef.current) return;
+        const rows = tabulatorRef.current.getRows() || [];
+        const expandedIds: Array<number | string> = [];
+        rows.forEach((row: any) => {
+            if (typeof row.isTreeExpanded === 'function' && row.isTreeExpanded()) {
+                expandedIds.push(row.getData()?.id);
+            }
+        });
+        setSavedExpandedIds(expandedIds);
+    };
+
+    const restoreTableState = () => {
+        if (!tabulatorRef.current) return;
+        const rows = tabulatorRef.current.getRows() || [];
+        rows.forEach((row: any) => {
+            const rowId = row.getData()?.id;
+            if (savedExpandedIds.includes(rowId)) {
+                row.treeExpand();
+            } else {
+                row.treeCollapse();
+            }
+        });
+        if (tableContainerRef.current) {
+            tableContainerRef.current.scrollTop = savedScrollTop;
+        }
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -454,7 +485,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                         hozAlign: 'center',
                         headerSort: false,
                         responsive: 0,
-                        formatter: () => '<button class="btn-delete" style="background:#FF2E2E;color:white;border:none;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:13px;">🗑️</button>',
+                        formatter: () => '<button class="btn-delete" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:4px;padding:6px 10px;cursor:pointer;font-size:13px;">🗑️ Eliminar</button>',
                         cellClick: (_e: any, cell: any) => {
                             handleDeleteRow(cell.getRow());
                         },
@@ -514,6 +545,10 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     onToggleMetrados={() => setShowMetradosPanel(prev => !prev)}
                     onSave={handleSave}
                     onShowWordModal={() => {
+                        if (tableContainerRef.current) {
+                            setSavedScrollTop(tableContainerRef.current.scrollTop);
+                        }
+                        captureTableState();
                         setShowWordModal(true);
                         setIsWordModalOpen(true);
                     }}
@@ -556,6 +591,7 @@ const EttpIndex = ({ proyecto, partidas }: EttpPageProps) => {
                     onClose={() => {
                         setShowWordModal(false);
                         setIsWordModalOpen(false);
+                        restoreTableState();
                     }}
                     getData={getTableData}
                     showNotification={showNotification}

@@ -31,7 +31,7 @@ import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/elect
 import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectricas/electricas_types';
 import {
   buildElectricasResumenRows, buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, colLetter, mkBlank,
-  mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
+  mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, pad2,
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
   levelStyle, toRoman,
 } from './metradoelectricas/electricas_utils';
@@ -567,21 +567,66 @@ export default function ElectricasIndex() {
       }
 
       const newRows = buildElectricasResumenRows(met, resumenRows);
-      const newSheet = rowsToSheet(newRows, resumenCols, 'Resumen', resIdx);
+      const prevOrder = inst.getSheet().order;
 
-      inst.setSheetData(
-        'Resumen',
-        newSheet.data,
-        newSheet.config,
-        newSheet.celldata,
-      );
+      // Activar hoja Resumen, limpiar y repoblar
+      inst.setSheetActive(resIdx);
+      inst.clearRange({ row: [0, 3000], column: [0, resumenCols.length + 1] });
+
+      // Encabezados
+      resumenCols.forEach((col, c) => {
+        inst.setCellValue(0, c, {
+          v: col.label,
+          m: col.label,
+          ct: { fa: 'General', t: 'g' },
+          bg: '#0f172a',
+          fc: '#94a3b8',
+          bl: 1,
+          fs: 10,
+        }, { isRefresh: false });
+      });
+
+      // Filas de datos
+      newRows.forEach((row, ri) => {
+        const level = toNum(row._level) || 1;
+        const kind = String(row._kind ?? 'leaf') as RowKind;
+        const st = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+
+        resumenCols.forEach((col, c) => {
+          const raw = (row as any)[col.key] ?? '';
+          let cell: any;
+
+          if (col.key === 'total' || col.key === 'unidad') {
+            cell = styledNum(toNum(raw), st);
+          } else if (col.key === 'partida') {
+            // Normalizar partida con formato de pares: 05, 05.01, 05.01.01, etc.
+            const normalized = String(raw)
+              .split('.')
+              .map(p => pad2(p))
+              .join('.');
+            cell = styledTxt(normalized, normalized, st);
+          } else if (col.key === 'descripcion') {
+            const desc = String(raw).trim();
+            cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
+          } else {
+            cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
+          }
+
+          inst.setCellValue(ri + 1, c, cell, { isRefresh: false });
+        });
+      });
+
+      inst.refresh();
+      inst.setSheetActive(prevOrder);
 
       // Forzar guardado del resumen
+      const refreshedSheets = inst.getAllSheets() as any[];
+      scheduleSave(refreshedSheets, ['Resumen']);
       saveNow(['Resumen']);
 
       setSyncing(false);
     }, 100);
-  }, [ls, resumenRows, resumenCols, saveNow]);
+  }, [ls, resumenRows, resumenCols, saveNow, scheduleSave]);
 
   // ═══════════════════════════════════════════════════════════
   // EFECTOS
