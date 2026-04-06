@@ -35,10 +35,10 @@ export interface DisciplineTemplate {
  *   07 = Gas
  */
 export const DISCIPLINE_TEMPLATES: Record<DisciplineKey, DisciplineTemplate> = {
-  arquitectura:   { code: '02', base: 2,  description: 'INSTALACIONES DE ARQUITECTURA' },
+  arquitectura:   { code: '02', base: 2,  description: 'METRADO ARQUITECTURA' },
   estructuras:    { code: '03', base: 3,  description: 'METRADO ESTRUCTURAS' },
-  sanitarias:     { code: '04', base: 4,  description: 'INSTALACIONES SANITARIAS' },
-  electricas:     { code: '05', base: 5,  description: 'INSTALACIONES ELÉCTRICAS' },
+  sanitarias:     { code: '04', base: 4,  description: 'METRADO SANITARIAS' },
+  electricas:     { code: '05', base: 5,  description: 'METRADO ELÉCTRICAS' },
   comunicaciones: { code: '06', base: 6,  description: 'METRADO COMUNICACIONES' },
   gas:            { code: '07', base: 7,  description: 'METRADO GAS' },
 };

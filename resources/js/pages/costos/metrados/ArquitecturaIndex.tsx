@@ -131,7 +131,7 @@ function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label:
           const isRes = s.name === 'Resumen';
           const isExt = s.name === 'Exterior';
           const isCis = s.name === 'Cisterna';
-          
+
           if (isRes) url = `/costos/${projectId}/metrado-arquitectura/resumen`;
           else if (isExt) url = `/costos/${projectId}/metrado-arquitectura/exterior`;
           else if (isCis) url = `/costos/${projectId}/metrado-arquitectura/cisterna`;
@@ -160,7 +160,7 @@ function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label:
 
       const good = results.filter((r) => r.ok);
       const bad = results.find((r) => !r.ok);
-      
+
       if (bad) {
         setSaveError(`Error ${bad.status}`);
       } else {
@@ -175,10 +175,10 @@ function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label:
                 const file = inst.getFile()[sheetIdx];
                 const sheetData = file?.data;
                 const dbIdColIdx = isRes ? 0 : CI['_dbid'];
-                
+
                 if (sheetData && dbIdColIdx !== undefined && dbIdColIdx >= 0) {
                   json.rows.forEach((dbRow: any, i: number) => {
-                    const r = i + 1; 
+                    const r = i + 1;
                     if (sheetData[r]) {
                       if (!sheetData[r][dbIdColIdx]) {
                         sheetData[r][dbIdColIdx] = { v: dbRow.id, m: String(dbRow.id) };
@@ -224,7 +224,7 @@ export default function ArquitecturaIndex() {
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',               href: '/costos' },
-    { title: project.nombre,         href: `/costos/${project.id}` },
+    { title: project?.nombre || 'Proyecto',         href: `/costos/${project?.id || 0}` },
     { title: 'Metrado Arquitectura',   href: '#' },
   ];
 
@@ -246,7 +246,7 @@ export default function ArquitecturaIndex() {
   }, [modulos, exterior, cisterna, moduleCount, resumen]);
 
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
-  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project.id, resumenCols);
+  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project?.id || 0, resumenCols);
 
   const [syncing,  setSyncing]  = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
@@ -254,6 +254,7 @@ export default function ArquitecturaIndex() {
   const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
   const progCount = useRef(0);
+  const isProgrammaticChange = useRef(false);
 
   const initialSheets = useMemo(() => {
     const sheets = [];
@@ -303,6 +304,7 @@ export default function ArquitecturaIndex() {
     const { level, kind } = rowMeta(currentRow);
     const rowStyle = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
     const descripcionLimpia = descripcion.trim();
+    const rowNum = ri + 1;
 
     if (CI.descripcion !== undefined) {
       ups.push({
@@ -343,14 +345,20 @@ export default function ArquitecturaIndex() {
 
       if (k === outputKey) {
         const { formula: cellFormula } = buildRowFormulaMeta({
-          rowIndex: ri + 1,
+          rowIndex: rowNum,
           outputKey: k,
           formulaKey,
           formulaExpression,
           formulaLabel: formulaLabel || formula,
           value: r4(outputs[k] ?? 0),
         });
-        ups.push({ r: ri, c, v: cellFormula ? mkFormula(cellFormula, r4(outputs[k] ?? 0)) : mkNum(r4(outputs[k] ?? 0), true) });
+        ups.push({
+          r: ri,
+          c,
+          v: cellFormula
+            ? mkFormula(cellFormula, r4(outputs[k] ?? 0))
+            : mkNum(r4(outputs[k] ?? 0), true),
+        });
         return;
       }
 
@@ -358,12 +366,20 @@ export default function ArquitecturaIndex() {
     });
 
     if (CI.total !== undefined) {
-      ups.push({ r: ri, c: CI.total, v: mkNum(r4(outputs[outputKey] ?? 0), true) });
+      const totalValue = r4(outputs[outputKey] ?? 0);
+
+      ups.push({
+        r: ri,
+        c: CI.total,
+        v: mkNum(totalValue, true),
+      });
     }
 
+    isProgrammaticChange.current = true;
+
     progCount.current++;
-    ups.forEach(({ r, c, v }, i) => {
-      ls()?.setCellValue(r, c, v, {
+    ups.forEach(({ c, v }, i) => {
+      ls()?.setCellValue(ri, c, v, {
         order: sheetOrder,
         isRefresh: i === ups.length - 1,
       });
@@ -372,8 +388,19 @@ export default function ArquitecturaIndex() {
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       recalc();
+
+      setTimeout(() => {
+        const all = getAllSheets();
+        if (all.length) {
+          scheduleSave(
+            all,
+            active?.name ? [String(active.name)] : undefined,
+          );
+        }
+        isProgrammaticChange.current = false;
+      }, 50);
     }, 120);
-  }, [getActive, ls, recalc]);
+  }, [getActive, getAllSheets, ls, recalc, scheduleSave]);
 
   const openCalc = useCallback(() => {
     const inst = ls();
@@ -499,7 +526,7 @@ export default function ArquitecturaIndex() {
         return;
       }
       const ci  = CI['unidad'];
-      const rng = `${colLetter(ci)}2:${colLetter(ci)}6000`; 
+      const rng = `${colLetter(ci)}2:${colLetter(ci)}6000`;
       const opt = { type: 'dropdown', value1: UNITS.join(','), prohibitInput: false };
 
       sheets
@@ -527,11 +554,11 @@ export default function ArquitecturaIndex() {
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="flex h-[calc(100vh-65px)] w-full flex-col overflow-hidden bg-slate-50 dark:bg-gray-950">
-        
+
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between
           gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-md
           dark:border-gray-800/60 dark:bg-gray-900/90">
-          
+
           <div className="flex items-center gap-2.5">
             <button type="button" onClick={() => router.get(`/costos/${project.id}`)}
               className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400

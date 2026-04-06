@@ -42,12 +42,11 @@ export const ALL_COLS: ColumnDef[] = [...MAIN_COLS, ...META_COLS];
 export const CI = Object.fromEntries(ALL_COLS.map((c, i) => [c.key, i]));
 
 // ── Columnas de la hoja Resumen ───────────────────────────────
-export const RESUMEN_COLS: ColumnDef[] = [
+export const RESUMEN_BASE_COLS: ColumnDef[] = [
   { key: '_dbid',       label: '',             width: 1   },
   { key: 'partida',     label: 'Ítem',         width: 120 },
   { key: 'descripcion', label: 'Descripción',  width: 360 },
   { key: 'unidad',      label: 'Und',          width: 65  },
-  { key: 'total',       label: 'Total',         width: 95  },
 ];
 
 // ── Perfiles de unidad ────────────────────────────────────────
@@ -59,7 +58,7 @@ export const RESUMEN_COLS: ColumnDef[] = [
  *  - fn: función de cálculo
  */
 export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
-  
+
   // ─────────────────────────────────────────────────────────────
   // METROS CUADRADOS (m²) — 5 versiones
   // ─────────────────────────────────────────────────────────────
@@ -186,7 +185,7 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
         if (!v.kgm) {
           return {
             lon: r4(lon),
-            kg: 0, 
+            kg: 0,
           };
         }
         return { lon: r4(lon), kg: r4(kg) };
@@ -433,8 +432,8 @@ export const UNIT_PROFILES: Record<string, UnitProfile[]> = {
 
 /** Fallback cuando la unidad no está registrada */
 export const DEFAULT_PROFILE: UnitProfile = {
-  key: 'default_v1',        
-  label: 'Fórmula Genérica', 
+  key: 'default_v1',
+  label: 'Fórmula Genérica',
   activeInputs: ['elsim', 'largo', 'ancho', 'alto', 'nveces'],
   outputKey:    'und',
   formula:      'Ingresa los valores y selecciona fórmula personalizada',

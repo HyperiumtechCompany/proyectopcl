@@ -203,6 +203,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                 Route::patch('/cisterna', [MetradoSanitariasController::class, 'updateCisterna'])->name('cisterna.update');
                 Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
                 Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
+                Route::post('/resumen/sync', [MetradoSanitariasController::class, 'syncResumen'])->name('resumen.sync');
             });
 
             Route::prefix('/metrado-electricas')->name('metrado-electricas.')->group(function () {
@@ -288,6 +289,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/', [EttpController::class, 'show'])->name('index');
             Route::post('/importar-metrados', [EttpController::class, 'importarMetrados'])->name('importar');
             Route::post('/guardar-general', [EttpController::class, 'guardarEspecificaciones'])->name('guardar');
+            Route::delete('/partida/{partidaId}', [EttpController::class, 'eliminarPartida'])->name('partida.eliminar');
             Route::get('/partida/{partidaId}/secciones', [EttpController::class, 'getSecciones'])->name('secciones');
             Route::put('/partida/{partidaId}/secciones', [EttpController::class, 'guardarSecciones'])->name('secciones.guardar');
             Route::delete('/seccion/{id}', [EttpController::class, 'eliminarSeccion'])->name('seccion.eliminar');

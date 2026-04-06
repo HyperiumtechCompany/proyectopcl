@@ -157,12 +157,32 @@ trait HandleMetradoSpreadsheet
     protected function queryRows(CostoProject $project, string $table): array
     {
         $presupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($project->database_name);
+
         return DB::connection('costos_tenant')
             ->table($table)
             ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
             ->get()
-            ->map(fn($r) => (array)$r)
+            ->map(function ($r) {
+                $row = (array) $r;
+
+                if (!array_key_exists('_dbid', $row) && array_key_exists('id', $row)) {
+                    $row['_dbid'] = $row['id'];
+                }
+
+                if (!array_key_exists('_level', $row) && array_key_exists('nivel', $row)) {
+                    $row['_level'] = $row['nivel'];
+                }
+
+                if (!array_key_exists('_kind', $row) && array_key_exists('node_type', $row)) {
+                    $nodeType = strtolower(trim((string) $row['node_type']));
+                    $row['_kind'] = in_array($nodeType, ['titulo', 'subtitulo', 'group'], true)
+                        ? 'group'
+                        : 'leaf';
+                }
+
+                return $row;
+            })
             ->toArray();
     }
 

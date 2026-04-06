@@ -26,14 +26,14 @@ import type { BreadcrumbItem } from '@/types';
 // Módulo local
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 import { CalcModal }     from './metradogas/gas_CalcModal';
-import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
+import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradogas/gas_NumberingModal';
 import type { CalcPayload, GasPageProps, RowKind } from './metradogas/gas_types';
 import {
-  buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, colLetter, mkBlank,
-  mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet,
+  buildGasResumenRows, buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, colLetter, mkBlank,
+  mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, pad2,
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
-  levelStyle,
+  levelStyle, toRoman,
 } from './metradogas/gas_utils';
 
 // ═══════════════════════════════════════════════════════════════
@@ -124,14 +124,18 @@ function useLuckysheet() {
 // HOOK: useAutoSave
 // ═══════════════════════════════════════════════════════════════
 
-function useAutoSave(projectId: number) {
+function useAutoSave(
+  projectId: number,
+  resumenCols: Array<{ key: string; label: string; width: number }>,
+) {
   const [saving,    setSaving]    = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSheets = useRef<any[]>([]);
+  const dirtySheetNames = useRef<Set<string>>(new Set());
 
-  const doSave = useCallback(async (sheets: any[]) => {
+  const doSave = useCallback(async (sheets: any[], targetSheetNames?: string[]) => {
     setSaving(true);
     setSaveError(null);
 
@@ -143,30 +147,47 @@ function useAutoSave(projectId: number) {
     };
 
     try {
-      const results = await Promise.all(
-        sheets
-          .filter((s) => s?.name === 'Metrado' || s?.name === 'Resumen')
-          .map((s) => {
-            const isMet = s.name === 'Metrado';
-            return fetch(
-              `/costos/${projectId}/metrado-gas/${isMet ? 'metrado' : 'resumen'}`,
-              {
-                method:  'PATCH',
-                headers,
-                body:    JSON.stringify({
-                  rows: sheetToRows(s, isMet ? ALL_COLS : RESUMEN_COLS),
-                }),
-              },
-            ).then(async (r) => {
-              const json = await r.json().catch(() => null);
-              return { ok: r.ok, status: r.status, sheet: s, json, isRes: !isMet };
-            });
-          }),
+      const targetNames = new Set(
+        targetSheetNames?.length
+          ? targetSheetNames
+          : sheets.map((s) => String(s?.name ?? '')),
       );
-      
+      const sheetsToSave = sheets.filter((s) =>
+        targetNames.has(String(s?.name ?? '')),
+      );
+
+      if (!sheetsToSave.length) return;
+
+      const results = await Promise.all(
+        sheetsToSave.map((s) => {
+          const name = String(s?.name ?? '');
+          const isRes = name === 'Resumen';
+
+          let endpoint = '';
+          if (isRes) endpoint = 'resumen';
+          else endpoint = 'metrado';
+
+          if (!endpoint) return Promise.resolve({ ok: false, status: 400, sheet: s, json: null, isRes });
+
+          return fetch(
+            `/costos/${projectId}/metrado-gas/${endpoint}`,
+            {
+              method:  'PATCH',
+              headers,
+              body:    JSON.stringify({
+                rows: sheetToRows(s, isRes ? resumenCols : ALL_COLS),
+              }),
+            },
+          ).then(async (r) => {
+            const json = await r.json().catch(() => null);
+            return { ok: r.ok, status: r.status, sheet: s, json, isRes };
+          });
+        }),
+      );
+
       const good = results.filter((r) => r.ok);
       const bad = results.find((r) => !r.ok);
-      
+
       if (bad) {
         setSaveError(`Error ${bad.status}`);
       } else {
@@ -182,7 +203,7 @@ function useAutoSave(projectId: number) {
                 const file = inst.getFile()[sheetIdx];
                 const sheetData = file?.data;
                 const dbIdColIdx = isRes ? 0 : CI['_dbid'];
-                
+
                 if (sheetData && dbIdColIdx !== undefined && dbIdColIdx >= 0) {
                   json.rows.forEach((dbRow: any, i: number) => {
                     const r = i + 1; // Fila 0 es cabecera
@@ -206,17 +227,37 @@ function useAutoSave(projectId: number) {
     } finally {
       setSaving(false);
     }
-  }, [projectId]);
+  }, [projectId, resumenCols]);
 
-  const scheduleSave = useCallback((sheets: any[]) => {
-    latestSheets.current = sheets;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => doSave(latestSheets.current), SAVE_DEBOUNCE);
-  }, [doSave]);
+  const scheduleSave = useCallback(
+    (sheets: any[], changedSheetNames?: string[]) => {
+      latestSheets.current = sheets;
+      (changedSheetNames ?? []).forEach((name) =>
+        dirtySheetNames.current.add(name),
+      );
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(
+        () => doSave(latestSheets.current),
+        SAVE_DEBOUNCE,
+      );
+    },
+    [doSave],
+  );
 
-  const saveNow = useCallback(() => doSave(latestSheets.current), [doSave]);
+  const saveNow = useCallback(
+    (targetSheetNames?: string[]) =>
+      doSave(latestSheets.current, targetSheetNames),
+    [doSave],
+  );
 
-  return { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets };
+  return {
+    saving,
+    lastSaved,
+    saveError,
+    scheduleSave,
+    saveNow,
+    latestSheets,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -224,18 +265,45 @@ function useAutoSave(projectId: number) {
 // ═══════════════════════════════════════════════════════════════
 
 export default function GasIndex() {
-  const { project, metrado, resumen } = usePage<GasPageProps>().props;
+  const { project, metrado, resumen } =
+    usePage<GasPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',             href: '/costos' },
-    { title: project.nombre,       href: `/costos/${project.id}` },
+    { title: project?.nombre || 'Proyecto',       href: `/costos/${project?.id || 0}` },
     { title: 'Metrado Gas', href: '#' },
   ];
 
   // ── Hooks ──────────────────────────────────────────────────
+  const resumenCols = useMemo(
+    () => [
+      ...RESUMEN_BASE_COLS,
+      { key: 'total', label: 'Total', width: 115 },
+    ],
+    [],
+  );
+
+  const resumenRows = useMemo(() => {
+    const generated = buildGasResumenRows(
+      metrado || [],
+      resumen ?? [],
+    );
+    return generated.length
+      ? generated
+      : resumen?.length
+        ? resumen
+        : buildResumenRows(metrado || []);
+  }, [metrado, resumen]);
+
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
-  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } =
-    useAutoSave(project.id);
+  const {
+    saving,
+    lastSaved,
+    saveError,
+    scheduleSave,
+    saveNow,
+    latestSheets,
+  } = useAutoSave(project?.id || 0, resumenCols);
 
   // ── UI State ───────────────────────────────────────────────
   const [syncing,  setSyncing]  = useState(false);
@@ -247,16 +315,29 @@ export default function GasIndex() {
 
   // ── Guard de recálculo (evita bucles) ──────────────────────
   const progCount = useRef(0);
+  const isProgrammaticChange = useRef(false);
 
-  // ── Datos iniciales ────────────────────────────────────────
-  const resumenRows = useMemo(() =>
-    buildResumenRows(metrado?.length ? metrado : (resumen ?? [])),
-  []);// eslint-disable-line
+  // ── Datos iniciales (2 hojas: Metrado y Resumen) ─────────
+  const initialSheets = useMemo(() => {
+    const sheets = [];
+    let currentOrder = 0;
 
-  const initialSheets = useMemo(() => [
-    rowsToSheet(injectTemplateIfEmpty(metrado ?? [], 'gas'), ALL_COLS,     'Metrado', 0),
-    rowsToSheet(resumenRows,   RESUMEN_COLS, 'Resumen', 1),
-  ], []);// eslint-disable-line
+    // Metrado
+    sheets.push(
+      rowsToSheet(
+        injectTemplateIfEmpty(metrado || [], 'gas'),
+        ALL_COLS,
+        'Metrado',
+        currentOrder++,
+      ),
+    );
+
+    sheets.push(
+      rowsToSheet(resumenRows, resumenCols, 'Resumen', currentOrder++),
+    );
+
+    return sheets;
+  }, [metrado, resumenRows, resumenCols]);
 
   // ═══════════════════════════════════════════════════════════
   // RECÁLCULO PRINCIPAL
@@ -280,7 +361,11 @@ export default function GasIndex() {
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       const all = getAllSheets();
-      if (all.length) scheduleSave(all);
+      if (all.length)
+        scheduleSave(
+          all,
+          active?.name ? [String(active.name)] : undefined,
+        );
     }, 120);
   }, [ls, getActive, setCells, getAllSheets, scheduleSave]);
 
@@ -289,77 +374,124 @@ export default function GasIndex() {
   // Escribe inputs + output en la fila y re-recalcula
   // ═══════════════════════════════════════════════════════════
 
-  const applyCalc = useCallback(({ ri, descripcion, unidad, inputs, outputs, outputKey, formulaKey, formulaLabel, formulaExpression, formula }: CalcPayload) => {
-    const active = getActive();
-    if (!active || active.name === 'Resumen') return;
+const applyCalc = useCallback(
+    ({
+      ri,
+      descripcion,
+      unidad,
+      outputKey,
+      inputs,
+      outputs,
+      formulaKey,
+      formulaLabel,
+      formulaExpression,
+      formula,
+    }: CalcPayload) => {
+      const active = getActive();
+      if (!active || active.name === 'Resumen') return;
 
-    const sheetOrder = active.order ?? 0;
-    const ups: Array<{ r: number; c: number; v: any }> = [];
+      const sheetOrder = active.order ?? 0;
+      const ups: Array<{ r: number; c: number; v: any }> = [];
+      const currentRow = readRow(active.data || [], ri);
+      const { level, kind } = rowMeta(currentRow);
+      const rowStyle = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+      const descripcionLimpia = descripcion.trim();
+      const rowNum = ri + 1;
 
-  if (descripcion && CI.descripcion !== undefined) {
-    ups.push({
-      r: ri,
-      c: CI.descripcion,
-      v: mkTxt(descripcion.trim())
-    });
-  }
-
-    if (CI.unidad !== undefined) {
-      ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
-    }
-
-    ([
-      ['_formula_key', formulaKey || ''],
-      ['_formula_output', outputKey || ''],
-      ['_formula_expr', formulaExpression || ''],
-      ['_formula_label', formulaLabel || formula || ''],
-    ] as const).forEach(([key, value]) => {
-      const c = CI[key];
-      if (c !== undefined) {
-        ups.push({ r: ri, c, v: value ? mkTxt(String(value)) : mkBlank() });
-      }
-    });
-
-    // Inputs
-    (['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'] as const).forEach((k) => {
-      const c = CI[k];
-      if (c !== undefined) ups.push({ r: ri, c, v: mkNum(inputs[k]) });
-    });
-
-    // Outputs (solo los que tienen valor)
-    (['lon', 'area', 'vol', 'kg', 'und'] as const).forEach((k) => {
-      const c = CI[k];
-      if (c === undefined) return;
-
-      if (k === outputKey) {
-        const { formula: cellFormula } = buildRowFormulaMeta({
-          rowIndex: ri + 1,
-          outputKey: k,
-          formulaKey,
-          formulaExpression,
-          formulaLabel: formulaLabel || formula,
-          value: r4(outputs[k] ?? 0),
+      if (CI.descripcion !== undefined) {
+        ups.push({
+          r: ri,
+          c: CI.descripcion,
+          v: styledTxt(
+            descripcionLimpia,
+            indent(level, kind === 'leaf') + descripcionLimpia,
+            rowStyle,
+          ),
         });
-        ups.push({ r: ri, c, v: cellFormula ? mkFormula(cellFormula, r4(outputs[k] ?? 0)) : mkNum(r4(outputs[k] ?? 0), true) });
-        return;
       }
 
-      ups.push({ r: ri, c, v: mkBlank() });
-    });
+      if (CI.unidad !== undefined) {
+        ups.push({ r: ri, c: CI.unidad, v: mkTxt(unidad) });
+      }
 
-    progCount.current++;
-    ups.forEach(({ r, c, v }, i) => {
-      ls()?.setCellValue(r, c, v, {
-        order:     sheetOrder,
-        isRefresh: i === ups.length - 1,
+      (
+        [
+          ['_formula_key', formulaKey || ''],
+          ['_formula_output', outputKey || ''],
+          ['_formula_expr', formulaExpression || ''],
+          ['_formula_label', formulaLabel || formula || ''],
+        ] as const
+      ).forEach(([key, value]) => {
+        const c = CI[key];
+        if (c !== undefined) {
+          ups.push({ r: ri, c, v: value ? mkTxt(String(value)) : mkBlank() });
+        }
       });
-    });
 
-    setTimeout(() => {
-      progCount.current = Math.max(0, progCount.current - 1);
-      recalc();
-    }, 120);
-  }, [getActive, ls, recalc]);
+      (
+        ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm'] as const
+      ).forEach((k) => {
+        const c = CI[k];
+        if (c !== undefined) ups.push({ r: ri, c, v: mkNum(inputs[k]) });
+      });
+
+      (['lon', 'area', 'vol', 'kg', 'und'] as const).forEach((k) => {
+        const c = CI[k];
+        if (c === undefined) return;
+
+        if (k === outputKey) {
+          const { formula: cellFormula } = buildRowFormulaMeta({
+            rowIndex: ri + 1,
+            outputKey: k,
+            formulaKey,
+            formulaExpression,
+            formulaLabel: formulaLabel || formula,
+            value: r4(outputs[k] ?? 0),
+          });
+          ups.push({
+            r: ri,
+            c,
+            v: cellFormula
+              ? mkFormula(cellFormula, r4(outputs[k] ?? 0))
+              : mkNum(r4(outputs[k] ?? 0), true),
+          });
+          return;
+        }
+
+        ups.push({ r: ri, c, v: mkBlank() });
+      });
+
+      if (CI.total !== undefined) {
+        const totalValue = r4(outputs[outputKey] ?? 0);
+
+        ups.push({
+          r: ri,
+          c: CI.total,
+          v: mkNum(totalValue, true),
+        });
+      }
+
+      isProgrammaticChange.current = true;
+
+      progCount.current++;
+      ups.forEach(({ c, v }, i) => {
+        ls()?.setCellValue(ri, c, v, {
+          order: sheetOrder,
+          isRefresh: i === ups.length - 1,
+        });
+      });
+
+      setTimeout(() => {
+        progCount.current = Math.max(0, progCount.current - 1);
+        recalc();
+
+        setTimeout(() => {
+          isProgrammaticChange.current = false;
+        }, 50);
+      }, 120);
+    },
+    [getActive, ls, recalc],
+  );
 
   // ═══════════════════════════════════════════════════════════
   // ABRIR CALCULADORA (lee fila seleccionada en Luckysheet)
@@ -412,48 +544,68 @@ export default function GasIndex() {
     setSyncing(true);
     setTimeout(() => {
       const inst = ls();
-      if (!inst) { setSyncing(false); return; }
+      if (!inst) {
+        setSyncing(false);
+        return;
+      }
 
-      const all        = inst.getAllSheets() as any[];
-      let metradoRows: Record<string, any>[] = [];
-      let resIdx       = -1;
+      const all = inst.getAllSheets() as any[];
+      let met: Record<string, any>[] = [];
+      let resIdx = -1;
 
       all.forEach((sheet: any, idx: number) => {
-        if (sheet.name === 'Metrado') metradoRows = sheetToRows(sheet, ALL_COLS);
-        if (sheet.name === 'Resumen') resIdx      = idx;
+        const name = String(sheet?.name ?? '');
+        if (name === 'Resumen') {
+          resIdx = idx;
+        } else if (name === 'Metrado') {
+          met = sheetToRows(sheet, ALL_COLS);
+        }
       });
 
-      if (resIdx === -1) { setSyncing(false); return; }
+      if (resIdx === -1) {
+        setSyncing(false);
+        return;
+      }
 
-      const newRows   = buildResumenRows(metradoRows);
+      const newRows = buildGasResumenRows(met, resumenRows);
       const prevOrder = inst.getSheet().order;
 
+      // Activar hoja Resumen, limpiar y repoblar
       inst.setSheetActive(resIdx);
-      inst.clearRange({ row: [0, 600], column: [0, RESUMEN_COLS.length + 1] });
+      inst.clearRange({ row: [0, 3000], column: [0, resumenCols.length + 1] });
 
-      // Cabecera
-      RESUMEN_COLS.forEach((col, c) => {
+      // Encabezados
+      resumenCols.forEach((col, c) => {
         inst.setCellValue(0, c, {
-          v: col.label, m: col.label,
+          v: col.label,
+          m: col.label,
           ct: { fa: 'General', t: 'g' },
-          bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+          bg: '#0f172a',
+          fc: '#94a3b8',
+          bl: 1,
+          fs: 10,
         }, { isRefresh: false });
       });
 
-      // Filas
+      // Filas de datos
       newRows.forEach((row, ri) => {
         const level = toNum(row._level) || 1;
-        const kind  = String(row._kind ?? 'leaf') as RowKind;
-        const st    = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+        const kind = String(row._kind ?? 'leaf') as RowKind;
+        const st = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
 
-        RESUMEN_COLS.forEach((col, c) => {
+        resumenCols.forEach((col, c) => {
           const raw = (row as any)[col.key] ?? '';
           let cell: any;
 
-          if (col.key === 'total') {
+          if (col.key === 'total' || col.key === 'unidad') {
             cell = styledNum(toNum(raw), st);
           } else if (col.key === 'partida') {
-            cell = styledTxt(String(raw), String(raw), st);
+            // Normalizar partida con formato de pares: 05, 05.01, 05.01.01, etc.
+            const normalized = String(raw)
+              .split('.')
+              .map(p => pad2(p))
+              .join('.');
+            cell = styledTxt(normalized, normalized, st);
           } else if (col.key === 'descripcion') {
             const desc = String(raw).trim();
             cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
@@ -467,10 +619,15 @@ export default function GasIndex() {
 
       inst.refresh();
       inst.setSheetActive(prevOrder);
-      saveNow();
+
+      // Forzar guardado del resumen
+      const refreshedSheets = inst.getAllSheets() as any[];
+      scheduleSave(refreshedSheets, ['Resumen']);
+      saveNow(['Resumen']);
+
       setSyncing(false);
-    }, 400);
-  }, [ls, saveNow]);
+    }, 100);
+  }, [ls, resumenRows, resumenCols, saveNow, scheduleSave]);
 
   // ═══════════════════════════════════════════════════════════
   // EFECTOS
@@ -535,7 +692,7 @@ export default function GasIndex() {
             {/* Botón volver */}
             <button
               type="button"
-              onClick={() => router.get(`/costos/${project.id}`)}
+              onClick={() => router.get(`/costos/${project?.id || 0}`)}
               className="flex h-7 w-7 items-center justify-center rounded-full
                 text-slate-400 transition-colors
                 hover:bg-slate-100 hover:text-slate-700
@@ -550,7 +707,7 @@ export default function GasIndex() {
                 Metrado Gas
               </p>
               <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                {project.nombre}
+                {project?.nombre || 'Proyecto'}
               </p>
             </div>
 

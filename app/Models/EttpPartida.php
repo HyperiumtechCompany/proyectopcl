@@ -39,6 +39,19 @@ class EttpPartida extends Model
         'item_order' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(function (EttpPartida $partida) {
+            foreach ($partida->secciones()->with('imagenes')->get() as $seccion) {
+                $seccion->delete();
+            }
+
+            foreach ($partida->children()->with('secciones.imagenes')->get() as $child) {
+                $child->delete();
+            }
+        });
+    }
+
     // ── Relaciones ──
 
     /**
