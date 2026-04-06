@@ -224,7 +224,7 @@ export default function ArquitecturaIndex() {
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Costos',               href: '/costos' },
-    { title: project.nombre,         href: `/costos/${project.id}` },
+    { title: project?.nombre || 'Proyecto',         href: `/costos/${project?.id || 0}` },
     { title: 'Metrado Arquitectura',   href: '#' },
   ];
 
@@ -246,7 +246,7 @@ export default function ArquitecturaIndex() {
   }, [modulos, exterior, cisterna, moduleCount, resumen]);
 
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
-  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project.id, resumenCols);
+  const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project?.id || 0, resumenCols);
 
   const [syncing,  setSyncing]  = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
@@ -254,6 +254,7 @@ export default function ArquitecturaIndex() {
   const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
   const progCount = useRef(0);
+  const isProgrammaticChange = useRef(false);
 
   const initialSheets = useMemo(() => {
     const sheets = [];
@@ -303,6 +304,7 @@ export default function ArquitecturaIndex() {
     const { level, kind } = rowMeta(currentRow);
     const rowStyle = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
     const descripcionLimpia = descripcion.trim();
+    const rowNum = ri + 1;
 
     if (CI.descripcion !== undefined) {
       ups.push({
@@ -343,14 +345,20 @@ export default function ArquitecturaIndex() {
 
       if (k === outputKey) {
         const { formula: cellFormula } = buildRowFormulaMeta({
-          rowIndex: ri + 1,
+          rowIndex: rowNum,
           outputKey: k,
           formulaKey,
           formulaExpression,
           formulaLabel: formulaLabel || formula,
           value: r4(outputs[k] ?? 0),
         });
-        ups.push({ r: ri, c, v: cellFormula ? mkFormula(cellFormula, r4(outputs[k] ?? 0)) : mkNum(r4(outputs[k] ?? 0), true) });
+        ups.push({
+          r: ri,
+          c,
+          v: cellFormula
+            ? mkFormula(cellFormula, r4(outputs[k] ?? 0))
+            : mkNum(r4(outputs[k] ?? 0), true),
+        });
         return;
       }
 
@@ -358,12 +366,20 @@ export default function ArquitecturaIndex() {
     });
 
     if (CI.total !== undefined) {
-      ups.push({ r: ri, c: CI.total, v: mkNum(r4(outputs[outputKey] ?? 0), true) });
+      const totalValue = r4(outputs[outputKey] ?? 0);
+
+      ups.push({
+        r: ri,
+        c: CI.total,
+        v: mkNum(totalValue, true),
+      });
     }
 
+    isProgrammaticChange.current = true;
+
     progCount.current++;
-    ups.forEach(({ r, c, v }, i) => {
-      ls()?.setCellValue(r, c, v, {
+    ups.forEach(({ c, v }, i) => {
+      ls()?.setCellValue(ri, c, v, {
         order: sheetOrder,
         isRefresh: i === ups.length - 1,
       });
@@ -372,8 +388,19 @@ export default function ArquitecturaIndex() {
     setTimeout(() => {
       progCount.current = Math.max(0, progCount.current - 1);
       recalc();
+
+      setTimeout(() => {
+        const all = getAllSheets();
+        if (all.length) {
+          scheduleSave(
+            all,
+            active?.name ? [String(active.name)] : undefined,
+          );
+        }
+        isProgrammaticChange.current = false;
+      }, 50);
     }, 120);
-  }, [getActive, ls, recalc]);
+  }, [getActive, getAllSheets, ls, recalc, scheduleSave]);
 
   const openCalc = useCallback(() => {
     const inst = ls();

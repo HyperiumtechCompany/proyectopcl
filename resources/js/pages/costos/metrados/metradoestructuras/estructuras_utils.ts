@@ -94,7 +94,7 @@ const FORMULA_META_KEYS = new Set([
 
 const getCellRef = (key: string, rowIndex: number): string => {
   const colIndex = CI[key];
-  return colIndex === undefined ? '' : ${colLetter(colIndex)};
+  return colIndex === undefined ? '' : `${colLetter(colIndex)}${rowIndex}`;
 };
 const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): string => {
   const E = getCellRef('elsim', rowIndex);
@@ -107,63 +107,65 @@ const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): st
   switch (formulaKey) {
     case 'm2_v1':
     case 'm_v2':
-      return =(+)**;
+      return `=(${L}+${A})*${N}*${E}`;
     case 'm2_v2':
     case 'm3_v3':
-      return =(+)*2**;
+      return `=(${L}+${A})*2*${H}*${N}`;
     case 'm2_v3':
-      return =**;
+      return `=${L}*${H}*${N}`;
     case 'm2_v4':
     case 'und_v3':
     case 'pza_v3':
-      return =**;
+      return `=${L}*${A}*${E}`;
     case 'm2_v5':
-      return =(+)*2*;
+      return `=(${L}+${A})*2*${H}`;
     case 'm3_v1':
     case 'm3_v2':
     case 'm3_v4':
     case 'm3_v7':
-      return =***;
+      return `=${L}*${A}*${H}*${N}`;
     case 'm3_v5':
-      return =**-;
+      return `=${L}*${A}*${H}-${E}`;
     case 'm3_v6':
-      return =***;
+      return `=${L}*${A}*${H}*${E}`;
     case 'kg_vbase':
-      return KGM ? =(*(++)*)* : =*(++)*;
+      return KGM
+        ? `=(${E}*(${L}+${A}+${H})*${N})*${KGM}`
+        : `=${E}*(${L}+${A}+${H})*${N}`;
     case 'kg_v1':
-      return =*;
+      return `=${L}*${K}`;
     case 'kg_v2':
-      return =**;
+      return `=${L}*${E}*${N}`;
     case 'kg_v3':
-      return =(++)*;
+      return `=(${L}+${A}+${H})*${N}`;
     case 'kg_v4':
-      return =**;
+      return `=${L}*${K}*${E}`;
     case 'kg_v5':
-      return K ? = : '';
+      return K ? `=${K}` : '';
     case 'm_v1':
     case 'ml_v1':
-      return =*;
+      return `=${L}*${N}`;
     case 'm_v3':
     case 'ml_v3':
-      return =*;
+      return `=${L}*${E}`;
     case 'm_v4':
     case 'ml_v4':
-      return =(+)*2*;
+      return `=(${L}+${A})*2*${N}`;
     case 'ml_v2':
-      return =(+)*;
+      return `=(${L}+${A})*${N}`;
     case 'und_v1':
     case 'pza_v1':
     case 'glb_v1':
     case 'pto_v1':
-      return =*;
+      return `=${E}*${N}`;
     case 'und_v2':
     case 'pza_v2':
-      return =;
+      return `=${N}`;
     case 'und_v4':
     case 'und_v5':
     case 'pza_v4':
     case 'pza_v5':
-      return =;
+      return `=${E}`;
     default:
       return '';
   }
@@ -186,16 +188,16 @@ const buildFormulaExpressionFromCustom = (expression: string, rowIndex: number):
   let translated = expression;
   Object.entries(refs).forEach(([key, ref]) => {
     if (!ref) return;
-    translated = translated.replace(new RegExp(\\b\\b, 'g'), ref);
+    translated = translated.replace(new RegExp(`\\b${key}\\b`, 'g'), ref);
   });
-  return translated.startsWith('=') ? translated : =;
+  return translated.startsWith('=') ? translated : `=${translated}`;
 };
 export const evaluateCustomFormula = (expression: string, inputs: MeasureInputs): number => {
   try {
     const { elsim, largo, ancho, alto, nveces, kg, kgm } = inputs;
     const result = new Function(
       'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',
-      "use strict"; return ();,
+      `"use strict"; return (${expression});`,
     )(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
     return toNum(result);
   } catch {
@@ -273,7 +275,7 @@ export const buildRowFormulaMeta = ({
     formulaDisplay:
       value === undefined || isZeroLike(value)
         ? label
-        : ${label} = ,
+        : `${label} = ${formatNumber(value)}`,
   };
 };
 

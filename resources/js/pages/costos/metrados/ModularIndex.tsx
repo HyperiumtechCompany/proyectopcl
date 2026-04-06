@@ -96,12 +96,12 @@ const RESUMEN_BASE: ColumnDef[] = [
 const UNIDAD_OPTIONS = ['und', 'm', 'ml', 'm2', 'm3', 'kg', 'lt', 'gl', 'pza', 'pto', 'glb'];
 
 const UNIT_TOTAL_COL: Record<string, string> = {
-  und: 'und', pza: 'und', pto: 'und',  
+  und: 'und', pza: 'und', pto: 'und',
   m:   'lon', ml:  'lon',
   m2:  'area',
   m3:  'vol', lt: 'vol', gl: 'vol',
   kg:  'kg',
-  glb: 'total',  
+  glb: 'total',
 };
 
 // Numeración base para Metrado Sanitarias
@@ -298,7 +298,7 @@ export default function ModularIndex() {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos',             href: '/costos' },
-        { title: project.nombre,       href: `/costos/${project.id}` },
+        { title: project?.nombre || 'Proyecto',       href: `/costos/${project?.id || 0}` },
         { title: titulo, href: '#' },
     ];
 
@@ -354,14 +354,14 @@ export default function ModularIndex() {
 
         const ensure = (code: string, desc: string, und: string, level: number) => {
             if (!byCode[code]) {
-                byCode[code] = { 
-                    code, 
-                    desc, 
-                    und, 
-                    level, 
-                    mod: {}, 
-                    ext: 0, 
-                    cis: 0 
+                byCode[code] = {
+                    code,
+                    desc,
+                    und,
+                    level,
+                    mod: {},
+                    ext: 0,
+                    cis: 0
                 };
                 codeOrder.push(code);
             }
@@ -481,7 +481,7 @@ export default function ModularIndex() {
         } finally {
             setSaving(false);
         }
-    }, [project.id, resumenCols]);
+    }, [project?.id || 0, resumenCols]);
 
     const scheduleSave = useCallback((sheets: any[]) => {
         latestSheets.current = sheets;
@@ -494,7 +494,7 @@ export default function ModularIndex() {
     // ═══════════════════════════════════════════════════════════════════════
     const recalcActiveSheet = useCallback(() => {
 
-        if (progUpdateCount.current > 3) return; 
+        if (progUpdateCount.current > 3) return;
         const ls = (window as any).luckysheet;
         if (!ls) return;
 
@@ -591,27 +591,27 @@ export default function ModularIndex() {
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS 
+        // PASE 3 — CÁLCULO NUMÉRICO DE HOJAS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         entries.forEach((e) => {
         if (e.kind !== 'leaf') return;
         const { row, ri } = e;
-        
+
         const elsim  = toNum(row.elsim);
         const nveces = toNum(row.nveces);
         const largo  = toNum(row.largo);
         const ancho  = toNum(row.ancho);
         const alto   = toNum(row.alto);
-        
+
         const newUnd  = r4(elsim * nveces);
         const newLon  = r4(largo * nveces);
         const newArea = r4(largo * ancho * nveces);
         const newVol  = r4(largo * ancho * alto * nveces);
-        
+
         const upd = (key: string, val: number) => {
-            if (toNum(row[key]) !== val) { 
-            set(ri, key, mkNum(val)); 
-            row[key] = val; 
+            if (toNum(row[key]) !== val) {
+            set(ri, key, mkNum(val));
+            row[key] = val;
             }
         };
 
@@ -619,21 +619,21 @@ export default function ModularIndex() {
         upd('area', newArea);
         upd('vol', newVol);
         upd('und', newUnd);
-        
+
         const unidadRaw = String(row.unidad ?? '').trim().toLowerCase();
-        const unidad = unidadRaw.replace(/\s+/g, ''); 
-        
+        const unidad = unidadRaw.replace(/\s+/g, '');
+
 
         let tVal = 0;
         const totalCol = UNIT_TOTAL_COL[unidad];
-        
+
         if (totalCol === 'lon') tVal = newLon;
         else if (totalCol === 'area') tVal = newArea;
         else if (totalCol === 'vol') tVal = newVol;
         else if (totalCol === 'kg') tVal = toNum(row.kg);
         else if (totalCol === 'und') tVal = newUnd;
-        
-        
+
+
         e.total = tVal;
         set(ri, 'total', mkNum(tVal));
         });
@@ -907,7 +907,7 @@ export default function ModularIndex() {
 
         setTimeout(() => recalcActiveSheet(), 120);
     }, [recalcActiveSheet]);
-    //  Dropdown de unidades  retry hasta que Luckysheet esté listo 
+    //  Dropdown de unidades  retry hasta que Luckysheet esté listo
     useEffect(() => {
         let attempts = 0;
         const MAX_ATTEMPTS = 40; // 40  250ms = 10s máximo
@@ -933,9 +933,9 @@ export default function ModularIndex() {
             sheets.forEach((s: any) => {
                 if (s.name === 'Resumen') return;
 
-                ls.setDataVerification(opt, { 
-                    range, 
-                    order: s.order 
+                ls.setDataVerification(opt, {
+                    range,
+                    order: s.order
                 });
             });
 
@@ -1055,7 +1055,7 @@ export default function ModularIndex() {
         }, 0);
     };
 
-    //export 
+    //export
     const handleExportExcel = () => {
         const ls = (window as any).luckysheet;
         if (!ls) return;
@@ -1165,7 +1165,7 @@ export default function ModularIndex() {
             ls.refresh();
 
             setTimeout(() => {
-                progUpdateCount.current = 0; 
+                progUpdateCount.current = 0;
                 recalcActiveSheet();
             }, 300);
         };
@@ -1188,7 +1188,7 @@ export default function ModularIndex() {
                     {/* Izquierda */}
                     <div className="flex items-center gap-2.5">
                         <button type="button"
-                            onClick={() => router.get(`/costos/${project.id}`)}
+                            onClick={() => router.get(`/costos/${project?.id || 0}`)}
                             className="flex h-7 w-7 items-center justify-center rounded-full
                                 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700
                                 dark:hover:bg-gray-800 dark:hover:text-gray-200">
@@ -1200,7 +1200,7 @@ export default function ModularIndex() {
                                 {titulo}
                             </p>
                             <p className="text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                                {project.nombre}
+                                {project?.nombre || 'Proyecto'}
                             </p>
                         </div>
 
@@ -1329,7 +1329,7 @@ export default function ModularIndex() {
                             Config
                         </Button>
 
-                        
+
                     </div>
                 </header>
 
@@ -1345,13 +1345,13 @@ export default function ModularIndex() {
                             sheetFormulaBar:  true,
                             showstatisticBar: true,
                             cellUpdated: () => {
-                                
+
                                 if (progUpdateCount.current > 0) return;
 
                                 clearTimeout(recalcTimer.current);
 
                                 recalcTimer.current = setTimeout(() => {
-                                    progUpdateCount.current = 0; 
+                                    progUpdateCount.current = 0;
                                     recalcActiveSheet();
                                 }, 80);
                             },
@@ -1482,7 +1482,7 @@ function ctxItem(
         type: 'button',
         onClick: () => {
             addRow(kind, sameLevelAsSelected);
-            triggerRecalc(); 
+            triggerRecalc();
         },
     };
 }

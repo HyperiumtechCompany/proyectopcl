@@ -203,6 +203,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                 Route::patch('/cisterna', [MetradoSanitariasController::class, 'updateCisterna'])->name('cisterna.update');
                 Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
                 Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
+                Route::post('/resumen/sync', [MetradoSanitariasController::class, 'syncResumen'])->name('resumen.sync');
             });
 
             Route::prefix('/metrado-electricas')->name('metrado-electricas.')->group(function () {
