@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CostoProject;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class CronogramaController extends Controller
 {
@@ -52,6 +54,55 @@ class CronogramaController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error al guardar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene todas las partidas del presupuesto para importar al cronograma
+     * Ruta: GET /presupuesto/{project}/partidas
+     */
+    public function getPartidas($project)
+    {
+        try {
+            // Buscar el proyecto
+            $costoProject = CostoProject::findOrFail($project);
+            
+            // Verificar permisos
+            if ($costoProject->user_id !== Auth::id()) {
+                return response()->json(['error' => 'No autorizado'], 403);
+            }
+            
+            // Obtener el presupuesto_id del tenant
+            $dbService = app(\App\Services\CostoDatabaseService::class);
+            $tenantPresupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
+            
+            // Obtener todas las partidas del presupuesto general
+            $partidas = DB::connection('costos_tenant')
+                ->table('presupuesto_general')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->whereNotNull('partida')
+                ->where('partida', '!=', '')
+                ->orderBy('item_order')
+                ->orderBy('id')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'descripcion' => $item->descripcion,
+                        'total' => (float)($item->parcial ?? 0),
+                        'plazo_estimado' => 5, // Valor por defecto
+                        'partida' => $item->partida,
+                        'unidad' => $item->unidad,
+                        'metrado' => (float)($item->metrado ?? 0),
+                        'precio_unitario' => (float)($item->precio_unitario ?? 0),
+                    ];
+                });
+            
+            return response()->json($partidas);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al obtener partidas: ' . $e->getMessage()
             ], 500);
         }
     }

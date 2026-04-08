@@ -303,6 +303,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
+    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']);    
+
     // ETTS — Redirecciones heredadas (opcional)
     Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
     Route::get('/module/etts', function() {
