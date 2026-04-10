@@ -27,6 +27,7 @@ use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use App\Http\Controllers\CronoMaterialesController;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -297,13 +298,14 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/eliminar-huerfanas', [EttpController::class, 'eliminarHuerfanas'])->name('huerfanas.eliminar');
         });
 }); // Cierre de costos
-
 // ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
+    Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');
+    Route::get('/module/crono_valorizado', [CronogramaController::class, 'valorizado'])->name('proyectos.cronograma.valorizado');
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
-    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']);    
+    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']); 
 
     // ETTS — Redirecciones heredadas (opcional)
     Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
