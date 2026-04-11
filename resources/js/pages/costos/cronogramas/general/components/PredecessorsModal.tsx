@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
+
 const LINK_LABELS: Record<string, string> = { '0': 'FC', '1': 'CC', '2': 'FF', '3': 'CF' };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,7 +15,8 @@ interface Props {
 interface GanttTask {
     id: any;
     text: string;
-    item?: string;
+    rownum: number;  // número de fila global (1, 2, 3…)
+    item?: string;   // código WBS, solo para filtrar en búsqueda
 }
 
 interface GanttLink {
@@ -28,27 +30,30 @@ interface GanttLink {
 // COMPONENTE
 // ─────────────────────────────────────────────────────────────────────────────
 export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
-    const [search, setSearch]               = useState('');
-    const [tasks, setTasks]                 = useState<GanttTask[]>([]);
-    const [links, setLinks]                 = useState<GanttLink[]>([]);
+    const [search,         setSearch]         = useState('');
+    const [tasks,          setTasks]          = useState<GanttTask[]>([]);
+    const [links,          setLinks]          = useState<GanttLink[]>([]);
     const [tempSelections, setTempSelections] = useState<Record<string, string>>({});
 
-    // ── Lectura del estado actual del gantt ──────────────────────────────────
+    // ── Leer estado del gantt ─────────────────────────────────────────────────
     const refreshState = useCallback(() => {
         if (!taskId) return;
 
         const incomingLinks: GanttLink[] = gantt
             .getLinks()
             .filter((l: any) => String(l.target) === String(taskId));
-
         setLinks(incomingLinks);
 
         const available: GanttTask[] = [];
         gantt.eachTask((t: any) => {
-            // Excluir la tarea actual y sus descendientes para evitar ciclos
-            if (String(t.id) !== String(taskId)) {
-                available.push({ id: t.id, text: t.text, item: t.item });
-            }
+            if (String(t.id) === String(taskId)) return;
+            available.push({
+                id:     t.id,
+                text:   t.text,
+                // FIX: número de fila global (1-based), no el código WBS
+                rownum: gantt.getGlobalTaskIndex(t.id) + 1,
+                item:   t.item,
+            });
         });
         setTasks(available);
         setTempSelections({});
@@ -58,42 +63,100 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         if (isOpen && taskId) refreshState();
     }, [isOpen, taskId, refreshState]);
 
-    // ── Añadir predecesora ───────────────────────────────────────────────────
-    // FIX: Se eliminó el ajuste manual de fechas que conflictuaba con
-    // auto_scheduling. Ahora solo se crea el link y se deja que el plugin
-    // auto_scheduling reposicione las tareas automáticamente.
-    const predAdd = useCallback((sourceId: any, type: string) => {
-        try {
-            gantt.addLink({
-                id: gantt.uid(),
-                source: sourceId,
-                target: taskId,
-                type,
-            });
-            gantt.refreshData();
-        } catch (e) {
-            console.warn('[predAdd]', e);
+    // ── Añadir predecesora ────────────────────────────────────────────────────
+    // Crea el link y llama autoSchedule() para que dhtmlx reposicione la tarea
+    // target respetando el tipo de relación (FC mueve al día siguiente del fin
+    // de source, CC alinea inicios, FF alinea fines, CF invierte).
+  const predAdd = useCallback((sourceId: any, type: string) => {
+    try {
+        console.log('🔍 predAdd - sourceId:', sourceId, 'taskId:', taskId, 'type:', type);
+        
+        const sourceTask = gantt.getTask(sourceId);
+        const targetTask = gantt.getTask(taskId);
+        
+        console.log('📌 sourceTask:', sourceTask?.text);
+        console.log('📌 targetTask:', targetTask?.text);
+        
+        // Validar que las tareas existan
+        if (!sourceTask) {
+            console.error('❌ sourceTask no encontrada:', sourceId);
+            return;
         }
-        refreshState();
-    }, [taskId, refreshState]);
+        if (!targetTask) {
+            console.error('❌ targetTask no encontrada:', taskId);
+            return;
+        }
+        
+        // Ajustar fechas según el tipo de relación
+        if (type === '0') { // FC - Fin-Comienzo
+            const newStart = new Date(sourceTask.end_date);
+            newStart.setDate(newStart.getDate() + 1);
+            targetTask.start_date = newStart;
+            targetTask.end_date = gantt.date.add(newStart, targetTask.duration, 'day');
+            gantt.updateTask(taskId);
+        }
+        else if (type === '1') { // CC - Comienzo-Comienzo
+            targetTask.start_date = new Date(sourceTask.start_date);
+            targetTask.end_date = gantt.date.add(targetTask.start_date, targetTask.duration, 'day');
+            gantt.updateTask(taskId);
+        }
+        else if (type === '2') { // FF - Fin-Fin
+            targetTask.end_date = new Date(sourceTask.end_date);
+            const newStart = gantt.date.add(targetTask.end_date, -targetTask.duration, 'day');
+            targetTask.start_date = newStart;
+            gantt.updateTask(taskId);
+        }
+        else if (type === '3') { // CF - Comienzo-Fin
+            targetTask.end_date = new Date(sourceTask.start_date);
+            const newStart = gantt.date.add(targetTask.end_date, -targetTask.duration, 'day');
+            targetTask.start_date = newStart;
+            gantt.updateTask(taskId);
+        }
+        
+        // Crear el link
+        gantt.addLink({
+            id: gantt.uid(),
+            source: sourceId,
+            target: taskId,
+            type,
+        });
+        
+        // Auto-scheduling
+        if (typeof (gantt as any).autoSchedule === 'function') {
+            (gantt as any).autoSchedule();
+        }
+        
+        gantt.render();
+    } catch (e) {
+        console.error('[predAdd] Error:', e);
+    }
+    refreshState();
+}, [taskId, refreshState]);
 
-    // ── Eliminar predecesora ────────────────────────────────────────────────
+    // ── Eliminar predecesora ──────────────────────────────────────────────────
     const predRemove = useCallback((linkId: any) => {
         try {
             gantt.deleteLink(linkId);
-            gantt.refreshData();
+            if (typeof (gantt as any).autoSchedule === 'function') {
+                (gantt as any).autoSchedule();
+            }
+            gantt.render();
         } catch (e) {
             console.warn('[predRemove]', e);
         }
         refreshState();
     }, [refreshState]);
 
-    // ── Filtrado ─────────────────────────────────────────────────────────────
-    const filteredTasks = tasks.filter((t) =>
-        !search.trim() ||
-        t.text.toLowerCase().includes(search.toLowerCase()) ||
-        (t.item ?? '').toLowerCase().includes(search.toLowerCase())
-    );
+    // ── Filtrado ──────────────────────────────────────────────────────────────
+    const filteredTasks = tasks.filter((t) => {
+        if (!search.trim()) return true;
+        const lower = search.toLowerCase();
+        return (
+            t.text.toLowerCase().includes(lower) ||
+            String(t.rownum).includes(lower) ||
+            (t.item ?? '').toLowerCase().includes(lower)
+        );
+    });
 
     if (!isOpen) return null;
 
@@ -122,7 +185,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                 <div className="px-5 py-3 border-b border-gray-100">
                     <input
                         type="text"
-                        placeholder="Buscar tarea o ítem..."
+                        placeholder="Buscar por nombre, número o ítem..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -147,17 +210,20 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                         return (
                             <div
                                 key={t.id}
-                                className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
+                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+                                    added ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                                }`}
                             >
-                                {/* Nombre */}
-                                <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">
-                                    <span className="text-gray-400 mr-1.5 text-xs font-mono">
-                                        {t.item ?? gantt.getGlobalTaskIndex(t.id) + 1}
+                                {/* Número de fila + nombre de tarea */}
+                                <span className="text-sm text-gray-800 flex-1 min-w-0 truncate flex items-center gap-2">
+                                    {/* FIX: número de fila (1, 2, 3…) en lugar del código WBS */}
+                                    <span className="inline-flex items-center justify-center min-w-[24px] h-5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold font-mono px-1 flex-shrink-0">
+                                        {t.rownum}
                                     </span>
-                                    {t.text}
+                                    <span className="truncate">{t.text}</span>
                                 </span>
 
-                                {/* Selector de tipo */}
+                                {/* Selector de tipo de relación */}
                                 <select
                                     value={added ? existingLink!.type : tempType}
                                     disabled={added}
@@ -167,7 +233,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                                             [String(t.id)]: e.target.value,
                                         }))
                                     }
-                                    className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none flex-shrink-0 disabled:opacity-60"
+                                    className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                     <option value="" disabled>Tipo…</option>
                                     <option value="0">FC – Fin-Comienzo</option>
@@ -176,7 +242,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                                     <option value="3">CF – Comienzo-Fin</option>
                                 </select>
 
-                                {/* Acción */}
+                                {/* Botón acción */}
                                 <button
                                     onClick={() => {
                                         if (added && existingLink) {
@@ -199,9 +265,26 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                     })}
                 </div>
 
-                {/* Pie */}
-                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-400 text-right">
-                    {links.length} predecesora{links.length !== 1 ? 's' : ''} asignada{links.length !== 1 ? 's' : ''}
+                {/* Pie — chips de predecesoras activas + contador */}
+                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
+                    <div className="flex gap-1.5 flex-wrap">
+                        {links.map((l) => {
+                            try {
+                                const rownum = gantt.getGlobalTaskIndex(l.source) + 1;
+                                return (
+                                    <span
+                                        key={l.id}
+                                        className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                    >
+                                        #{rownum} {LINK_LABELS[l.type]}
+                                    </span>
+                                );
+                            } catch { return null; }
+                        })}
+                    </div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                        {links.length} predecesora{links.length !== 1 ? 's' : ''}
+                    </span>
                 </div>
             </div>
         </div>
