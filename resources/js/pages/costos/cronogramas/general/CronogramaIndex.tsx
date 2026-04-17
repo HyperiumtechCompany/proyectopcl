@@ -2,45 +2,127 @@ import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import { gantt } from 'dhtmlx-gantt';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PredecessorsModal } from './components/PredecessorsModal';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
-
 import {
+    applyAutoScheduling,
+    getSubtreeDates,
     markCriticalTasks,
     updateCountersAndItems,
-    getSubtreeDates,
-    applyAutoScheduling,
 } from './helpers/ganttHelpers';
 
-const LINK_LABELS: Record<string, string> = { '0': 'FC', '1': 'CC', '2': 'FF', '3': 'CF' };
-const LINK_NAMES: Record<string, string> = { '0': 'Fin-Comienzo', '1': 'Comienzo-Comienzo', '2': 'Fin-Fin', '3': 'Comienzo-Fin' };
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTES
+// ─────────────────────────────────────────────────────────────────────────────
 
+/** Etiquetas cortas para los tipos de link (usadas en la columna PREDECESORAS) */
+const LINK_LABELS: Record<string, string> = {
+    '0': 'FC',
+    '1': 'CC',
+    '2': 'FF',
+    '3': 'CF',
+};
+
+/** Nombres completos de los tipos de link (usados en tooltip y descripción) */
+const LINK_NAMES: Record<string, string> = {
+    '0': 'Fin-Comienzo',
+    '1': 'Comienzo-Comienzo',
+    '2': 'Fin-Fin',
+    '3': 'Comienzo-Fin',
+};
+
+/** Mapa de texto legible a código interno del tipo de link */
+const LINK_TYPE_MAP: Record<string, string> = {
+    FC: '0',
+    CC: '1',
+    FF: '2',
+    CF: '3',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILIDADES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Formatea un número como moneda peruana (S/.) */
 const formatSoles = (value: number | string | null | undefined): string => {
     const num = parseFloat(String(value ?? 0));
     if (isNaN(num)) return 'S/. 0.00';
-    return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', minimumFractionDigits: 2 }).format(num).replace('PEN', 'S/.');
+    return new Intl.NumberFormat('es-PE', {
+        style: 'currency',
+        currency: 'PEN',
+        minimumFractionDigits: 2,
+    })
+        .format(num)
+        .replace('PEN', 'S/.');
 };
 
+/**
+ * Muestra un toast de notificación en la esquina inferior derecha.
+ * Se auto-elimina a los 3 segundos.
+ */
 const showToast = (message: string, type: 'success' | 'error' | 'info'): void => {
     const toast = document.createElement('div');
     toast.className = `pcl-toast pcl-toast--${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
+
+    // Doble requestAnimationFrame para que el navegador aplique el estado inicial antes de animar
     requestAnimationFrame(() => {
-        requestAnimationFrame(() => { toast.classList.add('pcl-toast--visible'); });
+        requestAnimationFrame(() => toast.classList.add('pcl-toast--visible'));
     });
+
     setTimeout(() => {
         toast.classList.remove('pcl-toast--visible');
         toast.addEventListener('transitionend', () => toast.remove(), { once: true });
     }, 3000);
 };
 
+/**
+ * Parsea el texto de predecesoras (ej: "3FC, 5CC") y crea los links
+ * correspondientes en el Gantt para la tarea `taskId`.
+ * Elimina todos los links previos antes de recrearlos.
+ */
+const parsePredecessorText = (taskId: any, rawText: string): void => {
+    // Eliminar links existentes hacia esta tarea
+    gantt
+        .getLinks()
+        .filter((l: any) => String(l.target) === String(taskId))
+        .forEach((l: any) => {
+            try { gantt.deleteLink(l.id); } catch { /* ignorar si ya no existe */ }
+        });
+
+    if (!rawText.trim()) return; // Si está vacío, solo se eliminaron los links
+
+    // Parsear y crear nuevos links
+    rawText.split(',').forEach((part) => {
+        const clean = part.trim().toUpperCase();
+        const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
+        if (!match) return;
+
+        const targetRownum = parseInt(match[1], 10);
+        const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
+
+        // Buscar la tarea origen por número de fila (índice global + 1)
+        let sourceTask: any = null;
+        gantt.eachTask((t: any) => {
+            if (gantt.getGlobalTaskIndex(t.id) + 1 === targetRownum) {
+                sourceTask = t;
+            }
+        });
+
+        if (sourceTask && String(sourceTask.id) !== String(taskId)) {
+            gantt.addLink({ id: gantt.uid(), source: sourceTask.id, target: taskId, type });
+        }
+    });
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERFACES
 // ─────────────────────────────────────────────────────────────────────────────
+
 interface Props {
     project_name?: string;
     project: string | number;
@@ -53,6 +135,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
+
 const CronogramaIndex = ({
     project_name,
     project,
@@ -61,11 +144,13 @@ const CronogramaIndex = ({
     cronogramaId,
     partidasBase,
 }: Props) => {
+    // ── REFS ────────────────────────────────────────────────────────────────
     const ganttContainer = useRef<HTMLDivElement>(null);
     const isUpdatingRef = useRef(false);
     const criticalOnRef = useRef(true);
+    const isParsingPredRef = useRef(false);
     const ganttInitialized = useRef(false);
-    // Guardamos IDs de eventos para hacer cleanup correcto
+    /** IDs de eventos attachados, para cleanup correcto en el return del useEffect */
     const eventIdsRef = useRef<any[]>([]);
 
     // ── UI STATE ─────────────────────────────────────────────────────────────
@@ -80,19 +165,21 @@ const CronogramaIndex = ({
     const [projectProgress, setProjectProgress] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [autoScheduling, setAutoScheduling] = useState(true);
-    const [manualMode, setManualMode] = useState(false);
 
     const displayName = project_name || `Proyecto ${project}`;
 
-
-
-
-
-    // ── KPIs ─────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // KPIs
+    // Recorre solo las tareas hoja (sin hijos) para calcular conteos y costos.
+    // Se llama después de cada operación que modifique tareas.
+    // ─────────────────────────────────────────────────────────────────────────
     const refreshKPIs = useCallback(() => {
         if (!ganttInitialized.current) return;
 
-        let count = 0, cost = 0, weightedProgress = 0, totalDuration = 0;
+        let count = 0;
+        let cost = 0;
+        let weightedProgress = 0;
+        let totalDuration = 0;
 
         gantt.eachTask((task: any) => {
             if (!gantt.hasChild(task.id)) {
@@ -106,15 +193,22 @@ const CronogramaIndex = ({
 
         setTaskCount(count);
         setTotalCost(cost);
-        setProjectProgress(
-            totalDuration > 0 ? (weightedProgress / totalDuration) * 100 : 0
-        );
+        setProjectProgress(totalDuration > 0 ? (weightedProgress / totalDuration) * 100 : 0);
     }, []);
 
-    // ── ACTUALIZACIÓN DE PADRES ───────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROPAGACIÓN DE FECHAS HACIA PADRES
+    // Cuando una tarea hijo cambia sus fechas, el padre debe expandirse
+    // para cubrir el rango de todos sus hijos. Se propaga recursivamente.
+    // ─────────────────────────────────────────────────────────────────────────
     const updateParentDates = useCallback((childId: any) => {
         let task: any;
-        try { task = gantt.getTask(childId); } catch { return; }
+        try {
+            task = gantt.getTask(childId);
+        } catch {
+            return;
+        }
+
         if (!task?.parent || !gantt.isTaskExists(task.parent)) return;
 
         const parent: any = gantt.getTask(task.parent);
@@ -124,32 +218,44 @@ const CronogramaIndex = ({
         gantt.getChildren(parent.id).forEach((id: any) => {
             const t: any = gantt.getTask(id);
             if (!t?.start_date || !t?.end_date) return;
-            const s = new Date(t.start_date), e = new Date(t.end_date);
+
+            const s = new Date(t.start_date);
+            const e = new Date(t.end_date);
+
             if (!minStart || s < minStart) minStart = s;
             if (!maxEnd || e > maxEnd) maxEnd = e;
         });
+        if (minStart && maxEnd) {
+            // Blindaje total para que getTime() no marque rojo
+            const pStart = new Date((parent as any).start_date).getTime();
+            const pEnd = new Date((parent as any).end_date).getTime();
 
-        if (
-            minStart && maxEnd &&
-            (parent.start_date.getTime() !== minStart.getTime() ||
-                parent.end_date.getTime() !== maxEnd.getTime())
-        ) {
-            parent.start_date = minStart;
-            parent.end_date = maxEnd;
-            gantt.updateTask(parent.id);
-            updateParentDates(parent.id); // propagar hacia arriba
+            // Usamos (variable as any) para asegurar que el editor no proteste
+            const nStart = (minStart as any).getTime();
+            const nEnd = (maxEnd as any).getTime();
+
+            if (pStart !== nStart || pEnd !== nEnd) {
+                (parent as any).start_date = minStart;
+                (parent as any).end_date = maxEnd;
+                gantt.updateTask(parent.id);
+                updateParentDates(parent.id);
+            }
         }
     }, []);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROPAGACIÓN DE COSTOS HACIA PADRES
+    // Suma los costos de todos los hijos directos y actualiza el padre.
+    // ─────────────────────────────────────────────────────────────────────────
     const updateParentCost = useCallback((childId: any) => {
         let child: any;
         try { child = gantt.getTask(childId); } catch { return; }
         if (!child?.parent || !gantt.isTaskExists(child.parent)) return;
 
         let total = 0;
-        gantt.getChildren(child.parent).forEach(
-            (cid: any) => { total += parseFloat(gantt.getTask(cid)?.cost) || 0; }
-        );
+        gantt.getChildren(child.parent).forEach((cid: any) => {
+            total += parseFloat(gantt.getTask(cid)?.cost) || 0;
+        });
 
         const parent: any = gantt.getTask(child.parent);
         if (parseFloat(parent.cost || 0) !== total) {
@@ -158,7 +264,11 @@ const CronogramaIndex = ({
         }
     }, []);
 
-    // ── PREDECESORAS EN TEXTO ─────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEXTO DE PREDECESORAS
+    // Sincroniza el campo task.predecessors con los links reales del Gantt.
+    // Se usa para mostrar el texto en la columna de predecesoras.
+    // ─────────────────────────────────────────────────────────────────────────
     const updatePredecessorsText = useCallback((taskId: any) => {
         let task: any;
         try { task = gantt.getTask(taskId); } catch { return; }
@@ -170,7 +280,7 @@ const CronogramaIndex = ({
                 try {
                     const src: any = gantt.getTask(l.source);
                     let wbs = src.item_p || src.item || src.id;
-                    try { wbs = (gantt as any).getWBSCode(src); } catch { /* ok */ }
+                    try { wbs = (gantt as any).getWBSCode(src); } catch { /* getWBSCode puede no estar disponible */ }
                     return `${wbs}${LINK_LABELS[l.type] ?? 'FC'}`;
                 } catch { return null; }
             })
@@ -180,7 +290,11 @@ const CronogramaIndex = ({
         gantt.updateTask(taskId);
     }, []);
 
-    // ── RUTA CRÍTICA ──────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // ACCIONES DEL TOOLBAR
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Alterna la visualización de la ruta crítica */
     const toggleCriticalPath = useCallback(() => {
         criticalOnRef.current = !criticalOnRef.current;
         gantt.config.highlight_critical_path = criticalOnRef.current;
@@ -189,11 +303,10 @@ const CronogramaIndex = ({
         gantt.render();
     }, []);
 
-    // ── AUTO-SCHEDULING ───────────────────────────────────────────────────────
+    /** Alterna entre modo auto-scheduling y modo manual */
     const toggleAutoScheduling = useCallback(() => {
         const next = !autoScheduling;
         setAutoScheduling(next);
-        setManualMode(!next);
         gantt.config.auto_scheduling = next;
         gantt.config.auto_scheduling_strict = next;
         if (next) applyAutoScheduling();
@@ -201,20 +314,27 @@ const CronogramaIndex = ({
         showToast(next ? '🤖 Auto-programado activado' : '🔧 Modo manual activado', 'info');
     }, [autoScheduling]);
 
-    // FIX: toggleManualMode ahora es la inversa exacta de toggleAutoScheduling
-    // y comparten el mismo estado; no duplicamos lógica.
-    const toggleManualMode = useCallback(() => toggleAutoScheduling(), [toggleAutoScheduling]);
+    /** Expande todos los nodos del árbol */
+    const expandAll = useCallback(() => {
+        gantt.eachTask((t: any) => { t.$open = true; });
+        gantt.render();
+    }, []);
 
-    // ── VISTA ─────────────────────────────────────────────────────────────────
-    const expandAll = useCallback(() => { gantt.eachTask((t: any) => { t.$open = true; }); gantt.render(); }, []);
-    const collapseAll = useCallback(() => { gantt.eachTask((t: any) => { if (gantt.hasChild(t.id)) t.$open = false; }); gantt.render(); }, []);
+    /** Colapsa solo los nodos padre (los hijos se muestran cuando se expande el padre) */
+    const collapseAll = useCallback(() => {
+        gantt.eachTask((t: any) => { if (gantt.hasChild(t.id)) t.$open = false; });
+        gantt.render();
+    }, []);
 
+    /** Ajusta la escala temporal para que muestre todo el proyecto con márgenes */
     const fitProject = useCallback(() => {
-        let minDate: Date | null = null, maxDate: Date | null = null;
+        let minDate: Date | null = null;
+        let maxDate: Date | null = null;
 
         gantt.eachTask((task: any) => {
             if (task.start_date && task.end_date) {
-                const s = new Date(task.start_date), e = new Date(task.end_date);
+                const s = new Date(task.start_date);
+                const e = new Date(task.end_date);
                 if (!minDate || s < minDate) minDate = s;
                 if (!maxDate || e > maxDate) maxDate = e;
             }
@@ -229,32 +349,39 @@ const CronogramaIndex = ({
         }
     }, []);
 
-    // ── BÚSQUEDA ──────────────────────────────────────────────────────────────
+    /** Filtra las filas del Gantt por texto y abre/colapsa según coincidencia */
     const handleSearch = useCallback((term: string) => {
+        console.log('🔍 Buscando:', term); // 👈 Agrega esto
         setSearchTerm(term);
-        const lower = term.trim().toLowerCase();
+        const val = term.trim().toLowerCase();
+        const isNum = /^\d+$/.test(val);
+        const target = isNum ? parseInt(val, 10) : null;
 
-        gantt.eachTask((task: any) => {
-            if (!lower) {
-                task.$open = true;
+        gantt.eachTask((t: any) => {
+            if (!val) {
+                t.$open = true;
             } else {
-                const match =
-                    task.text?.toLowerCase().includes(lower) ||
-                    task.item?.toLowerCase().includes(lower);
-                task.$open = match;
-                if (match) gantt.showTask(task.id);
+                const row = gantt.getGlobalTaskIndex(t.id) + 1;
+                const matchRow = target !== null && row === target;
+                const matchText = (t.text?.toLowerCase().includes(val) || t.item?.toLowerCase().includes(val));
+                t.$open = matchRow || matchText;
+                if (matchRow || matchText) gantt.showTask(t.id);
             }
         });
 
         gantt.render();
     }, []);
 
-    // ── GUARDAR ───────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // GUARDAR CRONOGRAMA
+    // Serializa todas las tareas y links del Gantt y los envía al backend.
+    // Expande todo el árbol antes para no perder tareas colapsadas.
+    // ─────────────────────────────────────────────────────────────────────────
     const handleSave = useCallback(async () => {
         setSaving(true);
-
-        // Expandir todo antes de serializar para no perder tareas colapsadas
+        // Expandir todo para que gantt.getTaskByTime() devuelva TODAS las tareas
         gantt.eachTask((task: any) => { task.$open = true; });
+
         gantt.render();
         await new Promise<void>((r) => setTimeout(r, 100));
 
@@ -282,7 +409,10 @@ const CronogramaIndex = ({
         }));
 
         const links = gantt.getLinks().map((l: any) => ({
-            id: l.id, source: l.source, target: l.target, type: l.type,
+            id: l.id,
+            source: l.source,
+            target: l.target,
+            type: l.type,
         }));
 
         try {
@@ -296,7 +426,11 @@ const CronogramaIndex = ({
         }
     }, [cronogramaId, project]);
 
-    // ── IMPORTAR ──────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // IMPORTAR DESDE PRESUPUESTO
+    // Trae las partidas del presupuesto base y las carga como tareas en el Gantt.
+    // Construye la jerarquía WBS a partir del campo `partida` (ej: "1.2.3").
+    // ─────────────────────────────────────────────────────────────────────────
     const handleImport = useCallback(async () => {
         if (!confirm('¿Importar las partidas del presupuesto como tareas?\n\nEsto reemplazará el cronograma actual.')) return;
 
@@ -305,17 +439,17 @@ const CronogramaIndex = ({
             const { data: partidas } = await axios.get(`/presupuesto/${project}/partidas`);
             if (!partidas?.length) throw new Error('No hay partidas en el presupuesto');
 
-            // Construir mapa id ↔ tarea
             const tasksMap = new Map<string, any>();
             const rootTasks: any[] = [];
 
+            // Crear una tarea por partida con duración base de 5 días hábiles
             partidas.forEach((partida: any) => {
                 const taskId = gantt.uid();
                 const task = {
                     id: taskId,
                     text: partida.descripcion,
                     start_date: new Date(),
-                    duration: partida.plazo_estimado || 5,
+                    duration: 5,
                     progress: 0,
                     cost: parseFloat(partida.total) || 0,
                     item: partida.partida,
@@ -328,7 +462,7 @@ const CronogramaIndex = ({
                 rootTasks.push(task);
             });
 
-            // Asignar padres por código jerárquico
+            // Inferir jerarquía: si "1.2.3" existe, su padre es "1.2"
             tasksMap.forEach((task) => {
                 const code = task.originalItem as string;
                 const lastDot = code.lastIndexOf('.');
@@ -344,7 +478,8 @@ const CronogramaIndex = ({
 
             gantt.clearAll();
             gantt.batchUpdate(() => {
-                // Primero las raíces, luego los hijos
+                if (!ganttContainer.current) return;
+                // Primero los raíz, luego los hijos (orden importa para el árbol)
                 rootTasks.forEach((t) => gantt.addTask({ ...t, parent: 0 }));
                 tasksMap.forEach((t) => { if (t.parent !== 0) gantt.addTask(t); });
             });
@@ -355,7 +490,7 @@ const CronogramaIndex = ({
             gantt.render();
             refreshKPIs();
 
-            showToast(`✅ ${partidas.length} partidas importadas`, 'success');
+            showToast(`✅ ${partidas.length} partidas importadas con duración de 5 días`, 'success');
         } catch (err: any) {
             showToast(`❌ Error: ${err.message}`, 'error');
         } finally {
@@ -365,51 +500,53 @@ const CronogramaIndex = ({
 
     // ─────────────────────────────────────────────────────────────────────────
     // INICIALIZACIÓN DEL GANTT
+    // Este efecto se ejecuta UNA VEZ (o cuando cambian initialData/partidasBase).
+    // Configura plugins, escalas, columnas, eventos y carga los datos.
+    // El return hace cleanup de todos los eventos registrados.
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!ganttContainer.current) return;
 
+        // Reset completo antes de (re-)inicializar
         ganttContainer.current.innerHTML = '';
         gantt.clearAll();
         ganttInitialized.current = false;
         eventIdsRef.current = [];
-        let projectStartDate: Date | null = null;
 
         // ── Plugins ────────────────────────────────────────────────────────
         gantt.plugins({ critical_path: true, auto_scheduling: true, tooltip: true });
         gantt.i18n.setLocale('es');
 
-        // ── Configuración base ────────────────────────────────────────────
+        // ── Configuración global ───────────────────────────────────────────
         gantt.config.date_format = '%Y-%m-%d %H:%i';
+        gantt.config.xml_date = '%d/%m/%Y';
         gantt.config.row_height = 28;
-        gantt.config.grid_width = 820;
+        gantt.config.grid_width = 500;
         gantt.config.scale_height = 54;
         gantt.config.min_column_width = 30;
         gantt.config.open_tree_initially = true;
         gantt.config.work_time = true;
-        gantt.config.skip_off_time = true;
-        gantt.config.fit_tasks = false;
+        gantt.config.skip_off_time = false;
+        gantt.config.fit_tasks = true;
         gantt.config.auto_scheduling = true;
         gantt.config.auto_scheduling_strict = true;
-        // Necesario para que FC/CC/FF/CF posicionen barras correctamente:
-    
-        (gantt.config as any).auto_scheduling_compatibility = false;
+        gantt.config.autosize = false;
         gantt.config.schedule_from_end = false;
         gantt.config.highlight_critical_path = true;
         gantt.config.show_chart_work_time = true;
-      
         gantt.config.split_tasks = false;
-        (gantt.config as any).smart_rendering = true;
-        (gantt.config as any).static_background = true;
         gantt.config.branch_loading = false;
+        gantt.config.limit_view = true;
+        gantt.config.auto_types = true;
 
-        // FIX: limit_view solo con fechas definidas para evitar render vacío
-        gantt.config.limit_view = false;
+        // Estas propiedades no están en el tipado oficial de dhtmlx-gantt
+        (gantt.config as any).auto_scheduling_compatibility = false;
+        (gantt.config as any).smart_rendering = false;
+        (gantt.config as any).static_background = false;
+        (gantt.config as any).split_tasks = true;
+        (gantt.config as any).work_time_render = true;
 
-        // Días laborables: L–V; S y D libres
-        gantt.setWorkTime({ day: 6, hours: false });
-        gantt.setWorkTime({ day: 0, hours: false });
-
+        // Tipos de links disponibles (fin-comienzo, comienzo-comienzo, etc.)
         gantt.config.links = {
             finish_to_start: '0',
             start_to_start: '1',
@@ -417,27 +554,39 @@ const CronogramaIndex = ({
             start_to_finish: '3',
         };
 
-        // ── Escalas ───────────────────────────────────────────────────────
+        // Días NO laborables: sábado (6) y domingo (0)
+        gantt.setWorkTime({ day: 6, hours: false });
+        gantt.setWorkTime({ day: 0, hours: false });
+
+        // ── Escalas temporales: Mes relativo + Semana relativa ──────────────
+        // Se muestran como "Mes 1", "Sem 3" en lugar de fechas absolutas.
         gantt.config.scales = [
             {
-                unit: 'month', step: 1,
+                unit: 'month',
+                step: 1,
                 format: (date: Date) => {
-                    if (!projectStartDate) return gantt.date.date_to_str('%F %Y')(date);
-                    const monthNum =
-                        Math.round(
-                            (date.getTime() - projectStartDate.getTime()) /
-                            (1000 * 60 * 60 * 24 * 30)
-                        ) + 1;
-                    return `Mes ${monthNum}`;
+                    const startDate = gantt.config.start_date || new Date();
+                    const monthDiff =
+                        (date.getFullYear() - startDate.getFullYear()) * 12 +
+                        (date.getMonth() - startDate.getMonth());
+                    return `Mes ${monthDiff + 1}`;
                 },
             },
             {
-                unit: 'day', step: 1, format: '%j',
+                unit: 'week',
+                step: 1,
+                format: (date: Date) => {
+                    const startDate = gantt.config.start_date || new Date();
+                    const weekDiff = Math.floor(
+                        (date.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7)
+                    );
+                    return `Sem ${weekDiff + 1}`;
+                },
                 css: (date: Date) => (gantt.isWorkTime(date) ? '' : 'pcl-weekend'),
             },
         ];
 
-        // ── Editores inline ───────────────────────────────────────────────
+        // ── Editores inline (tipos de editor por campo) ────────────────────
         const editors = {
             text: { type: 'text', map_to: 'text' },
             date: { type: 'date', map_to: 'start_date' },
@@ -448,14 +597,21 @@ const CronogramaIndex = ({
             owner: { type: 'text', map_to: 'owner' },
         };
 
-        // ── Columnas ──────────────────────────────────────────────────────
+        // ── Columnas del grid ──────────────────────────────────────────────
         gantt.config.columns = [
             {
-                name: 'rownum', label: '#', width: 38, align: 'center',
+                name: 'rownum',
+                label: '#',
+                width: 50,
+                align: 'center',
+                resize: true,
                 template: (t: any) => gantt.getGlobalTaskIndex(t.id) + 1,
             },
             {
-                name: 'wbs_item', label: 'ÍTEM', width: 70,
+                name: 'wbs_item',
+                label: 'ÍTEM',
+                width: 80,
+                resize: true,
                 template: (t: any) => {
                     const code = t.item || '';
                     const isParent = gantt.hasChild(t.id) || code.split('.').length <= 2;
@@ -463,36 +619,70 @@ const CronogramaIndex = ({
                 },
             },
             {
-                name: 'text', label: 'NOMBRE DE TAREA', tree: true, width: 280,
+                name: 'text',
+                label: 'NOMBRE DE TAREA',
+                tree: true,
+                width: 300,
+                min_width: 150,
+                resize: true,
                 editor: editors.text,
-                template: (t: any) =>
-                    `<span style="font-weight:${gantt.hasChild(t.id) ? '700;color:#0f172a' : '400;color:#334155'}">${t.text || ''}</span>`,
+                template: (t: any) => {
+                    if (gantt.hasChild(t.id)) {
+                        return `<span style="font-weight:700;color:#0f172a">
+                            <span style="font-weight:300;opacity:0.8;color:#000;">[</span>
+                            ${t.text || ''}
+                            <span style="font-weight:300;opacity:0.8;color:#000;">]</span>
+                        </span>`;
+                    }
+                    return `<span style="font-weight:400;color:#334155">${t.text || ''}</span>`;
+                },
             },
             {
-                name: 'duration', label: 'DÍAS', align: 'center', width: 52,
+                name: 'duration',
+                label: 'DÍAS',
+                align: 'center',
+                width: 60,
+                resize: true,
                 editor: editors.duration,
                 template: (t: any) => `${t.duration || 0}d`,
             },
             {
-                name: 'cost', label: 'COSTO PARCIAL', align: 'right', width: 115,
+                name: 'cost',
+                label: 'COSTO PARCIAL',
+                align: 'right',
+                width: 120,
+                resize: true,
                 editor: editors.cost,
                 template: (t: any) =>
                     `<span style="font-variant-numeric:tabular-nums;color:${parseFloat(t.cost) > 0 ? '#0f766e' : '#94a3b8'}">${formatSoles(t.cost)}</span>`,
             },
             {
-                name: 'progress', label: '%', align: 'center', width: 50,
+                name: 'progress',
+                label: '%',
+                align: 'center',
+                width: 60,
+                resize: true,
                 editor: editors.progress,
                 template: (t: any) => {
                     const p = Math.round((parseFloat(t.progress) || 0) * 100);
-                    return `<span style="font-weight:600;color:${p >= 100 ? '#10b981' : p >= 50 ? '#f59e0b' : '#3b82f6'}">${p}%</span>`;
+                    const color = p >= 100 ? '#10b981' : p >= 50 ? '#f59e0b' : '#3b82f6';
+                    return `<span style="font-weight:600;color:${color}">${p}%</span>`;
                 },
             },
             {
-                name: 'start_date', label: 'INICIO', align: 'center', width: 84,
+                name: 'start_date',
+                label: 'INICIO',
+                align: 'center',
+                width: 95,
+                resize: true,
                 editor: editors.date,
             },
             {
-                name: 'end_date', label: 'FIN', align: 'center', width: 84,
+                name: 'end_date',
+                label: 'FIN',
+                align: 'center',
+                width: 95,
+                resize: true,
                 editor: editors.endDate,
                 template: (t: any) => {
                     try { return gantt.templates.date_grid(t.end_date, t, 'end_date'); }
@@ -500,17 +690,21 @@ const CronogramaIndex = ({
                 },
             },
             {
-                name: 'predecessors', label: 'PREDECESORAS', align: 'center', width: 100,
+                name: 'predecessors',
+                label: 'PREDECESORAS',
+                align: 'center',
+                width: 110,
+                resize: true,
+                editor: { type: 'text', map_to: 'predecessors' },
                 template: (task: any) => {
+                    // Muestra números de fila + tipo de link; botón para abrir modal de predecesoras
                     const labels = gantt
                         .getLinks()
                         .filter((l: any) => String(l.target) === String(task.id))
                         .map((l: any) => {
                             try {
-                                const src: any = gantt.getTask(l.source);
-                                let wbs = src.item_p || src.item || String(l.source);
-                                try { wbs = (gantt as any).getWBSCode(src); } catch { /* ok */ }
-                                return `${wbs}${LINK_LABELS[l.type] ?? ''}`;
+                                const rownum = gantt.getGlobalTaskIndex(l.source) + 1;
+                                return `${rownum}${LINK_LABELS[l.type] ?? 'FC'}`;
                             } catch { return null; }
                         })
                         .filter(Boolean);
@@ -523,17 +717,21 @@ const CronogramaIndex = ({
                 },
             },
             {
-                name: 'owner', label: 'RESP.', align: 'center', width: 60,
+                name: 'owner',
+                label: 'RESP.',
+                align: 'center',
+                width: 70,
+                resize: true,
                 editor: editors.owner,
                 template: (t: any) =>
                     t.owner
                         ? `<span style="background:#eff6ff;color:#2563eb;padding:1px 5px;border-radius:9px;">${t.owner}</span>`
                         : '',
             },
-            { name: 'add', width: 36 },
+            { name: 'add', width: 40, resize: false },
         ];
 
-        // ── Lightbox ──────────────────────────────────────────────────────
+        // ── Lightbox (diálogo de edición avanzada al hacer doble clic) ─────
         gantt.config.lightbox.sections = [
             { name: 'description', height: 38, map_to: 'text', type: 'textarea', focus: true },
             { name: 'time', type: 'duration', map_to: 'auto', time_format: ['%d', '%m', '%Y'] },
@@ -543,7 +741,9 @@ const CronogramaIndex = ({
         gantt.locale.labels.section_cost = 'Costo Parcial (S/.)';
         gantt.locale.labels.section_owner = 'Responsable';
 
-        // ── Templates ─────────────────────────────────────────────────────
+        // ── Templates de estilos dinámicos ────────────────────────────────
+
+        /** Clase CSS de cada barra de tarea (agrega ruta crítica y tipo padre) */
         gantt.templates.task_class = (_s: Date, _e: Date, task: any) => {
             const cls: string[] = [];
             if (gantt.hasChild(task.id)) cls.push('pcl-task-parent');
@@ -553,11 +753,13 @@ const CronogramaIndex = ({
                         ? gantt.isCriticalTask(task)
                         : task._critical;
                     if (isCrit) cls.push('gantt_critical_task');
-                } catch { /* ok */ }
+                } catch { /* ok si isCriticalTask no está disponible */ }
             }
             return cls.join(' ');
         };
 
+
+        /** Clase CSS de cada link/flecha entre tareas */
         gantt.templates.link_class = (link: any) => {
             const cls: string[] = [];
             if (criticalOnRef.current) {
@@ -577,18 +779,25 @@ const CronogramaIndex = ({
             return cls.join(' ');
         };
 
+        /** Descripción del link en el tooltip de la flecha */
         gantt.templates.link_description = (link: any) => {
             try {
                 return `${gantt.getTask(link.source).text} (${LINK_NAMES[link.type]}) → ${gantt.getTask(link.target).text}`;
             } catch { return ''; }
         };
 
+        /** Contenido HTML del tooltip al pasar el mouse sobre una tarea */
         gantt.templates.tooltip_text = (start: Date, end: Date, task: any) => {
             const isCrit = (() => {
-                try { return typeof gantt.isCriticalTask === 'function' ? gantt.isCriticalTask(task) : task._critical; }
-                catch { return false; }
+                try {
+                    return typeof gantt.isCriticalTask === 'function'
+                        ? gantt.isCriticalTask(task)
+                        : task._critical;
+                } catch { return false; }
             })();
+
             const pct = Math.round((parseFloat(task.progress) || 0) * 100);
+
             const predLabels = gantt
                 .getLinks()
                 .filter((l: any) => String(l.target) === String(task.id))
@@ -625,47 +834,124 @@ const CronogramaIndex = ({
             </div>`;
         };
 
+        /** Texto dentro de la barra de tarea (solo para hijos, los padres no muestran texto) */
         gantt.templates.task_text = (_s: Date, _e: Date, task: any) =>
-            gantt.hasChild(task.id) ? '' : `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
-        gantt.templates.scale_cell_class = (date: Date) => (!gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '');
-        gantt.templates.timeline_cell_class = (_t: any, date: Date) => (!gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '');
+            gantt.hasChild(task.id)
+                ? ''
+                : `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
 
-        // ── Eventos ───────────────────────────────────────────────────────
-        // FIX: guardamos los IDs para poder hacer detachEvent en el cleanup.
+        /** Colorea las celdas de escala de fines de semana */
+        gantt.templates.scale_cell_class = (date: Date) =>
+            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
 
+        /** Colorea las celdas del timeline de fines de semana */
+        gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
+            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
+
+        // ── Helper interno para attachEvent con registro automático ─────────
         const on = (event: string, handler: (...args: any[]) => any) => {
-            eventIdsRef.current.push(gantt.attachEvent(event, handler, {}));
+            // Usamos (gantt as any) para silenciar el error del nombre del evento
+            eventIdsRef.current.push((gantt as any).attachEvent(event, handler));
         };
 
-        on('onGanttReady', () => {
-            ganttInitialized.current = true;
-            try {
-                projectStartDate = gantt.getState().min_date
-                    ? new Date(gantt.getState().min_date)
-                    : null;
-            } catch { /* ok */ }
-            refreshKPIs();
-        });
+        // ── EVENTOS DEL GANTT ─────────────────────────────────────────────
 
+        /**
+         * onTaskLoading: se llama por cada tarea al parsear datos.
+         * Convierte a milestone si duración 0, o a proyecto si tiene hijos.
+         */
         on('onTaskLoading', (task: any) => {
             if (task.duration === 0 || task.type === 'milestone') {
                 task.type = gantt.config.types.milestone;
             } else if (gantt.hasChild(task.id)) {
                 task.type = gantt.config.types.project;
-                // ← elimina: task.unscheduled = true;
             }
             return true;
         });
 
+        /**
+         * onTaskCreated: se llama al crear una tarea nueva (ej: clic en "+").
+         * Asigna valores por defecto.
+         */
         on('onTaskCreated', (task: any) => {
-            task.start_date = projectStartDate || new Date();
+            task.start_date = new Date();
             task.end_date = gantt.date.add(task.start_date, 1, 'day');
             task.cost = 0;
             task.progress = 0;
             return true;
         });
 
+
         on('onAfterTaskUpdate', (id: any, item: any) => {
+            // ── 1. Sincronizar predecesoras desde el texto editado ──────────
+            const rawText = String(item.predecessors ?? '').trim();
+            const currentLinksText = gantt
+                .getLinks()
+                .filter((l: any) => String(l.target) === String(id))
+                .map((l: any) => {
+                    const rownum = gantt.getGlobalTaskIndex(l.source) + 1;
+                    return `${rownum}${LINK_LABELS[l.type] ?? 'FC'}`;
+                })
+                .join(', ');
+
+            // No sincronizar si el cambio proviene del auto-scheduling o de una actualización de fecha.
+            const isAutoSync = isUpdatingRef.current || isParsingPredRef.current;
+            const predChanged = !isAutoSync && (
+                (rawText !== '' && rawText.toUpperCase() !== currentLinksText.toUpperCase()) ||
+                (rawText === '' && currentLinksText !== '')
+            );
+
+            if (predChanged && !isParsingPredRef.current && !isUpdatingRef.current) {
+                isParsingPredRef.current = true;
+                parsePredecessorText(id, rawText);
+                if (typeof (gantt as any).autoSchedule === 'function') {
+                    (gantt as any).autoSchedule();
+                }
+                markCriticalTasks();
+                isParsingPredRef.current = false;
+            }
+
+            // ── 2. Validar límites del proyecto (inicio y fin) ───────────────
+            const projectStart = gantt.config.start_date;
+            const projectEnd = gantt.config.end_date;
+
+            if (projectStart && projectEnd && !gantt.hasChild(id)) {
+                let needsUpdate = false;
+                let task = gantt.getTask(id);
+
+                if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
+                    task.start_date = new Date(projectStart);
+                    if (task.duration && task.duration > 0) {
+                        task.end_date = gantt.calculateEndDate({
+                            start_date: task.start_date,
+                            duration: task.duration,
+                            task: task
+                        });
+                    }
+                    needsUpdate = true;
+                }
+
+                if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
+                    task.end_date = new Date(projectEnd);
+                    if (task.start_date) {
+                        const newDuration = gantt.calculateDuration({
+                            start_date: task.start_date,
+                            end_date: task.end_date,
+                            task: task
+                        });
+                        if (newDuration > 0) {
+                            task.duration = newDuration;
+                        }
+                    }
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    gantt.updateTask(id);
+                }
+            }
+
+            // ── 3. Propagar fechas y costos al padre ───────────────────────
             if (isUpdatingRef.current) return true;
             isUpdatingRef.current = true;
             try {
@@ -687,6 +973,8 @@ const CronogramaIndex = ({
             return true;
         });
 
+
+        /** onAfterTaskAdd: recalcula WBS, auto-scheduling y KPIs tras agregar una tarea */
         on('onAfterTaskAdd', (id: any) => {
             const task = gantt.getTask(id);
             if (!task.cost) { task.cost = 0; gantt.updateTask(id); }
@@ -698,6 +986,7 @@ const CronogramaIndex = ({
             refreshKPIs();
         });
 
+        /** onAfterTaskDelete: recalcula WBS, auto-scheduling y KPIs tras borrar una tarea */
         on('onAfterTaskDelete', () => {
             updateCountersAndItems();
             applyAutoScheduling();
@@ -706,6 +995,7 @@ const CronogramaIndex = ({
             refreshKPIs();
         });
 
+        /** onAfterTaskMove: recalcula WBS tras mover una tarea en el árbol */
         on('onAfterTaskMove', () => {
             updateCountersAndItems();
             applyAutoScheduling();
@@ -713,20 +1003,112 @@ const CronogramaIndex = ({
             gantt.render();
         });
 
+        /** onAfterLinkAdd: sincroniza texto de predecesoras y ruta crítica */
         on('onAfterLinkAdd', (_id: any, link: any) => {
             updatePredecessorsText(link.target);
             applyAutoScheduling();
             markCriticalTasks();
+
+            // ── Validar límites del proyecto después de crear la relación ──
+            const projectStart = gantt.config.start_date;
+            const projectEnd = gantt.config.end_date;
+            const targetTask = gantt.getTask(link.target);
+
+            if (projectStart && projectEnd && targetTask && !gantt.hasChild(link.target)) {
+                let needsUpdate = false;
+
+                // Validar inicio: no puede ser antes del inicio del proyecto
+                if (targetTask.start_date && new Date(targetTask.start_date) < new Date(projectStart)) {
+                    targetTask.start_date = new Date(projectStart);
+                    if (targetTask.duration && targetTask.duration > 0) {
+                        targetTask.end_date = gantt.calculateEndDate({
+                            start_date: targetTask.start_date,
+                            duration: targetTask.duration,
+                            task: targetTask
+                        });
+                    }
+                    needsUpdate = true;
+                }
+
+                // Validar fin: no puede ser después del fin del proyecto
+                if (targetTask.end_date && new Date(targetTask.end_date) > new Date(projectEnd)) {
+                    targetTask.end_date = new Date(projectEnd);
+                    if (targetTask.start_date) {
+                        const newDuration = gantt.calculateDuration({
+                            start_date: targetTask.start_date,
+                            end_date: targetTask.end_date,
+                            task: targetTask
+                        });
+                        if (newDuration > 0) {
+                            targetTask.duration = newDuration;
+                        }
+                    }
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    gantt.updateTask(link.target);
+                }
+            }
+
             gantt.render();
         });
-
+        /** onAfterLinkDelete: sincroniza texto de predecesoras y ruta crítica */
         on('onAfterLinkDelete', (_id: any, link: any) => {
-            try { updatePredecessorsText(link.target); } catch { /* tarea puede no existir */ }
+            try { updatePredecessorsText(link.target); } catch { /* la tarea puede haber sido eliminada */ }
             applyAutoScheduling();
             markCriticalTasks();
+
+            // ── Validar límites del proyecto después de eliminar la relación ──
+            const projectStart = gantt.config.start_date;
+            const projectEnd = gantt.config.end_date;
+            const targetTask = gantt.getTask(link.target);
+
+            if (projectStart && projectEnd && targetTask && !gantt.hasChild(link.target)) {
+                let needsUpdate = false;
+
+                // Validar inicio: no puede ser antes del inicio del proyecto
+                if (targetTask.start_date && new Date(targetTask.start_date) < new Date(projectStart)) {
+                    targetTask.start_date = new Date(projectStart);
+                    if (targetTask.duration && targetTask.duration > 0) {
+                        targetTask.end_date = gantt.calculateEndDate({
+                            start_date: targetTask.start_date,
+                            duration: targetTask.duration,
+                            task: targetTask
+                        });
+                    }
+                    needsUpdate = true;
+                }
+
+                // Validar fin: no puede ser después del fin del proyecto
+                if (targetTask.end_date && new Date(targetTask.end_date) > new Date(projectEnd)) {
+                    targetTask.end_date = new Date(projectEnd);
+                    if (targetTask.start_date) {
+                        const newDuration = gantt.calculateDuration({
+                            start_date: targetTask.start_date,
+                            end_date: targetTask.end_date,
+                            task: targetTask
+                        });
+                        if (newDuration > 0) {
+                            targetTask.duration = newDuration;
+                        }
+                    }
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    gantt.updateTask(link.target);
+                }
+            }
+
             gantt.render();
         });
 
+
+        /**
+         * onAfterAutoSchedule: recalcula duraciones en días hábiles después
+         * del auto-scheduling (las fechas pueden haber cambiado por dependencias).
+         */
         on('onAfterAutoSchedule', () => {
             markCriticalTasks();
             gantt.eachTask((task: any) => {
@@ -738,20 +1120,23 @@ const CronogramaIndex = ({
                             task,
                         });
                         gantt.updateTask(task.id);
-                    } catch { /* ok */ }
+                    } catch { /* ok si la tarea tiene datos incompletos */ }
                 }
             });
             refreshKPIs();
         });
 
-        // ── Inicializar y cargar datos ─────────────────────────────────────
+
+        // ── Inicializar el Gantt en el DOM ─────────────────────────────────
         gantt.init(ganttContainer.current);
 
+        ganttInitialized.current = true;
+
+        // ── Cargar datos ───────────────────────────────────────────────────
+        // Prioridad: initialData (datos guardados) > partidasBase > vacío
         let rawData: { tasks: any[]; links: any[] };
         if (initialData) {
-            rawData = typeof initialData === 'string'
-                ? JSON.parse(initialData)
-                : initialData;
+            rawData = typeof initialData === 'string' ? JSON.parse(initialData) : initialData;
         } else if (partidasBase?.tasks?.length) {
             rawData = partidasBase;
         } else {
@@ -760,24 +1145,70 @@ const CronogramaIndex = ({
 
         gantt.batchUpdate(() => {
             gantt.parse(rawData);
-            gantt.eachTask((task: any) => { task.$open = true; });
+
+
+            // 🔥 NORMALIZAR DURACIONES: FORZAR 5 DÍAS A TAREAS HOJA CON DURACIÓN > 30
+            gantt.eachTask((task: any) => {
+                task.$open = true;
+                if (!gantt.hasChild(task.id) && task.duration > 30) {
+                    task.duration = 5;
+                    if (task.start_date) {
+                        task.end_date = gantt.date.add(task.start_date, 5, 'day');
+                    }
+                }
+            });
         });
 
-        try {
-            projectStartDate = gantt.getState().min_date
-                ? new Date(gantt.getState().min_date)
-                : null;
-        } catch { /* ok */ }
+        // 🔥 Ajustar la vista después de cargar los datos
+        setTimeout(() => fitProject(), 100);
 
+        // ── Recrear links desde el texto de predecesoras ───────────────────
+        // Al cargar datos guardados, los links pueden estar en el campo `predecessors`
+        // como texto. Este bloque los recrea si no existen ya como links en el Gantt.
+        gantt.eachTask((task: any) => {
+            const predText = task.predecessors;
+            if (!predText || typeof predText !== 'string') return;
+
+            predText.split(',').forEach((part: string) => {
+                const clean = part.trim().toUpperCase();
+                const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
+                if (!match) return;
+
+                const targetRownum = parseInt(match[1], 10);
+                const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
+
+                let sourceTask: any = null;
+                gantt.eachTask((t: any) => {
+                    if (gantt.getGlobalTaskIndex(t.id) + 1 === targetRownum) {
+                        sourceTask = t;
+                    }
+                });
+
+                if (sourceTask && String(sourceTask.id) !== String(task.id)) {
+                    const linkExists = gantt.getLinks().some(
+                        (l: any) =>
+                            String(l.source) === String(sourceTask.id) &&
+                            String(l.target) === String(task.id)
+                    );
+                    if (!linkExists) {
+                        gantt.addLink({ id: gantt.uid(), source: sourceTask.id, target: task.id, type });
+                    }
+                }
+            });
+        });
+
+        // Sincronizar el texto de predecesoras con los links finales
+        gantt.eachTask((task: any) => { updatePredecessorsText(task.id); });
+
+        // Post-carga: recalcular WBS, ruta crítica y KPIs
         updateCountersAndItems();
         markCriticalTasks();
         setTimeout(() => { gantt.render(); refreshKPIs(); }, 80);
 
-        // ── Cleanup ───────────────────────────────────────────────────────
+        // ── Cleanup: se ejecuta cuando el componente se desmonta ───────────
         return () => {
-            // FIX: detach de todos los eventos registrados antes de destruir
-            eventIdsRef.current.forEach((id) => {
-                try { gantt.detachEvent(id); } catch { /* ok */ }
+            eventIdsRef.current.forEach((evtId) => {
+                try { gantt.detachEvent(evtId); } catch { /* ok */ }
             });
             eventIdsRef.current = [];
             ganttInitialized.current = false;
@@ -785,7 +1216,9 @@ const CronogramaIndex = ({
         };
     }, [initialData, partidasBase, refreshKPIs, updateParentCost, updateParentDates, updatePredecessorsText]);
 
-    // ── Modal de predecesoras (global callback) ───────────────────────────────
+    // ── Modal de predecesoras ─────────────────────────────────────────────────
+    // Expone una función global para que el botón 🔗 en la columna pueda
+    // abrir el modal (el template de la columna es HTML puro, no React).
     useEffect(() => {
         (window as any).__openPredModal = (taskId: any) => {
             setPredTaskId(taskId);
@@ -794,12 +1227,77 @@ const CronogramaIndex = ({
         return () => { delete (window as any).__openPredModal; };
     }, []);
 
-    // ── Valores derivados ────────────────────────────────────────────────────
-    const breadcrumbs = useMemo(() => [
-        { title: 'Costos', href: '/costos' },
-        { title: displayName, href: `/costos/${project}` },
-        { title: 'Cronograma General', href: '#' },
-    ], [displayName, project]);
+    // ── Aplicar configuración de ajustes del proyecto ─────────────────────────
+    // Centraliza la lógica de onApply del modal de ajustes para no repetirla.
+    const handleApplySettings = useCallback(
+        (settings: { projectStart?: string; projectEnd?: string }) => {
+            // 🔥 Verificar que el contenedor existe
+            if (!ganttContainer.current) return;
+
+            if (settings.projectStart) {
+                gantt.config.start_date = new Date(settings.projectStart);
+            }
+            if (settings.projectEnd) {
+                gantt.config.end_date = new Date(settings.projectEnd);
+            }
+            gantt.config.limit_view = true;
+
+            // 🔥 AJUSTAR LAS TAREAS PARA QUE LLEGUEN HASTA LA NUEVA FECHA DE FIN
+            if (settings.projectEnd) {
+                const projectEnd = new Date(settings.projectEnd);
+                gantt.eachTask((task: any) => {
+                    // Solo tareas hoja (sin hijos)
+                    if (!gantt.hasChild(task.id)) {
+                        const taskEnd = new Date(task.end_date);
+                        // Si la tarea termina antes del fin del proyecto
+                        if (taskEnd < projectEnd) {
+                            // Calcular nuevos días necesarios
+                            const daysNeeded = Math.ceil(
+                                (projectEnd.getTime() - task.start_date.getTime()) / (1000 * 60 * 60 * 24)
+                            );
+                            task.duration = Math.max(daysNeeded, 5);
+                            task.end_date = gantt.date.add(task.start_date, task.duration, 'day');
+                            gantt.updateTask(task.id);
+                        }
+                    }
+                });
+            }
+
+            // Re-aplicar templates de fines de semana
+            gantt.templates.scale_cell_class = (date: Date) =>
+                !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
+            gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
+                !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
+
+           
+            if (ganttContainer.current) {
+                gantt.render();
+            }
+
+            // Mover la vista al inicio del proyecto
+            if (gantt.config.start_date) {
+                setTimeout(() => {
+                    if (ganttContainer.current) {
+                        gantt.showDate(new Date(gantt.config.start_date!));
+                    }
+                }, 100);
+            }
+
+            refreshKPIs();
+            setIsSettingsOpen(false);
+        },
+        [refreshKPIs]
+    );
+
+    // ── Valores derivados para el render ──────────────────────────────────────
+    const breadcrumbs = useMemo(
+        () => [
+            { title: 'Costos', href: '/costos' },
+            { title: displayName, href: `/costos/${project}` },
+            { title: 'Cronograma General', href: '#' },
+        ],
+        [displayName, project]
+    );
 
     const progressPct = Math.min(Math.round(projectProgress), 100);
     const budgetUsed = total_budget > 0 ? Math.min((totalCost / total_budget) * 100, 100) : 0;
@@ -816,6 +1314,7 @@ const CronogramaIndex = ({
                 {/* ── HEADER ────────────────────────────────────────────── */}
                 <header className="pcl-header">
                     <div className="pcl-header__top">
+                        {/* Título del proyecto */}
                         <div className="pcl-header__project">
                             <div className="pcl-header__icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
@@ -828,7 +1327,7 @@ const CronogramaIndex = ({
                             </div>
                         </div>
 
-                        {/* KPIs */}
+                        {/* KPIs en tiempo real */}
                         <div className="pcl-kpis">
                             <div className="pcl-kpi">
                                 <span className="pcl-kpi__value">{taskCount.toLocaleString()}</span>
@@ -859,7 +1358,7 @@ const CronogramaIndex = ({
                         </div>
                     </div>
 
-                    {/* Barra presupuestal */}
+                    {/* Barra de ejecución presupuestal */}
                     {total_budget > 0 && (
                         <div className="pcl-budget-bar">
                             <div className="pcl-budget-bar__track">
@@ -871,9 +1370,10 @@ const CronogramaIndex = ({
                         </div>
                     )}
 
-                    {/* Toolbar */}
+                    {/* Toolbar de acciones */}
                     <nav className="pcl-toolbar">
-                        {/* Vista */}
+
+                        {/* Grupo: Vista */}
                         <div className="pcl-toolbar__group">
                             <span className="pcl-toolbar__group-label">VISTA</span>
                             <button onClick={expandAll} className="pcl-btn pcl-btn--ghost">
@@ -890,7 +1390,7 @@ const CronogramaIndex = ({
                             </button>
                         </div>
 
-                        {/* Búsqueda */}
+                        {/* Grupo: Búsqueda */}
                         <div className="pcl-toolbar__group">
                             <span className="pcl-toolbar__group-label">BUSCAR</span>
                             <div className="pcl-search">
@@ -907,7 +1407,7 @@ const CronogramaIndex = ({
                             </div>
                         </div>
 
-                        {/* Análisis */}
+                        {/* Grupo: Análisis (ruta crítica) */}
                         <div className="pcl-toolbar__group">
                             <span className="pcl-toolbar__group-label">ANÁLISIS</span>
                             <button
@@ -919,7 +1419,7 @@ const CronogramaIndex = ({
                             </button>
                         </div>
 
-                        {/* Programación */}
+                        {/* Grupo: Programación (auto/manual) */}
                         <div className="pcl-toolbar__group">
                             <span className="pcl-toolbar__group-label">PROGRAMACIÓN</span>
                             <button
@@ -931,35 +1431,24 @@ const CronogramaIndex = ({
                             </button>
                         </div>
 
-                        {/* Proyecto */}
+                        {/* Grupo: Proyecto (importar, ajustes) */}
                         <div className="pcl-toolbar__group">
                             <span className="pcl-toolbar__group-label">PROYECTO</span>
-                            <button
-                                onClick={handleImport}
-                                disabled={importing}
-                                className="pcl-btn pcl-btn--warning"
-                            >
+                            <button onClick={handleImport} disabled={importing} className="pcl-btn pcl-btn--warning">
                                 {importing
                                     ? <span className="pcl-spinner" />
                                     : <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" /></svg>
                                 }
-                                <span>Importar Presupuesto</span>
+                                <span>Importar</span>
                             </button>
-                            <button
-                                onClick={() => setIsSettingsOpen(true)}
-                                className="pcl-btn pcl-btn--ghost"
-                            >
+                            <button onClick={() => setIsSettingsOpen(true)} className="pcl-btn pcl-btn--ghost">
                                 <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" /></svg>
                                 <span>Ajustes</span>
                             </button>
                         </div>
 
-                        {/* Guardar */}
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="pcl-btn pcl-btn--primary pcl-btn--save"
-                        >
+                        {/* Guardar (siempre visible al final del toolbar) */}
+                        <button onClick={handleSave} disabled={saving} className="pcl-btn pcl-btn--primary pcl-btn--save">
                             {saving
                                 ? <span className="pcl-spinner" />
                                 : <svg viewBox="0 0 20 20" fill="currentColor"><path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" /></svg>
@@ -970,11 +1459,11 @@ const CronogramaIndex = ({
                 </header>
 
                 {/* ── GANTT ─────────────────────────────────────────────── */}
-                <div className="flex-1 relative overflow-hidden">
+                <div className="flex-1 relative overflow-auto">
                     <div
                         ref={ganttContainer}
-                        className="w-full h-full pcl-gantt-wrapper"
-                        style={{ minHeight: '500px', height: 'calc(100vh - 180px)' }}
+                        className="pcl-gantt-wrapper"
+                        style={{ minHeight: '500px', height: 'calc(100vh - 180px)', width: '100%' }}
                     />
                 </div>
 
@@ -984,142 +1473,326 @@ const CronogramaIndex = ({
                     taskId={predTaskId}
                     onClose={() => setPredOpen(false)}
                 />
+                {/* ProjectSettingsModal usa handleApplySettings centralizado */}
                 <ProjectSettingsModal
                     isOpen={isSettingsOpen}
                     onClose={() => setIsSettingsOpen(false)}
-                    onApply={(settings) => {
-                        // Re-aplicar templates de días no laborables con la nueva
-                        // configuración para que el sombreado refleje los días desmarcados.
-                        // gantt.isWorkTime() ya fue actualizado dentro del modal,
-                        // así que solo necesitamos forzar un re-render con los templates.
-                        gantt.templates.scale_cell_class = (date: Date) =>
-                            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
-                        gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
-                            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
-
-                        // Recalcular duraciones de tareas según nuevo calendario
-                        gantt.eachTask((task: any) => {
-                            if (!gantt.hasChild(task.id) && task.start_date && task.end_date) {
-                                try {
-                                    task.duration = gantt.calculateDuration({
-                                        start_date: task.start_date,
-                                        end_date: task.end_date,
-                                        task,
-                                    });
-                                    gantt.updateTask(task.id);
-                                } catch { /* ok */ }
-                            }
-                        });
-
-                        gantt.render();
-                        refreshKPIs();
-                        setIsSettingsOpen(false);
-                    }}
+                    onApply={handleApplySettings}
                 />
             </div>
 
-            {/* ── ESTILOS ───────────────────────────────────────────────── */}
+            {/* ── ESTILOS GLOBALES ──────────────────────────────────────── */}
             <style>{`
-                .pcl-header { background: linear-gradient(135deg, #0f2140 0%, #162d57 100%); border-bottom: 1px solid rgba(34,211,238,0.15); flex-shrink: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
-                .pcl-header__top { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 8px; gap: 12px; }
-                .pcl-header__project { display: flex; align-items: center; gap: 10px; min-width: 0; }
-                .pcl-header__icon { width: 36px; height: 36px; background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.3); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #22d3ee; }
-                .pcl-header__icon svg { width: 18px; height: 18px; }
-                .pcl-header__label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(34,211,238,0.7); text-transform: uppercase; margin: 0; }
-                .pcl-header__title { font-size: 14px; font-weight: 700; color: #fff; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
-                .pcl-kpis { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-                .pcl-kpi { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 12px; text-align: center; min-width: 80px; }
-                .pcl-kpi--cost, .pcl-kpi--budget { min-width: 140px; }
-                .pcl-kpi--progress { display: flex; align-items: center; gap: 8px; padding: 5px 10px; }
-                .pcl-kpi__value { display: block; font-size: 15px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
-                .pcl-kpi--cost .pcl-kpi__value { color: #6ee7b7; }
-                .pcl-kpi--budget .pcl-kpi__value { color: #22d3ee; }
-                .pcl-kpi__label { font-size: 9px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.08em; }
-                .pcl-kpi__progress-ring { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
-                .pcl-kpi__progress-ring svg { width: 34px; height: 34px; transform: rotate(-90deg); }
-                .pcl-kpi__progress-ring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #22d3ee; }
-                .pcl-budget-bar { display: flex; align-items: center; gap: 10px; padding: 0 16px 6px; }
-                .pcl-budget-bar__track { flex: 1; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
-                .pcl-budget-bar__fill { height: 100%; background: linear-gradient(90deg, #10b981, #22d3ee); border-radius: 2px; transition: width 0.6s ease; }
-                .pcl-budget-bar__label { font-size: 10px; color: rgba(255,255,255,0.45); white-space: nowrap; }
-                .pcl-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 16px 6px; border-top: 1px solid rgba(255,255,255,0.06); overflow-x: auto; }
-                .pcl-toolbar__group { display: flex; align-items: center; gap: 3px; padding-right: 10px; border-right: 1px solid rgba(255,255,255,0.1); margin-right: 6px; }
-                .pcl-toolbar__group:last-of-type { border-right: none; }
-                .pcl-toolbar__group-label { font-size: 8px; font-weight: 700; color: rgba(255,255,255,0.35); letter-spacing: 0.1em; text-transform: uppercase; margin-right: 4px; white-space: nowrap; }
-                .pcl-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; font-family: 'Segoe UI', system-ui, sans-serif; }
-                .pcl-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
-                .pcl-btn--ghost   { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.12); }
-                .pcl-btn--ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
-                .pcl-btn--danger  { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-                .pcl-btn--danger:hover { background: rgba(239,68,68,0.35); }
-                .pcl-btn--warning { background: rgba(245,158,11,0.2); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
-                .pcl-btn--warning:hover { background: rgba(245,158,11,0.35); }
-                .pcl-btn--success { background: rgba(16,185,129,0.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
-                .pcl-btn--success:hover { background: rgba(16,185,129,0.35); }
-                .pcl-btn--primary { background: #0ea5e9; color: #fff; border: none; }
-                .pcl-btn--primary:hover { background: #38bdf8; }
-                .pcl-btn--save { padding: 5px 14px; font-size: 12px; }
-                .pcl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-                .pcl-btn__dot { width: 7px; height: 7px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); }
-                .pcl-btn__dot--active { background: #f87171; border-color: #f87171; }
-                .pcl-search { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 4px 8px; }
-                .pcl-search svg { width: 13px; height: 13px; color: rgba(255,255,255,0.4); flex-shrink: 0; }
-                .pcl-search input { background: transparent; border: none; outline: none; color: #fff; font-size: 11px; width: 180px; font-family: 'Segoe UI', system-ui, sans-serif; }
-                .pcl-search input::placeholder { color: rgba(255,255,255,0.35); }
-                .pcl-search button { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 12px; padding: 0 2px; }
-                .pcl-search button:hover { color: #fff; }
-                .pcl-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; animation: pcl-spin 0.7s linear infinite; display: inline-block; }
-                @keyframes pcl-spin { to { transform: rotate(360deg); } }
-                /* FIX: toast ahora necesita la clase --visible para ser opaco */
-                .pcl-toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0,0,0,0.3); opacity: 0; transform: translateY(10px); transition: opacity 0.3s ease, transform 0.3s ease; max-width: 360px; pointer-events: none; }
-                .pcl-toast--visible { opacity: 1; transform: translateY(0); }
-                .pcl-toast--success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
-                .pcl-toast--error   { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
-                .pcl-toast--info    { background: #0c4a6e; color: #7dd3fc; border: 1px solid #075985; }
-                .pcl-gantt-wrapper .gantt_container { border: none !important; font-family: 'Segoe UI', system-ui, sans-serif !important; }
-                .pcl-gantt-wrapper .gantt_grid { background: #fff; }
-                .pcl-gantt-wrapper .gantt_grid_head_cell { background: #f1f5f9 !important; font-size: 10px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.07em !important; color: #475569 !important; border-right: 1px solid #e2e8f0 !important; border-bottom: 2px solid #cbd5e1 !important; }
-                .pcl-gantt-wrapper .gantt_cell { font-size: 12px !important; color: #334155; border-right: 1px solid #f1f5f9 !important; }
-                .pcl-gantt-wrapper .gantt_row:nth-child(even) .gantt_cell { background: #f8fafc; }
-                .pcl-gantt-wrapper .gantt_row:hover .gantt_cell { background: #eff6ff !important; }
-                .pcl-gantt-wrapper .gantt_row.gantt_selected .gantt_cell { background: #dbeafe !important; }
-                .pcl-gantt-wrapper .gantt_scale_cell { font-size: 11px !important; font-weight: 600 !important; color: #475569; border-right: 1px solid #e2e8f0 !important; }
-                .pcl-gantt-wrapper .gantt_scale_line:first-child .gantt_scale_cell { background: #f8fafc !important; font-size: 12px !important; color: #1e293b; }
-                .pcl-weekend-cell, .pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell { background: repeating-linear-gradient(45deg, rgba(203,213,225,0.18) 0px, rgba(203,213,225,0.18) 2px, transparent 2px, transparent 8px) !important; }
-                .pcl-gantt-wrapper .gantt_scale_cell.pcl-weekend-cell { color: #94a3b8 !important; }
-                .pcl-gantt-wrapper .gantt_row_task { border-bottom: 1px solid #f1f5f9; }
-                .pcl-gantt-wrapper .gantt_task_line { border-radius: 3px !important; background: #2563eb !important; border: 1px solid #1d4ed8 !important; box-shadow: 0 1px 3px rgba(37,99,235,0.3) !important; }
-                .pcl-gantt-wrapper .gantt_task_progress { background: #1d4ed8 !important; opacity: 0.5 !important; }
-                .pcl-gantt-wrapper .gantt_task_content { font-size: 11px !important; font-weight: 500 !important; color: #fff !important; }
-                .pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::before, .pcl-gantt-wrapper .gantt_task_line.gantt_project::before { content: ''; position: absolute; top: 4px; left: 0; right: 0; height: 7px; background: #0f172a; border-radius: 2px 2px 0 0; }
-                .pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::after, .pcl-gantt-wrapper .gantt_task_line.gantt_project::after { content: ''; position: absolute; top: 4px; left: 0; border-left: 8px solid #0f172a; border-right: 8px solid transparent; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
-                .pcl-gantt-wrapper .gantt_critical_task.gantt_task_line { background: #dc2626 !important; border-color: #b91c1c !important; box-shadow: 0 0 6px rgba(220,38,38,0.4) !important; }
-                .pcl-gantt-wrapper .gantt_critical_task .gantt_task_progress { background: #991b1b !important; }
-                .pcl-gantt-wrapper .gantt_critical_link .gantt_line_wrapper div { background: #ef4444 !important; }
-                .pcl-gantt-wrapper .gantt_critical_link .gantt_link_arrow { border-color: #ef4444 !important; }
-                .pcl-gantt-wrapper .gantt_link_fc .gantt_line_wrapper div { background: #3b82f6 !important; }
-                .pcl-gantt-wrapper .gantt_link_cc .gantt_line_wrapper div { background: #10b981 !important; }
-                .pcl-gantt-wrapper .gantt_link_ff .gantt_line_wrapper div { background: #f59e0b !important; }
-                .pcl-gantt-wrapper .gantt_link_cf .gantt_line_wrapper div { background: #ef4444 !important; }
-                .pcl-gantt-wrapper .gantt_grid_editor_placeholder input { box-sizing: border-box; width: 100%; height: 100%; border: 2px solid #2563eb !important; padding: 0 5px; font-size: 12px; outline: none; background: #fff; font-family: 'Segoe UI', system-ui, sans-serif; }
-                .pcl-gantt-wrapper .gantt_marker.today_marker { background: rgba(239,68,68,0.25) !important; border-left: 2px dashed #ef4444 !important; }
-                .pcl-gantt-wrapper .gantt_marker_content { background: #ef4444 !important; color: #fff !important; font-size: 10px !important; padding: 2px 6px !important; border-radius: 0 0 4px 4px !important; }
-                .pcl-gantt-wrapper .gantt_link_arrow { border-width: 6px !important; }
-                .pcl-gantt-wrapper .gantt_line_wrapper div { background: #64748b !important; }
-                .pcl-gantt-wrapper .gantt_tooltip { background: #ffffff !important; color: #1e293b !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; padding: 0 !important; font-size: 12px !important; box-shadow: 0 12px 40px rgba(0,0,0,0.15) !important; min-width: 260px; overflow: hidden; }
-                .pcl-tooltip { padding: 12px 14px; font-family: 'Segoe UI', system-ui, sans-serif; }
-                .pcl-tooltip__title { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; line-height: 1.3; }
-                .pcl-tooltip__table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                .pcl-tooltip__table td { padding: 3px 0; vertical-align: top; }
-                .pcl-tooltip__table td:first-child { color: #64748b; padding-right: 12px; white-space: nowrap; width: 90px; }
-                .pcl-tooltip__table td:last-child { color: #1e293b; font-weight: 500; }
-                .pcl-gantt-wrapper ::-webkit-scrollbar { width: 6px; height: 6px; }
-                .pcl-gantt-wrapper ::-webkit-scrollbar-track { background: #f1f5f9; }
-                .pcl-gantt-wrapper ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-                .pcl-gantt-wrapper ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-                .pcl-gantt-wrapper .gantt_selected .gantt_task_line { box-shadow: 0 0 0 2px #f59e0b, 0 2px 8px rgba(245,158,11,0.3) !important; }
-                select, select option { color: #1e293b !important; background: white !important; }
-            `}</style>
+/* ========== HEADER ========== */
+.pcl-header { background: linear-gradient(135deg, #0f2140 0%, #162d57 100%); border-bottom: 1px solid rgba(34,211,238,0.15); flex-shrink: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+.pcl-header__top { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 8px; gap: 12px; }
+.pcl-header__project { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pcl-header__icon { width: 36px; height: 36px; background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.3); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #22d3ee; }
+.pcl-header__icon svg { width: 18px; height: 18px; }
+.pcl-header__label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(34,211,238,0.7); text-transform: uppercase; margin: 0; }
+.pcl-header__title { font-size: 14px; font-weight: 700; color: #fff; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
+
+/* ========== KPIs ========== */
+.pcl-kpis { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pcl-kpi { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 12px; text-align: center; min-width: 80px; }
+.pcl-kpi--cost, .pcl-kpi--budget { min-width: 140px; }
+.pcl-kpi--progress { display: flex; align-items: center; gap: 8px; padding: 5px 10px; }
+.pcl-kpi__value { display: block; font-size: 15px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pcl-kpi--cost .pcl-kpi__value { color: #6ee7b7; }
+.pcl-kpi--budget .pcl-kpi__value { color: #22d3ee; }
+.pcl-kpi__label { font-size: 9px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.08em; }
+.pcl-kpi__progress-ring { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
+.pcl-kpi__progress-ring svg { width: 34px; height: 34px; transform: rotate(-90deg); }
+.pcl-kpi__progress-ring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #22d3ee; }
+
+/* ========== BARRA PRESUPUESTAL ========== */
+.pcl-budget-bar { display: flex; align-items: center; gap: 10px; padding: 0 16px 6px; }
+.pcl-budget-bar__track { flex: 1; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+.pcl-budget-bar__fill { height: 100%; background: linear-gradient(90deg, #10b981, #22d3ee); border-radius: 2px; transition: width 0.6s ease; }
+.pcl-budget-bar__label { font-size: 10px; color: rgba(255,255,255,0.45); white-space: nowrap; }
+
+/* ========== TOOLBAR ========== */
+.pcl-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 16px 6px; border-top: 1px solid rgba(255,255,255,0.06); overflow-x: auto; }
+.pcl-toolbar__group { display: flex; align-items: center; gap: 3px; padding-right: 10px; border-right: 1px solid rgba(255,255,255,0.1); margin-right: 6px; }
+.pcl-toolbar__group:last-of-type { border-right: none; }
+.pcl-toolbar__group-label { font-size: 8px; font-weight: 700; color: rgba(255,255,255,0.35); letter-spacing: 0.1em; text-transform: uppercase; margin-right: 4px; white-space: nowrap; }
+
+/* ========== BOTONES ========== */
+.pcl-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; font-family: 'Segoe UI', system-ui, sans-serif; }
+.pcl-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.pcl-btn--ghost { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.12); }
+.pcl-btn--ghost:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.pcl-btn--danger { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+.pcl-btn--danger:hover { background: rgba(239,68,68,0.35); }
+.pcl-btn--warning { background: rgba(245,158,11,0.2); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
+.pcl-btn--warning:hover { background: rgba(245,158,11,0.35); }
+.pcl-btn--success { background: rgba(16,185,129,0.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
+.pcl-btn--success:hover { background: rgba(16,185,129,0.35); }
+.pcl-btn--primary { background: #0ea5e9; color: #fff; border: none; }
+.pcl-btn--primary:hover { background: #38bdf8; }
+.pcl-btn--save { padding: 5px 14px; font-size: 12px; }
+.pcl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pcl-btn__dot { width: 7px; height: 7px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); }
+.pcl-btn__dot--active { background: #f87171; border-color: #f87171; }
+
+/* ========== BÚSQUEDA ========== */
+.pcl-search { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 4px 8px; }
+.pcl-search svg { width: 13px; height: 13px; color: rgba(255,255,255,0.4); flex-shrink: 0; }
+.pcl-search input { background: transparent; border: none; outline: none; color: #fff; font-size: 11px; width: 180px; font-family: 'Segoe UI', system-ui, sans-serif; }
+.pcl-search input::placeholder { color: rgba(255,255,255,0.35); }
+.pcl-search button { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.pcl-search button:hover { color: #fff; }
+
+/* ========== SPINNER ========== */
+.pcl-spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; animation: pcl-spin 0.7s linear infinite; display: inline-block; }
+@keyframes pcl-spin { to { transform: rotate(360deg); } }
+
+/* ========== TOAST ========== */
+.pcl-toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Segoe UI', system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0,0,0,0.3); opacity: 0; transform: translateY(10px); transition: opacity 0.3s ease, transform 0.3s ease; max-width: 360px; pointer-events: none; }
+.pcl-toast--visible { opacity: 1; transform: translateY(0); }
+.pcl-toast--success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+.pcl-toast--error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+.pcl-toast--info { background: #0c4a6e; color: #7dd3fc; border: 1px solid #075985; }
+
+/* ========== GANTT - CONTENEDOR Y GRID ========== */
+.pcl-gantt-wrapper .gantt_container { border: none !important; font-family: 'Segoe UI', system-ui, sans-serif !important; }
+.pcl-gantt-wrapper .gantt_grid { background: #fff; }
+.pcl-gantt-wrapper .gantt_grid_head_cell { background: #f1f5f9 !important; font-size: 10px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.07em !important; color: #475569 !important; border-right: 1px solid #e2e8f0 !important; border-bottom: 2px solid #cbd5e1 !important; }
+.pcl-gantt-wrapper .gantt_cell { font-size: 12px !important; color: #334155; border-right: 1px solid #f1f5f9 !important; }
+.pcl-gantt-wrapper .gantt_row:nth-child(even) .gantt_cell { background: #f8fafc; }
+.pcl-gantt-wrapper .gantt_row:hover .gantt_cell { background: #eff6ff !important; }
+.pcl-gantt-wrapper .gantt_row.gantt_selected .gantt_cell { background: #dbeafe !important; }
+
+/* ========== GANTT - ESCALAS ========== */
+.pcl-gantt-wrapper .gantt_scale_cell { font-size: 11px !important; font-weight: 600 !important; color: #475569; border-right: 1px solid #e2e8f0 !important; }
+.pcl-gantt-wrapper .gantt_scale_line:first-child .gantt_scale_cell { background: #f8fafc !important; font-size: 12px !important; color: #1e293b; }
+
+/* ========== GANTT - FINES DE SEMANA ========== */
+.pcl-weekend-cell,
+.pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell { 
+    /* Fondo blanco sólido para tapar lo que esté debajo */
+    background-color: #ffffff !important; 
+    /* Z-index alto para que se superponga a las barras y corchetes */
+    position: relative;
+    z-index: 5 !important; 
+    pointer-events: none; 
+}
+
+.pcl-gantt-wrapper .gantt_scale_cell.pcl-weekend-cell { 
+    color: #94a3b8 !important; 
+    background-color: #ffffff !important;
+}
+
+.pcl-gantt-wrapper .gantt_row_task { 
+    border-bottom: 1px solid #f1f5f9; 
+}
+
+/* ========== GANTT - TAREAS HOJA ========== */
+.pcl-gantt-wrapper .gantt_task_line { 
+    border-radius: 3px !important; 
+    background: #2563eb !important; 
+    border: 1px solid #1d4ed8 !important; 
+    box-shadow: 0 1px 3px rgba(37,99,235,0.3) !important; 
+    /* Z-index bajo para que el blanco del fin de semana pueda taparlo */
+    z-index: 1 !important;
+}
+
+.pcl-gantt-wrapper .gantt_task_progress { 
+    background: #1d4ed8 !important; 
+    opacity: 0.5 !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_content { 
+    font-size: 11px !important; 
+    font-weight: 500 !important; 
+    color: #fff !important; 
+}
+
+/* ========== GANTT - TAREAS PADRE (Corchetes con las dos patitas) ========== */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project { 
+    background: transparent !important; 
+    border: none !important; 
+    box-shadow: none !important; 
+}
+
+/* La línea horizontal negra central */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::before,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::before { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    right: 0 !important; 
+    height: 3px !important; 
+    background: #0f172a !important; 
+    border-radius: 2px !important; 
+    z-index: 1 !important; /* Para que el blanco lo tape en los saltos */
+}
+
+/* LAS PATITAS: Izquierda y Derecha */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::after,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::after { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    /* Obligatorio para que abarque todo el ancho y pinte ambos extremos */
+    width: 100% !important; 
+    height: 6px !important; 
+    /* Aquí creamos las dos patitas usando bordes laterales */
+    border-left: 6px solid #0f172a !important; 
+    border-right: 6px solid #0f172a !important; 
+    box-sizing: border-box !important;
+    /* Z-index superior al blanco (5) para que las patitas nunca se borren */
+    z-index: 6 !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_line.gantt_project .gantt_task_content { 
+    display: none !important; 
+}
+
+/* ========== GANTT - TAREAS PADRE (Corchetes originales de la imagen) ========== */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project { 
+    background: transparent !important; 
+    border: none !important; 
+    box-shadow: none !important; 
+}
+
+/* La línea horizontal negra del corchete */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::before,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::before { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    right: 0 !important; 
+    height: 3px !important; 
+    background: #0f172a !important; 
+    border-radius: 2px !important; 
+}
+
+/* Las patitas de los extremos (el diseño que me enviaste) */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::after,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::after { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    /* Este borde crea la forma de corchete hacia abajo en los extremos */
+    width: 100% !important;
+    height: 8px !important;
+    border-left: 6px solid #0f172a !important; 
+    border-right: 6px solid #0f172a !important; 
+    box-sizing: border-box !important;
+}
+
+.pcl-gantt-wrapper .gantt_task_line.gantt_project .gantt_task_content { 
+    display: none !important; 
+}
+
+//* ========== GANTT - TAREAS HOJA ========== */
+.pcl-gantt-wrapper .gantt_task_line { 
+    border-radius: 3px !important; 
+    /* Se quita !important para que split_tasks pueda ocultar el color en el hueco */
+    background: #2563eb; 
+    border: 1px solid #1d4ed8 !important; 
+    box-shadow: 0 1px 3px rgba(37,99,235,0.3) !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_progress { 
+    background: #1d4ed8 !important; 
+    opacity: 0.5 !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_content { 
+    font-size: 11px !important; 
+    font-weight: 500 !important; 
+    color: #fff !important; 
+}
+/* ========== GANTT - TAREAS PADRE (solo corchetes, sin barra azul) ========== */
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project { 
+    background: transparent !important; 
+    border: none !important; 
+    box-shadow: none !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::before,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::before { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    /* Cambiado de right: 0 a width: 100% para que el corchete se rompa en el salto */
+    width: 100% !important; 
+    height: 3px !important; 
+    background: #0f172a !important; 
+    border-radius: 2px !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::after,
+.pcl-gantt-wrapper .gantt_task_line.gantt_project::after { 
+    content: '' !important; 
+    position: absolute !important; 
+    top: 4px !important; 
+    left: 0 !important; 
+    border-left: 6px solid #0f172a !important; 
+    border-right: 6px solid transparent !important; 
+    border-top: 6px solid transparent !important; 
+    border-bottom: 6px solid transparent !important; 
+}
+
+.pcl-gantt-wrapper .gantt_task_line.gantt_project .gantt_task_content { 
+    display: none !important; 
+}
+
+/* ========== GANTT - RUTA CRÍTICA ========== */
+.pcl-gantt-wrapper .gantt_critical_task.gantt_task_line { background: #dc2626 !important; border-color: #b91c1c !important; box-shadow: 0 0 6px rgba(220,38,38,0.4) !important; }
+.pcl-gantt-wrapper .gantt_critical_task .gantt_task_progress { background: #991b1b !important; }
+.pcl-gantt-wrapper .gantt_critical_link .gantt_line_wrapper div { background: #ef4444 !important; }
+.pcl-gantt-wrapper .gantt_critical_link .gantt_link_arrow { border-color: #ef4444 !important; }
+
+/* ========== GANTT - LINKS POR TIPO ========== */
+.pcl-gantt-wrapper .gantt_link_fc .gantt_line_wrapper div { background: #3b82f6 !important; }
+.pcl-gantt-wrapper .gantt_link_cc .gantt_line_wrapper div { background: #10b981 !important; }
+.pcl-gantt-wrapper .gantt_link_ff .gantt_line_wrapper div { background: #f59e0b !important; }
+.pcl-gantt-wrapper .gantt_link_cf .gantt_line_wrapper div { background: #ef4444 !important; }
+.pcl-gantt-wrapper .gantt_link_arrow { border-width: 6px !important; }
+.pcl-gantt-wrapper .gantt_line_wrapper div { background: #64748b !important; }
+
+/* ========== GANTT - EDITORES INLINE ========== */
+.pcl-gantt-wrapper .gantt_grid_editor_placeholder input { box-sizing: border-box; width: 100%; height: 100%; border: 2px solid #2563eb !important; padding: 0 5px; font-size: 12px; outline: none; background: #fff; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+/* ========== GANTT - MARCADOR HOY ========== */
+.pcl-gantt-wrapper .gantt_marker.today_marker { background: rgba(239,68,68,0.25) !important; border-left: 2px dashed #ef4444 !important; }
+.pcl-gantt-wrapper .gantt_marker_content { background: #ef4444 !important; color: #fff !important; font-size: 10px !important; padding: 2px 6px !important; border-radius: 0 0 4px 4px !important; }
+
+/* ========== GANTT - TOOLTIP ========== */
+.pcl-gantt-wrapper .gantt_tooltip { background: #ffffff !important; color: #1e293b !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important; padding: 0 !important; font-size: 12px !important; box-shadow: 0 12px 40px rgba(0,0,0,0.15) !important; min-width: 260px; overflow: hidden; }
+.pcl-tooltip { padding: 12px 14px; font-family: 'Segoe UI', system-ui, sans-serif; }
+.pcl-tooltip__title { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; line-height: 1.3; }
+.pcl-tooltip__table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.pcl-tooltip__table td { padding: 3px 0; vertical-align: top; }
+.pcl-tooltip__table td:first-child { color: #64748b; padding-right: 12px; white-space: nowrap; width: 90px; }
+.pcl-tooltip__table td:last-child { color: #1e293b; font-weight: 500; }
+
+/* ========== GANTT - SCROLLBAR PERSONALIZADA ========== */
+.pcl-gantt-wrapper ::-webkit-scrollbar { width: 6px; height: 6px; }
+.pcl-gantt-wrapper ::-webkit-scrollbar-track { background: #f1f5f9; }
+.pcl-gantt-wrapper ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.pcl-gantt-wrapper ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ========== GANTT - TAREA SELECCIONADA ========== */
+.pcl-gantt-wrapper .gantt_selected .gantt_task_line { box-shadow: 0 0 0 2px #f59e0b, 0 2px 8px rgba(245,158,11,0.3) !important; }
+
+/* ========== OTROS ========== */
+select, select option { color: #1e293b !important; background: white !important; }
+.gantt_task_line {
+  background: yellow !important;
+}
+`}</style>
         </AppLayout>
     );
 };

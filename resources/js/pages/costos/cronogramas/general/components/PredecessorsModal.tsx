@@ -30,9 +30,9 @@ interface GanttLink {
 // COMPONENTE
 // ─────────────────────────────────────────────────────────────────────────────
 export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
-    const [search,         setSearch]         = useState('');
-    const [tasks,          setTasks]          = useState<GanttTask[]>([]);
-    const [links,          setLinks]          = useState<GanttLink[]>([]);
+    const [search, setSearch] = useState('');
+    const [tasks, setTasks] = useState<GanttTask[]>([]);
+    const [links, setLinks] = useState<GanttLink[]>([]);
     const [tempSelections, setTempSelections] = useState<Record<string, string>>({});
 
     // ── Leer estado del gantt ─────────────────────────────────────────────────
@@ -48,11 +48,11 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         gantt.eachTask((t: any) => {
             if (String(t.id) === String(taskId)) return;
             available.push({
-                id:     t.id,
-                text:   t.text,
+                id: t.id,
+                text: t.text,
                 // FIX: número de fila global (1-based), no el código WBS
                 rownum: gantt.getGlobalTaskIndex(t.id) + 1,
-                item:   t.item,
+                item: t.item,
             });
         });
         setTasks(available);
@@ -67,71 +67,77 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
     // Crea el link y llama autoSchedule() para que dhtmlx reposicione la tarea
     // target respetando el tipo de relación (FC mueve al día siguiente del fin
     // de source, CC alinea inicios, FF alinea fines, CF invierte).
-  const predAdd = useCallback((sourceId: any, type: string) => {
-    try {
-        console.log('🔍 predAdd - sourceId:', sourceId, 'taskId:', taskId, 'type:', type);
-        
-        const sourceTask = gantt.getTask(sourceId);
-        const targetTask = gantt.getTask(taskId);
-        
-        console.log('📌 sourceTask:', sourceTask?.text);
-        console.log('📌 targetTask:', targetTask?.text);
-        
-        // Validar que las tareas existan
-        if (!sourceTask) {
-            console.error('❌ sourceTask no encontrada:', sourceId);
-            return;
-        }
-        if (!targetTask) {
-            console.error('❌ targetTask no encontrada:', taskId);
-            return;
-        }
-        
-        // Ajustar fechas según el tipo de relación
-        if (type === '0') { // FC - Fin-Comienzo
-            const newStart = new Date(sourceTask.end_date);
-            newStart.setDate(newStart.getDate() + 1);
-            targetTask.start_date = newStart;
-            targetTask.end_date = gantt.date.add(newStart, targetTask.duration, 'day');
+    const predAdd = useCallback((sourceId: any, type: string) => {
+        try {
+            console.log('🔍 predAdd - sourceId:', sourceId, 'taskId:', taskId, 'type:', type);
+
+            const sourceTask = gantt.getTask(sourceId);
+            const targetTask = gantt.getTask(taskId);
+
+            console.log('📌 sourceTask:', sourceTask?.text);
+            console.log('📌 targetTask:', targetTask?.text);
+
+            // Validar que las tareas existan
+            if (!sourceTask) {
+                console.error('❌ sourceTask no encontrada:', sourceId);
+                return;
+            }
+            if (!targetTask) {
+                console.error('❌ targetTask no encontrada:', taskId);
+                return;
+            }
+
+            // Ajustar fechas según el tipo de relación
+            // Ajustar fechas según el tipo de relación
+            const duration = Number((targetTask as any).duration);
+
+            if (type === '0') { // FC - Fin-Comienzo
+                const newStart = new Date((sourceTask as any).end_date);
+                newStart.setDate(newStart.getDate() + 1);
+
+                (targetTask as any).start_date = newStart;
+                (targetTask as any).end_date = gantt.date.add(newStart, duration, 'day');
+            }
+            else if (type === '1') { // CC - Comienzo-Comienzo
+                const newStart = new Date((sourceTask as any).start_date);
+
+                (targetTask as any).start_date = newStart;
+                (targetTask as any).end_date = gantt.date.add(newStart, duration, 'day');
+            }
+            else if (type === '2') { // FF - Fin-Fin
+                const newEnd = new Date((sourceTask as any).end_date);
+
+                (targetTask as any).end_date = newEnd;
+                (targetTask as any).start_date = gantt.date.add(newEnd, -duration, 'day');
+            }
+            else if (type === '3') { // CF - Comienzo-Fin
+                const newEnd = new Date((sourceTask as any).start_date);
+
+                (targetTask as any).end_date = newEnd;
+                (targetTask as any).start_date = gantt.date.add(newEnd, -duration, 'day');
+            }
+
             gantt.updateTask(taskId);
+
+            // Crear el link
+            gantt.addLink({
+                id: gantt.uid(),
+                source: sourceId,
+                target: taskId,
+                type,
+            });
+
+            // Auto-scheduling
+            if (typeof (gantt as any).autoSchedule === 'function') {
+                (gantt as any).autoSchedule();
+            }
+
+            gantt.render();
+        } catch (e) {
+            console.error('[predAdd] Error:', e);
         }
-        else if (type === '1') { // CC - Comienzo-Comienzo
-            targetTask.start_date = new Date(sourceTask.start_date);
-            targetTask.end_date = gantt.date.add(targetTask.start_date, targetTask.duration, 'day');
-            gantt.updateTask(taskId);
-        }
-        else if (type === '2') { // FF - Fin-Fin
-            targetTask.end_date = new Date(sourceTask.end_date);
-            const newStart = gantt.date.add(targetTask.end_date, -targetTask.duration, 'day');
-            targetTask.start_date = newStart;
-            gantt.updateTask(taskId);
-        }
-        else if (type === '3') { // CF - Comienzo-Fin
-            targetTask.end_date = new Date(sourceTask.start_date);
-            const newStart = gantt.date.add(targetTask.end_date, -targetTask.duration, 'day');
-            targetTask.start_date = newStart;
-            gantt.updateTask(taskId);
-        }
-        
-        // Crear el link
-        gantt.addLink({
-            id: gantt.uid(),
-            source: sourceId,
-            target: taskId,
-            type,
-        });
-        
-        // Auto-scheduling
-        if (typeof (gantt as any).autoSchedule === 'function') {
-            (gantt as any).autoSchedule();
-        }
-        
-        gantt.render();
-    } catch (e) {
-        console.error('[predAdd] Error:', e);
-    }
-    refreshState();
-}, [taskId, refreshState]);
+        refreshState();
+    }, [taskId, refreshState]);
 
     // ── Eliminar predecesora ──────────────────────────────────────────────────
     const predRemove = useCallback((linkId: any) => {
@@ -204,15 +210,14 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                         const existingLink = links.find(
                             (l) => String(l.source) === String(t.id)
                         );
-                        const added    = !!existingLink;
+                        const added = !!existingLink;
                         const tempType = tempSelections[String(t.id)] ?? '';
 
                         return (
                             <div
                                 key={t.id}
-                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${
-                                    added ? 'bg-emerald-50' : 'hover:bg-gray-50'
-                                }`}
+                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${added ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                                    }`}
                             >
                                 {/* Número de fila + nombre de tarea */}
                                 <span className="text-sm text-gray-800 flex-1 min-w-0 truncate flex items-center gap-2">
@@ -252,11 +257,10 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                                         }
                                     }}
                                     disabled={!added && !tempType}
-                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
-                                        added
+                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${added
                                             ? 'bg-red-500 hover:bg-red-600'
                                             : 'bg-emerald-500 hover:bg-emerald-600'
-                                    }`}
+                                        }`}
                                 >
                                     {added ? 'Quitar' : 'Agregar'}
                                 </button>
