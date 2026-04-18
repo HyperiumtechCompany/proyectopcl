@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
 
-const LINK_LABELS: Record<string, string> = { '0': 'FC', '1': 'CC', '2': 'FF', '3': 'CF' };
+// Importamos las funciones centralizadas del helper
+// ya no duplicamos la lógica de fechas aquí
+import {
+    adjustTaskDatesByLinkType,
+    updatePredecessorsText,
+    LINK_LABELS,
+} from '../helpers/ganttHelpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -16,7 +22,7 @@ interface GanttTask {
     id: any;
     text: string;
     rownum: number;  // número de fila global (1, 2, 3…)
-    item?: string;   // código WBS, solo para filtrar en búsqueda
+    item?: string;
 }
 
 interface GanttLink {
@@ -35,88 +41,56 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
     const [links, setLinks] = useState<GanttLink[]>([]);
     const [tempSelections, setTempSelections] = useState<Record<string, string>>({});
 
-    // ── Leer estado del gantt ─────────────────────────────────────────────────
+    // ── Leer estado actual del gantt ──────────────────────────────────────────
+    // Se llama al abrir el modal y después de cada acción para mantener
+    // la lista sincronizada con los links reales del gantt.
     const refreshState = useCallback(() => {
         if (!taskId) return;
 
+        // Links que apuntan a esta tarea (sus predecesoras)
         const incomingLinks: GanttLink[] = gantt
             .getLinks()
             .filter((l: any) => String(l.target) === String(taskId));
         setLinks(incomingLinks);
 
+        // Lista de todas las tareas disponibles para seleccionar como predecesora
         const available: GanttTask[] = [];
         gantt.eachTask((t: any) => {
-            if (String(t.id) === String(taskId)) return;
+            if (String(t.id) === String(taskId)) return; // excluir la tarea actual
             available.push({
                 id: t.id,
                 text: t.text,
-                // FIX: número de fila global (1-based), no el código WBS
-                rownum: gantt.getGlobalTaskIndex(t.id) + 1,
+                rownum: gantt.getGlobalTaskIndex(t.id) + 1, // número de fila (1-based)
                 item: t.item,
             });
         });
+
         setTasks(available);
-        setTempSelections({});
+        setTempSelections({}); // limpiar selecciones temporales al refrescar
     }, [taskId]);
 
     useEffect(() => {
         if (isOpen && taskId) refreshState();
     }, [isOpen, taskId, refreshState]);
 
-    // ── Añadir predecesora ────────────────────────────────────────────────────
-    // Crea el link y llama autoSchedule() para que dhtmlx reposicione la tarea
-    // target respetando el tipo de relación (FC mueve al día siguiente del fin
-    // de source, CC alinea inicios, FF alinea fines, CF invierte).
+    // ── Agregar predecesora ───────────────────────────────────────────────────
+    // 1. Ajusta las fechas de la tarea destino según el tipo de relación
+    //    usando calculateEndDate (respeta días no laborables)
+    // 2. Crea el link en el gantt
+    // 3. Llama autoSchedule para propagar cambios a tareas dependientes
+    // 4. Actualiza el texto de la columna predecesoras
     const predAdd = useCallback((sourceId: any, type: string) => {
         try {
-            console.log('🔍 predAdd - sourceId:', sourceId, 'taskId:', taskId, 'type:', type);
-
             const sourceTask = gantt.getTask(sourceId);
             const targetTask = gantt.getTask(taskId);
 
-            console.log('📌 sourceTask:', sourceTask?.text);
-            console.log('📌 targetTask:', targetTask?.text);
+            if (!sourceTask || !targetTask) return;
 
-            // Validar que las tareas existan
-            if (!sourceTask) {
-                console.error('❌ sourceTask no encontrada:', sourceId);
-                return;
-            }
-            if (!targetTask) {
-                console.error('❌ targetTask no encontrada:', taskId);
-                return;
-            }
+            const duration = Number(targetTask.duration) || 1;
 
-            // Ajustar fechas según el tipo de relación
-            // Ajustar fechas según el tipo de relación
-            const duration = Number((targetTask as any).duration);
-
-            if (type === '0') { // FC - Fin-Comienzo
-                const newStart = new Date((sourceTask as any).end_date);
-                newStart.setDate(newStart.getDate() + 1);
-
-                (targetTask as any).start_date = newStart;
-                (targetTask as any).end_date = gantt.date.add(newStart, duration, 'day');
-            }
-            else if (type === '1') { // CC - Comienzo-Comienzo
-                const newStart = new Date((sourceTask as any).start_date);
-
-                (targetTask as any).start_date = newStart;
-                (targetTask as any).end_date = gantt.date.add(newStart, duration, 'day');
-            }
-            else if (type === '2') { // FF - Fin-Fin
-                const newEnd = new Date((sourceTask as any).end_date);
-
-                (targetTask as any).end_date = newEnd;
-                (targetTask as any).start_date = gantt.date.add(newEnd, -duration, 'day');
-            }
-            else if (type === '3') { // CF - Comienzo-Fin
-                const newEnd = new Date((sourceTask as any).start_date);
-
-                (targetTask as any).end_date = newEnd;
-                (targetTask as any).start_date = gantt.date.add(newEnd, -duration, 'day');
-            }
-
+            // Ajustar fechas usando la función centralizada del helper
+            // (antes se hacía con date.add que ignora fines de semana)
+            adjustTaskDatesByLinkType(targetTask, sourceTask, type, duration);
             gantt.updateTask(taskId);
 
             // Crear el link
@@ -127,25 +101,37 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                 type,
             });
 
-            // Auto-scheduling
+            // Propagar el cambio a tareas que dependan de esta
             if (typeof (gantt as any).autoSchedule === 'function') {
                 (gantt as any).autoSchedule();
             }
 
+            // Actualizar la columna de predecesoras en el grid
+            // usando número de fila (formato unificado con el parser)
+            updatePredecessorsText(taskId);
+
             gantt.render();
         } catch (e) {
-            console.error('[predAdd] Error:', e);
+            console.error('[predAdd]', e);
         }
         refreshState();
     }, [taskId, refreshState]);
 
     // ── Eliminar predecesora ──────────────────────────────────────────────────
-    const predRemove = useCallback((linkId: any) => {
+    // Elimina el link, dispara auto-scheduling y actualiza la columna del grid.
+    // Antes solo eliminaba el link y no actualizaba el texto de la columna.
+    const predRemove = useCallback((linkId: any, targetId: any) => {
         try {
             gantt.deleteLink(linkId);
+
             if (typeof (gantt as any).autoSchedule === 'function') {
                 (gantt as any).autoSchedule();
             }
+
+            // FIX: actualizar el texto de la columna después de eliminar
+            // Antes esto no se hacía, entonces la columna mostraba datos viejos
+            updatePredecessorsText(targetId);
+
             gantt.render();
         } catch (e) {
             console.warn('[predRemove]', e);
@@ -153,7 +139,38 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         refreshState();
     }, [refreshState]);
 
-    // ── Filtrado ──────────────────────────────────────────────────────────────
+    // ── Cambiar tipo de relación existente ────────────────────────────────────
+    // Permite editar el tipo de un link ya creado sin tener que quitarlo y
+    // volver a agregarlo. Antes esto no era posible.
+    const predChangeType = useCallback((linkId: any, newType: string) => {
+        try {
+            const link: any = gantt.getLink(linkId);
+            if (!link) return;
+
+            link.type = newType;
+            gantt.updateLink(linkId);
+
+            // Recalcular fechas con el nuevo tipo de relación
+            const sourceTask = gantt.getTask(link.source);
+            const targetTask = gantt.getTask(link.target);
+            const duration   = Number(targetTask.duration) || 1;
+
+            adjustTaskDatesByLinkType(targetTask, sourceTask, newType, duration);
+            gantt.updateTask(link.target);
+
+            if (typeof (gantt as any).autoSchedule === 'function') {
+                (gantt as any).autoSchedule();
+            }
+
+            updatePredecessorsText(link.target);
+            gantt.render();
+        } catch (e) {
+            console.warn('[predChangeType]', e);
+        }
+        refreshState();
+    }, [refreshState]);
+
+    // ── Filtrado de tareas ────────────────────────────────────────────────────
     const filteredTasks = tasks.filter((t) => {
         if (!search.trim()) return true;
         const lower = search.toLowerCase();
@@ -198,7 +215,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                     />
                 </div>
 
-                {/* Lista */}
+                {/* Lista de tareas */}
                 <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
                     {filteredTasks.length === 0 && (
                         <p className="px-5 py-8 text-center text-gray-400 text-sm">
@@ -210,35 +227,41 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                         const existingLink = links.find(
                             (l) => String(l.source) === String(t.id)
                         );
-                        const added = !!existingLink;
+                        const added    = !!existingLink;
                         const tempType = tempSelections[String(t.id)] ?? '';
 
                         return (
                             <div
                                 key={t.id}
-                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${added ? 'bg-emerald-50' : 'hover:bg-gray-50'
-                                    }`}
+                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+                                    added ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                                }`}
                             >
-                                {/* Número de fila + nombre de tarea */}
+                                {/* Número de fila + nombre */}
                                 <span className="text-sm text-gray-800 flex-1 min-w-0 truncate flex items-center gap-2">
-                                    {/* FIX: número de fila (1, 2, 3…) en lugar del código WBS */}
                                     <span className="inline-flex items-center justify-center min-w-[24px] h-5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold font-mono px-1 flex-shrink-0">
                                         {t.rownum}
                                     </span>
                                     <span className="truncate">{t.text}</span>
                                 </span>
 
-                                {/* Selector de tipo de relación */}
+                                {/* Selector de tipo de relación
+                                    - Si ya existe link: permite editar el tipo (predChangeType)
+                                    - Si no existe: guarda la selección temporal para usarla al agregar */}
                                 <select
                                     value={added ? existingLink!.type : tempType}
-                                    disabled={added}
-                                    onChange={(e) =>
-                                        setTempSelections((prev) => ({
-                                            ...prev,
-                                            [String(t.id)]: e.target.value,
-                                        }))
-                                    }
-                                    className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    onChange={(e) => {
+                                        if (added && existingLink) {
+                                            // Cambiar tipo del link existente sin quitar y volver a agregar
+                                            predChangeType(existingLink.id, e.target.value);
+                                        } else {
+                                            setTempSelections((prev) => ({
+                                                ...prev,
+                                                [String(t.id)]: e.target.value,
+                                            }));
+                                        }
+                                    }}
+                                    className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none flex-shrink-0"
                                 >
                                     <option value="" disabled>Tipo…</option>
                                     <option value="0">FC – Fin-Comienzo</option>
@@ -247,20 +270,21 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                                     <option value="3">CF – Comienzo-Fin</option>
                                 </select>
 
-                                {/* Botón acción */}
+                                {/* Botón agregar / quitar */}
                                 <button
                                     onClick={() => {
                                         if (added && existingLink) {
-                                            predRemove(existingLink.id);
+                                            predRemove(existingLink.id, taskId);
                                         } else if (!added && tempType) {
                                             predAdd(t.id, tempType);
                                         }
                                     }}
                                     disabled={!added && !tempType}
-                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${added
+                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        added
                                             ? 'bg-red-500 hover:bg-red-600'
                                             : 'bg-emerald-500 hover:bg-emerald-600'
-                                        }`}
+                                    }`}
                                 >
                                     {added ? 'Quitar' : 'Agregar'}
                                 </button>

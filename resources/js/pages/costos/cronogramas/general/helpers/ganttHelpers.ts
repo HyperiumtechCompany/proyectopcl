@@ -1,11 +1,7 @@
 import { gantt } from 'dhtmlx-gantt';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FORMATO UNIFICADO DE PREDECESORAS
-//
-// ⚠️ DECISIÓN ARQUITECTURAL IMPORTANTE:
-// Todo el sistema usa NÚMERO DE FILA GLOBAL (1, 2, 3…) como identificador
-// en el texto de predecesoras. Ejemplo: "3FC, 5CC"
+// CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Etiquetas cortas por tipo de link (usadas en toda la app) */
@@ -16,6 +12,14 @@ export const LINK_LABELS: Record<string, string> = {
     '3': 'CF',
 };
 
+/** Nombres completos de los tipos de link (usados en tooltip y descripción) */
+export const LINK_NAMES: Record<string, string> = {
+    '0': 'Fin-Comienzo',
+    '1': 'Comienzo-Comienzo',
+    '2': 'Fin-Fin',
+    '3': 'Comienzo-Fin',
+};
+
 /** Mapa de texto legible → código interno de tipo de link */
 export const LINK_TYPE_MAP: Record<string, string> = {
     FC: '0',
@@ -23,6 +27,8 @@ export const LINK_TYPE_MAP: Record<string, string> = {
     FF: '2',
     CF: '3',
 };
+
+// ... el resto de tu código (funciones) permanece igual ...
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SINCRONIZAR TEXTO DE PREDECESORAS
@@ -151,14 +157,18 @@ export function adjustTaskDatesByLinkType(
             });
             break;
         }
-        case '3': { // CF — Comienzo → Fin: la tarea termina cuando empieza la anterior
-            const newEnd = new Date(sourceTask.start_date);
-            targetTask.end_date = newEnd;
-            targetTask.start_date = gantt.calculateEndDate({
-                start_date: newEnd,
-                duration: -duration,
+        case '3': { // CF — Comienzo → Fin: la tarea destino COMIENZA cuando la tarea origen TERMINA
+            // La fecha de inicio de la tarea destino = fecha de fin de la tarea origen
+            const newStart = new Date(sourceTask.end_date);
+            targetTask.start_date = newStart;
+
+            // Calcular la fecha de fin sumando la duración
+            targetTask.end_date = gantt.calculateEndDate({
+                start_date: newStart,
+                duration: duration,
                 task: targetTask,
             });
+
             break;
         }
     }
@@ -276,8 +286,8 @@ export function getSubtreeDates(
     if (!task?.start_date || !task?.end_date) return null;
 
     let earliest = new Date(task.start_date);
-    let latest   = new Date(task.end_date);
-    const seen   = new Set<any>();
+    let latest = new Date(task.end_date);
+    const seen = new Set<any>();
 
     function walk(id: any): void {
         if (seen.has(id)) return;
@@ -291,7 +301,7 @@ export function getSubtreeDates(
             const s = new Date(c.start_date);
             const e = new Date(c.end_date);
             if (s < earliest) earliest = s;
-            if (e > latest)   latest   = e;
+            if (e > latest) latest = e;
 
             if (gantt.hasChild(cid)) walk(cid);
         });
@@ -308,7 +318,7 @@ export function getSubtreeDates(
 // ─────────────────────────────────────────────────────────────────────────────
 export function enforceProjectBounds(taskId: any): boolean {
     const projectStart = gantt.config.start_date;
-    const projectEnd   = gantt.config.end_date;
+    const projectEnd = gantt.config.end_date;
 
     // Si no hay límites configurados o es tarea padre, no hacer nada
     if (!projectStart || !projectEnd) return false;
@@ -357,7 +367,7 @@ export function applyAutoScheduling(): void {
         const tasks = gantt.getTaskByTime();
         if (tasks.length === 0) return;
 
-        const state        = gantt.getState();
+        const state = gantt.getState();
         const projectStart = state.min_date ? new Date(state.min_date) : null;
 
         if (projectStart) {

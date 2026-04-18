@@ -1,19 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { gantt } from 'dhtmlx-gantt';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────────────────────────────────────────
-export interface ProjectSettings {
-    topUnit: string;
-    bottomUnit: string;
-    workStartTime: string;
-    workEndTime: string;
-    projectStart: string;
-    projectEnd: string;
-    scheduleFromEnd: boolean;
-    workDays: WorkDays;
-}
 
 interface WorkDays {
     lunes: boolean;
@@ -25,10 +15,13 @@ interface WorkDays {
     domingo: boolean;
 }
 
+// FIX: el contrato de onApply se simplifica — el modal solo notifica
+// las fechas al padre. Toda la lógica de configurar el gantt se hace
+// aquí adentro para no duplicarla entre modal y componente padre.
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onApply: (settings: ProjectSettings) => void;
+    onApply: (settings: { projectStart?: string; projectEnd?: string }) => void;
 }
 
 // Mapeo nombre de día → número (0=domingo, 1=lunes, ..., 6=sábado)
@@ -54,29 +47,7 @@ const DAY_LABELS: [keyof WorkDays, string][] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENTE ICONO CALENDARIO
-// ─────────────────────────────────────────────────────────────────────────────
-const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: () => void }) => (
-    <svg
-        className={className}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        xmlns="http://www.w3.org/2000/svg"
-        onClick={onClick}
-    >
-        <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-    </svg>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER — construye la configuración de escalas del gantt
-// según la combinación de capa superior e inferior seleccionadas
+// HELPER — construye la configuración de escalas
 // ─────────────────────────────────────────────────────────────────────────────
 function buildScaleConfig(topUnit: string, bottomUnit: string): any[] {
     const DAY_FORMAT = '%j %D';
@@ -95,17 +66,74 @@ function buildScaleConfig(topUnit: string, bottomUnit: string): any[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HELPER — lee el estado actual del gantt para inicializar el formulario
+// Así cuando el usuario abre el modal por segunda vez ve la config real,
+// no los valores por defecto.
+// ─────────────────────────────────────────────────────────────────────────────
+function readCurrentWorkDays(): WorkDays {
+    // Si el gantt no está inicializado, devolver valores por defecto
+    if (!gantt || typeof gantt.isWorkTime !== 'function') {
+        return {
+            lunes: true, martes: true, miercoles: true,
+            jueves: true, viernes: true, sabado: false, domingo: false,
+        };
+    }
+
+    try {
+        // Usar getWorkTime que es más estable
+        const getDayStatus = (day: number): boolean => {
+            try {
+                const result = (gantt as any).getWorkTime(day);
+                return result !== false && result !== null;
+            } catch {
+                return day >= 1 && day <= 5;
+            }
+        };
+
+        return {
+            lunes: getDayStatus(1),
+            martes: getDayStatus(2),
+            miercoles: getDayStatus(3),
+            jueves: getDayStatus(4),
+            viernes: getDayStatus(5),
+            sabado: getDayStatus(6),
+            domingo: getDayStatus(0),
+        };
+    } catch (e) {
+        return {
+            lunes: true, martes: true, miercoles: true,
+            jueves: true, viernes: true, sabado: false, domingo: false,
+        };
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// ICONO CALENDARIO
+// ─────────────────────────────────────────────────────────────────────────────
+const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: () => void }) => (
+    <svg
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+        onClick={onClick}
+    >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
-    // ── Refs para los inputs de fecha ─────────────────────────────────────────
     const startDateRef = useRef<HTMLInputElement>(null);
     const endDateRef = useRef<HTMLInputElement>(null);
 
     // ── Estado del formulario ─────────────────────────────────────────────────
     const [topUnit, setTopUnit] = useState('month');
-    const [bottomUnit, setBottomUnit] = useState('day');
+    const [bottomUnit, setBottomUnit] = useState('week');
     const [workStartTime, setWorkStartTime] = useState('08:00');
     const [workEndTime, setWorkEndTime] = useState('17:00');
     const [projectStart, setProjectStart] = useState('');
@@ -116,99 +144,124 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         jueves: true, viernes: true, sabado: false, domingo: false,
     });
 
-    // ── Función para abrir el calendario nativo ───────────────────────────────
+    // FIX: al abrir el modal, leer el estado real del gantt en lugar de
+    // mostrar siempre los valores por defecto.
+    useEffect(() => {
+        if (!isOpen) return;
+
+        // Leer días laborables actuales del gantt
+        setWorkDays(readCurrentWorkDays());
+
+        // 🔥 NO leer fechas del Gantt - dejar campos vacíos
+        setProjectStart('');
+        setProjectEnd('');
+    }, [isOpen]);
+
+    // Abrir el selector de fecha nativo del navegador
     const openCalendar = (ref: React.RefObject<HTMLInputElement>) => {
-        if (ref.current) {
-            // Método moderno (Chrome, Edge, Safari)
-            if (typeof ref.current.showPicker === 'function') {
-                ref.current.showPicker();
-            } else {
-                // Fallback para navegadores que no soportan showPicker
-                ref.current.click();
-            }
+        if (!ref.current) return;
+        if (typeof ref.current.showPicker === 'function') {
+            ref.current.showPicker();
+        } else {
+            ref.current.click();
         }
     };
 
-    // Alterna un día entre laborable / no laborable
     const toggleDay = (key: keyof WorkDays) =>
         setWorkDays((prev) => ({ ...prev, [key]: !prev[key] }));
 
-    // ── Aplicar ajustes al gantt ──────────────────────────────────────────────
+    // ── Aplicar ajustes ───────────────────────────────────────────────────────
+    // Toda la configuración del gantt se hace aquí.
+    // El padre (CronogramaIndex) solo recibe las fechas para actualizar
+    // su config.start_date / config.end_date y hacer render.
+    // Así no hay doble ejecución de lógica entre modal y padre.
     const aplicarAjustes = () => {
         try {
-            gantt.batchUpdate(() => {
-                // 1. Configuración de Escala (Mantenemos la escala normal)
-                (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
+            // 1. Escala de tiempo
+            (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
-                // 2. CONFIGURACIÓN PARA EL HUECO (Sin ocultar el día)
-                gantt.config.work_time = true;     // Las tareas solo avanzan en tiempo laborable
-                gantt.config.skip_off_time = false; // NO ocultamos la columna, para que se vea el "hueco"
-                (gantt.config as any).correct_work_time = true;
-                (gantt.config as any).split_tasks = true;
-
-                // 3. Resetear y aplicar días laborables
-                for (let i = 0; i <= 6; i++) {
-                    gantt.setWorkTime({ day: i, hours: false } as any);
+            // 2. Días laborables — resetear todos primero, luego activar los marcados
+            for (let i = 0; i <= 6; i++) {
+                gantt.setWorkTime({ day: i, hours: false } as any);
+            }
+            (Object.entries(workDays) as [keyof WorkDays, boolean][]).forEach(([name, active]) => {
+                if (active) {
+                    gantt.setWorkTime({
+                        day: DAY_MAP[name],
+                        hours: [`${workStartTime}-${workEndTime}`],
+                    } as any);
                 }
+            });
 
-                (Object.entries(workDays) as [string, boolean][]).forEach(([name, active]) => {
-                    if (active) {
-                        gantt.setWorkTime({
-                            day: (DAY_MAP as any)[name],
-                            hours: [`${workStartTime}-${workEndTime}`],
-                        } as any);
+            // 3. Modo de programación
+
+            (gantt.config as any).schedule_from_end = scheduleFromEnd;
+            gantt.config.skip_off_time = true;  // ← Cambiar de false a true
+            gantt.config.work_time = true;
+
+            // 4. Desplazar tareas si cambió la fecha de inicio
+            if (projectStart) {
+                const newStart = new Date(projectStart);
+                let minTaskStart: Date | null = null;
+
+                gantt.eachTask((task: any) => {
+                    if (task.start_date) {
+                        const s = new Date(task.start_date);
+                        if (!minTaskStart || s < minTaskStart) minTaskStart = s;
                     }
                 });
 
-                // 4. IMPORTANTE: Quitar ignore_time para que el día desmarcado SIGA VISIBLE
-                gantt.ignore_time = null as any;
+                if (minTaskStart) {
+                    const diff = newStart.getTime() - (minTaskStart as Date).getTime();
+                    if (diff !== 0) {
+                        gantt.batchUpdate(() => {
+                            gantt.eachTask((task: any) => {
+                                task.start_date = new Date(new Date(task.start_date).getTime() + diff);
+                                task.end_date = new Date(new Date(task.end_date).getTime() + diff);
+                                gantt.updateTask(task.id);
+                            });
+                        });
+                    }
+                }
+            }
 
-                // 5. Recalcular fechas de tareas
-             
+            // 5. Recalcular fechas de fin
+            gantt.batchUpdate(() => {
                 gantt.eachTask((task: any) => {
-                    if (task.start_date && task.duration) {
+                    if (!gantt.hasChild(task.id) && task.start_date && task.duration) {
                         task.end_date = gantt.calculateEndDate({
                             start_date: task.start_date,
                             duration: Number(task.duration),
-                            task: task,
+                            task,
                         } as any);
                         gantt.updateTask(task.id);
                     }
                 });
-
-                if (typeof (gantt as any).autoSchedule === 'function') {
-                    (gantt as any).autoSchedule();
-                }
             });
 
-            // 6. Template para que el "hueco" sea gris y se note que no se trabaja ahí
-            gantt.templates.timeline_cell_class = (task: any, date: Date) => {
-                if (!gantt.isWorkTime({ date, task } as any)) {
-                    return 'pcl-weekend-cell'; // Este estilo debe tener el fondo gris en tu CSS
-                }
-                return '';
-            };
+            // 🔥 LOGS PARA DEPURAR
+            console.log('🔍 Modal - projectStart:', projectStart);
+            console.log('🔍 Modal - projectEnd:', projectEnd);
 
-            gantt.render();
+            const validStart = projectStart && projectStart !== '' ? projectStart : undefined;
+            const validEnd = projectEnd && projectEnd !== '' ? projectEnd : undefined;
 
-            if (projectStart) {
-                setTimeout(() => gantt.showDate(new Date(projectStart)), 100);
-            }
+            console.log('📤 Modal - enviando:', { validStart, validEnd });
+            // 🔥 FIN LOGS
 
             onApply({
-                topUnit, bottomUnit, workStartTime, workEndTime,
-                projectStart, projectEnd, scheduleFromEnd, workDays,
+                projectStart: validStart,
+                projectEnd: validEnd
             });
-            onClose();
 
         } catch (error) {
-            console.error('Error en aplicarAjustes:', error);
+            console.error('[ProjectSettingsModal] aplicarAjustes:', error);
         }
     };
 
     if (!isOpen) return null;
 
-    // ── Render del modal ──────────────────────────────────────────────────────
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div
             className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -232,7 +285,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
                 <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
 
-                    {/* Escala de tiempo — define cómo se ven los encabezados del diagrama */}
+                    {/* Escala de tiempo */}
                     <section>
                         <SectionTitle>Escala de Tiempo</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -253,7 +306,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Fechas del proyecto — definen el rango visible del diagrama */}
+                    {/* Fechas del proyecto */}
                     <section>
                         <SectionTitle>Fechas del Proyecto</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -272,7 +325,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                     />
                                 </div>
                             </Field>
-
                             <Field label="Fin Pronosticado">
                                 <div className="relative">
                                     <input
@@ -301,7 +353,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </label>
                     </section>
 
-                    {/* Días laborales — cualquier día desmarcado será no laborable en el diagrama */}
+                    {/* Días laborales */}
                     <section>
                         <SectionTitle>Días Laborales</SectionTitle>
                         <div className="grid grid-cols-4 gap-3">
@@ -325,7 +377,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Horario laboral — horas de trabajo dentro de los días laborables */}
+                    {/* Horario laboral */}
                     <section>
                         <SectionTitle>Horario Laboral</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -349,7 +401,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                     </section>
                 </div>
 
-                {/* Pie — acciones */}
+                {/* Pie */}
                 <div className="bg-gray-50 px-5 py-4 border-t flex justify-end gap-3">
                     <button
                         onClick={onClose}
@@ -370,19 +422,17 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTES DE APOYO
+// SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
 const selectCls = 'w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
 const inputCls = 'w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
 
-// Título de sección dentro del modal
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     <h3 className="text-[11px] font-black text-blue-600 border-b border-blue-100 mb-4 pb-1 uppercase tracking-wider">
         {children}
     </h3>
 );
 
-// Campo con etiqueta superior
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div className="flex flex-col gap-1.5">
         <label className="text-[10px] text-gray-500 font-bold uppercase">{label}</label>
