@@ -56,6 +56,8 @@ export function updatePredecessorsText(taskId: any): void {
     gantt.updateTask(taskId);
 }
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PARSEAR TEXTO DE PREDECESORAS → LINKS EN EL GANTT
 // Convierte texto como "3FC, 5CC" en links reales del gantt.
@@ -78,18 +80,15 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
     const duration = Number(targetTask.duration) || 1;
 
-    // 2. Parsear cada parte ("3FC", "5", "2CC", etc.)
+    // 2. Parsear cada parte
     rawText.split(',').forEach((part) => {
         const clean = part.trim().toUpperCase();
-
-        // Formato esperado: número de fila + tipo opcional (FC por defecto)
         const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
         if (!match) return;
 
         const targetRownum = parseInt(match[1], 10);
         const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
 
-        // Buscar la tarea origen por su número de fila global
         let sourceTask: any = null;
         gantt.eachTask((t: any) => {
             if (gantt.getGlobalTaskIndex(t.id) + 1 === targetRownum) {
@@ -99,20 +98,25 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
         if (!sourceTask || String(sourceTask.id) === String(taskId)) return;
 
-        // 3. Ajustar fechas de la tarea destino según el tipo de relación
-        //    usando calculateEndDate para respetar días no laborables
-        adjustTaskDatesByLinkType(targetTask, sourceTask, type, duration);
-        gantt.updateTask(taskId);
-
-        // 4. Crear el link en el gantt
+        // Crear el link PRIMERO
         gantt.addLink({
             id: gantt.uid(),
             source: sourceTask.id,
             target: taskId,
             type,
         });
+
+        // Luego ajustar las fechas
+        adjustTaskDatesByLinkType(targetTask, sourceTask, type, duration);
+        gantt.updateTask(taskId);
     });
+
+    // Forzar auto-scheduling después de todo
+    forceAutoSchedule();
+    gantt.render();
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTAR FECHAS SEGÚN TIPO DE RELACIÓN
@@ -157,15 +161,15 @@ export function adjustTaskDatesByLinkType(
             });
             break;
         }
-        case '3': { // CF — Comienzo → Fin: la tarea destino COMIENZA cuando la tarea origen TERMINA
-            // La fecha de inicio de la tarea destino = fecha de fin de la tarea origen
-            const newStart = new Date(sourceTask.end_date);
-            targetTask.start_date = newStart;
+        case '3': { // CF — Comienzo → Fin
+            // El FIN de la tarea destino se alinea con el COMIENZO de la tarea origen
+            const newEnd = new Date(sourceTask.start_date);
+            targetTask.end_date = newEnd;
 
-            // Calcular la fecha de fin sumando la duración
-            targetTask.end_date = gantt.calculateEndDate({
-                start_date: newStart,
-                duration: duration,
+            // Calcular el inicio restando la duración
+            targetTask.start_date = gantt.calculateEndDate({
+                start_date: newEnd,
+                duration: -duration,
                 task: targetTask,
             });
 
@@ -367,34 +371,64 @@ export function applyAutoScheduling(): void {
         const tasks = gantt.getTaskByTime();
         if (tasks.length === 0) return;
 
-        const state = gantt.getState();
-        const projectStart = state.min_date ? new Date(state.min_date) : null;
-
-        if (projectStart) {
-            gantt.batchUpdate(() => {
-                gantt.eachTask((task: any) => {
-                    // Solo tareas raíz sin predecesoras
-                    const hasIncomingLink = gantt
-                        .getLinks()
-                        .some((l: any) => String(l.target) === String(task.id));
-
-                    if (!task.parent && !hasIncomingLink && task.start_date < projectStart) {
-                        task.start_date = new Date(projectStart);
-                        task.end_date = gantt.calculateEndDate({
-                            start_date: task.start_date,
-                            duration: task.duration || 1,
-                            task,
-                        });
-                        gantt.updateTask(task.id);
-                    }
-                });
-            });
-        }
-
+        // 1. Ejecutamos el autoSchedule oficial para todas las relaciones normales
         if (typeof (gantt as any).autoSchedule === 'function') {
             (gantt as any).autoSchedule();
         }
+
+        // 2. FORZAMOS LA ALINEACIÓN CF (TIPO 3) AL FINAL
+        // Lo hacemos después del motor oficial para que no se mueva
+        gantt.batchUpdate(() => {
+            const links = gantt.getLinks();
+            links.forEach((link: any) => {
+                if (String(link.type) === "3") { // Relación Comienzo-Fin
+                    const source = gantt.getTask(link.source); // La de arriba
+                    const target = gantt.getTask(link.target); // La de abajo
+
+                    // El FIN exacto debe ser el INICIO de la predecesora
+                    const targetEndDate = new Date(source.start_date);
+                    
+                    // Calculamos el INICIO restando la duración en milisegundos directos
+                    // Esto ignora el calendario y asegura la alineación visual perfecta
+                    const durationInDays = target.duration || 1;
+                    const durationInMs = durationInDays * 24 * 60 * 60 * 1000;
+                    const targetStartDate = new Date(targetEndDate.getTime() - durationInMs);
+
+                    target.start_date = targetStartDate;
+                    target.end_date = targetEndDate;
+                    
+                    gantt.updateTask(target.id);
+                }
+            });
+        });
+
     } catch (e) {
         console.warn('[applyAutoScheduling]', e);
     }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// FORZAR AUTO-SCHEDULING (alternativa cuando el plugin no está disponible)
+// ─────────────────────────────────────────────────────────────────────────────
+export function forceAutoSchedule(): void {
+    // 1. Recalcular duraciones
+    gantt.batchUpdate(() => {
+        gantt.eachTask((task: any) => {
+            if (!gantt.hasChild(task.id) && task.start_date && task.end_date) {
+                const newDuration = gantt.calculateDuration({
+                    start_date: task.start_date,
+                    end_date: task.end_date,
+                    task: task,
+                });
+                if (newDuration > 0 && newDuration !== task.duration) {
+                    task.duration = newDuration;
+                    gantt.updateTask(task.id);
+                }
+            }
+        });
+    });
+
+    // 2. Forzar render múltiple
+    gantt.render();
+    setTimeout(() => gantt.render(), 50);
+    setTimeout(() => gantt.render(), 100);
 }

@@ -434,10 +434,15 @@ const CronogramaIndex = ({
         eventIdsRef.current = [];
 
         // ── Plugins ───────────────────────────────────────────────────────────
-        gantt.plugins({ critical_path: true, auto_scheduling: true, tooltip: true });
+        gantt.plugins({
+            critical_path: true,
+            auto_scheduling: true,
+            tooltip: true
+        });
         gantt.i18n.setLocale('es');
 
         // ── Configuración global ──────────────────────────────────────────────
+        // ── Configuración global corregida ──────────────────────────────────────────────
         gantt.config.date_format = '%Y-%m-%d %H:%i';
         gantt.config.xml_date = '%d/%m/%Y';
         gantt.config.row_height = 32;
@@ -448,8 +453,14 @@ const CronogramaIndex = ({
         gantt.config.work_time = true;
         gantt.config.skip_off_time = true;
         gantt.config.fit_tasks = true;
+
+        // AUTO-SCHEDULING: Configuración crítica para relaciones CF
         gantt.config.auto_scheduling = true;
         gantt.config.auto_scheduling_strict = true;
+        (gantt.config as any).auto_scheduling_move_projects = true;
+        (gantt.config as any).auto_scheduling_initial = true;
+        (gantt.config as any).auto_scheduling_compatibility = true; // Permite alineación tope con tope
+
         gantt.config.autosize = false;
         gantt.config.schedule_from_end = false;
         gantt.config.highlight_critical_path = true;
@@ -457,24 +468,33 @@ const CronogramaIndex = ({
         gantt.config.split_tasks = false;
         gantt.config.branch_loading = false;
         gantt.config.limit_view = true;
-        // auto_types: convierte automáticamente tareas con hijos a tipo "project"
-        // FIX: esto reemplaza el onTaskLoading que usaba hasChild (siempre false en carga)
-        (gantt.config as any).auto_types = true;
 
-        (gantt.config as any).auto_scheduling_compatibility = false;
+        // Evita que el calendario separe las barras en relaciones CF
+        gantt.config.correct_work_time = false;
+
+        // Otras configuraciones de rendimiento y tipos
+        (gantt.config as any).auto_types = true;
         (gantt.config as any).smart_rendering = false;
         (gantt.config as any).static_background = false;
 
+        // Definición de tipos de enlaces
         gantt.config.links = {
             finish_to_start: '0',
             start_to_start: '1',
             finish_to_finish: '2',
-            start_to_finish: '3',
+            start_to_finish: '3', // Relación CF
         };
-
         // Días NO laborables por defecto: sábado y domingo
         gantt.setWorkTime({ day: 6, hours: false });
         gantt.setWorkTime({ day: 0, hours: false });
+
+
+        // Evento para que se actualice al escribir y dar Enter
+        const evUpdateCostoTotal = gantt.attachEvent("onAfterTaskUpdate", () => {
+            gantt.refreshData();
+            return true;
+        });
+        eventIdsRef.current.push(evUpdateCostoTotal);
 
         // ── Escalas: Mes relativo + Semana relativa ───────────────────────────
         gantt.config.scales = [
@@ -690,6 +710,7 @@ const CronogramaIndex = ({
             </div>`;
         };
 
+
         gantt.templates.task_text = (_s: Date, _e: Date, task: any) =>
             gantt.hasChild(task.id)
                 ? ''
@@ -728,6 +749,11 @@ const CronogramaIndex = ({
          *   3. Propagar fechas y costos hacia el padre
          */
         on('onAfterTaskUpdate', (id: any, item: any) => {
+            const task = gantt.getTask(id);
+            if (gantt.hasChild(id) && task.cost) {
+                // Forzar render para que el template se actualice
+                gantt.render();
+            }
 
             // ── 1. Predecesoras editadas en la celda de texto ─────────────────
             const rawText = String(item.predecessors ?? '').trim();
@@ -870,6 +896,17 @@ const CronogramaIndex = ({
             refreshKPIs();
         });
 
+
+        // Mostrar costo encima del corchete de tareas padre
+        gantt.templates.task_text = (_s: Date, _e: Date, task: any) => {
+            if (gantt.hasChild(task.id)) {
+                const monto = formatSoles(task.cost || 0);
+                return `<span class="monto-flotante-final">${monto}</span>`;
+            }
+            return `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
+        };
+
+
         // ── Inicializar el Gantt en el DOM ────────────────────────────────────
         gantt.init(ganttContainer.current);
         ganttInitialized.current = true;
@@ -944,6 +981,8 @@ const CronogramaIndex = ({
                 }
             });
         });
+
+
 
         // Sincronizar texto de predecesoras con los links cargados
         gantt.eachTask((task: any) => { updatePredecessorsText(task.id); });
@@ -1353,8 +1392,34 @@ select,select option{color:#1e293b !important;background:white !important}
 .pcl-gantt-wrapper .gantt_task_line.gantt_project::before,
 .pcl-gantt-wrapper .gantt_task_line.gantt_project::after {
     z-index: 1 !important;
+ }
+/* 2. FORZAR VISIBILIDAD: El corchete no debe cortar el contenido */
+.pcl-gantt-wrapper .gantt_task_line.gantt_project {
+    overflow: visible !important;
 }
 
+.pcl-gantt-wrapper .gantt_task_content {
+    overflow: visible !important;
+}
+
+/* 3. AJUSTE DE CAPAS: Bajamos los días blancos */
+.pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell,
+.pcl-gantt-wrapper .gantt_task_cell.gantt_non_work_cell {
+    z-index: 0 !important; /* IMPORTANTE: De 10 bajamos a 0 */
+}
+
+.monto-flotante-final {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    color: #1e293b;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
 `}</style>
         </AppLayout>
     );
