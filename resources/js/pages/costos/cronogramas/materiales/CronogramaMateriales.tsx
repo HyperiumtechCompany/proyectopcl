@@ -1,208 +1,269 @@
-import React, { useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
+import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler,
-    ChartOptions,
-    ChartData
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import axios from 'axios';
 
-// Registro avanzado de componentes para evitar errores de "scale not found"
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler
-);
+import { CronogramaProps }      from './types';
+import { useCronogramaLogic }   from './helpers/useCronogramaLogic';
+import HeaderMateriales         from './components/HeaderMateriales';
+import ResumenCards             from './components/ResumenCards';
+import TablaMateriales          from './components/TablaMateriales';
 
-interface Periodo {
-    label: string;
-    key: string;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILIDADES DE EXPORTACIÓN A EXCEL (simple CSV con BOM para UTF-8)
+// ─────────────────────────────────────────────────────────────────────────────
+const exportarExcel = (
+    materiales: any[],
+    periodos:   any[],
+    projectName: string,
+    viewMode:   'cantidad' | 'monto',
+) => {
+    const headers = [
+        'Descripción', 'Unidad', 'Precio Unitario',
+        'Cantidad Total', 'Presupuesto Total (S/.)',
+        ...periodos.map((p: any) => p.label),
+    ];
 
-interface Material {
-    descripcion: string;
-    unidad: string;
-    precio: number;
-    cantidad_total: number;
-    mensual: Record<string, number>;
-}
+    const rows = materiales.map(mat => [
+        mat.descripcion,
+        mat.unidad,
+        mat.precio.toFixed(4),
+        mat.cantidad_total.toFixed(3),
+        mat.presupuesto.toFixed(2),
+        ...periodos.map((p: any) => {
+            const cant = mat.mensual[p.key] || 0;
+            return viewMode === 'cantidad'
+                ? cant.toFixed(3)
+                : (cant * mat.precio).toFixed(2);
+        }),
+    ]);
 
-interface Props {
-    project: string;
-    materiales: Material[];
-    periodos: Periodo[];
-}
-
-const CronogramaMateriales: React.FC<Props> = ({ project, materiales = [], periodos = [] }) => {
-    
-    // Memoizamos los datos del gráfico para que no se recalculen en cada renderizado (Optimización)
-    const dataGrafico: ChartData<'bar'> = useMemo(() => {
-        const valoresPorMes = periodos.map(p => {
-            return materiales.reduce((sum, mat) => {
-                const cantMes = mat.mensual[p.key] || 0;
-                return sum + (cantMes * mat.precio);
+    // Totales
+    const totales = [
+        'TOTAL', '', '', '', '',
+        ...periodos.map((p: any) => {
+            const tot = materiales.reduce((s: number, m: any) => {
+                const v = m.mensual[p.key] || 0;
+                return s + (viewMode === 'cantidad' ? v : v * m.precio);
             }, 0);
-        });
+            return tot.toFixed(2);
+        }),
+    ];
 
-        return {
-            labels: periodos.map(p => p.label.toUpperCase()),
-            datasets: [
-                {
-                    label: 'Inversión Mensual (S/.)',
-                    data: valoresPorMes,
-                    backgroundColor: 'rgba(30, 64, 175, 0.7)', // Azul fuerte
-                    borderColor: 'rgb(30, 64, 175)',
-                    borderWidth: 2,
-                    borderRadius: 5,
-                    hoverBackgroundColor: 'rgba(234, 88, 12, 0.8)', // Naranja al pasar el mouse
-                },
-            ],
-        };
-    }, [materiales, periodos]);
+    const csvContent = [
+        [`Cronograma de Materiales - ${projectName}`],
+        [],
+        headers,
+        ...rows,
+        [],
+        totales,
+    ].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
 
-    const opcionesGrafico: ChartOptions<'bar'> = {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                grid: { color: '#e2e8f0' },
-                ticks: { 
-                    callback: (value) => 'S/. ' + Number(value).toLocaleString(),
-                    font: { size: 11, weight: 'bold' }
-                }
-            },
-            x: {
-                grid: { display: false },
-                ticks: { font: { size: 10, weight: 'bold' } }
-            }
-        },
-        plugins: {
-            legend: { display: false }, // Quitamos la leyenda para más espacio
-            tooltip: {
-                backgroundColor: '#1e293b',
-                padding: 12,
-                titleFont: { size: 14 },
-                callbacks: {
-                    label: (context) => ` Total Mes: S/. ${context.parsed.y ? context.parsed.y.toLocaleString() : '0'}`
-                }
-            }
-        },
-    };
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `Cronograma_Materiales_${projectName.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
 
-    const totalGeneralInsumos = useMemo(() => 
-        materiales.reduce((sum, m) => sum + (m.cantidad_total * m.precio), 0)
-    , [materiales]);
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
+const CronogramaMateriales: React.FC<CronogramaProps> = ({
+    project, projectName, materiales = [], periodos = [],
+    resumen, estaGuardado, sinGantt = false,
+}) => {
+    const [saving,         setSaving]         = useState(false);
+    const [deleting,       setDeleting]       = useState(false);
+    const [estaGuardadoUI, setEstaGuardadoUI] = useState(estaGuardado);
 
+    const {
+        viewMode, setViewMode,
+        sortField, sortDir, toggleSort,
+        filtro, setFiltro,
+        destacado, setDestacado,
+        materialesFiltrados,
+        totalesMensuales,
+        totalGeneral,
+        curvaSData,
+        mesPicoKey,
+        getIntensidad,
+    } = useCronogramaLogic(materiales, periodos);
+
+    // ── GUARDAR ───────────────────────────────────────────────────────────────
+    const handleSave = useCallback(async () => {
+        if (!materiales.length) {
+            showToast('⚠ No hay materiales para guardar.', 'warning');
+            return;
+        }
+        if (!confirm(`¿Guardar el cronograma de ${materiales.length} materiales en la base de datos?`)) return;
+
+        setSaving(true);
+        try {
+            await axios.post('/cronograma/materiales/save', {
+                project_id: project,
+                materiales,
+            });
+            setEstaGuardadoUI(true);
+            showToast(`✅ ${materiales.length} materiales guardados correctamente.`, 'success');
+        } catch (err: any) {
+            console.error('[handleSave]', err);
+            showToast(`❌ Error al guardar: ${err?.response?.data?.message ?? err.message}`, 'error');
+        } finally {
+            setSaving(false);
+        }
+    }, [project, materiales]);
+
+    // ── ELIMINAR ──────────────────────────────────────────────────────────────
+    const handleDelete = useCallback(async () => {
+        if (!confirm('¿Eliminar los datos guardados del cronograma de materiales?\nEsta acción no se puede deshacer.')) return;
+
+        setDeleting(true);
+        try {
+            await axios.delete(`/cronograma/materiales/destroy?project=${project}`);
+            setEstaGuardadoUI(false);
+            showToast('🗑 Cronograma de materiales eliminado.', 'info');
+        } catch (err: any) {
+            showToast(`❌ Error: ${err?.response?.data?.message ?? err.message}`, 'error');
+        } finally {
+            setDeleting(false);
+        }
+    }, [project]);
+
+    // ── EXPORTAR ──────────────────────────────────────────────────────────────
+    const handleExportExcel = useCallback(() => {
+        exportarExcel(materiales, periodos, projectName || project, viewMode);
+    }, [materiales, periodos, projectName, project, viewMode]);
+
+    // ── BREADCRUMBS ───────────────────────────────────────────────────────────
+    const breadcrumbs = [
+        { title: 'Costos',              href: '/costos' },
+        { title: projectName || `Proyecto ${project}`, href: `/costos/${project}` },
+        { title: 'Cronograma Materiales', href: '#' },
+    ];
+
+    // ── RENDER ────────────────────────────────────────────────────────────────
     return (
-        <div className="p-4 bg-[#f1f5f9] min-h-screen font-sans antialiased text-slate-900">
-            <Head title="Cronograma de Insumos - Sistema Experto" />
-            
-            <div className="max-w-[1700px] mx-auto space-y-4">
-                
-                {/* CABECERA PROFESIONAL */}
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                            <span className="bg-blue-600 text-white p-1 rounded">MS</span> 
-                            USO DE RECURSOS DEL PROYECTO
-                        </h1>
-                        <p className="text-slate-500 font-medium">ID Proyecto: {project} | Análisis de Insumos Programados</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Presupuesto Total Materiales</p>
-                        <p className="text-3xl font-black text-blue-700">S/. {totalGeneralInsumos.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                    </div>
-                </div>
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={`Materiales — ${projectName || project}`} />
 
-                {/* HISTOGRAMA DE RECURSOS */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <div className="lg:col-span-3 bg-white p-5 rounded-xl shadow-md border border-slate-200">
-                        <div className="flex justify-between mb-4">
-                            <h3 className="font-bold text-slate-700 uppercase text-sm">Histograma de Inversión en Materiales</h3>
-                            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">VALORES EN SOLES</span>
-                        </div>
-                        <div className="h-[250px]">
-                            <Bar options={opcionesGrafico} data={dataGrafico} />
-                        </div>
-                    </div>
-                    
-                    {/* MINI RESUMEN LATERAL */}
-                    <div className="bg-slate-800 p-5 rounded-xl shadow-md text-white flex flex-col justify-center">
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-slate-400 text-xs uppercase">Total de Insumos</p>
-                                <p className="text-2xl font-bold">{materiales.length} Registros</p>
-                            </div>
-                            <div className="pt-4 border-t border-slate-700">
-                                <p className="text-slate-400 text-xs uppercase">Mes con mayor gasto</p>
-                                <p className="text-xl font-bold text-orange-400">Pico de Obra</p>
-                            </div>
-                            <button className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-xs transition">
-                                GENERAR REPORTE PDF
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
+                <div className="max-w-[1700px] mx-auto">
 
-                {/* TABLA DE TIEMPO (ESTILO MS PROJECT) */}
-                <div className="bg-white rounded-xl shadow-xl overflow-hidden border border-slate-300">
-                    <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
-                        <table className="min-w-full border-separate border-spacing-0">
-                            <thead>
-                                <tr className="bg-slate-50">
-                                    <th className="p-3 border-b border-r sticky left-0 bg-slate-50 z-30 min-w-[300px] text-left text-[11px] font-black uppercase text-slate-600">Descripción del Recurso</th>
-                                    <th className="p-3 border-b border-r text-center text-[11px] font-black uppercase text-slate-600 w-16">Und</th>
-                                    <th className="p-3 border-b border-r text-right text-[11px] font-black uppercase text-slate-600 w-28">Precio</th>
-                                    <th className="p-3 border-b border-r text-right text-[11px] font-black uppercase text-blue-700 bg-blue-50 w-32">Cantidad Total</th>
-                                    {periodos.map(p => (
-                                        <th key={p.key} className="p-3 border-b border-r text-center text-[10px] font-black uppercase bg-slate-100 text-slate-500 min-w-[120px]">
-                                            {p.label}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="text-[12px]">
-                                {materiales.map((mat, i) => (
-                                    <tr key={i} className="group">
-                                        <td className="p-3 border-b border-r sticky left-0 bg-white group-hover:bg-blue-50 font-bold z-20 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                            {mat.descripcion}
-                                        </td>
-                                        <td className="p-3 border-b border-r text-center text-slate-500 group-hover:bg-blue-50">{mat.unidad}</td>
-                                        <td className="p-3 border-b border-r text-right font-mono group-hover:bg-blue-50">{new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2 }).format(mat.precio)}</td>
-                                        <td className="p-3 border-b border-r text-right font-black text-blue-900 bg-blue-50/50 group-hover:bg-blue-100 transition-colors">
-                                            {mat.cantidad_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                        </td>
-                                        {periodos.map(p => {
-                                            const valor = mat.mensual[p.key] || 0;
-                                            return (
-                                                <td key={p.key} className={`p-3 border-b border-r text-right font-mono transition-colors ${valor > 0 ? 'bg-white font-bold text-slate-900 group-hover:bg-orange-50' : 'text-slate-300 bg-slate-50/30'}`}>
-                                                    {valor > 0 ? valor.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    {/* HEADER */}
+                    <HeaderMateriales
+                        project={project}
+                        projectName={projectName}
+                        viewMode={viewMode}
+                        setViewMode={setViewMode}
+                        estaGuardado={estaGuardadoUI}
+                        saving={saving}
+                        deleting={deleting}
+                        resumen={resumen}
+                        onSave={handleSave}
+                        onDelete={handleDelete}
+                        onExportExcel={handleExportExcel}
+                    />
+
+                    {/* RESUMEN + CURVA S */}
+                    <ResumenCards
+                        estaGuardado={estaGuardadoUI}
+                        sinGantt={sinGantt}
+                        curvaSData={curvaSData}
+                        mesPicoKey={mesPicoKey}
+                    />
+
+                    {/* TABLA PRINCIPAL */}
+                    {!sinGantt && (
+                        <TablaMateriales
+                            materiales={materialesFiltrados}
+                            periodos={periodos}
+                            viewMode={viewMode}
+                            totalesMensuales={totalesMensuales}
+                            totalGeneral={totalGeneral}
+                            sortField={sortField}
+                            sortDir={sortDir}
+                            filtro={filtro}
+                            mesPicoKey={mesPicoKey}
+                            destacado={destacado}
+                            setDestacado={setDestacado}
+                            onToggleSort={toggleSort}
+                            onFiltroChange={delta => setFiltro(prev => ({ ...prev, ...delta }))}
+                            getIntensidad={getIntensidad}
+                        />
+                    )}
+
+                    {/* Sin Gantt */}
+                    {sinGantt && (
+                        <div className="bg-white rounded-2xl border-2 border-dashed border-amber-200 p-16 text-center">
+                            <span className="text-6xl">📋</span>
+                            <h2 className="mt-4 text-lg font-black text-slate-700">
+                                Cronograma General no configurado
+                            </h2>
+                            <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
+                                Para calcular el cronograma de materiales, primero debe completar el
+                                <strong> Cronograma General (Gantt)</strong> con las fechas de inicio
+                                y fin de cada partida, y guardarlo.
+                            </p>
+                            <a
+                                href={`/cronograma/general?project=${project}`}
+                                className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
+                            >
+                                Ir al Cronograma General →
+                            </a>
+                        </div>
+                    )}
+
                 </div>
             </div>
+
+            {/* TOAST CONTAINER */}
+            <ToastContainer />
+        </AppLayout>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MINI SISTEMA DE TOASTS (sin dependencias externas)
+// ─────────────────────────────────────────────────────────────────────────────
+let toastSetterGlobal: ((t: ToastMsg[]) => void) | null = null;
+interface ToastMsg { id: number; text: string; type: string; }
+let toastCounter = 0;
+
+const showToast = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    if (!toastSetterGlobal) return;
+    const id = ++toastCounter;
+    toastSetterGlobal(prev => [...prev, { id, text, type }]);
+    setTimeout(() => {
+        toastSetterGlobal!(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+};
+
+const ToastContainer: React.FC = () => {
+    const [toasts, setToasts] = useState<ToastMsg[]>([]);
+    toastSetterGlobal = setToasts;
+
+    if (!toasts.length) return null;
+
+    const colorMap: Record<string, string> = {
+        success: 'bg-emerald-800 border-emerald-600 text-emerald-100',
+        error:   'bg-rose-900    border-rose-700    text-rose-100',
+        info:    'bg-blue-900    border-blue-700    text-blue-100',
+        warning: 'bg-amber-800   border-amber-600   text-amber-100',
+    };
+
+    return (
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full">
+            {toasts.map(t => (
+                <div
+                    key={t.id}
+                    className={`px-4 py-3 rounded-xl border shadow-xl text-sm font-semibold backdrop-blur-sm animate-fade-in ${colorMap[t.type] || colorMap.info}`}
+                >
+                    {t.text}
+                </div>
+            ))}
         </div>
     );
 };

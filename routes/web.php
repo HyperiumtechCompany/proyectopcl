@@ -301,7 +301,10 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 // ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
+    // Cronograma de Materiales 
     Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');
+    Route::post('/module/crono_materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
+    Route::delete('/module/crono_materiales/clear', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
     Route::get('/module/crono_valorizado', [CronogramaController::class, 'valorizado'])->name('proyectos.cronograma.valorizado');
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
