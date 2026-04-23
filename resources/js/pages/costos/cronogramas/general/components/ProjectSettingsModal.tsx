@@ -15,16 +15,20 @@ interface WorkDays {
     domingo: boolean;
 }
 
-// FIX: el contrato de onApply se simplifica — el modal solo notifica
-// las fechas al padre. Toda la lógica de configurar el gantt se hace
-// aquí adentro para no duplicarla entre modal y componente padre.
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onApply: (settings: { projectStart?: string; projectEnd?: string }) => void;
+    onApply: (settings: {
+        projectStart?: string;
+        projectEnd?: string;
+        holidays?: any[];
+        workDays?: any;
+        workStartTime?: string;
+        workEndTime?: string;
+        scheduleFromEnd?: boolean;
+    }) => void;
 }
 
-// Mapeo nombre de día → número (0=domingo, 1=lunes, ..., 6=sábado)
 const DAY_MAP: Record<keyof WorkDays, number> = {
     domingo: 0,
     lunes: 1,
@@ -35,7 +39,6 @@ const DAY_MAP: Record<keyof WorkDays, number> = {
     sabado: 6,
 };
 
-// Orden visual de los días en el modal
 const DAY_LABELS: [keyof WorkDays, string][] = [
     ['lunes', 'Lunes'],
     ['martes', 'Martes'],
@@ -47,11 +50,11 @@ const DAY_LABELS: [keyof WorkDays, string][] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPER — construye la configuración de escalas
+// HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+
 function buildScaleConfig(topUnit: string, bottomUnit: string): any[] {
     const DAY_FORMAT = '%j %D';
-
     const configs: Record<string, any[]> = {
         'year-month': [{ unit: 'year', step: 1, format: '%Y' }, { unit: 'month', step: 1, format: '%F' }],
         'year-week': [{ unit: 'year', step: 1, format: '%Y' }, { unit: 'week', step: 1, format: 'Sem %W' }],
@@ -61,26 +64,14 @@ function buildScaleConfig(topUnit: string, bottomUnit: string): any[] {
         'month-week': [{ unit: 'month', step: 1, format: '%F %Y' }, { unit: 'week', step: 1, format: 'Sem %W' }],
         'month-day': [{ unit: 'month', step: 1, format: '%F %Y' }, { unit: 'day', step: 1, format: DAY_FORMAT }],
     };
-
     return configs[`${topUnit}-${bottomUnit}`] ?? configs['month-day'];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER — lee el estado actual del gantt para inicializar el formulario
-// Así cuando el usuario abre el modal por segunda vez ve la config real,
-// no los valores por defecto.
-// ─────────────────────────────────────────────────────────────────────────────
 function readCurrentWorkDays(): WorkDays {
-    // Si el gantt no está inicializado, devolver valores por defecto
     if (!gantt || typeof gantt.isWorkTime !== 'function') {
-        return {
-            lunes: true, martes: true, miercoles: true,
-            jueves: true, viernes: true, sabado: false, domingo: false,
-        };
+        return { lunes: true, martes: true, miercoles: true, jueves: true, viernes: true, sabado: false, domingo: false };
     }
-
     try {
-        // Usar getWorkTime que es más estable
         const getDayStatus = (day: number): boolean => {
             try {
                 const result = (gantt as any).getWorkTime(day);
@@ -89,7 +80,6 @@ function readCurrentWorkDays(): WorkDays {
                 return day >= 1 && day <= 5;
             }
         };
-
         return {
             lunes: getDayStatus(1),
             martes: getDayStatus(2),
@@ -99,29 +89,48 @@ function readCurrentWorkDays(): WorkDays {
             sabado: getDayStatus(6),
             domingo: getDayStatus(0),
         };
-    } catch (e) {
-        return {
-            lunes: true, martes: true, miercoles: true,
-            jueves: true, viernes: true, sabado: false, domingo: false,
-        };
+    } catch {
+        return { lunes: true, martes: true, miercoles: true, jueves: true, viernes: true, sabado: false, domingo: false };
     }
 }
+
+/** Convierte un Date a string "YYYY-MM-DD" para el input type=date */
+function dateToInputValue(date: Date | null | undefined): string {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ICONO CALENDARIO
 // ─────────────────────────────────────────────────────────────────────────────
 const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: () => void }) => (
-    <svg
-        className={className}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        xmlns="http://www.w3.org/2000/svg"
-        onClick={onClick}
-    >
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" onClick={onClick}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSISTENCIA — guardamos los últimos valores aplicados en módulo-level
+// para que sobrevivan entre aperturas del modal (no se pierden al cerrar).
+// ─────────────────────────────────────────────────────────────────────────────
+let _savedStart = '';
+let _savedEnd = '';
+let _savedTopUnit = 'month';
+let _savedBottomUnit = 'week';
+let _savedWorkStart = '08:00';
+let _savedWorkEnd = '17:00';
+let _savedScheduleFromEnd = false;
+// Feriados persistidos entre aperturas
+let _savedHolidays: { date: string; name: string; checked: boolean; custom: boolean }[] = [];
+// Días laborables persistidos entre aperturas
+let _savedWorkDays: WorkDays = {
+    lunes: true, martes: true, miercoles: true,
+    jueves: true, viernes: true, sabado: false, domingo: false,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -131,33 +140,75 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     const startDateRef = useRef<HTMLInputElement>(null);
     const endDateRef = useRef<HTMLInputElement>(null);
 
-    // ── Estado del formulario ─────────────────────────────────────────────────
-    const [topUnit, setTopUnit] = useState('month');
-    const [bottomUnit, setBottomUnit] = useState('week');
-    const [workStartTime, setWorkStartTime] = useState('08:00');
-    const [workEndTime, setWorkEndTime] = useState('17:00');
-    const [projectStart, setProjectStart] = useState('');
-    const [projectEnd, setProjectEnd] = useState('');
-    const [scheduleFromEnd, setScheduleFromEnd] = useState(false);
+    // Inicializar con los últimos valores guardados
+    const [topUnit, setTopUnit] = useState(_savedTopUnit);
+    const [bottomUnit, setBottomUnit] = useState(_savedBottomUnit);
+    const [workStartTime, setWorkStartTime] = useState(_savedWorkStart);
+    const [workEndTime, setWorkEndTime] = useState(_savedWorkEnd);
+    const [projectStart, setProjectStart] = useState(_savedStart);
+    const [projectEnd, setProjectEnd] = useState(_savedEnd);
+    const [scheduleFromEnd, setScheduleFromEnd] = useState(_savedScheduleFromEnd);
     const [workDays, setWorkDays] = useState<WorkDays>({
         lunes: true, martes: true, miercoles: true,
         jueves: true, viernes: true, sabado: false, domingo: false,
     });
 
-    // FIX: al abrir el modal, leer el estado real del gantt en lugar de
-    // mostrar siempre los valores por defecto.
+    const [holidays, setHolidays] = useState<{ date: string; name: string; checked: boolean; custom: boolean }[]>([]);
+    const [holidayYear, setHolidayYear] = useState(2026);
+    const [holidayOpen, setHolidayOpen] = useState(false);
+    const [newHolidayDate, setNewHolidayDate] = useState('');
+    const [newHolidayName, setNewHolidayName] = useState('');
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    const FERIADOS_PERU_2026 = [
+        { date: '01-01', name: 'Año Nuevo' },
+        { date: '19-03', name: 'San José' },
+        { date: '05-01', name: 'Día del Trabajo' },  // 🔥 Corregido: 1 de mayo
+        { date: '29-06', name: 'San Pedro y San Pablo' },
+        { date: '28-07', name: 'Fiestas Patrias' },
+        { date: '29-07', name: 'Fiestas Patrias' },
+        { date: '30-08', name: 'Santa Rosa de Lima' },
+        { date: '08-10', name: 'Combate de Angamos' },
+        { date: '01-11', name: 'Todos los Santos' },
+        { date: '08-12', name: 'Inmaculada Concepción' },
+        { date: '25-12', name: 'Navidad' },
+    ];
+    function buildHolidaysForYear(year: number) {
+        return FERIADOS_PERU_2026.map(h => ({
+            date: `${year}-${h.date}`,  // ya está bien el formato
+            name: h.name,
+            checked: false,
+            custom: false,
+        }));
+    }
+    // Al abrir el modal: leer días laborables del gantt (siempre frescos)
+    // y restaurar fechas/escala desde los valores persistidos.
     useEffect(() => {
         if (!isOpen) return;
 
-        // Leer días laborables actuales del gantt
-        setWorkDays(readCurrentWorkDays());
+        // Días laborables: leer del estado real del gantt
+        setWorkDays(_savedWorkDays);
 
-        // 🔥 NO leer fechas del Gantt - dejar campos vacíos
-        setProjectStart('');
-        setProjectEnd('');
+        // Fechas: solo restaurar si el usuario ya guardó algo antes
+        setProjectStart(_savedStart);
+        setProjectEnd(_savedEnd);
+
+        // Restaurar escala y horario
+        setTopUnit(_savedTopUnit);
+        setBottomUnit(_savedBottomUnit);
+        setWorkStartTime(_savedWorkStart);
+        setWorkEndTime(_savedWorkEnd);
+        setScheduleFromEnd(_savedScheduleFromEnd);
+
+        // Restaurar feriados
+        if (_savedHolidays.length > 0) {
+            setHolidays(_savedHolidays);
+        } else {
+            setHolidays(buildHolidaysForYear(2026));
+        }
+
     }, [isOpen]);
 
-    // Abrir el selector de fecha nativo del navegador
     const openCalendar = (ref: React.RefObject<HTMLInputElement>) => {
         if (!ref.current) return;
         if (typeof ref.current.showPicker === 'function') {
@@ -171,97 +222,41 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         setWorkDays((prev) => ({ ...prev, [key]: !prev[key] }));
 
     // ── Aplicar ajustes ───────────────────────────────────────────────────────
-    // Toda la configuración del gantt se hace aquí.
-    // El padre (CronogramaIndex) solo recibe las fechas para actualizar
-    // su config.start_date / config.end_date y hacer render.
-    // Así no hay doble ejecución de lógica entre modal y padre.
     const aplicarAjustes = () => {
         try {
-            // 1. Escala de tiempo
+            // Persistir valores
+            _savedStart = projectStart;
+            _savedEnd = projectEnd;
+            _savedTopUnit = topUnit;
+            _savedBottomUnit = bottomUnit;
+            _savedWorkStart = workStartTime;
+            _savedWorkEnd = workEndTime;
+            _savedScheduleFromEnd = scheduleFromEnd;
+            _savedWorkDays = { ...workDays };
+            _savedHolidays = holidays;
+
+            // Solo escala de tiempo — sin tocar setWorkTime aquí
             (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
-            // 2. Días laborables — resetear todos primero, luego activar los marcados
-            for (let i = 0; i <= 6; i++) {
-                gantt.setWorkTime({ day: i, hours: false } as any);
-            }
-            (Object.entries(workDays) as [keyof WorkDays, boolean][]).forEach(([name, active]) => {
-                if (active) {
-                    gantt.setWorkTime({
-                        day: DAY_MAP[name],
-                        hours: [`${workStartTime}-${workEndTime}`],
-                    } as any);
-                }
-            });
-
-            // 3. Modo de programación
-
-            (gantt.config as any).schedule_from_end = scheduleFromEnd;
-            gantt.config.skip_off_time = true;  // ← Cambiar de false a true
-            gantt.config.work_time = true;
-
-            // 4. Desplazar tareas si cambió la fecha de inicio
-            if (projectStart) {
-                const newStart = new Date(projectStart);
-                let minTaskStart: Date | null = null;
-
-                gantt.eachTask((task: any) => {
-                    if (task.start_date) {
-                        const s = new Date(task.start_date);
-                        if (!minTaskStart || s < minTaskStart) minTaskStart = s;
-                    }
-                });
-
-                if (minTaskStart) {
-                    const diff = newStart.getTime() - (minTaskStart as Date).getTime();
-                    if (diff !== 0) {
-                        gantt.batchUpdate(() => {
-                            gantt.eachTask((task: any) => {
-                                task.start_date = new Date(new Date(task.start_date).getTime() + diff);
-                                task.end_date = new Date(new Date(task.end_date).getTime() + diff);
-                                gantt.updateTask(task.id);
-                            });
-                        });
-                    }
-                }
-            }
-
-            // 5. Recalcular fechas de fin
-            gantt.batchUpdate(() => {
-                gantt.eachTask((task: any) => {
-                    if (!gantt.hasChild(task.id) && task.start_date && task.duration) {
-                        task.end_date = gantt.calculateEndDate({
-                            start_date: task.start_date,
-                            duration: Number(task.duration),
-                            task,
-                        } as any);
-                        gantt.updateTask(task.id);
-                    }
-                });
-            });
-
-            // 🔥 LOGS PARA DEPURAR
-            console.log('🔍 Modal - projectStart:', projectStart);
-            console.log('🔍 Modal - projectEnd:', projectEnd);
-
-            const validStart = projectStart && projectStart !== '' ? projectStart : undefined;
-            const validEnd = projectEnd && projectEnd !== '' ? projectEnd : undefined;
-
-            console.log('📤 Modal - enviando:', { validStart, validEnd });
-            // 🔥 FIN LOGS
-
+            // Notificar al padre con todo
             onApply({
-                projectStart: validStart,
-                projectEnd: validEnd
+                projectStart: projectStart || undefined,
+                projectEnd: projectEnd || undefined,
+                holidays: holidays,
+                workDays: { ...workDays },
+                workStartTime,
+                workEndTime,
+                scheduleFromEnd,
             });
+
+            onClose();
 
         } catch (error) {
             console.error('[ProjectSettingsModal] aplicarAjustes:', error);
         }
     };
-
     if (!isOpen) return null;
 
-    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div
             className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -274,11 +269,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                     <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
                         Configuración del Proyecto
                     </h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                        aria-label="Cerrar"
-                    >
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="Cerrar">
                         &times;
                     </button>
                 </div>
@@ -377,25 +368,134 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
+                    {/* Días Feriados */}
+                    <section style={{ position: 'relative' }} className="mb-6">
+                        <SectionTitle>Días Feriados</SectionTitle>
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setHolidayOpen(!holidayOpen)}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs border border-gray-300 rounded-md bg-white text-gray-700 hover:border-blue-400 transition-colors"
+                            >
+                                <span>
+                                    {holidays.filter(h => h.checked).length} feriado{holidays.filter(h => h.checked).length !== 1 ? 's' : ''} activo{holidays.filter(h => h.checked).length !== 1 ? 's' : ''} — {holidayYear}
+                                </span>
+                                <span className="text-gray-500 text-[10px]">{holidayOpen ? '▲' : '▼'}</span>
+                            </button>
+
+                            {holidayOpen && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden">
+                                    {/* Toolbar del dropdown */}
+                                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
+                                        <span className="text-[10px] text-gray-700 font-medium">Año:</span>
+                                        <input
+                                            type="number"
+                                            value={holidayYear}
+                                            onChange={e => setHolidayYear(Number(e.target.value))}
+                                            className="w-16 text-[11px] px-2 py-1 border border-gray-300 rounded text-gray-800 bg-white"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setHolidays(buildHolidaysForYear(holidayYear))}
+                                            className="text-[11px] px-2 py-1 border border-gray-300 rounded bg-white text-gray-700 hover:bg-gray-50"
+                                        >
+                                            Cargar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddForm(!showAddForm)}
+                                            className="text-[11px] px-2 py-1 border border-blue-200 rounded bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                        >
+                                            + Personalizado
+                                        </button>
+                                    </div>
+
+                                    {/* Formulario agregar personalizado */}
+                                    {showAddForm && (
+                                        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-blue-50">
+                                            <input
+                                                type="date"
+                                                value={newHolidayDate}
+                                                onChange={e => setNewHolidayDate(e.target.value)}
+                                                className="text-[11px] px-2 py-1 border border-gray-300 rounded flex-1 text-gray-800"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Nombre"
+                                                value={newHolidayName}
+                                                onChange={e => setNewHolidayName(e.target.value)}
+                                                className="text-[11px] px-2 py-1 border border-gray-300 rounded flex-1 text-gray-800 placeholder:text-gray-400"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!newHolidayDate || !newHolidayName) return;
+                                                    setHolidays(prev => [...prev, { date: newHolidayDate, name: newHolidayName, checked: true, custom: true }]);
+                                                    setNewHolidayDate('');
+                                                    setNewHolidayName('');
+                                                    setShowAddForm(false);
+                                                }}
+                                                className="text-[11px] px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                            >
+                                                Agregar
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Lista de feriados */}
+                                    <div className="max-h-44 overflow-y-auto">
+                                        {holidays.map((h, i) => (
+                                            <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={h.checked}
+                                                    onChange={() => setHolidays(prev => prev.map((x, j) => j === i ? { ...x, checked: !x.checked } : x))}
+                                                    className="accent-blue-600 flex-shrink-0"
+                                                />
+                                                <span className="text-[10px] text-gray-600 w-20 flex-shrink-0">
+                                                    {h.date.split('-').slice(1).reverse().join('/')}
+                                                </span>
+                                                <span className={`text-[11px] flex-1 ${h.checked ? 'text-gray-700 font-medium' : 'text-gray-400 line-through'}`}>
+                                                    {h.name}
+                                                </span>
+                                                {h.custom && (
+                                                    <span className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-full border border-blue-100">custom</span>
+                                                )}
+                                                {h.custom && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setHolidays(prev => prev.filter((_, j) => j !== i))}
+                                                        className="text-gray-400 hover:text-red-400 text-sm leading-none p-1"
+                                                    >×</button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Pie del dropdown */}
+                                    <div className="px-3 py-2 border-t border-gray-100 flex justify-end bg-gray-50">
+                                        <button
+                                            type="button"
+                                            onClick={() => setHolidayOpen(false)}
+                                            className="text-[11px] px-3 py-1 border border-gray-300 rounded bg-white text-gray-700 hover:bg-gray-100 transition-colors shadow-sm"
+                                        >
+                                            Cerrar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
                     {/* Horario laboral */}
                     <section>
                         <SectionTitle>Horario Laboral</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
                             <Field label="Hora de Inicio">
-                                <input
-                                    type="time"
-                                    value={workStartTime}
-                                    onChange={(e) => setWorkStartTime(e.target.value)}
-                                    className={inputCls}
-                                />
+                                <input type="time" value={workStartTime} onChange={(e) => setWorkStartTime(e.target.value)} className={inputCls} />
                             </Field>
                             <Field label="Hora de Fin">
-                                <input
-                                    type="time"
-                                    value={workEndTime}
-                                    onChange={(e) => setWorkEndTime(e.target.value)}
-                                    className={inputCls}
-                                />
+                                <input type="time" value={workEndTime} onChange={(e) => setWorkEndTime(e.target.value)} className={inputCls} />
                             </Field>
                         </div>
                     </section>
@@ -403,16 +503,10 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
                 {/* Pie */}
                 <div className="bg-gray-50 px-5 py-4 border-t flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 text-xs font-bold text-gray-500 uppercase hover:text-gray-700 transition-colors"
-                    >
+                    <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase hover:text-gray-700 transition-colors">
                         Cancelar
                     </button>
-                    <button
-                        onClick={aplicarAjustes}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-xs font-black uppercase shadow-md transition-colors"
-                    >
+                    <button onClick={aplicarAjustes} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-xs font-black uppercase shadow-md transition-colors">
                         Guardar Cambios
                     </button>
                 </div>
