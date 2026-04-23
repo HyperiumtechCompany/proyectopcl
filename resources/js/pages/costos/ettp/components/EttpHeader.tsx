@@ -23,9 +23,9 @@ const EttpHeader: React.FC<Props> = ({ onToggleMetrados, onSave, onShowWordModal
                     </button>
                     <button
                         onClick={onToggleMetrados}
-                        className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition"
+                        className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 px-3 sm:px-4 py-2 rounded-md text-sm font-medium transition"
                     >
-                        📊 Cargar Metrados
+                        📥 Importar Metrados
                     </button>
                     <button
                         onClick={onSave}
@@ -42,7 +42,7 @@ const EttpHeader: React.FC<Props> = ({ onToggleMetrados, onSave, onShowWordModal
                         onClick={onShowWordModal}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition"
                     >
-                        📄 Generar Word
+                        📄 Exportar ETTP
                     </button>
                 </div>
             </div>

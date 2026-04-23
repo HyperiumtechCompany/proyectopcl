@@ -20,13 +20,13 @@ const EttpMetradosPanel: React.FC<Props> = ({
     if (!show) return null;
 
     return (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
+        <div className="bg-linear-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
             <div className="max-w-7xl mx-auto px-6 py-5">
                 <div className="flex items-center gap-2 mb-4">
-                    <span className="text-sm font-bold text-blue-800 dark:text-blue-400 uppercase tracking-wide">
-                        📋 ESPECIALIDADES
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                        📋 IMPORTAR MÉTRADOS
                     </span>
-                    <div className="flex-1 h-px bg-blue-200 dark:bg-gray-700" />
+                    <div className="flex-1 h-px bg-slate-200 dark:bg-gray-700" />
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -60,11 +60,11 @@ const EttpMetradosPanel: React.FC<Props> = ({
                         className={`px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide shadow-md transition-all flex items-center gap-2 ${
                             loading
                                 ? 'bg-gray-400 cursor-not-allowed text-white'
-                                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:shadow-lg'
+                                : 'bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:shadow-lg'
                         }`}
                     >
                         <span>{loading ? '⏳' : '📥'}</span>
-                        {loading ? 'Importando...' : 'Cargar Datos Seleccionados'}
+                        {loading ? 'Importando...' : 'Importar Metrados'}
                     </button>
                 </div>
             </div>
