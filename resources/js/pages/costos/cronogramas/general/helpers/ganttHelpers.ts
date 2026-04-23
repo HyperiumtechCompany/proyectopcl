@@ -320,44 +320,47 @@ export function getSubtreeDates(
 // Verifica que una tarea no esté fuera del rango [projectStart, projectEnd].
 // Si lo está, la corrige y devuelve true para indicar que hubo cambio.
 // ─────────────────────────────────────────────────────────────────────────────
-export function enforceProjectBounds(taskId: any): boolean {
-    const projectStart = gantt.config.start_date;
-    const projectEnd = gantt.config.end_date;
+    export function enforceProjectBounds(taskId: any): boolean {
+        // 🔥 Si NO está en modo auto, salir sin hacer nada
+        if (!gantt.config.auto_scheduling) return false;
 
-    // Si no hay límites configurados o es tarea padre, no hacer nada
-    if (!projectStart || !projectEnd) return false;
+        const projectStart = gantt.config.start_date;
+        const projectEnd = gantt.config.end_date;
 
-    let task: any;
-    try { task = gantt.getTask(taskId); } catch { return false; }
-    if (gantt.hasChild(taskId)) return false;
+        // Si no hay límites configurados o es tarea padre, no hacer nada
+        if (!projectStart || !projectEnd) return false;
 
-    let changed = false;
+        let task: any;
+        try { task = gantt.getTask(taskId); } catch { return false; }
+        if (gantt.hasChild(taskId)) return false;
 
-    // Inicio antes del comienzo del proyecto → mover al inicio
-    if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
-        task.start_date = new Date(projectStart);
-        task.end_date = gantt.calculateEndDate({
-            start_date: task.start_date,
-            duration: task.duration || 1,
-            task,
-        });
-        changed = true;
+        let changed = false;
+
+        // Inicio antes del comienzo del proyecto → mover al inicio
+        if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
+            task.start_date = new Date(projectStart);
+            task.end_date = gantt.calculateEndDate({
+                start_date: task.start_date,
+                duration: task.duration || 1,
+                task,
+            });
+            changed = true;
+        }
+
+        // Fin después del final del proyecto → recortar al límite
+        if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
+            task.end_date = new Date(projectEnd);
+            const newDuration = gantt.calculateDuration({
+                start_date: task.start_date,
+                end_date: task.end_date,
+                task,
+            });
+            if (newDuration > 0) task.duration = newDuration;
+            changed = true;
+        }
+
+        return changed;
     }
-
-    // Fin después del final del proyecto → recortar al límite
-    if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
-        task.end_date = new Date(projectEnd);
-        const newDuration = gantt.calculateDuration({
-            start_date: task.start_date,
-            end_date: task.end_date,
-            task,
-        });
-        if (newDuration > 0) task.duration = newDuration;
-        changed = true;
-    }
-
-    return changed;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTO-SCHEDULING SEGURO
@@ -387,7 +390,7 @@ export function applyAutoScheduling(): void {
 
                     // El FIN exacto debe ser el INICIO de la predecesora
                     const targetEndDate = new Date(source.start_date);
-                    
+
                     // Calculamos el INICIO restando la duración en milisegundos directos
                     // Esto ignora el calendario y asegura la alineación visual perfecta
                     const durationInDays = target.duration || 1;
@@ -396,7 +399,7 @@ export function applyAutoScheduling(): void {
 
                     target.start_date = targetStartDate;
                     target.end_date = targetEndDate;
-                    
+
                     gantt.updateTask(target.id);
                 }
             });

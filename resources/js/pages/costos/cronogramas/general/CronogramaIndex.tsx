@@ -65,6 +65,11 @@ interface Props {
     cronogramaId?: number;
     partidasBase?: { tasks: any[]; links: any[] } | null;
 }
+type Settings = {
+    projectStart?: string;
+    projectEnd?: string;
+    holidays?: { date: string; name: string; checked: boolean }[];
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -105,6 +110,8 @@ const CronogramaIndex = ({
     const [autoScheduling, setAutoScheduling] = useState(true);
 
     const displayName = project_name || `Proyecto ${project}`;
+
+    const [holidays, setHolidays] = useState<{ date: string; name: string; checked: boolean; custom: boolean }[]>([]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // KPIs
@@ -206,10 +213,99 @@ const CronogramaIndex = ({
         setAutoScheduling(next);
         gantt.config.auto_scheduling = next;
         gantt.config.auto_scheduling_strict = next;
-        if (next) applyAutoScheduling();
+
+        if (next) {
+            // Modo AUTO: activar límites
+            gantt.config.limit_view = true;
+            (gantt.config as any).limit_task_move = true;
+
+            // 🔥 Obtener la fecha límite del proyecto (desde el modal de ajustes)
+            let projectEndDate = gantt.config.end_date;
+
+            // Si no hay fecha en gantt.config, usar la fecha actual + 30 días
+            if (!projectEndDate) {
+                projectEndDate = new Date();
+                projectEndDate.setDate(projectEndDate.getDate() + 30);
+            }
+
+            const projectEnd = new Date(projectEndDate);
+
+            // 🔥 FORZAR el ajuste de TODAS las tareas que pasan la fecha límite
+            gantt.batchUpdate(() => {
+                gantt.eachTask((task: any) => {
+                    if (!gantt.hasChild(task.id)) {
+                        const taskEnd = task.end_date ? new Date(task.end_date) : null;
+
+                        if (taskEnd && taskEnd > projectEnd) {
+                            console.log(`Ajustando tarea ${task.id}: ${taskEnd} → ${projectEnd}`);
+
+                            // Ajustar fecha de fin al límite
+                            task.end_date = new Date(projectEnd);
+
+                            // Recalcular duración en días hábiles
+                            try {
+                                const newDuration = gantt.calculateDuration({
+                                    start_date: task.start_date,
+                                    end_date: task.end_date,
+                                    task: task,
+                                });
+                                if (newDuration > 0) {
+                                    task.duration = newDuration;
+                                }
+                            } catch (e) {
+                                // Si falla, calcular duración en días normales
+                                const diffTime = Math.abs(task.end_date.getTime() - task.start_date.getTime());
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                task.duration = diffDays;
+                            }
+
+                            gantt.updateTask(task.id);
+                        }
+                    }
+                });
+            });
+
+            // 🔥 Forzar la vista a la fecha límite
+            gantt.config.start_date = new Date(projectEnd);
+            gantt.config.start_date.setDate(gantt.config.start_date.getDate() - 60);
+            gantt.config.end_date = new Date(projectEnd);
+
+            gantt.render();
+            applyAutoScheduling();
+            refreshKPIs();
+
+            showToast('🤖 Auto activado: Tareas ajustadas a la fecha límite', 'info');
+
+        } else {
+            // Modo MANUAL: desactivar límites
+            gantt.config.limit_view = false;
+            (gantt.config as any).limit_task_move = false;
+
+            // Expandir la vista
+            setTimeout(() => {
+                let maxDate: Date | null = null;
+                gantt.eachTask((task: any) => {
+                    if (task.end_date) {
+                        const end = new Date(task.end_date);
+                        if (maxDate === null || end > maxDate) {
+                            maxDate = end;
+                        }
+                    }
+                });
+
+                if (maxDate !== null) {
+                    const newEnd = new Date(maxDate);
+                    newEnd.setDate(newEnd.getDate() + 30);
+                    gantt.config.end_date = newEnd;
+                    gantt.render();
+                }
+            }, 100);
+
+            showToast('🔧 Manual activado: Puedes pasar la fecha límite', 'info');
+        }
+
         gantt.render();
-        showToast(next ? '🤖 Auto-programado activado' : '🔧 Modo manual activado', 'info');
-    }, [autoScheduling]);
+    }, [autoScheduling, applyAutoScheduling, refreshKPIs]);
 
     const expandAll = useCallback(() => {
         gantt.eachTask((t: any) => { t.$open = true; });
@@ -424,25 +520,26 @@ const CronogramaIndex = ({
     // Se ejecuta UNA VEZ al montar (o cuando cambian initialData/partidasBase).
     // El return hace cleanup de todos los eventos al desmontar.
     // ─────────────────────────────────────────────────────────────────────────
+
     useEffect(() => {
         if (!ganttContainer.current) return;
 
-        // Reset completo antes de inicializar
         ganttContainer.current.innerHTML = '';
         gantt.clearAll();
         ganttInitialized.current = false;
         eventIdsRef.current = [];
 
         // ── Plugins ───────────────────────────────────────────────────────────
-        gantt.plugins({
+        (gantt as any).plugins({
             critical_path: true,
             auto_scheduling: true,
-            tooltip: true
+            tooltip: true,
+            marker: true,
         });
         gantt.i18n.setLocale('es');
 
         // ── Configuración global ──────────────────────────────────────────────
-        // ── Configuración global corregida ──────────────────────────────────────────────
+
         gantt.config.date_format = '%Y-%m-%d %H:%i';
         gantt.config.xml_date = '%d/%m/%Y';
         gantt.config.row_height = 32;
@@ -709,19 +806,6 @@ const CronogramaIndex = ({
                 </table>
             </div>`;
         };
-
-
-        gantt.templates.task_text = (_s: Date, _e: Date, task: any) =>
-            gantt.hasChild(task.id)
-                ? ''
-                : `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
-
-        gantt.templates.scale_cell_class = (date: Date) =>
-            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
-        gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
-            !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
-
-        // ── Helper: registrar evento con cleanup automático ───────────────────
         const on = (event: string, handler: (...args: any[]) => any) => {
             eventIdsRef.current.push((gantt as any).attachEvent(event, handler));
         };
@@ -742,7 +826,6 @@ const CronogramaIndex = ({
         });
 
         /**
-         * onAfterTaskUpdate: el evento más importante.
          * Maneja en orden:
          *   1. Sincronizar predecesoras si el usuario editó el campo de texto
          *   2. Validar límites del proyecto (usando enforceProjectBounds del helper)
@@ -790,7 +873,8 @@ const CronogramaIndex = ({
 
             // ── 2. Validar límites del proyecto ───────────────────────────────
             // FIX: antes este bloque estaba copiado 3 veces. Ahora es una función.
-            if (enforceProjectBounds(id)) {
+            // ── 2. Validar límites del proyecto (solo en modo AUTO) ───────────
+            if (autoScheduling && enforceProjectBounds(id)) {
                 gantt.updateTask(id);
             }
 
@@ -820,6 +904,13 @@ const CronogramaIndex = ({
         on('onAfterTaskAdd', (id: any) => {
             const task = gantt.getTask(id);
             if (!task.cost) { task.cost = 0; gantt.updateTask(id); }
+
+            // 👈 Agregar esto: validar límites solo en modo AUTO
+            if (autoScheduling) {
+                enforceProjectBounds(id);
+                gantt.updateTask(id);
+            }
+
             updateCountersAndItems();
             applyAutoScheduling();
             markCriticalTasks();
@@ -905,11 +996,33 @@ const CronogramaIndex = ({
             }
             return `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
         };
-
-
         // ── Inicializar el Gantt en el DOM ────────────────────────────────────
         gantt.init(ganttContainer.current);
         ganttInitialized.current = true;
+        // ========== ZOOM CON LA RUEDA DEL MOUSE SOLO EN EL DIAGRAMA ==========
+        // ========== ZOOM CON RUEDA DEL MOUSE ==========
+        setTimeout(() => {
+            const taskContainer = document.querySelector('.gantt_task') as HTMLElement;
+            if (!taskContainer) return;
+
+            let zoom = 1;
+            const minZoom = 0.5;
+            const maxZoom = 2;
+
+            taskContainer.onwheel = function (e: WheelEvent) {
+                e.preventDefault();
+
+                if (e.deltaY < 0) {
+                    zoom = Math.min(maxZoom, zoom + 0.1);
+                } else {
+                    zoom = Math.max(minZoom, zoom - 0.1);
+                }
+
+                taskContainer.style.transform = 'scale(' + zoom + ')';
+                taskContainer.style.transformOrigin = '0 0';
+            };
+        }, 500);
+
 
         // ── Cargar datos ──────────────────────────────────────────────────────
         // Prioridad: initialData (guardado) > partidasBase > vacío
@@ -947,7 +1060,89 @@ const CronogramaIndex = ({
         }
 
         // Ajustar vista al rango del proyecto
-        setTimeout(() => fitProject(), 100);
+        // Ajustar vista al rango del proyecto
+        setTimeout(() => {
+            fitProject();
+
+            // ========== ZOOM CON LA RUEDA DEL MOUSE ==========
+            setTimeout(() => {
+                const diagramContainer = ganttContainer.current?.querySelector('.gantt_task') as HTMLElement;
+
+                if (diagramContainer) {
+                    let isZooming = false;
+
+                    const handleZoom = (deltaY: number, mouseX: number) => {
+                        if (isZooming) return;
+                        if (!gantt.config.start_date || !gantt.config.end_date) return;
+
+                        isZooming = true;
+
+                        try {
+                            const rect = diagramContainer.getBoundingClientRect();
+                            const scrollLeft = diagramContainer.scrollLeft;
+
+                            const startCoord = gantt.getCoordinateByDate(gantt.config.start_date);
+                            const endCoord = gantt.getCoordinateByDate(gantt.config.end_date);
+
+                            if (!startCoord || !endCoord) {
+                                isZooming = false;
+                                return;
+                            }
+
+                            const totalWidth = endCoord - startCoord;
+                            if (totalWidth <= 0) {
+                                isZooming = false;
+                                return;
+                            }
+
+                            const ratio = Math.max(0, Math.min(1, (mouseX - rect.left + scrollLeft) / totalWidth));
+
+                            const currentStart = gantt.config.start_date.getTime();
+                            const currentEnd = gantt.config.end_date.getTime();
+                            const currentRange = currentEnd - currentStart;
+
+                            const zoomFactor = deltaY < 0 ? 0.7 : 1.43;
+                            const newRange = currentRange * zoomFactor;
+
+                            const minRange = 1 * 24 * 60 * 60 * 1000;
+                            const maxRange = 365 * 24 * 60 * 60 * 1000;
+
+                            if (newRange < minRange || newRange > maxRange) {
+                                isZooming = false;
+                                return;
+                            }
+
+                            const centerDate = currentStart + (currentRange * ratio);
+                            const newStart = centerDate - (newRange * ratio);
+                            const newEnd = newStart + newRange;
+
+                            gantt.config.start_date = new Date(newStart);
+                            gantt.config.end_date = new Date(newEnd);
+                            gantt.render();
+
+                        } catch (error) {
+                            console.error('Zoom error:', error);
+                        }
+
+                        setTimeout(() => { isZooming = false; }, 50);
+                    };
+
+                    const onWheel = (e: WheelEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleZoom(e.deltaY, e.clientX);
+                    };
+
+                    diagramContainer.addEventListener('wheel', onWheel, { passive: false });
+
+                    const cleanupZoom = () => {
+                        diagramContainer.removeEventListener('wheel', onWheel);
+                    };
+                    (window as any).__ganttZoomCleanup = cleanupZoom;
+                }
+            }, 500);
+
+        }, 100);
 
         // ── Recrear links desde task.predecessors ─────────────────────────────
         // Los datos guardados tienen el texto en formato "3FC, 5CC" (número de fila).
@@ -998,6 +1193,13 @@ const CronogramaIndex = ({
                 try { gantt.detachEvent(evtId); } catch { /* ok */ }
             });
             eventIdsRef.current = [];
+
+            // Agrega esto para limpiar el zoom
+            if ((window as any).__ganttZoomCleanup) {
+                (window as any).__ganttZoomCleanup();
+                delete (window as any).__ganttZoomCleanup;
+            }
+
             ganttInitialized.current = false;
             gantt.clearAll();
         };
@@ -1015,34 +1217,161 @@ const CronogramaIndex = ({
     // ── Aplicar configuración del proyecto ────────────────────────────────────
     // El modal ya configuró los días laborables y desplazó tareas.
     // Aquí solo actualizamos las fechas límite y hacemos render/fitProject.
+
     const handleApplySettings = useCallback(
-        (settings: { projectStart?: string; projectEnd?: string }) => {
-            console.log('📥 handleApplySettings recibió:', settings); // 👈 Agrega esto
+        (settings: {
+            projectStart?: string;
+            projectEnd?: string;
+            holidays?: any[];
+            workDays?: any;
+            workStartTime?: string;
+            workEndTime?: string;
+            scheduleFromEnd?: boolean;
+        }) => {
+            // 1. Días laborables
+            if (settings.workDays) {
+                const DAY_MAP: Record<string, number> = {
+                    domingo: 0, lunes: 1, martes: 2, miercoles: 3,
+                    jueves: 4, viernes: 5, sabado: 6,
+                };
+                for (let i = 0; i <= 6; i++) {
+                    gantt.setWorkTime({ day: i, hours: false } as any);
+                }
+                Object.entries(settings.workDays).forEach(([name, active]) => {
+                    if (active) {
+                        gantt.setWorkTime({
+                            day: DAY_MAP[name],
+                            hours: [`${settings.workStartTime || '08:00'}-${settings.workEndTime || '17:00'}`],
+                        } as any);
+                    }
+                });
+            }
 
-            if (settings.projectStart && settings.projectStart !== '') {
+            // 2. Feriados
+            const hols = settings.holidays || [];
+            hols.forEach((h: any) => {
+                if (h.checked) {
+                    const date = new Date(h.date);
+                    if (!isNaN(date.getTime())) {
+                        gantt.setWorkTime({ date, hours: false } as any);
+                    }
+                }
+            });
+
+            // 3. Fechas del proyecto
+            if (settings.projectStart) {
                 gantt.config.start_date = new Date(settings.projectStart);
-                console.log('✅ start_date asignado:', gantt.config.start_date); // 👈 Agrega esto
             }
-            if (settings.projectEnd && settings.projectEnd !== '') {
+            if (settings.projectEnd) {
                 gantt.config.end_date = new Date(settings.projectEnd);
-                console.log('✅ end_date asignado:', gantt.config.end_date); // 👈 Agrega esto
             }
 
+            // 4. Modo programación
+            if (settings.scheduleFromEnd !== undefined) {
+                (gantt.config as any).schedule_from_end = settings.scheduleFromEnd;
+            }
+            gantt.config.skip_off_time = true;
+            gantt.config.work_time = true;
             gantt.config.limit_view = true;
 
-            gantt.templates.scale_cell_class = (date: Date) =>
-                !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
-            gantt.templates.timeline_cell_class = (_t: any, date: Date) =>
-                !gantt.isWorkTime(date) ? 'pcl-weekend-cell' : '';
+            // 5. Templates de colores
+            // 5. Templates de colores - CORREGIDO
+            gantt.templates.timeline_cell_class = (_t: any, date: Date) => {
+                const dStr = date.toLocaleDateString('en-CA');
+                // Verificar si es feriado (checked o no, todos los feriados deben pintarse)
+                const esFeriado = hols.some((h: any) => {
+                    const holidayDate = new Date(h.date).toLocaleDateString('en-CA');
+                    return holidayDate === dStr;
+                });
+                if (esFeriado) return 'pcl-feriado-cell';
+                if (!gantt.isWorkTime(date)) return 'pcl-weekend-cell';
+                return '';
+            };
 
-            gantt.render();
-            adjustView();
-            refreshKPIs();
+            gantt.templates.scale_cell_class = (date: Date) => {
+                const dStr = date.toLocaleDateString('en-CA');
+                const esFeriado = hols.some((h: any) => {
+                    const holidayDate = new Date(h.date).toLocaleDateString('en-CA');
+                    return holidayDate === dStr;
+                });
+                if (esFeriado) return 'pcl-feriado-cell';
+                if (!gantt.isWorkTime(date)) return 'pcl-weekend-cell';
+                return '';
+            };
+
+            // 6. Marcadores
+            try {
+                const markers = (gantt as any).getMarkers();
+                if (Array.isArray(markers)) {
+                    markers.forEach((m: any) => (gantt as any).deleteMarker(m.id));
+                }
+            } catch { /* ok */ }
+
+            if (settings.projectStart) {
+                (gantt as any).addMarker({
+                    start_date: new Date(settings.projectStart),
+                    css: 'pcl-marker-start',
+                    text: 'Inicio',
+                    title: 'Inicio del proyecto',
+                });
+            }
+            if (settings.projectEnd) {
+                (gantt as any).addMarker({
+                    start_date: new Date(settings.projectEnd),
+                    css: 'pcl-marker-end',
+                    text: 'Fin',
+                    title: 'Fin del proyecto',
+                });
+            }
+
+            // 7. Recalcular y renderizar
+            gantt.batchUpdate(() => {
+                gantt.eachTask((task: any) => {
+                    if (!gantt.hasChild(task.id) && task.start_date && task.duration) {
+                        try {
+                            task.end_date = gantt.calculateEndDate({
+                                start_date: task.start_date,
+                                duration: Number(task.duration),
+                                task,
+                            } as any);
+                            gantt.updateTask(task.id);
+                        } catch { /* ok */ }
+                    }
+                });
+            });
+
+            setTimeout(() => {
+                // Forzar re-render del template de celdas
+                gantt.templates.task_row_class = (start: Date, end: Date, task: any) => {
+                    return '';
+                };
+
+                // Aplicar clase a cada día individual via CSS dinámico
+                const style = document.getElementById('pcl-feriado-style') || document.createElement('style');
+                style.id = 'pcl-feriado-style';
+                style.innerHTML = hols
+                    .filter((h: any) => h.checked)
+                    .map((h: any) => {
+                        const d = new Date(h.date);
+                        if (isNaN(d.getTime())) return '';
+                        return `
+            .pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell::after { 
+                background: rgba(251,146,60,0.5) !important; 
+                z-index: 6 !important;
+            }
+        `;
+                    })
+                    .join('');
+                document.head.appendChild(style);
+                gantt.render();
+                adjustView();
+                refreshKPIs();
+            }, 50);
+
             setIsSettingsOpen(false);
         },
         [refreshKPIs, adjustView]
     );
-
     // ── Valores derivados ─────────────────────────────────────────────────────
     const breadcrumbs = useMemo(() => [
         { title: 'Costos', href: '/costos' },
@@ -1319,7 +1648,7 @@ const CronogramaIndex = ({
 .pcl-gantt-wrapper .gantt_task_line.gantt_project::before{content:'' !important;position:absolute !important;top:4px !important;left:0 !important;right:0 !important;height:3px !important;background:#0f172a !important;border-radius:2px !important}
 .pcl-gantt-wrapper .gantt_task_line.pcl-task-parent::after,
 .pcl-gantt-wrapper .gantt_task_line.gantt_project::after{content:'' !important;position:absolute !important;top:4px !important;left:0 !important;width:100% !important;height:8px !important;border-left:6px solid #0f172a !important;border-right:6px solid #0f172a !important;box-sizing:border-box !important}
-.pcl-gantt-wrapper .gantt_task_line.gantt_project .gantt_task_content{display:none !important}
+
 
 /* ========== GANTT - RUTA CRÍTICA ========== */
 .pcl-gantt-wrapper .gantt_critical_task.gantt_task_line{background:#dc2626 !important;border-color:#b91c1c !important;box-shadow:0 0 6px rgba(220,38,38,0.4) !important}
@@ -1362,64 +1691,128 @@ const CronogramaIndex = ({
 
 select,select option{color:#1e293b !important;background:white !important}
 /* ========== HUECOS EN DÍAS NO LABORABLES ========== */
-
-/* Forzar que las celdas de días no laborables tengan fondo blanco y estén por encima */
-.pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell {
-    background-color: #ffffff !important;
-    position: relative;
-    z-index: 10 !important;
-    pointer-events: none;
-}
-
-/* Extender el efecto a cualquier día marcado como no laborable */
-.pcl-gantt-wrapper .gantt_task_cell.gantt_non_work_cell {
-    background-color: #ffffff !important;
-    position: relative;
-    z-index: 10 !important;
-    pointer-events: none;
-}
-
-/* Asegurar que las barras estén por DEBAJO de los huecos */
-.pcl-gantt-wrapper .gantt_task_line {
-    z-index: 1 !important;
-}
-
-/* Los corchetes de padres también deben estar por debajo */
-.pcl-gantt-wrapper .gantt_task_line.gantt_project {
-    z-index: 1 !important;
-}
-
-.pcl-gantt-wrapper .gantt_task_line.gantt_project::before,
-.pcl-gantt-wrapper .gantt_task_line.gantt_project::after {
-    z-index: 1 !important;
- }
-/* 2. FORZAR VISIBILIDAD: El corchete no debe cortar el contenido */
-.pcl-gantt-wrapper .gantt_task_line.gantt_project {
-    overflow: visible !important;
-}
-
-.pcl-gantt-wrapper .gantt_task_content {
-    overflow: visible !important;
-}
-
-/* 3. AJUSTE DE CAPAS: Bajamos los días blancos */
 .pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell,
 .pcl-gantt-wrapper .gantt_task_cell.gantt_non_work_cell {
-    z-index: 0 !important; /* IMPORTANTE: De 10 bajamos a 0 */
+    position: relative;
+    z-index: 5 !important;
+    pointer-events: none;
+    background: transparent !important;
+}
+.pcl-gantt-wrapper .gantt_task_cell.pcl-weekend-cell::after,
+.pcl-gantt-wrapper .gantt_task_cell.gantt_non_work_cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    z-index: 5;
+    pointer-events: none;
 }
 
+/* ========== BARRAS Y CORCHETES ========== */
+.pcl-gantt-wrapper .gantt_task_line {
+    z-index: 1 !important;
+    height: 12px !important;
+    margin-top: 7px !important;
+    line-height: 17px !important;
+}
+.pcl-gantt-wrapper .gantt_task_line.gantt_project,
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent {
+    overflow: visible !important;
+    z-index: 1 !important;
+    height: auto !important;
+    margin-top: 0 !important;
+    line-height: normal !important;
+}
+
+/* Texto visible dentro de barras hoja */
+.pcl-gantt-wrapper .gantt_task_line:not(.gantt_project):not(.pcl-task-parent) .gantt_task_content {
+    overflow: hidden !important;
+    z-index: 1 !important;
+    line-height: 17px !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Contenido de corchetes: visible para el monto flotante */
+.pcl-gantt-wrapper .gantt_task_line.gantt_project .gantt_task_content,
+.pcl-gantt-wrapper .gantt_task_line.pcl-task-parent .gantt_task_content {
+    overflow: visible !important;
+    position: relative !important;
+    z-index: 1 !important;
+    display: block !important;
+}
+
+/* ========== MONTO FLOTANTE ENCIMA DE CORCHETES ========== */
 .monto-flotante-final {
     position: absolute;
-    top: -18px;
+    top: -16px;
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
     color: #1e293b;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     white-space: nowrap;
     pointer-events: none;
+    z-index: 20;
 }
+
+/* ========== FERIADO: OCULTAR BARRAS Y CORCHETES COMPLETAMENTE ========== */
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell {
+    background: #fb923c !important;
+}
+
+/* Ocultar cualquier barra o corchete dentro del día feriado */
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell .gantt_task_line,
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell .gantt_task_progress,
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell .gantt_project,
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell .pcl-task-parent,
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell .gantt_task_content {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    background: transparent !important;
+}
+
+/* El fondo naranja debe estar por encima de todo */
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell {
+    z-index: 100 !important;
+    position: relative;
+}
+
+.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #fb923c;
+    z-index: 101;
+}
+
+/* Forzar que las barras no se dibujen */
+.gantt_task_line {
+    pointer-events: auto;
+}
+    /* ========== LINEAS PREDECESORAS POR ENCIMA DE LOS HUECOS ========== */
+.pcl-gantt-wrapper .gantt_task_links {
+    z-index: 100 !important;
+}
+
+.pcl-gantt-wrapper .gantt_line_wrapper {
+    z-index: 100 !important;
+}
+
+.pcl-gantt-wrapper .gantt_link_arrow {
+    z-index: 100 !important;
+}
+
+.pcl-gantt-wrapper .gantt_task_link {
+    overflow: visible !important;
+}
+    
 `}</style>
         </AppLayout>
     );
