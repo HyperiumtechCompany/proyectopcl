@@ -56,8 +56,6 @@ export function updatePredecessorsText(taskId: any): void {
     gantt.updateTask(taskId);
 }
 
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PARSEAR TEXTO DE PREDECESORAS → LINKS EN EL GANTT
 // Convierte texto como "3FC, 5CC" en links reales del gantt.
@@ -115,8 +113,6 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
     forceAutoSchedule();
     gantt.render();
 }
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTAR FECHAS SEGÚN TIPO DE RELACIÓN
@@ -320,47 +316,47 @@ export function getSubtreeDates(
 // Verifica que una tarea no esté fuera del rango [projectStart, projectEnd].
 // Si lo está, la corrige y devuelve true para indicar que hubo cambio.
 // ─────────────────────────────────────────────────────────────────────────────
-    export function enforceProjectBounds(taskId: any): boolean {
-        // 🔥 Si NO está en modo auto, salir sin hacer nada
-        if (!gantt.config.auto_scheduling) return false;
+export function enforceProjectBounds(taskId: any): boolean {
+    // Usar la fecha REAL de inicio (no la de vista)
+    const projectStart = (window as any).__projectRealStartDate || gantt.config.start_date;
+    const projectEnd = gantt.config.end_date;
 
-        const projectStart = gantt.config.start_date;
-        const projectEnd = gantt.config.end_date;
+    if (!projectStart || !projectEnd) return false;
 
-        // Si no hay límites configurados o es tarea padre, no hacer nada
-        if (!projectStart || !projectEnd) return false;
+    let task: any;
+    try { task = gantt.getTask(taskId); } catch { return false; }
+    if (gantt.hasChild(taskId)) return false;
 
-        let task: any;
-        try { task = gantt.getTask(taskId); } catch { return false; }
-        if (gantt.hasChild(taskId)) return false;
+    // Solo aplicar si el modo auto está activo
+    if (!gantt.config.auto_scheduling) return false;
 
-        let changed = false;
+    let changed = false;
 
-        // Inicio antes del comienzo del proyecto → mover al inicio
-        if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
-            task.start_date = new Date(projectStart);
-            task.end_date = gantt.calculateEndDate({
-                start_date: task.start_date,
-                duration: task.duration || 1,
-                task,
-            });
-            changed = true;
-        }
-
-        // Fin después del final del proyecto → recortar al límite
-        if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
-            task.end_date = new Date(projectEnd);
-            const newDuration = gantt.calculateDuration({
-                start_date: task.start_date,
-                end_date: task.end_date,
-                task,
-            });
-            if (newDuration > 0) task.duration = newDuration;
-            changed = true;
-        }
-
-        return changed;
+    // Validar contra la fecha REAL
+    if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
+        task.start_date = new Date(projectStart);
+        task.end_date = gantt.calculateEndDate({
+            start_date: task.start_date,
+            duration: task.duration || 1,
+            task,
+        });
+        changed = true;
     }
+
+    if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
+        task.end_date = new Date(projectEnd);
+        const newDuration = gantt.calculateDuration({
+            start_date: task.start_date,
+            end_date: task.end_date,
+            task,
+        });
+        if (newDuration > 0) task.duration = newDuration;
+        changed = true;
+    }
+
+    return changed;
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTO-SCHEDULING SEGURO
@@ -374,37 +370,64 @@ export function applyAutoScheduling(): void {
         const tasks = gantt.getTaskByTime();
         if (tasks.length === 0) return;
 
-        // 1. Ejecutamos el autoSchedule oficial para todas las relaciones normales
+        // Usamos (gantt as any) para evitar errores si el plugin no está cargado
         if (typeof (gantt as any).autoSchedule === 'function') {
             (gantt as any).autoSchedule();
         }
 
-        // 2. FORZAMOS LA ALINEACIÓN CF (TIPO 3) AL FINAL
-        // Lo hacemos después del motor oficial para que no se mueva
         gantt.batchUpdate(() => {
-            const links = gantt.getLinks();
-            links.forEach((link: any) => {
-                if (String(link.type) === "3") { // Relación Comienzo-Fin
-                    const source = gantt.getTask(link.source); // La de arriba
-                    const target = gantt.getTask(link.target); // La de abajo
+            const allLinks = gantt.getLinks();
+            for (let i = 0; i < allLinks.length; i++) {
+                const link = allLinks[i];
+                try {
+                    // Forzamos el tipo a 'any' para acceder a .start_date, .end_date y .duration libremente
+                    const source = gantt.getTask(link.source) as any;
+                    const target = gantt.getTask(link.target) as any;
 
-                    // El FIN exacto debe ser el INICIO de la predecesora
-                    const targetEndDate = new Date(source.start_date);
+                    if (!source || !target) continue;
+                    if (gantt.hasChild(target.id)) continue;
 
-                    // Calculamos el INICIO restando la duración en milisegundos directos
-                    // Esto ignora el calendario y asegura la alineación visual perfecta
-                    const durationInDays = target.duration || 1;
-                    const durationInMs = durationInDays * 24 * 60 * 60 * 1000;
-                    const targetStartDate = new Date(targetEndDate.getTime() - durationInMs);
+                    const duration = Number(target.duration) || 1;
+                    const linkType = String(link.type);
 
-                    target.start_date = targetStartDate;
-                    target.end_date = targetEndDate;
-
-                    gantt.updateTask(target.id);
+                    if (linkType === '0') {
+                        target.start_date = new Date(source.end_date);
+                        target.end_date = gantt.calculateEndDate({
+                            start_date: target.start_date,
+                            duration: duration,
+                            task: target,
+                        });
+                        gantt.updateTask(target.id);
+                    } else if (linkType === '1') {
+                        target.start_date = new Date(source.start_date);
+                        target.end_date = gantt.calculateEndDate({
+                            start_date: target.start_date,
+                            duration: duration,
+                            task: target,
+                        });
+                        gantt.updateTask(target.id);
+                    } else if (linkType === '2') {
+                        target.end_date = new Date(source.end_date);
+                        target.start_date = gantt.calculateEndDate({
+                            start_date: target.end_date,
+                            duration: -duration,
+                            task: target,
+                        });
+                        gantt.updateTask(target.id);
+                    } else if (linkType === '3') {
+                        target.end_date = new Date(source.start_date);
+                        target.start_date = gantt.calculateEndDate({
+                            start_date: target.end_date,
+                            duration: -duration,
+                            task: target,
+                        });
+                        gantt.updateTask(target.id);
+                    }
+                } catch (err) {
+                    // Ignorar errores individuales
                 }
-            });
+            }
         });
-
     } catch (e) {
         console.warn('[applyAutoScheduling]', e);
     }
@@ -434,4 +457,61 @@ export function forceAutoSchedule(): void {
     gantt.render();
     setTimeout(() => gantt.render(), 50);
     setTimeout(() => gantt.render(), 100);
+}
+// ... (aquí termina tu función forceAutoSchedule anterior)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. DEFINICIÓN DEL AUTO-SCHEDULING ESTRICTO (El que ordena todo)
+// ─────────────────────────────────────────────────────────────────────────────
+export function applyStrictAutoScheduling(): void {
+    const pStart = gantt.config.start_date;
+    const pEnd = gantt.config.end_date;
+
+    gantt.batchUpdate(() => {
+        gantt.eachTask((task: any) => {
+            // Si el plugin de auto-schedule está activo, lo ejecutamos primero
+            if ((gantt as any).autoSchedule) {
+                (gantt as any).autoSchedule();
+            }
+
+            // REGLA RIGUROSA: No pasarse del fin del proyecto
+            if (pEnd && task.end_date > pEnd) {
+                const duration = Number(task.duration) || 1;
+                task.end_date = new Date(pEnd);
+                task.start_date = gantt.calculateEndDate({
+                    start_date: task.end_date,
+                    duration: -duration,
+                    task: task
+                });
+            }
+
+            // REGLA RIGUROSA: No empezar antes del inicio del proyecto
+            if (pStart && task.start_date < pStart) {
+                task.start_date = new Date(pStart);
+                task.end_date = gantt.calculateEndDate({
+                    start_date: task.start_date,
+                    duration: Number(task.duration) || 1,
+                    task: task
+                });
+            }
+            gantt.updateTask(task.id);
+        });
+    });
+    gantt.render();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. EL INTERRUPTOR DE MODOS (Manual vs Auto)
+// ─────────────────────────────────────────────────────────────────────────────
+export function toggleGanttMode(isAuto: boolean): void {
+    // Configuramos el comportamiento interno de DHTMLX
+    gantt.config.auto_scheduling = isAuto;
+    gantt.config.auto_scheduling_strict = isAuto;
+
+    // Si pasamos a modo AUTO, ejecutamos la limpieza rigurosa inmediatamente
+    if (isAuto) {
+        applyStrictAutoScheduling();
+    }
+
+    gantt.render();
 }

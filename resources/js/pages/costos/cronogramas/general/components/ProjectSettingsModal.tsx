@@ -185,15 +185,9 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     // y restaurar fechas/escala desde los valores persistidos.
     useEffect(() => {
         if (!isOpen) return;
-
-        // Días laborables: leer del estado real del gantt
         setWorkDays(_savedWorkDays);
-
-        // Fechas: solo restaurar si el usuario ya guardó algo antes
         setProjectStart(_savedStart);
         setProjectEnd(_savedEnd);
-
-        // Restaurar escala y horario
         setTopUnit(_savedTopUnit);
         setBottomUnit(_savedBottomUnit);
         setWorkStartTime(_savedWorkStart);
@@ -249,10 +243,11 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                 scheduleFromEnd,
             });
 
-            onClose();
-
         } catch (error) {
             console.error('[ProjectSettingsModal] aplicarAjustes:', error);
+        } finally {
+            // ✅ Cerrar el modal SIEMPRE, haya o no error
+            onClose();
         }
     };
     if (!isOpen) return null;
