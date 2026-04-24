@@ -301,19 +301,22 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/eliminar-huerfanas', [EttpController::class, 'eliminarHuerfanas'])->name('huerfanas.eliminar');
         });
 }); // Cierre de costos
-// ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
+// ─── CRONOGRAMA GANTT (Configuración Final) ──────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
+   
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
-    // Cronograma de Materiales 
     Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');
-    Route::post('/module/crono_materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
-    Route::delete('/module/crono_materiales/clear', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
-    Route::get('/module/crono_valorizado', [CronoValorizadoController::class, 'valorizado'])->name('proyectos.cronograma.valorizado');
-    Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
-
+    Route::get('/module/crono_valorizado', [CronoValorizadoController::class, 'index'])->name('proyectos.cronograma.valorizado');
     Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']); 
 
-    // ETTS — Redirecciones heredadas (opcional)
+    // 3. Ruta para GUARDAR el Gantt
+    Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
+
+    // 4. Otras rutas del módulo de materiales
+    Route::post('/module/crono_materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
+    Route::delete('/module/crono_materiales/clear', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
+
+    // ETTS — Redirecciones heredadas
     Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
     Route::get('/module/etts', function() {
         return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);

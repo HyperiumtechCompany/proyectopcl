@@ -10,6 +10,10 @@ use Carbon\Carbon;
 
 class CronoMaterialesController extends Controller
 {
+    // ──────────────────────────────────────────────────────────────────────────
+    // INDEX — Lee el Gantt desde config_json, cruza con APU y retorna
+    //         el cronograma de materiales mes a mes.
+    // ──────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $projectId = (int) $request->query('project');
@@ -18,51 +22,7 @@ class CronoMaterialesController extends Controller
         $costoProject = CostoProject::findOrFail($projectId);
         $db           = $costoProject->database_name;
 
-        // ── 1. PRIORIDAD: Intentar leer datos ya guardados en la tabla ──────────
-        $materialesGuardados = DB::connection('mysql')
-            ->table("{$db}.cronograma_materiales")
-            ->where('presupuesto_id', $projectId)
-            ->orderBy('item_order')
-            ->get();
-
-        if ($materialesGuardados->isNotEmpty()) {
-            $materialesFinales = $materialesGuardados->map(function ($item) {
-                return [
-                    'descripcion'    => $item->descripcion,
-                    'unidad'         => $item->unidad,
-                    'precio'         => (float) $item->precio_unitario,
-                    'cantidad_total' => (float) $item->cantidad_total,
-                    'presupuesto'    => (float) $item->presupuesto_total,
-                    // Decodificamos el JSON para que el Frontend lo reciba como objeto
-                    'mensual'        => json_decode($item->distribucion_mensual, true) ?: [],
-                ];
-            });
-
-            // Reconstruir los periodos basados en las llaves del primer material
-            $primerMat = $materialesFinales->first();
-            $periodos = [];
-            if ($primerMat && !empty($primerMat['mensual'])) {
-                foreach (array_keys($primerMat['mensual']) as $key) {
-                    $cursor = Carbon::parse($key . "-01");
-                    $periodos[] = [
-                        'label' => ucfirst($cursor->translatedFormat('M Y')),
-                        'key'   => $key,
-                    ];
-                }
-            }
-
-            return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
-                'project'      => (string) $projectId,
-                'projectName'  => $costoProject->nombre,
-                'materiales'   => $materialesFinales,
-                'periodos'     => $periodos,
-                'resumen'      => $this->calcularResumen($materialesFinales->toArray(), $periodos, []),
-                'estaGuardado' => true,
-                'sinGantt'     => false,
-            ]);
-        }
-
-        // ── 2. SI NO HAY GUARDADOS, PROCEDER CON CÁLCULO AUTOMÁTICO (GANTT) ─────
+        // ── 1. Leer el config_json del Gantt General ──────────────────────────
         $cronograma = DB::connection('mysql')
             ->table("{$db}.cronograma_general")
             ->where('project_id', $projectId)
@@ -70,6 +30,7 @@ class CronoMaterialesController extends Controller
             ->orderByDesc('updated_at')
             ->first();
 
+        // Si no hay Gantt guardado, devolvemos UI vacía con mensaje
         if (!$cronograma || !$cronograma->config_json) {
             return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
                 'project'      => (string) $projectId,
@@ -84,6 +45,8 @@ class CronoMaterialesController extends Controller
 
         $ganttData = json_decode($cronograma->config_json, true);
         $tasks     = $ganttData['tasks'] ?? [];
+
+        // ── 2. Identificar tareas HOJA (las que no son padres de nadie) ───────
         $parentIds = collect($tasks)->pluck('parent')->filter()->unique()->toArray();
         $leafTasks = collect($tasks)
             ->filter(fn($t) => !in_array($t['id'], $parentIds) && !empty($t['item']))
@@ -102,12 +65,23 @@ class CronoMaterialesController extends Controller
             ]);
         }
 
-        $fechas = collect($leafTasks)->filter(fn($t) => !empty($t['start_date']) && !empty($t['end_date']));
-        $inicio = $fechas->min(fn($t) => $t['start_date']) ? Carbon::parse($fechas->min(fn($t) => $t['start_date']))->startOfMonth() : now()->startOfMonth();
-        $fin    = $fechas->max(fn($t) => $t['end_date']) ? Carbon::parse($fechas->max(fn($t) => $t['end_date']))->endOfMonth() : $inicio->copy()->addMonths(5)->endOfMonth();
+        // ── 3. Rango de fechas del proyecto ───────────────────────────────────
+        $fechas = collect($leafTasks)
+            ->filter(fn($t) => !empty($t['start_date']) && !empty($t['end_date']));
 
+        $inicioProyecto = $fechas->min(fn($t) => $t['start_date']);
+        $finProyecto    = $fechas->max(fn($t) => $t['end_date']);
+
+        $inicio = $inicioProyecto
+            ? Carbon::parse($inicioProyecto)->startOfMonth()
+            : now()->startOfMonth();
+        $fin = $finProyecto
+            ? Carbon::parse($finProyecto)->endOfMonth()
+            : $inicio->copy()->addMonths(5)->endOfMonth();
+
+        // ── 4. Generar períodos mensuales ────────────────────────────────────
         $periodos = [];
-        $cursor = $inicio->copy();
+        $cursor   = $inicio->copy();
         while ($cursor->lte($fin)) {
             $periodos[] = [
                 'label' => ucfirst($cursor->translatedFormat('M Y')),
@@ -116,53 +90,86 @@ class CronoMaterialesController extends Controller
             $cursor->addMonth();
         }
 
+        // ── 5. Obtener materiales de APU por partida ──────────────────────────
         $codigosPartidas = collect($leafTasks)->pluck('item')->unique()->filter()->toArray();
+
         $materialesApu = DB::connection('mysql')
             ->table("{$db}.presupuesto_acus as pa")
             ->join("{$db}.acu_materiales as am", 'am.acu_id', '=', 'pa.id')
-            ->join("{$db}.presupuesto_general as pg", function($j) use ($projectId) {
-                $j->on('pg.presupuesto_id', '=', 'pa.presupuesto_id')
-                  ->whereRaw('TRIM(pg.partida) = TRIM(pa.partida)');
-            })
+            ->join("{$db}.presupuesto_general as pg",
+                fn($j) => $j
+                    ->on('pg.presupuesto_id', '=', 'pa.presupuesto_id')
+                    ->whereRaw('TRIM(pg.partida) = TRIM(pa.partida)')
+            )
             ->where('pa.presupuesto_id', $projectId)
             ->whereIn(DB::raw('TRIM(pa.partida)'), array_map('trim', $codigosPartidas))
             ->select([
                 DB::raw('TRIM(pa.partida) as partida'),
-                'am.descripcion', 'am.unidad',
+                'am.descripcion',
+                'am.unidad',
                 DB::raw('am.precio_unitario as precio'),
+                DB::raw('am.cantidad as aporte_unitario'),
+                DB::raw('am.factor_desperdicio'),
+                'pg.metrado as metrado_partida',
                 DB::raw('(am.cantidad * am.factor_desperdicio * pg.metrado) as cantidad_en_partida'),
                 DB::raw('(am.cantidad * am.factor_desperdicio * pg.metrado * am.precio_unitario) as costo_en_partida'),
-            ])->get();
+            ])
+            ->get();
 
+        // ── 6. Cruzar tareas con materiales y distribuir por mes ─────────────
+        // Índice rápido: partida → datos de tarea (fechas)
         $tareasPorPartida = collect($leafTasks)->keyBy('item');
+
+        // Agrupar materiales por descripción (un material puede estar en varias partidas)
+        $agrupados = $materialesApu->groupBy('descripcion');
+
         $clavesPeriodos = collect($periodos)->pluck('key')->toArray();
 
-        $materialesFinales = $materialesApu->groupBy('descripcion')->map(function ($filas, $descripcion) use ($tareasPorPartida, $clavesPeriodos) {
-            $primerFila = $filas->first();
-            $mensual = array_fill_keys($clavesPeriodos, 0.0);
-            $cantTotal = 0.0;
-            $costoTotal = 0.0;
+        $materialesFinales = $agrupados->map(function ($filas, $descripcion) use (
+            $tareasPorPartida, $clavesPeriodos, $periodos
+        ) {
+            $primerFila  = $filas->first();
+            $mensual     = array_fill_keys($clavesPeriodos, 0.0);
+            $cantTotal   = 0.0;
+            $costoTotal  = 0.0;
 
             foreach ($filas as $fila) {
-                $cantPartida = (float) $fila->cantidad_en_partida;
-                $cantTotal += $cantPartida;
-                $costoTotal += (float) $fila->costo_en_partida;
+                $cantPartida  = (float) $fila->cantidad_en_partida;
+                $costoPartida = (float) $fila->costo_en_partida;
+                $cantTotal   += $cantPartida;
+                $costoTotal  += $costoPartida;
+
+                if ($cantPartida <= 0) continue;
 
                 $tarea = $tareasPorPartida->get(trim($fila->partida));
                 if (!$tarea) {
-                    $mensual[$clavesPeriodos[0]] += $cantPartida;
-                } else {
-                    $tsStart = Carbon::parse($tarea['start_date'])->startOfMonth();
-                    $tsEnd   = Carbon::parse($tarea['end_date'])->endOfMonth();
-                    $mesesActivos = [];
-                    foreach ($clavesPeriodos as $key) {
-                        if (Carbon::parse($key."-01")->between($tsStart, $tsEnd)) $mesesActivos[] = $key;
+                    $mensual[$clavesPeriodos[0]] = ($mensual[$clavesPeriodos[0]] ?? 0) + $cantPartida;
+                    continue;
+                }
+
+                // Determinar meses activos de la tarea
+                $tsStart = !empty($tarea['start_date'])
+                    ? Carbon::parse($tarea['start_date'])->startOfMonth()
+                    : null;
+                $tsEnd   = !empty($tarea['end_date'])
+                    ? Carbon::parse($tarea['end_date'])->endOfMonth()
+                    : null;
+
+                $mesesActivos = [];
+                foreach ($clavesPeriodos as $key) {
+                    $fechaMes = Carbon::parse("{$key}-01");
+                    if ($tsStart && $tsEnd && $fechaMes->between($tsStart, $tsEnd)) {
+                        $mesesActivos[] = $key;
                     }
-                    $num = count($mesesActivos);
-                    if ($num > 0) {
-                        foreach ($mesesActivos as $k) $mensual[$k] += $cantPartida / $num;
-                    } else {
-                        $mensual[$clavesPeriodos[0]] += $cantPartida;
+                }
+
+                $numMeses = count($mesesActivos);
+                if ($numMeses === 0) {
+                    $mensual[$clavesPeriodos[0]] = ($mensual[$clavesPeriodos[0]] ?? 0) + $cantPartida;
+                } else {
+                    $dist = $cantPartida / $numMeses;
+                    foreach ($mesesActivos as $key) {
+                        $mensual[$key] = ($mensual[$key] ?? 0) + $dist;
                     }
                 }
             }
@@ -175,29 +182,55 @@ class CronoMaterialesController extends Controller
                 'presupuesto'    => round($costoTotal, 2),
                 'mensual'        => array_map(fn($v) => round($v, 4), $mensual),
             ];
-        })->filter(fn($m) => $m['cantidad_total'] > 0)->sortBy('descripcion')->values();
+        })
+        ->filter(fn($m) => $m['cantidad_total'] > 0)
+        ->sortBy('descripcion')
+        ->values();
+
+        // ── 7. Resumen estadístico ─────────────────────────────────────────────
+        $resumen = $this->calcularResumen($materialesFinales->toArray(), $periodos, $leafTasks);
+
+        // ── 8. ¿Ya está guardado en cronograma_materiales? ────────────────────
+        $estaGuardado = DB::connection('mysql')
+            ->table("{$db}.cronograma_materiales")
+            ->where('presupuesto_id', $projectId)
+            ->exists();
 
         return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
             'project'      => (string) $projectId,
             'projectName'  => $costoProject->nombre,
-            'materiales'   => $materialesFinales,
+            'materiales'   => $materialesFinales->toArray(),
             'periodos'     => $periodos,
-            'resumen'      => $this->calcularResumen($materialesFinales->toArray(), $periodos, $leafTasks),
-            'estaGuardado' => false,
+            'resumen'      => $resumen,
+            'estaGuardado' => $estaGuardado,
             'sinGantt'     => false,
         ]);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // STORE — Guarda el cronograma en cronograma_materiales
+    // ──────────────────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
-        $request->validate(['project_id' => 'required|integer', 'materiales' => 'required|array']);
+        $request->validate([
+            'project_id' => 'required|integer',
+            'materiales' => 'required|array',
+        ]);
+
         $projectId = (int) $request->input('project_id');
         $materiales = $request->input('materiales');
+
         $costoProject = CostoProject::findOrFail($projectId);
         $db = $costoProject->database_name;
 
         DB::transaction(function () use ($db, $projectId, $materiales) {
-            DB::connection('mysql')->table("{$db}.cronograma_materiales")->where('presupuesto_id', $projectId)->delete();
+            // Limpiar registros anteriores
+            DB::connection('mysql')
+                ->table("{$db}.cronograma_materiales")
+                ->where('presupuesto_id', $projectId)
+                ->delete();
+
+            // Insertar nuevos
             $rows = [];
             foreach ($materiales as $idx => $mat) {
                 $rows[] = [
@@ -213,43 +246,86 @@ class CronoMaterialesController extends Controller
                     'updated_at'          => now(),
                 ];
             }
+
+            // Insertar en lotes de 200 para grandes volúmenes
             foreach (array_chunk($rows, 200) as $chunk) {
-                DB::connection('mysql')->table("{$db}.cronograma_materiales")->insert($chunk);
+                DB::connection('mysql')
+                    ->table("{$db}.cronograma_materiales")
+                    ->insert($chunk);
             }
         });
 
-        return response()->json(['status' => 'success', 'message' => '¡Cronograma guardado!']);
+        return response()->json([
+            'status'  => 'success',
+            'message' => '¡Cronograma de materiales guardado correctamente!',
+            'total'   => count($materiales),
+        ]);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // DESTROY — Elimina el cronograma guardado
+    // ──────────────────────────────────────────────────────────────────────────
     public function destroy(Request $request)
     {
         $projectId = (int) ($request->query('project') ?? $request->input('project'));
+        if (!$projectId) abort(422, 'Project ID requerido');
+
         $costoProject = CostoProject::findOrFail($projectId);
         $db = $costoProject->database_name;
-        DB::connection('mysql')->table("{$db}.cronograma_materiales")->where('presupuesto_id', $projectId)->delete();
-        return response()->json(['status' => 'success', 'message' => 'Cronograma eliminado.']);
+
+        $deleted = DB::connection('mysql')
+            ->table("{$db}.cronograma_materiales")
+            ->where('presupuesto_id', $projectId)
+            ->delete();
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => "Se eliminaron {$deleted} registros del cronograma de materiales.",
+        ]);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // PRIVADOS
+    // ──────────────────────────────────────────────────────────────────────────
     private function calcularResumen(array $materiales, array $periodos, array $leafTasks): array
     {
-        $presupuestoTotal = array_sum(array_column($materiales, 'presupuesto'));
+        $totalMateriales   = count($materiales);
+        $presupuestoTotal  = array_sum(array_column($materiales, 'presupuesto'));
+
+        // Mes pico (mayor gasto mensual)
         $acumuladoMensual = [];
         foreach ($periodos as $p) {
-            $acumuladoMensual[$p['key']] = array_sum(array_map(fn($m) => ($m['mensual'][$p['key']] ?? 0) * $m['precio'], $materiales));
+            $acumuladoMensual[$p['key']] = array_sum(array_map(
+                fn($m) => ($m['mensual'][$p['key']] ?? 0) * $m['precio'],
+                $materiales
+            ));
         }
         arsort($acumuladoMensual);
-        $mesPico = array_key_first($acumuladoMensual);
+        $mesPico    = array_key_first($acumuladoMensual) ?? null;
+        $montoPico  = $acumuladoMensual[$mesPico] ?? 0;
+
+        // Duración del proyecto
+        $duracionMeses = count($periodos);
+
         return [
-            'total_materiales'  => count($materiales),
-            'presupuesto_total' => round($presupuestoTotal, 2),
-            'duracion_meses'    => count($periodos),
-            'mes_pico'          => $mesPico,
-            'monto_mes_pico'    => round($acumuladoMensual[$mesPico] ?? 0, 2),
-            'total_partidas'    => count($leafTasks),
+            'total_materiales'   => $totalMateriales,
+            'presupuesto_total'  => round($presupuestoTotal, 2),
+            'duracion_meses'     => $duracionMeses,
+            'mes_pico'           => $mesPico,
+            'monto_mes_pico'     => round($montoPico, 2),
+            'total_partidas'     => count($leafTasks),
         ];
     }
 
-    private function resumenVacio() {
-        return ['total_materiales' => 0, 'presupuesto_total' => 0, 'duracion_meses' => 0, 'mes_pico' => null, 'monto_mes_pico' => 0, 'total_partidas' => 0];
+    private function resumenVacio(): array
+    {
+        return [
+            'total_materiales'  => 0,
+            'presupuesto_total' => 0,
+            'duracion_meses'    => 0,
+            'mes_pico'          => null,
+            'monto_mes_pico'    => 0,
+            'total_partidas'    => 0,
+        ];
     }
 }
