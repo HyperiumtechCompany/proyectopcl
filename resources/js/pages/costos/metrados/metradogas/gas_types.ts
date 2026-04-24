@@ -7,9 +7,6 @@ export interface ColumnDef {
 
 export interface GasPageProps {
   project: { id: number; nombre: string };
-  titulo: string;
-  baseURL: string;
-  modulos: Record<number, Record<string, any>[]>;
   metrado: Record<string, any>[];
   resumen: Record<string, any>[];
   [key: string]: unknown;
@@ -48,8 +45,8 @@ export interface MeasureOutputs {
 
 /** Perfil de una unidad: qué inputs necesita y qué columna produce */
 export interface UnitProfile {
-  key: string;           
-  label: string;        
+  key: string;
+  label: string;
   activeInputs: (keyof MeasureInputs)[];
   outputKey: keyof MeasureOutputs;
   formula: string;

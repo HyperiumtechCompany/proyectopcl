@@ -73,6 +73,7 @@ export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent
+        aria-describedby="numbering-modal-description"
         className="z-9999 max-w-sm gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-2xl"
         style={{ zIndex: 9999 }}
       >
@@ -83,7 +84,10 @@ export function NumberingModal({ open, onClose, onApply }: NumberingModalProps) 
             <Hash className="h-4.5 w-4.5" />
             Numeración Jerárquica
           </DialogTitle>
-          <DialogDescription className="text-[11px] text-violet-200">
+          <DialogDescription
+            id="numbering-modal-description"
+            className="text-[11px] text-violet-200"
+          >
             Asigna códigos de ítem automáticamente.
             Filas sin descripción se omiten.
           </DialogDescription>

@@ -3,7 +3,6 @@ import {
     Paragraph,
     TextRun,
     ImageRun,
-    TableOfContents,
     Header,
     Footer,
     Table,
@@ -17,6 +16,10 @@ import {
     UnderlineType,
     LineRuleType,
     PageNumber,
+    PageReference,
+    Bookmark,
+    TabStopType,
+    TabStopPosition,
     SectionType,
     Packer,
 } from 'docx';
@@ -264,6 +267,7 @@ const processHierarchicalItemsToWord = async (
     items: any[],
     sections: any[],
     level: number,
+    tocEntries: { text: string; level: number; bookmarkId: string }[],
 ) => {
     if (!items || !Array.isArray(items) || items.length === 0) return;
 
@@ -286,22 +290,32 @@ const processHierarchicalItemsToWord = async (
 
         // Título del item
         const titulo = `${item.item || ''} ${item.descripcion || ''}`.trim();
+        const bookmarkId = `bookmark_${level}_${i}_${(item.item || item.descripcion || 'heading')
+            .toString()
+            .replace(/[^a-zA-Z0-9]/g, '_')}`;
+
         if (titulo) {
             sections.push(
                 new Paragraph({
                     children: [
-                        new TextRun({
-                            text: titulo,
-                            bold: true,
-                            font: 'Arial Narrow',
-                            color: '#000000',
-                            size: 24,
+                        new Bookmark({
+                            id: bookmarkId,
+                            children: [
+                                new TextRun({
+                                    text: titulo,
+                                    bold: true,
+                                    font: 'Arial Narrow',
+                                    color: '#000000',
+                                    size: 24,
+                                }),
+                            ],
                         }),
                     ],
                     heading: headingLevel,
                     spacing: { before: 300, after: 100, line: 480 },
                 }),
             );
+            tocEntries.push({ text: titulo, level, bookmarkId });
         }
 
         // Unidad de medida
@@ -355,7 +369,7 @@ const processHierarchicalItemsToWord = async (
             Array.isArray(item._children) &&
             item._children.length > 0
         ) {
-            await processHierarchicalItemsToWord(item._children, sections, level + 1);
+            await processHierarchicalItemsToWord(item._children, sections, level + 1, tocEntries);
         }
     }
 };
@@ -366,6 +380,7 @@ const generateSectionsForWord = async (
     sectionName: string,
 ): Promise<{
     sections: any[];
+    tocEntries: { text: string; level: number; bookmarkId: string }[];
 }> => {
     if (!data || !Array.isArray(data) || data.length === 0) {
         return {
@@ -379,6 +394,7 @@ const generateSectionsForWord = async (
                     ],
                 }),
             ],
+            tocEntries: [],
         };
     }
 
@@ -400,8 +416,9 @@ const generateSectionsForWord = async (
         }),
     );
 
-    await processHierarchicalItemsToWord(data, sections, 1);
-    return { sections };
+    const tocEntries: { text: string; level: number; bookmarkId: string }[] = [];
+    await processHierarchicalItemsToWord(data, sections, 1, tocEntries);
+    return { sections, tocEntries };
 };
 
 // Filtrar datos por sección
@@ -876,8 +893,8 @@ const generarWordParaSeccion = async (
         }),
     ];
 
-    // Tabla de contenido con numeración
-    const { sections: contentSections } = await generateSectionsForWord(
+    // Tabla de contenido con numeración manual basada en bookmarks
+    const { sections: contentSections, tocEntries } = await generateSectionsForWord(
         datosFiltrados,
         nombreArchivoBase,
     );
@@ -896,12 +913,31 @@ const generarWordParaSeccion = async (
             alignment: AlignmentType.CENTER,
             spacing: { after: 400 },
         }),
-        new TableOfContents('ÍNDICE', {
-            hyperlink: true,
-            headingStyleRange: '1-3',
-            pageNumbersEntryLevelsRange: '1-3',
-            entryAndPageNumberSeparator: ' ',
-        }),
+        ...tocEntries.map((entry) =>
+            new Paragraph({
+                children: [
+                    new TextRun({
+                        text: entry.text,
+                        font: 'Arial',
+                        size: 24,
+                        color: '#000000',
+                    }),
+                    new TextRun({ text: '\t' }),
+                    new PageReference(entry.bookmarkId),
+                ],
+                tabStops: [
+                    {
+                        type: TabStopType.RIGHT,
+                        position: TabStopPosition.MAX,
+                    },
+                ],
+                spacing: { after: 150, line: 360 },
+                indent: {
+                    left: (entry.level - 1) * 360,
+                    firstLine: 0,
+                },
+            }),
+        ),
     ];
 
 

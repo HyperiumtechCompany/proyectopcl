@@ -549,6 +549,31 @@ const CronogramaIndex = ({
         });
         eventIdsRef.current.push(evUpdateCostoTotal);
 
+        gantt.config.layout = {
+    css: "gantt_container",
+    cols: [
+        {
+            width: 400,
+            min_width: 50,  
+            gravity: 1,     
+            rows: [
+                { view: "grid", scrollX: "gridScroll", scrollable: true, scrollY: "vScroll" },
+                { view: "scrollbar", id: "gridScroll" }
+            ]
+        },
+        // ESTA LÍNEA ES LA QUE ACTIVA LA FLECHA <-> Y EL ARRASTRE
+        { view: "resizer", mode: "resize", width: 10 }, 
+        {
+            gravity: 2,     
+            rows: [
+                { view: "timeline", scrollX: "scrollHor", scrollY: "vScroll" },
+                { view: "scrollbar", id: "scrollHor" }
+            ]
+        },
+        { view: "scrollbar", id: "vScroll" }
+    ]
+};
+
         // ── Escalas: Mes relativo + Semana relativa ───────────────────────────
         gantt.config.scales = [
             {

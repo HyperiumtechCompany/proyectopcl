@@ -29,6 +29,15 @@ class EttpSeccion extends Model
         'orden' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        static::deleting(function (EttpSeccion $seccion) {
+            foreach ($seccion->imagenes()->get() as $imagen) {
+                $imagen->delete();
+            }
+        });
+    }
+
     // ── Relaciones ──
 
     public function partida(): BelongsTo

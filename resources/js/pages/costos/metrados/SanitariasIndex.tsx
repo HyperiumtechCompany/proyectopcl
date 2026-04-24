@@ -378,7 +378,7 @@ export default function SanitariasIndex() {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
-        { title: project.nombre, href: `/costos/${project.id}` },
+        { title: project?.nombre || 'Proyecto', href: `/costos/${project?.id || 0}` },
         { title: 'Metrado Sanitarias', href: '#' },
     ];
 
@@ -421,7 +421,7 @@ export default function SanitariasIndex() {
         scheduleSave,
         saveNow,
         latestSheets,
-    } = useAutoSave(project.id, resumenCols);
+    } = useAutoSave(project?.id || 0, resumenCols);
 
     // ── UI State ───────────────────────────────────────────────
     const [syncing, setSyncing] = useState(false);

@@ -74,36 +74,36 @@ interface ModuleMeta {
 
 const MODULE_MAP: Record<string, ModuleMeta> = {
     metrado_arquitectura: {
-        label: '2: Arquitectura',
+        label: '02: Arquitectura',
         group: 'metrado',
         icon: Ruler,
         order: 2,
     },
     metrado_estructura: {
-        label: '3: Estructuras',
+        label: '03: Estructuras',
         group: 'metrado',
         icon: Layers,
         order: 3,
     },
     metrado_sanitarias: {
-        label: '4: Sanitarias',
+        label: '04: Sanitarias',
         group: 'metrado',
         icon: Droplets,
         order: 4,
     },
     metrado_electricas: {
-        label: '5: Eléctricas',
+        label: '05: Eléctricas',
         group: 'metrado',
         icon: Zap,
         order: 5,
     },
     metrado_comunicaciones: {
-        label: '6: Comunicaciones',
+        label: '06: Comunicaciones',
         group: 'metrado',
         icon: Wifi,
         order: 6,
     },
-    metrado_gas: { label: '7: Gas', group: 'metrado', icon: Flame, order: 7 },
+    metrado_gas: { label: '07: Gas', group: 'metrado', icon: Flame, order: 7 },
     presupuesto: {
         label: 'Presupuesto',
         group: 'presupuesto',
@@ -478,6 +478,8 @@ export default function Show() {
                                                     <strong className="font-semibold">
                                                         {v}
                                                     </strong>
+
+                                                    
                                                 </span>
                                             ))}
                                         </div>
@@ -623,7 +625,7 @@ export default function Show() {
                         </div>
                     </div>
                 </section>
-                
+
             </div>
         </AppLayout>
     );
