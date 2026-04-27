@@ -21,6 +21,7 @@ interface Props {
     onApply: (settings: {
         projectStart?: string;
         projectEnd?: string;
+        projectDuration?: number;  // 👈 AGREGAR ESTA LÍNEA
         holidays?: any[];
         workDays?: any;
         workStartTime?: string;
@@ -120,17 +121,16 @@ const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: ()
 let _savedStart = '';
 let _savedEnd = '';
 let _savedTopUnit = 'month';
-let _savedBottomUnit = 'week';
+let _savedBottomUnit = 'day';
 let _savedWorkStart = '08:00';
 let _savedWorkEnd = '17:00';
 let _savedScheduleFromEnd = false;
-// Feriados persistidos entre aperturas
 let _savedHolidays: { date: string; name: string; checked: boolean; custom: boolean }[] = [];
-// Días laborables persistidos entre aperturas
 let _savedWorkDays: WorkDays = {
     lunes: true, martes: true, miercoles: true,
     jueves: true, viernes: true, sabado: false, domingo: false,
 };
+let _savedDuration: number | null = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -159,6 +159,8 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     const [newHolidayDate, setNewHolidayDate] = useState('');
     const [newHolidayName, setNewHolidayName] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
+    const [projectDuration, setProjectDuration] = useState<number | null>(null);
+    const [calculatedEndDate, setCalculatedEndDate] = useState<string>('');
 
     const FERIADOS_PERU_2026 = [
         { date: '01-01', name: 'Año Nuevo' },
@@ -193,6 +195,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         setWorkStartTime(_savedWorkStart);
         setWorkEndTime(_savedWorkEnd);
         setScheduleFromEnd(_savedScheduleFromEnd);
+        setProjectDuration(_savedDuration);
 
         // Restaurar feriados
         if (_savedHolidays.length > 0) {
@@ -202,6 +205,19 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         }
 
     }, [isOpen]);
+
+    // Efecto para calcular fecha fin cuando cambia inicio o duración
+    useEffect(() => {
+        if (projectStart && projectDuration && projectDuration > 0) {
+            const startDate = new Date(projectStart);
+            // Cálculo simple (sin días hábiles por ahora)
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + projectDuration);
+            setCalculatedEndDate(endDate.toISOString().split('T')[0]);
+        } else {
+            setCalculatedEndDate('');
+        }
+    }, [projectStart, projectDuration]);
 
     const openCalendar = (ref: React.RefObject<HTMLInputElement>) => {
         if (!ref.current) return;
@@ -218,7 +234,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     // ── Aplicar ajustes ───────────────────────────────────────────────────────
     const aplicarAjustes = () => {
         try {
-            // Persistir valores
             _savedStart = projectStart;
             _savedEnd = projectEnd;
             _savedTopUnit = topUnit;
@@ -228,25 +243,23 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             _savedScheduleFromEnd = scheduleFromEnd;
             _savedWorkDays = { ...workDays };
             _savedHolidays = holidays;
+            _savedDuration = projectDuration; // ← esta línea faltaba
 
-            // Solo escala de tiempo — sin tocar setWorkTime aquí
             (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
-            // Notificar al padre con todo
             onApply({
                 projectStart: projectStart || undefined,
                 projectEnd: projectEnd || undefined,
-                holidays: holidays,
+                projectDuration: projectDuration ?? undefined,
+                holidays,
                 workDays: { ...workDays },
                 workStartTime,
                 workEndTime,
                 scheduleFromEnd,
             });
-
         } catch (error) {
             console.error('[ProjectSettingsModal] aplicarAjustes:', error);
         } finally {
-            // ✅ Cerrar el modal SIEMPRE, haya o no error
             onClose();
         }
     };
@@ -292,9 +305,9 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Fechas del proyecto */}
+                    {/* Duración del Proyecto */}
                     <section>
-                        <SectionTitle>Fechas del Proyecto</SectionTitle>
+                        <SectionTitle>Duración del Proyecto</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
                             <Field label="Inicio del Proyecto">
                                 <div className="relative">
@@ -311,22 +324,25 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                     />
                                 </div>
                             </Field>
-                            <Field label="Fin Pronosticado">
-                                <div className="relative">
-                                    <input
-                                        ref={endDateRef}
-                                        type="date"
-                                        value={projectEnd}
-                                        onChange={(e) => setProjectEnd(e.target.value)}
-                                        className={`${inputCls} pl-9`}
-                                    />
-                                    <CalendarIcon
-                                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 cursor-pointer"
-                                        onClick={() => openCalendar(endDateRef as any)}
-                                    />
-                                </div>
+                            <Field label="Duración (días)">
+                                <input
+                                    type="number"
+                                    value={projectDuration === null ? '' : projectDuration}
+                                    onChange={(e) => setProjectDuration(e.target.value === '' ? null : parseInt(e.target.value))}
+                                    min="1"
+                                    placeholder="Ej: 180"
+                                    className={inputCls}
+                                />
                             </Field>
                         </div>
+
+                        {calculatedEndDate && (
+                            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <span className="text-xs text-blue-700 font-medium">
+                                    📅 Fin estimado: <strong>{calculatedEndDate}</strong>
+                                </span>
+                            </div>
+                        )}
 
                         <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
                             <input
