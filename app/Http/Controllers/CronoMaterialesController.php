@@ -23,35 +23,40 @@ class CronoMaterialesController extends Controller
         $db           = $costoProject->database_name;
 
         // ── 1. Leer el config_json del Gantt General ──────────────────────────
-        $cronograma = DB::connection('mysql')
-            ->table("{$db}.cronograma_general")
-            ->where('project_id', $projectId)
-            ->whereNotNull('config_json')
-            ->orderByDesc('updated_at')
-            ->first();
+   // ── 1. Leer tareas desde cronograma_general (filas individuales) ──────
+$filas = DB::connection('mysql')
+    ->table("{$db}.cronograma_general")
+    ->where('project_id', $projectId)
+    ->orderBy('item_order')
+    ->get();
 
-        // Si no hay Gantt guardado, devolvemos UI vacía con mensaje
-        if (!$cronograma || !$cronograma->config_json) {
-            return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
-                'project'      => (string) $projectId,
-                'projectName'  => $costoProject->nombre,
-                'materiales'   => [],
-                'periodos'     => [],
-                'resumen'      => $this->resumenVacio(),
-                'estaGuardado' => false,
-                'sinGantt'     => true,
-            ]);
-        }
+if ($filas->isEmpty()) {
+    return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
+        'project'      => (string) $projectId,
+        'projectName'  => $costoProject->nombre,
+        'materiales'   => [],
+        'periodos'     => [],
+        'resumen'      => $this->resumenVacio(),
+        'estaGuardado' => false,
+        'sinGantt'     => true,
+    ]);
+}
 
-        $ganttData = json_decode($cronograma->config_json, true);
-        $tasks     = $ganttData['tasks'] ?? [];
+$tasks = $filas->map(fn($f) => [
+    'id'         => (string)$f->gantt_id,
+    'item'       => $f->partida,
+    'parent'     => $f->parent_id ? (string)$f->parent_id : 0,
+    'start_date' => $f->fecha_inicio,
+    'end_date'   => $f->fecha_fin,
+    'cost'       => (float)$f->costo,
+])->toArray();
 
-        // ── 2. Identificar tareas HOJA (las que no son padres de nadie) ───────
-        $parentIds = collect($tasks)->pluck('parent')->filter()->unique()->toArray();
-        $leafTasks = collect($tasks)
-            ->filter(fn($t) => !in_array($t['id'], $parentIds) && !empty($t['item']))
-            ->values()
-            ->toArray();
+// ── 2. Identificar tareas HOJA ────────────────────────────────────────
+$parentIds = collect($tasks)->pluck('parent')->filter()->unique()->toArray();
+$leafTasks = collect($tasks)
+    ->filter(fn($t) => !in_array($t['id'], $parentIds) && !empty($t['item']))
+    ->values()
+    ->toArray();
 
         if (empty($leafTasks)) {
             return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [

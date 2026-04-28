@@ -22,34 +22,40 @@ class CronoValorizadoController extends Controller
         $db = $costoProject->database_name;
 
         // ── 1. Leer config_json del Gantt ─────────────────────────────────────
-        $ganttRow = DB::connection('mysql')
-            ->table("{$db}.cronograma_general")
-            ->where('project_id', $projectId)
-            ->whereNotNull('config_json')
-            ->orderByDesc('updated_at')
-            ->first();
+    // ── 1. Leer tareas desde cronograma_general (filas individuales) ──────
+$filas = DB::connection('mysql')
+    ->table("{$db}.cronograma_general")
+    ->where('project_id', $projectId)
+    ->orderBy('item_order')
+    ->get();
 
-        if (!$ganttRow || !$ganttRow->config_json) {
-            return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
-                'project'          => (string) $projectId,
-                'projectName'      => $costoProject->nombre,
-                'items'            => [],
-                'periodos'         => [],
-                'totalPresupuesto' => 0,
-                'resumen'          => $this->resumenVacio(),
-                'sinGantt'         => true,
-            ]);
-        }
+if ($filas->isEmpty()) {
+    return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
+        'project'          => (string) $projectId,
+        'projectName'      => $costoProject->nombre,
+        'items'            => [],
+        'periodos'         => [],
+        'totalPresupuesto' => 0,
+        'resumen'          => $this->resumenVacio(),
+        'sinGantt'         => true,
+    ]);
+}
 
-        $ganttData = json_decode($ganttRow->config_json, true);
-        $tasks     = collect($ganttData['tasks'] ?? []);
+$tasks = $filas->map(fn($f) => [
+    'id'         => (string)$f->gantt_id,
+    'item'       => $f->partida,
+    'parent'     => $f->parent_id ? (string)$f->parent_id : 0,
+    'start_date' => $f->fecha_inicio,
+    'end_date'   => $f->fecha_fin,
+    'cost'       => (float)$f->costo,
+]);
 
-        // ── 2. Identificar tareas HOJA ────────────────────────────────────────
-        $parentIds = $tasks->pluck('parent')->filter()->unique()->values()->toArray();
-        $leafTasks = $tasks
-            ->filter(fn($t) => !in_array($t['id'], $parentIds))
-            ->keyBy(fn($t) => trim($t['item'] ?? ''))
-            ->filter(fn($t, $k) => $k !== '');
+// ── 2. Identificar tareas HOJA ────────────────────────────────────────
+$parentIds = $tasks->pluck('parent')->filter()->unique()->values()->toArray();
+$leafTasks = $tasks
+    ->filter(fn($t) => !in_array($t['id'], $parentIds))
+    ->keyBy(fn($t) => trim($t['item'] ?? ''))
+    ->filter(fn($t, $k) => $k !== '');
 
         // ── 3. Determinar períodos del proyecto ────────────────────────────────
         $fechas = $tasks->filter(fn($t) => !empty($t['start_date']) && !empty($t['end_date']));

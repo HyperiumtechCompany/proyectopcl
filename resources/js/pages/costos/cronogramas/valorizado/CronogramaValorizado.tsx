@@ -1,23 +1,23 @@
 import React, { useState, useCallback } from 'react';
 import AppLayout from '@/layouts/app-layout';
-import { Head }  from '@inertiajs/react';
-import axios     from 'axios';
+import { Head } from '@inertiajs/react';
+import axios from 'axios';
 
-import { ValorizadoProps }       from './types';
-import { useValorizadoLogic }    from './helpers/useValorizadoLogic';
-import HeaderValorizado          from './components/HeaderValorizado';
-import ResumenFinanciero         from './components/ResumenFinanciero';
-import TablaValorizada           from './components/TablaValorizada';
+import { ValorizadoProps } from './types';
+import { useValorizadoLogic } from './helpers/useValorizadoLogic';
+import HeaderValorizado from './components/HeaderValorizado';
+import ResumenFinanciero from './components/ResumenFinanciero';
+import TablaValorizada from './components/TablaValorizada';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORTACIÓN EXCEL (CSV UTF-8 con BOM, abre en Excel correctamente)
 // ─────────────────────────────────────────────────────────────────────────────
 const exportarExcel = (
-    items:            any[],
-    periodos:         any[],
-    totales:          any,
-    projectName:      string,
-    viewMode:         'monto' | 'porcentaje',
+    items: any[],
+    periodos: any[],
+    totales: any,
+    projectName: string,
+    viewMode: 'monto' | 'porcentaje',
     totalPresupuesto: number,
 ) => {
     const fmtN = (v: number) => (v ?? 0).toFixed(2);
@@ -74,9 +74,9 @@ const exportarExcel = (
     ].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
 
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = `Cronograma_Valorizado_${projectName.replace(/\s+/g, '_')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
@@ -86,9 +86,9 @@ const exportarExcel = (
 // EXPORTACIÓN PDF via ventana de impresión
 // ─────────────────────────────────────────────────────────────────────────────
 const exportarPDF = (
-    items:       any[],
-    periodos:    any[],
-    totales:     any,
+    items: any[],
+    periodos: any[],
+    totales: any,
     projectName: string,
 ) => {
     const fmtN = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
@@ -100,10 +100,10 @@ const exportarPDF = (
 
     const bodyRows = items.map((item: any, i: number) => {
         const isLeaf = item.is_leaf;
-        const niv    = (item.item?.split('.').length ?? 1) - 1;
-        const bg     = niv === 0 ? '#1e293b' : niv === 1 ? '#e2e8f0' : niv === 2 ? '#f1f5f9' : '#ffffff';
-        const color  = niv === 0 ? '#ffffff' : '#1e293b';
-        const pl     = `${6 + niv * 8}px`;
+        const niv = (item.item?.split('.').length ?? 1) - 1;
+        const bg = niv === 0 ? '#1e293b' : niv === 1 ? '#e2e8f0' : niv === 2 ? '#f1f5f9' : '#ffffff';
+        const color = niv === 0 ? '#ffffff' : '#1e293b';
+        const pl = `${6 + niv * 8}px`;
 
         const mensualCols = periodos.map((p: any) => {
             const m = item.distribucion?.[p.key]?.monto ?? 0;
@@ -209,8 +209,8 @@ const ToastContainer: React.FC = () => {
     _toastSetter = setToasts;
     const cm: Record<string, string> = {
         success: 'bg-emerald-900 border-emerald-600 text-emerald-100',
-        error:   'bg-rose-900    border-rose-700    text-rose-100',
-        info:    'bg-blue-900    border-blue-700    text-blue-100',
+        error: 'bg-rose-900    border-rose-700    text-rose-100',
+        info: 'bg-blue-900    border-blue-700    text-blue-100',
     };
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm">
@@ -227,8 +227,8 @@ const ToastContainer: React.FC = () => {
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CronogramaValorizado(props: ValorizadoProps) {
-    const [saving,         setSaving]         = useState(false);
-    const [deleting,       setDeleting]       = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
 
     const {
@@ -255,9 +255,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             await axios.post('/cronograma/valorizado/save', {
                 project_id: props.project,
                 items: items.map(i => ({
-                    item:         i.item,
-                    descripcion:  i.descripcion,
-                    parcial:      i.parcial,
+                    item: i.item,
+                    descripcion: i.descripcion,
+                    parcial: i.parcial,
                     distribucion: i.distribucion,
                 })),
             });
@@ -305,9 +305,9 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     }, [totalesFinales]);
 
     const breadcrumbs = [
-        { title: 'Costos',                           href: '/costos' },
+        { title: 'Costos', href: '/costos' },
         { title: props.projectName || `Proyecto ${props.project}`, href: `/costos/${props.project}` },
-        { title: 'Cronograma Valorizado',            href: '#' },
+        { title: 'Cronograma Valorizado', href: '#' },
     ];
 
     return (
@@ -328,8 +328,8 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 Primero debe guardar el Cronograma General (Gantt) con las fechas
                                 de inicio y fin de cada partida.
                             </p>
-                            <a href={`/cronograma/general?project=${props.project}`}
-                               className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md">
+                            <a href={`/module/crono_general?project=${props.project}`}
+                                className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md">
                                 Ir al Cronograma General →
                             </a>
                         </div>
