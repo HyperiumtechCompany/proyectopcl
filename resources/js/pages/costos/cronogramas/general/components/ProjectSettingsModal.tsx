@@ -234,6 +234,11 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     // ── Aplicar ajustes ───────────────────────────────────────────────────────
     const aplicarAjustes = () => {
         try {
+            // ✅ Asegurar que projectDuration es un número entero
+            const duracionValida = projectDuration !== null && !isNaN(projectDuration) && projectDuration > 0
+                ? parseInt(String(projectDuration), 10)
+                : null;
+
             _savedStart = projectStart;
             _savedEnd = projectEnd;
             _savedTopUnit = topUnit;
@@ -243,14 +248,14 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             _savedScheduleFromEnd = scheduleFromEnd;
             _savedWorkDays = { ...workDays };
             _savedHolidays = holidays;
-            _savedDuration = projectDuration; // ← esta línea faltaba
+            _savedDuration = duracionValida;  // ← Usar la variable validada
 
             (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
             onApply({
                 projectStart: projectStart || undefined,
                 projectEnd: projectEnd || undefined,
-                projectDuration: projectDuration ?? undefined,
+                projectDuration: duracionValida ?? undefined,  // ← Usar la variable validada
                 holidays,
                 workDays: { ...workDays },
                 workStartTime,

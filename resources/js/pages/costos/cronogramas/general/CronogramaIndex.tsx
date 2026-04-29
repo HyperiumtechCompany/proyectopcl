@@ -91,7 +91,7 @@ const CronogramaIndex = ({
     const [projectProgress, setProjectProgress] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [autoScheduling, setAutoScheduling] = useState(true);
-  
+
 
     const displayName = project_name || `Proyecto ${project}`;
     const [showTaskLabels, setShowTaskLabels] = useState(true);
@@ -304,7 +304,7 @@ const CronogramaIndex = ({
         }
     }, [cronogramaId, project]);
 
-    
+
     // ─────────────────────────────────────────────────────────────────────────
     // IMPORTAR DESDE PRESUPUESTO
     // ─────────────────────────────────────────────────────────────────────────
@@ -420,25 +420,46 @@ const CronogramaIndex = ({
                 }
 
                 // ── Fecha límite (calculada desde duración) ───────────────────
+                // ── Fecha límite (calculada desde duración) ───────────────────
                 if (settings.projectStart && settings.projectDuration && settings.projectDuration > 0) {
-                    const start = new Date(settings.projectStart + 'T00:00:00');
-                    limitDate = new Date(start);
-                    limitDate.setDate(limitDate.getDate() + settings.projectDuration);
-
-                    // Guardar globalmente
-                    (window as any).__projectLimitDate = limitDate;
-
-                    if (autoScheduling) {
-                        // AUTO: vista exacta hasta el límite + 1 día
-                        const viewEnd = new Date(limitDate);
-                        viewEnd.setDate(viewEnd.getDate() + 1);
-                        gantt.config.end_date = viewEnd;
-                        gantt.config.limit_view = true;
+                    // ✅ Asegurar que la duración es un número válido
+                    const duracion = Number(settings.projectDuration);
+                    if (isNaN(duracion) || duracion <= 0) {
+                        console.warn('Duración inválida:', settings.projectDuration);
                     } else {
-                        // MANUAL: hasta el último día del mes del límite
-                        const viewEnd = new Date(limitDate.getFullYear(), limitDate.getMonth() + 1, 0);
-                        gantt.config.end_date = viewEnd;
-                        gantt.config.limit_view = false;
+                        const start = new Date(settings.projectStart + 'T00:00:00');
+                        limitDate = new Date(start);
+
+                        // ✅ Sumar días correctamente
+                        limitDate.setDate(limitDate.getDate() + duracion);
+
+                        // ✅ Validar que la fecha sea válida
+                        if (isNaN(limitDate.getTime())) {
+                            console.error('Fecha límite inválida:', limitDate);
+                            limitDate = null;
+                        } else {
+                            // Guardar globalmente
+                            (window as any).__projectLimitDate = limitDate;
+
+                            // Configurar vista del Gantt
+                            if (autoScheduling) {
+                                const viewEnd = new Date(limitDate);
+                                viewEnd.setDate(viewEnd.getDate() + 1);
+                                gantt.config.end_date = viewEnd;
+                                gantt.config.limit_view = true;
+                            } else {
+                                const viewEnd = new Date(limitDate.getFullYear(), limitDate.getMonth() + 1, 0);
+                                gantt.config.end_date = viewEnd;
+                                gantt.config.limit_view = false;
+                            }
+
+                            // ✅ Forzar que start_date también se actualice
+                            if (realStartDate) {
+                                const viewStart = new Date(realStartDate);
+                                viewStart.setDate(viewStart.getDate() - 1);
+                                gantt.config.start_date = viewStart;
+                            }
+                        }
                     }
                 }
 
@@ -446,18 +467,54 @@ const CronogramaIndex = ({
                     (gantt.config as any).schedule_from_end = settings.scheduleFromEnd;
                 }
 
-                gantt.config.skip_off_time = true;
-                gantt.config.work_time = true;
+                gantt.config.skip_off_time = true;     // ← Mantener true
+                gantt.config.work_time = false;
 
                 // ── Template de celda (feriados + fines de semana) ────────────
+                // ── Template de celda (feriados + días no laborables SOLO VISUAL) ────────────
                 const hols = settings.holidays || [];
+                const workDaysConfig = settings.workDays || {};
+
+                // Mapear días no laborables según la configuración
+                const nonWorkingDays: number[] = [];
+                if (workDaysConfig) {
+                    const dayMap: Record<string, number> = {
+                        domingo: 0, lunes: 1, martes: 2, miercoles: 3,
+                        jueves: 4, viernes: 5, sabado: 6,
+                    };
+                    Object.entries(workDaysConfig).forEach(([dayName, isWorking]) => {
+                        if (!isWorking) {
+                            nonWorkingDays.push(dayMap[dayName]);
+                        }
+                    });
+                }
+
                 gantt.templates.timeline_cell_class = (_t: any, date: Date) => {
+                    // Validar fecha
+                    if (!date || isNaN(date.getTime())) return '';
+
                     const dStr = date.toLocaleDateString('en-CA');
-                    const esFeriado = hols.some(
-                        (h: any) => h.checked && new Date(h.date).toISOString().split('T')[0] === dStr
-                    );
+
+                    // 1. Verificar si es feriado
+                    const esFeriado = hols.some((h: any) => {
+                        if (!h.checked || !h.date) return false;
+                        try {
+                            const fechaFeriado = new Date(h.date);
+                            if (isNaN(fechaFeriado.getTime())) return false;
+                            return fechaFeriado.toISOString().split('T')[0] === dStr;
+                        } catch (e) {
+                            return false;
+                        }
+                    });
+
                     if (esFeriado) return 'pcl-feriado-cell';
-                    if (!gantt.isWorkTime(date)) return 'pcl-weekend-cell';
+
+                    // 2. Verificar si es día no laborable (según configuración)
+                    const dayOfWeek = date.getDay(); // 0 = domingo, 1 = lunes, etc.
+                    if (nonWorkingDays.includes(dayOfWeek)) {
+                        return 'pcl-weekend-cell';
+                    }
+
                     return '';
                 };
             });
@@ -534,8 +591,8 @@ const CronogramaIndex = ({
         gantt.config.scale_height = 54;
         gantt.config.min_column_width = 30;
         gantt.config.open_tree_initially = true;
-        gantt.config.work_time = false;
-        gantt.config.skip_off_time = true;
+        gantt.config.work_time = false;        // Habilita días laborables personalizados
+        gantt.config.skip_off_time = true;   // NO ignorar días no laborables
         gantt.config.fit_tasks = true;
         gantt.config.auto_scheduling = autoScheduling;
         gantt.config.auto_scheduling_strict = autoScheduling;
@@ -550,6 +607,9 @@ const CronogramaIndex = ({
         gantt.config.branch_loading = false;
         gantt.config.limit_view = autoScheduling;
         gantt.config.correct_work_time = false;
+        gantt.config.grid_resize = true;
+        gantt.config.grid_resize_rows = false;  // No redimensionar filas
+        gantt.config.min_column_width = 30;
         (gantt.config as any).auto_types = true;
         (gantt.config as any).smart_rendering = false;
         (gantt.config as any).static_background = false;
@@ -781,7 +841,7 @@ const CronogramaIndex = ({
             if (gantt.hasChild(task.id)) {
                 return `<span class="monto-flotante-final">${formatSoles(task.cost || 0)}</span>`;
             }
-            return `<span style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
+            return `<span class="gantt-task-label" style="font-size:11px;font-weight:500;color:#fff;">${task.text}</span>`;
         };
 
         // ── Helper para registrar eventos ─────────────────────────────────────
@@ -913,19 +973,18 @@ const CronogramaIndex = ({
         gantt.init(ganttContainer.current);
         ganttInitialized.current = true;
 
+
         // ── Zoom con rueda del mouse ──────────────────────────────────────────
 
         setTimeout(() => {
-            const taskContainer = document.querySelector('.gantt_task') as HTMLElement;
-            if (!taskContainer) return;
-            let zoom = 1;
-            taskContainer.onwheel = (e: WheelEvent) => {
-                e.preventDefault();
-                zoom = Math.min(2, Math.max(0.5, zoom + (e.deltaY < 0 ? 0.1 : -0.1)));
-                taskContainer.style.transform = `scale(${zoom})`;
-                taskContainer.style.transformOrigin = '0 0';
-            };
-        }, 500);
+            gantt.render();
+            if (gantt.config.start_date) {
+                gantt.showDate(gantt.config.start_date);
+            }
+        }, 100);
+
+        adjustView();
+        refreshKPIs();
 
         // ── Cargar datos ──────────────────────────────────────────────────────
         let rawData: { tasks: any[]; links: any[] };
@@ -1320,6 +1379,7 @@ select,select option{color:#1e293b !important;background:white !important}
 .pcl-gantt-wrapper.pcl-modal-open .gantt_marker { display: none !important; }
 ${!showTaskLabels ? `
     .pcl-gantt-wrapper .gantt_task_content { display: none !important; }
+    .pcl-gantt-wrapper .gantt-task-label { display: none !important; }
     .monto-flotante-final { display: none !important; }
 ` : ''}
 `}</style>
