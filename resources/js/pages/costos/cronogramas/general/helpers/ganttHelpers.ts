@@ -24,14 +24,9 @@ export const LINK_TYPE_MAP: Record<string, string> = {
 const MARKER_START_ID = 'marker_project_start';
 const MARKER_END_ID = 'marker_project_end';
 
-/**
- * Elimina y vuelve a crear los marcadores de inicio y límite del proyecto.
- * Centralizar aquí evita duplicados sin importar cuántas veces se llame.
- */
 export function setProjectMarkers(startDate: Date | null, endDate: Date | null): void {
-    // Eliminar siempre los anteriores antes de crear nuevos
-    try { (gantt as any).deleteMarker(MARKER_START_ID); } catch { /* no existía */ }
-    try { (gantt as any).deleteMarker(MARKER_END_ID); } catch { /* no existía */ }
+    try { (gantt as any).deleteMarker(MARKER_START_ID); } catch { }
+    try { (gantt as any).deleteMarker(MARKER_END_ID); } catch { }
 
     if (startDate) {
         (gantt as any).addMarker({
@@ -50,6 +45,26 @@ export function setProjectMarkers(startDate: Date | null, endDate: Date | null):
             text: 'LÍMITE',
         });
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CACHÉ PARA PREDECESORAS (OPTIMIZACIÓN)
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _rownumIndexCache: Map<number, any> | null = null;
+
+function getRownumIndexCached(): Map<number, any> {
+    if (_rownumIndexCache) return _rownumIndexCache;
+    const index = new Map<number, any>();
+    gantt.eachTask((t: any) => {
+        index.set(gantt.getGlobalTaskIndex(t.id) + 1, t);
+    });
+    _rownumIndexCache = index;
+    return index;
+}
+
+function invalidateRownumCache(): void {
+    _rownumIndexCache = null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,43 +91,58 @@ export function updatePredecessorsText(taskId: any): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARSEAR TEXTO DE PREDECESORAS → LINKS
+// PARSEAR TEXTO DE PREDECESORAS → LINKS (VERSIÓN OPTIMIZADA)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function parsePredecessorText(taskId: any, rawText: string): void {
-    gantt.getLinks()
-        .filter((l: any) => String(l.target) === String(taskId))
-        .forEach((l: any) => { try { gantt.deleteLink(l.id); } catch { } });
+    const existingLinks = gantt.getLinks().filter((l: any) => String(l.target) === String(taskId));
+    const newPredecessors: { source: any; type: string }[] = [];
 
-    if (!rawText.trim()) return;
+    if (rawText.trim()) {
+        const index = getRownumIndexCached();
+        const parts = rawText.split(',');
 
-    let targetTask: any;
-    try { targetTask = gantt.getTask(taskId); } catch { return; }
+        for (const part of parts) {
+            const clean = part.trim().toUpperCase();
+            const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
+            if (!match) continue;
 
-    const duration = Number(targetTask.duration) || 1;
+            const targetRownum = parseInt(match[1], 10);
+            const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
+            const sourceTask = index.get(targetRownum);
 
-    // Construir índice rownum → task UNA sola vez
-    const rownumIndex = new Map<number, any>();
-    gantt.eachTask((t: any) => {
-        rownumIndex.set(gantt.getGlobalTaskIndex(t.id) + 1, t);
-    });
+            if (sourceTask && String(sourceTask.id) !== String(taskId)) {
+                newPredecessors.push({ source: sourceTask.id, type });
+            }
+        }
+    }
 
-    rawText.split(',').forEach((part) => {
-        const clean = part.trim().toUpperCase();
-        const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
-        if (!match) return;
+    const existingKeys = new Set(existingLinks.map(l => `${l.source}|${l.type}`));
+    const newKeys = new Set(newPredecessors.map(p => `${p.source}|${p.type}`));
 
-        const targetRownum = parseInt(match[1], 10);
-        const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
-        const sourceTask = rownumIndex.get(targetRownum);
+    const hasChanges = existingKeys.size !== newKeys.size ||
+        [...existingKeys].some(k => !newKeys.has(k));
 
-        if (!sourceTask || String(sourceTask.id) === String(taskId)) return;
+    if (!hasChanges) return;
 
-        gantt.addLink({ id: gantt.uid(), source: sourceTask.id, target: taskId, type });
-        adjustTaskDatesByLinkType(targetTask, sourceTask, type, duration);
-    });
+    for (const link of existingLinks) {
+        const key = `${link.source}|${link.type}`;
+        if (!newKeys.has(key)) {
+            try { gantt.deleteLink(link.id); } catch { }
+        }
+    }
 
-    gantt.render();
+    for (const pred of newPredecessors) {
+        const key = `${pred.source}|${pred.type}`;
+        if (!existingKeys.has(key)) {
+            gantt.addLink({
+                id: gantt.uid(),
+                source: pred.source,
+                target: taskId,
+                type: pred.type,
+            });
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,15 +158,13 @@ export function adjustTaskDatesByLinkType(
     let newStart: Date = new Date(targetTask.start_date);
 
     switch (type) {
-        case '0': // FC: Fin → Inicio
+        case '0':
             newStart = new Date(sourceTask.end_date);
             break;
-
-        case '1': // CC: Inicio → Inicio
+        case '1':
             newStart = new Date(sourceTask.start_date);
             break;
-
-        case '2': { // FF: Fin → Fin
+        case '2': {
             const targetEnd = new Date(sourceTask.end_date);
             newStart = gantt.calculateEndDate({ start_date: targetEnd, duration: -duration, task: targetTask });
             targetTask.start_date = newStart;
@@ -144,8 +172,7 @@ export function adjustTaskDatesByLinkType(
             gantt.updateTask(targetTask.id);
             return;
         }
-
-        case '3': { // CF: Inicio → Fin
+        case '3': {
             const targetEndCF = new Date(sourceTask.start_date);
             newStart = gantt.calculateEndDate({ start_date: targetEndCF, duration: -duration, task: targetTask });
             const projectStart = gantt.config.start_date || sourceTask.start_date;
@@ -157,7 +184,6 @@ export function adjustTaskDatesByLinkType(
         }
     }
 
-    // FC y CC
     targetTask.start_date = newStart;
     targetTask.end_date = gantt.calculateEndDate({ start_date: newStart, duration, task: targetTask });
     gantt.updateTask(targetTask.id);
@@ -173,6 +199,7 @@ export function markCriticalTasks(): void {
         gantt.eachTask((task: any) => { task._critical = false; });
         return;
     }
+
     try {
         if (typeof gantt.isCriticalTask === 'function') {
             gantt.eachTask((task: any) => { task._critical = gantt.isCriticalTask(task); });
@@ -180,7 +207,6 @@ export function markCriticalTasks(): void {
         }
     } catch { /* fallback */ }
 
-    // Fallback: trazar hacia atrás desde la tarea con fin más tardío
     let maxEnd: Date | null = null;
     gantt.eachTask((task: any) => {
         if (!gantt.hasChild(task.id) && task.end_date) {
@@ -192,6 +218,9 @@ export function markCriticalTasks(): void {
     if (!maxEnd) return;
 
     const criticalIds = new Set<any>();
+    // ✅ ARREGLO: usar una variable auxiliar o el operador !
+    const maxEndTime = (maxEnd as Date).getTime();
+
     function traceBack(taskId: any): void {
         if (criticalIds.has(taskId)) return;
         criticalIds.add(taskId);
@@ -202,7 +231,7 @@ export function markCriticalTasks(): void {
 
     gantt.eachTask((task: any) => {
         if (!gantt.hasChild(task.id) && task.end_date) {
-            const diff = Math.abs(new Date(task.end_date).getTime() - (maxEnd as Date).getTime());
+            const diff = Math.abs(new Date(task.end_date).getTime() - maxEndTime);
             if (diff === 0) traceBack(task.id);
         }
     });
@@ -228,7 +257,6 @@ export function updateCountersAndItems(): void {
                     ? `${parentItem}.${String(childIndex).padStart(2, '0')}`
                     : String(childIndex).padStart(2, '0');
             childIndex++;
-            // Sin gantt.updateTask() aquí — lo hace el batchUpdate
             if (gantt.hasChild(t.id)) walk(t.id, t.item);
         });
     }
@@ -236,7 +264,8 @@ export function updateCountersAndItems(): void {
     gantt.batchUpdate(() => {
         walk(0, null);
     });
-    // Solo UN render al final
+
+    invalidateRownumCache();
     gantt.render();
 }
 
@@ -315,7 +344,6 @@ export function applyAutoScheduling(): void {
         if (typeof (gantt as any).autoSchedule === 'function') {
             (gantt as any).autoSchedule();
         } else {
-            // Fallback: recalcular duraciones
             gantt.batchUpdate(() => {
                 gantt.eachTask((task: any) => {
                     if (!gantt.hasChild(task.id) && task.start_date && task.end_date) {
@@ -333,10 +361,6 @@ export function applyAutoScheduling(): void {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODO AUTO vs MANUAL
-//
-// AUTO  → tareas confinadas dentro del rango [inicio, límite]. Vista exacta.
-// MANUAL → tareas pueden pasar el límite. Vista extendida hasta fin del mes
-//           de la fecha límite (o un mes adicional).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function toggleGanttMode(isAuto: boolean): void {
@@ -347,18 +371,15 @@ export function toggleGanttMode(isAuto: boolean): void {
     const limitDate = (window as any).__projectLimitDate as Date | null;
 
     if (isAuto) {
-        // ── Modo AUTO ─────────────────────────────────────────────────────────
         gantt.config.limit_view = true;
         (gantt.config as any).limit_task_move = true;
 
         if (limitDate) {
-            // Vista: exactamente hasta el día límite
             const viewEnd = new Date(limitDate);
             viewEnd.setDate(viewEnd.getDate() + 1);
             gantt.config.end_date = viewEnd;
         }
 
-        // Confinar las tareas que se hayan pasado al volver a AUTO
         gantt.batchUpdate(() => {
             gantt.eachTask((task: any) => {
                 if (!gantt.hasChild(task.id) && enforceProjectBounds(task.id)) {
@@ -372,13 +393,11 @@ export function toggleGanttMode(isAuto: boolean): void {
         }
 
     } else {
-        // ── Modo MANUAL ───────────────────────────────────────────────────────
         gantt.config.limit_view = false;
         (gantt.config as any).limit_task_move = false;
 
         if (limitDate) {
-            // Vista: hasta el último día del mes de la fecha límite
-            const viewEnd = new Date(limitDate.getFullYear(), limitDate.getMonth() + 1, 0); // último día del mes
+            const viewEnd = new Date(limitDate.getFullYear(), limitDate.getMonth() + 1, 0);
             gantt.config.end_date = viewEnd;
         }
     }
