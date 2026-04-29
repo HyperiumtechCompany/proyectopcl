@@ -118,8 +118,8 @@ class CronogramaController extends Controller
                     'owner'         => $t['owner'] ?? null,
                     'parent_id'     => isset($t['parent']) && $t['parent'] != 0 ? (string)$t['parent'] : null,
                     'predecesoras'  => isset($t['predecessors']) && $t['predecessors'] !== ''
-                                        ? json_encode($t['predecessors'])
-                                        : null,
+                    ? $t['predecessors']
+                    : null,
                     'item_order'    => $i,
                     'nivel'         => substr_count($t['item'] ?? '', '.'),
                     'created_at'    => now(),

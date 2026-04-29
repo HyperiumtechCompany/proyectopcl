@@ -22,7 +22,7 @@ export const LINK_TYPE_MAP: Record<string, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MARKER_START_ID = 'marker_project_start';
-const MARKER_END_ID   = 'marker_project_end';
+const MARKER_END_ID = 'marker_project_end';
 
 /**
  * Elimina y vuelve a crear los marcadores de inicio y límite del proyecto.
@@ -31,7 +31,7 @@ const MARKER_END_ID   = 'marker_project_end';
 export function setProjectMarkers(startDate: Date | null, endDate: Date | null): void {
     // Eliminar siempre los anteriores antes de crear nuevos
     try { (gantt as any).deleteMarker(MARKER_START_ID); } catch { /* no existía */ }
-    try { (gantt as any).deleteMarker(MARKER_END_ID); }   catch { /* no existía */ }
+    try { (gantt as any).deleteMarker(MARKER_END_ID); } catch { /* no existía */ }
 
     if (startDate) {
         (gantt as any).addMarker({
@@ -80,7 +80,6 @@ export function updatePredecessorsText(taskId: any): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function parsePredecessorText(taskId: any, rawText: string): void {
-    // Eliminar links existentes hacia esta tarea
     gantt.getLinks()
         .filter((l: any) => String(l.target) === String(taskId))
         .forEach((l: any) => { try { gantt.deleteLink(l.id); } catch { } });
@@ -92,6 +91,12 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
     const duration = Number(targetTask.duration) || 1;
 
+    // Construir índice rownum → task UNA sola vez
+    const rownumIndex = new Map<number, any>();
+    gantt.eachTask((t: any) => {
+        rownumIndex.set(gantt.getGlobalTaskIndex(t.id) + 1, t);
+    });
+
     rawText.split(',').forEach((part) => {
         const clean = part.trim().toUpperCase();
         const match = clean.match(/^(\d+)(FC|CC|FF|CF)?$/);
@@ -99,11 +104,7 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
         const targetRownum = parseInt(match[1], 10);
         const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
-
-        let sourceTask: any = null;
-        gantt.eachTask((t: any) => {
-            if (gantt.getGlobalTaskIndex(t.id) + 1 === targetRownum) sourceTask = t;
-        });
+        const sourceTask = rownumIndex.get(targetRownum);
 
         if (!sourceTask || String(sourceTask.id) === String(taskId)) return;
 
@@ -167,18 +168,17 @@ export function adjustTaskDatesByLinkType(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function markCriticalTasks(): void {
-    if (gantt.getLinks().length === 0) {
+    const links = gantt.getLinks();
+    if (links.length === 0) {
         gantt.eachTask((task: any) => { task._critical = false; });
         return;
     }
-
-    // Usar plugin oficial si está disponible
     try {
         if (typeof gantt.isCriticalTask === 'function') {
             gantt.eachTask((task: any) => { task._critical = gantt.isCriticalTask(task); });
             return;
         }
-    } catch { /* fallback manual */ }
+    } catch { /* fallback */ }
 
     // Fallback: trazar hacia atrás desde la tarea con fin más tardío
     let maxEnd: Date | null = null;
@@ -228,12 +228,15 @@ export function updateCountersAndItems(): void {
                     ? `${parentItem}.${String(childIndex).padStart(2, '0')}`
                     : String(childIndex).padStart(2, '0');
             childIndex++;
-            gantt.updateTask(t.id);
+            // Sin gantt.updateTask() aquí — lo hace el batchUpdate
             if (gantt.hasChild(t.id)) walk(t.id, t.item);
         });
     }
 
-    walk(0, null);
+    gantt.batchUpdate(() => {
+        walk(0, null);
+    });
+    // Solo UN render al final
     gantt.render();
 }
 
@@ -247,8 +250,8 @@ export function getSubtreeDates(taskId: any): { start_date: Date; end_date: Date
     if (!task?.start_date || !task?.end_date) return null;
 
     let earliest = new Date(task.start_date);
-    let latest   = new Date(task.end_date);
-    const seen   = new Set<any>();
+    let latest = new Date(task.end_date);
+    const seen = new Set<any>();
 
     function walk(id: any): void {
         if (seen.has(id)) return;
@@ -260,7 +263,7 @@ export function getSubtreeDates(taskId: any): { start_date: Date; end_date: Date
             const s = new Date(c.start_date);
             const e = new Date(c.end_date);
             if (s < earliest) earliest = s;
-            if (e > latest)   latest   = e;
+            if (e > latest) latest = e;
             if (gantt.hasChild(cid)) walk(cid);
         });
     }
@@ -277,7 +280,7 @@ export function enforceProjectBounds(taskId: any): boolean {
     if (!gantt.config.auto_scheduling) return false;
 
     const projectStart = (window as any).__projectRealStartDate || gantt.config.start_date;
-    const projectEnd   = (window as any).__projectLimitDate || gantt.config.end_date;
+    const projectEnd = (window as any).__projectLimitDate || gantt.config.end_date;
     if (!projectStart || !projectEnd) return false;
 
     let task: any;
@@ -288,7 +291,7 @@ export function enforceProjectBounds(taskId: any): boolean {
 
     if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
         task.start_date = new Date(projectStart);
-        task.end_date   = gantt.calculateEndDate({ start_date: task.start_date, duration: task.duration || 1, task });
+        task.end_date = gantt.calculateEndDate({ start_date: task.start_date, duration: task.duration || 1, task });
         changed = true;
     }
 
@@ -337,11 +340,11 @@ export function applyAutoScheduling(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function toggleGanttMode(isAuto: boolean): void {
-    gantt.config.auto_scheduling        = isAuto;
+    gantt.config.auto_scheduling = isAuto;
     gantt.config.auto_scheduling_strict = isAuto;
 
     const projectStart = (window as any).__projectRealStartDate as Date | null;
-    const limitDate    = (window as any).__projectLimitDate    as Date | null;
+    const limitDate = (window as any).__projectLimitDate as Date | null;
 
     if (isAuto) {
         // ── Modo AUTO ─────────────────────────────────────────────────────────

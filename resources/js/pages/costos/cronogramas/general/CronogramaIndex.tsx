@@ -91,6 +91,7 @@ const CronogramaIndex = ({
     const [projectProgress, setProjectProgress] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [autoScheduling, setAutoScheduling] = useState(true);
+  
 
     const displayName = project_name || `Proyecto ${project}`;
     const [showTaskLabels, setShowTaskLabels] = useState(true);
@@ -303,6 +304,7 @@ const CronogramaIndex = ({
         }
     }, [cronogramaId, project]);
 
+    
     // ─────────────────────────────────────────────────────────────────────────
     // IMPORTAR DESDE PRESUPUESTO
     // ─────────────────────────────────────────────────────────────────────────
@@ -994,6 +996,7 @@ const CronogramaIndex = ({
             gantt.clearAll();
         };
     }, [initialData, partidasBase, refreshKPIs, updateParentCost, updateParentDates]);
+
 
     // ── Modal de predecesoras ─────────────────────────────────────────────────
     useEffect(() => {
