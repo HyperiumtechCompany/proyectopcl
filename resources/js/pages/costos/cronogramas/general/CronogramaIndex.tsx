@@ -134,20 +134,53 @@ const CronogramaIndex = ({
         gantt.getChildren(parent.id).forEach((id: any) => {
             const t: any = gantt.getTask(id);
             if (!t?.start_date || !t?.end_date) return;
+
             const s = new Date(t.start_date);
             const e = new Date(t.end_date);
-            if (!minStart || s < minStart) minStart = s;
-            if (!maxEnd || e > maxEnd) maxEnd = e;
+
+            if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+
+            if (minStart === null || s < minStart) minStart = s;
+            if (maxEnd === null || e > maxEnd) maxEnd = e;
         });
 
-        if (minStart && maxEnd) {
-            const pStart = new Date(parent.start_date).getTime();
-            const pEnd = new Date(parent.end_date).getTime();
-            if (pStart !== (minStart as any).getTime() || pEnd !== (maxEnd as any).getTime()) {
-                parent.start_date = minStart;
-                parent.end_date = maxEnd;
+        // Función auxiliar para obtener timestamp de forma segura
+        const getTimeSafe = (date: Date | null): number | null => {
+            if (date === null) return null;
+            const time = date.getTime();
+            return isNaN(time) ? null : time;
+        };
+
+        const startTime = getTimeSafe(minStart);
+        const endTime = getTimeSafe(maxEnd);
+
+        if (startTime !== null && endTime !== null) {
+            const newDuration = Math.ceil((endTime - startTime) / (1000 * 60 * 60 * 24));
+            const durationValida = (newDuration > 0 && newDuration < 1000) ? newDuration : 5;
+
+            let needsUpdate = false;
+
+            const parentStartTime = parent.start_date ? new Date(parent.start_date).getTime() : null;
+            const parentEndTime = parent.end_date ? new Date(parent.end_date).getTime() : null;
+
+            if (parentStartTime !== startTime) {
+                parent.start_date = new Date(startTime);
+                needsUpdate = true;
+            }
+            if (parentEndTime !== endTime) {
+                parent.end_date = new Date(endTime);
+                needsUpdate = true;
+            }
+            if (parent.duration !== durationValida) {
+                parent.duration = durationValida;
+                needsUpdate = true;
+            }
+
+            if (needsUpdate) {
                 gantt.updateTask(parent.id);
-                updateParentDates(parent.id);
+                if (parent.parent) {
+                    updateParentDates(parent.id);
+                }
             }
         }
     }, []);
@@ -324,7 +357,10 @@ const CronogramaIndex = ({
             partidas.forEach((partida: any) => {
                 const task = {
                     id: gantt.uid(), text: partida.descripcion,
-                    start_date: new Date(), duration: 3, progress: 0,
+                    start_date: new Date(),
+                    end_date: gantt.date.add(new Date(), 5, 'day'), // Fin = inicio + 5 días
+                    duration: 5,  // Duración por defecto 5 días
+                    progress: 0,
                     cost: parseFloat(partida.total) || 0,
                     item: partida.partida, originalItem: partida.partida,
                     unidad: partida.unidad || '', parent: 0, $open: true,
@@ -420,7 +456,7 @@ const CronogramaIndex = ({
                     gantt.config.start_date = viewStart;
                 }
 
-                // ── Fecha límite (calculada desde duración) ───────────────────
+
                 // ── Fecha límite (calculada desde duración) ───────────────────
                 if (settings.projectStart && settings.projectDuration && settings.projectDuration > 0) {
                     // ✅ Asegurar que la duración es un número válido
@@ -472,7 +508,6 @@ const CronogramaIndex = ({
                 gantt.config.work_time = false;
 
                 // ── Template de celda (feriados + fines de semana) ────────────
-                // ── Template de celda (feriados + días no laborables SOLO VISUAL) ────────────
                 const hols = settings.holidays || [];
                 const workDaysConfig = settings.workDays || {};
 
@@ -521,33 +556,36 @@ const CronogramaIndex = ({
             });
 
             // ── Mover tareas hoja al nuevo inicio ─────────────────────────────
+            // ── Mover tareas hoja al nuevo inicio (RESPETANDO DURACIONES RAZONABLES) ──
             if (realStartDate !== null) {
                 gantt.batchUpdate(() => {
                     gantt.eachTask((task: any) => {
                         if (!gantt.hasChild(task.id)) {
+                            // ✅ Validar duración: si es anormal (> 365), resetear a 5
+                            let duracionValida = task.duration;
+                            if (duracionValida > 365 || duracionValida < 1 || isNaN(duracionValida)) {
+                                duracionValida = 5;
+                            }
+
                             task.start_date = new Date(realStartDate as Date);
-                            task.end_date = new Date(realStartDate as Date);
-                            task.end_date.setDate(task.end_date.getDate() + (task.duration || 1));
+                            // Calcular fecha fin sumando días corridos
+                            const endDate = new Date(task.start_date);
+                            endDate.setDate(endDate.getDate() + duracionValida);
+                            task.end_date = endDate;
+                            task.duration = duracionValida;
                             gantt.updateTask(task.id);
                         }
                     });
                 });
+
+                // ✅ Recalcular padres después de mover los hijos
                 gantt.eachTask((task: any) => {
-                    if (gantt.hasChild(task.id)) updateParentDates(task.id);
+                    if (gantt.hasChild(task.id)) {
+                        updateParentDates(task.id);
+                    }
                 });
             }
 
-            // ── Recalcular fin de cada tarea hoja ────────────────────────────
-            gantt.batchUpdate(() => {
-                gantt.eachTask((task: any) => {
-                    if (!gantt.hasChild(task.id) && task.start_date && task.duration) {
-                        try {
-                            task.end_date = gantt.calculateEndDate(task);
-                            gantt.updateTask(task.id);
-                        } catch { /* ok */ }
-                    }
-                });
-            });
 
             // ── Marcadores (centralizados — sin duplicados) ───────────────────
             setProjectMarkers(realStartDate, limitDate);
@@ -740,10 +778,10 @@ const CronogramaIndex = ({
                         }).filter(Boolean);
 
                     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:2px;">
-                        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${labels.join(', ')}</span>
-                        <button onclick="event.stopPropagation();window.__openPredModal(${task.id})"
-                            style="background:#e2e8f0;border:1px solid #94a3b8;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;color:#1e293b;">🔗</button>
-                    </div>`;
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${labels.join(', ')}</span>
+            <button onclick="event.stopPropagation();window.__openPredModal('${task.id}')"
+                style="background:#e2e8f0;border:1px solid #94a3b8;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;color:#1e293b;">🔗</button>
+        </div>`;
                 },
             },
             {
@@ -861,10 +899,7 @@ const CronogramaIndex = ({
         });
 
         on('onAfterTaskUpdate', (id: any, item: any) => {
-            // Forzar re-render para padres con costo
-            if (gantt.hasChild(id) && item.cost) gantt.render();
-
-            // ── Sincronizar predecesoras si el usuario editó la celda ─────────
+            // Solo actualizar predecesoras si cambiaron
             const rawText = String(item.predecessors ?? '').trim();
             const currentLinksText = gantt.getLinks()
                 .filter((l: any) => String(l.target) === String(id))
@@ -874,43 +909,33 @@ const CronogramaIndex = ({
                 }).filter(Boolean).join(', ');
 
             const isInternalUpdate = isUpdatingRef.current || isParsingPredRef.current;
-            const predChanged = !isInternalUpdate && (
-                (rawText !== '' && rawText.toUpperCase() !== currentLinksText.toUpperCase()) ||
-                (rawText === '' && currentLinksText !== '')
-            );
-
+            const predChanged = !isInternalUpdate && rawText !== currentLinksText;
             if (predChanged) {
                 isParsingPredRef.current = true;
                 parsePredecessorText(id, rawText);
-                gantt.refreshData();
+
+                // ✅ Render forzado después de parsear
                 gantt.render();
-                if (typeof (gantt as any).autoSchedule === 'function') (gantt as any).autoSchedule();
-                markCriticalTasks();
+
                 isParsingPredRef.current = false;
             }
 
-            // ── Validar límites (solo AUTO) ───────────────────────────────────
-            if (autoScheduling && enforceProjectBounds(id)) gantt.updateTask(id);
-
-            if (isUpdatingRef.current) return true;
-            isUpdatingRef.current = true;
-            try {
-                const dates = getSubtreeDates(id);
-                if (dates && gantt.hasChild(id)) {
-                    const t = gantt.getTask(id);
-                    t.start_date = dates.start_date;
-                    t.end_date = dates.end_date;
-                }
-                if (item.parent && gantt.isTaskExists(item.parent)) {
+            // Actualizar padres si es necesario (solo si tiene padre)
+            if (item.parent && gantt.isTaskExists(item.parent) && !isUpdatingRef.current) {
+                isUpdatingRef.current = true;
+                try {
                     updateParentCost(id);
                     updateParentDates(id);
+                } finally {
+                    isUpdatingRef.current = false;
                 }
-            } finally {
-                isUpdatingRef.current = false;
-                gantt.render();
-                refreshKPIs();
             }
-            return true;
+
+            // Un SOLO render al final
+            gantt.render();
+
+            // Actualizar KPIs sin bloquear
+            setTimeout(() => refreshKPIs(), 50);
         });
 
         on('onAfterTaskAdd', (id: any) => {
@@ -945,7 +970,6 @@ const CronogramaIndex = ({
             applyAutoScheduling();
             markCriticalTasks();
             if (enforceProjectBounds(link.target)) gantt.updateTask(link.target);
-            gantt.refreshData();
             gantt.render();
         });
 
@@ -997,13 +1021,51 @@ const CronogramaIndex = ({
             rawData = { tasks: [], links: [] };
         }
 
-        gantt.batchUpdate(() => {
-            gantt.parse(rawData);
-            gantt.eachTask((task: any) => {
-                task.$open = true;
-                
+        // Cargar datos de forma PROGRESIVA para no bloquear
+        const tasks = rawData.tasks || [];
+        const links = rawData.links || [];
+
+        if (tasks.length > 50) {
+            // Para muchas tareas, cargar en batches
+            const batchSize = 30;
+            let index = 0;
+
+            function loadBatch() {
+                const batch = tasks.slice(index, index + batchSize);
+                gantt.batchUpdate(() => {
+                    batch.forEach((task: any) => {
+                        gantt.addTask(task);
+                    });
+                });
+                index += batchSize;
+                if (index < tasks.length) {
+                    setTimeout(loadBatch, 50); // Pequeña pausa entre batches
+                } else {
+                    // Cargar links después de todas las tareas
+                    setTimeout(() => {
+                        gantt.batchUpdate(() => {
+                            links.forEach((link: any) => {
+                                gantt.addLink(link);
+                            });
+                        });
+                        gantt.render();
+                        refreshKPIs();
+                    }, 100);
+                }
+            }
+
+            loadBatch();
+        } else {
+            // Pocas tareas, cargar normal
+            gantt.batchUpdate(() => {
+                gantt.parse(rawData);
+                gantt.eachTask((task: any) => {
+                    task.$open = true;
+                });
             });
-        });
+            gantt.render();
+            refreshKPIs();
+        }
 
         if (!gantt.config.start_date || gantt.config.start_date.getFullYear() < 2000) {
             gantt.config.start_date = new Date(2026, 3, 1);
@@ -1219,7 +1281,7 @@ const CronogramaIndex = ({
             </div>
 
             {/* ESTILOS */}
-           
+
         </AppLayout>
     );
 };

@@ -93,13 +93,21 @@ export function updatePredecessorsText(taskId: any): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // PARSEAR TEXTO DE PREDECESORAS → LINKS (VERSIÓN OPTIMIZADA)
 // ─────────────────────────────────────────────────────────────────────────────
-
 export function parsePredecessorText(taskId: any, rawText: string): void {
+    // Obtener la tarea destino
+    const targetTask = gantt.getTask(taskId);
+    if (!targetTask) {
+        console.error('Tarea destino no encontrada:', taskId);
+        return;
+    }
+
+    // Obtener links existentes hacia esta tarea
     const existingLinks = gantt.getLinks().filter((l: any) => String(l.target) === String(taskId));
+
+    // Parsear nuevas predecesoras desde el texto
     const newPredecessors: { source: any; type: string }[] = [];
 
-    if (rawText.trim()) {
-        const index = getRownumIndexCached();
+    if (rawText && rawText.trim()) {
         const parts = rawText.split(',');
 
         for (const part of parts) {
@@ -109,7 +117,14 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
             const targetRownum = parseInt(match[1], 10);
             const type = LINK_TYPE_MAP[match[2] ?? 'FC'] ?? '0';
-            const sourceTask = index.get(targetRownum);
+
+            // Buscar tarea por número de fila
+            let sourceTask: any = null;
+            gantt.eachTask((t: any) => {
+                if (gantt.getGlobalTaskIndex(t.id) + 1 === targetRownum) {
+                    sourceTask = t;
+                }
+            });
 
             if (sourceTask && String(sourceTask.id) !== String(taskId)) {
                 newPredecessors.push({ source: sourceTask.id, type });
@@ -117,6 +132,7 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
         }
     }
 
+    // Comparar cambios
     const existingKeys = new Set(existingLinks.map(l => `${l.source}|${l.type}`));
     const newKeys = new Set(newPredecessors.map(p => `${p.source}|${p.type}`));
 
@@ -125,13 +141,17 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
     if (!hasChanges) return;
 
+    // Eliminar links que ya no existen
     for (const link of existingLinks) {
         const key = `${link.source}|${link.type}`;
         if (!newKeys.has(key)) {
-            try { gantt.deleteLink(link.id); } catch { }
+            try {
+                gantt.deleteLink(link.id);
+            } catch { }
         }
     }
 
+    // Crear nuevos links
     for (const pred of newPredecessors) {
         const key = `${pred.source}|${pred.type}`;
         if (!existingKeys.has(key)) {
@@ -143,50 +163,82 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
             });
         }
     }
+
+    // ✅ AJUSTAR FECHAS según el tipo de relación
+    const duration = Number(targetTask.duration) || 5;
+
+    for (const pred of newPredecessors) {
+        const sourceTask = gantt.getTask(pred.source);
+        if (sourceTask) {
+            adjustTaskDatesByLinkType(targetTask, sourceTask, pred.type, duration);
+        }
+    }
+
+    // ✅ Actualizar la tarea y renderizar
+    gantt.updateTask(taskId);
+    gantt.render();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTAR FECHAS POR TIPO DE LINK
 // ─────────────────────────────────────────────────────────────────────────────
-
 export function adjustTaskDatesByLinkType(
     targetTask: any,
     sourceTask: any,
     type: string,
     duration: number,
 ): void {
-    let newStart: Date = new Date(targetTask.start_date);
+    if (!targetTask || !sourceTask) return;
+
+    let newStart: Date;
+    let newEnd: Date;
 
     switch (type) {
-        case '0':
+        case '0': // FC: Fin → Inicio (empieza cuando termina la predecesora)
             newStart = new Date(sourceTask.end_date);
+            newEnd = new Date(newStart);
+            newEnd.setDate(newStart.getDate() + duration);
             break;
-        case '1':
+
+        case '1': // CC: Inicio → Inicio (empieza cuando empieza la predecesora)
             newStart = new Date(sourceTask.start_date);
+            newEnd = new Date(newStart);
+            newEnd.setDate(newStart.getDate() + duration);
             break;
-        case '2': {
-            const targetEnd = new Date(sourceTask.end_date);
-            newStart = gantt.calculateEndDate({ start_date: targetEnd, duration: -duration, task: targetTask });
-            targetTask.start_date = newStart;
-            targetTask.end_date = targetEnd;
-            gantt.updateTask(targetTask.id);
-            return;
+
+        case '2': { // FF: Fin → Fin (termina cuando termina la predecesora)
+            newEnd = new Date(sourceTask.end_date);
+            newStart = new Date(newEnd);
+            newStart.setDate(newEnd.getDate() - duration);
+            break;
         }
-        case '3': {
-            const targetEndCF = new Date(sourceTask.start_date);
-            newStart = gantt.calculateEndDate({ start_date: targetEndCF, duration: -duration, task: targetTask });
-            const projectStart = gantt.config.start_date || sourceTask.start_date;
-            if (newStart < projectStart) newStart = new Date(projectStart);
-            targetTask.start_date = newStart;
-            targetTask.end_date = gantt.calculateEndDate({ start_date: newStart, duration, task: targetTask });
-            gantt.updateTask(targetTask.id);
-            return;
+
+        case '3': { // CF: Inicio → Fin (termina cuando empieza la predecesora)
+            newEnd = new Date(sourceTask.start_date);
+            newStart = new Date(newEnd);
+            newStart.setDate(newEnd.getDate() - duration);
+            break;
         }
+
+        default:
+            return;
     }
 
+    // Validar fechas
+    if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) {
+        console.warn('Fecha inválida calculada');
+        return;
+    }
+
+    // ✅ Guardar los cambios
     targetTask.start_date = newStart;
-    targetTask.end_date = gantt.calculateEndDate({ start_date: newStart, duration, task: targetTask });
+    targetTask.end_date = newEnd;
+    targetTask.duration = duration;
+
     gantt.updateTask(targetTask.id);
+
+    // ✅ Forzar render para ver el cambio inmediatamente
+    gantt.render();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,29 +296,30 @@ export function markCriticalTasks(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function updateCountersAndItems(): void {
-    let counter = 1;
+    // Usar requestIdleCallback para no bloquear la UI
+    if ((window as any).__counterUpdateTimeout) return;
 
-    function walk(parentId: any, parentItem: string | null): void {
-        let childIndex = 1;
-        gantt.getChildren(parentId).forEach((id: any) => {
-            const t: any = gantt.getTask(id);
-            t.counter = counter++;
-            t.item = t.originalItem
-                ? t.originalItem
-                : parentItem
-                    ? `${parentItem}.${String(childIndex).padStart(2, '0')}`
-                    : String(childIndex).padStart(2, '0');
-            childIndex++;
-            if (gantt.hasChild(t.id)) walk(t.id, t.item);
-        });
-    }
+    (window as any).__counterUpdateTimeout = setTimeout(() => {
+        let counter = 1;
 
-    gantt.batchUpdate(() => {
+        function walk(parentId: any, parentItem: string | null): void {
+            let childIndex = 1;
+            gantt.getChildren(parentId).forEach((id: any) => {
+                const t: any = gantt.getTask(id);
+                t.counter = counter++;
+                t.item = t.originalItem
+                    ? t.originalItem
+                    : parentItem
+                        ? `${parentItem}.${String(childIndex).padStart(2, '0')}`
+                        : String(childIndex).padStart(2, '0');
+                childIndex++;
+                if (gantt.hasChild(t.id)) walk(t.id, t.item);
+            });
+        }
+
         walk(0, null);
-    });
-
-    invalidateRownumCache();
-    gantt.render();
+        (window as any).__counterUpdateTimeout = null;
+    }, 100);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,15 +371,24 @@ export function enforceProjectBounds(taskId: any): boolean {
 
     let changed = false;
 
+    // Validar inicio (no puede ser antes del inicio del proyecto)
     if (task.start_date && new Date(task.start_date) < new Date(projectStart)) {
         task.start_date = new Date(projectStart);
-        task.end_date = gantt.calculateEndDate({ start_date: task.start_date, duration: task.duration || 1, task });
+        // Recalcular end_date basado en la duración actual
+        const duracion = task.duration || 1;
+        const newEndDate = new Date(task.start_date);
+        newEndDate.setDate(newEndDate.getDate() + duracion);
+        task.end_date = newEndDate;
         changed = true;
     }
 
+    // Validar fin (no puede ser después del fin del proyecto)
     if (task.end_date && new Date(task.end_date) > new Date(projectEnd)) {
         task.end_date = new Date(projectEnd);
-        const newDuration = gantt.calculateDuration({ start_date: task.start_date, end_date: task.end_date, task });
+        // Recalcular duración basado en las fechas
+        const startTime = new Date(task.start_date).getTime();
+        const endTime = new Date(task.end_date).getTime();
+        const newDuration = Math.ceil((endTime - startTime) / (1000 * 60 * 60 * 24));
         if (newDuration > 0) task.duration = newDuration;
         changed = true;
     }

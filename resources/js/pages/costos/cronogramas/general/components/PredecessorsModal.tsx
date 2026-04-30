@@ -88,29 +88,28 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
 
             const duration = Number(targetTask.duration) || 1;
 
-            // Ajustar fechas usando la función centralizada del helper
-            // (antes se hacía con date.add que ignora fines de semana)
+            // Ajustar fechas (esta función ya hace gantt.updateTask internamente)
             adjustTaskDatesByLinkType(targetTask, sourceTask, type, duration);
-            gantt.updateTask(taskId);
 
             // Crear el link
-            gantt.addLink({
+            const newLinkId = gantt.addLink({
                 id: gantt.uid(),
                 source: sourceId,
                 target: taskId,
                 type,
             });
 
-            // Propagar el cambio a tareas que dependan de esta
+            // Propagar cambios
             if (typeof (gantt as any).autoSchedule === 'function') {
                 (gantt as any).autoSchedule();
             }
 
-            // Actualizar la columna de predecesoras en el grid
-            // usando número de fila (formato unificado con el parser)
+            // Actualizar la columna de predecesoras
             updatePredecessorsText(taskId);
 
             gantt.render();
+
+            console.log('Predecesora agregada:', { sourceId, targetId: taskId, type });
         } catch (e) {
             console.error('[predAdd]', e);
         }
@@ -153,7 +152,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
             // Recalcular fechas con el nuevo tipo de relación
             const sourceTask = gantt.getTask(link.source);
             const targetTask = gantt.getTask(link.target);
-            const duration   = Number(targetTask.duration) || 1;
+            const duration = Number(targetTask.duration) || 1;
 
             adjustTaskDatesByLinkType(targetTask, sourceTask, newType, duration);
             gantt.updateTask(link.target);
@@ -227,15 +226,14 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                         const existingLink = links.find(
                             (l) => String(l.source) === String(t.id)
                         );
-                        const added    = !!existingLink;
+                        const added = !!existingLink;
                         const tempType = tempSelections[String(t.id)] ?? '';
 
                         return (
                             <div
                                 key={t.id}
-                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${
-                                    added ? 'bg-emerald-50' : 'hover:bg-gray-50'
-                                }`}
+                                className={`flex items-center gap-3 px-5 py-3 transition-colors ${added ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                                    }`}
                             >
                                 {/* Número de fila + nombre */}
                                 <span className="text-sm text-gray-800 flex-1 min-w-0 truncate flex items-center gap-2">
@@ -280,11 +278,10 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                                         }
                                     }}
                                     disabled={!added && !tempType}
-                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
-                                        added
+                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold text-white transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${added
                                             ? 'bg-red-500 hover:bg-red-600'
                                             : 'bg-emerald-500 hover:bg-emerald-600'
-                                    }`}
+                                        }`}
                                 >
                                     {added ? 'Quitar' : 'Agregar'}
                                 </button>
