@@ -1,5 +1,14 @@
 /.phpunit.cache
 /bootstrap/ssr
+/.kiro
+/.agents
+/.codex
+/.cursor
+/.gemini
+/.github
+/AGENTS.md
+/GEMINI.md
+/dialux-core
 /node_modules
 /public/build
 /public/hot

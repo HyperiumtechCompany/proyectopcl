@@ -3,9 +3,7 @@
 namespace App\Events;
 
 use App\Models\MetradoComunicacionSpreadsheet;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -36,10 +34,10 @@ class ComunicacionSpreadsheetUpdated implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'sheet_data'       => $this->spreadsheet->sheet_data,
-            'updated_by'       => $this->updatedBy,
-            'updated_by_name'  => $this->updatedByName,
-            'updated_at'       => now()->toIso8601String(),
+            'sheet_data' => $this->spreadsheet->sheet_data,
+            'updated_by' => $this->updatedBy,
+            'updated_by_name' => $this->updatedByName,
+            'updated_at' => now()->toIso8601String(),
         ];
     }
 }

@@ -20,10 +20,10 @@ trait HandleMetradoSpreadsheet
         $rows = $request->input('rows', []);
         $connection = DB::connection('costos_tenant');
         $presupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($costoProject->database_name);
-        
+
         // Get available columns to avoid "column not found" errors
         $columns = $connection->getSchemaBuilder()->getColumnListing($table);
-        $hasColumn = fn($col) => in_array($col, $columns);
+        $hasColumn = fn ($col) => in_array($col, $columns);
 
         $connection->beginTransaction();
         try {
@@ -31,7 +31,7 @@ trait HandleMetradoSpreadsheet
             $existingIds = $connection->table($table)
                 ->where($scope)
                 ->pluck('id')
-                ->map(fn($id) => (int) $id)
+                ->map(fn ($id) => (int) $id)
                 ->all();
             $touchedIds = [];
 
@@ -46,6 +46,7 @@ trait HandleMetradoSpreadsheet
                         ->update($data + ['updated_at' => now()]);
 
                     $touchedIds[] = $rowId;
+
                     continue;
                 }
 
@@ -59,6 +60,7 @@ trait HandleMetradoSpreadsheet
                         ->where('id', $existingByIndex->id)
                         ->update($data + ['updated_at' => now()]);
                     $touchedIds[] = $existingByIndex->id;
+
                     continue;
                 }
 
@@ -69,7 +71,7 @@ trait HandleMetradoSpreadsheet
             }
 
             $deleteQuery = $connection->table($table)->where($scope);
-            if (!empty($touchedIds)) {
+            if (! empty($touchedIds)) {
                 $deleteQuery->whereNotIn('id', $touchedIds);
             }
             $deleteQuery->delete();
@@ -78,14 +80,15 @@ trait HandleMetradoSpreadsheet
 
             return response()->json([
                 'success' => true,
-                'count'   => count($rows),
-                'rows'    => $this->queryRows($costoProject, $table),
+                'count' => count($rows),
+                'rows' => $this->queryRows($costoProject, $table),
             ]);
         } catch (\Exception $e) {
             $connection->rollBack();
+
             return response()->json([
                 'success' => false,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -114,13 +117,25 @@ trait HandleMetradoSpreadsheet
             'item_order' => $index,
         ];
 
-        if ($hasColumn('node_type'))   $data['node_type']   = $row['node_type'] ?? 'partida';
-        if ($hasColumn('titulo'))      $data['titulo']      = $row['titulo'] ?? null;
-        if ($hasColumn('partida'))     $data['partida']     = $row['partida'] ?? ($row['item'] ?? null);
-        if ($hasColumn('item'))        $data['item']        = $row['partida'] ?? ($row['item'] ?? null);
-        if ($hasColumn('descripcion')) $data['descripcion'] = $row['descripcion'] ?? null;
+        if ($hasColumn('node_type')) {
+            $data['node_type'] = $row['node_type'] ?? 'partida';
+        }
+        if ($hasColumn('titulo')) {
+            $data['titulo'] = $row['titulo'] ?? null;
+        }
+        if ($hasColumn('partida')) {
+            $data['partida'] = $row['partida'] ?? ($row['item'] ?? null);
+        }
+        if ($hasColumn('item')) {
+            $data['item'] = $row['partida'] ?? ($row['item'] ?? null);
+        }
+        if ($hasColumn('descripcion')) {
+            $data['descripcion'] = $row['descripcion'] ?? null;
+        }
 
-        if ($hasColumn('unidad'))      $data['unidad']      = $row['unidad'] ?? ($row['und'] ?? null);
+        if ($hasColumn('unidad')) {
+            $data['unidad'] = $row['unidad'] ?? ($row['und'] ?? null);
+        }
         if ($hasColumn('und')) {
             if (str_contains($table, 'resumen')) {
                 $data['und'] = $row['unidad'] ?? ($row['und'] ?? null);
@@ -131,25 +146,45 @@ trait HandleMetradoSpreadsheet
 
         $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
         foreach ($decimalFields as $field) {
-            if (!$hasColumn($field)) {
+            if (! $hasColumn($field)) {
                 continue;
             }
 
             $val = $row[$field] ?? 0;
-            if ($field === 'elsim' && !isset($row['elsim'])) $val = $row['elem_simil'] ?? 0;
-            if ($field === 'lon'   && !isset($row['lon']))   $val = $row['long'] ?? 0;
-            if ($field === 'total' && !isset($row['total'])) $val = $row['parcial'] ?? 0;
+            if ($field === 'elsim' && ! isset($row['elsim'])) {
+                $val = $row['elem_simil'] ?? 0;
+            }
+            if ($field === 'lon' && ! isset($row['lon'])) {
+                $val = $row['long'] ?? 0;
+            }
+            if ($field === 'total' && ! isset($row['total'])) {
+                $val = $row['parcial'] ?? 0;
+            }
 
             $data[$field] = $this->toDecimalValue($val);
         }
 
-        if ($hasColumn('observacion')) $data['observacion'] = $row['observacion'] ?? ($row['obs'] ?? null);
-        if ($hasColumn('nivel'))       $data['nivel']       = $row['nivel'] ?? ($row['_level'] ?? 0);
-        if ($hasColumn('parent_id'))   $data['parent_id']   = $row['parent_id'] ?? null;
-        if ($hasColumn('_formula_key'))    $data['_formula_key'] = $row['_formula_key'] ?? null;
-        if ($hasColumn('_formula_output')) $data['_formula_output'] = $row['_formula_output'] ?? null;
-        if ($hasColumn('_formula_expr'))   $data['_formula_expr'] = $row['_formula_expr'] ?? null;
-        if ($hasColumn('_formula_label'))  $data['_formula_label'] = $row['_formula_label'] ?? null;
+        if ($hasColumn('observacion')) {
+            $data['observacion'] = $row['observacion'] ?? ($row['obs'] ?? null);
+        }
+        if ($hasColumn('nivel')) {
+            $data['nivel'] = $row['nivel'] ?? ($row['_level'] ?? 0);
+        }
+        if ($hasColumn('parent_id')) {
+            $data['parent_id'] = $row['parent_id'] ?? null;
+        }
+        if ($hasColumn('_formula_key')) {
+            $data['_formula_key'] = $row['_formula_key'] ?? null;
+        }
+        if ($hasColumn('_formula_output')) {
+            $data['_formula_output'] = $row['_formula_output'] ?? null;
+        }
+        if ($hasColumn('_formula_expr')) {
+            $data['_formula_expr'] = $row['_formula_expr'] ?? null;
+        }
+        if ($hasColumn('_formula_label')) {
+            $data['_formula_label'] = $row['_formula_label'] ?? null;
+        }
 
         return $data;
     }
@@ -162,7 +197,30 @@ trait HandleMetradoSpreadsheet
             ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
             ->get()
+<<<<<<< Updated upstream
             ->map(fn($r) => (array)$r)
+=======
+            ->map(function ($r) {
+                $row = (array) $r;
+
+                if (! array_key_exists('_dbid', $row) && array_key_exists('id', $row)) {
+                    $row['_dbid'] = $row['id'];
+                }
+
+                if (! array_key_exists('_level', $row) && array_key_exists('nivel', $row)) {
+                    $row['_level'] = $row['nivel'];
+                }
+
+                if (! array_key_exists('_kind', $row) && array_key_exists('node_type', $row)) {
+                    $nodeType = strtolower(trim((string) $row['node_type']));
+                    $row['_kind'] = in_array($nodeType, ['titulo', 'subtitulo', 'group'], true)
+                        ? 'group'
+                        : 'leaf';
+                }
+
+                return $row;
+            })
+>>>>>>> Stashed changes
             ->toArray();
     }
 
@@ -179,7 +237,7 @@ trait HandleMetradoSpreadsheet
             ->where('module_type', $moduleType)
             ->exists();
 
-        if (!$enabled) {
+        if (! $enabled) {
             abort(403, "El módulo {$moduleType} no está habilitado.");
         }
     }

@@ -15,8 +15,11 @@ class PresupuestoControllerTest extends TestCase
     use RefreshDatabase;
 
     protected CostoDatabaseService $dbService;
+
     protected User $user;
+
     protected CostoProject $project;
+
     protected string $testDbName;
 
     protected function setUp(): void
@@ -308,7 +311,7 @@ class PresupuestoControllerTest extends TestCase
 
         // Create metrado_arquitectura table
         $this->dbService->setTenantConnection($this->testDbName);
-        DB::connection('costos_tenant')->statement("
+        DB::connection('costos_tenant')->statement('
             CREATE TABLE IF NOT EXISTS metrado_arquitectura (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 item_order INT DEFAULT 0,
@@ -319,7 +322,7 @@ class PresupuestoControllerTest extends TestCase
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
-        ");
+        ');
 
         // Insert test metrado data
         DB::connection('costos_tenant')->table('metrado_arquitectura')->insert([
@@ -381,7 +384,7 @@ class PresupuestoControllerTest extends TestCase
 
         // Create metrado_estructura table
         $this->dbService->setTenantConnection($this->testDbName);
-        DB::connection('costos_tenant')->statement("
+        DB::connection('costos_tenant')->statement('
             CREATE TABLE IF NOT EXISTS metrado_estructura (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 item_order INT DEFAULT 0,
@@ -392,7 +395,7 @@ class PresupuestoControllerTest extends TestCase
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
-        ");
+        ');
 
         // Insert existing partida in presupuesto_general with price
         DB::connection('costos_tenant')->table('presupuesto_general')->insert([
@@ -492,7 +495,7 @@ class PresupuestoControllerTest extends TestCase
 
         // Create metrado_electricas table
         $this->dbService->setTenantConnection($this->testDbName);
-        DB::connection('costos_tenant')->statement("
+        DB::connection('costos_tenant')->statement('
             CREATE TABLE IF NOT EXISTS metrado_electricas (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 item_order INT DEFAULT 0,
@@ -503,7 +506,7 @@ class PresupuestoControllerTest extends TestCase
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
-        ");
+        ');
 
         // Insert metrado data with some empty partidas
         DB::connection('costos_tenant')->table('metrado_electricas')->insert([

@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves, PanelsLeftBottomIcon } from 'lucide-react';
+import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -66,6 +66,11 @@ export function AppSidebar() {
             title: 'Costos',
             href: '/costos',
             icon: PanelsLeftBottomIcon,
+        },
+        {
+            title: 'DIAlux',
+            href: '/dialux',
+            icon: Lightbulb,
         },
     ];
 

@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -25,8 +25,8 @@ class SpattPararrayoSpreadsheet extends Model
     ];
 
     protected $casts = [
-        'pozo_data'        => 'array',
-        'pararrayo_data'   => 'array',
+        'pozo_data' => 'array',
+        'pararrayo_data' => 'array',
         'is_collaborative' => 'boolean',
     ];
 
@@ -50,12 +50,14 @@ class SpattPararrayoSpreadsheet extends Model
     public function scopeForUser($query, int $userId)
     {
         return $query->where('user_id', $userId)
-            ->orWhereHas('collaborators', fn($q) => $q->where('users.id', $userId));
+            ->orWhereHas('collaborators', fn ($q) => $q->where('users.id', $userId));
     }
 
     public function canEdit(User $user): bool
     {
-        if ($this->user_id === $user->id) return true;
+        if ($this->user_id === $user->id) {
+            return true;
+        }
 
         $pivot = $this->collaboratorPivots()
             ->where('user_id', $user->id)
@@ -64,7 +66,6 @@ class SpattPararrayoSpreadsheet extends Model
         return $pivot && $pivot->role === 'editor';
     }
 
-    
     public static function generateCollabCode(): string
     {
         do {

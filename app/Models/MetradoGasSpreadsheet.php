@@ -44,8 +44,8 @@ class MetradoGasSpreadsheet extends Model
     public function collaborators()
     {
         return $this->belongsToMany(User::class, 'metrado_gas_collaborators')
-                    ->withPivot('role', 'joined_at')
-                    ->withTimestamps();
+            ->withPivot('role', 'joined_at')
+            ->withTimestamps();
     }
 
     // Scope para obtener hojas a las que el usuario tiene acceso (propias o colaboraciones)
@@ -92,9 +92,9 @@ class MetradoGasSpreadsheet extends Model
     public function getSummaryAttribute(): array
     {
         $data = $this->sheet_data;
-        
+
         // Si no hay datos, retornar ceros
-        if (!is_array($data) || empty($data)) {
+        if (! is_array($data) || empty($data)) {
             return [
                 'pipes' => 0,
                 'fittings' => 0,
@@ -104,14 +104,14 @@ class MetradoGasSpreadsheet extends Model
                 'meters' => 0,
             ];
         }
-        
+
         $pipes = 0;
         $fittings = 0;
         $valves = 0;
         $equipment = 0;
         $pressure_regulators = 0;
         $meters = 0;
-        
+
         // Recorrer filas de datos (saltar headers: fila 0)
         // Formato: [ITEM, DESCRIPCION, UNID, ELEM, DIAM, LARGO, N_VECES, PERDIDA, PRESION, CAUDAL, VELOCIDAD, LONGITUD, ACCESORIOS, VALVULAS, TOTAL]
         foreach (array_slice($data, 1) as $row) {
@@ -122,32 +122,32 @@ class MetradoGasSpreadsheet extends Model
             $accesorios = floatval($row[12] ?? 0);           // Columna ACCESORIOS (índice 12)
             $valvulas = floatval($row[13] ?? 0);             // Columna VALVULAS (índice 13)
             $total = floatval($row[14] ?? 0);                // Columna TOTAL (índice 14)
-            
+
             // Sumar longitudes de tuberías (unidad ml o m)
             if ($unidad === 'ml' || $unidad === 'm') {
                 $pipes += $longitud > 0 ? $longitud : $total;
             }
-            
+
             // Sumar accesorios (codos, tes, reducciones)
             if ($accesorios > 0) {
                 $fittings += $accesorios;
-            } elseif ($unidad === 'und' && 
-                     (str_contains($descripcion, 'codo') || 
-                      str_contains($descripcion, 'te') || 
+            } elseif ($unidad === 'und' &&
+                     (str_contains($descripcion, 'codo') ||
+                      str_contains($descripcion, 'te') ||
                       str_contains($descripcion, 'reduccion') ||
                       str_contains($descripcion, 'union'))) {
                 $fittings += $elem;
             }
-            
+
             // Sumar válvulas
             if ($valvulas > 0) {
                 $valves += $valvulas;
             } elseif ($unidad === 'und' && str_contains($descripcion, 'valvula')) {
                 $valves += $elem;
             }
-            
+
             // Sumar equipos
-            if ($unidad === 'und' && 
+            if ($unidad === 'und' &&
                 (str_contains($descripcion, 'calentador') ||
                  str_contains($descripcion, 'caldera') ||
                  str_contains($descripcion, 'cocina') ||
@@ -156,18 +156,18 @@ class MetradoGasSpreadsheet extends Model
                  str_contains($descripcion, 'quemador'))) {
                 $equipment += $elem;
             }
-            
+
             // Sumar reguladores de presión
             if ($unidad === 'und' && str_contains($descripcion, 'regulador')) {
                 $pressure_regulators += $elem;
             }
-            
+
             // Sumar medidores
             if ($unidad === 'und' && str_contains($descripcion, 'medidor')) {
                 $meters += $elem;
             }
         }
-        
+
         return [
             'pipes' => round($pipes, 1),
             'fittings' => round($fittings, 0),
@@ -177,4 +177,4 @@ class MetradoGasSpreadsheet extends Model
             'meters' => round($meters, 0),
         ];
     }
-}   
+}

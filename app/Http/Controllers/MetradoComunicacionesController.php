@@ -3,17 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
+use App\Traits\HandleMetradoSpreadsheet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Traits\HandleMetradoSpreadsheet;
 
 class MetradoComunicacionesController extends Controller
 {
     use HandleMetradoSpreadsheet;
 
     private const TABLE_METRADO = 'metrado_comunicaciones';
+
     private const TABLE_RESUMEN = 'metrado_comunicaciones_resumen';
 
     public function index(CostoProject $costoProject): Response
@@ -23,7 +24,7 @@ class MetradoComunicacionesController extends Controller
 
         return Inertia::render('costos/metrados/ComunicacionesIndex', [
             'project' => [
-                'id'     => $costoProject->id,
+                'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,
             ],
             'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
@@ -35,6 +36,7 @@ class MetradoComunicacionesController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_comunicaciones');
+
         return $this->updateSheet($costoProject, self::TABLE_METRADO, $request);
     }
 
@@ -42,6 +44,7 @@ class MetradoComunicacionesController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_comunicaciones');
+
         return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
@@ -49,7 +52,7 @@ class MetradoComunicacionesController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_comunicaciones');
-        
+
         return response()->json([
             'success' => true,
             'message' => 'Sincronización completada (backend stub)',

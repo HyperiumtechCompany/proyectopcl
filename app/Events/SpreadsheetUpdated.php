@@ -3,9 +3,7 @@
 namespace App\Events;
 
 use App\Models\CaidaTensionSpreadsheet;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -45,12 +43,12 @@ class SpreadsheetUpdated implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'td_data'          => $this->spreadsheet->td_data,
-            'tg_data'          => $this->spreadsheet->tg_data,
-            'selection_data'   => $this->spreadsheet->selection_data,
-            'updated_by'       => $this->updatedBy,
-            'updated_by_name'  => $this->updatedByName,
-            'updated_at'       => now()->toIso8601String(),
+            'td_data' => $this->spreadsheet->td_data,
+            'tg_data' => $this->spreadsheet->tg_data,
+            'selection_data' => $this->spreadsheet->selection_data,
+            'updated_by' => $this->updatedBy,
+            'updated_by_name' => $this->updatedByName,
+            'updated_at' => now()->toIso8601String(),
         ];
     }
 }

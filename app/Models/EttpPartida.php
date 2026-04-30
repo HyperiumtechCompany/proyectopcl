@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 class EttpPartida extends Model
 {
     protected $connection = 'costos_tenant';
+
     protected $table = 'ettp_partidas';
 
     protected $fillable = [
@@ -35,7 +36,7 @@ class EttpPartida extends Model
 
     protected $casts = [
         'huerfano' => 'boolean',
-        'nivel'    => 'integer',
+        'nivel' => 'integer',
         'item_order' => 'integer',
     ];
 
@@ -46,7 +47,10 @@ class EttpPartida extends Model
      */
     public function getPresupuestoAttribute()
     {
-        if (!$this->presupuesto_id) return null;
+        if (! $this->presupuesto_id) {
+            return null;
+        }
+
         return DB::connection('costos_tenant')
             ->table('presupuestos')
             ->where('id', $this->presupuesto_id)

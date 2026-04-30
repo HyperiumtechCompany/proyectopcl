@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\File;
 class ImportUbigeo extends Command
 {
     protected $signature = 'ubigeo:import';
+
     protected $description = 'Download and generate ubigeo.json for Peru';
 
     public function handle(): int
@@ -16,8 +17,9 @@ class ImportUbigeo extends Command
         $this->info('Downloading ubigeo data...');
 
         $json = @file_get_contents($url);
-        if (!$json) {
+        if (! $json) {
             $this->error('Could not download. Create database/data/ubigeo.json manually.');
+
             return 1;
         }
 
@@ -48,9 +50,10 @@ class ImportUbigeo extends Command
 
         $dir = database_path('data');
         File::ensureDirectoryExists($dir);
-        File::put($dir . '/ubigeo.json', json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        File::put($dir.'/ubigeo.json', json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-        $this->info('Saved to database/data/ubigeo.json (' . count($result) . ' departamentos)');
+        $this->info('Saved to database/data/ubigeo.json ('.count($result).' departamentos)');
+
         return 0;
     }
 }

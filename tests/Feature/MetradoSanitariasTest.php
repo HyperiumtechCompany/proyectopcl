@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\CostoProject;
 use App\Models\User;
 use App\Services\CostoDatabaseService;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithoutMiddleware;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -15,25 +15,27 @@ class MetradoSanitariasTest extends TestCase
     use RefreshDatabase;
 
     private CostoDatabaseService $dbService;
+
     private User $user;
+
     private CostoProject $project;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->withoutMiddleware([
-            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            ValidateCsrfToken::class,
         ]);
 
         $this->dbService = app(CostoDatabaseService::class);
         $this->user = User::factory()->create();
-        
+
         // Create project in main DB
         $this->project = CostoProject::create([
             'user_id' => $this->user->id,
             'nombre' => 'Test Project Sanitarias',
-            'database_name' => 'costos_test_sanitarias_' . time(),
+            'database_name' => 'costos_test_sanitarias_'.time(),
         ]);
 
         // Enable module
@@ -45,10 +47,10 @@ class MetradoSanitariasTest extends TestCase
 
         // Create tenant DB and run migrations
         $this->dbService->createDatabase($this->project);
-        
+
         // Ensure connection is set for the test session
         $this->dbService->setTenantConnection($this->project->database_name);
-        
+
         // Initialize config
         DB::connection('costos_tenant')->table('metrado_sanitarias_config')->insert([
             'cantidad_modulos' => 2,
@@ -110,13 +112,13 @@ class MetradoSanitariasTest extends TestCase
                 'unidad' => 'm',
                 'total' => 45.0,
                 'nivel' => 1,
-            ]
+            ],
         ];
 
         $response = $this->actingAs($this->user)
             ->patch("/costos/{$this->project->id}/metrado-sanitarias/modulo/1", [
                 'rows' => $rows,
-                'modulo_nombre' => 'Modulo de Prueba 1'
+                'modulo_nombre' => 'Modulo de Prueba 1',
             ]);
 
         $response->assertStatus(200)
@@ -139,12 +141,12 @@ class MetradoSanitariasTest extends TestCase
                 'partida' => 'EXT.01',
                 'descripcion' => 'Red exterior agua',
                 'total' => 100.0,
-            ]
+            ],
         ];
 
         $response = $this->actingAs($this->user)
             ->patch("/costos/{$this->project->id}/metrado-sanitarias/exterior", [
-                'rows' => $rows
+                'rows' => $rows,
             ]);
 
         $response->assertStatus(200)
@@ -164,18 +166,18 @@ class MetradoSanitariasTest extends TestCase
                 'total_exterior' => 100,
                 'total_cisterna' => 50,
                 'total_general' => 650,
-            ]
+            ],
         ];
 
         $response = $this->actingAs($this->user)
             ->patch("/costos/{$this->project->id}/metrado-sanitarias/resumen", [
-                'rows' => $rows
+                'rows' => $rows,
             ]);
 
         $response->assertStatus(200);
 
         $this->dbService->setTenantConnection($this->project->database_name);
         $resumen = DB::connection('costos_tenant')->table('metrado_sanitarias_resumen')->first();
-        $this->assertEquals(650, (float)$resumen->total_general);
+        $this->assertEquals(650, (float) $resumen->total_general);
     }
 }

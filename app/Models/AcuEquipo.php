@@ -11,6 +11,7 @@ class AcuEquipo extends Model
     use HasFactory;
 
     protected $connection = 'costos_tenant';
+
     protected $table = 'acu_equipos';
 
     protected $fillable = [
@@ -28,10 +29,10 @@ class AcuEquipo extends Model
     protected function casts(): array
     {
         return [
-            'cantidad'    => 'decimal:4',
-            'recursos'    => 'decimal:4',
+            'cantidad' => 'decimal:4',
+            'recursos' => 'decimal:4',
             'precio_hora' => 'decimal:4',
-            'parcial'     => 'decimal:4',
+            'parcial' => 'decimal:4',
         ];
     }
 

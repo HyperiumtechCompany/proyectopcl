@@ -19,16 +19,16 @@ class SetCostosDatabase
     public function handle(Request $request, Closure $next): Response
     {
         // Búsqueda flexible de ID de proyecto o instancia
-        $project = $request->route('costoProject') 
-            ?? $request->route('project') 
-            ?? $request->route('proyectoId') 
-            ?? $request->route('presupuestoId') 
-            ?? $request->query('project') 
+        $project = $request->route('costoProject')
+            ?? $request->route('project')
+            ?? $request->route('proyectoId')
+            ?? $request->route('presupuestoId')
+            ?? $request->query('project')
             ?? $request->input('proyecto_id')
             ?? $request->input('project_id');
 
         if (empty($project)) {
-            abort(500, "Error de configuración multi-tenant: No se encontró el contexto del proyecto (ID).");
+            abort(500, 'Error de configuración multi-tenant: No se encontró el contexto del proyecto (ID).');
         }
 
         if (! $project instanceof CostoProject) {
@@ -48,7 +48,4 @@ class SetCostosDatabase
 
         return $next($request);
     }
-    
-
-    
 }

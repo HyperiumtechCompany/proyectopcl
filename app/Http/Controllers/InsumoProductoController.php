@@ -8,8 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class InsumoProductoController extends Controller
 {
@@ -67,33 +65,33 @@ class InsumoProductoController extends Controller
         if ($usadosOnly) {
             $tableMap = [
                 'mano_de_obra' => [
-                    'table'        => 'acu_mano_de_obra',
+                    'table' => 'acu_mano_de_obra',
                     'price_column' => 'precio_unitario',
-                    'unit_column'  => 'unidad',
+                    'unit_column' => 'unidad',
                 ],
                 'materiales' => [
-                    'table'        => 'acu_materiales',
+                    'table' => 'acu_materiales',
                     'price_column' => 'precio_unitario',
-                    'unit_column'  => 'unidad',
+                    'unit_column' => 'unidad',
                 ],
                 'equipos' => [
-                    'table'        => 'acu_equipos',
+                    'table' => 'acu_equipos',
                     'price_column' => 'precio_hora',
-                    'unit_column'  => 'unidad',
+                    'unit_column' => 'unidad',
                 ],
                 'subcontratos' => [
-                    'table'        => 'acu_subcontratos',
+                    'table' => 'acu_subcontratos',
                     'price_column' => 'precio_unitario',
-                    'unit_column'  => 'unidad',
+                    'unit_column' => 'unidad',
                 ],
                 'subpartidas' => [
-                    'table'        => 'acu_subpartidas',
+                    'table' => 'acu_subpartidas',
                     'price_column' => 'precio_unitario',
-                    'unit_column'  => 'unidad',
+                    'unit_column' => 'unidad',
                 ],
             ];
 
-            if (!$tipo || !isset($tableMap[$tipo])) {
+            if (! $tipo || ! isset($tableMap[$tipo])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Debe especificar un tipo válido para listar insumos usados.',
@@ -103,16 +101,16 @@ class InsumoProductoController extends Controller
 
             $conf = $tableMap[$tipo];
 
-            $projectModel = $project instanceof CostoProject 
-                ? $project 
+            $projectModel = $project instanceof CostoProject
+                ? $project
                 : CostoProject::findOrFail($project);
             $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
 
             $query = $connection->table("{$conf['table']} as t")
                 ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
-                ->join('presupuesto_general as g', function($join) use ($tenantPresupuestoId) {
+                ->join('presupuesto_general as g', function ($join) use ($tenantPresupuestoId) {
                     $join->on('a.partida', '=', 'g.partida')
-                         ->where('g.presupuesto_id', '=', $tenantPresupuestoId);
+                        ->where('g.presupuesto_id', '=', $tenantPresupuestoId);
                 })
                 ->leftJoin('insumo_productos as p', 't.insumo_id', '=', 'p.id')
                 ->leftJoin('diccionario as d', 'p.diccionario_id', '=', 'd.id')
@@ -125,7 +123,7 @@ class InsumoProductoController extends Controller
                     DB::raw("COALESCE(MAX(u.descripcion_singular), MAX(u.abreviatura_unidad), MAX(t.{$conf['unit_column']})) as unidad_nombre"),
                     DB::raw('MAX(p.tipo_proveedor) as tipo_proveedor'),
                     DB::raw("MAX(COALESCE(p.costo_unitario, t.{$conf['price_column']}, 0)) as precio"),
-                    DB::raw("SUM(t.cantidad * COALESCE(g.metrado, 0)) as cantidad_total")
+                    DB::raw('SUM(t.cantidad * COALESCE(g.metrado, 0)) as cantidad_total'),
                 ])
                 ->where('a.presupuesto_id', $tenantPresupuestoId)
                 ->groupBy('t.insumo_id', 'group_id');
@@ -133,8 +131,8 @@ class InsumoProductoController extends Controller
             if ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('t.descripcion', 'like', "%{$search}%")
-                      ->orWhere('p.descripcion', 'like', "%{$search}%")
-                      ->orWhere('p.codigo_producto', 'like', "%{$search}%");
+                        ->orWhere('p.descripcion', 'like', "%{$search}%")
+                        ->orWhere('p.codigo_producto', 'like', "%{$search}%");
                 });
             }
 
@@ -150,22 +148,23 @@ class InsumoProductoController extends Controller
             $productos = $rows->map(function ($row) use ($tipo) {
                 $precio = (float) $row->precio;
                 $cantidadTotal = (float) $row->cantidad_total;
+
                 return [
-                    'id'                   => $row->insumo_id ? 'ins-' . $row->insumo_id : 'desc-' . md5((string)$row->descripcion),
-                    'insumo_id'            => $row->insumo_id,
-                    'codigo'               => $row->codigo ?: '-',
-                    'descripcion'          => $row->descripcion,
-                    'unidad_nombre'        => $row->unidad_nombre ?: '-',
-                    'proveedor'            => $row->tipo_proveedor ?: 'SIN CLASIFICAR',
-                    'cantidad'             => $cantidadTotal,
-                    'precio'               => $precio,
-                    'total'                => round($cantidadTotal * $precio, 2),
-                    'tipo'                 => $tipo,
+                    'id' => $row->insumo_id ? 'ins-'.$row->insumo_id : 'desc-'.md5((string) $row->descripcion),
+                    'insumo_id' => $row->insumo_id,
+                    'codigo' => $row->codigo ?: '-',
+                    'descripcion' => $row->descripcion,
+                    'unidad_nombre' => $row->unidad_nombre ?: '-',
+                    'proveedor' => $row->tipo_proveedor ?: 'SIN CLASIFICAR',
+                    'cantidad' => $cantidadTotal,
+                    'precio' => $precio,
+                    'total' => round($cantidadTotal * $precio, 2),
+                    'tipo' => $tipo,
                 ];
             })->values()->toArray();
 
             return response()->json([
-                'success'   => true,
+                'success' => true,
                 'productos' => $productos,
             ]);
         }
@@ -200,9 +199,9 @@ class InsumoProductoController extends Controller
         }
 
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('p.descripcion', 'like', "%{$search}%")
-                  ->orWhere('p.codigo_producto', 'like', "%{$search}%");
+                    ->orWhere('p.codigo_producto', 'like', "%{$search}%");
             });
         }
 
@@ -211,33 +210,33 @@ class InsumoProductoController extends Controller
             ->orderBy('p.descripcion')
             ->limit(50)
             ->get()
-            ->map(fn($p) => [
-                'id'                   => $p->id,
-                'codigo'               => $p->codigo,
-                'descripcion'          => $p->descripcion,
-                'especificaciones'     => $p->especificaciones,
-                'unidad_id'            => $p->unidad_id,
-                'diccionario_id'       => $p->diccionario_id,
-                'tipo_proveedor'       => $p->tipo_proveedor,
-                'precio'               => (float) $p->precio,
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'codigo' => $p->codigo,
+                'descripcion' => $p->descripcion,
+                'especificaciones' => $p->especificaciones,
+                'unidad_id' => $p->unidad_id,
+                'diccionario_id' => $p->diccionario_id,
+                'tipo_proveedor' => $p->tipo_proveedor,
+                'precio' => (float) $p->precio,
                 'costo_unitario_lista' => (float) $p->costo_unitario_lista,
-                'costo_flete'          => (float) $p->costo_flete,
-                'tipo'                 => $p->tipo,
-                'diccionario'          => $p->diccionario_id_rel ? [
-                    'id'          => $p->diccionario_id_rel,
-                    'codigo'      => $p->diccionario_codigo,
+                'costo_flete' => (float) $p->costo_flete,
+                'tipo' => $p->tipo,
+                'diccionario' => $p->diccionario_id_rel ? [
+                    'id' => $p->diccionario_id_rel,
+                    'codigo' => $p->diccionario_codigo,
                     'descripcion' => $p->diccionario_descripcion,
                 ] : null,
-                'unidad'               => $p->unidad_id_rel ? [
-                    'id'                   => $p->unidad_id_rel,
-                    'descripcion'          => $p->unidad_descripcion,
+                'unidad' => $p->unidad_id_rel ? [
+                    'id' => $p->unidad_id_rel,
+                    'descripcion' => $p->unidad_descripcion,
                     'descripcion_singular' => $p->unidad_descripcion_singular,
-                    'abreviatura_unidad'   => $p->abreviatura_unidad,
+                    'abreviatura_unidad' => $p->abreviatura_unidad,
                 ] : null,
             ]);
 
         return response()->json([
-            'success'   => true,
+            'success' => true,
             'productos' => $productos,
         ]);
     }
@@ -249,9 +248,9 @@ class InsumoProductoController extends Controller
     public function especialidades(Request $request, $project): JsonResponse
     {
         $connection = DB::connection('costos_tenant');
-        
-        $projectModel = $project instanceof CostoProject 
-            ? $project 
+
+        $projectModel = $project instanceof CostoProject
+            ? $project
             : CostoProject::findOrFail($project);
         $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
 
@@ -262,16 +261,18 @@ class InsumoProductoController extends Controller
 
         // Filtrar estrictamente solo aquellas partidas que sean exactamente un par de números (ej. '01', '02', '10')
         $especialidades = $todas->filter(function ($item) {
-            $cleanPartida = trim((string)$item->partida);
+            $cleanPartida = trim((string) $item->partida);
+
             return preg_match('/^\d{2}$/', $cleanPartida);
         })->sortBy('partida')->values();
 
         // Formatear para el frontend listando "02 Estructuras"
-        $formatted = $especialidades->map(function($item) {
-            $cleanPartida = trim((string)$item->partida);
+        $formatted = $especialidades->map(function ($item) {
+            $cleanPartida = trim((string) $item->partida);
+
             return [
                 'value' => $cleanPartida, // enviamos '02' para que en la búsqueda (like 02%) coincida perfectamente
-                'label' => $cleanPartida . ' ' . $item->descripcion
+                'label' => $cleanPartida.' '.$item->descripcion,
             ];
         });
 
@@ -293,7 +294,7 @@ class InsumoProductoController extends Controller
             ->get();
 
         return response()->json([
-            'success'      => true,
+            'success' => true,
             'diccionarios' => $diccionarios,
         ]);
     }
@@ -310,7 +311,7 @@ class InsumoProductoController extends Controller
             ->get();
 
         return response()->json([
-            'success'  => true,
+            'success' => true,
             'unidades' => $unidades,
         ]);
     }
@@ -322,59 +323,59 @@ class InsumoProductoController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'descripcion'          => 'required|string',
-            'especificaciones'     => 'nullable|string',
-            'unidad_id'            => 'required|integer',
-            'diccionario_id'       => 'required|integer',
-            'tipo_proveedor'       => 'required|string|size:3',
+            'descripcion' => 'required|string',
+            'especificaciones' => 'nullable|string',
+            'unidad_id' => 'required|integer',
+            'diccionario_id' => 'required|integer',
+            'tipo_proveedor' => 'required|string|size:3',
             'costo_unitario_lista' => 'required|numeric|min:0',
-            'costo_unitario'       => 'required|numeric|min:0',
-            'costo_flete'          => 'nullable|numeric|min:0',
-            'fecha_lista'          => 'nullable|date',
-            'tipo'                 => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
-            'estado'               => 'nullable|boolean',
+            'costo_unitario' => 'required|numeric|min:0',
+            'costo_flete' => 'nullable|numeric|min:0',
+            'fecha_lista' => 'nullable|date',
+            'tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'estado' => 'nullable|boolean',
         ]);
 
         $connection = DB::connection('costos_tenant');
 
         // Generar código de producto automáticamente
         $diccionario = $connection->table('diccionario')->where('id', $validated['diccionario_id'])->first();
-        if (!$diccionario) {
-             return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
+        if (! $diccionario) {
+            return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
         }
 
         $diccionarioCodigo = data_get($diccionario, 'codigo', '');
-        $prefix = $diccionarioCodigo . $validated['tipo_proveedor'];
-        
+        $prefix = $diccionarioCodigo.$validated['tipo_proveedor'];
+
         $lastM = $connection->table('insumo_productos')
-            ->where('codigo_producto', 'like', $prefix . '%')
+            ->where('codigo_producto', 'like', $prefix.'%')
             ->orderBy('codigo_producto', 'desc')
             ->first();
-            
+
         $nextSequence = 1;
         if ($lastM) {
-            $lastSequence = substr((string)$lastM->codigo_producto, strlen($prefix));
+            $lastSequence = substr((string) $lastM->codigo_producto, strlen($prefix));
             if (is_numeric($lastSequence)) {
                 $nextSequence = intval($lastSequence) + 1;
             }
         }
-        
-        $codigoProducto = $prefix . str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
+
+        $codigoProducto = $prefix.str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
 
         $now = now();
         $id = $connection->table('insumo_productos')->insertGetId(array_merge($validated, [
             'codigo_producto' => $codigoProducto,
-            'estado'          => $validated['estado'] ?? true,
-            'costo_flete'     => $validated['costo_flete'] ?? 0,
-            'created_at'      => $now,
-            'updated_at'      => $now,
+            'estado' => $validated['estado'] ?? true,
+            'costo_flete' => $validated['costo_flete'] ?? 0,
+            'created_at' => $now,
+            'updated_at' => $now,
         ]));
 
         $producto = $connection->table('insumo_productos')->where('id', $id)->first();
 
         return response()->json([
-            'success'  => true,
-            'message'  => 'Producto creado exitosamente',
+            'success' => true,
+            'message' => 'Producto creado exitosamente',
             'producto' => $producto,
         ], 201);
     }
@@ -386,17 +387,17 @@ class InsumoProductoController extends Controller
     public function update(Request $request, $project, $insumoId): JsonResponse
     {
         $validated = $request->validate([
-            'descripcion'          => 'sometimes|string',
-            'especificaciones'     => 'nullable|string',
-            'unidad_id'            => 'sometimes|integer',
-            'diccionario_id'       => 'sometimes|integer',
-            'tipo_proveedor'       => 'sometimes|string|size:3',
+            'descripcion' => 'sometimes|string',
+            'especificaciones' => 'nullable|string',
+            'unidad_id' => 'sometimes|integer',
+            'diccionario_id' => 'sometimes|integer',
+            'tipo_proveedor' => 'sometimes|string|size:3',
             'costo_unitario_lista' => 'sometimes|numeric|min:0',
-            'costo_unitario'       => 'sometimes|numeric|min:0',
-            'costo_flete'          => 'nullable|numeric|min:0',
-            'fecha_lista'          => 'nullable|date',
-            'tipo'                 => 'sometimes|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
-            'estado'               => 'nullable|boolean',
+            'costo_unitario' => 'sometimes|numeric|min:0',
+            'costo_flete' => 'nullable|numeric|min:0',
+            'fecha_lista' => 'nullable|date',
+            'tipo' => 'sometimes|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'estado' => 'nullable|boolean',
         ]);
 
         $connection = DB::connection('costos_tenant');
@@ -417,8 +418,8 @@ class InsumoProductoController extends Controller
         }
 
         return response()->json([
-            'success'  => true,
-            'message'  => 'Producto actualizado exitosamente',
+            'success' => true,
+            'message' => 'Producto actualizado exitosamente',
             'producto' => $producto,
         ]);
     }
@@ -447,39 +448,39 @@ class InsumoProductoController extends Controller
     public function replaceProjectInsumo(Request $request, $project): JsonResponse
     {
         $validated = $request->validate([
-            'tipo'              => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
-            'old_insumo_id'     => 'nullable|integer',
-            'old_descripcion'   => 'nullable|string',
-            'new_insumo_id'     => 'nullable|integer',
-            'new_descripcion'   => 'nullable|string',
-            'new_precio'        => 'nullable|numeric',
+            'tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'old_insumo_id' => 'nullable|integer',
+            'old_descripcion' => 'nullable|string',
+            'new_insumo_id' => 'nullable|integer',
+            'new_descripcion' => 'nullable|string',
+            'new_precio' => 'nullable|numeric',
         ]);
 
         $tipo = $validated['tipo'];
-        
+
         $tableMap = [
             'mano_de_obra' => ['table' => 'acu_mano_de_obra', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
-            'materiales'   => ['table' => 'acu_materiales', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
-            'equipos'      => ['table' => 'acu_equipos', 'price_column' => 'precio_hora', 'unit_column' => 'unidad'],
+            'materiales' => ['table' => 'acu_materiales', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+            'equipos' => ['table' => 'acu_equipos', 'price_column' => 'precio_hora', 'unit_column' => 'unidad'],
             'subcontratos' => ['table' => 'acu_subcontratos', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
-            'subpartidas'  => ['table' => 'acu_subpartidas', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
+            'subpartidas' => ['table' => 'acu_subpartidas', 'price_column' => 'precio_unitario', 'unit_column' => 'unidad'],
         ];
 
         $conf = $tableMap[$tipo];
         $connection = DB::connection('costos_tenant');
-        
+
         $projectModel = $project instanceof CostoProject ? $project : CostoProject::findOrFail($project);
         $tenantPresupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($projectModel->database_name);
 
         $query = $connection->table("{$conf['table']} as t")
             ->join('presupuesto_acus as a', 't.acu_id', '=', 'a.id')
             ->where('a.presupuesto_id', $tenantPresupuestoId);
-            
-        if (!empty($validated['old_insumo_id'])) {
+
+        if (! empty($validated['old_insumo_id'])) {
             $query->where('t.insumo_id', $validated['old_insumo_id']);
         } else {
             $query->where('t.descripcion', $validated['old_descripcion'])
-                  ->whereNull('t.insumo_id');
+                ->whereNull('t.insumo_id');
         }
 
         $items = $query->select('t.*')->get();
@@ -493,18 +494,18 @@ class InsumoProductoController extends Controller
 
         // Si se seleccionó un insumo de catálogo para reemplazar:
         $newInsumo = null;
-        if (!empty($validated['new_insumo_id'])) {
+        if (! empty($validated['new_insumo_id'])) {
             $newInsumo = $connection->table('insumo_productos')->where('id', $validated['new_insumo_id'])->first();
-            if (!$newInsumo) {
+            if (! $newInsumo) {
                 return response()->json(['success' => false, 'message' => 'El insumo de reemplazo no existe.'], 404);
             }
         }
 
         $affectedAcuIds = [];
-        
+
         foreach ($items as $item) {
             $affectedAcuIds[] = $item->acu_id;
-            
+
             $updateData = [];
             if ($newInsumo) {
                 $updateData['insumo_id'] = $newInsumo->id;
@@ -514,7 +515,7 @@ class InsumoProductoController extends Controller
                 $unidad = $newInsumo->unidad_id ? $connection->table('unidad')->where('id', $newInsumo->unidad_id)->first() : null;
                 $updateData[$conf['unit_column']] = $unidad ? ($unidad->abreviatura_unidad ?? $unidad->descripcion_singular) : null;
             } else {
-                if (!empty($validated['new_descripcion'])) {
+                if (! empty($validated['new_descripcion'])) {
                     $updateData['descripcion'] = $validated['new_descripcion'];
                 }
                 if (isset($validated['new_precio'])) {
@@ -522,13 +523,13 @@ class InsumoProductoController extends Controller
                 }
             }
 
-            if (!empty($updateData)) {
+            if (! empty($updateData)) {
                 // Recalcular parcial
-                $cant = (float)$item->cantidad;
-                $prec = (float)($updateData[$conf['price_column']] ?? $item->{$conf['price_column']});
-                $falc = (float)($item->factor_desperdicio ?? 1);
+                $cant = (float) $item->cantidad;
+                $prec = (float) ($updateData[$conf['price_column']] ?? $item->{$conf['price_column']});
+                $falc = (float) ($item->factor_desperdicio ?? 1);
                 $parcial = round($cant * $prec * ($tipo === 'materiales' ? $falc : 1), 4);
-                
+
                 $updateData['parcial'] = $parcial;
                 $updateData['updated_at'] = now();
 
@@ -537,11 +538,11 @@ class InsumoProductoController extends Controller
         }
 
         $affectedAcuIds = array_unique($affectedAcuIds);
-        
-        // Disparar recálculo de los ACUs afectados
-        app(CostoDatabaseService::class)->propagateInsumoUpdate($projectModel, (object)['id' => -1]); // Triggers update for the ACUs we just saved
 
-        // The propagateInsumoUpdate currently works differently: it takes an insumo and finds ACUs. 
+        // Disparar recálculo de los ACUs afectados
+        app(CostoDatabaseService::class)->propagateInsumoUpdate($projectModel, (object) ['id' => -1]); // Triggers update for the ACUs we just saved
+
+        // The propagateInsumoUpdate currently works differently: it takes an insumo and finds ACUs.
         // We modified ACU components directly, so we need to recalculate the ACU JSONs and totals.
         $this->recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel);
 
@@ -550,7 +551,7 @@ class InsumoProductoController extends Controller
             'message' => 'Insumos reemplazados correctamente en el proyecto.',
         ]);
     }
-    
+
     private function recalculateAcus($connection, $affectedAcuIds, $tenantPresupuestoId, $projectModel)
     {
         $updatedPartidas = [];
@@ -573,38 +574,38 @@ class InsumoProductoController extends Controller
                 $connection->table('presupuesto_acus')
                     ->where('id', $acuId)
                     ->update([
-                        'mano_de_obra'       => json_encode($mo),
-                        'materiales'         => json_encode($ma),
-                        'equipos'            => json_encode($eq),
-                        'subcontratos'       => json_encode($sc),
-                        'subpartidas'        => json_encode($sp),
-                        'costo_mano_obra'    => $costoMo,
-                        'costo_materiales'   => $costoMa,
-                        'costo_equipos'      => $costoEq,
+                        'mano_de_obra' => json_encode($mo),
+                        'materiales' => json_encode($ma),
+                        'equipos' => json_encode($eq),
+                        'subcontratos' => json_encode($sc),
+                        'subpartidas' => json_encode($sp),
+                        'costo_mano_obra' => $costoMo,
+                        'costo_materiales' => $costoMa,
+                        'costo_equipos' => $costoEq,
                         'costo_subcontratos' => $costoSc,
-                        'costo_subpartidas'  => $costoSp,
+                        'costo_subpartidas' => $costoSp,
                         // 'costo_unitario_total' es una generated column y se calcula automáticamente
-                        'updated_at'         => now(),
+                        'updated_at' => now(),
                     ]);
-                
+
                 $updatedPartidas[] = $acu->partida;
             }
         }
 
-        if (!empty($updatedPartidas)) {
+        if (! empty($updatedPartidas)) {
             foreach (array_unique($updatedPartidas) as $partida) {
                 $acuRes = $connection->table('presupuesto_acus')
                     ->where('presupuesto_id', $tenantPresupuestoId)
                     ->where('partida', $partida)
                     ->first();
-                
+
                 if ($acuRes) {
                     $connection->table('presupuesto_general')
                         ->where('presupuesto_id', $tenantPresupuestoId)
                         ->where('partida', $partida)
                         ->update([
-                            'precio_unitario' => (float)($acuRes->costo_unitario_total ?? 0),
-                            'updated_at'      => now(),
+                            'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
+                            'updated_at' => now(),
                         ]);
                 }
             }

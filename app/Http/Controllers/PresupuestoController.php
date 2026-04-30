@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CostoProject;
-use App\Models\PresupuestoAcu;
+use App\Models\AcuEquipo;
 use App\Models\AcuManoDeObra;
 use App\Models\AcuMaterial;
-use App\Models\AcuEquipo;
 use App\Models\AcuSubcontrato;
 use App\Models\AcuSubpartida;
+use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PresupuestoController extends Controller
 {
@@ -84,7 +85,7 @@ class PresupuestoController extends Controller
 
         // Read rows from the tenant DB
         $rows = $this->getOrderedRows($tableName)
-            ->map(fn($row) => (array)$row)
+            ->map(fn ($row) => (array) $row)
             ->toArray();
 
         // Get centralized project params from tenant DB
@@ -97,7 +98,7 @@ class PresupuestoController extends Controller
                 'fecha_inicio' => $project->fecha_inicio?->format('Y-m-d'),
                 'fecha_fin' => $project->fecha_fin?->format('Y-m-d'),
             ],
-            'projectParams' => $projectParams ? (array)$projectParams : null,
+            'projectParams' => $projectParams ? (array) $projectParams : null,
             'subsection' => $subsection,
             'subsectionLabel' => self::SUBSECTION_LABELS[$subsection],
             'tableName' => $tableName,
@@ -120,7 +121,7 @@ class PresupuestoController extends Controller
         $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
 
         $rows = $this->getOrderedRows($tableName)
-            ->map(fn($row) => (array)$row)
+            ->map(fn ($row) => (array) $row)
             ->toArray();
 
         return response()->json([
@@ -148,7 +149,7 @@ class PresupuestoController extends Controller
 
         // Validate input data based on subsection type
         $validationErrors = $this->validateRowsForSubsection($subsection, $rows);
-        if (!empty($validationErrors)) {
+        if (! empty($validationErrors)) {
             return response()->json([
                 'success' => false,
                 'errors' => $validationErrors,
@@ -167,20 +168,20 @@ class PresupuestoController extends Controller
 
             foreach ($rows as $index => $row) {
                 $oldId = $row['id'] ?? null;
-                
+
                 // Clean and prepare row data
                 $cleanedRow = $this->prepareRowForSubsection($subsection, $row, $index, $project, $tenantPresupuestoId);
 
                 // Remap parent_id if it exists in our mapping
                 $originalParentId = $row['parent_id'] ?? null;
-                if (!is_null($originalParentId)) {
+                if (! is_null($originalParentId)) {
                     if (isset($idMapping[$originalParentId])) {
                         $cleanedRow['parent_id'] = $idMapping[$originalParentId];
                     } else {
-                        // Crucial: If the parent hasn't been inserted yet or was deleted, 
+                        // Crucial: If the parent hasn't been inserted yet or was deleted,
                         // set to null to avoid FK violation (500 Error)
                         $cleanedRow['parent_id'] = null;
-                        
+
                         // Log for debugging if needed
                         // Log::debug("PresupuestoController: Parent ID {$originalParentId} not found in mapping - set to NULL");
                     }
@@ -207,7 +208,7 @@ class PresupuestoController extends Controller
                 }
 
                 // Sincronización automática con GG Variables
-                if ($subsection === 'remuneraciones' && !empty($cleanedRow['gg_variable_id'])) {
+                if ($subsection === 'remuneraciones' && ! empty($cleanedRow['gg_variable_id'])) {
                     // Si viene con un ID de variable de la tabla temporal de remapeo, lo usamos
                     $varId = $cleanedRow['gg_variable_id'];
                     if (isset($idMapping[$varId])) {
@@ -246,7 +247,7 @@ class PresupuestoController extends Controller
 
             // Fetch updated data to return
             $updatedRows = $this->getOrderedRows($tableName)
-                ->map(fn($row) => (array)$row)
+                ->map(fn ($row) => (array) $row)
                 ->toArray();
 
             return response()->json([
@@ -258,7 +259,7 @@ class PresupuestoController extends Controller
             if ($connection->transactionLevel() > 0) {
                 $connection->rollBack();
             }
-            Log::error("Error saving presupuesto data", [
+            Log::error('Error saving presupuesto data', [
                 'subsection' => $subsection,
                 'project' => $project->id,
                 'error' => $e->getMessage(),
@@ -287,6 +288,7 @@ class PresupuestoController extends Controller
                 'project' => $project->id,
                 'error' => $e->getMessage(),
             ]);
+
             return response()->json([
                 'success' => false,
                 'error' => 'No se pudo calcular el consolidado',
@@ -322,6 +324,7 @@ class PresupuestoController extends Controller
                 'project' => $project->id,
                 'error' => $e->getMessage(),
             ]);
+
             return response()->json([
                 'success' => false,
                 'error' => 'No se pudo guardar el consolidado',
@@ -357,7 +360,7 @@ class PresupuestoController extends Controller
             $extraComponents = $existing->componentes_extra_json ?? '[]';
             $extraComponents = is_string($extraComponents) ? json_decode($extraComponents, true) : $extraComponents;
         }
-        if (!is_array($extraComponents)) {
+        if (! is_array($extraComponents)) {
             $extraComponents = [];
         }
 
@@ -454,7 +457,7 @@ class PresupuestoController extends Controller
         // Filtrar payload a columnas reales (tenants pueden no tener nuevas columnas)
         $realColumns = Schema::connection('costos_tenant')->getColumnListing('gg_consolidado');
         $filteredPayload = collect($payload)
-            ->filter(fn($val, $key) => in_array($key, $realColumns, true))
+            ->filter(fn ($val, $key) => in_array($key, $realColumns, true))
             ->toArray();
 
         if ($existing) {
@@ -480,17 +483,25 @@ class PresupuestoController extends Controller
         $tens = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
         $hundreds = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
 
-        if ($n === 0) return '';
-        if ($n === 100) return 'CIEN';
-        if ($n < 30) return $ones[$n];
+        if ($n === 0) {
+            return '';
+        }
+        if ($n === 100) {
+            return 'CIEN';
+        }
+        if ($n < 30) {
+            return $ones[$n];
+        }
         if ($n < 100) {
             $t = intdiv($n, 10);
             $o = $n % 10;
-            return $tens[$t] . ($o ? ' Y ' . $ones[$o] : '');
+
+            return $tens[$t].($o ? ' Y '.$ones[$o] : '');
         }
         $h = intdiv($n, 100);
         $rem = $n % 100;
-        return $hundreds[$h] . ($rem ? ' ' . $this->numberToWordsES($rem) : '');
+
+        return $hundreds[$h].($rem ? ' '.$this->numberToWordsES($rem) : '');
     }
 
     private function amountToWords(float $amount): string
@@ -505,12 +516,12 @@ class PresupuestoController extends Controller
             $rem = $intPart;
             if ($rem >= 1000000) {
                 $m = intdiv($rem, 1000000);
-                $words .= ($m === 1 ? 'UN MILLON' : $this->numberToWordsES($m) . ' MILLONES') . ' ';
+                $words .= ($m === 1 ? 'UN MILLON' : $this->numberToWordsES($m).' MILLONES').' ';
                 $rem = $rem % 1000000;
             }
             if ($rem >= 1000) {
                 $k = intdiv($rem, 1000);
-                $words .= ($k === 1 ? 'MIL' : $this->numberToWordsES($k) . ' MIL') . ' ';
+                $words .= ($k === 1 ? 'MIL' : $this->numberToWordsES($k).' MIL').' ';
                 $rem = $rem % 1000;
             }
             if ($rem > 0) {
@@ -519,7 +530,7 @@ class PresupuestoController extends Controller
             $words = trim($words);
         }
 
-        return 'SON: ' . $words . ' CON ' . str_pad((string) $decPart, 2, '0', STR_PAD_LEFT) . '/100 SOLES';
+        return 'SON: '.$words.' CON '.str_pad((string) $decPart, 2, '0', STR_PAD_LEFT).'/100 SOLES';
     }
 
     /**
@@ -541,7 +552,7 @@ class PresupuestoController extends Controller
         $metradoType = $validated['metrado_type'];
 
         // Validate that the requested metrado module is enabled
-        if (!$project->hasModule($metradoType)) {
+        if (! $project->hasModule($metradoType)) {
             return response()->json([
                 'success' => false,
                 'message' => "El módulo {$metradoType} no está habilitado en este proyecto.",
@@ -553,7 +564,7 @@ class PresupuestoController extends Controller
         try {
             // Prefer summary table (item, descripcion, und, total) when available
             $schemaBuilder = DB::connection('costos_tenant')->getSchemaBuilder();
-            $resumenTable  = "{$metradoType}_resumen";
+            $resumenTable = "{$metradoType}_resumen";
 
             $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
 
@@ -592,16 +603,16 @@ class PresupuestoController extends Controller
 
             $rowIndex = 0;
             foreach ($metradoRows as $metradoRow) {
-                $codigo = trim((string)($metradoRow->item ?? $metradoRow->partida ?? ''));
-                if (!$codigo) {
+                $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
+                if (! $codigo) {
                     // Saltamos filas sin código de ítem
                     continue;
                 }
 
                 // Usamos la descripción tal cual viene del resumen; si falta, caemos al código de ítem.
                 $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
-                $unidad      = $metradoRow->unidad ?? ($metradoRow->und ?? '');
-                $total       = $metradoRow->total ?? 0;
+                $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                $total = $metradoRow->total ?? 0;
 
                 // Check if partida already exists in presupuesto_general
                 $existingPartida = DB::connection('costos_tenant')
@@ -616,7 +627,7 @@ class PresupuestoController extends Controller
                         ->where('partida', $codigo)
                         ->update([
                             'metrado' => $total,
-                            'unidad'  => $unidad,
+                            'unidad' => $unidad,
                             'descripcion' => $descripcion,
                             'metrado_source' => $metradoType,
                             'item_order' => $this->hasTenantColumn('presupuesto_general', 'item_order') ? $rowIndex : null,
@@ -667,7 +678,7 @@ class PresupuestoController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
-            Log::error("Error importing metrado", [
+            Log::error('Error importing metrado', [
                 'metrado_type' => $metradoType,
                 'project' => $project->id,
                 'error' => $e->getMessage(),
@@ -675,7 +686,7 @@ class PresupuestoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al importar metrado: ' . $e->getMessage(),
+                'message' => 'Error al importar metrado: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -701,7 +712,7 @@ class PresupuestoController extends Controller
 
         // Validate that all requested metrado modules are enabled
         foreach ($metradosList as $metradoType) {
-            if (!$project->hasModule($metradoType)) {
+            if (! $project->hasModule($metradoType)) {
                 return response()->json([
                     'success' => false,
                     'message' => "El módulo {$metradoType} no está habilitado en este proyecto.",
@@ -721,7 +732,7 @@ class PresupuestoController extends Controller
 
             foreach ($metradosList as $metradoType) {
                 $isModular = in_array($metradoType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
-                
+
                 if ($isModular) {
                     $metradoQuery = DB::connection('costos_tenant')
                         ->table("{$metradoType}_resumen")
@@ -752,15 +763,15 @@ class PresupuestoController extends Controller
 
                 $rowIndex = 0;
                 foreach ($metradoRows as $metradoRow) {
-                    $codigo = trim((string)($metradoRow->item ?? $metradoRow->partida ?? ''));
-                    if (!$codigo) {
+                    $codigo = trim((string) ($metradoRow->item ?? $metradoRow->partida ?? ''));
+                    if (! $codigo) {
                         continue;
                     }
 
                     // No duplicar el código en la descripción: usamos la descripción del resumen o, si falta, el código.
                     $descripcion = trim($metradoRow->descripcion ?? ($metradoRow->item ?? ''));
-                    $unidad      = $metradoRow->unidad ?? ($metradoRow->und ?? '');
-                    $total       = $metradoRow->total ?? 0;
+                    $unidad = $metradoRow->unidad ?? ($metradoRow->und ?? '');
+                    $total = $metradoRow->total ?? 0;
 
                     // Check if partida already exists in presupuesto_general
                     $existingPartida = DB::connection('costos_tenant')
@@ -775,7 +786,7 @@ class PresupuestoController extends Controller
                             ->where('partida', $codigo)
                             ->update([
                                 'metrado' => $total,
-                                'unidad'  => $unidad,
+                                'unidad' => $unidad,
                                 'descripcion' => $descripcion,
                                 'metrado_source' => $metradoType,
                                 'item_order' => $hasItemOrder ? $rowIndex : $existingPartida->item_order ?? null,
@@ -825,7 +836,7 @@ class PresupuestoController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
-            Log::error("Error batch importing metrados", [
+            Log::error('Error batch importing metrados', [
                 'metrados' => $metradosList,
                 'project' => $project->id,
                 'error' => $e->getMessage(),
@@ -833,7 +844,7 @@ class PresupuestoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al importar metrados: ' . $e->getMessage(),
+                'message' => 'Error al importar metrados: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -927,7 +938,7 @@ class PresupuestoController extends Controller
             $equipos = $validated['equipos'] ?? [];
             $costoEquipos = 0;
             foreach ($equipos as &$componente) {
-                $descripcion = strtolower((string)($componente['descripcion'] ?? ''));
+                $descripcion = strtolower((string) ($componente['descripcion'] ?? ''));
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
                 if ($isHerramientas) {
@@ -970,20 +981,20 @@ class PresupuestoController extends Controller
             $costoSubpartidas = round($costoSubpartidas, 2);
 
             // ─── Update Master Project Prices如果 flag is active ────────────
-            if (!empty($validated['update_project_prices'])) {
-                $dbService = app(\App\Services\CostoDatabaseService::class);
+            if (! empty($validated['update_project_prices'])) {
+                $dbService = app(CostoDatabaseService::class);
                 $dbService->setTenantConnection($project->database_name);
-                
+
                 $checkAndUpdatePrice = function ($items, $priceKey) use ($project, $dbService) {
                     foreach ($items as $item) {
-                        if (!empty($item['insumo_id'])) {
-                            $sentPrice = (float)($item[$priceKey] ?? 0);
+                        if (! empty($item['insumo_id'])) {
+                            $sentPrice = (float) ($item[$priceKey] ?? 0);
                             $insumo = DB::connection('costos_tenant')
                                 ->table('insumo_productos')
                                 ->where('id', $item['insumo_id'])
                                 ->first();
-                                
-                            if ($insumo && (float)$insumo->costo_unitario !== $sentPrice) {
+
+                            if ($insumo && (float) $insumo->costo_unitario !== $sentPrice) {
                                 // Price changed! Update catalog and propagate
                                 DB::connection('costos_tenant')
                                     ->table('insumo_productos')
@@ -992,7 +1003,7 @@ class PresupuestoController extends Controller
                                         'costo_unitario' => $sentPrice,
                                         'updated_at' => now(),
                                     ]);
-                                
+
                                 // Update memory object for propagation
                                 $insumo->costo_unitario = $sentPrice;
                                 $dbService->propagateInsumoUpdate($project, $insumo);
@@ -1017,21 +1028,21 @@ class PresupuestoController extends Controller
                 'descripcion' => $validated['descripcion'],
                 'unidad' => $validated['unidad'],
                 'rendimiento' => $rendimiento,
-                'mano_de_obra' => !empty($manoDeObra) ? json_encode($manoDeObra) : null,
+                'mano_de_obra' => ! empty($manoDeObra) ? json_encode($manoDeObra) : null,
                 'costo_mano_obra' => $costoManoObra,
-                'materiales' => !empty($materiales) ? json_encode($materiales) : null,
+                'materiales' => ! empty($materiales) ? json_encode($materiales) : null,
                 'costo_materiales' => $costoMateriales,
-                'equipos' => !empty($equipos) ? json_encode($equipos) : null,
+                'equipos' => ! empty($equipos) ? json_encode($equipos) : null,
                 'costo_equipos' => $costoEquipos,
-                'subcontratos' => !empty($subcontratos) ? json_encode($subcontratos) : null,
+                'subcontratos' => ! empty($subcontratos) ? json_encode($subcontratos) : null,
                 'costo_subcontratos' => $costoSubcontratos,
-                'subpartidas' => !empty($subpartidas) ? json_encode($subpartidas) : null,
+                'subpartidas' => ! empty($subpartidas) ? json_encode($subpartidas) : null,
                 'costo_subpartidas' => $costoSubpartidas,
                 'updated_at' => now(),
             ];
 
             // Update or insert ACU
-            if (!empty($validated['id'])) {
+            if (! empty($validated['id'])) {
                 // Update existing ACU
                 DB::connection('costos_tenant')
                     ->table('presupuesto_acus')
@@ -1062,7 +1073,7 @@ class PresupuestoController extends Controller
                 ->first();
 
             // Decode JSON fields for response
-            $acuArray = (array)$calculatedAcu;
+            $acuArray = (array) $calculatedAcu;
             $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
             $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
             $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
@@ -1071,15 +1082,15 @@ class PresupuestoController extends Controller
             // ── Sincronizar con Presupuesto General ───────────────────────────
             // Buscamos la partida en presupuesto_general para actualizar su precio_unitario
             if ($calculatedAcu) {
-                $newUnitPrice = (float)($calculatedAcu->costo_unitario_total ?? 0);
-                
+                $newUnitPrice = (float) ($calculatedAcu->costo_unitario_total ?? 0);
+
                 DB::connection('costos_tenant')
                     ->table('presupuesto_general')
                     ->where('presupuesto_id', $tenantPresupuestoId)
                     ->where('partida', $validated['partida'])
                     ->update([
                         'precio_unitario' => $newUnitPrice,
-                        'updated_at'      => now(),
+                        'updated_at' => now(),
                     ]);
 
                 // Recalcular el costo directo total del presupuesto
@@ -1096,7 +1107,7 @@ class PresupuestoController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
-            Log::error("Error calculating ACU", [
+            Log::error('Error calculating ACU', [
                 'project' => $project->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -1104,7 +1115,7 @@ class PresupuestoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al calcular ACU: ' . $e->getMessage(),
+                'message' => 'Error al calcular ACU: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -1121,7 +1132,7 @@ class PresupuestoController extends Controller
         $tipoCalculo = $request->query('tipo_calculo');
         $connection = DB::connection('costos_tenant');
 
-        if (!$tipoCalculo || $tipoCalculo === 'manual') {
+        if (! $tipoCalculo || $tipoCalculo === 'manual') {
             return response()->json(['success' => true, 'data' => null]);
         }
 
@@ -1170,7 +1181,7 @@ class PresupuestoController extends Controller
 
         $tipoCalculo = $request->input('tipo_calculo');
         $data = $request->input('data', []);
-        
+
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
         $data['presupuesto_id'] = $tenantPresupuestoId;
 
@@ -1196,7 +1207,7 @@ class PresupuestoController extends Controller
         $tipoCalculo = $request->query('tipo_calculo');
         $connection = DB::connection('costos_tenant');
 
-        if (!$tipoCalculo || $tipoCalculo === 'manual') {
+        if (! $tipoCalculo || $tipoCalculo === 'manual') {
             return response()->json(['success' => true, 'data' => []]);
         }
 
@@ -1226,7 +1237,7 @@ class PresupuestoController extends Controller
 
         $query = $connection->table($tableName)
             ->where('presupuesto_id', $tenantPresupuestoId);
-            
+
         if ($value === 'sctr_salud') {
             $query->whereIn($field, ['sctr_salud', 'sctr_pension']);
         } else {
@@ -1252,13 +1263,13 @@ class PresupuestoController extends Controller
 
         $tipoCalculo = $request->input('tipo_calculo');
         $data = $request->input('data', []);
-        
+
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-        
+
         // Ensure each row has presupuesto_id
         if (is_array($data)) {
             // Is it an array of associative arrays (multiple rows)?
-            if (!empty($data) && isset($data[0]) && is_array($data[0])) {
+            if (! empty($data) && isset($data[0]) && is_array($data[0])) {
                 foreach ($data as &$row) {
                     $row['presupuesto_id'] = $tenantPresupuestoId;
                 }
@@ -1300,7 +1311,7 @@ class PresupuestoController extends Controller
             ->get();
 
         foreach ($fianzaTotals as $row) {
-            $key = 'fianza_' . $row->tipo_fianza;
+            $key = 'fianza_'.$row->tipo_fianza;
             $totals[$key] = (float) $row->total;
         }
 
@@ -1317,15 +1328,17 @@ class PresupuestoController extends Controller
 
             if (in_array($tipo, ['sctr_salud', 'sctr_pension'], true)) {
                 $totals['poliza_sctr'] = ($totals['poliza_sctr'] ?? 0) + $rowTotal;
+
                 continue;
             }
 
             if (in_array($tipo, ['sencico', 'itf'], true)) {
                 $totals[$tipo] = ($totals[$tipo] ?? 0) + $rowTotal;
+
                 continue;
             }
 
-            $key = 'poliza_' . $tipo;
+            $key = 'poliza_'.$tipo;
             $totals[$key] = ($totals[$key] ?? 0) + $rowTotal;
         }
 
@@ -1413,13 +1426,13 @@ class PresupuestoController extends Controller
         try {
             // Verificar si ggf_porcentaje existe
             $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
-            if (!in_array('ggf_porcentaje', $columns)) {
+            if (! in_array('ggf_porcentaje', $columns)) {
                 $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggf_porcentaje DECIMAL(12,4) DEFAULT 0');
             }
 
             // Verificar si ggv_porcentaje existe
             $columns = $connection->getSchemaBuilder()->getColumnListing('gg_consolidado');
-            if (!in_array('ggv_porcentaje', $columns)) {
+            if (! in_array('ggv_porcentaje', $columns)) {
                 $connection->statement('ALTER TABLE gg_consolidado ADD COLUMN ggv_porcentaje DECIMAL(12,4) DEFAULT 0');
             }
         } catch (\Exception $e) {
@@ -1440,7 +1453,7 @@ class PresupuestoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $params ? (array)$params : null,
+            'data' => $params ? (array) $params : null,
         ]);
     }
 
@@ -1458,22 +1471,22 @@ class PresupuestoController extends Controller
         $this->validateModuleEnabled($project);
 
         $validated = $request->validate([
-            'costo_directo'          => 'nullable|numeric|min:0',
-            'utilidad_porcentaje'    => 'nullable|numeric|min:0|max:100',
-            'igv_porcentaje'         => 'nullable|numeric|min:0|max:100',
-            'jornada_laboral_horas'  => 'nullable|numeric|min:1|max:24',
-            'rmv'                    => 'nullable|numeric|min:0',
+            'costo_directo' => 'nullable|numeric|min:0',
+            'utilidad_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'igv_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'jornada_laboral_horas' => 'nullable|numeric|min:1|max:24',
+            'rmv' => 'nullable|numeric|min:0',
         ]);
 
         $this->dbService->updateProjectFinancialParams(
             $project->database_name,
-            array_filter($validated, fn($v) => $v !== null)
+            array_filter($validated, fn ($v) => $v !== null)
         );
 
         // Auto-propagate costo_directo to fianzas/polizas base_calculo
         if (isset($validated['costo_directo']) && $validated['costo_directo'] !== null) {
             $connection = DB::connection('costos_tenant');
-            $costoDirecto = (float)$validated['costo_directo'];
+            $costoDirecto = (float) $validated['costo_directo'];
 
             // Update base_calculo for all fianzas
             $connection->table('gg_fijos_fianzas')
@@ -1489,11 +1502,10 @@ class PresupuestoController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $params ? (array)$params : null,
+            'data' => $params ? (array) $params : null,
             'message' => 'Parámetros actualizados correctamente.',
         ]);
     }
-
 
     /**
      * Exporta presupuesto a formato Excel/PDF
@@ -1511,7 +1523,7 @@ class PresupuestoController extends Controller
         $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
         $rowIndex = $request->input('row_index');
 
-        if (!is_numeric($rowIndex) || $rowIndex < 0) {
+        if (! is_numeric($rowIndex) || $rowIndex < 0) {
             return response()->json([
                 'success' => false,
                 'error' => 'Índice de fila inválido',
@@ -1532,10 +1544,10 @@ class PresupuestoController extends Controller
                 ], 404);
             }
 
-            $rowToDelete = (object)$rows[$rowIndex];
+            $rowToDelete = (object) $rows[$rowIndex];
             $rowId = $rowToDelete->id ?? null;
 
-            if (!$rowId) {
+            if (! $rowId) {
                 return response()->json([
                     'success' => false,
                     'error' => 'No se pudo obtener el ID de la fila',
@@ -1581,7 +1593,7 @@ class PresupuestoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Error al eliminar la fila: ' . $e->getMessage(),
+                'error' => 'Error al eliminar la fila: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -1607,7 +1619,7 @@ class PresupuestoController extends Controller
     private function getAvailableSubsections(): array
     {
         return collect(self::SUBSECTION_LABELS)
-            ->map(fn($label, $key) => [
+            ->map(fn ($label, $key) => [
                 'key' => $key,
                 'label' => $label,
             ])
@@ -1669,7 +1681,7 @@ class PresupuestoController extends Controller
     private function validateModuleEnabled(CostoProject $project): void
     {
         $enabled = $project->enabledModules()->where('module_type', 'presupuesto')->exists();
-        if (!$enabled) {
+        if (! $enabled) {
             abort(403, 'El módulo de presupuesto no está habilitado para este proyecto.');
         }
     }
@@ -1679,7 +1691,7 @@ class PresupuestoController extends Controller
      */
     private function validateSubsection(string $subsection): void
     {
-        if (!array_key_exists($subsection, self::SUBSECTION_TABLE_MAP)) {
+        if (! array_key_exists($subsection, self::SUBSECTION_TABLE_MAP)) {
             abort(404, "Sub-sección '{$subsection}' no existe.");
         }
     }
@@ -1704,16 +1716,16 @@ class PresupuestoController extends Controller
                 default => [],
             };
 
-            if (!empty($rowErrors)) {
+            if (! empty($rowErrors)) {
                 $errors["row_{$index}"] = $rowErrors;
             }
         }
 
-        if (isset($row['costo_subcontratos']) && !is_numeric($row['costo_subcontratos'])) {
+        if (isset($row['costo_subcontratos']) && ! is_numeric($row['costo_subcontratos'])) {
             $errors[] = 'El campo costo_subcontratos debe ser numÃ©rico';
         }
 
-        if (isset($row['costo_subpartidas']) && !is_numeric($row['costo_subpartidas'])) {
+        if (isset($row['costo_subpartidas']) && ! is_numeric($row['costo_subpartidas'])) {
             $errors[] = 'El campo costo_subpartidas debe ser numÃ©rico';
         }
 
@@ -1725,7 +1737,7 @@ class PresupuestoController extends Controller
      */
     private function isGeneralTitle(array $row): bool
     {
-        return !isset($row['unidad']) || trim((string)$row['unidad']) === '';
+        return ! isset($row['unidad']) || trim((string) $row['unidad']) === '';
     }
 
     /**
@@ -1745,21 +1757,21 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo descripción es requerido';
         }
 
-        if (!$this->isGeneralTitle($row)) {
-            if (!isset($row['unidad']) || trim((string)$row['unidad']) === '') {
+        if (! $this->isGeneralTitle($row)) {
+            if (! isset($row['unidad']) || trim((string) $row['unidad']) === '') {
                 $errors[] = 'El campo unidad es requerido';
-            } elseif (strlen((string)$row['unidad']) > 20) {
+            } elseif (strlen((string) $row['unidad']) > 20) {
                 $errors[] = 'El campo unidad no puede exceder 20 caracteres';
             }
-        } elseif (isset($row['unidad']) && strlen((string)$row['unidad']) > 20) {
+        } elseif (isset($row['unidad']) && strlen((string) $row['unidad']) > 20) {
             $errors[] = 'El campo unidad no puede exceder 20 caracteres';
         }
 
-        if (isset($row['metrado']) && !is_numeric($row['metrado'])) {
+        if (isset($row['metrado']) && ! is_numeric($row['metrado'])) {
             $errors[] = 'El campo metrado debe ser numérico';
         }
 
-        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
+        if (isset($row['precio_unitario']) && ! is_numeric($row['precio_unitario'])) {
             $errors[] = 'El campo precio_unitario debe ser numérico';
         }
 
@@ -1794,7 +1806,7 @@ class PresupuestoController extends Controller
         }
 
         if (isset($row['rendimiento'])) {
-            if (!is_numeric($row['rendimiento'])) {
+            if (! is_numeric($row['rendimiento'])) {
                 $errors[] = 'El campo rendimiento debe ser numérico';
             } elseif ($row['rendimiento'] <= 0) {
                 $errors[] = 'El campo rendimiento debe ser mayor que cero';
@@ -1802,35 +1814,35 @@ class PresupuestoController extends Controller
         }
 
         // Validate JSON fields if present
-        if (isset($row['mano_de_obra']) && !is_array($row['mano_de_obra']) && !is_null($row['mano_de_obra'])) {
+        if (isset($row['mano_de_obra']) && ! is_array($row['mano_de_obra']) && ! is_null($row['mano_de_obra'])) {
             $errors[] = 'El campo mano_de_obra debe ser un array';
         }
 
-        if (isset($row['materiales']) && !is_array($row['materiales']) && !is_null($row['materiales'])) {
+        if (isset($row['materiales']) && ! is_array($row['materiales']) && ! is_null($row['materiales'])) {
             $errors[] = 'El campo materiales debe ser un array';
         }
 
-        if (isset($row['equipos']) && !is_array($row['equipos']) && !is_null($row['equipos'])) {
+        if (isset($row['equipos']) && ! is_array($row['equipos']) && ! is_null($row['equipos'])) {
             $errors[] = 'El campo equipos debe ser un array';
         }
 
-        if (isset($row['subcontratos']) && !is_array($row['subcontratos']) && !is_null($row['subcontratos'])) {
+        if (isset($row['subcontratos']) && ! is_array($row['subcontratos']) && ! is_null($row['subcontratos'])) {
             $errors[] = 'El campo subcontratos debe ser un array';
         }
 
-        if (isset($row['subpartidas']) && !is_array($row['subpartidas']) && !is_null($row['subpartidas'])) {
+        if (isset($row['subpartidas']) && ! is_array($row['subpartidas']) && ! is_null($row['subpartidas'])) {
             $errors[] = 'El campo subpartidas debe ser un array';
         }
 
-        if (isset($row['costo_mano_obra']) && !is_numeric($row['costo_mano_obra'])) {
+        if (isset($row['costo_mano_obra']) && ! is_numeric($row['costo_mano_obra'])) {
             $errors[] = 'El campo costo_mano_obra debe ser numérico';
         }
 
-        if (isset($row['costo_materiales']) && !is_numeric($row['costo_materiales'])) {
+        if (isset($row['costo_materiales']) && ! is_numeric($row['costo_materiales'])) {
             $errors[] = 'El campo costo_materiales debe ser numérico';
         }
 
-        if (isset($row['costo_equipos']) && !is_numeric($row['costo_equipos'])) {
+        if (isset($row['costo_equipos']) && ! is_numeric($row['costo_equipos'])) {
             $errors[] = 'El campo costo_equipos debe ser numérico';
         }
 
@@ -1849,18 +1861,18 @@ class PresupuestoController extends Controller
         }
 
         $tipoFila = $row['tipo_fila'] ?? 'detalle';
-        if (!in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
+        if (! in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
             $errors[] = "Fila {$index}: tipo_fila inválido";
         }
 
         if ($tipoFila === 'detalle') {
-            if (isset($row['cantidad_descripcion']) && !is_numeric($row['cantidad_descripcion'])) {
+            if (isset($row['cantidad_descripcion']) && ! is_numeric($row['cantidad_descripcion'])) {
                 $errors[] = "Fila {$index}: cantidad_descripcion debe ser numérico";
             }
-            if (isset($row['cantidad_tiempo']) && !is_numeric($row['cantidad_tiempo'])) {
+            if (isset($row['cantidad_tiempo']) && ! is_numeric($row['cantidad_tiempo'])) {
                 $errors[] = "Fila {$index}: cantidad_tiempo debe ser numérico";
             }
-            if (isset($row['precio']) && !is_numeric($row['precio'])) {
+            if (isset($row['precio']) && ! is_numeric($row['precio'])) {
                 $errors[] = "Fila {$index}: precio debe ser numérico";
             }
         }
@@ -1880,15 +1892,15 @@ class PresupuestoController extends Controller
         }
 
         $tipoFila = $row['tipo_fila'] ?? 'detalle';
-        if (!in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
+        if (! in_array($tipoFila, ['seccion', 'grupo', 'detalle'])) {
             $errors[] = "Fila {$index}: tipo_fila inválido";
         }
 
         if ($tipoFila === 'detalle') {
-            if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+            if (isset($row['cantidad']) && ! is_numeric($row['cantidad'])) {
                 $errors[] = "Fila {$index}: cantidad debe ser numérico";
             }
-            if (isset($row['costo_unitario']) && !is_numeric($row['costo_unitario'])) {
+            if (isset($row['costo_unitario']) && ! is_numeric($row['costo_unitario'])) {
                 $errors[] = "Fila {$index}: costo_unitario debe ser numérico";
             }
         }
@@ -1919,13 +1931,13 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo unidad no puede exceder 20 caracteres';
         }
 
-        if (isset($row['precio_unitario']) && !is_numeric($row['precio_unitario'])) {
+        if (isset($row['precio_unitario']) && ! is_numeric($row['precio_unitario'])) {
             $errors[] = 'El campo precio_unitario debe ser numérico';
         }
 
         if (empty($row['tipo'])) {
             $errors[] = 'El campo tipo es requerido';
-        } elseif (!in_array($row['tipo'], ['material', 'mano_obra', 'equipo'])) {
+        } elseif (! in_array($row['tipo'], ['material', 'mano_obra', 'equipo'])) {
             $errors[] = 'El campo tipo debe ser: material, mano_obra o equipo';
         }
 
@@ -1953,16 +1965,16 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo categoría no puede exceder 50 caracteres';
         }
 
-        if (isset($row['sueldo_basico']) && !is_numeric($row['sueldo_basico'])) {
+        if (isset($row['sueldo_basico']) && ! is_numeric($row['sueldo_basico'])) {
             $errors[] = 'El campo sueldo_basico debe ser numérico';
         }
 
-        if (isset($row['asignacion_familiar']) && !is_numeric($row['asignacion_familiar'])) {
+        if (isset($row['asignacion_familiar']) && ! is_numeric($row['asignacion_familiar'])) {
             $errors[] = 'El campo asignacion_familiar debe ser numérico';
         }
 
         if (isset($row['meses'])) {
-            if (!is_numeric($row['meses'])) {
+            if (! is_numeric($row['meses'])) {
                 $errors[] = 'El campo meses debe ser numérico';
             } elseif ($row['meses'] < 1) {
                 $errors[] = 'El campo meses debe ser al menos 1';
@@ -1989,19 +2001,19 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo descripción es requerido';
         }
 
-        if (isset($row['coeficiente']) && !is_numeric($row['coeficiente'])) {
+        if (isset($row['coeficiente']) && ! is_numeric($row['coeficiente'])) {
             $errors[] = 'El campo coeficiente debe ser numérico';
         }
 
         if (isset($row['indice_base'])) {
-            if (!is_numeric($row['indice_base'])) {
+            if (! is_numeric($row['indice_base'])) {
                 $errors[] = 'El campo indice_base debe ser numérico';
             } elseif ($row['indice_base'] == 0) {
                 $errors[] = 'El campo indice_base no puede ser cero (división por cero)';
             }
         }
 
-        if (isset($row['indice_actual']) && !is_numeric($row['indice_actual'])) {
+        if (isset($row['indice_actual']) && ! is_numeric($row['indice_actual'])) {
             $errors[] = 'El campo indice_actual debe ser numérico';
         }
 
@@ -2023,15 +2035,15 @@ class PresupuestoController extends Controller
             $errors[] = 'El campo concepto es requerido';
         }
 
-        if (isset($row['cantidad']) && !is_numeric($row['cantidad'])) {
+        if (isset($row['cantidad']) && ! is_numeric($row['cantidad'])) {
             $errors[] = 'El campo cantidad debe ser numérico';
         }
 
-        if (isset($row['meses']) && !is_numeric($row['meses'])) {
+        if (isset($row['meses']) && ! is_numeric($row['meses'])) {
             $errors[] = 'El campo meses debe ser numérico';
         }
 
-        if (isset($row['importe']) && !is_numeric($row['importe'])) {
+        if (isset($row['importe']) && ! is_numeric($row['importe'])) {
             $errors[] = 'El campo importe debe ser numérico';
         }
 
@@ -2102,8 +2114,9 @@ class PresupuestoController extends Controller
         // AGGRESSIVE CLEANING: Filter only real columns of the table to avoid 500 errors
         if ($tableName) {
             $realColumns = Schema::connection('costos_tenant')->getColumnListing($tableName);
+
             return collect($row)
-                ->filter(fn($val, $key) => in_array($key, $realColumns))
+                ->filter(fn ($val, $key) => in_array($key, $realColumns))
                 ->toArray();
         }
 
@@ -2203,13 +2216,13 @@ class PresupuestoController extends Controller
 
         if ($tableName === 'presupuesto_remuneraciones') {
             $query->leftJoin('gg_variables', 'presupuesto_remuneraciones.gg_variable_id', '=', 'gg_variables.id')
-                  ->select('presupuesto_remuneraciones.*', 'gg_variables.descripcion as cargo_gg');
+                ->select('presupuesto_remuneraciones.*', 'gg_variables.descripcion as cargo_gg');
         }
 
         if ($this->hasTenantColumn($tableName, 'item_order')) {
             $query->orderBy("$tableName.item_order");
         }
-        
+
         if ($this->hasTenantColumn($tableName, 'id')) {
             $query->orderBy("$tableName.id");
         }
@@ -2220,7 +2233,7 @@ class PresupuestoController extends Controller
         if ($tableName === 'presupuesto_acus') {
             return $rows->map(function ($row) use ($connection) {
                 $acuId = $row->id;
-                
+
                 // Estos campos reemplazan el contenido de los JSON si están presentes
                 // (Para compatibilidad gradual, si no hay filas en las tablas hijas, conserva el JSON)
                 $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
@@ -2229,11 +2242,21 @@ class PresupuestoController extends Controller
                 $sc = $connection->table('acu_subcontratos')->where('acu_id', $acuId)->orderBy('item_order')->get();
                 $sp = $connection->table('acu_subpartidas')->where('acu_id', $acuId)->orderBy('item_order')->get();
 
-                if ($mo->isNotEmpty()) $row->mano_de_obra = json_encode($mo);
-                if ($ma->isNotEmpty()) $row->materiales = json_encode($ma);
-                if ($eq->isNotEmpty()) $row->equipos = json_encode($eq);
-                if ($sc->isNotEmpty()) $row->subcontratos = json_encode($sc);
-                if ($sp->isNotEmpty()) $row->subpartidas = json_encode($sp);
+                if ($mo->isNotEmpty()) {
+                    $row->mano_de_obra = json_encode($mo);
+                }
+                if ($ma->isNotEmpty()) {
+                    $row->materiales = json_encode($ma);
+                }
+                if ($eq->isNotEmpty()) {
+                    $row->equipos = json_encode($eq);
+                }
+                if ($sc->isNotEmpty()) {
+                    $row->subcontratos = json_encode($sc);
+                }
+                if ($sp->isNotEmpty()) {
+                    $row->subpartidas = json_encode($sp);
+                }
 
                 return $row;
             });
@@ -2248,7 +2271,7 @@ class PresupuestoController extends Controller
     private function hasTenantColumn(string $tableName, string $column): bool
     {
         $key = "{$tableName}.{$column}";
-        if (!array_key_exists($key, $this->tenantColumnCache)) {
+        if (! array_key_exists($key, $this->tenantColumnCache)) {
             $this->tenantColumnCache[$key] = Schema::connection('costos_tenant')
                 ->hasColumn($tableName, $column);
         }
@@ -2262,11 +2285,11 @@ class PresupuestoController extends Controller
     private function ensureAcuSchema(): void
     {
         $schema = Schema::connection('costos_tenant');
-        if (!$schema->hasTable('presupuesto_acus')) {
+        if (! $schema->hasTable('presupuesto_acus')) {
             return;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'mano_de_obra')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'mano_de_obra')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('mano_de_obra')->nullable()
                     ->comment('Array of labor components');
@@ -2274,14 +2297,14 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.mano_de_obra'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_mano_obra')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_mano_obra')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_mano_obra', 15, 4)->default(0);
             });
             $this->tenantColumnCache['presupuesto_acus.costo_mano_obra'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'materiales')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'materiales')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('materiales')->nullable()
                     ->comment('Array of material components');
@@ -2289,14 +2312,14 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.materiales'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_materiales')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_materiales')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_materiales', 15, 4)->default(0);
             });
             $this->tenantColumnCache['presupuesto_acus.costo_materiales'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'equipos')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'equipos')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('equipos')->nullable()
                     ->comment('Array of equipment components');
@@ -2304,14 +2327,14 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.equipos'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_equipos')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_equipos')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_equipos', 15, 4)->default(0);
             });
             $this->tenantColumnCache['presupuesto_acus.costo_equipos'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'subcontratos')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'subcontratos')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('subcontratos')->nullable()
                     ->comment('Array of subcontract components');
@@ -2319,14 +2342,14 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.subcontratos'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_subcontratos')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_subcontratos')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_subcontratos', 15, 4)->default(0);
             });
             $this->tenantColumnCache['presupuesto_acus.costo_subcontratos'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'subpartidas')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'subpartidas')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->json('subpartidas')->nullable()
                     ->comment('Array of subpartidas components');
@@ -2334,14 +2357,14 @@ class PresupuestoController extends Controller
             $this->tenantColumnCache['presupuesto_acus.subpartidas'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_subpartidas')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_subpartidas')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_subpartidas', 15, 4)->default(0);
             });
             $this->tenantColumnCache['presupuesto_acus.costo_subpartidas'] = true;
         }
 
-        if (!$schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
+        if (! $schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
                 $table->decimal('costo_unitario_total', 15, 4)
                     ->storedAs('costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas')
@@ -2351,7 +2374,7 @@ class PresupuestoController extends Controller
         } else {
             try {
                 DB::connection('costos_tenant')->statement(
-                    "ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,4) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED"
+                    'ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,4) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED'
                 );
             } catch (\Throwable $e) {
                 Log::warning('No se pudo actualizar la fórmula de costo_unitario_total', [
@@ -2383,7 +2406,7 @@ class PresupuestoController extends Controller
         $this->authorizeProject($project);
         $this->validateModuleEnabled($project);
 
-        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+        if (! Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
             return response()->json(['success' => true, 'rows' => [], 'total' => 0]);
         }
 
@@ -2392,7 +2415,7 @@ class PresupuestoController extends Controller
             ->orderBy('item_order')
             ->orderBy('id')
             ->get()
-            ->map(fn($r) => (array)$r)
+            ->map(fn ($r) => (array) $r)
             ->toArray();
 
         // Calculate global total as SUM of total_seccion for root sections
@@ -2404,8 +2427,8 @@ class PresupuestoController extends Controller
 
         return response()->json([
             'success' => true,
-            'rows'    => $rows,
-            'total'   => round((float)$total, 2),
+            'rows' => $rows,
+            'total' => round((float) $total, 2),
         ]);
     }
 
@@ -2420,7 +2443,7 @@ class PresupuestoController extends Controller
         $this->authorizeProject($project);
         $this->validateModuleEnabled($project);
 
-        if (!Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
+        if (! Schema::connection('costos_tenant')->hasTable('supervision_gg_detalle')) {
             return response()->json(['success' => false, 'error' => 'Tabla no existe. Ejecute las migraciones.'], 500);
         }
 
@@ -2435,7 +2458,7 @@ class PresupuestoController extends Controller
                 ->where('presupuesto_id', $tenantPresupuestoId)
                 ->delete();
 
-            $idMapping   = [];
+            $idMapping = [];
             $sectionTotals = []; // parentId (new) => sum of subtotals
 
             foreach ($rows as $index => $row) {
@@ -2444,23 +2467,23 @@ class PresupuestoController extends Controller
                 // Prepare clean row
                 $cleanRow = [
                     'presupuesto_id' => $tenantPresupuestoId,
-                    'parent_id'      => null,
-                    'tipo_fila'      => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
-                    'item_codigo'    => substr((string)($row['item_codigo'] ?? ''), 0, 20) ?: null,
-                    'concepto'       => $row['concepto'] ?? '',
-                    'unidad'         => substr((string)($row['unidad'] ?? ''), 0, 20) ?: null,
-                    'cantidad'       => is_numeric($row['cantidad'] ?? null) ? (float)$row['cantidad'] : 0,
-                    'meses'          => is_numeric($row['meses'] ?? null)    ? (float)$row['meses']    : 0,
-                    'importe'        => is_numeric($row['importe'] ?? null)  ? (float)$row['importe']  : 0,
-                    'total_seccion'  => 0, // will be updated after all children inserted
-                    'item_order'     => $index,
-                    'created_at'     => now(),
-                    'updated_at'     => now(),
+                    'parent_id' => null,
+                    'tipo_fila' => in_array($row['tipo_fila'] ?? '', ['seccion', 'detalle']) ? $row['tipo_fila'] : 'detalle',
+                    'item_codigo' => substr((string) ($row['item_codigo'] ?? ''), 0, 20) ?: null,
+                    'concepto' => $row['concepto'] ?? '',
+                    'unidad' => substr((string) ($row['unidad'] ?? ''), 0, 20) ?: null,
+                    'cantidad' => is_numeric($row['cantidad'] ?? null) ? (float) $row['cantidad'] : 0,
+                    'meses' => is_numeric($row['meses'] ?? null) ? (float) $row['meses'] : 0,
+                    'importe' => is_numeric($row['importe'] ?? null) ? (float) $row['importe'] : 0,
+                    'total_seccion' => 0, // will be updated after all children inserted
+                    'item_order' => $index,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ];
 
                 // Remap parent_id
                 $originalParentId = $row['parent_id'] ?? null;
-                if (!is_null($originalParentId) && isset($idMapping[$originalParentId])) {
+                if (! is_null($originalParentId) && isset($idMapping[$originalParentId])) {
                     $cleanRow['parent_id'] = $idMapping[$originalParentId];
                 }
 
@@ -2486,7 +2509,7 @@ class PresupuestoController extends Controller
 
                 $connection->table('supervision_gg_detalle')
                     ->where('id', $section->id)
-                    ->update(['total_seccion' => round((float)$sectionTotal, 4)]);
+                    ->update(['total_seccion' => round((float) $sectionTotal, 4)]);
             }
 
             // Global total = SUM of root section totals
@@ -2504,20 +2527,21 @@ class PresupuestoController extends Controller
                 ->orderBy('item_order')
                 ->orderBy('id')
                 ->get()
-                ->map(fn($r) => (array)$r)
+                ->map(fn ($r) => (array) $r)
                 ->toArray();
 
             return response()->json([
                 'success' => true,
-                'rows'    => $updatedRows,
-                'total'   => round((float)$grandTotal, 2),
+                'rows' => $updatedRows,
+                'total' => round((float) $grandTotal, 2),
             ]);
         } catch (\Exception $e) {
             $connection->rollBack();
             Log::error('Error saving supervision_gg_detalle', [
                 'project' => $project->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
@@ -2532,12 +2556,13 @@ class PresupuestoController extends Controller
     private function buildPresupuestoRows(CostoProject $project): array
     {
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
         return DB::connection('costos_tenant')
             ->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->orderBy('partida')
             ->get()
-            ->map(fn($r) => (array)$r)
+            ->map(fn ($r) => (array) $r)
             ->toArray();
     }
 
@@ -2545,35 +2570,35 @@ class PresupuestoController extends Controller
      * Exporta el presupuesto general a CSV/Excel (UTF-8 BOM para compatibilidad con Microsoft Excel).
      * Ruta: GET /costos/proyectos/{project}/presupuesto/export/excel
      */
-    public function exportExcel(CostoProject $project): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function exportExcel(CostoProject $project): StreamedResponse
     {
         abort_unless(Auth::check(), 403);
 
         $rows = $this->buildPresupuestoRows($project);
-        $filename = 'presupuesto_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.csv';
+        $filename = 'presupuesto_'.preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre).'_'.date('Ymd').'.csv';
 
         return response()->streamDownload(function () use ($rows) {
             $f = fopen('php://output', 'w');
             // BOM para que Excel lo abra correctamente en UTF-8
-            fprintf($f, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($f, chr(0xEF).chr(0xBB).chr(0xBF));
             fputcsv($f, ['Ítem', 'Descripción', 'Unidad', 'Metrado', 'Precio Unit.', 'Parcial'], ';');
 
             foreach ($rows as $row) {
-                $level  = substr_count((string)($row['partida'] ?? ''), '.');
+                $level = substr_count((string) ($row['partida'] ?? ''), '.');
                 $indent = str_repeat('  ', $level);
                 fputcsv($f, [
-                    $row['partida']       ?? '',
-                    $indent . ($row['descripcion'] ?? ''),
-                    $row['unidad']        ?? '',
-                    number_format((float)($row['metrado'] ?? 0), 4, '.', ''),
-                    number_format((float)($row['precio_unitario'] ?? 0), 4, '.', ''),
-                    number_format((float)($row['parcial'] ?? 0), 4, '.', ''),
+                    $row['partida'] ?? '',
+                    $indent.($row['descripcion'] ?? ''),
+                    $row['unidad'] ?? '',
+                    number_format((float) ($row['metrado'] ?? 0), 4, '.', ''),
+                    number_format((float) ($row['precio_unitario'] ?? 0), 4, '.', ''),
+                    number_format((float) ($row['parcial'] ?? 0), 4, '.', ''),
                 ], ';');
             }
             fclose($f);
         }, $filename, [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
@@ -2585,15 +2610,15 @@ class PresupuestoController extends Controller
     {
         abort_unless(Auth::check(), 403);
 
-        $rows   = $this->buildPresupuestoRows($project);
+        $rows = $this->buildPresupuestoRows($project);
         $nombre = $project->nombre;
-        $fecha  = now()->format('d/m/Y');
+        $fecha = now()->format('d/m/Y');
 
         $levelColors = ['#1e3a5f', '#1a5276', '#1f618d', '#2471a3', '#2e86c1'];
-        $bgColors    = ['#d6eaf8', '#eaf4fb', '#f2f9fd', '#ffffff', '#ffffff'];
+        $bgColors = ['#d6eaf8', '#eaf4fb', '#f2f9fd', '#ffffff', '#ffffff'];
 
         $html = '<!DOCTYPE html><html><head><meta charset="UTF-8">
-            <title>Presupuesto - ' . e($nombre) . '</title>
+            <title>Presupuesto - '.e($nombre).'</title>
             <style>
             body { font-family: Arial, sans-serif; font-size: 10px; color: #111; margin: 20px; }
             h1 { font-size: 14px; color: #1a3a5c; margin-bottom: 4px; }
@@ -2607,7 +2632,7 @@ class PresupuestoController extends Controller
             @media print { @page { size: A4 landscape; margin: 15mm; } }
             </style></head><body>
             <h1>PRESUPUESTO GENERAL</h1>
-            <p class="sub">Proyecto: <strong>' . e($nombre) . '</strong> &nbsp;|&nbsp; ' . $fecha . '</p>
+            <p class="sub">Proyecto: <strong>'.e($nombre).'</strong> &nbsp;|&nbsp; '.$fecha.'</p>
             <table><thead><tr>
             <th style="width:90px">Ítem</th><th>Descripción</th>
             <th style="width:40px" class="r">Und.</th>
@@ -2618,43 +2643,48 @@ class PresupuestoController extends Controller
 
         $rootTotal = 0;
         foreach ($rows as $row) {
-            $level   = substr_count((string)($row['partida'] ?? ''), '.');
-            $bg      = $bgColors[min($level, 4)];
-            $color   = $levelColors[min($level, 4)];
-            $bold    = $level <= 1 ? ' font-weight:bold;' : '';
-            $indent  = $level * 16;
-            $parcial = (float)($row['parcial'] ?? 0);
-            if ($level === 0) $rootTotal += $parcial;
+            $level = substr_count((string) ($row['partida'] ?? ''), '.');
+            $bg = $bgColors[min($level, 4)];
+            $color = $levelColors[min($level, 4)];
+            $bold = $level <= 1 ? ' font-weight:bold;' : '';
+            $indent = $level * 16;
+            $parcial = (float) ($row['parcial'] ?? 0);
+            if ($level === 0) {
+                $rootTotal += $parcial;
+            }
 
-            $html .= '<tr style="background:' . $bg . ';color:' . $color . ';' . $bold . '">';
-            $html .= '<td style="padding-left:' . ($indent + 8) . 'px;font-size:9px">' . e($row['partida'] ?? '') . '</td>';
-            $html .= '<td style="padding-left:' . ($indent + 8) . 'px">' . e($row['descripcion'] ?? '') . '</td>';
-            $html .= '<td class="r">' . e($row['unidad'] ?? '') . '</td>';
-            $html .= '<td class="r">' . ((float)($row['metrado'] ?? 0) > 0 ? number_format((float)$row['metrado'], 4, '.', ',') : '') . '</td>';
-            $html .= '<td class="r">' . ((float)($row['precio_unitario'] ?? 0) > 0 ? number_format((float)$row['precio_unitario'], 4, '.', ',') : '') . '</td>';
-            $html .= '<td class="r">' . number_format($parcial, 2, '.', ',') . '</td>';
+            $html .= '<tr style="background:'.$bg.';color:'.$color.';'.$bold.'">';
+            $html .= '<td style="padding-left:'.($indent + 8).'px;font-size:9px">'.e($row['partida'] ?? '').'</td>';
+            $html .= '<td style="padding-left:'.($indent + 8).'px">'.e($row['descripcion'] ?? '').'</td>';
+            $html .= '<td class="r">'.e($row['unidad'] ?? '').'</td>';
+            $html .= '<td class="r">'.((float) ($row['metrado'] ?? 0) > 0 ? number_format((float) $row['metrado'], 4, '.', ',') : '').'</td>';
+            $html .= '<td class="r">'.((float) ($row['precio_unitario'] ?? 0) > 0 ? number_format((float) $row['precio_unitario'], 4, '.', ',') : '').'</td>';
+            $html .= '<td class="r">'.number_format($parcial, 2, '.', ',').'</td>';
             $html .= '</tr>';
         }
 
         $html .= '<tr class="tot"><td colspan="5" style="text-align:right;padding-right:16px">COSTO DIRECTO TOTAL</td>';
-        $html .= '<td class="r">' . number_format($rootTotal, 2, '.', ',') . '</td></tr>';
+        $html .= '<td class="r">'.number_format($rootTotal, 2, '.', ',').'</td></tr>';
         $html .= '</tbody></table></body></html>';
 
-        $filename = 'presupuesto_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.pdf';
+        $filename = 'presupuesto_'.preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre).'_'.date('Ymd').'.pdf';
 
         // Si Dompdf (barryvdh/laravel-dompdf) está instalado, generar PDF real
-        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+        if (class_exists(Pdf::class)) {
+            $pdf = Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+
             return $pdf->download($filename);
         }
 
         // Fallback: HTML con ventana de impresión automática
         $html = str_replace('</body>', '<script>window.onload=function(){window.print();}</script></body>', $html);
+
         return response($html, 200, [
-            'Content-Type'        => 'text/html; charset=UTF-8',
-            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
         ]);
     }
+
     /**
      * Obtener componentes de un ACU por tipo.
      */
@@ -2684,9 +2714,9 @@ class PresupuestoController extends Controller
         $model = $this->getAcuComponentModel($tipo);
         $data = $request->all();
         $data['acu_id'] = $acuId;
-        
+
         // Calculate item_order if not provided
-        if (!isset($data['item_order'])) {
+        if (! isset($data['item_order'])) {
             $data['item_order'] = $model::where('acu_id', $acuId)->count();
         }
 
@@ -2711,7 +2741,7 @@ class PresupuestoController extends Controller
 
         $model = $this->getAcuComponentModel($tipo);
         $componente = $model::where('acu_id', $acuId)->findOrFail($id);
-        
+
         $componente->update($request->all());
 
         $this->refreshAcuTotalsAndJson($acuId);
@@ -2748,30 +2778,31 @@ class PresupuestoController extends Controller
     {
         $this->authorizeProject($project);
         $sourcePresupuestoId = $request->input('source_presupuesto_id');
-        
-        if (!$sourcePresupuestoId) {
+
+        if (! $sourcePresupuestoId) {
             return response()->json(['success' => false, 'message' => 'ID de presupuesto origen requerido'], 422);
         }
 
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-        
+
         DB::connection('costos_tenant')->beginTransaction();
         try {
             $this->copyAcuData($sourcePresupuestoId, $tenantPresupuestoId, $project->database_name);
             DB::connection('costos_tenant')->commit();
-            
+
             return response()->json(['success' => true, 'message' => 'Presupuesto copiado exitosamente']);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
-            Log::error("Error copying budget: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Error al copiar presupuesto: ' . $e->getMessage()], 500);
+            Log::error('Error copying budget: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Error al copiar presupuesto: '.$e->getMessage()], 500);
         }
     }
 
     private function validateAcuComponentType(string $tipo): void
     {
         $validTypes = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
-        if (!in_array($tipo, $validTypes)) {
+        if (! in_array($tipo, $validTypes)) {
             abort(400, "Tipo de componente de ACU inválido: {$tipo}");
         }
     }
@@ -2780,17 +2811,17 @@ class PresupuestoController extends Controller
     {
         return match ($tipo) {
             'mano_de_obra' => AcuManoDeObra::class,
-            'materiales'   => AcuMaterial::class,
-            'equipos'      => AcuEquipo::class,
+            'materiales' => AcuMaterial::class,
+            'equipos' => AcuEquipo::class,
             'subcontratos' => AcuSubcontrato::class,
-            'subpartidas'  => AcuSubpartida::class,
+            'subpartidas' => AcuSubpartida::class,
         };
     }
 
     private function refreshAcuTotalsAndJson(int $acuId): void
     {
         $connection = DB::connection('costos_tenant');
-        
+
         $mo = $connection->table('acu_mano_de_obra')->where('acu_id', $acuId)->orderBy('item_order')->get();
         $ma = $connection->table('acu_materiales')->where('acu_id', $acuId)->orderBy('item_order')->get();
         $eq = $connection->table('acu_equipos')->where('acu_id', $acuId)->orderBy('item_order')->get();
@@ -2806,19 +2837,19 @@ class PresupuestoController extends Controller
         $connection->table('presupuesto_acus')
             ->where('id', $acuId)
             ->update([
-                'mano_de_obra'       => json_encode($mo),
-                'materiales'         => json_encode($ma),
-                'equipos'            => json_encode($eq),
-                'subcontratos'       => json_encode($sc),
-                'subpartidas'        => json_encode($sp),
-                'costo_mano_obra'    => $costoMo,
-                'costo_materiales'   => $costoMa,
-                'costo_equipos'      => $costoEq,
+                'mano_de_obra' => json_encode($mo),
+                'materiales' => json_encode($ma),
+                'equipos' => json_encode($eq),
+                'subcontratos' => json_encode($sc),
+                'subpartidas' => json_encode($sp),
+                'costo_mano_obra' => $costoMo,
+                'costo_materiales' => $costoMa,
+                'costo_equipos' => $costoEq,
                 'costo_subcontratos' => $costoSc,
-                'costo_subpartidas'  => $costoSp,
-                'updated_at'         => now(),
+                'costo_subpartidas' => $costoSp,
+                'updated_at' => now(),
             ]);
-            
+
         // Sync with presupuesto_general
         $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
         if ($acu) {
@@ -2826,10 +2857,10 @@ class PresupuestoController extends Controller
                 ->where('presupuesto_id', data_get($acu, 'presupuesto_id'))
                 ->where('partida', data_get($acu, 'partida'))
                 ->update([
-                    'precio_unitario' => (float)data_get($acu, 'costo_unitario_total', 0),
-                    'updated_at'      => now(),
+                    'precio_unitario' => (float) data_get($acu, 'costo_unitario_total', 0),
+                    'updated_at' => now(),
                 ]);
-            
+
             $this->dbService->syncCostoDirecto(DB::connection('costos_tenant')->getDatabaseName(), data_get($acu, 'presupuesto_id'));
         }
     }
@@ -2847,7 +2878,7 @@ class PresupuestoController extends Controller
             ->get();
 
         foreach ($sourceAcus as $sourceAcu) {
-            $acuData = (array)$sourceAcu;
+            $acuData = (array) $sourceAcu;
             unset($acuData['id']);
             $acuData['presupuesto_id'] = $targetPresupuestoId;
             $acuData['created_at'] = now();
@@ -2870,7 +2901,7 @@ class PresupuestoController extends Controller
                     ->get();
 
                 foreach ($components as $comp) {
-                    $compData = (array)$comp;
+                    $compData = (array) $comp;
                     unset($compData['id']);
                     $compData['acu_id'] = $newAcuId;
                     $compData['created_at'] = now();
@@ -2886,11 +2917,11 @@ class PresupuestoController extends Controller
      * Sincroniza los componentes de un ACU con las tablas hijas especializadas.
      */
     private function syncAcuComponents(
-        int $acuId, 
-        array $manoDeObra, 
-        array $materiales, 
-        array $equipos, 
-        array $subcontratos, 
+        int $acuId,
+        array $manoDeObra,
+        array $materiales,
+        array $equipos,
+        array $subcontratos,
         array $subpartidas
     ): void {
         // Limpiar registros previos

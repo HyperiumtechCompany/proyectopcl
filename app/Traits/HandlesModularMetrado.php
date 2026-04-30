@@ -80,7 +80,7 @@ trait HandlesModularMetrado
         $connection = DB::connection('costos_tenant');
         $presupuestoId = app(CostoDatabaseService::class)->getDefaultPresupuestoId($costoProject->database_name);
         $columns = $connection->getSchemaBuilder()->getColumnListing(static::TABLE_MODULOS);
-        $hasColumn = fn(string $column) => in_array($column, $columns, true);
+        $hasColumn = fn (string $column) => in_array($column, $columns, true);
 
         $connection->beginTransaction();
 
@@ -92,7 +92,7 @@ trait HandlesModularMetrado
             $existingIds = $connection->table(static::TABLE_MODULOS)
                 ->where($scope)
                 ->pluck('id')
-                ->map(fn($id) => (int) $id)
+                ->map(fn ($id) => (int) $id)
                 ->all();
             $touchedIds = [];
 
@@ -167,6 +167,7 @@ trait HandlesModularMetrado
                         ->update($data + ['updated_at' => now()]);
 
                     $touchedIds[] = $rowId;
+
                     continue;
                 }
 
@@ -180,6 +181,7 @@ trait HandlesModularMetrado
                         ->where('id', $existingByIndex->id)
                         ->update($data + ['updated_at' => now()]);
                     $touchedIds[] = $existingByIndex->id;
+
                     continue;
                 }
 
@@ -190,7 +192,7 @@ trait HandlesModularMetrado
             }
 
             $deleteQuery = $connection->table(static::TABLE_MODULOS)->where($scope);
-            if (!empty($touchedIds)) {
+            if (! empty($touchedIds)) {
                 $deleteQuery->whereNotIn('id', $touchedIds);
             }
             $deleteQuery->delete();
@@ -246,7 +248,7 @@ trait HandlesModularMetrado
             ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
             ->get()
-            ->map(fn($row) => (array) $row)
+            ->map(fn ($row) => (array) $row)
             ->toArray();
     }
 

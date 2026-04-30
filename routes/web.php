@@ -8,21 +8,23 @@ use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\CronogramaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
+use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
+use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\EttpController;
+use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\MetradoArquitecturaController;
 use App\Http\Controllers\MetradoComunicacionesController;
-use App\Http\Controllers\MetradoEstructurasController;
-use App\Http\Controllers\MetradoSanitariasController;
+use App\Http\Controllers\MetradoComunicacionSpreadsheetController;
 use App\Http\Controllers\MetradoElectricasController;
+use App\Http\Controllers\MetradoElectricasSpreadsheetController;
+use App\Http\Controllers\MetradoEstructurasController;
+use App\Http\Controllers\MetradoGasController;
+use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradosController;
-use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\MetradoComunicacionSpreadsheetController;
-use App\Http\Controllers\MetradoElectricasSpreadsheetController;
-use App\Http\Controllers\MetradoGasController;
 use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -38,6 +40,23 @@ Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
+// ----------- DIALux (Editor Lumínico 2D/3D)
+Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->group(function () {
+    Route::get('/', [DialuxEditor2DController::class, 'index'])->name('index');
+    Route::post('/import-dwg', [DialuxEditor2DController::class, 'importDWG'])->name('import-dwg');
+    Route::post('/formal-export', [DialuxEditor2DController::class, 'formalExport'])->name('formal-export');
+
+    // ─── Catálogo de productos fotométricos ─────────────────────────────────
+    Route::prefix('products')->name('products.')->group(function () {
+        Route::get('/', [DialuxProductController::class, 'index'])->name('index');
+        Route::post('/import', [DialuxProductController::class, 'import'])->name('import');
+        Route::get('/{productId}', [DialuxProductController::class, 'show'])->name('show');
+        Route::delete('/{productId}', [DialuxProductController::class, 'destroy'])->name('destroy');
+        Route::post('/{productId}/assign', [DialuxProductController::class, 'assign'])->name('assign');
+        Route::get('/{productId}/source', [DialuxProductController::class, 'downloadSource'])->name('source');
+    });
+});
+
 // ─── Gestión de Personal / Usuarios ───────────────────────────────────────────
 Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->group(function () {
     Route::resource('users', UserController::class);
@@ -47,7 +66,7 @@ Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->gr
 Route::middleware(['auth', 'verified'])->prefix('caida-tension')->name('caida-tension.')->group(function () {
     Route::get('/', [CaidaTensionController::class, 'index'])->name('index');
     Route::post('/', [CaidaTensionController::class, 'store'])->name('store');
-    Route::get('/join', fn() => redirect()->route('caida-tension.index'))->name('join.form');
+    Route::get('/join', fn () => redirect()->route('caida-tension.index'))->name('join.form');
     Route::post('/join', [CaidaTensionController::class, 'join'])->name('join');
     Route::get('/{caidaTension}', [CaidaTensionController::class, 'show'])->name('show');
     Route::patch('/{caidaTension}', [CaidaTensionController::class, 'update'])->name('update');
@@ -59,7 +78,7 @@ Route::middleware(['auth', 'verified'])->prefix('caida-tension')->name('caida-te
 Route::middleware(['auth', 'verified'])->prefix('ac-calculation')->name('ac-calculation.')->group(function () {
     Route::get('/', [AcCalculationController::class, 'index'])->name('index');
     Route::post('/', [AcCalculationController::class, 'store'])->name('store');
-    Route::get('/join', fn() => redirect()->route('ac-calculation.index'))->name('join.form');
+    Route::get('/join', fn () => redirect()->route('ac-calculation.index'))->name('join.form');
     Route::post('/join', [AcCalculationController::class, 'join'])->name('join');
     Route::get('/{acCalculation}', [AcCalculationController::class, 'show'])->name('show');
     Route::patch('/{acCalculation}', [AcCalculationController::class, 'update'])->name('update');
@@ -76,7 +95,7 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
     Route::group(['prefix' => 'comunicaciones', 'as' => 'comunicaciones.'], function () {
         Route::get('/', [MetradoComunicacionSpreadsheetController::class, 'index'])->name('index');
         Route::post('/', [MetradoComunicacionSpreadsheetController::class, 'store'])->name('store');
-        Route::get('/join', fn() => redirect()->route('metrados.comunicaciones.index'))->name('join.form');
+        Route::get('/join', fn () => redirect()->route('metrados.comunicaciones.index'))->name('join.form');
         Route::post('/join', [MetradoComunicacionSpreadsheetController::class, 'join'])->name('join');
         Route::get('/{metradosComunicacion}', [MetradoComunicacionSpreadsheetController::class, 'show'])->name('show');
         Route::patch('/{metradosComunicacion}', [MetradoComunicacionSpreadsheetController::class, 'update'])->name('update');
@@ -90,7 +109,7 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
     Route::group(['prefix' => 'electricas', 'as' => 'electricas.'], function () {
         Route::get('/', [MetradoElectricasSpreadsheetController::class, 'index'])->name('index');
         Route::post('/', [MetradoElectricasSpreadsheetController::class, 'store'])->name('store');
-        Route::get('/join', fn() => redirect()->route('metrados.electricas.index'))->name('join.form');
+        Route::get('/join', fn () => redirect()->route('metrados.electricas.index'))->name('join.form');
         Route::post('/join', [MetradoElectricasSpreadsheetController::class, 'join'])->name('join');
         Route::get('/{metradosElectrica}', [MetradoElectricasSpreadsheetController::class, 'show'])->name('show');
         Route::patch('/{metradosElectrica}', [MetradoElectricasSpreadsheetController::class, 'update'])->name('update');
@@ -107,7 +126,7 @@ Route::middleware(['auth', 'verified'])->prefix('metrados')->name('metrados.')->
 Route::middleware(['auth', 'verified'])->prefix('agua-calculation')->name('agua-calculation.')->group(function () {
     Route::get('/', [AguaCalculationController::class, 'index'])->name('index');
     Route::post('/', [AguaCalculationController::class, 'store'])->name('store');
-    Route::get('/join', fn() => redirect()->route('agua-calculation.index'))->name('join.form');
+    Route::get('/join', fn () => redirect()->route('agua-calculation.index'))->name('join.form');
     Route::post('/join', [AguaCalculationController::class, 'join'])->name('join');
     Route::get('/{aguaCalculation}', [AguaCalculationController::class, 'show'])->name('show');
     Route::patch('/{aguaCalculation}', [AguaCalculationController::class, 'update'])->name('update');
@@ -119,7 +138,7 @@ Route::middleware(['auth', 'verified'])->prefix('agua-calculation')->name('agua-
 Route::middleware(['auth', 'verified'])->prefix('desague-calculation')->name('desague-calculation.')->group(function () {
     Route::get('/', [DesagueCalculationController::class, 'index'])->name('index');
     Route::post('/', [DesagueCalculationController::class, 'store'])->name('store');
-    Route::get('/join', fn() => redirect()->route('desague-calculation.index'))->name('join.form');
+    Route::get('/join', fn () => redirect()->route('desague-calculation.index'))->name('join.form');
     Route::post('/join', [DesagueCalculationController::class, 'join'])->name('join');
     Route::get('/{desagueCalculation}', [DesagueCalculationController::class, 'show'])->name('show');
     Route::patch('/{desagueCalculation}', [DesagueCalculationController::class, 'update'])->name('update');
@@ -131,7 +150,7 @@ Route::middleware(['auth', 'verified'])->prefix('desague-calculation')->name('de
 Route::middleware(['auth', 'verified'])->prefix('spatt-pararrayos')->name('spatt-pararrayos.')->group(function () {
     Route::get('/', [SpattPararrayoSpreadsheetController::class, 'index'])->name('index');
     Route::post('/', [SpattPararrayoSpreadsheetController::class, 'store'])->name('store');
-    Route::get('/join', fn() => redirect()->route('spatt-pararrayos.index'))->name('join.form');
+    Route::get('/join', fn () => redirect()->route('spatt-pararrayos.index'))->name('join.form');
     Route::post('/join', [SpattPararrayoSpreadsheetController::class, 'join'])->name('join');
     Route::get('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'show'])->name('show');
     Route::patch('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'update'])->name('update');
@@ -304,8 +323,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
     // ETTS — Redirecciones heredadas (opcional)
-    Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
-    Route::get('/module/etts', function() {
+    Route::get('/costos/{costoProject}/ettp/test', [EttpController::class, 'testMetrados']);
+    Route::get('/module/etts', function () {
         return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);
     })->name('module.etts');
 });
@@ -333,4 +352,4 @@ Route::middleware(['auth'])->prefix('api/ubigeo')->name('ubigeo.')->group(functi
     Route::get('/distritos/{provincia}', [UbigeoController::class, 'distritos'])->name('distritos');
 });
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

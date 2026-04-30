@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * ETTP Sección — Sección variable de una partida de especificación técnica.
@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class EttpSeccion extends Model
 {
     protected $connection = 'costos_tenant';
+
     protected $table = 'ettp_secciones';
 
     protected $fillable = [
@@ -55,6 +56,7 @@ class EttpSeccion extends Model
             $slug
         );
         $slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
+
         return trim($slug, '_');
     }
 

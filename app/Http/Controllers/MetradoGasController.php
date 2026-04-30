@@ -14,6 +14,7 @@ class MetradoGasController extends Controller
     use HandleMetradoSpreadsheet;
 
     private const TABLE_METRADO = 'metrado_gas';
+
     private const TABLE_RESUMEN = 'metrado_gas_resumen';
 
     public function index(CostoProject $costoProject): Response

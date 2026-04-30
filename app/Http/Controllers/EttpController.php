@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use Inertia\Inertia;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\CostoProject;
+use App\Models\EttpImagen;
 use App\Models\EttpPartida;
 use App\Models\EttpSeccion;
-use App\Models\EttpImagen;
-use App\Models\CostoProject;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CostoDatabaseService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class EttpController extends Controller
 {
@@ -20,12 +21,12 @@ class EttpController extends Controller
      * Todas las claves usan la forma plural que coincide con el frontend.
      */
     private const TABLA_RESUMEN_MAP = [
-        'arquitectura'   => 'metrado_arquitectura_resumen',
-        'estructuras'    => 'metrado_estructura_resumen',
-        'sanitarias'     => 'metrado_sanitarias_resumen',
-        'electricas'     => 'metrado_electricas_resumen',
+        'arquitectura' => 'metrado_arquitectura_resumen',
+        'estructuras' => 'metrado_estructura_resumen',
+        'sanitarias' => 'metrado_sanitarias_resumen',
+        'electricas' => 'metrado_electricas_resumen',
         'comunicaciones' => 'metrado_comunicaciones_resumen',
-        'gas'            => 'metrado_gas_resumen',
+        'gas' => 'metrado_gas_resumen',
     ];
 
     /**
@@ -35,7 +36,7 @@ class EttpController extends Controller
     public function show(CostoProject $costoProject, Request $request)
     {
         // Obtener el ID del presupuesto interno del tenant
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $proyectoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         // Cargar partidas con sus secciones e imágenes (eager loading)
@@ -51,17 +52,17 @@ class EttpController extends Controller
         $arbol = $this->buildTree($partidas, $proyectoId);
 
         return Inertia::render('costos/ettp/etts', [
-            'proyecto'   => array_merge($costoProject->toArray(), [
-                'plantilla_logo_izq_url'  => $costoProject->plantilla_logo_izq
-                    ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der_url'  => $costoProject->plantilla_logo_der
-                    ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+            'proyecto' => array_merge($costoProject->toArray(), [
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq
+                    ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der
+                    ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
                 'portada_logo_center_url' => $costoProject->portada_logo_center
-                    ? asset('storage/' . $costoProject->portada_logo_center) : null,
-                'plantilla_firma_url'     => $costoProject->plantilla_firma
-                    ? asset('storage/' . $costoProject->plantilla_firma) : null,
+                    ? asset('storage/'.$costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma
+                    ? asset('storage/'.$costoProject->plantilla_firma) : null,
             ]),
-            'partidas'       => $arbol,
+            'partidas' => $arbol,
             'especialidades' => $this->getEspecialidadesDisponibles($proyectoId),
         ]);
     }
@@ -101,31 +102,31 @@ class EttpController extends Controller
     private function formatPartida($partida): array
     {
         return [
-            'id'            => $partida->id,
-            'item'          => $partida->item,
-            'partida'       => $partida->partida,
-            'descripcion'   => $partida->descripcion,
-            'unidad'        => $partida->unidad,
-            'especialidad'  => $partida->especialidad,
-            'estado'        => $partida->estado,
-            'huerfano'      => $partida->huerfano,
-            'nivel'         => $partida->nivel,
-            'secciones'     => $partida->secciones->map(fn($s) => [
-                'id'        => $s->id,
-                'title'     => $s->titulo,
-                'titulo'    => $s->titulo,
-                'slug'      => $s->slug,
-                'content'   => $s->contenido,
+            'id' => $partida->id,
+            'item' => $partida->item,
+            'partida' => $partida->partida,
+            'descripcion' => $partida->descripcion,
+            'unidad' => $partida->unidad,
+            'especialidad' => $partida->especialidad,
+            'estado' => $partida->estado,
+            'huerfano' => $partida->huerfano,
+            'nivel' => $partida->nivel,
+            'secciones' => $partida->secciones->map(fn ($s) => [
+                'id' => $s->id,
+                'title' => $s->titulo,
+                'titulo' => $s->titulo,
+                'slug' => $s->slug,
+                'content' => $s->contenido,
                 'contenido' => $s->contenido,
-                'origen'    => $s->origen,
-                'orden'     => $s->orden,
-                'imagenes'  => $s->imagenes->map(fn($i) => [
-                    'id'              => $i->id,
-                    'nombre_archivo'  => $i->nombre_archivo,
+                'origen' => $s->origen,
+                'orden' => $s->orden,
+                'imagenes' => $s->imagenes->map(fn ($i) => [
+                    'id' => $i->id,
+                    'nombre_archivo' => $i->nombre_archivo,
                     'nombre_original' => $i->nombre_original,
-                    'caption'         => $i->caption,
-                    'url'             => $i->url,
-                    'orden'           => $i->orden,
+                    'caption' => $i->caption,
+                    'url' => $i->url,
+                    'orden' => $i->orden,
                 ])->toArray(),
             ])->toArray(),
             '_children' => [],
@@ -142,17 +143,18 @@ class EttpController extends Controller
                 $todas->where('parent_id', $node['id'])->values()
             );
             if ($children->isNotEmpty()) {
-                $childNodes = $children->map(fn($p) => $this->formatPartida($p))->toArray();
+                $childNodes = $children->map(fn ($p) => $this->formatPartida($p))->toArray();
                 $node['_children'] = $this->attachChildren($childNodes, $todas);
             }
         }
+
         return $tree;
     }
 
     private function sortPartidasByItem($partidas)
     {
         return $partidas
-            ->sort(static fn($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
+            ->sort(static fn ($left, $right) => EttpPartida::compareItemCodes($left->item, $right->item))
             ->values();
     }
 
@@ -172,15 +174,15 @@ class EttpController extends Controller
 
                 $especialidades[] = [
                     'nombre' => $nombre,
-                    'tabla'  => $tabla,
-                    'total'  => $count,
+                    'tabla' => $tabla,
+                    'total' => $count,
                     'disponible' => $count > 0,
                 ];
             } catch (\Exception $e) {
                 $especialidades[] = [
                     'nombre' => $nombre,
-                    'tabla'  => $tabla,
-                    'total'  => 0,
+                    'tabla' => $tabla,
+                    'total' => 0,
                     'disponible' => false,
                 ];
             }
@@ -199,7 +201,7 @@ class EttpController extends Controller
      */
     public function importarMetrados(CostoProject $costoProject, Request $request)
     {
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         // Usar el mapa constante unificado
@@ -207,12 +209,12 @@ class EttpController extends Controller
 
         // Claves consistentes con el frontend (todas en plural)
         $seleccionadas = array_keys(array_filter([
-            'arquitectura'   => (bool) $request->input('arquitectura', 0),
-            'estructuras'    => (bool) $request->input('estructuras', 0),
-            'sanitarias'     => (bool) $request->input('sanitarias', 0),
-            'electricas'     => (bool) $request->input('electricas', 0),
+            'arquitectura' => (bool) $request->input('arquitectura', 0),
+            'estructuras' => (bool) $request->input('estructuras', 0),
+            'sanitarias' => (bool) $request->input('sanitarias', 0),
+            'electricas' => (bool) $request->input('electricas', 0),
             'comunicaciones' => (bool) $request->input('comunicaciones', 0),
-            'gas'            => (bool) $request->input('gas', 0),
+            'gas' => (bool) $request->input('gas', 0),
         ]));
 
         if (empty($seleccionadas)) {
@@ -228,29 +230,33 @@ class EttpController extends Controller
                     ->where('presupuesto_id', $presupuestoId)
                     ->get();
 
-                if ($datos->isEmpty()) continue;
+                if ($datos->isEmpty()) {
+                    continue;
+                }
 
                 foreach ($datos as $item) {
                     // Manejar discrepancia de nombres de columnas (base vs modular)
-                    $codigo = trim((string)($item->item ?? $item->partida ?? ''));
-                    $unidad = trim((string)($item->und ?? $item->unidad ?? ''));
+                    $codigo = trim((string) ($item->item ?? $item->partida ?? ''));
+                    $unidad = trim((string) ($item->und ?? $item->unidad ?? ''));
 
-                    if (empty($codigo)) continue;
+                    if (empty($codigo)) {
+                        continue;
+                    }
 
                     // Sincronizar con tabla maestros de especificaciones
                     EttpPartida::updateOrCreate(
                         [
                             'presupuesto_id' => $presupuestoId,
-                            'especialidad'   => $especialidad,
-                            'item'           => $codigo,
+                            'especialidad' => $especialidad,
+                            'item' => $codigo,
                         ],
                         [
-                            'descripcion'          => $item->descripcion,
-                            'unidad'               => $unidad,
-                            'resumen_source_id'    => $item->id,
+                            'descripcion' => $item->descripcion,
+                            'unidad' => $unidad,
+                            'resumen_source_id' => $item->id,
                             'resumen_source_table' => $tabla,
-                            'nivel'                => $item->nivel ?? 0,
-                            'item_order'           => $item->item_order ?? 0,
+                            'nivel' => $item->nivel ?? 0,
+                            'item_order' => $item->item_order ?? 0,
                         ]
                     );
                 }
@@ -265,9 +271,11 @@ class EttpController extends Controller
                     ->keyBy('item');
 
                 foreach ($todasSpecialidad as $item) {
-                    if ($item->parent_id) continue; // Ya fue resuelto por BD origen
+                    if ($item->parent_id) {
+                        continue;
+                    } // Ya fue resuelto por BD origen
 
-                    $codigo = trim((string)$item->item);
+                    $codigo = trim((string) $item->item);
                     $partes = explode('.', $codigo);
                     if (count($partes) > 1) {
                         $parentCode = implode('.', array_slice($partes, 0, -1));
@@ -277,7 +285,8 @@ class EttpController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                Log::error("Error importando especialidad {$especialidad}: " . $e->getMessage());
+                Log::error("Error importando especialidad {$especialidad}: ".$e->getMessage());
+
                 continue;
             }
         }
@@ -307,7 +316,7 @@ class EttpController extends Controller
             ->toArray();
 
         foreach ($resumen as $fila) {
-            if (!empty($fila->parent_id) && isset($mapaIds[$fila->id]) && isset($mapaIds[$fila->parent_id])) {
+            if (! empty($fila->parent_id) && isset($mapaIds[$fila->id]) && isset($mapaIds[$fila->parent_id])) {
                 EttpPartida::where('id', $mapaIds[$fila->id])
                     ->update(['parent_id' => $mapaIds[$fila->parent_id]]);
             }
@@ -335,14 +344,43 @@ class EttpController extends Controller
         try {
             $this->recursiveSavePartidas($data);
             DB::connection('costos_tenant')->commit();
+
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
             Log::error('Error saving ETTP specifications', ['error' => $e->getMessage()]);
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
+<<<<<<< Updated upstream
+=======
+    public function eliminarPartida(CostoProject $costoProject, $partidaId)
+    {
+        $dbService = app(CostoDatabaseService::class);
+        $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
+
+        $partida = EttpPartida::where('presupuesto_id', $presupuestoId)
+            ->with(['secciones.imagenes', 'children.secciones.imagenes'])
+            ->findOrFail($partidaId);
+
+        DB::connection('costos_tenant')->beginTransaction();
+
+        try {
+            $partida->delete();
+            DB::connection('costos_tenant')->commit();
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            DB::connection('costos_tenant')->rollBack();
+            Log::error('Error deleting ETTP partida', ['error' => $e->getMessage(), 'partida_id' => $partidaId]);
+
+            return response()->json(['error' => 'No se pudo eliminar la partida'], 500);
+        }
+    }
+
+>>>>>>> Stashed changes
     /**
      * Guarda recursivamente las partidas del árbol.
      */
@@ -353,14 +391,14 @@ class EttpController extends Controller
                 $partida = EttpPartida::find($node['id']);
                 if ($partida) {
                     $partida->update([
-                        'item'        => $node['item'] ?? $partida->item,
+                        'item' => $node['item'] ?? $partida->item,
                         'descripcion' => $node['descripcion'] ?? $partida->descripcion,
-                        'unidad'      => $node['unidad'] ?? $partida->unidad,
+                        'unidad' => $node['unidad'] ?? $partida->unidad,
                     ]);
                 }
             }
 
-            if (!empty($node['_children'])) {
+            if (! empty($node['_children'])) {
                 $this->recursiveSavePartidas($node['_children']);
             }
         }
@@ -372,7 +410,7 @@ class EttpController extends Controller
 
     public function getSecciones(CostoProject $costoProject, $partidaId)
     {
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         $partida = EttpPartida::where('presupuesto_id', $presupuestoId)
@@ -380,29 +418,29 @@ class EttpController extends Controller
             ->findOrFail($partidaId);
 
         return response()->json([
-            'partida'   => [
-                'id'          => $partida->id,
-                'item'        => $partida->item,
+            'partida' => [
+                'id' => $partida->id,
+                'item' => $partida->item,
                 'descripcion' => $partida->descripcion,
-                'estado'      => $partida->estado,
-                'huerfano'    => $partida->huerfano,
+                'estado' => $partida->estado,
+                'huerfano' => $partida->huerfano,
             ],
-            'secciones' => $partida->secciones->map(fn($s) => [
-                'id'        => $s->id,
-                'title'     => $s->titulo,
-                'titulo'    => $s->titulo,
-                'slug'      => $s->slug,
-                'content'   => $s->contenido,
+            'secciones' => $partida->secciones->map(fn ($s) => [
+                'id' => $s->id,
+                'title' => $s->titulo,
+                'titulo' => $s->titulo,
+                'slug' => $s->slug,
+                'content' => $s->contenido,
                 'contenido' => $s->contenido,
-                'origen'    => $s->origen,
-                'orden'     => $s->orden,
-                'imagenes'  => $s->imagenes->map(fn($i) => [
-                    'id'              => $i->id,
-                    'nombre_archivo'  => $i->nombre_archivo,
+                'origen' => $s->origen,
+                'orden' => $s->orden,
+                'imagenes' => $s->imagenes->map(fn ($i) => [
+                    'id' => $i->id,
+                    'nombre_archivo' => $i->nombre_archivo,
                     'nombre_original' => $i->nombre_original,
-                    'caption'         => $i->caption,
-                    'url'             => $i->url,
-                    'orden'           => $i->orden,
+                    'caption' => $i->caption,
+                    'url' => $i->url,
+                    'orden' => $i->orden,
                 ])->toArray(),
             ])->toArray(),
         ]);
@@ -410,7 +448,7 @@ class EttpController extends Controller
 
     public function guardarSecciones(CostoProject $costoProject, Request $request, $partidaId)
     {
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         $partida = EttpPartida::where('presupuesto_id', $presupuestoId)->findOrFail($partidaId);
@@ -419,21 +457,21 @@ class EttpController extends Controller
         try {
             DB::connection('costos_tenant')->beginTransaction();
 
-            if (!is_array($secciones)) {
+            if (! is_array($secciones)) {
                 $secciones = [];
             }
 
             // Recopilar IDs válidos recibidos
             $idsRecibidos = collect($secciones)
                 ->pluck('id')
-                ->filter(fn($id) => !empty($id) && is_numeric($id))
-                ->map(fn($id) => (int) $id)
+                ->filter(fn ($id) => ! empty($id) && is_numeric($id))
+                ->map(fn ($id) => (int) $id)
                 ->toArray();
 
             // Eliminar secciones omitidas (junto a sus imágenes atadas)
             $seccionesAEliminarQuery = EttpSeccion::where('ettp_partida_id', $partida->id)->with('imagenes');
 
-            if (!empty($idsRecibidos)) {
+            if (! empty($idsRecibidos)) {
                 $seccionesAEliminarQuery->whereNotIn('id', $idsRecibidos);
             }
 
@@ -448,14 +486,14 @@ class EttpController extends Controller
 
             // Procesar guardado/actualización
             foreach ($secciones as $index => $seccionData) {
-                if (!is_array($seccionData)) {
+                if (! is_array($seccionData)) {
                     continue;
                 }
 
                 $tituloBruto = $seccionData['titulo'] ?? $seccionData['title'] ?? '';
                 $titulo = trim((string) $tituloBruto);
                 if ($titulo === '') {
-                    $titulo = 'Sección ' . ($index + 1);
+                    $titulo = 'Sección '.($index + 1);
                 }
 
                 $titulo = Str::limit($titulo, 150, '');
@@ -465,32 +503,32 @@ class EttpController extends Controller
                 $orden = isset($seccionData['orden']) && is_numeric($seccionData['orden'])
                     ? (int) $seccionData['orden']
                     : ($index + 1);
-                $seccion   = null;
+                $seccion = null;
 
-                if (!empty($seccionData['id']) && is_numeric($seccionData['id'])) {
+                if (! empty($seccionData['id']) && is_numeric($seccionData['id'])) {
                     $seccion = EttpSeccion::where('ettp_partida_id', $partida->id)->find($seccionData['id']);
                     if ($seccion) {
                         $seccion->update([
-                            'titulo'    => $titulo,
-                            'slug'      => $slug,
+                            'titulo' => $titulo,
+                            'slug' => $slug,
                             'contenido' => $contenido,
-                            'orden'     => $orden,
+                            'orden' => $orden,
                         ]);
                     }
                 } else {
                     $seccion = EttpSeccion::create([
                         'ettp_partida_id' => $partida->id,
-                        'titulo'          => $titulo,
-                        'slug'            => $slug,
-                        'contenido'       => $contenido,
-                        'origen'          => 'manual',
-                        'orden'           => $orden,
+                        'titulo' => $titulo,
+                        'slug' => $slug,
+                        'contenido' => $contenido,
+                        'origen' => 'manual',
+                        'orden' => $orden,
                     ]);
                 }
 
                 if ($seccion) {
                     // Procesar imágenes en base64 insertadas offline/manual
-                    if (!empty($contenido)) {
+                    if (! empty($contenido)) {
                         $contenidoModificado = preg_replace_callback('/src="data:image\/([a-zA-Z0-9.+-]+);base64,([^"]*?)"/', function ($matches) use ($seccion, $presupuestoId) {
                             $extension = strtolower($matches[1]);
                             $extension = match ($extension) {
@@ -510,7 +548,7 @@ class EttpController extends Controller
                                 return $matches[0];
                             }
 
-                            $nombreArchivo = Str::uuid() . '.' . $extension;
+                            $nombreArchivo = Str::uuid().'.'.$extension;
                             $path = "ettp/{$presupuestoId}/{$nombreArchivo}";
 
                             $stored = Storage::disk('public')->put($path, $imageData);
@@ -522,14 +560,15 @@ class EttpController extends Controller
 
                             $imagen = EttpImagen::create([
                                 'ettp_seccion_id' => $seccion->id,
-                                'nombre_archivo'  => $nombreArchivo,
-                                'nombre_original' => 'imagen_insertada.' . $extension,
-                                'caption'         => null,
-                                'orden'           => EttpImagen::where('ettp_seccion_id', $seccion->id)->count(),
-                                'ancho'           => $dimensions ? $dimensions[0] : null,
-                                'alto'            => $dimensions ? $dimensions[1] : null,
+                                'nombre_archivo' => $nombreArchivo,
+                                'nombre_original' => 'imagen_insertada.'.$extension,
+                                'caption' => null,
+                                'orden' => EttpImagen::where('ettp_seccion_id', $seccion->id)->count(),
+                                'ancho' => $dimensions ? $dimensions[0] : null,
+                                'alto' => $dimensions ? $dimensions[1] : null,
                             ]);
-                            return 'src="' . $imagen->url . '"';
+
+                            return 'src="'.$imagen->url.'"';
                         }, $contenido);
 
                         if ($contenidoModificado !== $contenido) {
@@ -557,28 +596,28 @@ class EttpController extends Controller
                 ->with('imagenes')
                 ->orderBy('orden')
                 ->get()
-                ->map(fn($s) => [
-                    'id'        => $s->id,
-                    'title'     => $s->titulo,
-                    'titulo'    => $s->titulo,
-                    'slug'      => $s->slug,
-                    'content'   => $s->contenido,
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'title' => $s->titulo,
+                    'titulo' => $s->titulo,
+                    'slug' => $s->slug,
+                    'content' => $s->contenido,
                     'contenido' => $s->contenido,
-                    'origen'    => $s->origen,
-                    'orden'     => $s->orden,
-                    'imagenes'  => $s->imagenes->map(fn($i) => [
-                        'id'              => $i->id,
-                        'nombre_archivo'  => $i->nombre_archivo,
+                    'origen' => $s->origen,
+                    'orden' => $s->orden,
+                    'imagenes' => $s->imagenes->map(fn ($i) => [
+                        'id' => $i->id,
+                        'nombre_archivo' => $i->nombre_archivo,
                         'nombre_original' => $i->nombre_original,
-                        'caption'         => $i->caption,
-                        'url'             => $i->url,
-                        'orden'           => $i->orden,
+                        'caption' => $i->caption,
+                        'url' => $i->url,
+                        'orden' => $i->orden,
                     ])->toArray(),
                 ])->toArray();
 
             return response()->json([
-                'success'   => true,
-                'secciones' => $seccionesActualizadas
+                'success' => true,
+                'secciones' => $seccionesActualizadas,
             ]);
         } catch (\Throwable $e) {
             DB::connection('costos_tenant')->rollBack();
@@ -591,6 +630,7 @@ class EttpController extends Controller
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -629,7 +669,7 @@ class EttpController extends Controller
         $file = $request->file('imagen');
         $extension = $file->getClientOriginalExtension();
         $nombreOriginal = $file->getClientOriginalName();
-        $nombreArchivo = Str::uuid() . '_' . Str::slug(pathinfo($nombreOriginal, PATHINFO_FILENAME)) . '.' . $extension;
+        $nombreArchivo = Str::uuid().'_'.Str::slug(pathinfo($nombreOriginal, PATHINFO_FILENAME)).'.'.$extension;
 
         $path = $file->storeAs(
             "ettp/{$presupuestoId}",
@@ -641,22 +681,22 @@ class EttpController extends Controller
 
         $imagen = EttpImagen::create([
             'ettp_seccion_id' => $seccion->id,
-            'nombre_archivo'  => $nombreArchivo,
+            'nombre_archivo' => $nombreArchivo,
             'nombre_original' => $nombreOriginal,
-            'caption'         => $request->input('caption'),
-            'orden'           => EttpImagen::where('ettp_seccion_id', $seccion->id)->count(),
-            'ancho'           => $dimensions ? $dimensions[0] : null,
-            'alto'            => $dimensions ? $dimensions[1] : null,
+            'caption' => $request->input('caption'),
+            'orden' => EttpImagen::where('ettp_seccion_id', $seccion->id)->count(),
+            'ancho' => $dimensions ? $dimensions[0] : null,
+            'alto' => $dimensions ? $dimensions[1] : null,
         ]);
 
         return response()->json([
             'success' => true,
-            'imagen'  => [
-                'id'              => $imagen->id,
-                'nombre_archivo'  => $imagen->nombre_archivo,
+            'imagen' => [
+                'id' => $imagen->id,
+                'nombre_archivo' => $imagen->nombre_archivo,
                 'nombre_original' => $imagen->nombre_original,
-                'url'             => $imagen->url,
-                'caption'         => $imagen->caption,
+                'url' => $imagen->url,
+                'caption' => $imagen->caption,
             ],
         ]);
     }
@@ -680,7 +720,7 @@ class EttpController extends Controller
 
     public function getHuerfanas(CostoProject $costoProject)
     {
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         $huerfanas = EttpPartida::where('presupuesto_id', $presupuestoId)
@@ -689,20 +729,20 @@ class EttpController extends Controller
             ->get();
 
         return response()->json([
-            'total'     => $huerfanas->count(),
-            'partidas'  => $huerfanas->map(fn($p) => [
-                'id'          => $p->id,
-                'item'        => $p->item,
+            'total' => $huerfanas->count(),
+            'partidas' => $huerfanas->map(fn ($p) => [
+                'id' => $p->id,
+                'item' => $p->item,
                 'descripcion' => $p->descripcion,
                 'especialidad' => $p->especialidad,
-                'tiene_contenido' => $p->secciones->some(fn($s) => !empty($s->contenido)),
+                'tiene_contenido' => $p->secciones->some(fn ($s) => ! empty($s->contenido)),
             ])->toArray(),
         ]);
     }
 
     public function eliminarHuerfanas(CostoProject $costoProject, Request $request)
     {
-        $dbService = app(\App\Services\CostoDatabaseService::class);
+        $dbService = app(CostoDatabaseService::class);
         $presupuestoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
         $ids = $request->input('ids', []);
@@ -722,7 +762,7 @@ class EttpController extends Controller
         }
 
         return response()->json([
-            'success'    => true,
+            'success' => true,
             'eliminadas' => $partidas->count(),
         ]);
     }
@@ -756,12 +796,12 @@ class EttpController extends Controller
                 'total_registros_en_tabla' => $total,
                 'registros_con_presupuesto_1' => $datos->count(),
                 'presupuestos_existentes' => $presupuestos,
-                'primeros_5_registros' => $datos
+                'primeros_5_registros' => $datos,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

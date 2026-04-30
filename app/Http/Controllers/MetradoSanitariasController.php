@@ -16,10 +16,15 @@ class MetradoSanitariasController extends Controller
     use HandlesModularMetrado;
 
     private const MODULE_TYPE = 'metrado_sanitarias';
+
     private const TABLE_CONFIG = 'metrado_sanitarias_config';
+
     private const TABLE_MODULOS = 'metrado_sanitarias_modulos';
+
     private const TABLE_EXTERIOR = 'metrado_sanitarias_exterior';
+
     private const TABLE_CISTERNA = 'metrado_sanitarias_cisterna';
+
     private const TABLE_RESUMEN = 'metrado_sanitarias_resumen';
 
     public function index(CostoProject $costoProject): Response

@@ -13,12 +13,13 @@ class TreeServiceIntegrationTest extends TestCase
     use RefreshDatabase;
 
     private TreeService $service;
+
     private CostoProject $project;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new TreeService();
+        $this->service = new TreeService;
         $this->project = CostoProject::factory()->create();
     }
 
@@ -68,7 +69,6 @@ class TreeServiceIntegrationTest extends TestCase
 
         $this->assertEquals('partida', $partida1->node_type);
         $this->assertEquals(2, $partida1->level);
-
 
         // 4. Get the complete tree
         $tree = $this->service->getTree($this->project->id);

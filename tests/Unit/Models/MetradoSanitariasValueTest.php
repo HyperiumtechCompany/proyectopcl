@@ -17,7 +17,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -39,7 +39,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -61,7 +61,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -87,7 +87,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -111,7 +111,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -137,7 +137,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -164,7 +164,7 @@ class MetradoSanitariasValueTest extends TestCase
         $project = CostoProject::factory()->create();
         $module1 = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
         $module2 = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -194,7 +194,7 @@ class MetradoSanitariasValueTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',

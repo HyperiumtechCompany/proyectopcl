@@ -16,18 +16,17 @@ class CostoModuleController extends Controller
      * Mapping: moduleType → tenant table name(s)
      */
     private const MODULE_TABLE_MAP = [
-        'metrado_arquitectura'   => 'metrado_arquitectura',
-        'metrado_estructura'     => 'metrado_estructura',
-        'metrado_sanitarias'     => 'metrado_sanitarias',
-        'metrado_electricas'     => 'metrado_electricas',
+        'metrado_arquitectura' => 'metrado_arquitectura',
+        'metrado_estructura' => 'metrado_estructura',
+        'metrado_sanitarias' => 'metrado_sanitarias',
+        'metrado_electricas' => 'metrado_electricas',
         'metrado_comunicaciones' => 'metrado_comunicaciones',
-        'metrado_gas'            => 'metrado_gas',
-        'crono_general'          => 'cronograma_general',
-        'crono_valorizado'       => 'cronograma_valorizado',
-        'crono_materiales'       => 'cronograma_materiales',
-        'etts'                   => 'ettp_partidas',
+        'metrado_gas' => 'metrado_gas',
+        'crono_general' => 'cronograma_general',
+        'crono_valorizado' => 'cronograma_valorizado',
+        'crono_materiales' => 'cronograma_materiales',
+        'etts' => 'ettp_partidas',
     ];
-
 
     /**
      * Columns per module table (for frontend column definitions).
@@ -57,16 +56,16 @@ class CostoModuleController extends Controller
     ];
 
     private const MODULE_LABELS = [
-        'metrado_arquitectura'   => 'Metrado Arquitectura',
-        'metrado_estructura'     => 'Metrado Estructura',
-        'metrado_sanitarias'     => 'Metrado Sanitarias',
-        'metrado_electricas'     => 'Metrado Eléctricas',
+        'metrado_arquitectura' => 'Metrado Arquitectura',
+        'metrado_estructura' => 'Metrado Estructura',
+        'metrado_sanitarias' => 'Metrado Sanitarias',
+        'metrado_electricas' => 'Metrado Eléctricas',
         'metrado_comunicaciones' => 'Metrado Comunicaciones',
-        'metrado_gas'            => 'Metrado Gas',
-        'crono_general'          => 'Cronograma General',
-        'crono_valorizado'       => 'Cronograma Valorizado',
-        'crono_materiales'       => 'Cronograma Materiales',
-        'etts'                   => 'Especificaciones Técnicas',
+        'metrado_gas' => 'Metrado Gas',
+        'crono_general' => 'Cronograma General',
+        'crono_valorizado' => 'Cronograma Valorizado',
+        'crono_materiales' => 'Cronograma Materiales',
+        'etts' => 'Especificaciones Técnicas',
     ];
 
     public function __construct(
@@ -121,7 +120,7 @@ class CostoModuleController extends Controller
             ->orderBy('item_order')
             ->orderBy('id')
             ->get()
-            ->map(fn($row) => (array)$row)
+            ->map(fn ($row) => (array) $row)
             ->toArray();
 
         // Build column definitions
@@ -175,7 +174,7 @@ class CostoModuleController extends Controller
             return response()->json(['success' => true, 'count' => count($rows)]);
         } catch (\Exception $e) {
             DB::connection('costos_tenant')->rollBack();
-            Log::error("Error saving module data", [
+            Log::error('Error saving module data', [
                 'module' => $moduleType,
                 'project' => $costoProject->id,
                 'error' => $e->getMessage(),
@@ -221,8 +220,8 @@ class CostoModuleController extends Controller
         $skip = ['id', 'created_at', 'updated_at', 'item_order'];
 
         return collect($schemaColumns)
-            ->filter(fn($col) => !in_array($col, $skip))
-            ->map(fn($col) => [
+            ->filter(fn ($col) => ! in_array($col, $skip))
+            ->map(fn ($col) => [
                 'key' => $col,
                 'label' => ucfirst(str_replace('_', ' ', $col)),
                 'width' => 120,
@@ -240,7 +239,7 @@ class CostoModuleController extends Controller
 
     private function validateModuleType(string $moduleType): void
     {
-        if (!array_key_exists($moduleType, self::MODULE_TABLE_MAP)) {
+        if (! array_key_exists($moduleType, self::MODULE_TABLE_MAP)) {
             abort(404, "Módulo '{$moduleType}' no existe.");
         }
     }
@@ -248,7 +247,7 @@ class CostoModuleController extends Controller
     private function validateModuleEnabled(CostoProject $project, string $moduleType): void
     {
         $enabled = $project->enabledModules()->where('module_type', $moduleType)->exists();
-        if (!$enabled) {
+        if (! $enabled) {
             abort(403, "El módulo '{$moduleType}' no está habilitado para este proyecto.");
         }
     }

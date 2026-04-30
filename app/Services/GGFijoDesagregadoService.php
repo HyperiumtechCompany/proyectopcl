@@ -13,9 +13,9 @@ class GGFijoDesagregadoService
     public function calculateAndSave(string $databaseName, ?int $ggFijoId, string $tipoCalculo, array $rows): array
     {
         $connection = DB::connection('costos_tenant');
-        
+
         // If it's a single associative array, wrap it in array
-        if (!empty($rows) && is_array($rows) && !isset($rows[0])) {
+        if (! empty($rows) && is_array($rows) && ! isset($rows[0])) {
             $rows = [$rows];
         }
 
@@ -24,7 +24,7 @@ class GGFijoDesagregadoService
 
             if (str_starts_with($tipoCalculo, 'fianza_')) {
                 $result = $this->handleFianza($connection, $ggFijoId, $tipoCalculo, $rows);
-            } else if (str_starts_with($tipoCalculo, 'poliza_') || in_array($tipoCalculo, ['sencico', 'itf'])) {
+            } elseif (str_starts_with($tipoCalculo, 'poliza_') || in_array($tipoCalculo, ['sencico', 'itf'])) {
                 $result = $this->handlePoliza($connection, $ggFijoId, $tipoCalculo, $rows);
             } else {
                 $result = ['success' => false, 'message' => 'Tipo de cálculo no soportado.'];
@@ -39,9 +39,9 @@ class GGFijoDesagregadoService
             return $result;
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Error en GGFijoDesagregadoService", [
+            Log::error('Error en GGFijoDesagregadoService', [
                 'gg_fijo_id' => $ggFijoId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -56,17 +56,17 @@ class GGFijoDesagregadoService
         ];
 
         $tipoFianza = $typeMap[$tipoCalculo] ?? 'fiel_cumplimiento';
-        
+
         // Borrar filas existentes
         $queryDelete = $connection->table('gg_fijos_fianzas')
             ->where('tipo_fianza', $tipoFianza);
-        
+
         if ($ggFijoId !== null) {
             $queryDelete->where('gg_fijos_id', $ggFijoId);
         } else {
-            // Global check: we need a presupuesto_id to delete safely global ones, 
+            // Global check: we need a presupuesto_id to delete safely global ones,
             // but we can trust the rows have presupuesto_id
-            if (!empty($rows) && isset($rows[0]['presupuesto_id'])) {
+            if (! empty($rows) && isset($rows[0]['presupuesto_id'])) {
                 $queryDelete->where('presupuesto_id', $rows[0]['presupuesto_id']);
             }
         }
@@ -76,19 +76,19 @@ class GGFijoDesagregadoService
         $insertData = [];
 
         foreach ($rows as $index => $data) {
-            $baseCalculo = (float)($data['base_calculo'] ?? 0);
-            $garantiaPorc = (float)($data['garantia_porcentaje'] ?? 10);
-            $teaPorc = (float)($data['tea_porcentaje'] ?? 0);
-            $duracionObra = (int)($data['duracion_obra_dias'] ?? 0);
-            $duracionLiq = (int)($data['duracion_liquidacion_dias'] ?? 0);
-            $factorPorc = (float)($data['factor_porcentaje'] ?? 100);
-            $avancePorc = (float)($data['avance_porcentaje'] ?? 100);
-            $renovacionDias = (int)($data['renovacion_dias'] ?? 0);
-            
+            $baseCalculo = (float) ($data['base_calculo'] ?? 0);
+            $garantiaPorc = (float) ($data['garantia_porcentaje'] ?? 10);
+            $teaPorc = (float) ($data['tea_porcentaje'] ?? 0);
+            $duracionObra = (int) ($data['duracion_obra_dias'] ?? 0);
+            $duracionLiq = (int) ($data['duracion_liquidacion_dias'] ?? 0);
+            $factorPorc = (float) ($data['factor_porcentaje'] ?? 100);
+            $avancePorc = (float) ($data['avance_porcentaje'] ?? 100);
+            $renovacionDias = (int) ($data['renovacion_dias'] ?? 0);
+
             // Lógica de cálculo real de fianza según excel
             $montoGarantia = $baseCalculo * ($garantiaPorc / 100);
             $teaDiaria = ($teaPorc / 100) / 360;
-            
+
             if ($tipoCalculo === 'fianza_fiel_cumplimiento') {
                 $diasTotales = $duracionObra + $duracionLiq;
                 $rowTotal = $montoGarantia * $teaDiaria * $diasTotales;
@@ -125,12 +125,12 @@ class GGFijoDesagregadoService
 
         // Sincronizar con la tabla principal gg_fijos
         $queryUpdate = $connection->table('gg_fijos');
-        
+
         if ($ggFijoId !== null) {
             $queryUpdate->where('id', $ggFijoId);
-        } else if (!empty($rows) && isset($rows[0]['presupuesto_id'])) {
+        } elseif (! empty($rows) && isset($rows[0]['presupuesto_id'])) {
             $queryUpdate->where('presupuesto_id', $rows[0]['presupuesto_id'])
-                        ->where('tipo_calculo', $tipoCalculo);
+                ->where('tipo_calculo', $tipoCalculo);
         }
 
         $queryUpdate->update(['costo_unitario' => round($totalSuma, 4), 'cantidad' => 1]);
@@ -142,7 +142,7 @@ class GGFijoDesagregadoService
     {
         $typeMap = [
             'poliza_car' => 'car',
-            'poliza_sctr' => 'sctr_salud', 
+            'poliza_sctr' => 'sctr_salud',
             'poliza_essalud_vida' => 'essalud_vida',
             'sencico' => 'sencico',
             'itf' => 'itf',
@@ -153,7 +153,7 @@ class GGFijoDesagregadoService
 
         $queryDelete = $connection->table('gg_fijos_polizas')
             ->whereIn('tipo_poliza', ['car', 'sctr_salud', 'sctr_pension', 'essalud_vida', 'sencico', 'itf'])
-            ->where(function($q) use ($basePoliza) {
+            ->where(function ($q) use ($basePoliza) {
                 if ($basePoliza === 'sctr_salud') {
                     $q->whereIn('tipo_poliza', ['sctr_salud', 'sctr_pension']);
                 } else {
@@ -163,10 +163,10 @@ class GGFijoDesagregadoService
 
         if ($ggFijoId !== null) {
             $queryDelete->where('gg_fijos_id', $ggFijoId);
-        } else if (!empty($rows) && isset($rows[0]['presupuesto_id'])) {
+        } elseif (! empty($rows) && isset($rows[0]['presupuesto_id'])) {
             $queryDelete->where('presupuesto_id', $rows[0]['presupuesto_id']);
         }
-            
+
         $queryDelete->delete();
 
         $totalSuma = 0;
@@ -174,11 +174,11 @@ class GGFijoDesagregadoService
 
         foreach ($rows as $index => $data) {
             $tipoPolizaRow = $data['tipo_poliza'] ?? $basePoliza;
-            
-            $baseCalculo = (float)($data['base_calculo'] ?? 0);
-            $tasaPorc = (float)($data['tea_porcentaje'] ?? 0);
-            $duracionDias = (int)($data['duracion_dias'] ?? 0);
-            
+
+            $baseCalculo = (float) ($data['base_calculo'] ?? 0);
+            $tasaPorc = (float) ($data['tea_porcentaje'] ?? 0);
+            $duracionDias = (int) ($data['duracion_dias'] ?? 0);
+
             if ($duracionDias > 0) {
                 $tasaDiaria = ($tasaPorc / 100) / 360;
                 $rowTotal = $baseCalculo * $tasaDiaria * $duracionDias;
@@ -210,12 +210,12 @@ class GGFijoDesagregadoService
 
         // Sincronizar con la tabla principal gg_fijos
         $queryUpdate = $connection->table('gg_fijos');
-        
+
         if ($ggFijoId !== null) {
             $queryUpdate->where('id', $ggFijoId);
-        } else if (!empty($rows) && isset($rows[0]['presupuesto_id'])) {
+        } elseif (! empty($rows) && isset($rows[0]['presupuesto_id'])) {
             $queryUpdate->where('presupuesto_id', $rows[0]['presupuesto_id'])
-                        ->where('tipo_calculo', $tipoCalculo);
+                ->where('tipo_calculo', $tipoCalculo);
         }
 
         $queryUpdate->update(['costo_unitario' => round($totalSuma, 4), 'cantidad' => 1]);

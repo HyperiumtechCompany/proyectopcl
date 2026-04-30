@@ -13,7 +13,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
         // 15. CATÁLOGOS GLOBALES DE INSUMOS (sin presupuesto_id)
         // ══════════════════════════════════════════════════════════════════════
-        if(!Schema::connection($this->connection)->hasTable('unidad')){
+        if (! Schema::connection($this->connection)->hasTable('unidad')) {
             Schema::connection($this->connection)->create('unidad', function (Blueprint $table) {
                 $table->id();
                 $table->string('descripcion', 20)->unique();
@@ -25,7 +25,7 @@ return new class extends Migration
             });
         }
 
-        if(!Schema::connection($this->connection)->hasTable('diccionario')){
+        if (! Schema::connection($this->connection)->hasTable('diccionario')) {
             Schema::connection($this->connection)->create('diccionario', function (Blueprint $table) {
                 $table->id();
                 $table->string('codigo', 20);
@@ -36,34 +36,34 @@ return new class extends Migration
             });
         }
 
-        if (!Schema::connection($this->connection)->hasTable('insumo_productos')) {
+        if (! Schema::connection($this->connection)->hasTable('insumo_productos')) {
             Schema::connection($this->connection)->create('insumo_productos', function (Blueprint $table) {
                 $table->id();
                 $table->string('codigo_producto', 50)->unique();
                 $table->text('descripcion');
                 $table->text('especificaciones')->nullable();
-                
+
                 $table->unsignedBigInteger('diccionario_id')->nullable();
                 $table->foreign('diccionario_id')->references('id')->on('diccionario')->nullOnDelete();
-                
+
                 $table->unsignedBigInteger('unidad_id')->nullable();
                 $table->foreign('unidad_id')->references('id')->on('unidad')->nullOnDelete();
-                
+
                 $table->string('tipo_proveedor', 3)->default('001');
 
                 $table->decimal('costo_unitario_lista', 15, 4)->default(0);
-                $table->decimal('costo_unitario',       15, 4)->default(0);
-                $table->decimal('costo_flete',          15, 4)->default(0);
+                $table->decimal('costo_unitario', 15, 4)->default(0);
+                $table->decimal('costo_flete', 15, 4)->default(0);
                 $table->date('fecha_lista')->nullable();
-                
+
                 $table->string('tipo', 20)->comment('mano_de_obra | materiales | equipos | subcontratos | subpartidas');
                 $table->boolean('estado')->default(true);
                 $table->timestamps();
 
                 $table->index('codigo_producto', 'idx_ip_codigo');
-                $table->index('tipo',            'idx_ip_tipo');
-                $table->index('diccionario_id',  'idx_ip_dicc');
-                $table->index('unidad_id',       'idx_ip_und');
+                $table->index('tipo', 'idx_ip_tipo');
+                $table->index('diccionario_id', 'idx_ip_dicc');
+                $table->index('unidad_id', 'idx_ip_und');
             });
         }
     }

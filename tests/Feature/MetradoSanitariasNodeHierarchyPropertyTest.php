@@ -19,12 +19,13 @@ class MetradoSanitariasNodeHierarchyPropertyTest extends TestCase
     use TestTrait;
 
     private User $user;
+
     private CostoProject $project;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->user = User::factory()->create();
         $this->project = CostoProject::factory()->create(['user_id' => $this->user->id]);
     }
@@ -59,8 +60,8 @@ class MetradoSanitariasNodeHierarchyPropertyTest extends TestCase
                         'project_id' => $this->project->id,
                         'parent_id' => $titulo->id,
                         'node_type' => $childType,
-                        'name' => ucfirst($childType) . ' ' . ($i + 1),
-                        'numbering' => $childType === 'subtitulo' ? "04.0" . ($i + 1) : null,
+                        'name' => ucfirst($childType).' '.($i + 1),
+                        'numbering' => $childType === 'subtitulo' ? '04.0'.($i + 1) : null,
                         'level' => 1,
                         'position' => $i + 1,
                     ]);
@@ -118,8 +119,8 @@ class MetradoSanitariasNodeHierarchyPropertyTest extends TestCase
                         'project_id' => $this->project->id,
                         'parent_id' => $subtitulo->id,
                         'node_type' => $childType,
-                        'name' => ucfirst($childType) . ' ' . ($i + 1),
-                        'numbering' => $childType === 'subtitulo' ? "04.01.0" . ($i + 1) : null,
+                        'name' => ucfirst($childType).' '.($i + 1),
+                        'numbering' => $childType === 'subtitulo' ? '04.01.0'.($i + 1) : null,
                         'level' => 2,
                         'position' => $i + 1,
                     ]);

@@ -30,7 +30,6 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-
         Schema::create('metrados_electricas_collaborators', function (Blueprint $table) {
 
             $table->id();
@@ -43,8 +42,8 @@ return new class extends Migration
                 'metrado_electricas_spreadsheet_id',
                 'fk_metrado_electricas_sheet'
             )->references('id')
-             ->on('metrados_electricas')
-             ->cascadeOnDelete();
+                ->on('metrados_electricas')
+                ->cascadeOnDelete();
 
             $table->foreignId('user_id')
                 ->constrained()
@@ -59,11 +58,10 @@ return new class extends Migration
             // Evita duplicar colaboradores
             $table->unique([
                 'metrado_electricas_spreadsheet_id',
-                'user_id'
+                'user_id',
             ], 'uniq_metrado_elec_user');
         });
     }
-
 
     public function down(): void
     {

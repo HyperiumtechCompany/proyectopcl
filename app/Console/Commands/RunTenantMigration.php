@@ -32,8 +32,9 @@ class RunTenantMigration extends Command
         $migration = $this->argument('migration');
 
         $project = CostoProject::find($projectId);
-        if (!$project) {
+        if (! $project) {
             $this->error("Project with ID {$projectId} not found.");
+
             return 1;
         }
 

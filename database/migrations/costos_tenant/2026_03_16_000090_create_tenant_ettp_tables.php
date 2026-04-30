@@ -16,7 +16,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
 
         // 4a. ETTP Partidas — Registro maestro por partida importada
-        if (!Schema::connection($this->connection)->hasTable('ettp_partidas')) {
+        if (! Schema::connection($this->connection)->hasTable('ettp_partidas')) {
             Schema::connection($this->connection)->create('ettp_partidas', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -63,7 +63,7 @@ return new class extends Migration
         //     Cada partida puede tener secciones como: Descripción, Materiales,
         //     Método de Ejecución, Método de Medición, Condiciones de Pago, etc.
         //     El contenido puede ser texto extenso (500+ chars), listas, HTML.
-        if (!Schema::connection($this->connection)->hasTable('ettp_secciones')) {
+        if (! Schema::connection($this->connection)->hasTable('ettp_secciones')) {
             Schema::connection($this->connection)->create('ettp_secciones', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('ettp_partida_id');
@@ -90,7 +90,7 @@ return new class extends Migration
         // 4c. ETTP Imágenes — Imágenes asociadas a cada sección
         //     Se almacenan en storage local, la BD guarda solo el nombre del archivo.
         //     Al eliminar el registro, se debe eliminar el archivo físico.
-        if (!Schema::connection($this->connection)->hasTable('ettp_imagenes')) {
+        if (! Schema::connection($this->connection)->hasTable('ettp_imagenes')) {
             Schema::connection($this->connection)->create('ettp_imagenes', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('ettp_seccion_id');

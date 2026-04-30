@@ -23,7 +23,7 @@ class MetradoElectricasSpreadsheet extends Model
     ];
 
     protected $casts = [
-        'sheet_data'       => 'array',
+        'sheet_data' => 'array',
         'is_collaborative' => 'boolean',
     ];
 
@@ -31,7 +31,7 @@ class MetradoElectricasSpreadsheet extends Model
     public static function forUser(int $userId)
     {
         return static::where('user_id', $userId)
-            ->orWhereHas('collaborators', fn($q) => $q->where('users.id', $userId));
+            ->orWhereHas('collaborators', fn ($q) => $q->where('users.id', $userId));
     }
 
     // dueño de la hoja
@@ -44,11 +44,11 @@ class MetradoElectricasSpreadsheet extends Model
     public function collaborators()
     {
         return $this->belongsToMany(
-                User::class,
-                'metrados_electricas_collaborators',
-                'metrado_electricas_spreadsheet_id',
-                'user_id'
-            )
+            User::class,
+            'metrados_electricas_collaborators',
+            'metrado_electricas_spreadsheet_id',
+            'user_id'
+        )
             ->withPivot(['role', 'joined_at'])
             ->withTimestamps();
     }

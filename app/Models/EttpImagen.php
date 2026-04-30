@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 class EttpImagen extends Model
 {
     protected $connection = 'costos_tenant';
+
     protected $table = 'ettp_imagenes';
 
     protected $fillable = [
@@ -30,7 +31,7 @@ class EttpImagen extends Model
     protected $casts = [
         'orden' => 'integer',
         'ancho' => 'integer',
-        'alto'  => 'integer',
+        'alto' => 'integer',
     ];
 
     // ── Relaciones ──
@@ -48,6 +49,7 @@ class EttpImagen extends Model
     public function getStoragePathAttribute(): string
     {
         $presupuestoId = $this->seccion?->partida?->presupuesto_id ?? 'sin_presupuesto';
+
         return "ettp/{$presupuestoId}";
     }
 
@@ -56,7 +58,7 @@ class EttpImagen extends Model
      */
     public function getFullPathAttribute(): string
     {
-        return $this->storage_path . '/' . $this->nombre_archivo;
+        return $this->storage_path.'/'.$this->nombre_archivo;
     }
 
     /**
@@ -65,6 +67,7 @@ class EttpImagen extends Model
     public function getUrlAttribute(): string
     {
         $presupuestoId = $this->seccion?->partida?->presupuesto_id ?? 'sin_presupuesto';
+
         return asset("storage/ettp/{$presupuestoId}/{$this->nombre_archivo}");
     }
 
@@ -74,8 +77,8 @@ class EttpImagen extends Model
     {
         // Eliminar archivo físico al eliminar el registro
         static::deleting(function (EttpImagen $imagen) {
-            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($imagen->full_path)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($imagen->full_path);
+            if (Storage::disk('public')->exists($imagen->full_path)) {
+                Storage::disk('public')->delete($imagen->full_path);
             }
         });
     }

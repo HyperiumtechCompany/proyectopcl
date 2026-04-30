@@ -3,9 +3,7 @@
 namespace App\Events;
 
 use App\Models\AcCalculation;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -25,7 +23,7 @@ class AcCalculationUpdated implements ShouldBroadcastNow
     {
         // Emitimos al canal privado específico de esta hoja
         return [
-            new PrivateChannel('ac-calculation.' . $this->spreadsheet->id),
+            new PrivateChannel('ac-calculation.'.$this->spreadsheet->id),
         ];
     }
 

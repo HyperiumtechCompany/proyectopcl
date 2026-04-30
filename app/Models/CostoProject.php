@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CostoProject extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'user_id',
         'nombre',
@@ -85,7 +86,7 @@ class CostoProject extends Model
      */
     public static function generateDatabaseName(int $userId): string
     {
-        return 'costos_' . $userId . '_' . now()->format('YmdHis') . '_' . mt_rand(100, 999);
+        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
     }
 
     /**
@@ -103,5 +104,4 @@ class CostoProject extends Model
     {
         return $this->hasModule('presupuesto');
     }
-
 }

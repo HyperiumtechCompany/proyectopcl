@@ -77,7 +77,7 @@ class InsumoProductoSeeder extends Seeder
             // ═══════════════════════════════════════════════════════════════════════
             // MATERIALES — Fierro y Acero (diccionario 02/03/04)
             // ═══════════════════════════════════════════════════════════════════════
-            ['diccionario_codigo' => '03', 'descripcion' => 'ACERO CORRUGADO fy=4200 kg/cm2 GRADO 60','unidad' => 'kg',  'costo' => 4.50, 'tipo' => 'materiales', 'tipo_proveedor' => '001'],
+            ['diccionario_codigo' => '03', 'descripcion' => 'ACERO CORRUGADO fy=4200 kg/cm2 GRADO 60', 'unidad' => 'kg',  'costo' => 4.50, 'tipo' => 'materiales', 'tipo_proveedor' => '001'],
             ['diccionario_codigo' => '02', 'descripcion' => 'ALAMBRE NEGRO RECOCIDO N° 8',            'unidad' => 'kg',  'costo' => 5.00, 'tipo' => 'materiales', 'tipo_proveedor' => '001'],
             ['diccionario_codigo' => '02', 'descripcion' => 'ALAMBRE NEGRO RECOCIDO N° 16',           'unidad' => 'kg',  'costo' => 5.00, 'tipo' => 'materiales', 'tipo_proveedor' => '001'],
             ['diccionario_codigo' => '02', 'descripcion' => 'CLAVOS PARA MADERA CON CABEZA DE 3"',    'unidad' => 'kg',  'costo' => 5.50, 'tipo' => 'materiales', 'tipo_proveedor' => '001'],
@@ -138,34 +138,34 @@ class InsumoProductoSeeder extends Seeder
 
         foreach ($productos as $prod) {
             $diccCode = $prod['diccionario_codigo'];
-            if (!isset($diccionarios[$diccCode])) {
+            if (! isset($diccionarios[$diccCode])) {
                 continue;
             }
 
             $unidadId = $unidades[$prod['unidad']] ?? null;
 
             $provCode = $prod['tipo_proveedor'];
-            $key = $diccCode . $provCode;
+            $key = $diccCode.$provCode;
             $counters[$key] = ($counters[$key] ?? 0) + 1;
 
-            $codigo_producto = $diccCode . $provCode . str_pad($counters[$key], 4, '0', STR_PAD_LEFT);
+            $codigo_producto = $diccCode.$provCode.str_pad($counters[$key], 4, '0', STR_PAD_LEFT);
 
             $connection->table('insumo_productos')->updateOrInsert(
                 ['codigo_producto' => $codigo_producto],
                 [
-                    'descripcion'         => $prod['descripcion'],
-                    'especificaciones'    => null,
-                    'diccionario_id'      => $diccionarios[$diccCode],
-                    'unidad_id'           => $unidadId,
-                    'tipo_proveedor'      => $provCode,
-                    'costo_unitario_lista'=> $prod['costo'],
-                    'costo_unitario'      => $prod['costo'],
-                    'costo_flete'         => 0,
-                    'fecha_lista'         => $fechaLista,
-                    'tipo'                => $prod['tipo'],
-                    'estado'              => true,
-                    'created_at'          => $now,
-                    'updated_at'          => $now,
+                    'descripcion' => $prod['descripcion'],
+                    'especificaciones' => null,
+                    'diccionario_id' => $diccionarios[$diccCode],
+                    'unidad_id' => $unidadId,
+                    'tipo_proveedor' => $provCode,
+                    'costo_unitario_lista' => $prod['costo'],
+                    'costo_unitario' => $prod['costo'],
+                    'costo_flete' => 0,
+                    'fecha_lista' => $fechaLista,
+                    'tipo' => $prod['tipo'],
+                    'estado' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ]
             );
         }

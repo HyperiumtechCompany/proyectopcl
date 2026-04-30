@@ -13,6 +13,7 @@ class UbigeoSeeder extends Seeder
 
         if (! file_exists($jsonPath)) {
             $this->command->error("Ubigeo JSON not found at {$jsonPath}. Run: php artisan ubigeo:import");
+
             return;
         }
 

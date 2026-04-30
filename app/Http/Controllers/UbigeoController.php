@@ -12,7 +12,7 @@ class UbigeoController extends Controller
      */
     public function departamentos(): JsonResponse
     {
-        $departamentos = Ubigeo::departamentos()->map(fn($u) => [
+        $departamentos = Ubigeo::departamentos()->map(fn ($u) => [
             'id' => $u->id,
             'nombre' => $u->departamento,
         ]);
@@ -25,7 +25,7 @@ class UbigeoController extends Controller
      */
     public function provincias(string $departamentoId): JsonResponse
     {
-        $provincias = Ubigeo::provinciasByDepartamento($departamentoId)->map(fn($u) => [
+        $provincias = Ubigeo::provinciasByDepartamento($departamentoId)->map(fn ($u) => [
             'id' => $u->id,
             'nombre' => $u->provincia,
         ]);
@@ -38,7 +38,7 @@ class UbigeoController extends Controller
      */
     public function distritos(string $provinciaId): JsonResponse
     {
-        $distritos = Ubigeo::distritosByProvincia($provinciaId)->map(fn($u) => [
+        $distritos = Ubigeo::distritosByProvincia($provinciaId)->map(fn ($u) => [
             'id' => $u->id,
             'nombre' => $u->distrito,
         ]);

@@ -17,15 +17,15 @@ class MetradoComunicacionSpreadsheetController extends Controller
             ->with(['owner:id,name,email,avatar'])
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn($s) => [
-                'id'               => $s->id,
-                'name'             => $s->name,
-                'project_name'     => $s->project_name,
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'project_name' => $s->project_name,
                 'is_collaborative' => $s->is_collaborative,
-                'collab_code'      => $s->user_id === Auth::id() ? $s->collab_code : null,
-                'owner'            => $s->owner,
-                'updated_at'       => $s->updated_at->format('d/m/Y H:i'),
-                'is_owner'         => $s->user_id === Auth::id(),
+                'collab_code' => $s->user_id === Auth::id() ? $s->collab_code : null,
+                'owner' => $s->owner,
+                'updated_at' => $s->updated_at->format('d/m/Y H:i'),
+                'is_owner' => $s->user_id === Auth::id(),
             ]);
 
         return Inertia::render('costos/metrados/metrado_comunicacion/index', [
@@ -36,15 +36,15 @@ class MetradoComunicacionSpreadsheetController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
 
         $spreadsheet = MetradoComunicacionSpreadsheet::create([
-            'user_id'        => Auth::id(),
-            'name'           => $validated['name'],
-            'project_name'   => $validated['project_name'] ?? null,
-            'sheet_data'     => null,
+            'user_id' => Auth::id(),
+            'name' => $validated['name'],
+            'project_name' => $validated['project_name'] ?? null,
+            'sheet_data' => null,
         ]);
 
         return redirect()->route('metrados.comunicaciones.show', $spreadsheet->id);
@@ -61,21 +61,21 @@ class MetradoComunicacionSpreadsheetController extends Controller
 
         return Inertia::render('costos/metrados/ComunicacionesIndex', [
             'project' => [
-                'id'     => $metradosComunicacion->id,
+                'id' => $metradosComunicacion->id,
                 'nombre' => $metradosComunicacion->name,
             ],
             // Map sheet_data to metrado/resumen if expected by the view
             'metrado' => $metradosComunicacion->sheet_data['metrado'] ?? [],
             'resumen' => $metradosComunicacion->sheet_data['resumen'] ?? [],
             'spreadsheet' => [
-                'id'               => $metradosComunicacion->id,
-                'name'             => $metradosComunicacion->name,
-                'project_name'     => $metradosComunicacion->project_name,
+                'id' => $metradosComunicacion->id,
+                'name' => $metradosComunicacion->name,
+                'project_name' => $metradosComunicacion->project_name,
                 'is_collaborative' => $metradosComunicacion->is_collaborative,
-                'collab_code'      => $metradosComunicacion->user_id === Auth::id() ? $metradosComunicacion->collab_code : null,
-                'owner'            => $metradosComunicacion->owner,
-                'can_edit'         => $metradosComunicacion->canEdit(Auth::user()),
-                'is_owner'         => $metradosComunicacion->user_id === Auth::id(),
+                'collab_code' => $metradosComunicacion->user_id === Auth::id() ? $metradosComunicacion->collab_code : null,
+                'owner' => $metradosComunicacion->owner,
+                'can_edit' => $metradosComunicacion->canEdit(Auth::user()),
+                'is_owner' => $metradosComunicacion->user_id === Auth::id(),
             ],
         ]);
     }
@@ -85,11 +85,11 @@ class MetradoComunicacionSpreadsheetController extends Controller
         $this->authorizeEdit($metradosComunicacion);
 
         $validated = $request->validate([
-            'name'         => 'sometimes|string|max:255',
+            'name' => 'sometimes|string|max:255',
             'project_name' => 'sometimes|nullable|string|max:255',
-            'rows'         => 'sometimes|nullable|array',
+            'rows' => 'sometimes|nullable|array',
         ]);
-        
+
         // Handle sheet data updates (if coming from the Luckysheet index)
         if ($request->has('rows')) {
             // This is a simplified version, usually you'd want to know which sheet
@@ -110,6 +110,7 @@ class MetradoComunicacionSpreadsheetController extends Controller
         $data = $metradosComunicacion->sheet_data ?? [];
         $data['metrado'] = $request->input('rows', []);
         $metradosComunicacion->update(['sheet_data' => $data]);
+
         return response()->json(['success' => true]);
     }
 
@@ -119,6 +120,7 @@ class MetradoComunicacionSpreadsheetController extends Controller
         $data = $metradosComunicacion->sheet_data ?? [];
         $data['resumen'] = $request->input('rows', []);
         $metradosComunicacion->update(['sheet_data' => $data]);
+
         return response()->json(['success' => true]);
     }
 
@@ -128,6 +130,7 @@ class MetradoComunicacionSpreadsheetController extends Controller
             abort(403);
         }
         $metradosComunicacion->delete();
+
         return redirect()->route('metrados.comunicaciones.index');
     }
 
@@ -139,19 +142,20 @@ class MetradoComunicacionSpreadsheetController extends Controller
         if ($spreadsheet->user_id !== $user->id) {
             $spreadsheet->collaborators()->syncWithoutDetaching([$user->id => ['role' => 'editor', 'joined_at' => now()]]);
         }
+
         return redirect()->route('metrados.comunicaciones.show', $spreadsheet->id);
     }
 
     private function authorizeAccess($sheet)
     {
-        if ($sheet->user_id !== Auth::id() && !$sheet->collaborators()->where('users.id', Auth::id())->exists()) {
+        if ($sheet->user_id !== Auth::id() && ! $sheet->collaborators()->where('users.id', Auth::id())->exists()) {
             abort(403);
         }
     }
 
     private function authorizeEdit($sheet)
     {
-        if (!$sheet->canEdit(Auth::user())) {
+        if (! $sheet->canEdit(Auth::user())) {
             abort(403);
         }
     }

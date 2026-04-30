@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             UsersSeeder::class,
             UbigeoSeeder::class,
+            LuminaireProductSeeder::class,
         ]);
     }
 }

@@ -8,7 +8,10 @@ interface Props {
     onSelectedChange: (sections: SelectedSections) => void;
     onClose: () => void;
     getData: () => any[];
-    showNotification: (type: 'success' | 'error' | 'warning', msg: string) => void;
+    showNotification: (
+        type: 'success' | 'error' | 'warning',
+        msg: string,
+    ) => void;
     proyecto?: any;
 }
 
@@ -30,11 +33,45 @@ const EttpWordModal: React.FC<Props> = ({
         if (!data || !Array.isArray(data)) return [];
 
         const sectionKeywords: Record<string, string[]> = {
-            'ESTRUCTURAS': ['estructura', 'concreto', 'acero', 'cimentación', 'columna', 'viga'],
-            'ARQUITECTURA': ['arquitectura', 'acabado', 'piso', 'cielorraso', 'tabique', 'revoque'],
-            'INSTALACIONES SANITARIAS': ['sanitaria', 'agua', 'desagüe', 'tubería', 'cisterna', 'tanque'],
-            'INSTALACIONES ELECTRICAS': ['eléctrica', 'eléctrico', 'electricas', 'alumbrado', 'tomacorriente', 'tablero'],
-            'INSTALACIONES DE COMUNICACIONES': ['comunicacion', 'comunicaciones', 'datos', 'teléfono', 'red'],
+            ESTRUCTURAS: [
+                'estructura',
+                'concreto',
+                'acero',
+                'cimentación',
+                'columna',
+                'viga',
+            ],
+            ARQUITECTURA: [
+                'arquitectura',
+                'acabado',
+                'piso',
+                'cielorraso',
+                'tabique',
+                'revoque',
+            ],
+            'INSTALACIONES SANITARIAS': [
+                'sanitaria',
+                'agua',
+                'desagüe',
+                'tubería',
+                'cisterna',
+                'tanque',
+            ],
+            'INSTALACIONES ELECTRICAS': [
+                'eléctrica',
+                'eléctrico',
+                'electricas',
+                'alumbrado',
+                'tomacorriente',
+                'tablero',
+            ],
+            'INSTALACIONES DE COMUNICACIONES': [
+                'comunicacion',
+                'comunicaciones',
+                'datos',
+                'teléfono',
+                'red',
+            ],
             'INSTALACIONES DE GAS': ['gas', 'gasfitería', 'tubería de gas'],
         };
 
@@ -45,15 +82,18 @@ const EttpWordModal: React.FC<Props> = ({
             return items.reduce((acc: any[], item: any) => {
                 const descripcion = (item.descripcion || '').toLowerCase();
                 const itemCode = (item.item || '').toLowerCase();
-                const matches = keywords.some(kw =>
-                    descripcion.includes(kw.toLowerCase()) || itemCode.includes(kw.toLowerCase())
+                const matches = keywords.some(
+                    (kw) =>
+                        descripcion.includes(kw.toLowerCase()) ||
+                        itemCode.includes(kw.toLowerCase()),
                 );
 
                 if (matches) {
                     acc.push({ ...item });
                 } else if (item._children?.length) {
                     const filtered = filterItems(item._children);
-                    if (filtered.length > 0) acc.push({ ...item, _children: filtered });
+                    if (filtered.length > 0)
+                        acc.push({ ...item, _children: filtered });
                 }
                 return acc;
             }, []);
@@ -63,13 +103,30 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── HELPERS WORD ─────
-    const crearParrafoDetalle = (docx: any, titulo: string, descripcion: string) => {
+    const crearParrafoDetalle = (
+        docx: any,
+        titulo: string,
+        descripcion: string,
+    ) => {
         return new docx.Paragraph({
             children: [
-                new docx.TextRun({ text: `${titulo} `, bold: true, font: "Arial", color: "#000000" }),
-                new docx.TextRun({ text: descripcion, font: "Arial", color: "#000000" }),
+                new docx.TextRun({
+                    text: `${titulo} `,
+                    bold: true,
+                    font: 'Arial',
+                    color: '#000000',
+                }),
+                new docx.TextRun({
+                    text: descripcion,
+                    font: 'Arial',
+                    color: '#000000',
+                }),
             ],
-            spacing: { after: 100, line: 750, lineRule: docx.LineRuleType.AUTO },
+            spacing: {
+                after: 100,
+                line: 750,
+                lineRule: docx.LineRuleType.AUTO,
+            },
         });
     };
 
@@ -80,6 +137,111 @@ const EttpWordModal: React.FC<Props> = ({
         right: { style: docx.BorderStyle.NONE },
     });
 
+<<<<<<< Updated upstream
+=======
+    // ─── DETECCIÓN DE NIVEL POR NUMERACIÓN ─────
+    const detectHeadingLevel = (itemNumber: string): number => {
+        if (!itemNumber) return 3;
+        const dotCount = (itemNumber.match(/\./g) || []).length;
+        switch (dotCount) {
+            case 0:
+                return 1; // 01 = HEADING_1
+            case 1:
+                return 2; // 01.01 = HEADING_2
+            default:
+                return 3; // 01.01.01+ = HEADING_3
+        }
+    };
+
+    // ─── CONSTRUCCIÓN DE ÍNDICE INTELIGENTE ─────
+    const buildTableOfContents = (items: any[]): any[] => {
+        const sections: any[] = [];
+        const toc: { level: number; text: string; item: string }[] = [];
+
+        const traverse = (items: any[]) => {
+            items?.forEach((item) => {
+                if (item?.item && item?.descripcion) {
+                    const level = detectHeadingLevel(item.item);
+                    toc.push({
+                        level,
+                        text: `${item.item} ${item.descripcion}`.trim(),
+                        item: item.item,
+                    });
+                    if (item._children?.length) traverse(item._children);
+                }
+            });
+        };
+
+        traverse(items);
+
+        // Encabezado de tabla de contenido
+        sections.push(
+            new window.docx.Paragraph({
+                children: [
+                    new window.docx.TextRun({
+                        text: 'Contenido',
+                        bold: true,
+                        font: 'Arial',
+                        size: 28,
+                        color: '#000000',
+                    }),
+                ],
+                alignment: window.docx.AlignmentType.LEFT,
+                spacing: { after: 300, line: 480 },
+            }),
+        );
+
+        // Contenido del índice con números de página
+        let pageCounter = 3; // Comienza en página 3 (portada, índice, luego contenido)
+        toc.forEach((entry, index) => {
+            const indent = (entry.level - 1) * 720;
+            const tabStopPosition = 9144; // Posición tab stop para números a la derecha
+
+            sections.push(
+                new window.docx.Paragraph({
+                    children: [
+                        new window.docx.TextRun({
+                            text: entry.text,
+                            font: 'Arial',
+                            size: entry.level === 1 ? 24 : 22,
+                            color: '#000000',
+                            bold: entry.level === 1,
+                        }),
+                        new window.docx.TextRun({
+                            text: '\t',
+                        }),
+                        new window.docx.TextRun({
+                            text: String(pageCounter),
+                            font: 'Arial',
+                            size: entry.level === 1 ? 24 : 22,
+                            color: '#000000',
+                            bold: entry.level === 1,
+                        }),
+                    ],
+                    indent: { left: indent, right: 0 },
+                    tabStops: [
+                        {
+                            type: window.docx.TabStopType.RIGHT,
+                            position: tabStopPosition,
+                            fill: window.docx.TabStopFillType.DOT,
+                        },
+                    ],
+                    spacing: { after: 80, line: 360 },
+                }),
+            );
+
+            // Incrementar página
+            if (entry.level === 1 && index > 0) {
+                pageCounter += 1;
+            } else if (index > 0 && entry.level === 1) {
+                pageCounter += 1;
+            }
+        });
+
+        return sections;
+    };
+
+>>>>>>> Stashed changes
     const procesarContenido = async (docx: any, contenido: string) => {
         if (!contenido) return [];
         const tempDiv = document.createElement('div');
@@ -92,14 +254,23 @@ const EttpWordModal: React.FC<Props> = ({
             const procesarInline = async (nodo: Node) => {
                 if (nodo.nodeType === Node.TEXT_NODE) {
                     if (nodo.textContent?.trim() !== '') {
-                        runs.push(new docx.TextRun({ text: nodo.textContent?.replace(/\s+/g, ' ') || '', font: "Arial Narrow", size: 24, color: "#000000" }));
+                        runs.push(
+                            new docx.TextRun({
+                                text:
+                                    nodo.textContent?.replace(/\s+/g, ' ') ||
+                                    '',
+                                font: 'Arial Narrow',
+                                size: 24,
+                                color: '#000000',
+                            }),
+                        );
                     }
                 } else if (nodo.nodeType === Node.ELEMENT_NODE) {
                     const el = nodo as HTMLElement;
                     if (el.tagName === 'IMG') {
                         const src = el.getAttribute('src');
                         if (src) {
-                            let dataStr = "";
+                            let dataStr = '';
                             if (src.startsWith('data:image')) {
                                 const partes = src.split(',');
                                 if (partes.length > 1) dataStr = partes[1];
@@ -107,21 +278,37 @@ const EttpWordModal: React.FC<Props> = ({
                                 try {
                                     const response = await fetch(src);
                                     const blob = await response.blob();
-                                    const base64Data = await new Promise<string>((resolve, reject) => {
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => resolve(reader.result as string);
-                                        reader.onerror = reject;
-                                        reader.readAsDataURL(blob);
-                                    });
+                                    const base64Data =
+                                        await new Promise<string>(
+                                            (resolve, reject) => {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () =>
+                                                    resolve(
+                                                        reader.result as string,
+                                                    );
+                                                reader.onerror = reject;
+                                                reader.readAsDataURL(blob);
+                                            },
+                                        );
                                     const partesUrl = base64Data.split(',');
+<<<<<<< Updated upstream
                                     if (partesUrl.length > 1) dataStr = partesUrl[1];
+=======
+                                    if (partesUrl.length > 1)
+                                        dataStr = partesUrl[1];
+>>>>>>> Stashed changes
                                 } catch (err) {}
                             }
                             if (dataStr) {
-                                runs.push(new docx.ImageRun({
-                                    data: dataStr,
-                                    transformation: { width: 200, height: 200 },
-                                }));
+                                runs.push(
+                                    new docx.ImageRun({
+                                        data: dataStr,
+                                        transformation: {
+                                            width: 200,
+                                            height: 200,
+                                        },
+                                    }),
+                                );
                             }
                         }
                     } else if (el.tagName !== 'BR') {
@@ -137,20 +324,31 @@ const EttpWordModal: React.FC<Props> = ({
             }
 
             if (runs.length > 0) {
-                const tieneImagen = runs.some(r => r.constructor.name === 'ImageRun' || (r.options && r.options.data));
-                elementos.push(new docx.Paragraph({
-                    alignment: tieneImagen ? docx.AlignmentType.CENTER : docx.AlignmentType.BOTH,
-                    children: runs,
-                    spacing: { after: 200, line: 480 },
-                    indent: tieneImagen ? {} : { left: 720, firstLine: 0 },
-                }));
+                const tieneImagen = runs.some(
+                    (r) =>
+                        r.constructor.name === 'ImageRun' ||
+                        (r.options && r.options.data),
+                );
+                elementos.push(
+                    new docx.Paragraph({
+                        alignment: tieneImagen
+                            ? docx.AlignmentType.CENTER
+                            : docx.AlignmentType.BOTH,
+                        children: runs,
+                        spacing: { after: 200, line: 480 },
+                        indent: tieneImagen ? {} : { left: 720, firstLine: 0 },
+                    }),
+                );
             }
         };
 
         for (const child of Array.from(tempDiv.childNodes)) {
             if (child.nodeType === Node.ELEMENT_NODE) {
                 await procesarBloque(child as HTMLElement);
-            } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+            } else if (
+                child.nodeType === Node.TEXT_NODE &&
+                child.textContent?.trim()
+            ) {
                 const fakeP = document.createElement('p');
                 fakeP.textContent = child.textContent;
                 await procesarBloque(fakeP);
@@ -160,27 +358,54 @@ const EttpWordModal: React.FC<Props> = ({
         return elementos;
     };
 
-    const addTechnicalDetails = async (docx: any, sectionsData: any[], sections: any[]) => {
+    const addTechnicalDetails = async (
+        docx: any,
+        sectionsData: any[],
+        sections: any[],
+    ) => {
         if (!sectionsData || !Array.isArray(sectionsData)) return;
 
         for (const section of sectionsData) {
             if (!section.titulo || !section.contenido) continue;
 
-            sections.push(new docx.Paragraph({
-                children: [new docx.TextRun({ text: `${section.titulo.toUpperCase()}:`, bold: true, font: "Arial Narrow", size: 24, color: "#000000" })],
-                spacing: { after: 200, line: 480 }, indent: { left: 720, firstLine: 0 },
-            }));
+            sections.push(
+                new docx.Paragraph({
+                    children: [
+                        new docx.TextRun({
+                            text: `${section.titulo.toUpperCase()}:`,
+                            bold: true,
+                            font: 'Arial Narrow',
+                            size: 24,
+                            color: '#000000',
+                        }),
+                    ],
+                    spacing: { after: 200, line: 480 },
+                    indent: { left: 720, firstLine: 0 },
+                }),
+            );
 
-            const elementosParsed = await procesarContenido(docx, section.contenido);
+            const elementosParsed = await procesarContenido(
+                docx,
+                section.contenido,
+            );
             sections.push(...elementosParsed);
         }
     };
 
+<<<<<<< Updated upstream
     const processHierarchicalItems = async (docx: any, items: any[], sections: any[], level: number) => {
+=======
+    const processHierarchicalItems = async (
+        docx: any,
+        items: any[],
+        sections: any[],
+    ) => {
+>>>>>>> Stashed changes
         if (!items?.length) return;
         for (const item of items) {
             if (!item) continue;
 
+<<<<<<< Updated upstream
             let headingLevel;
             switch (level) {
                 case 1: headingLevel = docx.HeadingLevel.HEADING_1; break;
@@ -202,6 +427,51 @@ const EttpWordModal: React.FC<Props> = ({
                     children: [new docx.TextRun({ text: `(Unidad de medida: ${item.unidad})`, font: "Arial Narrow", size: 22, color: "#000000" })],
                     spacing: { line: 480 },
                 }));
+=======
+            const headingLevel = detectHeadingLevel(item.item);
+            const headingLevelEnum =
+                headingLevel === 1
+                    ? docx.HeadingLevel.HEADING_1
+                    : headingLevel === 2
+                      ? docx.HeadingLevel.HEADING_2
+                      : docx.HeadingLevel.HEADING_3;
+
+            sections.push(
+                new docx.Paragraph({
+                    children: [
+                        new docx.TextRun({
+                            text: `${item.item || ''} ${item.descripcion || ''}`.trim(),
+                            bold: true,
+                            font: 'Arial Narrow',
+                            color: '#000000',
+                            size:
+                                headingLevel === 1
+                                    ? 28
+                                    : headingLevel === 2
+                                      ? 26
+                                      : 24,
+                        }),
+                    ],
+                    heading: headingLevelEnum,
+                    spacing: { before: 300, after: 100, line: 480 },
+                }),
+            );
+
+            if (item.unidad) {
+                sections.push(
+                    new docx.Paragraph({
+                        children: [
+                            new docx.TextRun({
+                                text: `(Unidad de medida: ${item.unidad})`,
+                                font: 'Arial Narrow',
+                                size: 22,
+                                color: '#666666',
+                            }),
+                        ],
+                        spacing: { line: 480, after: 200 },
+                    }),
+                );
+>>>>>>> Stashed changes
             }
 
             if (item.secciones && item.secciones.length > 0) {
@@ -216,7 +486,10 @@ const EttpWordModal: React.FC<Props> = ({
 
     const readFileAsDataURL = (file: File): Promise<string | null> => {
         return new Promise((resolve, reject) => {
-            if (!file) { resolve(null); return; }
+            if (!file) {
+                resolve(null);
+                return;
+            }
             const reader = new FileReader();
             reader.onload = (ev) => resolve(ev.target?.result as string);
             reader.onerror = reject;
@@ -225,6 +498,10 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── GENERACIÓN PRINCIPAL ─────
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
     const fetchImageAsDataURL = async (url: string): Promise<string | null> => {
         try {
             const response = await fetch(url);
@@ -236,29 +513,47 @@ const EttpWordModal: React.FC<Props> = ({
                 reader.readAsDataURL(blob);
             });
         } catch (e) {
-            console.error("Error obteniendo imagen de proyecto:", e);
+            console.error('Error obteniendo imagen de proyecto:', e);
             return null;
         }
     };
 
-    const generarWordParaSeccion = async (docx: any, datosFiltrados: any[], nombreArchivo: string) => {
-        const logoFile = (document.getElementById('logoFile') as HTMLInputElement)?.files?.[0] || null;
-        const escudoFile = (document.getElementById('escudoFile') as HTMLInputElement)?.files?.[0] || null;
-        const principalFile = (document.getElementById('logoPrinFile') as HTMLInputElement)?.files?.[0] || null;
-        const firmaFile = (document.getElementById('firmaFile') as HTMLInputElement)?.files?.[0] || null;
+    const generarWordParaSeccion = async (
+        docx: any,
+        datosFiltrados: any[],
+        nombreArchivo: string,
+    ) => {
+        const logoFile =
+            (document.getElementById('logoFile') as HTMLInputElement)
+                ?.files?.[0] || null;
+        const escudoFile =
+            (document.getElementById('escudoFile') as HTMLInputElement)
+                ?.files?.[0] || null;
+        const principalFile =
+            (document.getElementById('logoPrinFile') as HTMLInputElement)
+                ?.files?.[0] || null;
+        const firmaFile =
+            (document.getElementById('firmaFile') as HTMLInputElement)
+                ?.files?.[0] || null;
 
-        let logoUrl: string | null = null, escudoUrl: string | null = null;
-        let principalUrl: string | null = null, firmaUrl: string | null = null;
+        let logoUrl: string | null = null,
+            escudoUrl: string | null = null;
+        let principalUrl: string | null = null,
+            firmaUrl: string | null = null;
 
         try {
             if (proyecto?.plantilla_logo_izq_url) {
-                logoUrl = await fetchImageAsDataURL(proyecto.plantilla_logo_izq_url);
+                logoUrl = await fetchImageAsDataURL(
+                    proyecto.plantilla_logo_izq_url,
+                );
             } else if (logoFile) {
                 logoUrl = await readFileAsDataURL(logoFile);
             }
 
             if (proyecto?.plantilla_logo_der_url) {
-                escudoUrl = await fetchImageAsDataURL(proyecto.plantilla_logo_der_url);
+                escudoUrl = await fetchImageAsDataURL(
+                    proyecto.plantilla_logo_der_url,
+                );
             } else if (escudoFile) {
                 escudoUrl = await readFileAsDataURL(escudoFile);
             }
@@ -268,21 +563,58 @@ const EttpWordModal: React.FC<Props> = ({
             }
 
             if (proyecto?.plantilla_firma_url) {
-                firmaUrl = await fetchImageAsDataURL(proyecto.plantilla_firma_url);
+                firmaUrl = await fetchImageAsDataURL(
+                    proyecto.plantilla_firma_url,
+                );
             } else if (firmaFile) {
                 firmaUrl = await readFileAsDataURL(firmaFile);
             }
-        } catch (err) { console.error("Error procesando imágenes:", err); }
+        } catch (err) {
+            console.error('Error procesando imágenes:', err);
+        }
 
-        const logoRun = logoUrl ? new docx.ImageRun({ data: logoUrl.split(',').length > 1 ? logoUrl.split(',')[1] : logoUrl, transformation: { width: 70, height: 70 } }) : null;
-        const escudoRun = escudoUrl ? new docx.ImageRun({ data: escudoUrl.split(',').length > 1 ? escudoUrl.split(',')[1] : escudoUrl, transformation: { width: 70, height: 70 } }) : null;
-        const principalRun = principalUrl ? new docx.ImageRun({ data: principalUrl.split(',').length > 1 ? principalUrl.split(',')[1] : principalUrl, transformation: { width: 300, height: 400 } }) : null;
-        const firmaRun = firmaUrl ? new docx.ImageRun({ data: firmaUrl.split(',').length > 1 ? firmaUrl.split(',')[1] : firmaUrl, transformation: { width: 70, height: 70 } }) : null;
+        const logoRun = logoUrl
+            ? new docx.ImageRun({
+                  data:
+                      logoUrl.split(',').length > 1
+                          ? logoUrl.split(',')[1]
+                          : logoUrl,
+                  transformation: { width: 70, height: 70 },
+              })
+            : null;
+        const escudoRun = escudoUrl
+            ? new docx.ImageRun({
+                  data:
+                      escudoUrl.split(',').length > 1
+                          ? escudoUrl.split(',')[1]
+                          : escudoUrl,
+                  transformation: { width: 70, height: 70 },
+              })
+            : null;
+        const principalRun = principalUrl
+            ? new docx.ImageRun({
+                  data:
+                      principalUrl.split(',').length > 1
+                          ? principalUrl.split(',')[1]
+                          : principalUrl,
+                  transformation: { width: 300, height: 400 },
+              })
+            : null;
+        const firmaRun = firmaUrl
+            ? new docx.ImageRun({
+                  data:
+                      firmaUrl.split(',').length > 1
+                          ? firmaUrl.split(',')[1]
+                          : firmaUrl,
+                  transformation: { width: 70, height: 70 },
+              })
+            : null;
 
         const header = new docx.Header({
             children: [
                 new docx.Table({
                     width: { size: 100, type: docx.WidthType.PERCENTAGE },
+<<<<<<< Updated upstream
                     borders: { top: { style: docx.BorderStyle.NONE }, bottom: { style: docx.BorderStyle.NONE }, left: { style: docx.BorderStyle.NONE }, right: { style: docx.BorderStyle.NONE }, insideHorizontal: { style: docx.BorderStyle.NONE }, insideVertical: { style: docx.BorderStyle.NONE } },
                     rows: [new docx.TableRow({
                         children: [
@@ -293,21 +625,120 @@ const EttpWordModal: React.FC<Props> = ({
                             new docx.TableCell({ width: { size: 15, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [new docx.Paragraph({ alignment: docx.AlignmentType.RIGHT, children: escudoRun ? [escudoRun] : [] })] }),
                         ],
                     })],
+=======
+                    borders: {
+                        top: { style: docx.BorderStyle.NONE },
+                        bottom: { style: docx.BorderStyle.NONE },
+                        left: { style: docx.BorderStyle.NONE },
+                        right: { style: docx.BorderStyle.NONE },
+                        insideHorizontal: { style: docx.BorderStyle.NONE },
+                        insideVertical: { style: docx.BorderStyle.NONE },
+                    },
+                    rows: [
+                        new docx.TableRow({
+                            children: [
+                                new docx.TableCell({
+                                    width: {
+                                        size: 15,
+                                        type: docx.WidthType.PERCENTAGE,
+                                    },
+                                    borders: sinBordes(docx),
+                                    children: [
+                                        new docx.Paragraph({
+                                            alignment: docx.AlignmentType.LEFT,
+                                            children: logoRun ? [logoRun] : [],
+                                        }),
+                                    ],
+                                }),
+                                new docx.TableCell({
+                                    width: {
+                                        size: 70,
+                                        type: docx.WidthType.PERCENTAGE,
+                                    },
+                                    borders: sinBordes(docx),
+                                    children: [
+                                        new docx.Paragraph({
+                                            alignment:
+                                                docx.AlignmentType.CENTER,
+                                            children: [
+                                                new docx.TextRun({
+                                                    text: 'ESPECIFICACIONES TÉCNICAS',
+                                                    bold: true,
+                                                    size: 16,
+                                                    color: '#000000',
+                                                    font: 'Arial',
+                                                }),
+                                            ],
+                                        }),
+                                    ],
+                                }),
+                                new docx.TableCell({
+                                    width: {
+                                        size: 15,
+                                        type: docx.WidthType.PERCENTAGE,
+                                    },
+                                    borders: sinBordes(docx),
+                                    children: [
+                                        new docx.Paragraph({
+                                            alignment: docx.AlignmentType.RIGHT,
+                                            children: escudoRun
+                                                ? [escudoRun]
+                                                : [],
+                                        }),
+                                    ],
+                                }),
+                            ],
+                        }),
+                    ],
                 }),
-                new docx.Paragraph({ border: { bottom: { color: "#000000", space: 1, style: docx.BorderStyle.SINGLE, size: 1 } }, children: [new docx.TextRun("")] }),
+                new docx.Paragraph({
+                    border: {
+                        bottom: {
+                            color: '#000000',
+                            space: 1,
+                            style: docx.BorderStyle.SINGLE,
+                            size: 1,
+                        },
+                    },
+                    children: [new docx.TextRun('')],
+>>>>>>> Stashed changes
+                }),
             ],
         });
 
         const footer = new docx.Footer({
             children: [
-                new docx.Paragraph({ alignment: docx.AlignmentType.LEFT, children: firmaRun ? [firmaRun] : [] }),
+                new docx.Paragraph({
+                    alignment: docx.AlignmentType.LEFT,
+                    children: firmaRun ? [firmaRun] : [],
+                }),
                 new docx.Paragraph({
                     alignment: docx.AlignmentType.RIGHT,
                     children: [
-                        new docx.TextRun({ text: "Página ", bold: true, color: "#000000", font: "Arial" }),
-                        new docx.TextRun({ children: [docx.PageNumber.CURRENT], bold: true, color: "#000000", font: "Arial" }),
-                        new docx.TextRun({ text: " | ", bold: true, color: "#000000", font: "Arial" }),
-                        new docx.TextRun({ children: [docx.PageNumber.TOTAL_PAGES], bold: true, color: "#000000", font: "Arial" }),
+                        new docx.TextRun({
+                            text: 'Página ',
+                            bold: true,
+                            color: '#000000',
+                            font: 'Arial',
+                        }),
+                        new docx.TextRun({
+                            children: [docx.PageNumber.CURRENT],
+                            bold: true,
+                            color: '#000000',
+                            font: 'Arial',
+                        }),
+                        new docx.TextRun({
+                            text: ' | ',
+                            bold: true,
+                            color: '#000000',
+                            font: 'Arial',
+                        }),
+                        new docx.TextRun({
+                            children: [docx.PageNumber.TOTAL_PAGES],
+                            bold: true,
+                            color: '#000000',
+                            font: 'Arial',
+                        }),
                     ],
                 }),
             ],
@@ -316,14 +747,51 @@ const EttpWordModal: React.FC<Props> = ({
         // Portada
         const coverPage = [
             new docx.Paragraph({
+<<<<<<< Updated upstream
                 children: [new docx.TextRun({ text: `ESPECIFICACIONES TECNICAS-${nombreArchivo.toUpperCase()}`, bold: true, size: 44, font: "Arial", color: "#000000", underline: { type: docx.UnderlineType.SINGLE } })],
                 alignment: docx.AlignmentType.CENTER, spacing: { after: 200 },
+=======
+                children: [
+                    new docx.TextRun({
+                        text: `ESPECIFICACIONES TÉCNICAS - ${nombreArchivo.toUpperCase()}`,
+                        bold: true,
+                        size: 44,
+                        font: 'Arial',
+                        color: '#000000',
+                        underline: { type: docx.UnderlineType.SINGLE },
+                    }),
+                ],
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { after: 200 },
+            }),
+            new docx.Paragraph({
+                text: '',
+                border: {
+                    bottom: {
+                        color: '#000000',
+                        space: 1,
+                        style: docx.BorderStyle.SINGLE,
+                        size: 1,
+                    },
+                },
+                spacing: { after: 400 },
+>>>>>>> Stashed changes
             }),
             new docx.Paragraph({ text: "", border: { bottom: { color: "#000000", space: 1, style: docx.BorderStyle.SINGLE, size: 1 } }, spacing: { after: 400 } }),
         ];
 
         if (principalRun) {
+<<<<<<< Updated upstream
             coverPage.push(new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [principalRun], spacing: { after: 400 } }));
+=======
+            coverPage.push(
+                new docx.Paragraph({
+                    alignment: docx.AlignmentType.CENTER,
+                    children: [principalRun],
+                    spacing: { after: 400 },
+                }),
+            );
+>>>>>>> Stashed changes
         }
 
         // Tabla de contenido
@@ -332,6 +800,7 @@ const EttpWordModal: React.FC<Props> = ({
             new docx.TableOfContents("Tabla de Contenido", { hyperlink: true, headingStyleRange: "1-5", size: 24, color: "#000000" }),
         ];
 
+<<<<<<< Updated upstream
         // Contenido
         const contentSections: any[] = [];
         contentSections.push(new docx.Paragraph({ text: nombreArchivo.toUpperCase(), heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER, bold: true, spacing: { before: 400, after: 200 } }));
@@ -350,6 +819,94 @@ const EttpWordModal: React.FC<Props> = ({
                 { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: coverPage },
                 { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: toc },
                 { properties: { type: docx.SectionType.CONTINUOUS }, headers: { default: header }, footers: { default: footer }, children: contentSections },
+=======
+        // Agregar las secciones del TOC al contenido
+        contentSections.push(...tocSections);
+
+        // Contenido
+        const contentSections: any[] = [];
+        contentSections.push(
+            new docx.Paragraph({
+                children: [
+                    new docx.TextRun({
+                        text: nombreArchivo.toUpperCase(),
+                        bold: true,
+                        size: 28,
+                        color: '#000000',
+                        font: 'Arial',
+                    }),
+                ],
+                heading: docx.HeadingLevel.HEADING_1,
+                alignment: docx.AlignmentType.CENTER,
+                spacing: { before: 400, after: 200 },
+            }),
+        );
+        await processHierarchicalItems(docx, datosFiltrados, contentSections);
+
+        const doc = new docx.Document({
+            styles: {
+                default: {
+                    document: {
+                        run: { font: 'Arial', color: '#000000', size: 24 },
+                    },
+                    paragraph: { spacing: { line: 276 } },
+                },
+                paragraphStyles: [
+                    {
+                        id: 'Heading1',
+                        name: 'Heading 1',
+                        run: {
+                            font: 'Arial',
+                            size: 28,
+                            bold: true,
+                            color: '#000000',
+                        },
+                        paragraph: { spacing: { before: 300, after: 150 } },
+                    },
+                    {
+                        id: 'Heading2',
+                        name: 'Heading 2',
+                        run: {
+                            font: 'Arial',
+                            size: 26,
+                            bold: true,
+                            color: '#1f2937',
+                        },
+                        paragraph: { spacing: { before: 280, after: 120 } },
+                    },
+                    {
+                        id: 'Heading3',
+                        name: 'Heading 3',
+                        run: {
+                            font: 'Arial',
+                            size: 24,
+                            bold: true,
+                            color: '#374151',
+                        },
+                        paragraph: { spacing: { before: 240, after: 100 } },
+                    },
+                ],
+            },
+            sections: [
+                {
+                    properties: { type: docx.SectionType.NEW_PAGE },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: coverPage,
+                },
+                {
+                    properties: { type: docx.SectionType.NEW_PAGE },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: tocSections,
+                },
+                {
+                    properties: { type: docx.SectionType.CONTINUOUS },
+                    headers: { default: header },
+                    footers: { default: footer },
+                    children: contentSections,
+                },
+>>>>>>> Stashed changes
             ],
         });
 
@@ -357,15 +914,24 @@ const EttpWordModal: React.FC<Props> = ({
             const blob = await docx.Packer.toBlob(doc);
             const saveAs = (window as any).saveAs;
             if (saveAs) {
-                saveAs(blob, `especificaciones_tecnicas_${nombreArchivo.replace(/ /g, '_')}.docx`);
+                saveAs(
+                    blob,
+                    `especificaciones_tecnicas_${nombreArchivo.replace(/ /g, '_')}.docx`,
+                );
             } else {
                 const { saveAs: fileSaverSaveAs } = await import('file-saver');
-                fileSaverSaveAs(blob, `especificaciones_tecnicas_${nombreArchivo.replace(/ /g, '_')}.docx`);
+                fileSaverSaveAs(
+                    blob,
+                    `especificaciones_tecnicas_${nombreArchivo.replace(/ /g, '_')}.docx`,
+                );
             }
-            showNotification('success', `Documento para ${nombreArchivo} generado con éxito`);
+            showNotification(
+                'success',
+                `Documento para ${nombreArchivo} generado con éxito`,
+            );
         } catch (err) {
-            console.error("Error generando documento:", err);
-            showNotification('error', "Error al generar el documento Word");
+            console.error('Error generando documento:', err);
+            showNotification('error', 'Error al generar el documento Word');
         }
     };
 
@@ -373,7 +939,10 @@ const EttpWordModal: React.FC<Props> = ({
     const handleGenerate = () => {
         const docx = (window as any).docx;
         if (!docx) {
-            showNotification('error', 'La biblioteca docx no se ha cargado correctamente');
+            showNotification(
+                'error',
+                'La biblioteca docx no se ha cargado correctamente',
+            );
             return;
         }
 
@@ -388,110 +957,207 @@ const EttpWordModal: React.FC<Props> = ({
 
         const data = getData();
         if (!data?.length) {
-            showNotification('warning', 'No hay datos para generar el documento');
+            showNotification(
+                'warning',
+                'No hay datos para generar el documento',
+            );
             return;
         }
 
         setGenerating(true);
         onClose();
 
-        Promise.all(selectedKeys.map(async seccion => {
-            const filtered = filterTreeData(data, seccion);
-            if (filtered.length > 0) {
-                await generarWordParaSeccion(docx, filtered, seccion);
-            } else {
-                showNotification('warning', `No se encontraron datos para ${seccion}`);
-            }
-        })).finally(() => setGenerating(false));
+        Promise.all(
+            selectedKeys.map(async (seccion) => {
+                const filtered = filterTreeData(data, seccion);
+                if (filtered.length > 0) {
+                    await generarWordParaSeccion(docx, filtered, seccion);
+                } else {
+                    showNotification(
+                        'warning',
+                        `No se encontraron datos para ${seccion}`,
+                    );
+                }
+            }),
+        ).finally(() => setGenerating(false));
     };
 
     return (
         <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black"
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-lg w-full max-w-md mx-4"
-                onClick={e => e.stopPropagation()}
+                className="mx-4 w-full max-w-md rounded-lg bg-white"
+                onClick={(e) => e.stopPropagation()}
             >
-                <div className="bg-gray-100 px-6 py-4 rounded-t-lg border-b">
-                    <h2 className="text-lg font-bold text-gray-800">Generar Documento Word</h2>
+                <div className="rounded-t-lg border-b bg-gray-100 px-6 py-4">
+                    <h2 className="text-lg font-bold text-gray-800">
+                        Generar Documento Word
+                    </h2>
                 </div>
-                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="max-h-[60vh] space-y-4 overflow-y-auto p-6">
                     {/* Secciones */}
                     <div>
-                        <p className="text-sm text-gray-600 mb-2">Seleccione las secciones a incluir:</p>
+                        <p className="mb-2 text-sm text-gray-600">
+                            Seleccione las secciones a incluir:
+                        </p>
                         <div className="space-y-2">
-                            {Object.entries(selectedSections).map(([key, value]) => (
-                                <label key={key} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={value}
-                                        onChange={e =>
-                                            onSelectedChange({ ...selectedSections, [key]: e.target.checked })
-                                        }
-                                        className="w-4 h-4 text-blue-600 rounded"
-                                    />
-                                    <span className="text-sm text-gray-700 capitalize">{key}</span>
-                                </label>
-                            ))}
+                            {Object.entries(selectedSections).map(
+                                ([key, value]) => (
+                                    <label
+                                        key={key}
+                                        className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-gray-50"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={value}
+                                            onChange={(e) =>
+                                                onSelectedChange({
+                                                    ...selectedSections,
+                                                    [key]: e.target.checked,
+                                                })
+                                            }
+                                            className="h-4 w-4 rounded text-blue-600"
+                                        />
+                                        <span className="text-sm text-gray-700 capitalize">
+                                            {key}
+                                        </span>
+                                    </label>
+                                ),
+                            )}
                         </div>
                     </div>
 
                     {/* Imágenes */}
                     <div className="border-t border-gray-200 pt-3">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Imágenes para el documento:</p>
+                        <p className="mb-2 text-sm font-medium text-gray-700">
+                            Imágenes para el documento:
+                        </p>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Logo izquierdo (header)</label>
+                                <label className="mb-1 block text-xs text-gray-500">
+                                    Logo izquierdo (header)
+                                </label>
                                 {proyecto?.plantilla_logo_izq_url ? (
-                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                                        <svg
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
                                         Usando imagen del proyecto
                                     </div>
                                 ) : (
-                                    <input type="file" id="logoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                    <input
+                                        type="file"
+                                        id="logoFile"
+                                        accept="image/*"
+                                        className="w-full rounded-md border border-gray-300 p-1.5 text-sm"
+                                    />
                                 )}
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Logo derecho / Escudo (header)</label>
+                                <label className="mb-1 block text-xs text-gray-500">
+                                    Logo derecho / Escudo (header)
+                                </label>
                                 {proyecto?.plantilla_logo_der_url ? (
-                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                                        <svg
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
                                         Usando imagen del proyecto
                                     </div>
                                 ) : (
-                                    <input type="file" id="escudoFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                    <input
+                                        type="file"
+                                        id="escudoFile"
+                                        accept="image/*"
+                                        className="w-full rounded-md border border-gray-300 p-1.5 text-sm"
+                                    />
                                 )}
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Imagen principal (portada)</label>
-                                <input type="file" id="logoPrinFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                <label className="mb-1 block text-xs text-gray-500">
+                                    Imagen principal (portada)
+                                </label>
+                                <input
+                                    type="file"
+                                    id="logoPrinFile"
+                                    accept="image/*"
+                                    className="w-full rounded-md border border-gray-300 p-1.5 text-sm"
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-500 mb-1">Firma (footer)</label>
+                                <label className="mb-1 block text-xs text-gray-500">
+                                    Firma (footer)
+                                </label>
                                 {proyecto?.plantilla_firma_url ? (
-                                    <div className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-md border border-emerald-100 text-sm flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                                        <svg
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
                                         Usando firma del proyecto
                                     </div>
                                 ) : (
-                                    <input type="file" id="firmaFile" accept="image/*" className="w-full text-sm border border-gray-300 rounded-md p-1.5" />
+                                    <input
+                                        type="file"
+                                        id="firmaFile"
+                                        accept="image/*"
+                                        className="w-full rounded-md border border-gray-300 p-1.5 text-sm"
+                                    />
                                 )}
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="bg-gray-100 px-6 py-4 rounded-b-lg flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                <div className="flex justify-end gap-3 rounded-b-lg bg-gray-100 px-6 py-4">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                    >
                         Cancelar
                     </button>
                     <button
                         onClick={handleGenerate}
                         disabled={generating}
+<<<<<<< Updated upstream
                         className={`px-4 py-2 rounded-md text-sm font-medium ${
                             generating
                                 ? 'bg-gray-400 cursor-not-allowed text-white'
+=======
+                        className={`rounded-md px-4 py-2 text-sm font-medium ${
+                            generating
+                                ? 'cursor-not-allowed bg-gray-400 text-white'
+>>>>>>> Stashed changes
                                 : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                     >

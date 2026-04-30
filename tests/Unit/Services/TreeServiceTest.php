@@ -3,9 +3,9 @@
 namespace Tests\Unit\Services;
 
 use App\Models\CostoProject;
+use App\Models\CostoProjectModule;
 use App\Models\MetradoSanitariasNode;
 use App\Models\MetradoSanitariasValue;
-use App\Models\CostoProjectModule;
 use App\Services\TreeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -15,12 +15,13 @@ class TreeServiceTest extends TestCase
     use RefreshDatabase;
 
     private TreeService $service;
+
     private CostoProject $project;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new TreeService();
+        $this->service = new TreeService;
         $this->project = CostoProject::factory()->create();
     }
 
@@ -94,7 +95,6 @@ class TreeServiceTest extends TestCase
         ]);
     }
 
-
     public function test_create_node_creates_child_with_correct_level(): void
     {
         $parent = MetradoSanitariasNode::factory()->create([
@@ -165,7 +165,6 @@ class TreeServiceTest extends TestCase
             'name' => 'Test',
         ]);
     }
-
 
     // ─── updateNode Tests ────────────────────────────────────────────────────
 
@@ -241,7 +240,6 @@ class TreeServiceTest extends TestCase
             'node_type' => 'partida',
         ]);
     }
-
 
     // ─── deleteNode Tests ────────────────────────────────────────────────────
 

@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -24,7 +24,7 @@ class AcCalculation extends Model
     ];
 
     protected $casts = [
-        'data'             => 'array',
+        'data' => 'array',
         'is_collaborative' => 'boolean',
     ];
 
@@ -55,14 +55,16 @@ class AcCalculation extends Model
     public function scopeForUser($query, int $userId)
     {
         return $query->where('user_id', $userId)
-            ->orWhereHas('collaborators', fn($q) => $q->where('users.id', $userId));
+            ->orWhereHas('collaborators', fn ($q) => $q->where('users.id', $userId));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     public function canEdit(User $user): bool
     {
-        if ($this->user_id === $user->id) return true;
+        if ($this->user_id === $user->id) {
+            return true;
+        }
 
         $pivot = $this->collaboratorPivots()
             ->where('user_id', $user->id)

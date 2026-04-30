@@ -15,7 +15,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
 
         // 3a. Cronograma General (tipo Gantt)
-        if (!Schema::connection($this->connection)->hasTable('cronograma_general')) {
+        if (! Schema::connection($this->connection)->hasTable('cronograma_general')) {
             Schema::connection($this->connection)->create('cronograma_general', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -38,7 +38,7 @@ return new class extends Migration
         }
 
         // 3b. Cronograma Valorizado (distribución mensual del presupuesto)
-        if (!Schema::connection($this->connection)->hasTable('cronograma_valorizado')) {
+        if (! Schema::connection($this->connection)->hasTable('cronograma_valorizado')) {
             Schema::connection($this->connection)->create('cronograma_valorizado', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -58,7 +58,7 @@ return new class extends Migration
         }
 
         // 3c. Cronograma de Materiales (adquisición de materiales por mes)
-        if (!Schema::connection($this->connection)->hasTable('cronograma_materiales')) {
+        if (! Schema::connection($this->connection)->hasTable('cronograma_materiales')) {
             Schema::connection($this->connection)->create('cronograma_materiales', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id')->nullable();

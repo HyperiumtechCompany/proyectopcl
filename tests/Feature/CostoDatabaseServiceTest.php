@@ -12,6 +12,7 @@ class CostoDatabaseServiceTest extends TestCase
     use RefreshDatabase;
 
     protected CostoDatabaseService $dbService;
+
     protected string $testDbName;
 
     protected function setUp(): void
@@ -24,7 +25,7 @@ class CostoDatabaseServiceTest extends TestCase
         }
 
         $this->dbService = app(CostoDatabaseService::class);
-        $this->testDbName = 'costos_test_' . time();
+        $this->testDbName = 'costos_test_'.time();
     }
 
     protected function tearDown(): void
@@ -175,7 +176,7 @@ class CostoDatabaseServiceTest extends TestCase
 
         // Verify presupuesto_general columns
         $columns = DB::connection('costos_tenant')
-            ->select("DESCRIBE presupuesto_general");
+            ->select('DESCRIBE presupuesto_general');
 
         $columnNames = array_column($columns, 'Field');
 

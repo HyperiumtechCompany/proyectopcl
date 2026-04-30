@@ -3,7 +3,6 @@
 namespace App\Events;
 
 use App\Models\AguaCalculation;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -35,13 +34,13 @@ class AguaCalculationUpdated implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'data_sheet'       => $this->spreadsheet->data_sheet,
-            'updated_by'       => $this->updatedBy,
-            'updated_by_name'  => $this->updatedByName,
-            'updated_at'       => now()->toIso8601String(),
+            'data_sheet' => $this->spreadsheet->data_sheet,
+            'updated_by' => $this->updatedBy,
+            'updated_by_name' => $this->updatedByName,
+            'updated_at' => now()->toIso8601String(),
             // Ensure payload has same structure
-            'selection_data'   => [
-                'data_sheet' => $this->spreadsheet->data_sheet
+            'selection_data' => [
+                'data_sheet' => $this->spreadsheet->data_sheet,
             ],
         ];
     }

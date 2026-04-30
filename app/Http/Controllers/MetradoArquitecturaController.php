@@ -16,10 +16,15 @@ class MetradoArquitecturaController extends Controller
     use HandlesModularMetrado;
 
     private const MODULE_TYPE = 'metrado_arquitectura';
+
     private const TABLE_CONFIG = 'metrado_arquitectura_config';
+
     private const TABLE_MODULOS = 'metrado_arquitectura_modulos';
+
     private const TABLE_EXTERIOR = 'metrado_arquitectura_exterior';
+
     private const TABLE_CISTERNA = 'metrado_arquitectura_cisterna';
+
     private const TABLE_RESUMEN = 'metrado_arquitectura_resumen';
 
     public function index(CostoProject $costoProject): Response

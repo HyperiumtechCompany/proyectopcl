@@ -15,26 +15,26 @@ class DashboardController extends Controller
 {
     public function index(): Response
     {
-        $user    = Auth::user();
-        $userId  = $user->id;
+        $user = Auth::user();
+        $userId = $user->id;
         $isAdmin = $user->hasRole('root') || $user->hasRole('gerencia') || $user->hasRole('administracion');
 
         // ── Stats
         if ($isAdmin) {
             $stats = [
-                'agua'    => AguaCalculation::count(),
+                'agua' => AguaCalculation::count(),
                 'desague' => DesagueCalculation::count(),
-                'ac'      => AcCalculation::count(),
-                'caida'   => CaidaTensionSpreadsheet::count(),
-                'spatt'   => SpattPararrayoSpreadsheet::count(),
+                'ac' => AcCalculation::count(),
+                'caida' => CaidaTensionSpreadsheet::count(),
+                'spatt' => SpattPararrayoSpreadsheet::count(),
             ];
         } else {
             $stats = [
-                'agua'    => AguaCalculation::forUser($userId)->count(),
+                'agua' => AguaCalculation::forUser($userId)->count(),
                 'desague' => DesagueCalculation::forUser($userId)->count(),
-                'ac'      => AcCalculation::forUser($userId)->count(),
-                'caida'   => CaidaTensionSpreadsheet::forUser($userId)->count(),
-                'spatt'   => SpattPararrayoSpreadsheet::forUser($userId)->count(),
+                'ac' => AcCalculation::forUser($userId)->count(),
+                'caida' => CaidaTensionSpreadsheet::forUser($userId)->count(),
+                'spatt' => SpattPararrayoSpreadsheet::forUser($userId)->count(),
             ];
         }
 
@@ -42,9 +42,9 @@ class DashboardController extends Controller
         $recentProjects = $this->getRecentProjects($userId, $isAdmin);
 
         return Inertia::render('dashboard', [
-            'stats'          => $stats,
+            'stats' => $stats,
             'recentProjects' => $recentProjects,
-            'isAdmin'        => $isAdmin,
+            'isAdmin' => $isAdmin,
         ]);
     }
 
@@ -56,11 +56,11 @@ class DashboardController extends Controller
         $projects = collect();
 
         $modules = [
-            'Cálculo de Agua'        => [AguaCalculation::class,           '/agua-calculation'],
-            'Cálculo de Desagüe'     => [DesagueCalculation::class,        '/desague-calculation'],
-            'Aire Acondicionado'     => [AcCalculation::class,             '/ac-calculation'],
-            'Caída de Tensión'       => [CaidaTensionSpreadsheet::class,   '/caida-tension'],
-            'SPAT y Pararrayos'      => [SpattPararrayoSpreadsheet::class, '/spatt-pararrayos'],
+            'Cálculo de Agua' => [AguaCalculation::class,           '/agua-calculation'],
+            'Cálculo de Desagüe' => [DesagueCalculation::class,        '/desague-calculation'],
+            'Aire Acondicionado' => [AcCalculation::class,             '/ac-calculation'],
+            'Caída de Tensión' => [CaidaTensionSpreadsheet::class,   '/caida-tension'],
+            'SPAT y Pararrayos' => [SpattPararrayoSpreadsheet::class, '/spatt-pararrayos'],
         ];
 
         foreach ($modules as $label => [$model, $route]) {
@@ -83,13 +83,13 @@ class DashboardController extends Controller
                 }
 
                 $projects->push([
-                    'id'         => $row->id,
-                    'name'       => $row->name ?? ($row->project_name ?? '—'),
-                    'type'       => $label,
-                    'route'      => "{$route}/{$row->id}",
-                    'owner'      => $row->owner?->name ?? '—',
+                    'id' => $row->id,
+                    'name' => $row->name ?? ($row->project_name ?? '—'),
+                    'type' => $label,
+                    'route' => "{$route}/{$row->id}",
+                    'owner' => $row->owner?->name ?? '—',
                     'updated_at' => $row->updated_at?->format('d/m/Y H:i') ?? '—',
-                    'is_owner'   => $row->user_id === $userId,
+                    'is_owner' => $row->user_id === $userId,
                     'collab_role' => $collabRole,
                 ]);
             }

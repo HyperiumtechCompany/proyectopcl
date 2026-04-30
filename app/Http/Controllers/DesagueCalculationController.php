@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\DesagueCalculation;
 use App\Events\DesagueCalculationUpdated;
+use App\Models\DesagueCalculation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -18,15 +17,15 @@ class DesagueCalculationController extends Controller
             ->with(['owner:id,name,email,avatar'])
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn($s) => [
-                'id'               => $s->id,
-                'name'             => $s->name,
-                'project_name'     => $s->project_name,
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'project_name' => $s->project_name,
                 'is_collaborative' => $s->is_collaborative,
-                'collab_code'      => $s->user_id === Auth::id() ? $s->collab_code : null,
-                'owner'            => $s->owner,
-                'updated_at'       => $s->updated_at->format('d/m/Y H:i'),
-                'is_owner'         => $s->user_id === Auth::id(),
+                'collab_code' => $s->user_id === Auth::id() ? $s->collab_code : null,
+                'owner' => $s->owner,
+                'updated_at' => $s->updated_at->format('d/m/Y H:i'),
+                'is_owner' => $s->user_id === Auth::id(),
             ]);
 
         return Inertia::render('calc-desague/Index', [
@@ -37,15 +36,15 @@ class DesagueCalculationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
 
         $data = [
-            'user_id'        => Auth::id(),
-            'name'           => $validated['name'],
-            'project_name'   => $validated['project_name'] ?? null,
-            'data_sheet'     => null,
+            'user_id' => Auth::id(),
+            'name' => $validated['name'],
+            'project_name' => $validated['project_name'] ?? null,
+            'data_sheet' => null,
         ];
 
         $spreadsheet = DesagueCalculation::create($data);
@@ -64,22 +63,22 @@ class DesagueCalculationController extends Controller
 
         return Inertia::render('calc-desague/Show', [
             'spreadsheet' => [
-                'id'               => $desagueCalculation->id,
-                'name'             => $desagueCalculation->name,
-                'project_name'     => $desagueCalculation->project_name,
-                'data_sheet'       => $desagueCalculation->data_sheet,
+                'id' => $desagueCalculation->id,
+                'name' => $desagueCalculation->name,
+                'project_name' => $desagueCalculation->project_name,
+                'data_sheet' => $desagueCalculation->data_sheet,
                 'is_collaborative' => $desagueCalculation->is_collaborative,
-                'collab_code'      => $desagueCalculation->user_id === Auth::id() ? $desagueCalculation->collab_code : null,
-                'owner'            => $desagueCalculation->owner,
-                'collaborators'    => $desagueCalculation->collaborators->map(fn($u) => [
-                    'id'     => $u->id,
-                    'name'   => $u->name,
-                    'email'  => $u->email,
+                'collab_code' => $desagueCalculation->user_id === Auth::id() ? $desagueCalculation->collab_code : null,
+                'owner' => $desagueCalculation->owner,
+                'collaborators' => $desagueCalculation->collaborators->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
                     'avatar' => $u->avatar,
-                    'role'   => $u->pivot->role,
+                    'role' => $u->pivot->role,
                 ]),
-                'can_edit'  => $desagueCalculation->canEdit(Auth::user()),
-                'is_owner'  => $desagueCalculation->user_id === Auth::id(),
+                'can_edit' => $desagueCalculation->canEdit(Auth::user()),
+                'is_owner' => $desagueCalculation->user_id === Auth::id(),
             ],
         ]);
     }
@@ -89,9 +88,9 @@ class DesagueCalculationController extends Controller
         $this->authorizeEdit($desagueCalculation);
 
         $validated = $request->validate([
-            'name'           => 'sometimes|string|max:255',
-            'project_name'   => 'sometimes|nullable|string|max:255',
-            'data_sheet'     => 'sometimes|nullable|array',
+            'name' => 'sometimes|string|max:255',
+            'project_name' => 'sometimes|nullable|string|max:255',
+            'data_sheet' => 'sometimes|nullable|array',
         ]);
 
         $desagueCalculation->update($validated);
@@ -161,17 +160,17 @@ class DesagueCalculationController extends Controller
     private function authorizeAccess(DesagueCalculation $sheet): void
     {
         $userId = Auth::id();
-        $isOwner       = $sheet->user_id === $userId;
-        $isCollab      = $sheet->collaborators()->where('users.id', $userId)->exists();
+        $isOwner = $sheet->user_id === $userId;
+        $isCollab = $sheet->collaborators()->where('users.id', $userId)->exists();
 
-        if (!$isOwner && !$isCollab) {
+        if (! $isOwner && ! $isCollab) {
             abort(403, 'No tienes acceso a esta hoja.');
         }
     }
 
     private function authorizeEdit(DesagueCalculation $sheet): void
     {
-        if (!$sheet->canEdit(Auth::user())) {
+        if (! $sheet->canEdit(Auth::user())) {
             abort(403, 'No tienes permiso para editar esta hoja.');
         }
     }
@@ -179,7 +178,7 @@ class DesagueCalculationController extends Controller
     private function requireCollabPlan(): void
     {
         $plan = Auth::user()->plan;
-        if (!in_array($plan, ['mensual', 'anual', 'lifetime'])) {
+        if (! in_array($plan, ['mensual', 'anual', 'lifetime'])) {
             abort(403, 'El trabajo colaborativo requiere un plan de pago.');
         }
     }

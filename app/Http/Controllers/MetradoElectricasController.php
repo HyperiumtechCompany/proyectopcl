@@ -3,17 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostoProject;
+use App\Traits\HandleMetradoSpreadsheet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Traits\HandleMetradoSpreadsheet;
 
 class MetradoElectricasController extends Controller
 {
     use HandleMetradoSpreadsheet;
 
     private const TABLE_METRADO = 'metrado_electricas';
+
     private const TABLE_RESUMEN = 'metrado_electricas_resumen';
 
     public function index(CostoProject $costoProject): Response
@@ -23,7 +24,7 @@ class MetradoElectricasController extends Controller
 
         return Inertia::render('costos/metrados/ElectricasIndex', [
             'project' => [
-                'id'     => $costoProject->id,
+                'id' => $costoProject->id,
                 'nombre' => $costoProject->nombre,
             ],
             'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
@@ -35,6 +36,7 @@ class MetradoElectricasController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_electricas');
+
         return $this->updateSheet($costoProject, self::TABLE_METRADO, $request);
     }
 
@@ -42,6 +44,7 @@ class MetradoElectricasController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_electricas');
+
         return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
@@ -49,7 +52,7 @@ class MetradoElectricasController extends Controller
     {
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_electricas');
-        
+
         return response()->json([
             'success' => true,
             'message' => 'Sincronización completada (backend stub)',

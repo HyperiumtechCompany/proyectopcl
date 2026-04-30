@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\MetradoSanitariasNode>
+ * @extends Factory<MetradoSanitariasNode>
  */
 class MetradoSanitariasNodeFactory extends Factory
 {
@@ -22,7 +22,7 @@ class MetradoSanitariasNodeFactory extends Factory
     public function definition(): array
     {
         $nodeType = fake()->randomElement(['titulo', 'subtitulo', 'partida']);
-        
+
         return [
             'id' => (string) Str::uuid(),
             'project_id' => CostoProject::factory(),
@@ -43,7 +43,7 @@ class MetradoSanitariasNodeFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'node_type' => 'titulo',
-            'numbering' => fake()->numberBetween(1, 20) . '.00',
+            'numbering' => fake()->numberBetween(1, 20).'.00',
             'unit' => null,
             'level' => 0,
         ]);
@@ -56,7 +56,7 @@ class MetradoSanitariasNodeFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'node_type' => 'subtitulo',
-            'numbering' => fake()->numberBetween(1, 20) . '.' . fake()->numberBetween(1, 99),
+            'numbering' => fake()->numberBetween(1, 20).'.'.fake()->numberBetween(1, 99),
             'unit' => null,
             'level' => 1,
         ]);
@@ -69,7 +69,7 @@ class MetradoSanitariasNodeFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'node_type' => 'partida',
-            'numbering' => fake()->numberBetween(1, 20) . '.' . fake()->numberBetween(1, 99) . '.' . fake()->numberBetween(1, 99),
+            'numbering' => fake()->numberBetween(1, 20).'.'.fake()->numberBetween(1, 99).'.'.fake()->numberBetween(1, 99),
             'unit' => fake()->randomElement(['m', 'm2', 'm3', 'kg', 'und', 'glb']),
             'level' => 2,
         ]);
@@ -81,9 +81,9 @@ class MetradoSanitariasNodeFactory extends Factory
     private function generateNumbering(string $nodeType): string
     {
         return match ($nodeType) {
-            'titulo' => fake()->numberBetween(1, 20) . '.00',
-            'subtitulo' => fake()->numberBetween(1, 20) . '.' . fake()->numberBetween(1, 99),
-            'partida' => fake()->numberBetween(1, 20) . '.' . fake()->numberBetween(1, 99) . '.' . fake()->numberBetween(1, 99),
+            'titulo' => fake()->numberBetween(1, 20).'.00',
+            'subtitulo' => fake()->numberBetween(1, 20).'.'.fake()->numberBetween(1, 99),
+            'partida' => fake()->numberBetween(1, 20).'.'.fake()->numberBetween(1, 99).'.'.fake()->numberBetween(1, 99),
             default => '1.00',
         };
     }

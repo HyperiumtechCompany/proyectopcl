@@ -21,7 +21,7 @@ return new class extends Migration
             $table->boolean('is_collaborative')->default(false);
             $table->string('collab_code', 8)->nullable()->unique();
             $table->timestamps();
-            
+
             // Índices
             $table->index('user_id');
             $table->index('gas_type');

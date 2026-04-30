@@ -4,17 +4,14 @@ namespace App\Services;
 
 use App\Models\MetradoSanitariasNode;
 use App\Models\MetradoSanitariasValue;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Database\Eloquent\Collection;
 
 class TreeService
 {
     /**
      * Get the complete tree structure for a project.
-     * 
-     * @param int $projectId
-     * @return array
      */
     public function getTree(int $projectId): array
     {
@@ -38,10 +35,7 @@ class TreeService
 
     /**
      * Create a new node in the tree.
-     * 
-     * @param int $projectId
-     * @param array $data
-     * @return MetradoSanitariasNode
+     *
      * @throws \InvalidArgumentException
      */
     public function createNode(int $projectId, array $data): MetradoSanitariasNode
@@ -91,10 +85,7 @@ class TreeService
 
     /**
      * Update an existing node.
-     * 
-     * @param string $nodeId
-     * @param array $data
-     * @return MetradoSanitariasNode
+     *
      * @throws \InvalidArgumentException
      */
     public function updateNode(string $nodeId, array $data): MetradoSanitariasNode
@@ -105,7 +96,7 @@ class TreeService
             // Validate node type if being changed
             if (isset($data['node_type']) && $data['node_type'] !== $node->node_type) {
                 $this->validateNodeType($data['node_type']);
-                
+
                 // Ensure node doesn't have children if changing to partida
                 if ($data['node_type'] === 'partida' && $node->children()->count() > 0) {
                     throw new \InvalidArgumentException('Cannot change node to partida type when it has children');
@@ -120,7 +111,7 @@ class TreeService
                 }
             }
 
-            if (!empty($updateData)) {
+            if (! empty($updateData)) {
                 $node->update($updateData);
             }
 
@@ -141,9 +132,6 @@ class TreeService
 
     /**
      * Delete a node and all its descendants (cascade).
-     * 
-     * @param string $nodeId
-     * @return void
      */
     public function deleteNode(string $nodeId): void
     {
@@ -169,10 +157,6 @@ class TreeService
 
     /**
      * Build hierarchical tree structure from flat collection.
-     * 
-     * @param Collection $nodes
-     * @param string|null $parentId
-     * @return array
      */
     private function buildHierarchy(Collection $nodes, ?string $parentId = null): array
     {
@@ -181,7 +165,7 @@ class TreeService
         foreach ($nodes as $node) {
             if ($node->parent_id === $parentId) {
                 $children = $this->buildHierarchy($nodes, $node->id);
-                
+
                 $nodeArray = [
                     'id' => $node->id,
                     'projectId' => $node->project_id,
@@ -208,9 +192,6 @@ class TreeService
 
     /**
      * Format node values as a key-value map (moduleId => value).
-     * 
-     * @param Collection $values
-     * @return array
      */
     private function formatValues(Collection $values): array
     {
@@ -218,47 +199,43 @@ class TreeService
         foreach ($values as $value) {
             $formatted[(string) $value->module_id] = (float) $value->value;
         }
+
         return $formatted;
     }
 
     /**
      * Validate that the node type is valid.
-     * 
-     * @param string|null $nodeType
-     * @return void
+     *
      * @throws \InvalidArgumentException
      */
     private function validateNodeType(?string $nodeType): void
     {
         $validTypes = ['titulo', 'subtitulo', 'partida'];
-        
-        if (!$nodeType || !in_array($nodeType, $validTypes)) {
+
+        if (! $nodeType || ! in_array($nodeType, $validTypes)) {
             throw new \InvalidArgumentException(
-                "Invalid node type. Must be one of: " . implode(', ', $validTypes)
+                'Invalid node type. Must be one of: '.implode(', ', $validTypes)
             );
         }
     }
 
     /**
      * Validate hierarchy rules (what types of children a parent can have).
-     * 
-     * @param string $parentId
-     * @param string $childType
-     * @return void
+     *
      * @throws \InvalidArgumentException
      */
     private function validateHierarchy(string $parentId, string $childType): void
     {
         $parent = MetradoSanitariasNode::find($parentId);
-        
-        if (!$parent) {
+
+        if (! $parent) {
             throw new \InvalidArgumentException("Parent node not found: {$parentId}");
         }
 
         // Partida cannot have children
         if ($parent->node_type === 'partida') {
             throw new \InvalidArgumentException(
-                "Cannot add children to a partida node"
+                'Cannot add children to a partida node'
             );
         }
 
@@ -268,26 +245,20 @@ class TreeService
 
     /**
      * Calculate the level of a node based on its parent.
-     * 
-     * @param string|null $parentId
-     * @return int
      */
     private function calculateLevel(?string $parentId): int
     {
-        if (!$parentId) {
+        if (! $parentId) {
             return 0; // Root level
         }
 
         $parent = MetradoSanitariasNode::find($parentId);
+
         return $parent ? $parent->level + 1 : 0;
     }
 
     /**
      * Calculate the next position for a new node among its siblings.
-     * 
-     * @param int $projectId
-     * @param string|null $parentId
-     * @return int
      */
     private function calculateNextPosition(int $projectId, ?string $parentId): int
     {
@@ -300,10 +271,8 @@ class TreeService
 
     /**
      * Create values for a node.
-     * 
-     * @param string $nodeId
-     * @param array $values Array of ['module_id' => value]
-     * @return void
+     *
+     * @param  array  $values  Array of ['module_id' => value]
      */
     private function createNodeValues(string $nodeId, array $values): void
     {
@@ -318,10 +287,8 @@ class TreeService
 
     /**
      * Update values for a node.
-     * 
-     * @param string $nodeId
-     * @param array $values Array of ['module_id' => value]
-     * @return void
+     *
+     * @param  array  $values  Array of ['module_id' => value]
      */
     private function updateNodeValues(string $nodeId, array $values): void
     {

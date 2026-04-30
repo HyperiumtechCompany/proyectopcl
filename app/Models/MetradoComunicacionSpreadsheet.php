@@ -23,14 +23,14 @@ class MetradoComunicacionSpreadsheet extends Model
     ];
 
     protected $casts = [
-        'sheet_data'       => 'array',
+        'sheet_data' => 'array',
         'is_collaborative' => 'boolean',
     ];
 
     public static function forUser(int $userId)
     {
         return static::where('user_id', $userId)
-            ->orWhereHas('collaborators', fn($q) => $q->where('users.id', $userId));
+            ->orWhereHas('collaborators', fn ($q) => $q->where('users.id', $userId));
     }
 
     public function owner()
@@ -52,6 +52,7 @@ class MetradoComunicacionSpreadsheet extends Model
         }
 
         $pivot = $this->collaborators()->where('users.id', $user->id)->first()?->pivot;
+
         return $pivot && $pivot->role === 'editor';
     }
 

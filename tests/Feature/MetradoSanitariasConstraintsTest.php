@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CostoProject;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -94,7 +95,7 @@ class MetradoSanitariasConstraintsTest extends TestCase
         ]);
 
         // Try to insert duplicate - should fail
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         DB::table('metrado_sanitarias_user_state')->insert([
             'user_id' => $user->id,
@@ -108,7 +109,7 @@ class MetradoSanitariasConstraintsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = CostoProject::factory()->create(['user_id' => $user->id]);
-        
+
         // Create a module
         $moduleId = DB::table('costo_project_modules')->insertGetId([
             'costo_project_id' => $project->id,

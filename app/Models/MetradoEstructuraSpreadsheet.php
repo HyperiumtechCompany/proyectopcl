@@ -43,8 +43,8 @@ class MetradoEstructuraSpreadsheet extends Model
     public function collaborators()
     {
         return $this->belongsToMany(User::class, 'metrado_estructura_collaborators')
-                    ->withPivot('role', 'joined_at')
-                    ->withTimestamps();
+            ->withPivot('role', 'joined_at')
+            ->withTimestamps();
     }
 
     // Scope para obtener hojas a las que el usuario tiene acceso (propias o colaboraciones)
@@ -91,9 +91,9 @@ class MetradoEstructuraSpreadsheet extends Model
     public function getSummaryAttribute(): array
     {
         $data = $this->sheet_data;
-        
+
         // Si no hay datos, retornar ceros
-        if (!is_array($data) || empty($data)) {
+        if (! is_array($data) || empty($data)) {
             return [
                 'concrete' => 0,
                 'steel' => 0,
@@ -101,12 +101,12 @@ class MetradoEstructuraSpreadsheet extends Model
                 'columns' => 0,
             ];
         }
-        
+
         $concrete = 0;
         $steel = 0;
         $formwork = 0;
         $columns = 0;
-        
+
         // Recorrer filas de datos (saltar headers: filas 0, 1, 2)
         // Cada fila: [ITEM, DESCRIPCION, UNID, ELEM, LARGO, ANCHO, ALTO, N_VECES, LON, AREA, VOL, KG, UNID_METRADO, TOTAL]
         foreach (array_slice($data, 3) as $row) {
@@ -115,7 +115,7 @@ class MetradoEstructuraSpreadsheet extends Model
             $kg = floatval($row[11] ?? 0);             // Columna KG (índice 11)
             $area = floatval($row[9] ?? 0);            // Columna AREA (índice 9)
             $elem = floatval($row[12] ?? 0);           // Columna UNID_METRADO (índice 12)
-            
+
             if ($unidad === 'm3') {
                 $concrete += $vol;
                 $steel += $kg;
@@ -125,7 +125,7 @@ class MetradoEstructuraSpreadsheet extends Model
                 $columns += $elem;
             }
         }
-        
+
         return [
             'concrete' => round($concrete, 2),
             'steel' => round($steel, 0),

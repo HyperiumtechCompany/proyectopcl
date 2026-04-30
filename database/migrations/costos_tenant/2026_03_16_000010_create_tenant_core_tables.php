@@ -13,7 +13,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
         // 0. PROJECT PARAMS — parámetros globales centralizados
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('project_params')) {
+        if (! Schema::connection($this->connection)->hasTable('project_params')) {
             Schema::connection($this->connection)->create('project_params', function (Blueprint $table) {
                 $table->id();
 
@@ -51,7 +51,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
         // 1. PRESUPUESTOS — TABLA MAESTRA (padre de todo el sistema)
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('presupuestos')) {
+        if (! Schema::connection($this->connection)->hasTable('presupuestos')) {
             Schema::connection($this->connection)->create('presupuestos', function (Blueprint $table) {
                 $table->id();
                 $table->string('nombre');

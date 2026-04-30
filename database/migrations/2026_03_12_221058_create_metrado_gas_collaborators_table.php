@@ -11,11 +11,11 @@ return new class extends Migration
         Schema::create('metrado_gas_collaborators', function (Blueprint $table) {
             $table->id();
             $table->foreignId('metrado_gas_spreadsheet_id')
-                  ->constrained('metrado_gas_spreadsheets')
-                  ->onDelete('cascade');
+                ->constrained('metrado_gas_spreadsheets')
+                ->onDelete('cascade');
             $table->foreignId('user_id')
-                  ->constrained()
-                  ->onDelete('cascade');
+                ->constrained()
+                ->onDelete('cascade');
             $table->enum('role', ['viewer', 'editor'])->default('viewer');
             $table->timestamp('joined_at')->nullable();
             $table->timestamps();

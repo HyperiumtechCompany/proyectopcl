@@ -11,6 +11,7 @@ class AcuSubpartida extends Model
     use HasFactory;
 
     protected $connection = 'costos_tenant';
+
     protected $table = 'acu_subpartidas';
 
     protected $fillable = [
@@ -27,9 +28,9 @@ class AcuSubpartida extends Model
     protected function casts(): array
     {
         return [
-            'cantidad'        => 'decimal:4',
+            'cantidad' => 'decimal:4',
             'precio_unitario' => 'decimal:4',
-            'parcial'         => 'decimal:4',
+            'parcial' => 'decimal:4',
         ];
     }
 

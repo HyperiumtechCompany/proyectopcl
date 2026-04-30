@@ -8,7 +8,7 @@ use App\Models\MetradoSanitariasValue;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\MetradoSanitariasValue>
+ * @extends Factory<MetradoSanitariasValue>
  */
 class MetradoSanitariasValueFactory extends Factory
 {

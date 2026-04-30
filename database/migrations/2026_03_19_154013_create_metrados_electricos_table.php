@@ -8,11 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('metrados_electricos')) {
+        if (! Schema::hasTable('metrados_electricos')) {
             Schema::create('metrados_electricos', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('project_id');
-                $table->string('hoja'); 
+                $table->string('hoja');
                 $table->integer('orden');
 
                 $table->string('partida')->nullable();

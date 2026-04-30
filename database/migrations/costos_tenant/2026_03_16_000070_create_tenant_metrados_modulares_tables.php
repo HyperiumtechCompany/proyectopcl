@@ -17,9 +17,9 @@ return new class extends Migration
         ];
 
         foreach ($especialidades as $prefix) {
-            
+
             // 1. Configuración del módulo
-            if (!Schema::connection($this->connection)->hasTable("{$prefix}_config")) {
+            if (! Schema::connection($this->connection)->hasTable("{$prefix}_config")) {
                 Schema::connection($this->connection)->create("{$prefix}_config", function (Blueprint $table) {
                     $table->id();
                     $table->integer('cantidad_modulos')->default(1);
@@ -29,7 +29,7 @@ return new class extends Migration
             }
 
             // 2. Módulos dinámicos (N hojas con misma estructura)
-            if (!Schema::connection($this->connection)->hasTable("{$prefix}_modulos")) {
+            if (! Schema::connection($this->connection)->hasTable("{$prefix}_modulos")) {
                 Schema::connection($this->connection)->create("{$prefix}_modulos", function (Blueprint $table) use ($prefix) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -64,7 +64,7 @@ return new class extends Migration
             }
 
             // 3. Red Exterior
-            if (!Schema::connection($this->connection)->hasTable("{$prefix}_exterior")) {
+            if (! Schema::connection($this->connection)->hasTable("{$prefix}_exterior")) {
                 Schema::connection($this->connection)->create("{$prefix}_exterior", function (Blueprint $table) use ($prefix) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -96,7 +96,7 @@ return new class extends Migration
             }
 
             // 4. Cisterna / Tanque Elevado
-            if (!Schema::connection($this->connection)->hasTable("{$prefix}_cisterna")) {
+            if (! Schema::connection($this->connection)->hasTable("{$prefix}_cisterna")) {
                 Schema::connection($this->connection)->create("{$prefix}_cisterna", function (Blueprint $table) use ($prefix) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -128,7 +128,7 @@ return new class extends Migration
             }
 
             // 5. Resumen Consolidado
-            if (!Schema::connection($this->connection)->hasTable("{$prefix}_resumen")) {
+            if (! Schema::connection($this->connection)->hasTable("{$prefix}_resumen")) {
                 Schema::connection($this->connection)->create("{$prefix}_resumen", function (Blueprint $table) use ($prefix) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();

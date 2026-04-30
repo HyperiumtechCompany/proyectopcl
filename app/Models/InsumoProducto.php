@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
 
 class InsumoProducto extends Model
 {
@@ -32,10 +31,10 @@ class InsumoProducto extends Model
     {
         return [
             'costo_unitario_lista' => 'decimal:4',
-            'costo_unitario'       => 'decimal:4',
-            'costo_flete'          => 'decimal:4',
-            'fecha_lista'          => 'date',
-            'estado'               => 'boolean',
+            'costo_unitario' => 'decimal:4',
+            'costo_flete' => 'decimal:4',
+            'fecha_lista' => 'date',
+            'estado' => 'boolean',
         ];
     }
 
@@ -76,7 +75,7 @@ class InsumoProducto extends Model
     {
         return $query->where(function (Builder $q) use ($term) {
             $q->where('descripcion', 'like', "%{$term}%")
-              ->orWhere('codigo_producto', 'like', "%{$term}%");
+                ->orWhere('codigo_producto', 'like', "%{$term}%");
         });
     }
 }

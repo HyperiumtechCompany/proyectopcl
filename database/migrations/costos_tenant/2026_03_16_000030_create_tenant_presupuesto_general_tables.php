@@ -13,7 +13,7 @@ return new class extends Migration
         // ══════════════════════════════════════════════════════════════════════
         // 5. PRESUPUESTO GENERAL — partidas WBS
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('presupuesto_general')) {
+        if (! Schema::connection($this->connection)->hasTable('presupuesto_general')) {
             Schema::connection($this->connection)->create('presupuesto_general', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
@@ -33,15 +33,15 @@ return new class extends Migration
                 $table->softDeletes();
 
                 $table->index('presupuesto_id', 'idx_pg_presupuesto');
-                $table->index('partida',        'idx_pg_partida');
-                $table->index('item_order',     'idx_pg_order');
+                $table->index('partida', 'idx_pg_partida');
+                $table->index('item_order', 'idx_pg_order');
             });
         }
 
         // ══════════════════════════════════════════════════════════════════════
         // 14. PRESUPUESTO ÍNDICES (fórmula polinómica)
         // ══════════════════════════════════════════════════════════════════════
-        if (!Schema::connection($this->connection)->hasTable('presupuesto_indices')) {
+        if (! Schema::connection($this->connection)->hasTable('presupuesto_indices')) {
             Schema::connection($this->connection)->create('presupuesto_indices', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('presupuesto_id');
@@ -49,10 +49,10 @@ return new class extends Migration
 
                 $table->string('simbolo', 10)->comment('M, MO, EQ, GG');
                 $table->text('descripcion');
-                $table->decimal('coeficiente',   10, 6)->default(0);
-                $table->decimal('indice_base',   15, 4)->default(100);
+                $table->decimal('coeficiente', 10, 6)->default(0);
+                $table->decimal('indice_base', 15, 4)->default(100);
                 $table->decimal('indice_actual', 15, 4)->default(100);
-                $table->decimal('monomio',       10, 6)
+                $table->decimal('monomio', 10, 6)
                     ->storedAs('coeficiente * (indice_actual / indice_base)');
                 $table->date('fecha_indice_base')->nullable();
                 $table->date('fecha_indice_actual')->nullable();
@@ -60,7 +60,7 @@ return new class extends Migration
                 $table->timestamps();
 
                 $table->index('presupuesto_id', 'idx_idx_presupuesto');
-                $table->index('simbolo',        'idx_idx_simbolo');
+                $table->index('simbolo', 'idx_idx_simbolo');
             });
         }
     }

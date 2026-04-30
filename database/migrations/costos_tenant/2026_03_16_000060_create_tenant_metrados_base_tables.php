@@ -20,7 +20,7 @@ return new class extends Migration
         ];
 
         foreach ($metradoTables as $tableName) {
-            if (!Schema::connection($this->connection)->hasTable($tableName)) {
+            if (! Schema::connection($this->connection)->hasTable($tableName)) {
                 Schema::connection($this->connection)->create($tableName, function (Blueprint $table) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();
@@ -65,7 +65,7 @@ return new class extends Migration
         ];
 
         foreach ($resumenMetradoTables as $resumenTable) {
-            if (!Schema::connection($this->connection)->hasTable($resumenTable)) {
+            if (! Schema::connection($this->connection)->hasTable($resumenTable)) {
                 Schema::connection($this->connection)->create($resumenTable, function (Blueprint $table) {
                     $table->id();
                     $table->unsignedBigInteger('presupuesto_id')->nullable();

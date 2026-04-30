@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -20,32 +21,28 @@ class UserController extends Controller
         $query = User::with('roles')
             ->when(
                 $request->search,
-                fn($q, $search) =>
-                $q->where('name', 'like', "%{$search}%")
+                fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
             )
             ->when(
                 $request->role,
-                fn($q, $role) =>
-                $q->whereHas('roles', fn($r) => $r->where('name', $role))
+                fn ($q, $role) => $q->whereHas('roles', fn ($r) => $r->where('name', $role))
             )
             ->when(
                 $request->plan,
-                fn($q, $plan) =>
-                $q->where('plan', $plan)
+                fn ($q, $plan) => $q->where('plan', $plan)
             )
             ->when(
                 $request->status,
-                fn($q, $status) =>
-                $q->where('status', $status)
+                fn ($q, $status) => $q->where('status', $status)
             )
             ->latest();
 
         $users = $query->paginate(15)->withQueryString();
 
         return Inertia::render('users/Index', [
-            'users'   => $users,
-            'roles'   => Role::orderBy('name')->get(['id', 'name']),
+            'users' => $users,
+            'roles' => Role::orderBy('name')->get(['id', 'name']),
             'filters' => $request->only(['search', 'role', 'plan', 'status']),
         ]);
     }
@@ -99,7 +96,7 @@ class UserController extends Controller
         $user->load('roles');
 
         return Inertia::render('users/Edit', [
-            'user'  => $user->append(['roles_list']),
+            'user' => $user->append(['roles_list']),
             'roles' => Role::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -118,7 +115,7 @@ class UserController extends Controller
         }
 
         // Update password only if provided
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
@@ -162,20 +159,20 @@ class UserController extends Controller
         $user->delete();
 
         return redirect()->route('users.index')
-            ->with('success', "Usuario eliminado correctamente.");
+            ->with('success', 'Usuario eliminado correctamente.');
     }
 
     /**
      * Resolve plan expiration date based on plan type.
      */
-    private function resolvePlanExpiration(string $plan): ?\Carbon\Carbon
+    private function resolvePlanExpiration(string $plan): ?Carbon
     {
         return match ($plan) {
-            'free'     => now()->addDays(5),
-            'mensual'  => now()->addDays(30),
-            'anual'    => now()->addDays(365),
+            'free' => now()->addDays(5),
+            'mensual' => now()->addDays(30),
+            'anual' => now()->addDays(365),
             'lifetime' => null,
-            default    => null,
+            default => null,
         };
     }
 }

@@ -16,7 +16,7 @@ class MetradoSanitariasDatabaseStructureTest extends TestCase
 
         $columns = [
             'id', 'project_id', 'parent_id', 'node_type', 'name',
-            'numbering', 'unit', 'level', 'position', 'created_at', 'updated_at'
+            'numbering', 'unit', 'level', 'position', 'created_at', 'updated_at',
         ];
 
         foreach ($columns as $column) {

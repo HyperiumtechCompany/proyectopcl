@@ -7,6 +7,7 @@ use App\Models\CostoProjectModule;
 use App\Models\Ubigeo;
 use App\Services\CostoDatabaseService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -28,7 +29,7 @@ class CostoProjectController extends Controller
             ->with('enabledModules')
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn(CostoProject $p) => [
+            ->map(fn (CostoProject $p) => [
                 'id' => $p->id,
                 'nombre' => $p->nombre,
                 'uei' => $p->uei,
@@ -78,7 +79,7 @@ class CostoProjectController extends Controller
             'distrito_id' => 'nullable|string|max:6',
             'centro_poblado' => 'nullable|string|max:255',
             'modules' => 'required|array|min:1',
-            'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
+            'modules.*' => 'string|in:'.implode(',', CostoProject::MODULE_TYPES),
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
             'plantilla_logo_izq' => 'nullable|image|max:2048',
             'plantilla_logo_der' => 'nullable|image|max:2048',
@@ -122,7 +123,7 @@ class CostoProjectController extends Controller
 
                 if (in_array($moduleType, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura'], true)) {
                     $moduleConfig = [
-                        'cantidad_modulos' => $cantidadModulos
+                        'cantidad_modulos' => $cantidadModulos,
                     ];
                 }
 
@@ -147,7 +148,7 @@ class CostoProjectController extends Controller
                     'metrado_arquitectura' => 'metrado_arquitectura_config',
                     'metrado_estructura' => 'metrado_estructura_config',
                 ] as $moduleType => $tableName) {
-                    if (!in_array($moduleType, $validated['modules'], true)) {
+                    if (! in_array($moduleType, $validated['modules'], true)) {
                         continue;
                     }
 
@@ -181,7 +182,7 @@ class CostoProjectController extends Controller
                     $this->dbService->dropDatabase($project);
                 } catch (\Exception $dropEx) {
                     Log::error('Failed to cleanup DB', [
-                        'error' => $dropEx->getMessage()
+                        'error' => $dropEx->getMessage(),
                     ]);
                 }
             }
@@ -192,7 +193,7 @@ class CostoProjectController extends Controller
             }
 
             return back()->withErrors([
-                'general' => 'Error al crear el proyecto: ' . $e->getMessage()
+                'general' => 'Error al crear el proyecto: '.$e->getMessage(),
             ]);
         }
     }
@@ -226,10 +227,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
-                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
-                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
-                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/'.$costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/'.$costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
                 'created_at' => $costoProject->created_at->format('d/m/Y'),
             ],
@@ -266,10 +267,10 @@ class CostoProjectController extends Controller
                 'distrito_nombre' => $costoProject->distrito_id ? Ubigeo::find($costoProject->distrito_id)?->distrito : null,
                 'centro_poblado' => $costoProject->centro_poblado,
                 'status' => $costoProject->status,
-                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
-                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/' . $costoProject->portada_logo_center) : null,
-                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/' . $costoProject->plantilla_firma) : null,
+                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
+                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
+                'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/'.$costoProject->portada_logo_center) : null,
+                'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/'.$costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
             ],
         ]);
@@ -300,7 +301,7 @@ class CostoProjectController extends Controller
             'distrito_id' => 'nullable|string|max:6',
             'centro_poblado' => 'nullable|string|max:255',
             'modules' => 'required|array|min:1',
-            'modules.*' => 'string|in:' . implode(',', CostoProject::MODULE_TYPES),
+            'modules.*' => 'string|in:'.implode(',', CostoProject::MODULE_TYPES),
             'sanitarias_cantidad_modulos' => 'nullable|integer|min:1|max:50',
             'plantilla_logo_izq' => 'nullable|image|max:2048',
             'plantilla_logo_der' => 'nullable|image|max:2048',
@@ -359,7 +360,7 @@ class CostoProjectController extends Controller
             $modulesToAdd = array_diff($newModules, $currentModules);
             $modulesToRemove = array_diff($currentModules, $newModules);
 
-            if (!empty($modulesToRemove)) {
+            if (! empty($modulesToRemove)) {
                 $costoProject->modules()->whereIn('module_type', $modulesToRemove)->delete();
             }
 
@@ -380,7 +381,7 @@ class CostoProjectController extends Controller
             }
 
             $structuralAdded = array_intersect($modulesToAdd, ['metrado_sanitarias', 'metrado_arquitectura', 'metrado_estructura']);
-            if (!empty($structuralAdded)) {
+            if (! empty($structuralAdded)) {
                 $this->dbService->setTenantConnection($costoProject->database_name);
                 foreach (['metrado_sanitarias' => 'metrado_sanitarias_config', 'metrado_arquitectura' => 'metrado_arquitectura_config', 'metrado_estructura' => 'metrado_estructura_config'] as $moduleType => $tableName) {
                     if (in_array($moduleType, $structuralAdded, true)) {
@@ -405,7 +406,7 @@ class CostoProjectController extends Controller
             ]);
 
             return back()->withErrors([
-                'general' => 'Error al actualizar el proyecto: ' . $e->getMessage()
+                'general' => 'Error al actualizar el proyecto: '.$e->getMessage(),
             ]);
         }
     }
@@ -435,25 +436,26 @@ class CostoProjectController extends Controller
         try {
             $this->dbService->setTenantConnection($costoProject->database_name);
 
-            $exitCode = \Illuminate\Support\Facades\Artisan::call('migrate', [
+            $exitCode = Artisan::call('migrate', [
                 '--database' => 'costos_tenant',
                 '--path' => 'database/migrations/costos_tenant',
                 '--force' => true,
             ]);
 
-            $output = \Illuminate\Support\Facades\Artisan::output();
+            $output = Artisan::output();
 
             if ($exitCode === 0) {
-                return back()->with('success', 'Migraciones ejecutadas correctamente. ' . $output);
+                return back()->with('success', 'Migraciones ejecutadas correctamente. '.$output);
             } else {
-                return back()->with('error', 'Error al ejecutar migraciones: ' . $output);
+                return back()->with('error', 'Error al ejecutar migraciones: '.$output);
             }
         } catch (\Exception $e) {
             Log::error('Error running tenant migration', [
                 'project_id' => $costoProject->id,
                 'error' => $e->getMessage(),
             ]);
-            return back()->with('error', 'Error: ' . $e->getMessage());
+
+            return back()->with('error', 'Error: '.$e->getMessage());
         }
     }
 

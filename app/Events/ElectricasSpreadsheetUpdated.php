@@ -21,7 +21,7 @@ class ElectricasSpreadsheetUpdated implements ShouldBroadcastNow
 
     public function broadcastOn(): Channel
     {
-        return new Channel('metrado-electricas.' . $this->spreadsheet->id);
+        return new Channel('metrado-electricas.'.$this->spreadsheet->id);
     }
 
     public function broadcastAs(): string

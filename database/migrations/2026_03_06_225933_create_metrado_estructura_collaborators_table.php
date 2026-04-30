@@ -18,9 +18,9 @@ return new class extends Migration
 
             // Clave foránea con nombre corto
             $table->foreign('metrado_estructura_spreadsheet_id', 'fk_estru_collab_spreadsheet')
-                  ->references('id')
-                  ->on('metrado_estructura_spreadsheets')
-                  ->onDelete('cascade');
+                ->references('id')
+                ->on('metrado_estructura_spreadsheets')
+                ->onDelete('cascade');
 
             // Índice único con nombre corto
             $table->unique(['metrado_estructura_spreadsheet_id', 'user_id'], 'unique_estru_collab');

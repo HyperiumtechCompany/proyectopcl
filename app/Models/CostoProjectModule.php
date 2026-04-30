@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CostoProjectModule extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'costo_project_id',
         'module_type',
@@ -20,7 +21,7 @@ class CostoProjectModule extends Model
     {
         return [
             'enabled' => 'boolean',
-            'config'  => 'array',
+            'config' => 'array',
         ];
     }
 

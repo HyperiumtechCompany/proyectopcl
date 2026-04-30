@@ -59,7 +59,7 @@ class MetradoElectricasSpreadsheet extends Model
     {
         return $query->where(function ($q) use ($userId) {
             $q->where('user_id', $userId) // Propietario
-              ->orWhereHas('collaborators', fn($q) => $q->where('users.id', $userId)); // Colaborador
+                ->orWhereHas('collaborators', fn ($q) => $q->where('users.id', $userId)); // Colaborador
         });
     }
 
@@ -85,8 +85,8 @@ class MetradoElectricasSpreadsheet extends Model
     public function collaborators(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'metrados_electricas_collaborators')
-                    ->withPivot('role', 'joined_at')
-                    ->withTimestamps();
+            ->withPivot('role', 'joined_at')
+            ->withTimestamps();
     }
 
     /**
@@ -105,7 +105,7 @@ class MetradoElectricasSpreadsheet extends Model
 
         // Colaboradores con rol 'editor' o superior pueden editar
         $pivot = $this->collaborators()->where('users.id', $user->id)->first()?->pivot;
-        
+
         return $pivot && in_array($pivot->role, ['editor', 'admin'], true);
     }
 
@@ -242,4 +242,3 @@ class MetradoElectricasSpreadsheet extends Model
         ];
     }
 }
-

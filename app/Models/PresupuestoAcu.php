@@ -11,6 +11,7 @@ class PresupuestoAcu extends Model
     use HasFactory;
 
     protected $connection = 'costos_tenant';
+
     protected $table = 'presupuesto_acus';
 
     protected $fillable = [
@@ -35,17 +36,17 @@ class PresupuestoAcu extends Model
     protected function casts(): array
     {
         return [
-            'mano_de_obra'       => 'json',
-            'materiales'         => 'json',
-            'equipos'            => 'json',
-            'subcontratos'       => 'json',
-            'subpartidas'        => 'json',
-            'rendimiento'        => 'decimal:4',
-            'costo_mano_obra'    => 'decimal:4',
-            'costo_materiales'   => 'decimal:4',
-            'costo_equipos'      => 'decimal:4',
+            'mano_de_obra' => 'json',
+            'materiales' => 'json',
+            'equipos' => 'json',
+            'subcontratos' => 'json',
+            'subpartidas' => 'json',
+            'rendimiento' => 'decimal:4',
+            'costo_mano_obra' => 'decimal:4',
+            'costo_materiales' => 'decimal:4',
+            'costo_equipos' => 'decimal:4',
             'costo_subcontratos' => 'decimal:4',
-            'costo_subpartidas'  => 'decimal:4',
+            'costo_subpartidas' => 'decimal:4',
             'costo_unitario_total' => 'decimal:4',
         ];
     }

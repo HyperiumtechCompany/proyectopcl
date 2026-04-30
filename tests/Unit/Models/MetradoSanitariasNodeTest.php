@@ -16,7 +16,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_generates_uuid_on_creation()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -33,7 +33,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_has_parent_relationship()
     {
         $project = CostoProject::factory()->create();
-        
+
         $parent = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -57,7 +57,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_has_children_relationship_ordered_by_position()
     {
         $project = CostoProject::factory()->create();
-        
+
         $parent = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -85,7 +85,7 @@ class MetradoSanitariasNodeTest extends TestCase
         ]);
 
         $children = $parent->children;
-        
+
         $this->assertCount(2, $children);
         $this->assertEquals('Child 1', $children[0]->name);
         $this->assertEquals('Child 2', $children[1]->name);
@@ -95,7 +95,7 @@ class MetradoSanitariasNodeTest extends TestCase
     {
         $project = CostoProject::factory()->create();
         $module = CostoProjectModule::factory()->create(['costo_project_id' => $project->id]);
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -117,7 +117,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_has_project_relationship()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -132,7 +132,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_scope_root_nodes_returns_only_nodes_without_parent()
     {
         $project = CostoProject::factory()->create();
-        
+
         $root1 = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -169,7 +169,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_scope_by_level_returns_nodes_at_specific_level()
     {
         $project = CostoProject::factory()->create();
-        
+
         $level1 = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -196,7 +196,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_scope_ordered_returns_nodes_sorted_by_position()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node3 = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -231,7 +231,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_is_title_returns_true_for_titulo_nodes()
     {
         $project = CostoProject::factory()->create();
-        
+
         $titulo = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -248,7 +248,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_is_subtitle_returns_true_for_subtitulo_nodes()
     {
         $project = CostoProject::factory()->create();
-        
+
         $subtitulo = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'subtitulo',
@@ -265,7 +265,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_is_partida_returns_true_for_partida_nodes()
     {
         $project = CostoProject::factory()->create();
-        
+
         $partida = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -282,7 +282,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_can_have_children_returns_true_for_titulo_and_subtitulo()
     {
         $project = CostoProject::factory()->create();
-        
+
         $titulo = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -306,7 +306,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_can_have_children_returns_false_for_partida()
     {
         $project = CostoProject::factory()->create();
-        
+
         $partida = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -321,7 +321,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_inherited_unit_returns_own_unit_if_defined()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'subtitulo',
@@ -337,7 +337,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_inherited_unit_returns_parent_unit_if_own_is_null()
     {
         $project = CostoProject::factory()->create();
-        
+
         $parent = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'subtitulo',
@@ -362,7 +362,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_inherited_unit_returns_null_for_root_node_without_unit()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -377,7 +377,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_inherited_unit_traverses_multiple_levels()
     {
         $project = CostoProject::factory()->create();
-        
+
         $grandparent = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -420,7 +420,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_descendants_returns_all_children_recursively()
     {
         $project = CostoProject::factory()->create();
-        
+
         $root = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',
@@ -467,7 +467,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_get_descendants_returns_empty_collection_for_leaf_node()
     {
         $project = CostoProject::factory()->create();
-        
+
         $node = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'partida',
@@ -484,7 +484,7 @@ class MetradoSanitariasNodeTest extends TestCase
     public function test_deleting_node_cascades_to_children()
     {
         $project = CostoProject::factory()->create();
-        
+
         $parent = MetradoSanitariasNode::create([
             'project_id' => $project->id,
             'node_type' => 'titulo',

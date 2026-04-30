@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class CostoDatabaseService
 {
@@ -123,7 +124,7 @@ class CostoDatabaseService
     public function databaseExists(string $databaseName): bool
     {
         $result = DB::connection('mysql')->select(
-            "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?",
+            'SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?',
             [$databaseName]
         );
 
@@ -136,8 +137,8 @@ class CostoDatabaseService
      * This is auto-called when a project is created. All metrados, cronogramas,
      * and ETTs can optionally link to this presupuesto via presupuesto_id.
      *
-     * @param string $databaseName The tenant database name
-     * @param string $projectName  The project name (used as presupuesto name)
+     * @param  string  $databaseName  The tenant database name
+     * @param  string  $projectName  The project name (used as presupuesto name)
      * @return int The ID of the created presupuesto
      */
     public function createDefaultPresupuesto(string $databaseName, string $projectName): int
@@ -147,20 +148,19 @@ class CostoDatabaseService
         return DB::connection('costos_tenant')
             ->table('presupuestos')
             ->insertGetId([
-                'nombre'      => $projectName,
+                'nombre' => $projectName,
                 'descripcion' => 'Presupuesto principal del proyecto',
-                'moneda'      => 'SOLES',
-                'fecha'       => now()->toDateString(),
-                'created_at'  => now(),
-                'updated_at'  => now(),
+                'moneda' => 'SOLES',
+                'fecha' => now()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
     }
 
     /**
      * Get the default (first) presupuesto ID from the tenant database.
      *
-     * @param string $databaseName The tenant database name
-     * @return int|null
+     * @param  string  $databaseName  The tenant database name
      */
     public function getDefaultPresupuestoId(string $databaseName): ?int
     {
@@ -244,26 +244,26 @@ class CostoDatabaseService
         DB::connection('costos_tenant')->table('project_params')->updateOrInsert(
             ['id' => 1], // Always a single record
             [
-                'nombre'              => $project->nombre,
-                'uei'                 => $project->uei,
-                'unidad_ejecutora'    => $project->unidad_ejecutora,
-                'codigo_snip'         => $project->codigo_snip,
-                'codigo_cui'          => $project->codigo_cui,
-                'codigo_local'        => $project->codigo_local,
-                'fecha_inicio'        => $project->fecha_inicio?->format('Y-m-d'),
-                'fecha_fin'           => $project->fecha_fin?->format('Y-m-d'),
-                'duracion_dias'       => $diasObra,
-                'duracion_meses'      => $mesesObra,
-                'departamento'        => $depNombre,
-                'provincia'           => $provNombre,
-                'distrito'            => $distNombre,
-                'centro_poblado'      => $project->centro_poblado,
-                'updated_at'          => now(),
+                'nombre' => $project->nombre,
+                'uei' => $project->uei,
+                'unidad_ejecutora' => $project->unidad_ejecutora,
+                'codigo_snip' => $project->codigo_snip,
+                'codigo_cui' => $project->codigo_cui,
+                'codigo_local' => $project->codigo_local,
+                'fecha_inicio' => $project->fecha_inicio?->format('Y-m-d'),
+                'fecha_fin' => $project->fecha_fin?->format('Y-m-d'),
+                'duracion_dias' => $diasObra,
+                'duracion_meses' => $mesesObra,
+                'departamento' => $depNombre,
+                'provincia' => $provNombre,
+                'distrito' => $distNombre,
+                'centro_poblado' => $project->centro_poblado,
+                'updated_at' => now(),
             ]
         );
 
         Log::info("CostoDatabaseService: Synced project_params on [{$databaseName}]", [
-            'duracion_dias'  => $diasObra,
+            'duracion_dias' => $diasObra,
             'duracion_meses' => $mesesObra,
         ]);
     }
@@ -310,6 +310,7 @@ class CostoDatabaseService
 
         Log::info("CostoDatabaseService: Updated financial params on [{$databaseName}]", $filtered);
     }
+
     /**
      * Recalcula el costo directo sumando los parciales de presupuesto_general
      * y actualiza project_params y presupuestos (tabla centralizada).
@@ -321,38 +322,38 @@ class CostoDatabaseService
 
         // Sumar todos los parciales de presupuesto_general vinculados a este presupuesto
         // Nota: metrado * precio_unitario es la base del parcial en DB.
-        $totalCostoDirecto = (float)$connection->table('presupuesto_general')
+        $totalCostoDirecto = (float) $connection->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->sum(DB::raw('metrado * precio_unitario'));
 
         // 1. Actualizar tabla maestra de presupuestos del tenant
-        if (\Illuminate\Support\Facades\Schema::connection('costos_tenant')->hasTable('presupuestos')) {
+        if (Schema::connection('costos_tenant')->hasTable('presupuestos')) {
             $connection->table('presupuestos')
                 ->where('id', $tenantPresupuestoId)
                 ->update([
                     'costo_directo' => $totalCostoDirecto,
-                    'updated_at'    => now(),
+                    'updated_at' => now(),
                 ]);
         }
 
         // 2. Actualizar tabla de parámetros globales (project_params)
-        if (\Illuminate\Support\Facades\Schema::connection('costos_tenant')->hasTable('project_params')) {
+        if (Schema::connection('costos_tenant')->hasTable('project_params')) {
             $connection->table('project_params')
                 ->where('id', 1)
                 ->update([
                     'costo_directo' => $totalCostoDirecto,
-                    'updated_at'    => now(),
+                    'updated_at' => now(),
                 ]);
         }
 
         // 3. Propagación automática a base_calculo de Fianzas y Pólizas
-        if (\Illuminate\Support\Facades\Schema::connection('costos_tenant')->hasTable('gg_fijos_fianzas')) {
+        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_fianzas')) {
             $connection->table('gg_fijos_fianzas')
                 ->where('presupuesto_id', $tenantPresupuestoId)
                 ->update(['base_calculo' => $totalCostoDirecto]);
         }
 
-        if (\Illuminate\Support\Facades\Schema::connection('costos_tenant')->hasTable('gg_fijos_polizas')) {
+        if (Schema::connection('costos_tenant')->hasTable('gg_fijos_polizas')) {
             $connection->table('gg_fijos_polizas')
                 ->where('presupuesto_id', $tenantPresupuestoId)
                 ->update(['base_calculo' => $totalCostoDirecto]);
@@ -367,8 +368,8 @@ class CostoDatabaseService
     public function propagateInsumoUpdate($projectIdentifier, $insumo): void
     {
         try {
-            $project = $projectIdentifier instanceof CostoProject 
-                ? $projectIdentifier 
+            $project = $projectIdentifier instanceof CostoProject
+                ? $projectIdentifier
                 : CostoProject::findOrFail($projectIdentifier);
 
             $this->setTenantConnection($project->database_name);
@@ -378,10 +379,10 @@ class CostoDatabaseService
             // 1. Buscar y actualizar directamente en las 5 nuevas tablas de componentes
             $childTables = [
                 'acu_mano_de_obra' => 'precio_unitario',
-                'acu_materiales'   => 'precio_unitario',
-                'acu_equipos'      => 'precio_hora',
+                'acu_materiales' => 'precio_unitario',
+                'acu_equipos' => 'precio_hora',
                 'acu_subcontratos' => 'precio_unitario',
-                'acu_subpartidas'  => 'precio_unitario',
+                'acu_subpartidas' => 'precio_unitario',
             ];
 
             $affectedAcuIds = [];
@@ -389,22 +390,22 @@ class CostoDatabaseService
                 $affected = $connection->table($table)
                     ->where('insumo_id', $insumo->id)
                     ->get();
-                
+
                 if ($affected->isNotEmpty()) {
                     foreach ($affected as $row) {
                         $affectedAcuIds[] = $row->acu_id;
-                        
+
                         // Recalcular parcial del item
-                        $cant = (float)$row->cantidad;
-                        $prec = (float)$insumo->costo_unitario;
-                        $falc = (float)($row->factor_desperdicio ?? 1);
+                        $cant = (float) $row->cantidad;
+                        $prec = (float) $insumo->costo_unitario;
+                        $falc = (float) ($row->factor_desperdicio ?? 1);
                         $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 4);
 
                         $connection->table($table)
                             ->where('id', $row->id)
                             ->update([
-                                $priceField  => $prec,
-                                'parcial'    => $parcial,
+                                $priceField => $prec,
+                                'parcial' => $parcial,
                                 'updated_at' => now(),
                             ]);
                     }
@@ -412,7 +413,9 @@ class CostoDatabaseService
             }
 
             $affectedAcuIds = array_unique($affectedAcuIds);
-            if (empty($affectedAcuIds)) return;
+            if (empty($affectedAcuIds)) {
+                return;
+            }
 
             // 2. Refrescar los ACUs afectados (JSON + Totales)
             $updatedPartidas = [];
@@ -435,39 +438,39 @@ class CostoDatabaseService
                     $connection->table('presupuesto_acus')
                         ->where('id', $acuId)
                         ->update([
-                            'mano_de_obra'       => json_encode($mo),
-                            'materiales'         => json_encode($ma),
-                            'equipos'            => json_encode($eq),
-                            'subcontratos'       => json_encode($sc),
-                            'subpartidas'        => json_encode($sp),
-                            'costo_mano_obra'    => $costoMo,
-                            'costo_materiales'   => $costoMa,
-                            'costo_equipos'      => $costoEq,
+                            'mano_de_obra' => json_encode($mo),
+                            'materiales' => json_encode($ma),
+                            'equipos' => json_encode($eq),
+                            'subcontratos' => json_encode($sc),
+                            'subpartidas' => json_encode($sp),
+                            'costo_mano_obra' => $costoMo,
+                            'costo_materiales' => $costoMa,
+                            'costo_equipos' => $costoEq,
                             'costo_subcontratos' => $costoSc,
-                            'costo_subpartidas'  => $costoSp,
-                            'updated_at'         => now(),
+                            'costo_subpartidas' => $costoSp,
+                            'updated_at' => now(),
                         ]);
-                    
+
                     $updatedPartidas[] = $acu->partida;
                 }
             }
 
             // 3. Si hubo ACUs actualizados, sincronizar con presupuesto_general
-            if (!empty($updatedPartidas)) {
+            if (! empty($updatedPartidas)) {
                 foreach (array_unique($updatedPartidas) as $partida) {
                     // Obtener el nuevo total del ACU (el trigger o columna calculada debería haberlo hecho ya)
                     $acuRes = $connection->table('presupuesto_acus')
                         ->where('presupuesto_id', $tenantPresupuestoId)
                         ->where('partida', $partida)
                         ->first();
-                    
+
                     if ($acuRes) {
                         $connection->table('presupuesto_general')
                             ->where('presupuesto_id', $tenantPresupuestoId)
                             ->where('partida', $partida)
                             ->update([
-                                'precio_unitario' => (float)($acuRes->costo_unitario_total ?? 0),
-                                'updated_at'      => now(),
+                                'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
+                                'updated_at' => now(),
                             ]);
                     }
                 }
@@ -477,11 +480,10 @@ class CostoDatabaseService
             }
 
         } catch (\Exception $e) {
-            Log::error("Error propagating insumo update", [
+            Log::error('Error propagating insumo update', [
                 'insumo_id' => $insumo->id ?? null,
-                'error'     => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 }
-

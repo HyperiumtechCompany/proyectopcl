@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'dialux_photometry' => [
+        'binary' => env('DIALUX_PHOTOMETRY_BINARY'),
+    ],
+
 ];

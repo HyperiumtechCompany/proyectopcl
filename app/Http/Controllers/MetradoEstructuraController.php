@@ -16,19 +16,19 @@ class MetradoEstructuraController extends Controller
             ->with(['owner:id,name,email,avatar'])
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn($s) => [
-                'id'                => $s->id,
-                'name'              => $s->name,
-                'project_name'      => $s->project_name,
-                'project_location'  => $s->project_location,
-                'building_type'     => $s->building_type,
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'project_name' => $s->project_name,
+                'project_location' => $s->project_location,
+                'building_type' => $s->building_type,
                 'structural_system' => $s->structural_system,
-                'is_collaborative'  => $s->is_collaborative,
-                'collab_code'       => $s->user_id === Auth::id() ? $s->collab_code : null,
-                'owner'             => $s->owner,
-                'updated_at'        => $s->updated_at->format('d/m/Y H:i'),
-                'is_owner'          => $s->user_id === Auth::id(),
-                'summary'           => $s->summary, // ← Ahora incluye el resumen
+                'is_collaborative' => $s->is_collaborative,
+                'collab_code' => $s->user_id === Auth::id() ? $s->collab_code : null,
+                'owner' => $s->owner,
+                'updated_at' => $s->updated_at->format('d/m/Y H:i'),
+                'is_owner' => $s->user_id === Auth::id(),
+                'summary' => $s->summary, // ← Ahora incluye el resumen
             ]);
 
         return Inertia::render('costos/metrados/metrado_estructura/index', [
@@ -39,10 +39,10 @@ class MetradoEstructuraController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'              => 'required|string|max:255',
-            'project_name'      => 'nullable|string|max:255',
-            'project_location'  => 'nullable|string|max:255',
-            'building_type'     => 'nullable|string|max:100',
+            'name' => 'required|string|max:255',
+            'project_name' => 'nullable|string|max:255',
+            'project_location' => 'nullable|string|max:255',
+            'building_type' => 'nullable|string|max:100',
             'structural_system' => 'nullable|string|max:100',
         ]);
 
@@ -50,13 +50,13 @@ class MetradoEstructuraController extends Controller
         $initialData = $this->getTemplateData($validated['structural_system'] ?? null);
 
         $sheet = MetradoEstructuraSpreadsheet::create([
-            'user_id'           => Auth::id(),
-            'name'              => $validated['name'],
-            'project_name'      => $validated['project_name'] ?? null,
-            'project_location'  => $validated['project_location'] ?? null,
-            'building_type'     => $validated['building_type'] ?? null,
+            'user_id' => Auth::id(),
+            'name' => $validated['name'],
+            'project_name' => $validated['project_name'] ?? null,
+            'project_location' => $validated['project_location'] ?? null,
+            'building_type' => $validated['building_type'] ?? null,
             'structural_system' => $validated['structural_system'] ?? null,
-            'sheet_data'        => $initialData, // ← USA LA PLANTILLA EN VEZ DE NULL
+            'sheet_data' => $initialData, // ← USA LA PLANTILLA EN VEZ DE NULL
         ]);
 
         return redirect()->route('metrados.estructura.show', $sheet->id);
@@ -71,27 +71,27 @@ class MetradoEstructuraController extends Controller
             'collaborators:id,name,email,avatar',
         ]);
 
-       return Inertia::render('costos/metrados/metrado_estructura/show', [
+        return Inertia::render('costos/metrados/metrado_estructura/show', [
             'spreadsheet' => [
-                'id'                => $metradosEstructura->id,
-                'name'              => $metradosEstructura->name,
-                'project_name'      => $metradosEstructura->project_name,
-                'project_location'  => $metradosEstructura->project_location,
-                'building_type'     => $metradosEstructura->building_type,
+                'id' => $metradosEstructura->id,
+                'name' => $metradosEstructura->name,
+                'project_name' => $metradosEstructura->project_name,
+                'project_location' => $metradosEstructura->project_location,
+                'building_type' => $metradosEstructura->building_type,
                 'structural_system' => $metradosEstructura->structural_system,
-                'sheet_data'        => $metradosEstructura->sheet_data,
-                'is_collaborative'  => $metradosEstructura->is_collaborative,
-                'collab_code'       => $metradosEstructura->user_id === Auth::id() ? $metradosEstructura->collab_code : null,
-                'owner'             => $metradosEstructura->owner,
-                'collaborators'     => $metradosEstructura->collaborators->map(fn($u) => [
-                    'id'     => $u->id,
-                    'name'   => $u->name,
-                    'email'  => $u->email,
+                'sheet_data' => $metradosEstructura->sheet_data,
+                'is_collaborative' => $metradosEstructura->is_collaborative,
+                'collab_code' => $metradosEstructura->user_id === Auth::id() ? $metradosEstructura->collab_code : null,
+                'owner' => $metradosEstructura->owner,
+                'collaborators' => $metradosEstructura->collaborators->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
                     'avatar' => $u->avatar,
-                    'role'   => $u->pivot->role,
+                    'role' => $u->pivot->role,
                 ]),
-                'can_edit'  => $metradosEstructura->canEdit(Auth::user()),
-                'is_owner'  => $metradosEstructura->user_id === Auth::id(),
+                'can_edit' => $metradosEstructura->canEdit(Auth::user()),
+                'is_owner' => $metradosEstructura->user_id === Auth::id(),
             ],
         ]);
     }
@@ -101,12 +101,12 @@ class MetradoEstructuraController extends Controller
         $this->authorizeEdit($metradosEstructura);
 
         $validated = $request->validate([
-            'name'              => 'sometimes|string|max:255',
-            'project_name'      => 'sometimes|nullable|string|max:255',
-            'project_location'  => 'sometimes|nullable|string|max:255',
-            'building_type'     => 'sometimes|nullable|string|max:100',
+            'name' => 'sometimes|string|max:255',
+            'project_name' => 'sometimes|nullable|string|max:255',
+            'project_location' => 'sometimes|nullable|string|max:255',
+            'building_type' => 'sometimes|nullable|string|max:100',
             'structural_system' => 'sometimes|nullable|string|max:100',
-            'sheet_data'        => 'sometimes|nullable|array',
+            'sheet_data' => 'sometimes|nullable|array',
         ]);
 
         $metradosEstructura->update($validated);
