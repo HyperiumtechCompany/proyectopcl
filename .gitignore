@@ -8,7 +8,7 @@
 /.github
 /AGENTS.md
 /GEMINI.md
-/dialux-core
+
 /node_modules
 /public/build
 /public/hot

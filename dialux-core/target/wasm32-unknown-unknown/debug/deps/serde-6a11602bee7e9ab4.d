@@ -1,0 +1,14 @@
+C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\deps\serde-6a11602bee7e9ab4.d: C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\build\serde-ecb044f615007f27\out/private.rs
+
+C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\deps\libserde-6a11602bee7e9ab4.rlib: C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\build\serde-ecb044f615007f27\out/private.rs
+
+C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\deps\libserde-6a11602bee7e9ab4.rmeta: C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\build\serde-ecb044f615007f27\out/private.rs
+
+C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs:
+C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs:
+C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs:
+C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs:
+C:\Users\admin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs:
+C:\laragon\www\proyectopcl\dialux-core\target\wasm32-unknown-unknown\debug\build\serde-ecb044f615007f27\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\laragon\\www\\proyectopcl\\dialux-core\\target\\wasm32-unknown-unknown\\debug\\build\\serde-ecb044f615007f27\\out
