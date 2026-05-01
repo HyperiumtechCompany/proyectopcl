@@ -326,6 +326,9 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                     // NOTA: allowEdit no se pasa aquí. Luckysheet 2.x no respeta
                     // este parámetro de forma consistente. El control de edición
                     // se maneja a nivel de servidor (can_edit) y de UX (botón Bloquear).
+                    forceCalculation: true,
+                    calcChain: [],
+
                     ...options,
 
                     /**
@@ -349,7 +352,6 @@ const Luckysheet: React.FC<LuckysheetProps> = ({
                      * programáticas que a veces no disparan afterChange.
                      */
                     updated: (operate: any) => {
-                        captureSheetsData();
                         options?.updated?.(operate);
                     },
                 });

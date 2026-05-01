@@ -67,6 +67,18 @@ export function AppSidebar() {
             href: '/costos',
             icon: PanelsLeftBottomIcon,
         },
+        ////////////////////////////////////////
+        {
+            title: 'Balance',
+            href: '/balance',
+        },
+        {
+            title: 'Presupuesto Proyecto',
+            href: '/presupuesto-proyecto',
+        },
+
+
+
     ];
 
     return (

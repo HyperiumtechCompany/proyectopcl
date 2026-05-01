@@ -28,6 +28,10 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
+///////////////////////////////
+use App\Http\Controllers\BalanceController;
+use App\Http\Controllers\PresupuestoProyectoController;
+
 Route::get('/', function () {
     return Inertia::render('welcome', [
         'canRegister' => Features::enabled(Features::registration()),
@@ -331,6 +335,23 @@ Route::middleware(['auth'])->prefix('api/ubigeo')->name('ubigeo.')->group(functi
     Route::get('/departamentos', [UbigeoController::class, 'departamentos'])->name('departamentos');
     Route::get('/provincias/{departamento}', [UbigeoController::class, 'provincias'])->name('provincias');
     Route::get('/distritos/{provincia}', [UbigeoController::class, 'distritos'])->name('distritos');
+});
+
+//balance
+Route::prefix('')->name('')->group(function () {
+
+    Route::get('/balance', [BalanceController::class, 'index']);
+    Route::post('/balance', [BalanceController::class, 'store']);
+    Route::get('/balance/{id}', [BalanceController::class, 'edit']);
+    Route::put('/balance/{id}', [BalanceController::class, 'update']);
+    Route::delete('/balance/{id}', [BalanceController::class, 'destroy']);
+});
+
+//presupuesto proyecto 
+Route::prefix('')->name('')->group(function () {
+    Route::get('/presupuesto-proyecto', [PresupuestoProyectoController::class, 'index']);
+    Route::post('/presupuesto-proyecto', [PresupuestoProyectoController::class, 'store']);
+    Route::put('/presupuesto-proyecto/{presupuesto}', [PresupuestoProyectoController::class, 'update']);
 });
 
 require __DIR__ . '/settings.php';
