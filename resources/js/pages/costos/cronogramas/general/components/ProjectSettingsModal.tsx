@@ -21,7 +21,7 @@ interface Props {
     onApply: (settings: {
         projectStart?: string;
         projectEnd?: string;
-        projectDuration?: number;  // 👈 AGREGAR ESTA LÍNEA
+        projectDuration?: number;  
         holidays?: any[];
         workDays?: any;
         workStartTime?: string;
@@ -165,7 +165,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     const FERIADOS_PERU_2026 = [
         { date: '01-01', name: 'Año Nuevo' },
         { date: '19-03', name: 'San José' },
-        { date: '05-01', name: 'Día del Trabajo' },  // 🔥 Corregido: 1 de mayo
+        { date: '05-01', name: 'Día del Trabajo' },  
         { date: '29-06', name: 'San Pedro y San Pablo' },
         { date: '28-07', name: 'Fiestas Patrias' },
         { date: '29-07', name: 'Fiestas Patrias' },
@@ -183,8 +183,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             custom: false,
         }));
     }
-    // Al abrir el modal: leer días laborables del gantt (siempre frescos)
-    // y restaurar fechas/escala desde los valores persistidos.
+   
     useEffect(() => {
         if (!isOpen) return;
         setWorkDays(_savedWorkDays);
@@ -206,7 +205,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
     }, [isOpen]);
 
-    // Efecto para calcular fecha fin cuando cambia inicio o duración
+
     useEffect(() => {
         if (projectStart && projectDuration && projectDuration > 0) {
             const startDate = new Date(projectStart);
@@ -248,14 +247,13 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             _savedScheduleFromEnd = scheduleFromEnd;
             _savedWorkDays = { ...workDays };
             _savedHolidays = holidays;
-            _savedDuration = duracionValida;  // ← Usar la variable validada
-
+            _savedDuration = duracionValida;  
             (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
             onApply({
                 projectStart: projectStart || undefined,
                 projectEnd: projectEnd || undefined,
-                projectDuration: duracionValida ?? undefined,  // ← Usar la variable validada
+                projectDuration: duracionValida ?? undefined, 
                 holidays,
                 workDays: { ...workDays },
                 workStartTime,

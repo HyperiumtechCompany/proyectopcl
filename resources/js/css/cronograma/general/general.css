@@ -57,7 +57,7 @@
 .pcl-gantt-wrapper .gantt_container{border:none !important;font-family:'Segoe UI',system-ui,sans-serif !important}
 .pcl-gantt-wrapper .gantt_grid{background:#fff}
 .pcl-gantt-wrapper .gantt_grid_head_cell{background:#f1f5f9 !important;font-size:10px !important;font-weight:700 !important;text-transform:uppercase !important;letter-spacing:.07em !important;color:#475569 !important;border-right:1px solid #e2e8f0 !important;border-bottom:2px solid #cbd5e1 !important}
-.pcl-gantt-wrapper .gantt_cell{font-size:12px !important;color:#334155;border-right:1px solid #f1f5f9 !important}
+.pcl-gantt-wrapper .gantt_cell{font-size:10px !important;color:#334155;border-right:1px solid #f1f5f9 !important}
 .pcl-gantt-wrapper .gantt_row:nth-child(even) .gantt_cell{background:#f8fafc}
 .pcl-gantt-wrapper .gantt_row:hover .gantt_cell{background:#eff6ff !important}
 .pcl-gantt-wrapper .gantt_row.gantt_selected .gantt_cell{background:#dbeafe !important}
@@ -125,3 +125,25 @@ select,select option{color:#1e293b !important;background:white !important}
 .pcl-gantt-wrapper .gantt_link_arrow{z-index:100 !important}
 .pcl-gantt-wrapper .gantt_task_link{overflow:visible !important}
 .pcl-gantt-wrapper.pcl-modal-open .gantt_marker { display: none !important; }
+
+/* Resaltado de fila en búsqueda */
+.pcl-row-highlight {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    border-left: 3px solid #3b82f6 !important;
+}
+
+.gantt_grid_data {
+    min-height: 100%;
+}
+.gantt_grid_head_cell {
+    position: relative;
+    padding-right: 20px !important;
+}
+
+.pcl-hide-col {
+    display: none;
+}
+
+.gantt_grid_head_cell:hover .pcl-hide-col {
+    display: flex !important;
+}
