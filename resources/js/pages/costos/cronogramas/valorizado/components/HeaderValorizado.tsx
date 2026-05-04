@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, FileDown, FileText, Trash2, Save, ArrowLeft } from 'lucide-react';
+import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { ViewMode } from '../types';
 
@@ -17,6 +17,8 @@ interface Props {
     onDelete:         () => void;
     onExportExcel:    () => void;
     onExportPDF:      () => void;
+    // Desvíos globales — muestra badge de advertencia si hay partidas sin cuadrar
+    totalDesviadas?:  number;
 }
 
 const HeaderValorizado: React.FC<Props> = ({
@@ -25,27 +27,38 @@ const HeaderValorizado: React.FC<Props> = ({
     searchTerm, setSearchTerm,
     estaGuardado, saving, deleting,
     onSave, onDelete, onExportExcel, onExportPDF,
+    totalDesviadas = 0,
 }) => (
     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
 
-        {/* Título */}
+        {/* ── Título ─────────────────────────────────────────────────────── */}
         <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
                     Cronograma de Valorización
                 </h1>
+
                 {estaGuardado && (
                     <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full uppercase border border-emerald-200">
                         Guardado
                     </span>
                 )}
+
+                {/* 🆕 Badge de advertencia si hay partidas con desvío */}
+                {totalDesviadas > 0 && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-700 text-[9px] font-black rounded-full uppercase border border-rose-200">
+                        <AlertTriangle className="w-3 h-3" />
+                        {totalDesviadas} con desvío
+                    </span>
+                )}
             </div>
+
             <p className="text-xs text-slate-500 font-semibold mt-0.5 uppercase tracking-wide">
                 {projectName}
             </p>
         </div>
 
-        {/* Controles */}
+        {/* ── Controles ──────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2">
 
             {/* Buscador */}
@@ -101,14 +114,19 @@ const HeaderValorizado: React.FC<Props> = ({
                 <FileText className="w-3.5 h-3.5" /> PDF
             </button>
 
-            {/* Guardar */}
+            {/* Guardar — deshabilitado si hay partidas con desvío */}
             <button
                 onClick={onSave}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-black rounded-xl shadow-md transition-all"
+                title={totalDesviadas > 0 ? `Hay ${totalDesviadas} partida(s) sin cuadrar — revisa antes de guardar` : 'Guardar cronograma'}
+                className={`flex items-center gap-1.5 px-4 py-2 disabled:opacity-60 text-white text-xs font-black rounded-xl shadow-md transition-all ${
+                    totalDesviadas > 0
+                        ? 'bg-amber-500 hover:bg-amber-600'   // Naranja cuando hay desvíos
+                        : 'bg-blue-600 hover:bg-blue-700'
+                }`}
             >
                 <Save className="w-3.5 h-3.5" />
-                {saving ? 'Guardando…' : 'Guardar'}
+                {saving ? 'Guardando…' : totalDesviadas > 0 ? `Guardar (${totalDesviadas} ⚠)` : 'Guardar'}
             </button>
 
             {/* Eliminar */}

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
 import { ItemValorizado, Periodo, ViewMode, TotalesColumna } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,22 +23,35 @@ const bgNivel = (n: number, isLeaf: boolean): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CELDA EDITABLE
+// CELDA EDITABLE (con soporte de bloqueo)
 // ─────────────────────────────────────────────────────────────────────────────
 interface EditableCellProps {
-    value:    number;
-    viewMode: ViewMode;
-    parcial:  number;
-    onChange: (v: number) => void;
-    isPico:   boolean;
+    value:      number;
+    viewMode:   ViewMode;
+    parcial:    number;
+    onChange:   (v: number) => void;
+    isPico:     boolean;
+    bloqueada:  boolean;   // Fuera del rango de fechas de la tarea
 }
 
 const EditableCell: React.FC<EditableCellProps> = ({
-    value, viewMode, parcial, onChange, isPico,
+    value, viewMode, parcial, onChange, isPico, bloqueada,
 }) => {
-    const [editing, setEditing]     = useState(false);
-    const [rawVal,  setRawVal]      = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [editing, setEditing] = useState(false);
+    const [rawVal, setRawVal]   = useState('');
+    const inputRef              = useRef<HTMLInputElement>(null);
+
+    // ── Celda bloqueada: no editable, fondo rayado ───────────────────────────
+    if (bloqueada) {
+        return (
+            <td
+                className="p-2 border border-slate-200 text-center bg-slate-100/70 cursor-not-allowed select-none"
+                title="Fuera del rango de ejecución de esta partida"
+            >
+                <Lock className="w-3 h-3 text-slate-300 mx-auto" />
+            </td>
+        );
+    }
 
     const startEdit = () => {
         setRawVal(value.toFixed(2));
@@ -57,7 +70,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
         setEditing(false);
     };
 
-    const display = viewMode === 'monto' ? fmtN(value) : fmtP(parcial > 0 ? (value / parcial) * 100 : 0);
+    const display  = viewMode === 'monto' ? fmtN(value) : fmtP(parcial > 0 ? (value / parcial) * 100 : 0);
     const hasValue = value > 0;
 
     if (editing) {
@@ -70,7 +83,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
                     onChange={e => setRawVal(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={e => {
-                        if (e.key === 'Enter') commitEdit();
+                        if (e.key === 'Enter')  commitEdit();
                         if (e.key === 'Escape') setEditing(false);
                     }}
                     className="w-full h-full px-2 py-2 text-xs text-right font-mono bg-yellow-50 border-0 outline-none focus:ring-2 focus:ring-blue-500"
@@ -97,25 +110,50 @@ const EditableCell: React.FC<EditableCellProps> = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BADGE DE DESVÍO — alerta visual por fila
+// ─────────────────────────────────────────────────────────────────────────────
+const BadgeDesviacion: React.FC<{ desvio: number }> = ({ desvio }) => {
+    if (desvio <= 0.01) return null; // Dentro de tolerancia
+    return (
+        <span
+            title={`Diferencia: S/. ${fmtN(desvio)}`}
+            className="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 bg-rose-100 border border-rose-300 text-rose-700 text-[8px] font-black rounded-full"
+        >
+            <AlertTriangle className="w-2.5 h-2.5" />
+            S/. {fmtN(desvio)}
+        </span>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TABLA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 interface Props {
-    items:             ItemValorizado[];
-    periodos:          Periodo[];
-    viewMode:          ViewMode;
-    totales:           Record<string, TotalesColumna>;
-    totalPresupuesto:  number;
-    onEditarCelda:     (itemId: number, key: string, monto: number) => void;
-    onRedistribuir:    (itemId: number) => void;
-    onLimpiar:         (itemId: number) => void;
-    mesPicoKey?:       string;
+    items:                ItemValorizado[];
+    periodos:             Periodo[];
+    viewMode:             ViewMode;
+    totales:              Record<string, TotalesColumna>;
+    totalPresupuesto:     number;
+    onEditarCelda:        (itemId: number | string, key: string, monto: number) => void;
+    onRedistribuir:       (itemId: number | string) => void;
+    onRedistribuirGauss:  (itemId: number | string) => void;  
+    onLimpiar:            (itemId: number | string) => void;
+    mesPicoKey?:          string;
+    diasPorMes?:          Record<string, number>;
+    desviaciones?:        Record<string | number, number>;    
+    totalDesviadas?:      number;                             
+    isPeriodoBloqueado:   (item: ItemValorizado, key: string) => boolean; 
 }
 
 const TablaValorizada: React.FC<Props> = ({
     items = [], periodos = [], viewMode, totales = {},
     totalPresupuesto = 0,
-    onEditarCelda, onRedistribuir, onLimpiar,
+    onEditarCelda, onRedistribuir, onRedistribuirGauss, onLimpiar,
     mesPicoKey,
+    diasPorMes,
+    desviaciones = {},
+    totalDesviadas = 0,
+    isPeriodoBloqueado,
 }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -129,18 +167,13 @@ const TablaValorizada: React.FC<Props> = ({
         });
     };
 
-    // Determinar qué filas están visibles (respetando collapsed)
     const visibleItems = items.filter(item => {
         const code = item.item || '';
         for (const col of collapsed) {
-            if (code.startsWith(col + '.') || code.startsWith(col + ' ')) {
-                return false;
-            }
+            if (code.startsWith(col + '.') || code.startsWith(col + ' ')) return false;
         }
         return true;
     });
-
-    const totalMensualValorizado = Object.values(totales).reduce((s, t) => s + t.monto, 0);
 
     if (items.length === 0) {
         return (
@@ -153,22 +186,37 @@ const TablaValorizada: React.FC<Props> = ({
 
     return (
         <div ref={tableRef} className="rounded-2xl border border-slate-200 shadow-xl bg-white overflow-hidden">
-            {/* Leyenda */}
+
+            {/* ── Leyenda + badge de desvíos globales ── */}
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                <span>📌 Clic en cualquier celda mensual para editar el monto</span>
-                <span>⟳ = Redistribuir uniformemente</span>
-                <span>✕ = Limpiar distribución</span>
-                <span className="ml-auto flex items-center gap-2">
-                    <span className="w-3 h-2 rounded-sm bg-amber-300 inline-block" /> Mes pico
+                <span>📌 Clic en celda para editar</span>
+                <span>⟳ = Uniforme</span>
+                <span className="flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> = Gauss (curva S)
+                </span>
+                <span>✕ = Limpiar</span>
+                <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> = Fuera de rango
+                </span>
+                <span className="ml-auto flex items-center gap-3">
+                    {totalDesviadas > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-rose-100 border border-rose-300 text-rose-700 rounded-full">
+                            <AlertTriangle className="w-3 h-3" />
+                            {totalDesviadas} partida{totalDesviadas > 1 ? 's' : ''} con desvío
+                        </span>
+                    )}
+                    <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-2 rounded-sm bg-amber-300 inline-block" /> Mes pico
+                    </span>
                 </span>
             </div>
 
             <div className="overflow-x-auto">
                 <table
                     className="w-full text-[11px] border-collapse"
-                    style={{ minWidth: `${Math.max(1100, 720 + periodos.length * 95)}px` }}
+                    style={{ minWidth: `${Math.max(1200, 800 + periodos.length * 95)}px` }}
                 >
-                    {/* ENCABEZADO */}
+                    {/* ── ENCABEZADO ── */}
                     <thead className="sticky top-0 z-20">
                         <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
                             <th className="p-3 border border-slate-700 text-center w-12">N°</th>
@@ -178,7 +226,7 @@ const TablaValorizada: React.FC<Props> = ({
                             <th className="p-3 border border-slate-700 text-right w-24">METRADO</th>
                             <th className="p-3 border border-slate-700 text-right w-28">P.U. (S/.)</th>
                             <th className="p-3 border border-slate-700 text-right w-32 bg-blue-900">PARCIAL (S/.)</th>
-                            <th className="p-3 border border-slate-700 text-center w-16 bg-slate-800">ACC.</th>
+                            <th className="p-3 border border-slate-700 text-center w-20 bg-slate-800">ACC.</th>
                             {periodos.map(p => (
                                 <th
                                     key={p.key}
@@ -193,19 +241,24 @@ const TablaValorizada: React.FC<Props> = ({
                         </tr>
                     </thead>
 
-                    {/* CUERPO */}
+                    {/* ── CUERPO ── */}
                     <tbody>
                         {visibleItems.map((item, idx) => {
-                            const n       = nivel(item.item);
-                            const isLeaf  = item.is_leaf;
-                            const hasKids = items.some(
+                            const n         = nivel(item.item);
+                            const isLeaf    = item.is_leaf;
+                            const hasKids   = items.some(
                                 i => i.item.startsWith(item.item + '.') || i.item.startsWith(item.item + ' ')
                             );
                             const isCollapsed = collapsed.has(item.item);
                             const bg          = bgNivel(n, isLeaf);
+                            const desvio      = isLeaf ? (desviaciones[item.id] ?? 0) : 0;
+                            const tieneDesv   = desvio > 0.01;
 
                             return (
-                                <tr key={item.id} className={`${bg || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30')} hover:bg-blue-50/40 transition-colors group`}>
+                                <tr
+                                    key={item.id}
+                                    className={`${bg || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30')} hover:bg-blue-50/40 transition-colors group ${tieneDesv ? 'ring-1 ring-inset ring-rose-200' : ''}`}
+                                >
                                     {/* N° */}
                                     <td className="p-2 border border-slate-200 text-center text-slate-500 font-semibold">
                                         {idx + 1}
@@ -224,7 +277,7 @@ const TablaValorizada: React.FC<Props> = ({
                                         }`}
                                         style={{ paddingLeft: `${8 + n * 12}px` }}
                                     >
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
                                             {hasKids && (
                                                 <button
                                                     onClick={() => toggleCollapse(item.item)}
@@ -237,6 +290,8 @@ const TablaValorizada: React.FC<Props> = ({
                                             <span className={`leading-tight ${n <= 1 ? 'font-black' : n === 2 ? 'font-bold' : 'font-medium'} ${item.is_leaf ? 'italic' : ''}`}>
                                                 {item.descripcion}
                                             </span>
+                                            {/* 🆕 Badge de desvío en la descripción */}
+                                            {tieneDesv && <BadgeDesviacion desvio={desvio} />}
                                         </div>
                                     </td>
                                     {/* UND */}
@@ -255,7 +310,7 @@ const TablaValorizada: React.FC<Props> = ({
                                     <td className="p-2 border border-slate-200 text-right font-black text-blue-800 bg-blue-50/30">
                                         {item.parcial > 0 ? fmtS(item.parcial) : '—'}
                                     </td>
-                                    {/* ACCIONES */}
+                                    {/* ACCIONES — 🆕 Botón Gauss añadido */}
                                     <td className="p-2 border border-slate-200 text-center bg-slate-50">
                                         {isLeaf && (
                                             <div className="flex items-center justify-center gap-1">
@@ -265,6 +320,13 @@ const TablaValorizada: React.FC<Props> = ({
                                                     title="Redistribuir uniformemente"
                                                 >
                                                     <RefreshCw className="w-3 h-3" />
+                                                </button>
+                                                <button
+                                                    onClick={() => onRedistribuirGauss(item.id)}
+                                                    className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                    title="Redistribuir con curva Gauss (MS Project)"
+                                                >
+                                                    <TrendingUp className="w-3 h-3" />
                                                 </button>
                                                 <button
                                                     onClick={() => onLimpiar(item.id)}
@@ -278,12 +340,11 @@ const TablaValorizada: React.FC<Props> = ({
                                     </td>
                                     {/* CELDAS MENSUALES */}
                                     {periodos.map(p => {
-                                        const dist = item.distribucion?.[p.key];
-                                        const monto = dist?.monto ?? 0;
+                                        const dist   = item.distribucion?.[p.key];
+                                        const monto  = dist?.monto ?? 0;
                                         const isPico = p.key === mesPicoKey;
 
                                         if (!isLeaf) {
-                                            // Fila padre: solo muestra suma de hijos (no editable)
                                             return (
                                                 <td
                                                     key={p.key}
@@ -299,6 +360,8 @@ const TablaValorizada: React.FC<Props> = ({
                                             );
                                         }
 
+                                        // 🆕 Pasar bloqueada al EditableCell
+                                        const bloqueada = isPeriodoBloqueado(item, p.key);
                                         return (
                                             <EditableCell
                                                 key={p.key}
@@ -307,6 +370,7 @@ const TablaValorizada: React.FC<Props> = ({
                                                 parcial={item.parcial}
                                                 onChange={v => onEditarCelda(item.id, p.key, v)}
                                                 isPico={isPico}
+                                                bloqueada={bloqueada}
                                             />
                                         );
                                     })}
@@ -315,14 +379,14 @@ const TablaValorizada: React.FC<Props> = ({
                         })}
                     </tbody>
 
-                    {/* FOOTER — Valorización mensual + acumulada + % */}
+                    {/* ── FOOTER ── */}
                     <tfoot className="font-black text-[11px] sticky bottom-0 z-10">
                         {/* Valorización Mensual */}
                         <tr className="bg-blue-900 text-white">
                             <td colSpan={7} className="p-3 text-right border border-blue-800 uppercase tracking-wider text-xs">
                                 Valorización Mensual (S/.)
                             </td>
-                            <td className="border border-blue-800 bg-blue-950"></td>
+                            <td className="border border-blue-800 bg-blue-950" />
                             {periodos.map(p => (
                                 <td key={p.key} className={`p-3 text-center border border-blue-800 ${p.key === mesPicoKey ? 'bg-amber-700' : ''}`}>
                                     {totales[p.key]?.monto > 0 ? fmtN(totales[p.key].monto) : '—'}
@@ -335,7 +399,7 @@ const TablaValorizada: React.FC<Props> = ({
                             <td colSpan={7} className="p-2 text-right border border-slate-600 text-[10px] uppercase tracking-wider">
                                 % Avance Mensual
                             </td>
-                            <td className="border border-slate-600"></td>
+                            <td className="border border-slate-600" />
                             {periodos.map(p => (
                                 <td key={p.key} className="p-2 text-center border border-slate-600 text-[10px]">
                                     {totales[p.key]?.porcentaje > 0 ? `${totales[p.key].porcentaje.toFixed(3)}%` : '—'}
@@ -343,12 +407,30 @@ const TablaValorizada: React.FC<Props> = ({
                             ))}
                         </tr>
 
+                        {/* Días Trabajados por Mes */}
+                        {diasPorMes && (
+                            <tr className="bg-indigo-900 text-indigo-100">
+                                <td colSpan={7} className="p-2 text-right border border-indigo-800 text-[10px] uppercase tracking-wider font-bold">
+                                    Días Trabajados
+                                </td>
+                                <td className="border border-indigo-800" />
+                                {periodos.map(p => {
+                                    const dias = diasPorMes[p.key] ?? 0;
+                                    return (
+                                        <td key={p.key} className="p-2 text-center border border-indigo-800 text-[11px] font-mono">
+                                            {dias > 0 ? dias : '—'}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        )}
+
                         {/* Valorización Acumulada */}
                         <tr className="bg-emerald-900 text-white">
                             <td colSpan={7} className="p-3 text-right border border-emerald-800 uppercase tracking-wider text-xs">
                                 Valorización Acumulada (S/.)
                             </td>
-                            <td className="border border-emerald-800"></td>
+                            <td className="border border-emerald-800" />
                             {periodos.map(p => (
                                 <td key={p.key} className="p-3 text-center border border-emerald-800 text-emerald-200">
                                     {totales[p.key]?.acumuladoMonto > 0 ? fmtN(totales[p.key].acumuladoMonto) : '—'}
@@ -361,7 +443,7 @@ const TablaValorizada: React.FC<Props> = ({
                             <td colSpan={7} className="p-2 text-right border border-slate-700 text-[10px] uppercase tracking-wider">
                                 % Avance Acumulado (Curva S)
                             </td>
-                            <td className="border border-slate-700"></td>
+                            <td className="border border-slate-700" />
                             {periodos.map(p => {
                                 const pct = totales[p.key]?.acumuladoPorcentaje ?? 0;
                                 return (

@@ -150,6 +150,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
     Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
+    Route::put('/{costoProject}', [CostoProjectController::class, 'update'])->name('update');
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])
@@ -157,6 +158,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         ->name('module.')
         ->group(function () {
             Route::get('/{moduleType}', [CostoModuleController::class, 'show'])->name('show');
+
             Route::patch('/{moduleType}', [CostoModuleController::class, 'update'])->name('update');
         });
 
@@ -311,6 +313,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // 3. Ruta para GUARDAR el Gantt
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
+    Route::post('/module/crono_valorizado/save', [CronoValorizadoController::class, 'store'])->name('proyectos.cronograma.valorizado.save');
 
     // 4. Otras rutas del módulo de materiales
     Route::post('/module/crono_materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');

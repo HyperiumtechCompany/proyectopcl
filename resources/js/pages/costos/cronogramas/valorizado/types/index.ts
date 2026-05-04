@@ -1,47 +1,56 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// TIPOS PARA CRONOGRAMA VALORIZADO
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface Periodo {
-    label:    string;   // "MES 1"
-    labelCal: string;   // "Abr 2026"
-    key:      string;   // "2026-04"
+    label:    string;   
+    labelCal: string;   
+    key:      string;  
 }
 
 export interface DistribucionMes {
-    monto:      number;   // S/. distribuido ese mes
-    porcentaje: number;   // % sobre el parcial
+    monto:      number;   
+    porcentaje: number;   
 }
 
 export interface ItemValorizado {
-    id:          number;
-    item:        string;
-    descripcion: string;
-    und:         string;
-    metrado:     number;
-    precio:      number;
-    parcial:     number;
-    is_leaf:     boolean;
-    distribucion: Record<string, DistribucionMes>;   // key = "2026-04"
+    parent_id: any;
+    id:           number | string;
+    item:         string;
+    descripcion:  string;
+    und:          string;
+    metrado:      number;
+    precio:       number;
+    parcial:      number;
+    is_leaf:      boolean;
+    distribucion: Record<string, DistribucionMes>;   
+    // 🆕 Fechas reales de la tarea en el Gantt — usadas para bloquear celdas
+    start_date?:  string | null;   
+    end_date?:    string | null;  
 }
 
 export interface TotalesColumna {
     monto:               number;
-    porcentaje:          number;   // % mensual sobre totalPresupuesto
+    porcentaje:          number;  
     acumuladoMonto:      number;
-    acumuladoPorcentaje: number;   // Curva S
+    acumuladoPorcentaje: number;  
 }
 
 export interface ResumenProyecto {
     total_partidas:    number;
     presupuesto_total: number;
     duracion_meses:    number;
-    mes_pico:          string | null;
+    mes_pico:          string | null;   
+    mes_pico_key:      string | null;  
     monto_mes_pico:    number;
     pct_mes_pico:      number;
 }
 
+/** Modo de visualización de valores en la tabla */
 export type ViewMode = 'monto' | 'porcentaje';
+
+/**
+ * Modo de cálculo de períodos:
+ *  - 'calendario' → corte al último día de cada mes (Regla de Ejecución)
+ *  - '30dias'     → bloques exactos de 30 días    (Regla de Inicialización)
+ */
+export type ModoCalculo = 'calendario' | '30dias';
 
 export interface ValorizadoProps {
     project:          string;
@@ -52,4 +61,6 @@ export interface ValorizadoProps {
     resumen:          ResumenProyecto;
     sinGantt?:        boolean;
     estaGuardado?:    boolean;
+    diasPorMes?:      Record<string, number>;   // Días trabajados por mes (YYYY-MM)
+    modoCalculo?:     ModoCalculo;              // 🆕 Modo enviado desde el backend
 }
