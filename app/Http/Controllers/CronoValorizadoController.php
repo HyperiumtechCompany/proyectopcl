@@ -30,6 +30,7 @@ class CronoValorizadoController extends Controller
         $db           = $costoProject->database_name;
 
         // ── 1. Leer tareas desde cronograma_general ──────────────────────────
+        // Filtramos por project_id (costo_projects.id)
         $filas = DB::connection('mysql')
             ->table("{$db}.cronograma_general")
             ->where('project_id', $projectId)
@@ -51,13 +52,22 @@ class CronoValorizadoController extends Controller
         }
 
         // ── 2. Leer presupuesto_general ──────────────────────────────────────
-        $presupuesto = DB::connection('mysql')
-            ->table("{$db}.presupuesto_general")
-            ->where('presupuesto_id', $projectId)
-            ->whereNull('deleted_at')
-            ->orderBy('item_order')
-            ->get()
-            ->keyBy(fn($p) => trim($p->partida ?? ''));
+        // presupuesto_general.presupuesto_id = presupuestos.id (no costo_projects.id)
+        // Necesitamos encontrar el presupuesto_id correcto para este project.
+        // La relación: costo_projects.id → presupuestos.id via presupuesto_general.presupuesto_id
+        // Detectamos el presupuesto_id leyendo cronograma_general.presupuesto_id de las filas
+        $presupuestoIdFromCrono = $filas->first()?->presupuesto_id ?? null;
+
+        $presupuesto = collect();
+        if ($presupuestoIdFromCrono) {
+            $presupuesto = DB::connection('mysql')
+                ->table("{$db}.presupuesto_general")
+                ->where('presupuesto_id', $presupuestoIdFromCrono)
+                ->whereNull('deleted_at')
+                ->orderBy('item_order')
+                ->get()
+                ->keyBy(fn($p) => trim($p->partida ?? ''));
+        }
 
         $usarCronoFuente = $presupuesto->isEmpty();
 
@@ -71,8 +81,8 @@ class CronoValorizadoController extends Controller
             'cost'        => (float) ($f->costo ?? 0),
             'descripcion' => $f->descripcion ?? '',
             'unidad'      => $f->unidad ?? '',
-            'metrado'     => (float) ($f->metrado ?? 0),
-            'precio'      => (float) ($f->precio_unitario ?? 0),
+            'metrado'     => 0.0,
+            'precio'      => 0.0,
         ])->keyBy('id');
 
         // ── 4. Determinar períodos (min fecha / max fecha) ───────────────────
@@ -98,6 +108,7 @@ class CronoValorizadoController extends Controller
         );
 
         // ── 5. Leer valorizado guardado ──────────────────────────────────────
+        // cronograma_valorizado.presupuesto_id = costo_projects.id (project_id)
         $valorizadoGuardado = DB::connection('mysql')
             ->table("{$db}.cronograma_valorizado")
             ->where('presupuesto_id', $projectId)
@@ -122,6 +133,9 @@ class CronoValorizadoController extends Controller
             );
         }
 
+        // 🔥 ENRIQUECER CON DATOS DE PRESUPUESTO (METRADOS, PRECIOS, UNIDADES)
+        $allItems = $this->enriquecerConPresupuesto($allItems, $presupuesto);
+
         // ── 7. Resumen ───────────────────────────────────────────────────────
         $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
 
@@ -143,48 +157,48 @@ class CronoValorizadoController extends Controller
     // STORE — Guarda el valorizado en cronograma_valorizado
     // ─────────────────────────────────────────────────────────────────────────
     public function store(Request $request)
-{
-    try {
-        $projectId = (int) $request->input('project_id');
-        $items = $request->input('items');
+    {
+        $request->validate([
+            'project_id' => 'required|integer',
+            'items'      => 'required|array',
+        ]);
 
-        if (!$projectId || empty($items)) {
-            return response()->json(['message' => 'Datos insuficientes'], 400);
-        }
-
+        $projectId    = (int) $request->input('project_id');
+        $items        = $request->input('items');
         $costoProject = CostoProject::findOrFail($projectId);
-        $db = $costoProject->database_name;
+        $db           = $costoProject->database_name;
 
         DB::connection('mysql')->transaction(function () use ($db, $projectId, $items) {
-            // 1. Limpiar registros anteriores
+            // Borrar los existentes para este project
             DB::connection('mysql')
                 ->table("{$db}.cronograma_valorizado")
                 ->where('presupuesto_id', $projectId)
                 ->delete();
 
             $rows = [];
-            $now = now();
-
             foreach ($items as $idx => $item) {
-                // Aseguramos que la distribución sea un JSON válido o un objeto vacío
-                $distribucion = isset($item['distribucion']) ? json_encode($item['distribucion']) : '{}';
+                // Calcular total_monto = suma de todos los montos mensuales
+                $distribucion = $item['distribucion'] ?? [];
+                $totalMonto   = 0.0;
+                foreach ($distribucion as $mes) {
+                    $totalMonto += (float) ($mes['monto'] ?? 0);
+                }
 
                 $rows[] = [
-                    'presupuesto_id'       => $projectId,
+                    'presupuesto_id'       => $projectId,   // costo_projects.id (no FK a presupuestos)
                     'item_order'           => $idx + 1,
-                    'partida'              => $item['item'] ?? '',
-                    'descripcion'          => $item['descripcion'] ?? '',
-                    'presupuesto_total'    => (float) ($item['parcial'] ?? 0),
-                    'distribucion_mensual' => $distribucion,
+                    'partida'              => $item['item'],
+                    'descripcion'          => $item['descripcion'],
+                    'presupuesto_total'    => $item['parcial'],
+                    'distribucion_mensual' => json_encode($distribucion),
                     'parent_id'            => $item['parent_id'] ?? null,
-                    'nivel'                => isset($item['item']) ? substr_count($item['item'], '.') : 0,
-                    'created_at'           => $now,
-                    'updated_at'           => $now,
+                    'nivel'                => substr_count($item['item'] ?? '', '.'),
+                    'created_at'           => now(),
+                    'updated_at'           => now(),
                 ];
             }
 
-            // 2. Insertar en trozos más pequeños (100) para evitar errores de buffer
-            foreach (array_chunk($rows, 100) as $chunk) {
+            foreach (array_chunk($rows, 200) as $chunk) {
                 DB::connection('mysql')
                     ->table("{$db}.cronograma_valorizado")
                     ->insert($chunk);
@@ -194,16 +208,10 @@ class CronoValorizadoController extends Controller
         return response()->json([
             'status'  => 'success',
             'message' => '¡Cronograma Valorizado guardado correctamente!',
+            'total'   => count($items),
         ]);
-
-    } catch (\Exception $e) {
-        // Esto devolverá un mensaje corto que sí podremos leer en el toast
-        return response()->json([
-            'status'  => 'error',
-            'message' => 'Error en BD: ' . $e->getMessage()
-        ], 500);
     }
-}
+
     // ─────────────────────────────────────────────────────────────────────────
     // DESTROY — Elimina el valorizado guardado
     // ─────────────────────────────────────────────────────────────────────────
@@ -232,7 +240,6 @@ class CronoValorizadoController extends Controller
 
     /**
      * REGLA DE EJECUCIÓN: Cortes al último día de cada mes calendario.
-     * Ejemplo: Tarea 25/04 → Mes1 = [25/04..30/04], Mes2 = [01/05..31/05]
      */
     private function generarPeriodosCalendario(Carbon $inicio, Carbon $fin): array
     {
@@ -255,8 +262,6 @@ class CronoValorizadoController extends Controller
 
     /**
      * REGLA DE INICIALIZACIÓN: Bloques exactos de 30 días.
-     * Ejemplo: Inicio 25/04 → Período1 = [25/04..24/05], Período2 = [25/05..23/06]
-     * Clave = fecha de inicio del bloque (YYYY-MM-DD) para evitar colisiones.
      */
     private function generarPeriodos30Dias(string $startDate, string $endDate): array
     {
@@ -266,11 +271,11 @@ class CronoValorizadoController extends Controller
         $fin      = Carbon::parse($endDate);
 
         while ($cursor->lte($fin)) {
-            $finBloque = $cursor->copy()->addDays(29); // 30 días inclusive
+            $finBloque = $cursor->copy()->addDays(29);
             $periodos[] = [
                 'label'    => "PER {$mesNum}",
                 'labelCal' => $cursor->format('d/m') . '–' . $finBloque->format('d/m/Y'),
-                'key'      => $cursor->format('Y-m-d'), // clave única por bloque
+                'key'      => $cursor->format('Y-m-d'),
             ];
             $cursor->addDays(30);
             $mesNum++;
@@ -278,17 +283,15 @@ class CronoValorizadoController extends Controller
 
         return $periodos;
     }
-    
 
     // =========================================================================
     // DISTRIBUCIÓN DE COSTOS
     // =========================================================================
 
     /**
-     * REGLA DE EJECUCIÓN (Prorrateo MS Project):
-     * Distribuye el parcial proporcional a los días reales que la tarea
-     * tiene en cada mes calendario. El ÚLTIMO mes absorbe el residuo de
-     * céntimos para garantizar suma exacta = parcial (Precisión Delfín).
+     * REGLA DE EJECUCIÓN (Prorrateo MS Project / Delfín):
+     * Distribuye proporcional a días reales por mes calendario.
+     * Precisión Delfín: último mes absorbe el residuo de céntimos.
      */
     private function distribuirPorDiasCalendario(
         float  $parcial,
@@ -312,7 +315,7 @@ class CronoValorizadoController extends Controller
             return $distribucion;
         }
 
-        // Contar días por mes (corte = último día del mes calendario)
+        // Contar días por mes calendario
         $diasPorMes = [];
         $cursor     = $inicio->copy();
         while ($cursor->lte($fin)) {
@@ -324,25 +327,22 @@ class CronoValorizadoController extends Controller
         $totalDias    = array_sum($diasPorMes);
         if ($totalDias === 0) return $distribucion;
 
-        // Asignar montos con truncado (no round) para acumular residuo
         $sumaAsignada = 0.0;
         $ultimaKey    = null;
 
         foreach ($diasPorMes as $key => $dias) {
             if (!isset($distribucion[$key])) continue;
-
-            $monto = floor(($parcial * $dias / $totalDias) * 100) / 100; // truncar a 2 decimales
+            $monto = floor(($parcial * $dias / $totalDias) * 100) / 100;
             $distribucion[$key]['monto']      = $monto;
             $distribucion[$key]['porcentaje'] = round(($dias / $totalDias) * 100, 6);
             $sumaAsignada += $monto;
             $ultimaKey     = $key;
         }
 
-        // ── Precisión Delfín: el último mes absorbe el residuo de céntimos ──
+        // ── Precisión Delfín ──
         if ($ultimaKey !== null) {
             $residuo = round($parcial - $sumaAsignada, 2);
             $distribucion[$ultimaKey]['monto'] = round($distribucion[$ultimaKey]['monto'] + $residuo, 2);
-            // Recalcular porcentaje del último mes
             if ($parcial > 0) {
                 $distribucion[$ultimaKey]['porcentaje'] = round(
                     ($distribucion[$ultimaKey]['monto'] / $parcial) * 100, 6
@@ -355,8 +355,6 @@ class CronoValorizadoController extends Controller
 
     /**
      * REGLA DE INICIALIZACIÓN (Bloques de 30 días):
-     * Distribuye el parcial proporcional a los días reales en cada bloque
-     * de 30 días. También aplica Precisión Delfín en el último bloque.
      */
     private function distribuirPorDias30(
         float  $parcial,
@@ -372,13 +370,11 @@ class CronoValorizadoController extends Controller
         $inicio = Carbon::parse($startDate);
         $fin    = Carbon::parse($endDate);
 
-        // Calcular intersección días-tarea vs días-período
         $diasPorPeriodo = [];
         foreach ($periodos as $p) {
-            $pInicio = Carbon::parse($p['key']);                   // inicio del bloque
-            $pFin    = $pInicio->copy()->addDays(29);              // fin del bloque (30 días)
+            $pInicio = Carbon::parse($p['key']);
+            $pFin    = $pInicio->copy()->addDays(29);
 
-            // Intersección
             $solape_inicio = $inicio->gt($pInicio) ? $inicio : $pInicio;
             $solape_fin    = $fin->lt($pFin)       ? $fin    : $pFin;
 
@@ -401,7 +397,6 @@ class CronoValorizadoController extends Controller
             $ultimaKey     = $key;
         }
 
-        // Precisión Delfín
         if ($ultimaKey !== null) {
             $residuo = round($parcial - $sumaAsignada, 2);
             $distribucion[$ultimaKey]['monto'] = round($distribucion[$ultimaKey]['monto'] + $residuo, 2);
@@ -416,7 +411,7 @@ class CronoValorizadoController extends Controller
     }
 
     /**
-     * Fachada que elige la estrategia de distribución según el modo.
+     * Fachada que elige la estrategia según el modo.
      */
     private function distribuir(
         float  $parcial,
@@ -436,9 +431,6 @@ class CronoValorizadoController extends Controller
     // CONSTRUCCIÓN DEL ÁRBOL DE ÍTEMS
     // =========================================================================
 
-    /**
-     * Árbol desde cronograma_general (sin presupuesto_general)
-     */
     private function construirArbolDesdeCrono(
         $filas,
         $tasks,
@@ -450,7 +442,6 @@ class CronoValorizadoController extends Controller
         $parentIds  = $tasks->pluck('parent')->filter(fn($p) => $p !== '0')->unique()->values()->toArray();
         $leafTasks  = $tasks->filter(fn($t) => !in_array($t['id'], $parentIds));
 
-        // ── Calcular distribución de hojas ───────────────────────────────────
         $leafData         = [];
         $totalPresupuesto = 0.0;
 
@@ -460,7 +451,6 @@ class CronoValorizadoController extends Controller
 
             if ($valRow) {
                 $distribucion = json_decode($valRow->distribucion_mensual, true) ?? [];
-                // Normalizar claves faltantes
                 foreach ($clavesPeriodos as $key) {
                     if (!isset($distribucion[$key])) {
                         $distribucion[$key] = ['monto' => 0.0, 'porcentaje' => 0.0];
@@ -482,7 +472,6 @@ class CronoValorizadoController extends Controller
             $totalPresupuesto += $parcial;
         }
 
-        // ── Construir mapa de todos los ítems ────────────────────────────────
         $sortedTasks = $filas->sortBy('item_order');
         $itemsMap    = [];
 
@@ -507,18 +496,17 @@ class CronoValorizadoController extends Controller
                 'item'        => $row->partida,
                 'descripcion' => $row->descripcion,
                 'und'         => $row->unidad ?? '',
-                'metrado'     => (float) ($task['metrado'] ?? 0),
-                'precio'      => (float) ($task['precio'] ?? 0),
+                'metrado'     => 0.0,
+                'precio'      => 0.0,
                 'parcial'     => $parcial,
                 'is_leaf'     => $isLeaf,
                 'distribucion'=> $distribucion,
                 'parent_id'   => $parentId,
-                'start_date'  => $task['start_date'] ?? null, // 🆕 Para bloquear celdas
-                'end_date'    => $task['end_date']   ?? null, // 🆕 Para bloquear celdas
+                'start_date'  => $task['start_date'] ?? null,
+                'end_date'    => $task['end_date']   ?? null,
             ];
         }
 
-        // ── Acumular de hojas → padres (bottom-up) ───────────────────────────
         $reversed = array_reverse($itemsMap, true);
         foreach ($reversed as $id => $item) {
             $parentId = $item['parent_id'];
@@ -531,7 +519,6 @@ class CronoValorizadoController extends Controller
             }
         }
 
-        // ── Recalcular porcentajes de padres ─────────────────────────────────
         foreach ($itemsMap as &$item) {
             if (!$item['is_leaf']) {
                 foreach ($clavesPeriodos as $key) {
@@ -542,7 +529,6 @@ class CronoValorizadoController extends Controller
             }
         }
 
-        // ── Orden final ──────────────────────────────────────────────────────
         $allItems = [];
         foreach ($sortedTasks as $row) {
             $id = (string) $row->gantt_id;
@@ -554,9 +540,6 @@ class CronoValorizadoController extends Controller
         return [$allItems, $totalPresupuesto];
     }
 
-    /**
-     * Árbol desde presupuesto_general (con Gantt para fechas)
-     */
     private function construirArbolDesdePresupuesto(
         $filas,
         $tasks,
@@ -575,12 +558,11 @@ class CronoValorizadoController extends Controller
             $partida  = trim($row->partida ?? '');
             $task     = $tasks->get($id) ?? [];
 
-            // Buscar datos de presupuesto
             $pItem   = $presupuesto->get($partida);
+            // Usar parcial de presupuesto_general (metrado × precio_unitario)
             $parcial = $pItem ? (float) ($pItem->parcial ?? $pItem->costo_directo ?? 0) : (float) ($task['cost'] ?? 0);
             $isLeaf  = $pItem ? (bool) ($pItem->is_leaf ?? true) : false;
 
-            // Distribución
             $valRow = $valorizadoGuardado->get($partida);
             if ($valRow) {
                 $distribucion = json_decode($valRow->distribucion_mensual, true) ?? [];
@@ -606,7 +588,7 @@ class CronoValorizadoController extends Controller
                 'id'          => $id,
                 'item'        => $partida,
                 'descripcion' => $row->descripcion ?? ($pItem->descripcion ?? ''),
-                'und'         => $pItem ? ($pItem->und ?? '') : ($task['unidad'] ?? ''),
+                'und'         => $pItem ? ($pItem->unidad ?? '') : ($task['unidad'] ?? ''),
                 'metrado'     => $pItem ? (float) ($pItem->metrado ?? 0) : 0.0,
                 'precio'      => $pItem ? (float) ($pItem->precio_unitario ?? 0) : 0.0,
                 'parcial'     => $parcial,
@@ -625,9 +607,6 @@ class CronoValorizadoController extends Controller
     // HELPERS PRIVADOS
     // =========================================================================
 
-    /**
-     * Días naturales del proyecto por mes (para mostrar en el footer de la tabla)
-     */
     private function calcularDiasPorMes(string $startDate, string $endDate, array $clavesPeriodos): array
     {
         $diasPorMes = array_fill_keys($clavesPeriodos, 0);
@@ -645,17 +624,12 @@ class CronoValorizadoController extends Controller
         return $diasPorMes;
     }
 
-    /**
-     * Resumen financiero — solo usa hojas (is_leaf = true) para evitar
-     * doble conteo en el mes pico y en el total.
-     */
     private function calcularResumen(array $items, array $periodos, float $totalPresupuesto): array
     {
         if (empty($periodos) || $totalPresupuesto <= 0) {
             return $this->resumenVacio();
         }
 
-        // FIX: filtrar solo hojas para no duplicar montos en padres
         $hojas = array_filter($items, fn($i) => $i['is_leaf']);
 
         $acumuladoMensual = [];
@@ -706,5 +680,48 @@ class CronoValorizadoController extends Controller
             'monto_mes_pico'    => 0,
             'pct_mes_pico'      => 0,
         ];
+    }
+
+    // =========================================================================
+    // ENRIQUECER CON DATOS DE PRESUPUESTO GENERAL
+    // =========================================================================
+
+    /**
+     * Sobreescribe metrado, precio_unitario y unidad desde presupuesto_general.
+     * Estos datos son la fuente de verdad para el presupuesto.
+     */
+    private function enriquecerConPresupuesto($items, $presupuesto)
+    {
+        if ($presupuesto->isEmpty()) return $items;
+
+        $presupuestoMap = [];
+        foreach ($presupuesto as $pItem) {
+            $partida = trim($pItem->partida ?? '');
+            if ($partida !== '') {
+                $presupuestoMap[$partida] = $pItem;
+            }
+        }
+
+        foreach ($items as &$item) {
+            $partida         = trim($item['item'] ?? '');
+            $presupuestoData = $presupuestoMap[$partida] ?? null;
+
+            if ($presupuestoData) {
+                $item['metrado'] = (float) ($presupuestoData->metrado ?? 0);
+                $item['precio']  = (float) ($presupuestoData->precio_unitario ?? 0);
+                $item['und']     = $presupuestoData->unidad ?? $item['und'] ?? '';
+
+                if (!empty($presupuestoData->descripcion)) {
+                    $item['descripcion'] = $presupuestoData->descripcion;
+                }
+
+                // Recalcular parcial si viene vacío
+                if ($item['parcial'] == 0 && $item['metrado'] > 0 && $item['precio'] > 0) {
+                    $item['parcial'] = round($item['metrado'] * $item['precio'], 2);
+                }
+            }
+        }
+
+        return $items;
     }
 }
