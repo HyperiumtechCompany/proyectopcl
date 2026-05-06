@@ -121,6 +121,7 @@ const CronogramaIndex = ({
     const isParsingPredRef = useRef(false);
     const ganttInitialized = useRef(false);
     const eventIdsRef = useRef<any[]>([]);
+    const allColumnsRef = useRef<any[]>([]);
 
     // ── UI STATE ──────────────────────────────────────────────────────────────
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -176,22 +177,22 @@ const CronogramaIndex = ({
         setColumnVisibility(prev => {
             const newVisibility = { ...prev, [columnName]: visible };
             localStorage.setItem('gantt_visible_columns', JSON.stringify(newVisibility));
-
-            // Aplicar cambios a las columnas del Gantt
-            const allColumns = gantt.config.columns;
-            const visibleColumns = allColumns.filter((col: any) => {
-                if (!col) return false;
-                if (col.name === 'add' || col.name === 'rownum') return true;
-                return newVisibility[col.name] !== false;
-            });
-            gantt.config.columns = visibleColumns;
-            gantt.render();
-            showToast(`Columna ${visible ? 'mostrada' : 'ocultada'}`, 'info');
-
             return newVisibility;
         });
     }, []);
 
+
+    useEffect(() => {
+        if (!ganttInitialized.current || allColumnsRef.current.length === 0) return;
+
+        gantt.config.columns = allColumnsRef.current.filter((col: any) => {
+            if (!col) return false;
+            if (col.name === 'add' || col.name === 'rownum') return true;
+            return columnVisibility[col.name] !== false;
+        });
+
+        gantt.render();
+    }, [columnVisibility]);
     // ─────────────────────────────────────────────────────────────────────────
     // PROPAGAR COSTO AL PADRE (suma de hijos, recursivo hacia arriba)
     // ─────────────────────────────────────────────────────────────────────────
@@ -992,7 +993,7 @@ const CronogramaIndex = ({
                 if (!gantt.hasChild(task.id)) recalcParentDates(task.id);
             });
         }
-        
+
 
         gantt.render();
         updateCountersAndItems();
@@ -1254,7 +1255,7 @@ const CronogramaIndex = ({
                                         type="checkbox"
                                         checked={columnVisibility[col.name] !== false}
                                         onChange={(e) => {
-                                            // ✅ Cambiar al instante cuando se hace clic
+                                            //  Cambiar al instante cuando se hace clic
                                             const newVisibility = { ...columnVisibility, [col.name]: e.target.checked };
                                             setColumnVisibility(newVisibility);
                                             localStorage.setItem('gantt_visible_columns', JSON.stringify(newVisibility));
