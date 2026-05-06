@@ -10,6 +10,8 @@
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix",
         "types": "tsc --noEmit",
+        "wasm:build": "wasm-pack build dialux-core --target web --out-dir ../public/dialux-core/pkg",
+        "wasm:build:release": "wasm-pack build dialux-core --target web --release --out-dir ../public/dialux-core/pkg",
         "test": "vitest run"
     },
     "devDependencies": {

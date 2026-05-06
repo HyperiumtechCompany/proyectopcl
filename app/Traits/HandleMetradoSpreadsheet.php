@@ -197,9 +197,6 @@ trait HandleMetradoSpreadsheet
             ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
             ->get()
-<<<<<<< Updated upstream
-            ->map(fn($r) => (array)$r)
-=======
             ->map(function ($r) {
                 $row = (array) $r;
 
@@ -220,7 +217,6 @@ trait HandleMetradoSpreadsheet
 
                 return $row;
             })
->>>>>>> Stashed changes
             ->toArray();
     }
 

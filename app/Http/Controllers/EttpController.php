@@ -354,8 +354,6 @@ class EttpController extends Controller
         }
     }
 
-<<<<<<< Updated upstream
-=======
     public function eliminarPartida(CostoProject $costoProject, $partidaId)
     {
         $dbService = app(CostoDatabaseService::class);
@@ -380,7 +378,6 @@ class EttpController extends Controller
         }
     }
 
->>>>>>> Stashed changes
     /**
      * Guarda recursivamente las partidas del árbol.
      */
