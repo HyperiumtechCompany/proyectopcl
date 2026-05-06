@@ -1,16 +1,16 @@
 export interface Periodo {
-    label:    string;   
-    labelCal: string;   
-    key:      string;  
+    label:    string;
+    labelCal: string;
+    key:      string;
 }
 
 export interface DistribucionMes {
-    monto:      number;   
-    porcentaje: number;   
+    monto:      number;
+    porcentaje: number;
 }
 
 export interface ItemValorizado {
-    parent_id: any;
+    parent_id:    any;
     id:           number | string;
     item:         string;
     descripcion:  string;
@@ -19,25 +19,27 @@ export interface ItemValorizado {
     precio:       number;
     parcial:      number;
     is_leaf:      boolean;
-    distribucion: Record<string, DistribucionMes>;   
-    // 🆕 Fechas reales de la tarea en el Gantt — usadas para bloquear celdas
-    start_date?:  string | null;   
-    end_date?:    string | null;  
+    distribucion: Record<string, DistribucionMes>;
+    // Fechas reales del Gantt — para bloquear celdas fuera de rango
+    start_date?:  string | null;
+    end_date?:    string | null;
+    // Total calculado (suma de todos los meses distribuidos)
+    total_monto?: number;
 }
 
 export interface TotalesColumna {
     monto:               number;
-    porcentaje:          number;  
+    porcentaje:          number;
     acumuladoMonto:      number;
-    acumuladoPorcentaje: number;  
+    acumuladoPorcentaje: number;
 }
 
 export interface ResumenProyecto {
     total_partidas:    number;
     presupuesto_total: number;
     duracion_meses:    number;
-    mes_pico:          string | null;   
-    mes_pico_key:      string | null;  
+    mes_pico:          string | null;
+    mes_pico_key:      string | null;
     monto_mes_pico:    number;
     pct_mes_pico:      number;
 }
@@ -61,6 +63,6 @@ export interface ValorizadoProps {
     resumen:          ResumenProyecto;
     sinGantt?:        boolean;
     estaGuardado?:    boolean;
-    diasPorMes?:      Record<string, number>;   // Días trabajados por mes (YYYY-MM)
-    modoCalculo?:     ModoCalculo;              // 🆕 Modo enviado desde el backend
+    diasPorMes?:      Record<string, number>;
+    modoCalculo?:     ModoCalculo;
 }

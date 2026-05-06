@@ -168,11 +168,22 @@ class CronoValorizadoController extends Controller
         $costoProject = CostoProject::findOrFail($projectId);
         $db           = $costoProject->database_name;
 
-        DB::connection('mysql')->transaction(function () use ($db, $projectId, $items) {
-            // Borrar los existentes para este project
+        // obtener el presupuesto_id desde cronograma_general para este project_id
+
+        $cronoGeneral =DB::connection('mysql')
+            ->table("{$db}.cronograma_general")
+            ->where('project_id', $projectId)
+            ->first();
+
+        // si no se encuentra, se va usar el id 2 (que existe en presupuestos)
+        $presupuestoId = $cronoGeneral ? ($cronoGeneral->presupuesto_id ?? 2) : 2;
+
+
+        DB::connection('mysql')->transaction(function () use ($db, $presupuestoId, $items) {
+            // Borrar los existentes para este presupuesto
             DB::connection('mysql')
                 ->table("{$db}.cronograma_valorizado")
-                ->where('presupuesto_id', $projectId)
+                ->where('presupuesto_id', $presupuestoId)
                 ->delete();
 
             $rows = [];
@@ -185,7 +196,7 @@ class CronoValorizadoController extends Controller
                 }
 
                 $rows[] = [
-                    'presupuesto_id'       => $projectId,   // costo_projects.id (no FK a presupuestos)
+                    'presupuesto_id'       => $presupuestoId,   // costo_projects.id (no FK a presupuestos)
                     'item_order'           => $idx + 1,
                     'partida'              => $item['item'],
                     'descripcion'          => $item['descripcion'],
