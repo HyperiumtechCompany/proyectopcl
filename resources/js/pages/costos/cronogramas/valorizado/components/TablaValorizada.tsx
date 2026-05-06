@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { RefreshCw, X, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
 import { ItemValorizado, Periodo, ViewMode, TotalesColumna } from '../types';
 
@@ -10,10 +10,8 @@ const fmtN = (v: number) =>
 const fmtS = (v: number) => `S/. ${fmtN(v)}`;
 const fmtP = (v: number) => `${(v ?? 0).toFixed(4)}%`;
 
-// Nivel de jerarquía WBS: "02.01.03.01" → profundidad 3
 const nivel = (item: string) => (item?.split('.').length ?? 1) - 1;
 
-// Color de fondo según nivel WBS
 const bgNivel = (n: number, isLeaf: boolean): string => {
     if (isLeaf)  return '';
     if (n === 0) return 'bg-slate-800 text-white';
@@ -23,15 +21,15 @@ const bgNivel = (n: number, isLeaf: boolean): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CELDA EDITABLE (con soporte de bloqueo)
+// CELDA EDITABLE
 // ─────────────────────────────────────────────────────────────────────────────
 interface EditableCellProps {
-    value:      number;
-    viewMode:   ViewMode;
-    parcial:    number;
-    onChange:   (v: number) => void;
-    isPico:     boolean;
-    bloqueada:  boolean;   // Fuera del rango de fechas de la tarea
+    value:     number;
+    viewMode:  ViewMode;
+    parcial:   number;
+    onChange:  (v: number) => void;
+    isPico:    boolean;
+    bloqueada: boolean;
 }
 
 const EditableCell: React.FC<EditableCellProps> = ({
@@ -41,7 +39,6 @@ const EditableCell: React.FC<EditableCellProps> = ({
     const [rawVal, setRawVal]   = useState('');
     const inputRef              = useRef<HTMLInputElement>(null);
 
-    // ── Celda bloqueada: no editable, fondo rayado ───────────────────────────
     if (bloqueada) {
         return (
             <td
@@ -110,10 +107,10 @@ const EditableCell: React.FC<EditableCellProps> = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BADGE DE DESVÍO — alerta visual por fila
+// BADGE DE DESVÍO
 // ─────────────────────────────────────────────────────────────────────────────
 const BadgeDesviacion: React.FC<{ desvio: number }> = ({ desvio }) => {
-    if (desvio <= 0.01) return null; // Dentro de tolerancia
+    if (desvio <= 0.01) return null;
     return (
         <span
             title={`Diferencia: S/. ${fmtN(desvio)}`}
@@ -129,20 +126,24 @@ const BadgeDesviacion: React.FC<{ desvio: number }> = ({ desvio }) => {
 // TABLA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 interface Props {
-    items:                ItemValorizado[];
-    periodos:             Periodo[];
-    viewMode:             ViewMode;
-    totales:              Record<string, TotalesColumna>;
-    totalPresupuesto:     number;
-    onEditarCelda:        (itemId: number | string, key: string, monto: number) => void;
-    onRedistribuir:       (itemId: number | string) => void;
-    onRedistribuirGauss:  (itemId: number | string) => void;  
-    onLimpiar:            (itemId: number | string) => void;
-    mesPicoKey?:          string;
-    diasPorMes?:          Record<string, number>;
-    desviaciones?:        Record<string | number, number>;    
-    totalDesviadas?:      number;                             
-    isPeriodoBloqueado:   (item: ItemValorizado, key: string) => boolean; 
+    items:               ItemValorizado[];
+    periodos:            Periodo[];
+    viewMode:            ViewMode;
+    totales:             Record<string, TotalesColumna>;
+    totalPresupuesto:    number;
+    onEditarCelda:       (itemId: number | string, key: string, monto: number) => void;
+    onRedistribuir:      (itemId: number | string) => void;
+    onRedistribuirGauss: (itemId: number | string) => void;
+    onLimpiar:           (itemId: number | string) => void;
+    mesPicoKey?:         string;
+    diasPorMes?:         Record<string, number>;
+    desviaciones?:       Record<string | number, number>;
+    totalDesviadas?:     number;
+    isPeriodoBloqueado:  (item: ItemValorizado, key: string) => boolean;
+    // 🆕 Total por fila (suma de todos los meses)
+    totalesPorItem?:     Record<string | number, number>;
+    // 🆕 Total general de la columna TOTAL
+    totalGeneralPeriodos?: number;
 }
 
 const TablaValorizada: React.FC<Props> = ({
@@ -154,6 +155,8 @@ const TablaValorizada: React.FC<Props> = ({
     desviaciones = {},
     totalDesviadas = 0,
     isPeriodoBloqueado,
+    totalesPorItem = {},
+    totalGeneralPeriodos = 0,
 }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -184,10 +187,14 @@ const TablaValorizada: React.FC<Props> = ({
         );
     }
 
+    // Total acumulado de la fila VALORIZACIÓN ACUMULADA (último período)
+    const lastKey          = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
+    const totalAcumuladoFinal = totales[lastKey]?.acumuladoMonto ?? 0;
+
     return (
         <div ref={tableRef} className="rounded-2xl border border-slate-200 shadow-xl bg-white overflow-hidden">
 
-            {/* ── Leyenda + badge de desvíos globales ── */}
+            {/* ── Leyenda ── */}
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-4 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                 <span>📌 Clic en celda para editar</span>
                 <span>⟳ = Uniforme</span>
@@ -214,7 +221,7 @@ const TablaValorizada: React.FC<Props> = ({
             <div className="overflow-x-auto">
                 <table
                     className="w-full text-[11px] border-collapse"
-                    style={{ minWidth: `${Math.max(1200, 800 + periodos.length * 95)}px` }}
+                    style={{ minWidth: `${Math.max(1300, 900 + periodos.length * 95)}px` }}
                 >
                     {/* ── ENCABEZADO ── */}
                     <thead className="sticky top-0 z-20">
@@ -238,6 +245,11 @@ const TablaValorizada: React.FC<Props> = ({
                                     <div className="text-[8px] font-normal text-slate-400 normal-case">{p.labelCal}</div>
                                 </th>
                             ))}
+                            {/* 🆕 Columna TOTAL al final */}
+                            <th className="p-3 border border-slate-700 text-center min-w-[110px] bg-emerald-900 text-emerald-100 sticky right-0 z-30">
+                                <div>TOTAL</div>
+                                <div className="text-[8px] font-normal text-emerald-300 normal-case">S/. acumulado</div>
+                            </th>
                         </tr>
                     </thead>
 
@@ -253,6 +265,8 @@ const TablaValorizada: React.FC<Props> = ({
                             const bg          = bgNivel(n, isLeaf);
                             const desvio      = isLeaf ? (desviaciones[item.id] ?? 0) : 0;
                             const tieneDesv   = desvio > 0.01;
+                            // Total de esta fila (suma de todos sus meses)
+                            const totalFila   = totalesPorItem[item.id] ?? 0;
 
                             return (
                                 <tr
@@ -290,7 +304,6 @@ const TablaValorizada: React.FC<Props> = ({
                                             <span className={`leading-tight ${n <= 1 ? 'font-black' : n === 2 ? 'font-bold' : 'font-medium'} ${item.is_leaf ? 'italic' : ''}`}>
                                                 {item.descripcion}
                                             </span>
-                                            {/* 🆕 Badge de desvío en la descripción */}
                                             {tieneDesv && <BadgeDesviacion desvio={desvio} />}
                                         </div>
                                     </td>
@@ -310,7 +323,7 @@ const TablaValorizada: React.FC<Props> = ({
                                     <td className="p-2 border border-slate-200 text-right font-black text-blue-800 bg-blue-50/30">
                                         {item.parcial > 0 ? fmtS(item.parcial) : '—'}
                                     </td>
-                                    {/* ACCIONES — 🆕 Botón Gauss añadido */}
+                                    {/* ACCIONES */}
                                     <td className="p-2 border border-slate-200 text-center bg-slate-50">
                                         {isLeaf && (
                                             <div className="flex items-center justify-center gap-1">
@@ -353,14 +366,15 @@ const TablaValorizada: React.FC<Props> = ({
                                                     } ${isPico && monto > 0 ? 'bg-amber-50/40' : ''}`}
                                                 >
                                                     {monto > 0
-                                                        ? (viewMode === 'monto' ? fmtN(monto) : fmtP(item.parcial > 0 ? (monto / item.parcial) * 100 : 0))
+                                                        ? (viewMode === 'monto'
+                                                            ? fmtN(monto)
+                                                            : fmtP(item.parcial > 0 ? (monto / item.parcial) * 100 : 0))
                                                         : '—'
                                                     }
                                                 </td>
                                             );
                                         }
 
-                                        // 🆕 Pasar bloqueada al EditableCell
                                         const bloqueada = isPeriodoBloqueado(item, p.key);
                                         return (
                                             <EditableCell
@@ -374,6 +388,21 @@ const TablaValorizada: React.FC<Props> = ({
                                             />
                                         );
                                     })}
+                                    {/* 🆕 Celda TOTAL por fila — sticky derecha */}
+                                    <td
+                                        className={`p-2 text-right text-[11px] font-black border border-slate-200 sticky right-0 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.04)] ${
+                                            totalFila > 0
+                                                ? tieneDesv
+                                                    ? 'bg-rose-50 text-rose-700'
+                                                    : 'bg-emerald-50 text-emerald-800'
+                                                : 'bg-slate-50 text-slate-300'
+                                        }`}
+                                        title={tieneDesv
+                                            ? `Desvío: S/. ${fmtN(desvio)} — no cuadra con el parcial`
+                                            : 'Total acumulado de todos los meses'}
+                                    >
+                                        {totalFila > 0 ? fmtS(totalFila) : '—'}
+                                    </td>
                                 </tr>
                             );
                         })}
@@ -392,6 +421,10 @@ const TablaValorizada: React.FC<Props> = ({
                                     {totales[p.key]?.monto > 0 ? fmtN(totales[p.key].monto) : '—'}
                                 </td>
                             ))}
+                            {/* Total general mensual */}
+                            <td className="p-3 text-center border border-blue-800 bg-emerald-900 text-emerald-100 sticky right-0 font-black">
+                                {totalGeneralPeriodos > 0 ? fmtN(totalGeneralPeriodos) : '—'}
+                            </td>
                         </tr>
 
                         {/* % Avance Mensual */}
@@ -405,9 +438,10 @@ const TablaValorizada: React.FC<Props> = ({
                                     {totales[p.key]?.porcentaje > 0 ? `${totales[p.key].porcentaje.toFixed(3)}%` : '—'}
                                 </td>
                             ))}
+                            <td className="p-2 text-center border border-slate-600 bg-slate-800 sticky right-0">—</td>
                         </tr>
 
-                        {/* Días Trabajados por Mes */}
+                        {/* Días Trabajados */}
                         {diasPorMes && (
                             <tr className="bg-indigo-900 text-indigo-100">
                                 <td colSpan={7} className="p-2 text-right border border-indigo-800 text-[10px] uppercase tracking-wider font-bold">
@@ -422,6 +456,7 @@ const TablaValorizada: React.FC<Props> = ({
                                         </td>
                                     );
                                 })}
+                                <td className="p-2 text-center border border-indigo-800 bg-indigo-950 sticky right-0">—</td>
                             </tr>
                         )}
 
@@ -436,6 +471,10 @@ const TablaValorizada: React.FC<Props> = ({
                                     {totales[p.key]?.acumuladoMonto > 0 ? fmtN(totales[p.key].acumuladoMonto) : '—'}
                                 </td>
                             ))}
+                            {/* Total acumulado final */}
+                            <td className="p-3 text-center border border-emerald-800 bg-emerald-800 text-white font-black sticky right-0">
+                                {totalAcumuladoFinal > 0 ? fmtN(totalAcumuladoFinal) : '—'}
+                            </td>
                         </tr>
 
                         {/* % Avance Acumulado — Curva S */}
@@ -455,6 +494,14 @@ const TablaValorizada: React.FC<Props> = ({
                                     </td>
                                 );
                             })}
+                            <td className="p-2 text-center border border-slate-700 bg-slate-800 sticky right-0">
+                                {totalAcumuladoFinal > 0 && totalPresupuesto > 0
+                                    ? <span className="text-emerald-400 font-black">
+                                        {((totalAcumuladoFinal / totalPresupuesto) * 100).toFixed(2)}%
+                                      </span>
+                                    : '—'
+                                }
+                            </td>
                         </tr>
                     </tfoot>
                 </table>

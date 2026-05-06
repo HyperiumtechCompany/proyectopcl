@@ -14,49 +14,47 @@ import {
  */
 const periodoEnRango = (
     periodoKey: string,
-    startDate: string | null | undefined,
-    endDate:   string | null | undefined,
+    startDate:  string | null | undefined,
+    endDate:    string | null | undefined,
 ): boolean => {
     if (!startDate || !endDate) return true; // Sin fechas → no bloquear
 
-    // Normalizar clave a fecha comparable: "2026-04" → "2026-04-01"
+    // Normalizar clave a fecha comparable
     const keyDate = periodoKey.length === 7 ? `${periodoKey}-01` : periodoKey;
 
-    // Fin del período: "2026-04" → "2026-04-30", "2026-04-25" → "2026-05-24"
+    // Fin del período
     const keyEnd = periodoKey.length === 7
-        ? `${periodoKey}-31`   // comparación lexicográfica alcanza
+        ? `${periodoKey}-31`
         : (() => {
             const d = new Date(keyDate);
             d.setDate(d.getDate() + 29);
             return d.toISOString().slice(0, 10);
         })();
 
-    // Hay solapamiento si el período empieza antes de endDate
-    // y termina después de startDate
     return keyDate <= endDate && keyEnd >= startDate;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DISTRIBUCIÓN GAUSS (frontend) — para redistribución manual con forma real
+// DISTRIBUCIÓN GAUSS (frontend) — redistribución manual con forma de campana
 // ─────────────────────────────────────────────────────────────────────────────
 
 const calcularPesosGauss = (numPeriodos: number): number[] => {
     if (numPeriodos <= 0) return [];
     if (numPeriodos === 1) return [1];
 
-    const media  = (numPeriodos - 1) / 2;          // centro del rango
-    const sigma  = numPeriodos / 6;                 // desviación estándar
-    const pesos  = Array.from({ length: numPeriodos }, (_, i) => {
+    const media = (numPeriodos - 1) / 2;
+    const sigma = numPeriodos / 6;
+    const pesos = Array.from({ length: numPeriodos }, (_, i) => {
         const exp = -((i - media) ** 2) / (2 * sigma ** 2);
         return Math.exp(exp);
     });
     const suma = pesos.reduce((a, b) => a + b, 0);
-    return pesos.map(p => p / suma);                // normalizar → suma = 1
+    return pesos.map(p => p / suma);
 };
 
 /**
- * Aplica pesos Gauss a un ítem para redistribuir con forma de campana.
- * Garantiza Precisión Delfín: último período activo absorbe el residuo.
+ * Redistribuye con forma de campana Gauss.
+ * Precisión Delfín: último período activo absorbe el residuo de céntimos.
  */
 const redistribuirGauss = (
     item:    ItemValorizado,
@@ -74,7 +72,6 @@ const redistribuirGauss = (
     let ultimaKey    = '';
 
     periodosActivos.forEach((p, i) => {
-        // Truncar a 2 decimales (no round) para acumular residuo
         const monto = Math.floor(item.parcial * pesos[i] * 100) / 100;
         nuevaDist[p.key] = {
             monto,
@@ -84,9 +81,9 @@ const redistribuirGauss = (
         ultimaKey = p.key;
     });
 
-    // Precisión Delfín: el último mes activo absorbe el residuo de céntimos
+    // Precisión Delfín
     if (ultimaKey) {
-        const residuo = Math.round((item.parcial - sumaAsignada) * 100) / 100;
+        const residuo    = Math.round((item.parcial - sumaAsignada) * 100) / 100;
         const montoFinal = Math.round((nuevaDist[ultimaKey].monto + residuo) * 100) / 100;
         nuevaDist[ultimaKey] = {
             monto:      montoFinal,
@@ -124,12 +121,6 @@ export const useValorizadoLogic = (
     );
 
     // ── EDICIÓN INLINE de una celda ───────────────────────────────────────────
-    /**
-     * Cuando el usuario edita el monto de un mes:
-     *  1. Verifica que el período esté en rango (bloqueo de celda)
-     *  2. Actualiza el monto y recalcula el porcentaje
-     *  3. NO toca otros meses (el usuario tiene control total)
-     */
     const editarCelda = useCallback((
         itemId:     number | string,
         periodoKey: string,
@@ -138,7 +129,6 @@ export const useValorizadoLogic = (
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
 
-            // Bloqueo: no editar fuera del rango de la tarea
             if (!periodoEnRango(periodoKey, item.start_date, item.end_date)) return item;
 
             const monto     = Math.max(0, nuevoMonto);
@@ -151,7 +141,7 @@ export const useValorizadoLogic = (
         }));
     }, []);
 
-    // ── REDISTRIBUIR UNIFORMEMENTE (solo meses activos) ───────────────────────
+    // ── REDISTRIBUIR UNIFORMEMENTE ────────────────────────────────────────────
     const redistribuirItem = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
@@ -162,13 +152,10 @@ export const useValorizadoLogic = (
             const numMeses = periodosActivos.length;
             if (numMeses === 0 || item.parcial <= 0) return item;
 
-            // Truncar para acumular residuo
             const montoPorMes = Math.floor((item.parcial / numMeses) * 100) / 100;
             const pctPorMes   = 100 / numMeses;
 
             const nuevaDist: Record<string, DistribucionMes> = { ...item.distribucion };
-
-            // Primero poner todo a 0
             periodos.forEach(p => { nuevaDist[p.key] = { monto: 0, porcentaje: 0 }; });
 
             let sumaAsignada = 0;
@@ -197,7 +184,7 @@ export const useValorizadoLogic = (
         }));
     }, [periodos]);
 
-    // ── REDISTRIBUIR CON GAUSS (curva S real) ─────────────────────────────────
+    // ── REDISTRIBUIR CON GAUSS ────────────────────────────────────────────────
     const redistribuirGaussItem = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
@@ -217,7 +204,23 @@ export const useValorizadoLogic = (
         }));
     }, []);
 
-    // ── TOTALES POR COLUMNA — solo hojas (is_leaf) para no duplicar ───────────
+    // ── TOTAL POR FILA — suma de todos los meses de cada ítem ────────────────
+    /**
+     * Calcula el total acumulado de cada ítem sumando todos sus meses.
+     * Se muestra en la columna TOTAL al final de la tabla.
+     */
+    const totalesPorItem = useMemo(() => {
+        const map: Record<string | number, number> = {};
+        items.forEach(item => {
+            const suma = Object.values(item.distribucion).reduce(
+                (acc, v) => acc + (v.monto ?? 0), 0
+            );
+            map[item.id] = Math.round(suma * 100) / 100;
+        });
+        return map;
+    }, [items]);
+
+    // ── TOTALES POR COLUMNA — solo hojas (is_leaf) ────────────────────────────
     const totalesFinales = useMemo<Record<string, TotalesColumna>>(() => {
         const totales: Record<string, TotalesColumna> = {};
         let acumMonto = 0;
@@ -240,7 +243,12 @@ export const useValorizadoLogic = (
         return totales;
     }, [items, periodos, totalPresupuesto]);
 
-    // ── CURVA S DATA ──────────────────────────────────────────────────────────
+    // ── TOTAL GENERAL de todos los períodos (columna TOTAL del footer) ────────
+    const totalGeneralPeriodos = useMemo(() => {
+        return Object.values(totalesFinales).reduce((acc, t) => acc + t.monto, 0);
+    }, [totalesFinales]);
+
+    // ── CURVA S ───────────────────────────────────────────────────────────────
     const curvaSData = useMemo(() =>
         periodos.map(p => ({
             mes:          p.labelCal,
@@ -270,11 +278,10 @@ export const useValorizadoLogic = (
         return totalesFinales[lastKey]?.acumuladoMonto ?? 0;
     }, [periodos, totalesFinales]);
 
-    // ── VALIDACIÓN: Desvío de cada hoja (suma meses vs parcial) ──────────────
+    // ── VALIDACIÓN: Desvío por fila ───────────────────────────────────────────
     /**
-     * Retorna la diferencia absoluta entre el parcial declarado y
-     * la suma de lo distribuido en todos los meses.
-     * Cualquier valor > 0.01 (tolerancia de 1 céntimo) es alerta visual.
+     * Diferencia absoluta entre parcial declarado y suma de meses distribuidos.
+     * > 0.01 (1 céntimo) dispara alerta visual.
      */
     const getDesviacion = useCallback((item: ItemValorizado): number => {
         const sumaDist = Object.values(item.distribucion).reduce(
@@ -283,10 +290,6 @@ export const useValorizadoLogic = (
         return Math.round(Math.abs(item.parcial - sumaDist) * 100) / 100;
     }, []);
 
-    /**
-     * Map de id → desvío para que TablaValorizada pueda acceder en O(1)
-     * sin recalcular en cada render de fila.
-     */
     const desviaciones = useMemo(() => {
         const map: Record<string | number, number> = {};
         items.filter(i => i.is_leaf).forEach(i => {
@@ -295,12 +298,11 @@ export const useValorizadoLogic = (
         return map;
     }, [items, getDesviacion]);
 
-    /** Número de hojas con desvío > 1 céntimo (para mostrar badge global) */
     const totalDesviadas = useMemo(() =>
         Object.values(desviaciones).filter(d => d > 0.01).length,
     [desviaciones]);
 
-    // ── HELPER: ¿Está el período bloqueado para un ítem? ─────────────────────
+    // ── HELPER: ¿Está el período bloqueado? ───────────────────────────────────
     const isPeriodoBloqueado = useCallback((
         item:       ItemValorizado,
         periodoKey: string,
@@ -311,23 +313,25 @@ export const useValorizadoLogic = (
         viewMode, setViewMode,
         searchTerm, setSearchTerm,
         modoCalculo,
-        // Items editables
+        // Items
         items,
-        // Acciones de edición
+        // Acciones
         editarCelda,
         redistribuirItem,
-        redistribuirGaussItem,   
+        redistribuirGaussItem,
         limpiarDistribucion,
         // Calculados
         itemsFiltrados,
         totalesFinales,
+        totalesPorItem,          // 🆕 Total por fila (suma de meses)
+        totalGeneralPeriodos,    // 🆕 Total general de todos los periodos
         curvaSData,
         montoAcumuladoTotal,
         // Validación
         getDesviacion,
-        desviaciones,            
-        totalDesviadas,          
+        desviaciones,
+        totalDesviadas,
         // Helpers
-        isPeriodoBloqueado,     
+        isPeriodoBloqueado,
     };
 };

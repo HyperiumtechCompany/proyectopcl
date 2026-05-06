@@ -1,0 +1,168 @@
+/* ==========================================================================
+   CRONOGRAMA VALORIZADO - ESTILOS
+   ========================================================================== */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LAYOUT PRINCIPAL
+   ───────────────────────────────────────────────────────────────────────────── */
+.valorizado-container {
+    padding: 1rem;
+}
+
+@media (min-width: 768px) {
+    .valorizado-container {
+        padding: 1.5rem;
+    }
+}
+
+.valorizado-container-inner {
+    max-width: 1900px;
+    margin: 0 auto;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SIN GANTT (Mensaje cuando no hay cronograma)
+   ───────────────────────────────────────────────────────────────────────────── */
+.sin-gantt-card {
+    background-color: white;
+    border-radius: 1rem;
+    border: 2px dashed #fde68a;
+    padding: 4rem;
+    text-align: center;
+}
+
+.sin-gantt-icon {
+    font-size: 3rem;
+}
+
+.sin-gantt-title {
+    margin-top: 1rem;
+    font-size: 1.125rem;
+    font-weight: 900;
+    color: #334155;
+}
+
+.sin-gantt-text {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #64748b;
+    max-width: 28rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sin-gantt-link {
+    margin-top: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background-color: #2563eb;
+    color: white;
+    font-weight: 700;
+    border-radius: 0.75rem;
+    transition: background-color 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.sin-gantt-link:hover {
+    background-color: #1d4ed8;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BANNER MODO DE CÁLCULO
+   ───────────────────────────────────────────────────────────────────────────── */
+.modo-calculo-banner {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: white;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    padding: 0.625rem 1rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.modo-calculo-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.modo-badge {
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.5rem;
+    font-weight: 900;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.modo-badge.calendario {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.modo-badge.dias30 {
+    background-color: #ede9fe;
+    color: #5b21b6;
+    border: 1px solid #ddd6fe;
+}
+
+.modo-texto {
+    color: #64748b;
+}
+
+.modo-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e1;
+    background-color: #f8fafc;
+    color: #334155;
+    transition: all 0.2s;
+}
+
+.modo-toggle-btn:hover {
+    background-color: #f1f5f9;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOAST CONTAINER
+   ───────────────────────────────────────────────────────────────────────────── */
+.toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 24rem;
+}
+
+.toast-success {
+    background-color: #064e3b;
+    border-color: #059669;
+    color: #d1fae5;
+}
+
+.toast-error {
+    background-color: #881337;
+    border-color: #e11d48;
+    color: #fecdd3;
+}
+
+.toast-info {
+    background-color: #1e3a8a;
+    border-color: #3b82f6;
+    color: #bfdbfe;
+}

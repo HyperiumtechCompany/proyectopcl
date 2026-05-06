@@ -4,21 +4,20 @@ import { Link } from '@inertiajs/react';
 import { ViewMode } from '../types';
 
 interface Props {
-    project:          string;
-    projectName:      string;
-    viewMode:         ViewMode;
-    setViewMode:      (v: ViewMode) => void;
-    searchTerm:       string;
-    setSearchTerm:    (s: string) => void;
-    estaGuardado:     boolean;
-    saving:           boolean;
-    deleting:         boolean;
-    onSave:           () => void;
-    onDelete:         () => void;
-    onExportExcel:    () => void;
-    onExportPDF:      () => void;
-    // Desvíos globales — muestra badge de advertencia si hay partidas sin cuadrar
-    totalDesviadas?:  number;
+    project:         string;
+    projectName:     string;
+    viewMode:        ViewMode;
+    setViewMode:     (v: ViewMode) => void;
+    searchTerm:      string;
+    setSearchTerm:   (s: string) => void;
+    estaGuardado:    boolean;
+    saving:          boolean;
+    deleting:        boolean;
+    onSave:          () => void;
+    onDelete:        () => void;
+    onExportExcel:   () => void;
+    onExportPDF:     () => void;
+    totalDesviadas?: number;
 }
 
 const HeaderValorizado: React.FC<Props> = ({
@@ -31,7 +30,7 @@ const HeaderValorizado: React.FC<Props> = ({
 }) => (
     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
 
-        {/* ── Título ─────────────────────────────────────────────────────── */}
+        {/* ── Título ── */}
         <div>
             <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
@@ -44,7 +43,6 @@ const HeaderValorizado: React.FC<Props> = ({
                     </span>
                 )}
 
-                {/* 🆕 Badge de advertencia si hay partidas con desvío */}
                 {totalDesviadas > 0 && (
                     <span className="flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-700 text-[9px] font-black rounded-full uppercase border border-rose-200">
                         <AlertTriangle className="w-3 h-3" />
@@ -58,7 +56,7 @@ const HeaderValorizado: React.FC<Props> = ({
             </p>
         </div>
 
-        {/* ── Controles ──────────────────────────────────────────────────── */}
+        {/* ── Controles ── */}
         <div className="flex flex-wrap items-center gap-2">
 
             {/* Buscador */}
@@ -114,14 +112,16 @@ const HeaderValorizado: React.FC<Props> = ({
                 <FileText className="w-3.5 h-3.5" /> PDF
             </button>
 
-            {/* Guardar — deshabilitado si hay partidas con desvío */}
+            {/* Guardar */}
             <button
                 onClick={onSave}
                 disabled={saving}
-                title={totalDesviadas > 0 ? `Hay ${totalDesviadas} partida(s) sin cuadrar — revisa antes de guardar` : 'Guardar cronograma'}
+                title={totalDesviadas > 0
+                    ? `Hay ${totalDesviadas} partida(s) sin cuadrar — revisa antes de guardar`
+                    : 'Guardar cronograma'}
                 className={`flex items-center gap-1.5 px-4 py-2 disabled:opacity-60 text-white text-xs font-black rounded-xl shadow-md transition-all ${
                     totalDesviadas > 0
-                        ? 'bg-amber-500 hover:bg-amber-600'   // Naranja cuando hay desvíos
+                        ? 'bg-amber-500 hover:bg-amber-600'
                         : 'bg-blue-600 hover:bg-blue-700'
                 }`}
             >

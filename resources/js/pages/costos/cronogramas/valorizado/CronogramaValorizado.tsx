@@ -10,7 +10,7 @@ import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TOAST — usando useRef en lugar de variable de módulo (fix React Strict Mode)
+// TOAST
 // ─────────────────────────────────────────────────────────────────────────────
 interface ToastItem { id: number; text: string; type: 'success' | 'error' | 'info' }
 
@@ -39,6 +39,7 @@ const colorToast: Record<string, string> = {
 const exportarExcel = (
     items: any[], periodos: any[], totales: any,
     projectName: string, viewMode: 'monto' | 'porcentaje',
+    totalesPorItem: Record<string | number, number>,
 ) => {
     const fmtN = (v: number) => (v ?? 0).toFixed(2);
     const fmtP = (v: number, p: number) => p > 0 ? ((v / p) * 100).toFixed(4) : '0.0000';
@@ -46,6 +47,7 @@ const exportarExcel = (
     const headers = [
         'N°', 'ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'PRECIO UNITARIO', 'PARCIAL (S/.)',
         ...periodos.map((p: any) => `${p.label} (${p.labelCal})`),
+        'TOTAL (S/.)',
     ];
 
     const rows: string[][] = [];
@@ -59,16 +61,18 @@ const exportarExcel = (
             const monto = item.distribucion?.[p.key]?.monto ?? 0;
             row.push(viewMode === 'monto' ? fmtN(monto) : fmtP(monto, item.parcial));
         });
+        // Columna TOTAL por fila
+        row.push(fmtN(totalesPorItem[item.id] ?? 0));
         rows.push(row);
     });
 
     const pushFooter = (label: string, vals: string[]) =>
         rows.push(['', '', '', '', '', label, '', ...vals]);
 
-    pushFooter('VALORIZACIÓN MENSUAL (S/.)',  periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)));
-    pushFooter('% AVANCE MENSUAL',            periodos.map((p: any) => fmtN(totales[p.key]?.porcentaje ?? 0) + '%'));
-    pushFooter('VALORIZACIÓN ACUMULADA (S/.)',periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)));
-    pushFooter('% AVANCE ACUMULADO',          periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoPorcentaje ?? 0) + '%'));
+    pushFooter('VALORIZACIÓN MENSUAL (S/.)',   periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)));
+    pushFooter('% AVANCE MENSUAL',             periodos.map((p: any) => fmtN(totales[p.key]?.porcentaje ?? 0) + '%'));
+    pushFooter('VALORIZACIÓN ACUMULADA (S/.)', periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)));
+    pushFooter('% AVANCE ACUMULADO',           periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoPorcentaje ?? 0) + '%'));
 
     const csv = [
         [`CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO`],
@@ -90,13 +94,19 @@ const exportarExcel = (
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORTACIÓN PDF
 // ─────────────────────────────────────────────────────────────────────────────
-const exportarPDF = (items: any[], periodos: any[], totales: any, projectName: string) => {
+const exportarPDF = (
+    items: any[], periodos: any[], totales: any, projectName: string,
+    totalesPorItem: Record<string | number, number>,
+) => {
     const fmtN     = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
-    const colWidth = Math.max(50, Math.floor(650 / Math.max(periodos.length, 1)));
+    const colWidth = Math.max(50, Math.floor(620 / Math.max(periodos.length + 1, 1)));
 
-    const headerCols = periodos.map((p: any) =>
-        `<th style="min-width:${colWidth}px;font-size:8px;text-align:center;padding:3px;background:#1e293b;color:#fff;border:1px solid #334155;">${p.label}<br><span style="font-size:7px;opacity:0.7">${p.labelCal}</span></th>`
-    ).join('');
+    const headerCols = [
+        ...periodos.map((p: any) =>
+            `<th style="min-width:${colWidth}px;font-size:8px;text-align:center;padding:3px;background:#1e293b;color:#fff;border:1px solid #334155;">${p.label}<br><span style="font-size:7px;opacity:0.7">${p.labelCal}</span></th>`
+        ),
+        `<th style="min-width:${colWidth}px;font-size:8px;text-align:center;padding:3px;background:#064e3b;color:#6ee7b7;border:1px solid #334155;">TOTAL</th>`,
+    ].join('');
 
     const bodyRows = items.map((item: any, i: number) => {
         const niv   = (item.item?.split('.').length ?? 1) - 1;
@@ -107,6 +117,7 @@ const exportarPDF = (items: any[], periodos: any[], totales: any, projectName: s
             const m = item.distribucion?.[p.key]?.monto ?? 0;
             return `<td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;">${m > 0 ? fmtN(m) : ''}</td>`;
         }).join('');
+        const totalFila = totalesPorItem[item.id] ?? 0;
         return `<tr>
             <td style="text-align:center;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;background:${bg};color:${color};">${i + 1}</td>
             <td style="font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;background:${bg};color:${color};">${item.item}</td>
@@ -116,12 +127,18 @@ const exportarPDF = (items: any[], periodos: any[], totales: any, projectName: s
             <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;">${item.precio > 0 ? fmtN(item.precio) : ''}</td>
             <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #dbeafe;background:#eff6ff;font-weight:700;font-family:monospace;color:#1d4ed8;">${item.parcial > 0 ? fmtN(item.parcial) : ''}</td>
             ${cols}
+            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #d1fae5;background:#ecfdf5;font-weight:900;font-family:monospace;color:#065f46;">${totalFila > 0 ? fmtN(totalFila) : ''}</td>
         </tr>`;
     }).join('');
 
-    const footerRow = (label: string, bg: string, color: string, vals: string[]) =>
+    const footerRow = (label: string, bg: string, color: string, vals: string[], totalVal: string = '') =>
         `<tr><td colspan="7" style="text-align:right;padding:3px;font-size:8px;font-weight:900;background:${bg};color:${color};border:1px solid ${bg};text-transform:uppercase;">${label}</td>
-        ${vals.map(v => `<td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bg};background:${bg};color:${color};font-family:monospace;">${v}</td>`).join('')}</tr>`;
+        ${vals.map(v => `<td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bg};background:${bg};color:${color};font-family:monospace;">${v}</td>`).join('')}
+        <td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bg};background:${bg};color:${color};font-family:monospace;font-weight:900;">${totalVal}</td></tr>`;
+
+    const lastKey       = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
+    const totalAcumFinal = totales[lastKey]?.acumuladoMonto ?? 0;
+    const totalMensual   = Object.values(totales as any).reduce((s: number, t: any) => s + (t.monto ?? 0), 0);
 
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
     <title>Cronograma Valorizado — ${projectName}</title>
@@ -140,9 +157,9 @@ const exportarPDF = (items: any[], periodos: any[], totales: any, projectName: s
         <th style="min-width:80px;text-align:right;padding:3px;background:#1e3a5f;color:#bfdbfe;border:1px solid #334155;">PARCIAL</th>
         ${headerCols}
     </tr></thead><tbody>${bodyRows}</tbody><tfoot>
-        ${footerRow('Valorización Mensual (S/.)',   '#1e3a5f', '#fff',    periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)))}
-        ${footerRow('Valorización Acumulada (S/).', '#064e3b', '#6ee7b7', periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)))}
-        ${footerRow('% Avance Acumulado (Curva S)', '#0f172a', '#34d399', periodos.map((p: any) => { const pct = totales[p.key]?.acumuladoPorcentaje ?? 0; return pct > 0 ? pct.toFixed(2) + '%' : ''; }))}
+        ${footerRow('Valorización Mensual (S/.)',   '#1e3a5f', '#fff',    periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)), fmtN(totalMensual as number))}
+        ${footerRow('Valorización Acumulada (S/).', '#064e3b', '#6ee7b7', periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)), fmtN(totalAcumFinal))}
+        ${footerRow('% Avance Acumulado (Curva S)', '#0f172a', '#34d399', periodos.map((p: any) => { const pct = totales[p.key]?.acumuladoPorcentaje ?? 0; return pct > 0 ? pct.toFixed(2) + '%' : ''; }), '100%')}
     </tfoot></table></body></html>`;
 
     const win = window.open('', '_blank', 'width=1200,height=800');
@@ -153,11 +170,10 @@ const exportarPDF = (items: any[], periodos: any[], totales: any, projectName: s
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CronogramaValorizado(props: ValorizadoProps) {
-    const [saving,          setSaving]          = useState(false);
-    const [deleting,        setDeleting]        = useState(false);
-    const [estaGuardadoUI,  setEstaGuardadoUI]  = useState(props.estaGuardado ?? false);
-    // Modo de cálculo controlado en frontend (sincronizado con URL en servidor)
-    const [modoCalculo,     setModoCalculo]     = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
+    const [saving,         setSaving]         = useState(false);
+    const [deleting,       setDeleting]       = useState(false);
+    const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
+    const [modoCalculo,    setModoCalculo]    = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
 
     const { toasts, show: showToast } = useToast();
 
@@ -168,6 +184,8 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         editarCelda, redistribuirItem, redistribuirGaussItem, limpiarDistribucion,
         itemsFiltrados,
         totalesFinales,
+        totalesPorItem,
+        totalGeneralPeriodos,
         curvaSData,
         montoAcumuladoTotal,
         desviaciones,
@@ -185,11 +203,11 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
             await axios.post('/module/crono_valorizado/save', {
                 project_id: props.project,
                 items: items.map(i => ({
-                    item: i.item, 
+                    item:        i.item,
                     descripcion: i.descripcion,
-                    parcial: i.parcial, 
+                    parcial:     i.parcial,
                     distribucion: i.distribucion,
-                    parent_id: i.parent_id
+                    parent_id:   i.parent_id ?? null,
                 })),
             });
             setEstaGuardadoUI(true);
@@ -218,10 +236,6 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     }, [props.project, showToast]);
 
     // ── TOGGLE MODO CÁLCULO ───────────────────────────────────────────────────
-    /**
-     * Al cambiar el modo, recarga la página con el parámetro ?modo=
-     * para que el backend recalcule los períodos y distribuciones.
-     */
     const handleToggleModo = useCallback(() => {
         const nuevoModo: ModoCalculo = modoCalculo === 'calendario' ? '30dias' : 'calendario';
         setModoCalculo(nuevoModo);
@@ -232,12 +246,12 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
 
     // ── EXPORTACIONES ─────────────────────────────────────────────────────────
     const handleExportExcel = useCallback(() => {
-        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode);
-    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode]);
+        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem);
+    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem]);
 
     const handleExportPDF = useCallback(() => {
-        exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName);
-    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName]);
+        exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem);
+    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem]);
 
     // ── MES PICO ──────────────────────────────────────────────────────────────
     const mesPicoKey = React.useMemo(() => {
@@ -269,8 +283,10 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                             <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
                                 Primero debe guardar el Cronograma General (Gantt) con las fechas de inicio y fin de cada partida.
                             </p>
-                            <a href={`/module/crono_general?project=${props.project}`}
-                                className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md">
+                            <a
+                                href={`/module/crono_general?project=${props.project}`}
+                                className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
+                            >
                                 Ir al Cronograma General →
                             </a>
                         </div>
@@ -278,7 +294,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
 
                     {!props.sinGantt && (
                         <>
-                            {/* Banner de modo de cálculo */}
+                            {/* Banner modo de cálculo */}
                             <div className="mb-4 flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-sm">
                                 <div className="flex items-center gap-3 text-xs text-slate-600 font-semibold">
                                     <span className={`px-2.5 py-1 rounded-lg font-black text-[10px] uppercase tracking-wide ${
@@ -316,6 +332,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 onDelete={handleDelete}
                                 onExportExcel={handleExportExcel}
                                 onExportPDF={handleExportPDF}
+                                totalDesviadas={totalDesviadas}
                             />
 
                             <ResumenFinanciero
@@ -343,24 +360,25 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 desviaciones={desviaciones}
                                 totalDesviadas={totalDesviadas}
                                 isPeriodoBloqueado={isPeriodoBloqueado}
+                                totalesPorItem={totalesPorItem}
+                                totalGeneralPeriodos={totalGeneralPeriodos}
                             />
                         </>
                     )}
                 </div>
             </div>
 
-            {/* Toast container — sin variable global de módulo */}
+            {/* Toast container */}
             <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm">
                 {toasts.map(t => (
-                    <div key={t.id} className={`px-4 py-3 rounded-xl border text-sm font-semibold shadow-xl ${colorToast[t.type] || colorToast.info}`}>
+                    <div
+                        key={t.id}
+                        className={`px-4 py-3 rounded-xl border text-sm font-semibold shadow-xl ${colorToast[t.type] || colorToast.info}`}
+                    >
                         {t.text}
                     </div>
                 ))}
             </div>
         </AppLayout>
     );
-}
-
-function route(arg0: string): string {
-    throw new Error('Function not implemented.');
 }
