@@ -291,3 +291,5 @@ const KpiCard: React.FC<{
 );
 
 export default ResumenFinanciero;
+
+
