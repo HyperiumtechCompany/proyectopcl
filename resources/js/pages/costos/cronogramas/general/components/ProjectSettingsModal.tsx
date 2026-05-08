@@ -386,7 +386,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                     />
                                 </div>
                             </Field>
-                            <Field label="Duración (días)">
+                            <Field label="Duración (días laborables)">
                                 <input
                                     type="number"
                                     value={projectDuration === null ? '' : projectDuration}
@@ -395,17 +395,34 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                         setProjectDuration(e.target.value === '' ? null : parseInt(e.target.value));
                                     }}
                                     min="1"
-                                    placeholder="Ej: 180"
+                                    placeholder="Ej: 100"
                                     className={inputCls}
                                 />
                             </Field>
                         </div>
 
-                        {calculatedEndDate && (
+                        {calculatedEndDate && projectStart && projectDuration && projectDuration > 0 && (
                             <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <span className="text-xs text-blue-700 font-medium">
-                                    📅 Fin estimado: <strong>{calculatedEndDate}</strong>
-                                </span>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-blue-700 font-medium">📅 Fin estimado:</span>
+                                    <span className="text-sm font-bold text-blue-800">{calculatedEndDate}</span>
+                                </div>
+                                <div className="flex justify-between items-center mt-1 pt-1 border-t border-blue-200">
+                                    <span className="text-xs text-blue-600">📆 Días calendario totales:</span>
+                                    <span className="text-sm font-semibold text-blue-700">
+                                        {(() => {
+                                            const start = new Date(projectStart);
+                                            const end = new Date(calculatedEndDate);
+                                            const diffTime = Math.abs(end.getTime() - start.getTime());
+                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                                            return `${diffDays} días`;
+                                        })()}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center mt-1">
+                                    <span className="text-xs text-blue-600">💼 Días laborables:</span>
+                                    <span className="text-sm font-semibold text-blue-700">{projectDuration} días</span>
+                                </div>
                             </div>
                         )}
 

@@ -561,18 +561,32 @@ const CronogramaIndex = ({
                 };
             });
             if (realStartDate !== null && settings.projectDuration && settings.projectDuration > 0) {
+                const nuevaDuracion = settings.projectDuration;
+
                 gantt.batchUpdate(() => {
                     gantt.eachTask((task: any) => {
                         if (!gantt.hasChild(task.id)) {
+                            // Asignar fecha de inicio
                             task.start_date = new Date(realStartDate as Date);
-                            task.end_date = limitDate ? new Date(limitDate) : new Date(realStartDate as Date);
-                            task.duration = settings.projectDuration! - 1;
+
+                            // Calcular fecha de fin correcta (inicio + duración - 1)
+                            const endDate = new Date(task.start_date);
+                            endDate.setDate(endDate.getDate() + nuevaDuracion - 1);
+                            task.end_date = endDate;
+
+                            // Asignar la duración explícitamente
+                            task.duration = nuevaDuracion;
+
                             gantt.updateTask(task.id);
                         }
                     });
                 });
+
+                // Recalcular padres
                 gantt.eachTask((task: any) => {
-                    if (gantt.hasChild(task.id)) recalcParentDates(task.id);
+                    if (gantt.hasChild(task.id)) {
+                        recalcParentDates(task.id);
+                    }
                 });
                 gantt.render();
             }
