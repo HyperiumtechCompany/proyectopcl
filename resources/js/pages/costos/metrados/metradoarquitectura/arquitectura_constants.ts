@@ -1,5 +1,10 @@
 import type { ColumnDef, MeasureInputs, UnitProfile } from './arquitectura_types';
-import { r4, toNum, isZeroLike } from './arquitectura_utils';
+
+const toNum = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const r4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+const isZeroLike = (v: unknown): boolean => { if (v === null || v === undefined || v === '') return true; const n = Number(v); return Number.isFinite(n) && abs(n) < 0.0000001; };
+const abs = Math.abs;
+
 
 // ── Unidades disponibles ──────────────────────────────────────
 export const UNITS = ['und', 'm', 'm2', 'm3', 'kg', 'glb', 'pto', 'pza', 'ml'] as const;

@@ -166,25 +166,6 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             cadView?.worldToScreen && cadView?.screenToWorld,
         );
 
-        useEffect(() => {
-            if (!hasCadView) return;
-            let lastState = '';
-            let rafId: number;
-            const tick = () => {
-                const st = engine.getViewState?.();
-                if (st) {
-                    const key = `${st.zoom},${st.panX},${st.panY}`;
-                    if (key !== lastState) {
-                        lastState = key;
-                        setViewTick((t) => t + 1);
-                    }
-                }
-                rafId = requestAnimationFrame(tick);
-            };
-            rafId = requestAnimationFrame(tick);
-            return () => cancelAnimationFrame(rafId);
-        }, [hasCadView, engine]);
-
         // ── Conversión de coordenadas ──────────────────────────────────────────────
         const screenPoint = useCallback(
             (point: { x: number; y: number }) => {
@@ -275,7 +256,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             [cadView, effectiveScale, engine, hasCadView, worldPoint],
         );
 
+        // Herramientas que realmente necesitan OSNAP CAD (view.pick es costoso)
+        const CAD_OSNAP_TOOLS = new Set([
+            'room', 'wall', 'corridor', 'calibrate', 'canopy',
+        ]);
+
         // ── Interacción ───────────────────────────────────────────────────────────
+        // IMPORTANT: useCanvasInteraction MUST be declared before the RAF useEffect
+        // below, because the RAF loop calls isDraggingFn(). Having the useEffect
+        // reference isDraggingFn before the const declaration causes a TDZ crash
+        // when the React Compiler inlines the closure.
         const {
             onMouseDown,
             onMouseMove,
@@ -285,8 +275,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
-            resolveCadOsnap: (scenePoint, lastPoint) =>
-                engine.getOsnapPoint(scenePoint, { lastPoint }),
+            resolveCadOsnap: CAD_OSNAP_TOOLS.has(ui.activeTool)
+                ? (scenePoint, lastPoint) =>
+                      engine.getOsnapPoint(scenePoint, { lastPoint })
+                : undefined,
             dxfEntities: store.dxfEntities,
             walls: scene?.walls ?? [],
             screenToScene: (cx, cy) => worldPoint(cx, cy),
@@ -440,19 +432,45 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 store.updateDoor(id, { wallId, offsetAlongWall }),
         });
 
-        // Track dragging state for cursor
+        // ── Ref estable para isDraggingFn — evita que el RAF tenga isDraggingFn
+        // en su lista de dependencias (lo que causaría el bucle de re-creación)
+        // y elimina el riesgo de TDZ si el compilador reordena declaraciones.
+        const isDraggingFnRef = useRef(isDraggingFn);
+        isDraggingFnRef.current = isDraggingFn;
+
+        // ── RAF único: sincroniza viewTick Y cursor isDragging en un solo loop ──
+        // Antes había dos loops RAF independientes (uno para viewTick, otro para
+        // isDragging) lo que duplicaba callbacks por frame sin necesidad.
         useEffect(() => {
+            let lastState = '';
             let rafId: number;
+
             const tick = () => {
-                const dragging = isDraggingFn();
+                // 1. Sincronizar vista CAD
+                if (hasCadView) {
+                    const st = engine.getViewState?.();
+                    if (st) {
+                        const key = `${st.zoom},${st.panX},${st.panY}`;
+                        if (key !== lastState) {
+                            lastState = key;
+                            setViewTick((t) => t + 1);
+                        }
+                    }
+                }
+
+                // 2. Cursor dragging — accessed via ref to avoid TDZ and stale closures
+                const dragging = isDraggingFnRef.current();
                 if (dragging !== isDragging) {
                     setIsDragging(dragging);
                 }
+
                 rafId = requestAnimationFrame(tick);
             };
+
             rafId = requestAnimationFrame(tick);
             return () => cancelAnimationFrame(rafId);
-        }, [isDraggingFn, isDragging]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [hasCadView, engine]);
 
         // ── Inicialización del motor ───────────────────────────────────────────────
         useEffect(() => {
@@ -492,10 +510,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             };
         }, [isVisible, engine.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-        // ── ResizeObserver ─────────────────────────────────────────────────────────
+        // ── ResizeObserver con debounce ────────────────────────────────────────────
+        // Sin debounce, un resize animado (ej. apertura del sidebar) dispara
+        // docenas de fitToView en < 200ms, lo que provoca parpadeo en el canvas.
         useEffect(() => {
             const el = wrapperRef.current;
             if (!el) return;
+
+            let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
             const obs = new ResizeObserver(([entry]) => {
                 const newSize = {
                     w: entry.contentRect.width,
@@ -507,19 +530,25 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     Math.abs(newSize.h - size.h) > 5
                 ) {
                     setSize(newSize);
-                    // Disparar resize event para que el motor CAD se adapte
-                    requestAnimationFrame(() => {
+
+                    // Debounce: esperar 120 ms desde el último evento antes de
+                    // despachar resize + fitToView para evitar llamadas en ráfaga.
+                    if (debounceTimer !== null) clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
                         window.dispatchEvent(new Event('resize'));
-                        // Pequeño delay antes de fitToView para que el motor se haya ajustado
                         setTimeout(() => {
                             engine.fitToView?.();
                             setViewTick((t) => t + 1);
                         }, 50);
-                    });
+                        debounceTimer = null;
+                    }, 120);
                 }
             });
             obs.observe(el);
-            return () => obs.disconnect();
+            return () => {
+                obs.disconnect();
+                if (debounceTimer !== null) clearTimeout(debounceTimer);
+            };
         }, [engine, size]);
 
         // ── Wheel (zoom overlay) ───────────────────────────────────────────────────

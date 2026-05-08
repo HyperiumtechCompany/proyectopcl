@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useMlightcadEngine.ts â€” Hook singleton para el motor mlightcad
  *
  * PatrÃ³n de diseÃ±o:
@@ -657,17 +657,31 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                     const injectPoints = (gsMark?: string) => {
                         for (const mode of modes) {
                             const startIndex = osnapPoints.length;
-                            entity.subGetOsnapPoints(
-                                mode,
-                                { ...worldPoint, z: 0 },
-                                {
-                                    x: lastPoint?.x ?? worldPoint.x,
-                                    y: lastPoint?.y ?? worldPoint.y,
-                                    z: 0,
-                                },
-                                osnapPoints,
-                                gsMark,
-                            );
+                            // Guard individual: el motor nativo puede lanzar
+                            // "Cannot destructure 'x' of null" cuando la
+                            // entidad tiene geometría interna nula (arcos,
+                            // splines o bloques mal parseados). El try/catch
+                            // exterior no lo intercepta porque el error se
+                            // propaga desde el call stack del motor antes de
+                            // llegar a nuestro wrapper.
+                            try {
+                                entity.subGetOsnapPoints(
+                                    mode,
+                                    { ...worldPoint, z: 0 },
+                                    {
+                                        x: lastPoint?.x ?? worldPoint.x,
+                                        y: lastPoint?.y ?? worldPoint.y,
+                                        z: 0,
+                                    },
+                                    osnapPoints,
+                                    gsMark,
+                                );
+                            } catch {
+                                // Geometría interna nula para este modo/entidad
+                                // → ignorar silenciosamente y continuar con el
+                                // siguiente modo.
+                                continue;
+                            }
                             for (
                                 let i = startIndex;
                                 i < osnapPoints.length;

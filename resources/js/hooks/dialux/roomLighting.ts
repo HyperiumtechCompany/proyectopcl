@@ -3,7 +3,7 @@ import {
     iesnaRegulations,
     type RawNormativeBranch,
     type RawNormativeLeaf,
-} from '@/pages/dialux/normativaData';
+} from './normativaData';
 import {
     calculateExactQuantity,
     calculateLumensRequired,

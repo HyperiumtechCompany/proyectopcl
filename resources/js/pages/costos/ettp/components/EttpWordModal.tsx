@@ -137,8 +137,6 @@ const EttpWordModal: React.FC<Props> = ({
         right: { style: docx.BorderStyle.NONE },
     });
 
-<<<<<<< Updated upstream
-=======
     // ─── DETECCIÓN DE NIVEL POR NUMERACIÓN ─────
     const detectHeadingLevel = (itemNumber: string): number => {
         if (!itemNumber) return 3;
@@ -241,7 +239,6 @@ const EttpWordModal: React.FC<Props> = ({
         return sections;
     };
 
->>>>>>> Stashed changes
     const procesarContenido = async (docx: any, contenido: string) => {
         if (!contenido) return [];
         const tempDiv = document.createElement('div');
@@ -291,12 +288,8 @@ const EttpWordModal: React.FC<Props> = ({
                                             },
                                         );
                                     const partesUrl = base64Data.split(',');
-<<<<<<< Updated upstream
-                                    if (partesUrl.length > 1) dataStr = partesUrl[1];
-=======
                                     if (partesUrl.length > 1)
                                         dataStr = partesUrl[1];
->>>>>>> Stashed changes
                                 } catch (err) {}
                             }
                             if (dataStr) {
@@ -392,42 +385,15 @@ const EttpWordModal: React.FC<Props> = ({
         }
     };
 
-<<<<<<< Updated upstream
-    const processHierarchicalItems = async (docx: any, items: any[], sections: any[], level: number) => {
-=======
     const processHierarchicalItems = async (
         docx: any,
         items: any[],
         sections: any[],
     ) => {
->>>>>>> Stashed changes
         if (!items?.length) return;
         for (const item of items) {
             if (!item) continue;
 
-<<<<<<< Updated upstream
-            let headingLevel;
-            switch (level) {
-                case 1: headingLevel = docx.HeadingLevel.HEADING_1; break;
-                case 2: headingLevel = docx.HeadingLevel.HEADING_2; break;
-                default: headingLevel = docx.HeadingLevel.HEADING_3; break;
-            }
-
-            sections.push(new docx.Paragraph({
-                children: [new docx.TextRun({
-                    text: `${item.item || ''} ${item.descripcion || ''}`.trim(),
-                    bold: true, font: "Arial Narrow", color: "#000000", size: 24,
-                })],
-                heading: headingLevel,
-                spacing: { before: 300, after: 100, line: 480 },
-            }));
-
-            if (item.unidad) {
-                sections.push(new docx.Paragraph({
-                    children: [new docx.TextRun({ text: `(Unidad de medida: ${item.unidad})`, font: "Arial Narrow", size: 22, color: "#000000" })],
-                    spacing: { line: 480 },
-                }));
-=======
             const headingLevel = detectHeadingLevel(item.item);
             const headingLevelEnum =
                 headingLevel === 1
@@ -471,7 +437,6 @@ const EttpWordModal: React.FC<Props> = ({
                         spacing: { line: 480, after: 200 },
                     }),
                 );
->>>>>>> Stashed changes
             }
 
             if (item.secciones && item.secciones.length > 0) {
@@ -498,10 +463,7 @@ const EttpWordModal: React.FC<Props> = ({
     };
 
     // ─── GENERACIÓN PRINCIPAL ─────
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
     const fetchImageAsDataURL = async (url: string): Promise<string | null> => {
         try {
             const response = await fetch(url);
@@ -614,18 +576,6 @@ const EttpWordModal: React.FC<Props> = ({
             children: [
                 new docx.Table({
                     width: { size: 100, type: docx.WidthType.PERCENTAGE },
-<<<<<<< Updated upstream
-                    borders: { top: { style: docx.BorderStyle.NONE }, bottom: { style: docx.BorderStyle.NONE }, left: { style: docx.BorderStyle.NONE }, right: { style: docx.BorderStyle.NONE }, insideHorizontal: { style: docx.BorderStyle.NONE }, insideVertical: { style: docx.BorderStyle.NONE } },
-                    rows: [new docx.TableRow({
-                        children: [
-                            new docx.TableCell({ width: { size: 15, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [new docx.Paragraph({ alignment: docx.AlignmentType.LEFT, children: logoRun ? [logoRun] : [] })] }),
-                            new docx.TableCell({ width: { size: 70, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [
-                                new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [new docx.TextRun({ text: "ESPECIFICACIONES TÉCNICAS", bold: true, size: 16, color: "#000000", font: "Arial" })] }),
-                            ]}),
-                            new docx.TableCell({ width: { size: 15, type: docx.WidthType.PERCENTAGE }, borders: sinBordes(docx), children: [new docx.Paragraph({ alignment: docx.AlignmentType.RIGHT, children: escudoRun ? [escudoRun] : [] })] }),
-                        ],
-                    })],
-=======
                     borders: {
                         top: { style: docx.BorderStyle.NONE },
                         bottom: { style: docx.BorderStyle.NONE },
@@ -701,7 +651,6 @@ const EttpWordModal: React.FC<Props> = ({
                         },
                     },
                     children: [new docx.TextRun('')],
->>>>>>> Stashed changes
                 }),
             ],
         });
@@ -747,10 +696,6 @@ const EttpWordModal: React.FC<Props> = ({
         // Portada
         const coverPage = [
             new docx.Paragraph({
-<<<<<<< Updated upstream
-                children: [new docx.TextRun({ text: `ESPECIFICACIONES TECNICAS-${nombreArchivo.toUpperCase()}`, bold: true, size: 44, font: "Arial", color: "#000000", underline: { type: docx.UnderlineType.SINGLE } })],
-                alignment: docx.AlignmentType.CENTER, spacing: { after: 200 },
-=======
                 children: [
                     new docx.TextRun({
                         text: `ESPECIFICACIONES TÉCNICAS - ${nombreArchivo.toUpperCase()}`,
@@ -775,15 +720,11 @@ const EttpWordModal: React.FC<Props> = ({
                     },
                 },
                 spacing: { after: 400 },
->>>>>>> Stashed changes
             }),
             new docx.Paragraph({ text: "", border: { bottom: { color: "#000000", space: 1, style: docx.BorderStyle.SINGLE, size: 1 } }, spacing: { after: 400 } }),
         ];
 
         if (principalRun) {
-<<<<<<< Updated upstream
-            coverPage.push(new docx.Paragraph({ alignment: docx.AlignmentType.CENTER, children: [principalRun], spacing: { after: 400 } }));
-=======
             coverPage.push(
                 new docx.Paragraph({
                     alignment: docx.AlignmentType.CENTER,
@@ -791,7 +732,6 @@ const EttpWordModal: React.FC<Props> = ({
                     spacing: { after: 400 },
                 }),
             );
->>>>>>> Stashed changes
         }
 
         // Tabla de contenido
@@ -800,26 +740,6 @@ const EttpWordModal: React.FC<Props> = ({
             new docx.TableOfContents("Tabla de Contenido", { hyperlink: true, headingStyleRange: "1-5", size: 24, color: "#000000" }),
         ];
 
-<<<<<<< Updated upstream
-        // Contenido
-        const contentSections: any[] = [];
-        contentSections.push(new docx.Paragraph({ text: nombreArchivo.toUpperCase(), heading: docx.HeadingLevel.HEADING_1, alignment: docx.AlignmentType.CENTER, bold: true, spacing: { before: 400, after: 200 } }));
-        await processHierarchicalItems(docx, datosFiltrados, contentSections, 1);
-
-        const doc = new docx.Document({
-            styles: {
-                default: { document: { run: { font: "Arial", color: "#000000", size: 24 } }, paragraph: { spacing: { line: 276 } } },
-                paragraphStyles: [
-                    { id: "Heading1", name: "Heading 1", run: { font: "Arial", size: 36, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                    { id: "Heading2", name: "Heading 2", run: { font: "Arial", size: 30, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                    { id: "Heading3", name: "Heading 3", run: { font: "Arial", size: 26, bold: true, color: "#000000" }, paragraph: { spacing: { before: 240, after: 120 } } },
-                ],
-            },
-            sections: [
-                { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: coverPage },
-                { properties: { type: docx.SectionType.NEW_PAGE }, headers: { default: header }, footers: { default: footer }, children: toc },
-                { properties: { type: docx.SectionType.CONTINUOUS }, headers: { default: header }, footers: { default: footer }, children: contentSections },
-=======
         // Agregar las secciones del TOC al contenido
         contentSections.push(...tocSections);
 
@@ -906,7 +826,6 @@ const EttpWordModal: React.FC<Props> = ({
                     footers: { default: footer },
                     children: contentSections,
                 },
->>>>>>> Stashed changes
             ],
         });
 
@@ -1149,15 +1068,9 @@ const EttpWordModal: React.FC<Props> = ({
                     <button
                         onClick={handleGenerate}
                         disabled={generating}
-<<<<<<< Updated upstream
-                        className={`px-4 py-2 rounded-md text-sm font-medium ${
-                            generating
-                                ? 'bg-gray-400 cursor-not-allowed text-white'
-=======
                         className={`rounded-md px-4 py-2 text-sm font-medium ${
                             generating
                                 ? 'cursor-not-allowed bg-gray-400 text-white'
->>>>>>> Stashed changes
                                 : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                     >

@@ -2,6 +2,10 @@ import type { Scene } from './types';
 import { getActivityOptions } from './roomLighting';
 import type { Fixture, Room, Vertex, Wall } from './types';
 
+// Logger condicional — silenciado en producción
+const isDev = typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+const ambientLog = isDev ? console.log.bind(console, '[ambientSpaces]') : () => {};
+
 export interface DerivedAmbientSpace {
     id: string;
     roomId: string;
@@ -105,9 +109,15 @@ function polygonAreaCentroid(vertices: Vertex[]): Vertex | null {
     };
 }
 
+/**
+ * Encuentra el punto interior más alejado de todos los bordes del polígono
+ * (polo de inaccessibilidad aproximado). Usa grilla 24×24 para polígonos
+ * complejos o estrechos donde el centroide puede caer fuera del área.
+ */
 function findInteriorPoint(vertices: Vertex[]): Vertex {
     if (vertices.length === 0) return { x: 0, y: 0 };
 
+    // Intentar candidatos rápidos primero
     const candidates: Vertex[] = [];
     const areaCentroid = polygonAreaCentroid(vertices);
     if (areaCentroid) candidates.push(areaCentroid);
@@ -125,16 +135,20 @@ function findInteriorPoint(vertices: Vertex[]): Vertex {
         }
     }
 
-    const cols = 12;
-    const rows = 12;
-    let bestPoint = vertices[0];
+    // Grilla de búsqueda más densa (24×24) para formas irregulares o estrechas
+    // como corredores en L, habitaciones en U o polígonos cóncavos.
+    const cols = 24;
+    const rows = 24;
+    const boundsW = bounds.maxX - bounds.minX;
+    const boundsH = bounds.maxY - bounds.minY;
+    let bestPoint: Vertex | null = null;
     let bestClearance = -Infinity;
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
-            const point = {
-                x: bounds.minX + ((col + 0.5) / cols) * (bounds.maxX - bounds.minX),
-                y: bounds.minY + ((row + 0.5) / rows) * (bounds.maxY - bounds.minY),
+            const point: Vertex = {
+                x: bounds.minX + ((col + 0.5) / cols) * boundsW,
+                y: bounds.minY + ((row + 0.5) / rows) * boundsH,
             };
 
             if (!pointInPolygon(point, vertices)) continue;
@@ -156,7 +170,11 @@ function findInteriorPoint(vertices: Vertex[]): Vertex {
         }
     }
 
-    return bestPoint;
+    // Si encontramos un punto interior válido, devolverlo
+    if (bestPoint !== null) return bestPoint;
+
+    // Último recurso: primer vértice del polígono (garantizado en el borde)
+    return vertices[0];
 }
 
 function closedWallPolygon(wall: Wall): Vertex[] | null {
@@ -251,6 +269,14 @@ function simplifyVertices(vertices: Vertex[]): Vertex[] {
     return simplified.length >= 3 ? simplified : vertices;
 }
 
+/**
+ * Construye el polígono contorno a partir de las celdas de la región raster.
+ *
+ * Problema conocido: cuando las celdas forman una figura con "estrechamientos"
+ * (p. ej. dos rectángulos unidos por un solo vértice diagonal), el algoritmo
+ * de media-bordes puede generar una cadena no cerrada. En ese caso se detecta
+ * el problema y se retorna [] para que el caller use el fallback de bounds.
+ */
 function buildRegionPolygon(
     cells: RasterCell[],
     originX: number,
@@ -260,9 +286,11 @@ function buildRegionPolygon(
     const occupied = new Set(cells.map((cell) => `${cell.col},${cell.row}`));
     const nextByStart = new Map<string, Vertex>();
 
-    const addEdge = (start: Vertex, end: Vertex) => {
-        nextByStart.set(`${start.x},${start.y}`, end);
-    };
+    // Registrar cada arista exterior exactamente una vez.
+    // Si una arista aparece desde ambos lados (colindante con otra celda en
+    // la misma dirección) se cancela → la arista de frontera real sobrevive.
+    const edgeCount = new Map<string, number>();
+    const edgeTarget = new Map<string, Vertex>();
 
     const hasCell = (col: number, row: number) => occupied.has(`${col},${row}`);
 
@@ -272,10 +300,24 @@ function buildRegionPolygon(
         const x1 = x0 + cellSize;
         const y1 = y0 + cellSize;
 
-        if (!hasCell(col, row + 1)) addEdge({ x: x0, y: y0 }, { x: x1, y: y0 });
-        if (!hasCell(col + 1, row)) addEdge({ x: x1, y: y0 }, { x: x1, y: y1 });
-        if (!hasCell(col, row - 1)) addEdge({ x: x1, y: y1 }, { x: x0, y: y1 });
-        if (!hasCell(col - 1, row)) addEdge({ x: x0, y: y1 }, { x: x0, y: y0 });
+        const addEdge = (sx: number, sy: number, ex: number, ey: number) => {
+            const key = `${sx},${sy}`;
+            edgeCount.set(key, (edgeCount.get(key) ?? 0) + 1);
+            edgeTarget.set(key, { x: ex, y: ey });
+        };
+
+        if (!hasCell(col, row + 1)) addEdge(x0, y0, x1, y0);
+        if (!hasCell(col + 1, row)) addEdge(x1, y0, x1, y1);
+        if (!hasCell(col, row - 1)) addEdge(x1, y1, x0, y1);
+        if (!hasCell(col - 1, row)) addEdge(x0, y1, x0, y0);
+    });
+
+    // Construir el mapa de adyacencia solo con las aristas exteriores (count===1)
+    edgeCount.forEach((count, key) => {
+        if (count === 1) {
+            const target = edgeTarget.get(key);
+            if (target) nextByStart.set(key, target);
+        }
     });
 
     const firstKey = nextByStart.keys().next().value as string | undefined;
@@ -284,18 +326,35 @@ function buildRegionPolygon(
     const vertices: Vertex[] = [];
     let cursorKey = firstKey;
     const visited = new Set<string>();
+    const maxSteps = nextByStart.size + 1; // salvaguarda anti-loop infinito
 
-    while (!visited.has(cursorKey)) {
+    while (!visited.has(cursorKey) && vertices.length <= maxSteps) {
         visited.add(cursorKey);
         const [x, y] = cursorKey.split(',').map(Number);
         vertices.push({ x, y });
 
         const next = nextByStart.get(cursorKey);
-        if (!next) break;
+        if (!next) {
+            // Cadena no cerrada → la geometría de la región es degenerada.
+            // Retornar [] para que buildRasterRegions use el fallback de bounds.
+            ambientLog(
+                `buildRegionPolygon: open chain detected after ${vertices.length} verts (cells=${cells.length})`,
+            );
+            return [];
+        }
         cursorKey = `${next.x},${next.y}`;
     }
 
-    return simplifyVertices(vertices);
+    // Verificar que el polígono tiene al menos 3 vértices no colineales
+    const simplified = simplifyVertices(vertices);
+    if (simplified.length < 3) {
+        ambientLog(
+            `buildRegionPolygon: degenerate polygon (${simplified.length} verts after simplify)`,
+        );
+        return [];
+    }
+
+    return simplified;
 }
 
 function collectWallSegments(room: Room, walls: Wall[]) {

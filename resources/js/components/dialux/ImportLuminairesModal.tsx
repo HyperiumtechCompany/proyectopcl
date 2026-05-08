@@ -14,8 +14,8 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { CatalogPanel } from './CatalogPanel';
-import type { LuminaireBrand } from './Toolbar';
-import { LUMINAIRE_BRANDS } from './Toolbar';
+import type { LuminaireBrand } from './constants';
+import { LUMINAIRE_BRANDS } from './constants';
 
 interface ImportLuminairesModalProps {
     open: boolean;

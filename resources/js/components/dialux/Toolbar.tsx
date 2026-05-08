@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Toolbar.tsx
  * DIAlux-style sidebar toolbar — scalable, responsive, brand/category-aware.
  *
@@ -101,27 +101,12 @@ const WIDTH_CLASS: Record<PanelWidth, string> = {
     lg: 'w-80',
 };
 
-/* Brands / materials for catalog filtering */
-export const LUMINAIRE_BRANDS = [
-    'Todas',
-    'Philips',
-    'Osram',
-    'Ledvance',
-    'GE',
-    'Cree',
-    'Zumtobel',
-] as const;
-export type LuminaireBrand = (typeof LUMINAIRE_BRANDS)[number];
-
-export const WINDOW_MATERIALS = [
-    'Todos',
-    'Madera',
-    'Aluminio',
-    'PVC',
-    'Vidrio',
-    'Acero',
-] as const;
-export type WindowMaterial = (typeof WINDOW_MATERIALS)[number];
+import {
+    LUMINAIRE_BRANDS,
+    WINDOW_MATERIALS,
+    type LuminaireBrand,
+    type WindowMaterial,
+} from './constants';
 
 const ANGLE_SNAP_OPTIONS: Array<{
     value: AngleSnapMode;

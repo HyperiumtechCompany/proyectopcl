@@ -1,5 +1,5 @@
 // utils/ggTemplates.ts
-import { TipoFilaVariable, GGVariableNode } from '../stores/ggVariablesStore';
+import { TipoFilaVariable, GGVariableNode } from '../stores/ggTypes';
 
 export interface GGTemplate {
     label: string;
