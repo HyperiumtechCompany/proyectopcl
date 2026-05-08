@@ -8,6 +8,7 @@ import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import HeaderValorizado from './components/HeaderValorizado';
 import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
+import { exportarExcel, exportarPDF } from './helpers/exportHelpers'; 
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST
@@ -31,147 +32,6 @@ const colorToast: Record<string, string> = {
     success: 'bg-emerald-900 border-emerald-600 text-emerald-100',
     error:   'bg-rose-900    border-rose-700    text-rose-100',
     info:    'bg-blue-900    border-blue-700    text-blue-100',
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORTACIÓN EXCEL
-// ─────────────────────────────────────────────────────────────────────────────
-const exportarExcel = (
-    items: any[], periodos: any[], totales: any,
-    projectName: string, viewMode: 'monto' | 'porcentaje',
-    totalesPorItem: Record<string | number, number>,
-) => {
-    const fmtN = (v: number) => (v ?? 0).toFixed(2);
-    const fmtP = (v: number, p: number) => p > 0 ? ((v / p) * 100).toFixed(4) : '0.0000';
-
-    const rowsArr: any[][] = [
-        ["CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO"],
-        ["PROYECTO:", projectName],
-        ["UNIDAD EJECUTORA:", "MUNICIPALIDAD PROVINCIAL"],
-        ["UBICACIÓN:", "HUÁNUCO"],
-        ["PLAZO DE EJECUCIÓN:", "450 DÍAS CALENDARIO"],
-        [], 
-        [
-            'N°', 'ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'PRECIO UNITARIO', 'PARCIAL (S/.)',
-            ...periodos.map((p: any) => p.label),
-            'TOTAL (S/.)'
-        ]
-    ];
-
-    items.forEach((item: any, i: number) => {
-        const row = [
-            i + 1, 
-            item.item, 
-            item.descripcion, 
-            item.und || '',
-            item.metrado, 
-            item.precio, 
-            item.parcial,
-        ];
-        periodos.forEach((p: any) => {
-            const monto = item.distribucion?.[p.key]?.monto ?? 0;
-            row.push(viewMode === 'monto' ? monto : (monto / item.parcial));
-        });
-        row.push(totalesPorItem[item.id] ?? 0);
-        rowsArr.push(row);
-    });
-
-    
-    const csvContent = rowsArr.map(row => 
-        row.map(cell => {
-            const text = String(cell ?? '');
-           
-            if (text.includes(';') || text.includes('\n')) {
-                return `"${text.replace(/"/g, '""')}"`;
-            }
-            return text;
-        }).join(';') 
-    ).join('\n');
-
-   
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `Cronograma_Valorizado_${projectName.replace(/\s+/g, '_')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-};
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORTACIÓN PDF
-// ─────────────────────────────────────────────────────────────────────────────
-const exportarPDF = (
-    items: any[], periodos: any[], totales: any, projectName: string,
-    totalesPorItem: Record<string | number, number>,
-) => {
-    const fmtN     = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
-    const colWidth = Math.max(50, Math.floor(620 / Math.max(periodos.length + 1, 1)));
-
-    const headerCols = [
-        ...periodos.map((p: any) =>
-            `<th style="min-width:${colWidth}px;font-size:8px;text-align:center;padding:3px;background:#1e293b;color:#fff;border:1px solid #334155;">${p.label}<br><span style="font-size:7px;opacity:0.7">${p.labelCal}</span></th>`
-        ),
-        `<th style="min-width:${colWidth}px;font-size:8px;text-align:center;padding:3px;background:#064e3b;color:#6ee7b7;border:1px solid #334155;">TOTAL</th>`,
-    ].join('');
-
-    const bodyRows = items.map((item: any, i: number) => {
-        const niv   = (item.item?.split('.').length ?? 1) - 1;
-        const bg    = niv === 0 ? '#1e293b' : niv === 1 ? '#e2e8f0' : niv === 2 ? '#f1f5f9' : '#ffffff';
-        const color = niv === 0 ? '#ffffff' : '#1e293b';
-        const pl    = `${6 + niv * 8}px`;
-        const cols  = periodos.map((p: any) => {
-            const m = item.distribucion?.[p.key]?.monto ?? 0;
-            return `<td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;">${m > 0 ? fmtN(m) : ''}</td>`;
-        }).join('');
-        const totalFila = totalesPorItem[item.id] ?? 0;
-        return `<tr>
-            <td style="text-align:center;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;background:${bg};color:${color};">${i + 1}</td>
-            <td style="font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;background:${bg};color:${color};">${item.item}</td>
-            <td style="font-size:8px;padding:2px ${pl};border:1px solid #e2e8f0;background:${bg};color:${color};font-weight:${niv <= 1 ? '700' : '400'};${item.is_leaf ? 'font-style:italic' : ''}">${item.descripcion}</td>
-            <td style="text-align:center;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;">${item.und || ''}</td>
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;">${item.metrado > 0 ? fmtN(item.metrado) : ''}</td>
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;">${item.precio > 0 ? fmtN(item.precio) : ''}</td>
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #dbeafe;background:#eff6ff;font-weight:700;font-family:monospace;color:#1d4ed8;">${item.parcial > 0 ? fmtN(item.parcial) : ''}</td>
-            ${cols}
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #d1fae5;background:#ecfdf5;font-weight:900;font-family:monospace;color:#065f46;">${totalFila > 0 ? fmtN(totalFila) : ''}</td>
-        </tr>`;
-    }).join('');
-
-    const footerRow = (label: string, bg: string, color: string, vals: string[], totalVal: string = '') =>
-        `<tr><td colspan="7" style="text-align:right;padding:3px;font-size:8px;font-weight:900;background:${bg};color:${color};border:1px solid ${bg};text-transform:uppercase;">${label}</td>
-        ${vals.map(v => `<td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bg};background:${bg};color:${color};font-family:monospace;">${v}</td>`).join('')}
-        <td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bg};background:${bg};color:${color};font-family:monospace;font-weight:900;">${totalVal}</td></tr>`;
-
-    const lastKey       = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
-    const totalAcumFinal = totales[lastKey]?.acumuladoMonto ?? 0;
-    const totalMensual   = Object.values(totales as any).reduce((s: number, t: any) => s + (t.monto ?? 0), 0);
-
-    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-    <title>Cronograma Valorizado — ${projectName}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:10px;padding:10mm;}
-    table{width:100%;border-collapse:collapse;}@media print{@page{size:A3 landscape;margin:8mm;}}</style>
-    </head><body>
-    <h2 style="font-size:12px;font-weight:900;text-transform:uppercase;margin-bottom:2px;">Cronograma de Ejecución Físico Valorizado</h2>
-    <p style="font-size:9px;color:#64748b;margin-bottom:8px;">${projectName}</p>
-    <table><thead><tr>
-        <th style="min-width:28px;text-align:center;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">N°</th>
-        <th style="min-width:60px;text-align:center;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">ÍTEM</th>
-        <th style="min-width:200px;text-align:left;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">DESCRIPCIÓN</th>
-        <th style="min-width:35px;text-align:center;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">UND</th>
-        <th style="min-width:60px;text-align:right;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">METRADO</th>
-        <th style="min-width:65px;text-align:right;padding:3px;background:#0f172a;color:#fff;border:1px solid #334155;">P.U.</th>
-        <th style="min-width:80px;text-align:right;padding:3px;background:#1e3a5f;color:#bfdbfe;border:1px solid #334155;">PARCIAL</th>
-        ${headerCols}
-    </tr></thead><tbody>${bodyRows}</tbody><tfoot>
-        ${footerRow('Valorización Mensual (S/.)',   '#1e3a5f', '#fff',    periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)), fmtN(totalMensual as number))}
-        ${footerRow('Valorización Acumulada (S/).', '#064e3b', '#6ee7b7', periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)), fmtN(totalAcumFinal))}
-        ${footerRow('% Avance Acumulado (Curva S)', '#0f172a', '#34d399', periodos.map((p: any) => { const pct = totales[p.key]?.acumuladoPorcentaje ?? 0; return pct > 0 ? pct.toFixed(2) + '%' : ''; }), '100%')}
-    </tfoot></table></body></html>`;
-
-    const win = window.open('', '_blank', 'width=1200,height=800');
-    if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 600); }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,7 +112,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         window.location.href = url.toString();
     }, [modoCalculo]);
 
-    // ── EXPORTACIONES ─────────────────────────────────────────────────────────
+    // ── EXPORTACIONES (usando las nuevas funciones) ──────────────────────────
     const handleExportExcel = useCallback(() => {
         exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem);
     }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem]);

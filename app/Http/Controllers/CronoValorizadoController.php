@@ -83,6 +83,7 @@ class CronoValorizadoController extends Controller
             'unidad'      => $f->unidad ?? '',
             'metrado'     => 0.0,
             'precio'      => 0.0,
+            'updated_at'  => $f->updated_at ?? now(),
         ])->keyBy('id');
 
         // ── 4. Determinar períodos (min fecha / max fecha) ───────────────────
@@ -169,8 +170,7 @@ class CronoValorizadoController extends Controller
         $db           = $costoProject->database_name;
 
         // obtener el presupuesto_id desde cronograma_general para este project_id
-
-        $cronoGeneral =DB::connection('mysql')
+        $cronoGeneral = DB::connection('mysql')
             ->table("{$db}.cronograma_general")
             ->where('project_id', $projectId)
             ->first();
@@ -178,8 +178,47 @@ class CronoValorizadoController extends Controller
         // si no se encuentra, se va usar el id 2 (que existe en presupuestos)
         $presupuestoId = $cronoGeneral ? ($cronoGeneral->presupuesto_id ?? 2) : 2;
 
+        // 🔥 SINCRONIZACIÓN BIDIRECCIONAL: Obtener costos actuales para comparar
+        $costosActualesGeneral = DB::connection('mysql')
+            ->table("{$db}.cronograma_general")
+            ->where('project_id', $projectId)
+            ->get(['partida', 'costo', 'updated_at'])
+            ->keyBy('partida');
 
-        DB::connection('mysql')->transaction(function () use ($db, $presupuestoId, $items) {
+        $costosActualesPresupuesto = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general")
+            ->where('presupuesto_id', $presupuestoId)
+            ->whereNull('deleted_at')
+            ->get(['partida', 'parcial', 'updated_at'])
+            ->keyBy('partida');
+
+        DB::connection('mysql')->transaction(function () use ($db, $presupuestoId, $items, $projectId, $costosActualesGeneral, $costosActualesPresupuesto) {
+            
+            // 🔥 PASO 1: Sincronizar costos bidireccionalmente antes de guardar valorizado
+            foreach ($items as $item) {
+                $partida = $item['item'];
+                $costoNuevo = (float) ($item['parcial'] ?? 0);
+                
+                $costoGeneral = $costosActualesGeneral->get($partida);
+                $costoPresupuesto = $costosActualesPresupuesto->get($partida);
+                
+                if ($costoGeneral && $costoPresupuesto) {
+                    $this->sincronizarCostoPartida(
+                        $db,
+                        $presupuestoId,
+                        $projectId,
+                        $partida,
+                        (float) $costoGeneral->costo,
+                        (float) $costoPresupuesto->parcial,
+                        $costoGeneral->updated_at,
+                        $costoPresupuesto->updated_at
+                    );
+                }
+            }
+            
+            // 🔥 PASO 2: Recalcular distribuciones con los costos sincronizados
+            $items = $this->recalcularDistribuciones($items, $projectId, $db);
+            
             // Borrar los existentes para este presupuesto
             DB::connection('mysql')
                 ->table("{$db}.cronograma_valorizado")
@@ -570,8 +609,23 @@ class CronoValorizadoController extends Controller
             $task     = $tasks->get($id) ?? [];
 
             $pItem   = $presupuesto->get($partida);
-            // Usar parcial de presupuesto_general (metrado × precio_unitario)
-            $parcial = $pItem ? (float) ($pItem->parcial ?? $pItem->costo_directo ?? 0) : (float) ($task['cost'] ?? 0);
+            
+            // 🔥 REGLA BIDIRECCIONAL: El último en editar define el costo
+            $costoGeneral = (float) ($task['cost'] ?? 0);
+            $costoPresupuesto = $pItem ? (float) ($pItem->parcial ?? 0) : 0;
+            
+            $fechaGeneral = $task['updated_at'] ?? $row->updated_at ?? '1970-01-01';
+            $fechaPresupuesto = $pItem->updated_at ?? '1970-01-01';
+            
+            $fechaGeneralCarbon = Carbon::parse($fechaGeneral);
+            $fechaPresupuestoCarbon = Carbon::parse($fechaPresupuesto);
+            
+            if ($fechaGeneralCarbon->gt($fechaPresupuestoCarbon)) {
+                $parcial = $costoGeneral;  // Gana el general
+            } else {
+                $parcial = $costoPresupuesto;  // Gana el presupuesto
+            }
+            
             $isLeaf  = $pItem ? (bool) ($pItem->is_leaf ?? true) : false;
 
             $valRow = $valorizadoGuardado->get($partida);
@@ -733,6 +787,119 @@ class CronoValorizadoController extends Controller
             }
         }
 
+        return $items;
+    }
+
+    // =========================================================================
+    // 🔥 NUEVOS MÉTODOS PARA SINCRONIZACIÓN BIDIRECCIONAL
+    // =========================================================================
+
+    /**
+     * 🔄 Sincronización bidireccional entre presupuesto_general y cronograma_general
+     * 
+     * Principio: El último en editar (comparando updated_at) es la fuente de verdad.
+     * Si cronograma_general.costo cambió, actualizamos presupuesto_general.precio_unitario
+     * Si presupuesto_general.parcial cambió, actualizamos cronograma_general.costo
+     */
+    private function sincronizarCostoPartida(
+        string $db,
+        int $presupuestoId,
+        int $projectId,
+        string $partida,
+        float $costoGeneral,
+        float $costoPresupuesto,
+        string $fechaGeneralUpdated,
+        string $fechaPresupuestoUpdated
+    ): void {
+        $fechaGeneral = Carbon::parse($fechaGeneralUpdated);
+        $fechaPresupuesto = Carbon::parse($fechaPresupuestoUpdated);
+        
+        // Comparar quién fue el último en editar (con tolerancia de 1 segundo)
+        if ($fechaGeneral->gt($fechaPresupuesto)) {
+            // El usuario editó cronograma_general.costo → actualizamos presupuesto_general
+            $presupuestoRow = DB::connection('mysql')
+                ->table("{$db}.presupuesto_general")
+                ->where('presupuesto_id', $presupuestoId)
+                ->where('partida', $partida)
+                ->whereNull('deleted_at')
+                ->first();
+            
+            if ($presupuestoRow && $presupuestoRow->metrado > 0) {
+                $nuevoPrecio = $costoGeneral / $presupuestoRow->metrado;
+                DB::connection('mysql')
+                    ->table("{$db}.presupuesto_general")
+                    ->where('id', $presupuestoRow->id)
+                    ->update([
+                        'precio_unitario' => round($nuevoPrecio, 4),
+                        'parcial' => $costoGeneral,
+                        'updated_at' => now(),
+                    ]);
+            }
+        } 
+        elseif ($fechaPresupuesto->gt($fechaGeneral)) {
+            // El usuario editó presupuesto_general → actualizamos cronograma_general.costo
+            DB::connection('mysql')
+                ->table("{$db}.cronograma_general")
+                ->where('project_id', $projectId)
+                ->where('partida', $partida)
+                ->update([
+                    'costo' => $costoPresupuesto,
+                    'updated_at' => now(),
+                ]);
+        }
+        // Si son iguales o diferencia menor a 1 segundo, no hacer nada (están sincronizados)
+    }
+
+    /**
+     * 🔥 Recalcula la distribución mensual de todas las partidas
+     * usando las fechas desde cronograma_general y los costos actualizados
+     */
+    private function recalcularDistribuciones(array $items, int $projectId, string $db): array
+    {
+        // Obtener las fechas de inicio/fin desde cronograma_general
+        $tareas = DB::connection('mysql')
+            ->table("{$db}.cronograma_general")
+            ->where('project_id', $projectId)
+            ->get()
+            ->keyBy('partida');
+        
+        // Generar periodos nuevamente para tener las claves correctas
+        $fechas = $tareas->filter(fn($t) => !empty($t->fecha_inicio) && !empty($t->fecha_fin));
+        $minFecha = $fechas->min(fn($t) => $t->fecha_inicio);
+        $maxFecha = $fechas->max(fn($t) => $t->fecha_fin);
+        
+        $inicio = $minFecha ? Carbon::parse($minFecha)->startOfMonth() : now()->startOfMonth();
+        $fin = $maxFecha ? Carbon::parse($maxFecha)->endOfMonth() : $inicio->copy()->addMonths(5);
+        
+        $periodos = $this->generarPeriodosCalendario($inicio, $fin);
+        $clavesPeriodos = array_column($periodos, 'key');
+        
+        foreach ($items as &$item) {
+            $partida = $item['item'];
+            $tarea = $tareas->get($partida);
+            
+            if ($tarea && !empty($tarea->fecha_inicio) && !empty($tarea->fecha_fin)) {
+                $costoReal = (float) ($item['parcial'] ?? 0);
+                
+                if ($costoReal > 0) {
+                    // Recalcular distribución con el costo actualizado
+                    $nuevaDistribucion = $this->distribuirPorDiasCalendario(
+                        $costoReal,
+                        $tarea->fecha_inicio,
+                        $tarea->fecha_fin,
+                        $clavesPeriodos
+                    );
+                    
+                    // Preservar la estructura original de distribución
+                    foreach ($clavesPeriodos as $key) {
+                        if (isset($nuevaDistribucion[$key])) {
+                            $item['distribucion'][$key] = $nuevaDistribucion[$key];
+                        }
+                    }
+                }
+            }
+        }
+        
         return $items;
     }
 }
