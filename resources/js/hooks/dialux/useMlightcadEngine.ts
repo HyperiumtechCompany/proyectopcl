@@ -31,6 +31,27 @@ const WORKER_URLS = {
     mtextRender: '/cad-workers/mtext-renderer-worker.js',
 };
 
+// DXF R2000 mínimo válido: pasa el parser de mlightcad sin errores de worker.
+// Usar openDocument con este buffer evita el hack de _context y cierra
+// correctamente el canal de mensajes con los workers.
+const BLANK_DXF_CONTENT = [
+    '0', 'SECTION', '2', 'HEADER',
+    '9', '$ACADVER', '1', 'AC1015',
+    '9', '$INSUNITS', '70', '4',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'TABLES',
+    '0', 'TABLE', '2', 'LTYPE', '70', '1',
+    '0', 'LTYPE', '2', 'CONTINUOUS', '70', '0', '3', 'Solid line', '72', '65', '73', '0', '40', '0.0',
+    '0', 'ENDTAB',
+    '0', 'TABLE', '2', 'LAYER', '70', '1',
+    '0', 'LAYER', '2', '0', '70', '0', '62', '7', '6', 'CONTINUOUS',
+    '0', 'ENDTAB',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES',
+    '0', 'ENDSEC',
+    '0', 'EOF',
+].join('\n') + '\n';
+
 // â”€â”€â”€ Estado a nivel mÃ³dulo (singleton) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _docManager: AcApDocManager | null = null;
@@ -44,10 +65,8 @@ interface ViewApi {
     center?: { x: number; y: number };
     zoom?: number;
     internalCamera?: { zoom?: number };
-    screenToWorld?: (point: { x: number; y: number }) => {
-        x: number;
-        y: number;
-    };
+    screenToWorld?: (point: { x: number; y: number }) => { x: number; y: number };
+    worldToScreen?: (point: { x: number; y: number }) => { x: number; y: number };
     flyTo?: (point: { x: number; y: number }, scale?: number) => void;
     zoomToFitDrawing?: (timeout?: number) => void;
     pick?: (
@@ -103,15 +122,30 @@ function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
 }
 
 async function bootstrapDocument(dm: AcApDocManager): Promise<void> {
-    const doc = ensureWritableBlankDocument(dm);
-
-    if (!doc || doc.openMode < AcEdOpenMode.Write) {
-        throw new Error(
-            'No se pudo preparar un documento editable en blanco.',
-        );
+    // Usar openDocument con un DXF mínimo válido para que los workers del motor
+    // reciban y respondan correctamente el canal de mensajes. El hack directo de
+    // _context dejaba los workers colgados, causando "message channel closed".
+    try {
+        const encoder = new TextEncoder();
+        const buffer = encoder.encode(BLANK_DXF_CONTENT).buffer as ArrayBuffer;
+        const ok = await dm.openDocument('nuevo.dxf', buffer, {
+            mode: AcEdOpenMode.Write,
+        });
+        if (ok) {
+            cadLog('Blank DXF document ready via openDocument');
+            return;
+        }
+        cadWarn('openDocument returned false, fallback to legacy bootstrap');
+    } catch (e) {
+        cadWarn('openDocument failed, fallback to legacy bootstrap:', e);
     }
 
-    cadLog('Blank writable document ready');
+    // Fallback: hack de contexto para motores que no aceptan el buffer DXF
+    const doc = ensureWritableBlankDocument(dm);
+    if (!doc || doc.openMode < AcEdOpenMode.Write) {
+        throw new Error('No se pudo preparar un documento editable en blanco.');
+    }
+    cadLog('Blank writable document ready (legacy bootstrap)');
 }
 
 // â”€â”€â”€ Store Reactivo Interno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -288,12 +322,15 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
 
                 _initialized = true;
 
-                useEngineStore.getState().setReady(true);
+                // setReady(true) va DESPUÉS de bootstrapDocument para que
+                // safeExecute y zoomAt no ejecuten comandos CAD antes de que
+                // el documento esté cargado.
                 useEngineStore.getState().setErrorMsg(null);
                 useEngineStore.getState().setCadCommandActive(false);
 
                 await bootstrapDocument(dm);
                 syncDocumentState(dm);
+                useEngineStore.getState().setReady(true);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 cadErr('initViewer error:', err);
@@ -365,9 +402,11 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
         }
 
         try {
-            cadLog('Creating new document');
-            ensureWritableBlankDocument(dm, { forceNew: true });
+            cadLog('Creating new document via blank DXF');
+            useEngineStore.getState().setReady(false);
+            await bootstrapDocument(dm);
             syncDocumentState(dm);
+            useEngineStore.getState().setReady(true);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             cadErr('newDocument error:', err);
@@ -378,8 +417,11 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
     // â”€â”€ safeExecute (interno) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const safeExecute = useCallback((cmd: string): void => {
         const dm = _docManager;
-        if (!dm || !useEngineStore.getState().isReady) {
-            cadWarn('Viewer not ready for command:', cmd);
+        // Requiere documento activo: evita que zoomToWindow y otros comandos
+        // internos de mlightcad crasheen con “zoomTo is undefined” cuando el
+        // motor está listo pero no hay documento cargado aún.
+        if (!dm || !useEngineStore.getState().isReady || !dm.curDocument) {
+            cadWarn('Viewer not ready or no document for command:', cmd);
             return;
         }
         try {
@@ -652,20 +694,14 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
 
                 for (const item of results) {
                     const entity = modelSpace.getIdAt(item.id);
-                    if (!entity?.subGetOsnapPoints) continue;
+                    const subGetOsnapPoints = entity?.subGetOsnapPoints;
+                    if (!subGetOsnapPoints) continue;
 
                     const injectPoints = (gsMark?: string) => {
                         for (const mode of modes) {
                             const startIndex = osnapPoints.length;
-                            // Guard individual: el motor nativo puede lanzar
-                            // "Cannot destructure 'x' of null" cuando la
-                            // entidad tiene geometría interna nula (arcos,
-                            // splines o bloques mal parseados). El try/catch
-                            // exterior no lo intercepta porque el error se
-                            // propaga desde el call stack del motor antes de
-                            // llegar a nuestro wrapper.
                             try {
-                                entity.subGetOsnapPoints(
+                                subGetOsnapPoints.call(entity,
                                     mode,
                                     { ...worldPoint, z: 0 },
                                     {
@@ -732,7 +768,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                         return closest;
                     },
                     null as {
-                        point: { x: number; y: number };
+                        point: { x: number; y: number; z?: number; type?: AcDbOsnapMode };
                         dist: number;
                     } | null,
                 );

@@ -1,6 +1,7 @@
 import {
     en12464Regulations,
     iesnaRegulations,
+    rnePeruRegulations,
     type RawNormativeBranch,
     type RawNormativeLeaf,
 } from './normativaData';
@@ -14,7 +15,14 @@ import {
 } from './lightingCalculations';
 import type { Fixture, Room } from './types';
 
-export type NormativeStandard = 'en_12464' | 'ies_na';
+export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru';
+
+export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
+    en_12464: 'EN 12464-1 (Europa)',
+    ies_na:   'IESNA / IES HB-10 (EE. UU.)',
+    rne_peru: 'RNE EM.010 / CNE (Perú)',
+};
+
 
 export interface NormativeLeafOption {
     id: string;
@@ -86,9 +94,12 @@ function flattenNormativeTree(branches: RawNormativeBranch[]): NormativeLeafOpti
 
 export const normativeOptionsEN = flattenNormativeTree(en12464Regulations);
 export const normativeOptionsIES = flattenNormativeTree(iesnaRegulations);
+export const normativeOptionsPERU = flattenNormativeTree(rnePeruRegulations);
 
 export function getNormativeOptions(standard: NormativeStandard): NormativeLeafOption[] {
-    return standard === 'ies_na' ? normativeOptionsIES : normativeOptionsEN;
+    if (standard === 'ies_na') return normativeOptionsIES;
+    if (standard === 'rne_peru') return normativeOptionsPERU;
+    return normativeOptionsEN;
 }
 
 export function getCategoryOptions(standard: NormativeStandard = 'en_12464'): string[] {
@@ -122,8 +133,8 @@ export function getActivityOptions(
     second?: string,
     third?: string,
 ): NormativeLeafOption[] {
-    const hasStandard = first === 'en_12464' || first === 'ies_na';
-    const standard = hasStandard ? first : 'en_12464';
+    const hasStandard = first === 'en_12464' || first === 'ies_na' || first === 'rne_peru';
+    const standard = hasStandard ? (first as NormativeStandard) : 'en_12464';
     const category = hasStandard ? second : first;
     const section = hasStandard ? third : second;
 

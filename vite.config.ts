@@ -3,17 +3,21 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import laravel from 'laravel-vite-plugin';
-import { defineConfig } from 'vite';
-import type { UserConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     server: {
-        host: '127.0.0.1',
+        host: 'localhost',
         port: 5173,
-        strictPort: true,
+        strictPort: false,
         hmr: {
-            host: '127.0.0.1',
-            port: 5173,
+            host: 'localhost',
+            protocol: 'http',
+        },
+        headers: {
+            // El motor mlightcad registra listeners de 'unload' internamente.
+            // Chrome 117+ los bloquea por defecto (bfcache); permitirlos en self.
+            'Permissions-Policy': 'unload=(self)',
         },
     },
 
@@ -54,5 +58,5 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['resources/js/**/*.test.ts', 'resources/js/**/*.test.tsx'],
-    } as UserConfig['test'],
+    },
 });

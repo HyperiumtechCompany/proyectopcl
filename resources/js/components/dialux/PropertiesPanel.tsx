@@ -240,8 +240,9 @@ const RoomProps: React.FC<{
                         label="Estandar"
                         value={standard}
                         options={[
-                            { value: 'en_12464', label: 'EN 12464-1' },
-                            { value: 'ies_na', label: 'IES/IESNA' },
+                            { value: 'en_12464', label: 'EN 12464-1 (Europa)' },
+                            { value: 'ies_na',   label: 'IESNA / IES HB-10 (EE. UU.)' },
+                            { value: 'rne_peru', label: 'RNE EM.010 / CNE (Perú)' },
                         ]}
                         onChange={handleNormativeStandardChange}
                     />
