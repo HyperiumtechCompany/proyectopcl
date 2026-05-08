@@ -1,9 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface WorkDays {
     lunes: boolean;
@@ -21,7 +17,7 @@ interface Props {
     onApply: (settings: {
         projectStart?: string;
         projectEnd?: string;
-        projectDuration?: number;  
+        projectDuration?: number;
         holidays?: any[];
         workDays?: any;
         workStartTime?: string;
@@ -49,10 +45,6 @@ const DAY_LABELS: [keyof WorkDays, string][] = [
     ['sabado', 'Sábado'],
     ['domingo', 'Domingo'],
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
 
 function buildScaleConfig(topUnit: string, bottomUnit: string): any[] {
     const DAY_FORMAT = '%j %D';
@@ -95,7 +87,6 @@ function readCurrentWorkDays(): WorkDays {
     }
 }
 
-/** Convierte un Date a string "YYYY-MM-DD" para el input type=date */
 function dateToInputValue(date: Date | null | undefined): string {
     if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
     const y = date.getFullYear();
@@ -104,9 +95,6 @@ function dateToInputValue(date: Date | null | undefined): string {
     return `${y}-${m}-${d}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ICONO CALENDARIO
-// ─────────────────────────────────────────────────────────────────────────────
 const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: () => void }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" onClick={onClick}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -114,10 +102,6 @@ const CalendarIcon = ({ className, onClick }: { className?: string; onClick?: ()
     </svg>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PERSISTENCIA — guardamos los últimos valores aplicados en módulo-level
-// para que sobrevivan entre aperturas del modal (no se pierden al cerrar).
-// ─────────────────────────────────────────────────────────────────────────────
 let _savedStart = '';
 let _savedEnd = '';
 let _savedTopUnit = 'month';
@@ -132,15 +116,11 @@ let _savedWorkDays: WorkDays = {
 };
 let _savedDuration: number | null = null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
     const startDateRef = useRef<HTMLInputElement>(null);
     const endDateRef = useRef<HTMLInputElement>(null);
 
-    // Inicializar con los últimos valores guardados
     const [topUnit, setTopUnit] = useState(_savedTopUnit);
     const [bottomUnit, setBottomUnit] = useState(_savedBottomUnit);
     const [workStartTime, setWorkStartTime] = useState(_savedWorkStart);
@@ -162,10 +142,13 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     const [projectDuration, setProjectDuration] = useState<number | null>(null);
     const [calculatedEndDate, setCalculatedEndDate] = useState<string>('');
 
+    // ref para saber si el último cambio fue manual en duración o en días laborables
+    const lastChangedRef = useRef<'duration' | 'days'>('duration');
+
     const FERIADOS_PERU_2026 = [
         { date: '01-01', name: 'Año Nuevo' },
         { date: '19-03', name: 'San José' },
-        { date: '05-01', name: 'Día del Trabajo' },  
+        { date: '05-01', name: 'Día del Trabajo' },
         { date: '29-06', name: 'San Pedro y San Pablo' },
         { date: '28-07', name: 'Fiestas Patrias' },
         { date: '29-07', name: 'Fiestas Patrias' },
@@ -175,15 +158,90 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         { date: '08-12', name: 'Inmaculada Concepción' },
         { date: '25-12', name: 'Navidad' },
     ];
+
     function buildHolidaysForYear(year: number) {
         return FERIADOS_PERU_2026.map(h => ({
-            date: `${year}-${h.date}`,  // ya está bien el formato
+            date: `${year}-${h.date}`,
             name: h.name,
             checked: false,
             custom: false,
         }));
     }
-   
+
+    const calcularFinLaborable = useCallback((fechaInicio: string, diasTotales: number, diasConfig: WorkDays, feriadosList: any[]): string => {
+        if (!fechaInicio || diasTotales <= 0) return '';
+        const inicio = new Date(fechaInicio);
+        if (isNaN(inicio.getTime())) return '';
+
+        const esLaborable: boolean[] = [
+            diasConfig.domingo,
+            diasConfig.lunes,
+            diasConfig.martes,
+            diasConfig.miercoles,
+            diasConfig.jueves,
+            diasConfig.viernes,
+            diasConfig.sabado,
+        ];
+
+        const feriadosSet = new Set<string>();
+        feriadosList.forEach(feriado => {
+            if (feriado.checked && feriado.date) {
+                const fechaFeriado = new Date(feriado.date);
+                if (!isNaN(fechaFeriado.getTime())) {
+                    feriadosSet.add(fechaFeriado.toISOString().split('T')[0]);
+                }
+            }
+        });
+
+        let fechaActual = new Date(inicio);
+        let diasAgregados = 0;
+        while (diasAgregados < diasTotales) {
+            fechaActual.setDate(fechaActual.getDate() + 1);
+            const diaSemana = fechaActual.getDay();
+            const fechaStr = fechaActual.toISOString().split('T')[0];
+            if (esLaborable[diaSemana] && !feriadosSet.has(fechaStr)) diasAgregados++;
+        }
+
+        const year = fechaActual.getFullYear();
+        const month = String(fechaActual.getMonth() + 1).padStart(2, '0');
+        const day = String(fechaActual.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
+
+    const contarDiasLaborables = useCallback((inicio: string, fin: string, diasConfig: WorkDays, feriadosList: any[]): number => {
+        const start = new Date(inicio);
+        const end = new Date(fin);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+
+        const esLaborable: boolean[] = [
+            diasConfig.domingo,
+            diasConfig.lunes,
+            diasConfig.martes,
+            diasConfig.miercoles,
+            diasConfig.jueves,
+            diasConfig.viernes,
+            diasConfig.sabado,
+        ];
+
+        const feriadosSet = new Set<string>();
+        feriadosList.forEach(h => {
+            if (h.checked && h.date) {
+                const f = new Date(h.date);
+                if (!isNaN(f.getTime())) feriadosSet.add(f.toISOString().split('T')[0]);
+            }
+        });
+
+        let fecha = new Date(start);
+        let dias = 0;
+        fecha.setDate(fecha.getDate() + 1);
+        while (fecha <= end) {
+            const str = fecha.toISOString().split('T')[0];
+            if (esLaborable[fecha.getDay()] && !feriadosSet.has(str)) dias++;
+            fecha.setDate(fecha.getDate() + 1);
+        }
+        return Math.max(1, dias);
+    }, []);
+
     useEffect(() => {
         if (!isOpen) return;
         setWorkDays(_savedWorkDays);
@@ -195,30 +253,34 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         setWorkEndTime(_savedWorkEnd);
         setScheduleFromEnd(_savedScheduleFromEnd);
         setProjectDuration(_savedDuration);
-
-        // Restaurar feriados
+        lastChangedRef.current = 'duration';
         if (_savedHolidays.length > 0) {
             setHolidays(_savedHolidays);
         } else {
             setHolidays(buildHolidaysForYear(2026));
         }
-
     }, [isOpen]);
 
-
+    // Cuando cambia duración o fecha inicio → recalcula fecha fin
     useEffect(() => {
+        if (lastChangedRef.current !== 'duration') return;
         if (projectStart && projectDuration && projectDuration > 0) {
-            const startDate = new Date(projectStart);
-            // Cálculo simple (sin días hábiles por ahora)
-            const endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + projectDuration);
-            setCalculatedEndDate(endDate.toISOString().split('T')[0]);
+            const fecha = calcularFinLaborable(projectStart, projectDuration, workDays, holidays);
+            setCalculatedEndDate(fecha);
         } else {
             setCalculatedEndDate('');
         }
     }, [projectStart, projectDuration]);
 
-    const openCalendar = (ref: React.RefObject<HTMLInputElement>) => {
+    // Cuando cambia días laborables o feriados → recalcula DURACIÓN manteniendo fecha fin
+    useEffect(() => {
+        lastChangedRef.current = 'days';
+        if (!projectStart || !calculatedEndDate) return;
+        const nueva = contarDiasLaborables(projectStart, calculatedEndDate, workDays, holidays);
+        setProjectDuration(nueva);
+    }, [workDays, holidays]);
+
+    const openCalendar = (ref: React.RefObject<HTMLInputElement | null>) => {
         if (!ref.current) return;
         if (typeof ref.current.showPicker === 'function') {
             ref.current.showPicker();
@@ -230,10 +292,8 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     const toggleDay = (key: keyof WorkDays) =>
         setWorkDays((prev) => ({ ...prev, [key]: !prev[key] }));
 
-    // ── Aplicar ajustes ───────────────────────────────────────────────────────
     const aplicarAjustes = () => {
         try {
-            // ✅ Asegurar que projectDuration es un número entero
             const duracionValida = projectDuration !== null && !isNaN(projectDuration) && projectDuration > 0
                 ? parseInt(String(projectDuration), 10)
                 : null;
@@ -247,13 +307,13 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             _savedScheduleFromEnd = scheduleFromEnd;
             _savedWorkDays = { ...workDays };
             _savedHolidays = holidays;
-            _savedDuration = duracionValida;  
+            _savedDuration = duracionValida;
             (gantt.config as any).scales = buildScaleConfig(topUnit, bottomUnit);
 
             onApply({
                 projectStart: projectStart || undefined,
                 projectEnd: projectEnd || undefined,
-                projectDuration: duracionValida ?? undefined, 
+                projectDuration: duracionValida ?? undefined,
                 holidays,
                 workDays: { ...workDays },
                 workStartTime,
@@ -266,6 +326,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             onClose();
         }
     };
+
     if (!isOpen) return null;
 
     return (
@@ -274,8 +335,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-
-                {/* Cabecera */}
                 <div className="bg-gray-100 px-5 py-4 border-b flex justify-between items-center">
                     <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
                         Configuración del Proyecto
@@ -286,8 +345,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                 </div>
 
                 <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-
-                    {/* Escala de tiempo */}
                     <section>
                         <SectionTitle>Escala de Tiempo</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -308,7 +365,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Duración del Proyecto */}
                     <section>
                         <SectionTitle>Duración del Proyecto</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -318,7 +374,10 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                         ref={startDateRef}
                                         type="date"
                                         value={projectStart}
-                                        onChange={(e) => setProjectStart(e.target.value)}
+                                        onChange={(e) => {
+                                            lastChangedRef.current = 'duration';
+                                            setProjectStart(e.target.value);
+                                        }}
                                         className={`${inputCls} pl-9`}
                                     />
                                     <CalendarIcon
@@ -331,7 +390,10 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                 <input
                                     type="number"
                                     value={projectDuration === null ? '' : projectDuration}
-                                    onChange={(e) => setProjectDuration(e.target.value === '' ? null : parseInt(e.target.value))}
+                                    onChange={(e) => {
+                                        lastChangedRef.current = 'duration';
+                                        setProjectDuration(e.target.value === '' ? null : parseInt(e.target.value));
+                                    }}
                                     min="1"
                                     placeholder="Ej: 180"
                                     className={inputCls}
@@ -358,7 +420,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </label>
                     </section>
 
-                    {/* Días laborales */}
                     <section>
                         <SectionTitle>Días Laborales</SectionTitle>
                         <div className="grid grid-cols-4 gap-3">
@@ -382,7 +443,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Días Feriados */}
                     <section style={{ position: 'relative' }} className="mb-6">
                         <SectionTitle>Días Feriados</SectionTitle>
                         <div className="relative">
@@ -399,7 +459,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
                             {holidayOpen && (
                                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden">
-                                    {/* Toolbar del dropdown */}
                                     <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
                                         <span className="text-[10px] text-gray-700 font-medium">Año:</span>
                                         <input
@@ -424,7 +483,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                         </button>
                                     </div>
 
-                                    {/* Formulario agregar personalizado */}
                                     {showAddForm && (
                                         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-blue-50">
                                             <input
@@ -456,7 +514,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                         </div>
                                     )}
 
-                                    {/* Lista de feriados */}
                                     <div className="max-h-44 overflow-y-auto">
                                         {holidays.map((h, i) => (
                                             <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-50 hover:bg-gray-50">
@@ -486,7 +543,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                                         ))}
                                     </div>
 
-                                    {/* Pie del dropdown */}
                                     <div className="px-3 py-2 border-t border-gray-100 flex justify-end bg-gray-50">
                                         <button
                                             type="button"
@@ -501,7 +557,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                         </div>
                     </section>
 
-                    {/* Horario laboral */}
                     <section>
                         <SectionTitle>Horario Laboral</SectionTitle>
                         <div className="grid grid-cols-2 gap-4">
@@ -515,7 +570,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
                     </section>
                 </div>
 
-                {/* Pie */}
                 <div className="bg-gray-50 px-5 py-4 border-t flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase hover:text-gray-700 transition-colors">
                         Cancelar
@@ -529,9 +583,6 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTES
-// ─────────────────────────────────────────────────────────────────────────────
 const selectCls = 'w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
 const inputCls = 'w-full border border-gray-300 rounded-md p-2 text-sm text-gray-900 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
 

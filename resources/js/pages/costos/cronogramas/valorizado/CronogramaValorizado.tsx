@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-
+import * as XLSX from 'xlsx';
 import { ValorizadoProps, ModoCalculo } from './types';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import HeaderValorizado from './components/HeaderValorizado';
