@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-
+import * as XLSX from 'xlsx';
 import { ValorizadoProps, ModoCalculo } from './types';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import HeaderValorizado from './components/HeaderValorizado';
@@ -44,53 +44,61 @@ const exportarExcel = (
     const fmtN = (v: number) => (v ?? 0).toFixed(2);
     const fmtP = (v: number, p: number) => p > 0 ? ((v / p) * 100).toFixed(4) : '0.0000';
 
-    const headers = [
-        'N°', 'ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'PRECIO UNITARIO', 'PARCIAL (S/.)',
-        ...periodos.map((p: any) => `${p.label} (${p.labelCal})`),
-        'TOTAL (S/.)',
+    const rowsArr: any[][] = [
+        ["CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO"],
+        ["PROYECTO:", projectName],
+        ["UNIDAD EJECUTORA:", "MUNICIPALIDAD PROVINCIAL"],
+        ["UBICACIÓN:", "HUÁNUCO"],
+        ["PLAZO DE EJECUCIÓN:", "450 DÍAS CALENDARIO"],
+        [], 
+        [
+            'N°', 'ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'PRECIO UNITARIO', 'PARCIAL (S/.)',
+            ...periodos.map((p: any) => p.label),
+            'TOTAL (S/.)'
+        ]
     ];
-
-    const rows: string[][] = [];
 
     items.forEach((item: any, i: number) => {
         const row = [
-            String(i + 1), item.item, item.descripcion, item.und || '',
-            fmtN(item.metrado), fmtN(item.precio), fmtN(item.parcial),
+            i + 1, 
+            item.item, 
+            item.descripcion, 
+            item.und || '',
+            item.metrado, 
+            item.precio, 
+            item.parcial,
         ];
         periodos.forEach((p: any) => {
             const monto = item.distribucion?.[p.key]?.monto ?? 0;
-            row.push(viewMode === 'monto' ? fmtN(monto) : fmtP(monto, item.parcial));
+            row.push(viewMode === 'monto' ? monto : (monto / item.parcial));
         });
-        // Columna TOTAL por fila
-        row.push(fmtN(totalesPorItem[item.id] ?? 0));
-        rows.push(row);
+        row.push(totalesPorItem[item.id] ?? 0);
+        rowsArr.push(row);
     });
 
-    const pushFooter = (label: string, vals: string[]) =>
-        rows.push(['', '', '', '', '', label, '', ...vals]);
+    
+    const csvContent = rowsArr.map(row => 
+        row.map(cell => {
+            const text = String(cell ?? '');
+           
+            if (text.includes(';') || text.includes('\n')) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        }).join(';') 
+    ).join('\n');
 
-    pushFooter('VALORIZACIÓN MENSUAL (S/.)',   periodos.map((p: any) => fmtN(totales[p.key]?.monto ?? 0)));
-    pushFooter('% AVANCE MENSUAL',             periodos.map((p: any) => fmtN(totales[p.key]?.porcentaje ?? 0) + '%'));
-    pushFooter('VALORIZACIÓN ACUMULADA (S/.)', periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoMonto ?? 0)));
-    pushFooter('% AVANCE ACUMULADO',           periodos.map((p: any) => fmtN(totales[p.key]?.acumuladoPorcentaje ?? 0) + '%'));
-
-    const csv = [
-        [`CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO`],
-        [`PROYECTO: ${projectName}`],
-        [],
-        headers,
-        ...rows,
-    ].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+   
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
     a.download = `Cronograma_Valorizado_${projectName.replace(/\s+/g, '_')}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
 };
-
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORTACIÓN PDF
 // ─────────────────────────────────────────────────────────────────────────────

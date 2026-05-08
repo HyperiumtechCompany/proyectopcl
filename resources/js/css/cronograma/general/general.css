@@ -147,22 +147,3 @@ select,select option{color:#1e293b !important;background:white !important}
 .gantt_grid_head_cell:hover .pcl-hide-col {
     display: flex !important;
 }
-/* Forzar que el scroll horizontal sea siempre visible */
-.gantt_container {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-}
-
-.gantt_grid_data {
-    overflow-x: auto !important;
-}
-
-.gantt_data_area {
-    overflow-x: auto !important;
-}
-
-/* Para la barra de scroll horizontal en la parte inferior */
-.gantt_grid_data .gantt_scroll {
-    display: block !important;
-    height: 12px !important;
-}

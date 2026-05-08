@@ -80,7 +80,6 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
 
     const existingLinks = gantt.getLinks().filter((l: any) => String(l.target) === String(taskId));
 
-    // Parsear el texto en pares {source, type}
     const newPredecessors: { source: any; type: string }[] = [];
 
     if (rawText?.trim()) {
@@ -105,17 +104,16 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
     const existingKeys = new Set(existingLinks.map((l: any) => `${l.source}|${l.type}`));
     const newKeys      = new Set(newPredecessors.map((p) => `${p.source}|${p.type}`));
 
-    // Sin cambios → no hacer nada
+   
     if (existingKeys.size === newKeys.size && [...existingKeys].every((k) => newKeys.has(k))) return;
 
-    // Eliminar links obsoletos
     for (const link of existingLinks) {
         if (!newKeys.has(`${link.source}|${link.type}`)) {
             try { gantt.deleteLink(link.id); } catch { /* ok */ }
         }
     }
 
-    // Crear nuevos links y ajustar fechas
+  
     const duration = Number(targetTask.duration) || 5;
     for (const pred of newPredecessors) {
         if (!existingKeys.has(`${pred.source}|${pred.type}`)) {
@@ -195,7 +193,7 @@ export function markCriticalTasks(): void {
         return;
     }
 
-    // Usar API nativa si está disponible
+  
     if (typeof gantt.isCriticalTask === 'function') {
         try {
             gantt.eachTask((task: any) => { task._critical = gantt.isCriticalTask(task); });
@@ -203,7 +201,6 @@ export function markCriticalTasks(): void {
         } catch { /* fallback manual */ }
     }
 
-    // Fallback: trazar hacia atrás desde las tareas con mayor end_date
     let maxEndTime = 0;
     gantt.eachTask((task: any) => {
         if (!gantt.hasChild(task.id) && task.end_date) {
