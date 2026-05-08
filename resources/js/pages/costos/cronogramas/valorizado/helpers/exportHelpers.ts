@@ -107,7 +107,7 @@ export async function exportarExcel(
 
     const ws = wb.addWorksheet('Cronograma Valorizado', {
         pageSetup: {
-            paperSize:   9,   // A3 (En ExcelJS PaperSize 8 es A3, 9 es A4)
+            paperSize:   5,   // A3
             orientation: 'landscape',
             fitToPage:   true,
             fitToWidth:  1,

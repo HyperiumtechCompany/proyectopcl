@@ -314,6 +314,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 3. Ruta para GUARDAR el Gantt
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
     Route::post('/module/crono_valorizado/save', [CronoValorizadoController::class, 'store'])->name('proyectos.cronograma.valorizado.save');
+    Route::delete('/cronograma/valorizado/destroy', [CronoValorizadoController::class, 'destroy'])->name('proyectos.cronograma.valorizado.destroy');
 
     // 4. Otras rutas del módulo de materiales
     Route::post('/module/crono_materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
