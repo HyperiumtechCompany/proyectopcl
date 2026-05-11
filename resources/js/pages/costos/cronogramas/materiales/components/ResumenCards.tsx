@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Info, TrendingUp } from 'lucide-react';
+import { ResumenProyecto } from '../types';
 
 interface CurvaSPoint {
     mes:        string;
@@ -14,6 +15,7 @@ interface Props {
     sinGantt:     boolean;
     curvaSData:   CurvaSPoint[];
     mesPicoKey:   string;
+    resumen?:     ResumenProyecto;  // Añadido para consistencia
 }
 
 const fmt = (v: number) =>

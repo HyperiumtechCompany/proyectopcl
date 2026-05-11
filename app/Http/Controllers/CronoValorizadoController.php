@@ -831,7 +831,7 @@ class CronoValorizadoController extends Controller
                     ->where('id', $presupuestoRow->id)
                     ->update([
                         'precio_unitario' => round($nuevoPrecio, 4),
-                        'parcial' => $costoGeneral,
+                        //'parcial' => $costoGeneral,
                         'updated_at' => now(),
                     ]);
             }
