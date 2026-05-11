@@ -382,7 +382,7 @@ class CronoValorizadoController extends Controller
 
         foreach ($diasPorMes as $key => $dias) {
             if (!isset($distribucion[$key])) continue;
-            $monto = floor(($parcial * $dias / $totalDias) * 100) / 100;
+            $monto = round($parcial * $dias / $totalDias, 2);
             $distribucion[$key]['monto']      = $monto;
             $distribucion[$key]['porcentaje'] = round(($dias / $totalDias) * 100, 6);
             $sumaAsignada += $monto;
@@ -440,7 +440,7 @@ class CronoValorizadoController extends Controller
         $ultimaKey    = null;
 
         foreach ($diasPorPeriodo as $key => $dias) {
-            $monto = floor(($parcial * $dias / $totalDias) * 100) / 100;
+            $monto = round($parcial * $dias / $totalDias, 2);
             $distribucion[$key]['monto']      = $monto;
             $distribucion[$key]['porcentaje'] = round(($dias / $totalDias) * 100, 6);
             $sumaAsignada += $monto;

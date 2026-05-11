@@ -94,7 +94,7 @@ const HeaderValorizado: React.FC<Props> = ({
                 ))}
             </div>
 
-            {/* Exportar Excel */}
+            {/* Exportar Excel */}  
             <button
                 onClick={onExportExcel}
                 className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-black rounded-xl border border-emerald-200 transition-all"

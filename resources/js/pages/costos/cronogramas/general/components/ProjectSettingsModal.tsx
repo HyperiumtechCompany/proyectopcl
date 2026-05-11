@@ -170,7 +170,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
     const calcularFinLaborable = useCallback((fechaInicio: string, diasTotales: number, diasConfig: WorkDays, feriadosList: any[]): string => {
         if (!fechaInicio || diasTotales <= 0) return '';
-        const inicio = new Date(fechaInicio);
+        const inicio = new Date(fechaInicio + 'T00:00:00');
         if (isNaN(inicio.getTime())) return '';
 
         const esLaborable: boolean[] = [
@@ -195,11 +195,17 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
         let fechaActual = new Date(inicio);
         let diasAgregados = 0;
+
+        // ✅ Contar el día de inicio SIN saltarlo
         while (diasAgregados < diasTotales) {
-            fechaActual.setDate(fechaActual.getDate() + 1);
             const diaSemana = fechaActual.getDay();
             const fechaStr = fechaActual.toISOString().split('T')[0];
-            if (esLaborable[diaSemana] && !feriadosSet.has(fechaStr)) diasAgregados++;
+            if (esLaborable[diaSemana] && !feriadosSet.has(fechaStr)) {
+                diasAgregados++;
+            }
+            if (diasAgregados < diasTotales) {
+                fechaActual.setDate(fechaActual.getDate() + 1);
+            }
         }
 
         const year = fechaActual.getFullYear();
@@ -233,15 +239,17 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
         let fecha = new Date(start);
         let dias = 0;
-        fecha.setDate(fecha.getDate() + 1);
+
+        // ✅ CORRECCIÓN: Contar el día de inicio también
         while (fecha <= end) {
             const str = fecha.toISOString().split('T')[0];
-            if (esLaborable[fecha.getDay()] && !feriadosSet.has(str)) dias++;
+            if (esLaborable[fecha.getDay()] && !feriadosSet.has(str)) {
+                dias++;
+            }
             fecha.setDate(fecha.getDate() + 1);
         }
         return Math.max(1, dias);
     }, []);
-
     useEffect(() => {
         if (!isOpen) return;
         setWorkDays(_savedWorkDays);
