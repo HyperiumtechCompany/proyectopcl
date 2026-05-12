@@ -10,7 +10,7 @@ export const LINK_LABELS: Record<string, string> = {
 
 export const LINK_NAMES: Record<string, string> = {
     '0': 'Fin-Comienzo', '1': 'Comienzo-Comienzo',
-    '2': 'Fin-Fin',      '3': 'Comienzo-Fin',
+    '2': 'Fin-Fin', '3': 'Comienzo-Fin',
 };
 
 export const LINK_TYPE_MAP: Record<string, string> = {
@@ -22,11 +22,11 @@ export const LINK_TYPE_MAP: Record<string, string> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MARKER_START_ID = 'marker_project_start';
-const MARKER_END_ID   = 'marker_project_end';
+const MARKER_END_ID = 'marker_project_end';
 
 export function setProjectMarkers(startDate: Date | null, endDate: Date | null): void {
     try { (gantt as any).deleteMarker(MARKER_START_ID); } catch { /* ok */ }
-    try { (gantt as any).deleteMarker(MARKER_END_ID);   } catch { /* ok */ }
+    try { (gantt as any).deleteMarker(MARKER_END_ID); } catch { /* ok */ }
 
     if (startDate) {
         (gantt as any).addMarker({
@@ -36,11 +36,12 @@ export function setProjectMarkers(startDate: Date | null, endDate: Date | null):
             text: 'INICIO',
         });
     }
-
     if (endDate) {
+        const markerDate = new Date(endDate);
+        markerDate.setHours(0, 0, 0, 0);
         (gantt as any).addMarker({
             id: MARKER_END_ID,
-            start_date: new Date(endDate),
+            start_date: markerDate,
             css: 'pcl-marker-end',
             text: 'LÍMITE',
         });
@@ -102,9 +103,9 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
     }
 
     const existingKeys = new Set(existingLinks.map((l: any) => `${l.source}|${l.type}`));
-    const newKeys      = new Set(newPredecessors.map((p) => `${p.source}|${p.type}`));
+    const newKeys = new Set(newPredecessors.map((p) => `${p.source}|${p.type}`));
 
-   
+
     if (existingKeys.size === newKeys.size && [...existingKeys].every((k) => newKeys.has(k))) return;
 
     for (const link of existingLinks) {
@@ -113,7 +114,7 @@ export function parsePredecessorText(taskId: any, rawText: string): void {
         }
     }
 
-  
+
     const duration = Number(targetTask.duration) || 5;
     for (const pred of newPredecessors) {
         if (!existingKeys.has(`${pred.source}|${pred.type}`)) {
@@ -145,24 +146,24 @@ export function adjustTaskDatesByLinkType(
     switch (type) {
         case '0': // FC — Fin → Inicio
             newStart = new Date(sourceTask.end_date);
-            newEnd   = new Date(newStart);
+            newEnd = new Date(newStart);
             newEnd.setDate(newStart.getDate() + duration);
             break;
 
         case '1': // CC — Inicio → Inicio
             newStart = new Date(sourceTask.start_date);
-            newEnd   = new Date(newStart);
+            newEnd = new Date(newStart);
             newEnd.setDate(newStart.getDate() + duration);
             break;
 
         case '2': // FF — Fin → Fin
-            newEnd   = new Date(sourceTask.end_date);
+            newEnd = new Date(sourceTask.end_date);
             newStart = new Date(newEnd);
             newStart.setDate(newEnd.getDate() - duration);
             break;
 
         case '3': // CF — Inicio → Fin
-            newEnd   = new Date(sourceTask.start_date);
+            newEnd = new Date(sourceTask.start_date);
             newStart = new Date(newEnd);
             newStart.setDate(newEnd.getDate() - duration);
             break;
@@ -174,8 +175,8 @@ export function adjustTaskDatesByLinkType(
     if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) return;
 
     targetTask.start_date = newStart;
-    targetTask.end_date   = newEnd;
-    targetTask.duration   = duration;
+    targetTask.end_date = newEnd;
+    targetTask.duration = duration;
 
     gantt.updateTask(targetTask.id);
     gantt.render();
@@ -193,7 +194,7 @@ export function markCriticalTasks(): void {
         return;
     }
 
-  
+
     if (typeof gantt.isCriticalTask === 'function') {
         try {
             gantt.eachTask((task: any) => { task._critical = gantt.isCriticalTask(task); });
@@ -274,7 +275,7 @@ export function enforceProjectBounds(taskId: any): boolean {
     if (!gantt.config.auto_scheduling) return false;
 
     const projectStart: Date | null = (window as any).__projectRealStartDate ?? gantt.config.start_date ?? null;
-    const projectEnd:   Date | null = (window as any).__projectLimitDate     ?? gantt.config.end_date   ?? null;
+    const projectEnd: Date | null = (window as any).__projectLimitDate ?? gantt.config.end_date ?? null;
     if (!projectStart || !projectEnd) return false;
 
     let task: any;
@@ -283,7 +284,7 @@ export function enforceProjectBounds(taskId: any): boolean {
 
     let changed = false;
     const startLimit = new Date(projectStart).getTime();
-    const endLimit   = new Date(projectEnd).getTime();
+    const endLimit = new Date(projectEnd).getTime();
 
     if (task.start_date && new Date(task.start_date).getTime() < startLimit) {
         task.start_date = new Date(projectStart);
@@ -312,20 +313,6 @@ export function enforceProjectBounds(taskId: any): boolean {
 export function applyAutoScheduling(): void {
     try {
         if (gantt.getTaskByTime().length === 0) return;
-
-        gantt.batchUpdate(() => {
-            gantt.eachTask((task: any) => {
-                if (gantt.hasChild(task.id) || !task.start_date || !task.end_date) return;
-                try {
-                    const d = gantt.calculateDuration({ start_date: task.start_date, end_date: task.end_date, task });
-                    if (d > 0 && d !== task.duration) {
-                        task.duration = d;
-                        gantt.updateTask(task.id);
-                    }
-                } catch { /* ignorar tarea inválida */ }
-            });
-        });
-
         gantt.render();
     } catch (e) {
         console.warn('[applyAutoScheduling]', e);
@@ -337,11 +324,11 @@ export function applyAutoScheduling(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function toggleGanttMode(isAuto: boolean): void {
-    gantt.config.auto_scheduling        = isAuto;
+    gantt.config.auto_scheduling = isAuto;
     gantt.config.auto_scheduling_strict = isAuto;
 
     const projectStart: Date | null = (window as any).__projectRealStartDate ?? null;
-    const limitDate:    Date | null = (window as any).__projectLimitDate     ?? null;
+    const limitDate: Date | null = (window as any).__projectLimitDate ?? null;
 
     if (isAuto) {
         gantt.config.limit_view = true;

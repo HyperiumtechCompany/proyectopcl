@@ -158,6 +158,7 @@ const TablaValorizada: React.FC<Props> = ({
     totalesPorItem = {},
     totalGeneralPeriodos = 0,
 }) => {
+    console.log(diasPorMes);
     const tableRef = useRef<HTMLDivElement>(null);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -189,6 +190,7 @@ const TablaValorizada: React.FC<Props> = ({
 
     // Total acumulado de la fila VALORIZACIÓN ACUMULADA (último período)
     const lastKey          = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
+    console.log(lastKey);
     const totalAcumuladoFinal = totales[lastKey]?.acumuladoMonto ?? 0;
 
     return (
@@ -442,6 +444,7 @@ const TablaValorizada: React.FC<Props> = ({
                         </tr>
 
                         {/* Días Trabajados */}
+                        
                         {diasPorMes && (
                             <tr className="bg-indigo-900 text-indigo-100">
                                 <td colSpan={7} className="p-2 text-right border border-indigo-800 text-[10px] uppercase tracking-wider font-bold">
@@ -449,6 +452,7 @@ const TablaValorizada: React.FC<Props> = ({
                                 </td>
                                 <td className="border border-indigo-800" />
                                 {periodos.map(p => {
+                                    console.log(p.key, diasPorMes[p.key]);
                                     const dias = diasPorMes[p.key] ?? 0;
                                     return (
                                         <td key={p.key} className="p-2 text-center border border-indigo-800 text-[11px] font-mono">

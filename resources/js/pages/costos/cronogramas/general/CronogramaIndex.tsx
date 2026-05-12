@@ -80,7 +80,11 @@ function recalcParentDates(childId: any): void {
     gantt.silent(() => {
         parent.start_date = new Date(minStart!);
         parent.end_date = new Date(maxEnd!);
-        parent.duration = Math.ceil((maxEnd!.getTime() - minStart!.getTime()) / 86400000);
+        parent.duration = gantt.calculateDuration({
+            start_date: new Date(minStart!),
+            end_date: new Date(maxEnd!),
+            task: parent,
+        });
         gantt.updateTask(parent.id);
     });
 
@@ -104,7 +108,6 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-
 function calcularFinLaborable(
     fechaInicio: string,
     diasTotales: number,
@@ -112,6 +115,7 @@ function calcularFinLaborable(
     holidays: { date: string; checked: boolean }[]
 ): Date | null {
     if (!fechaInicio || diasTotales <= 0) return null;
+
     const inicio = new Date(fechaInicio + 'T00:00:00');
     if (isNaN(inicio.getTime())) return null;
 
@@ -120,29 +124,48 @@ function calcularFinLaborable(
         jueves: 4, viernes: 5, sabado: 6,
     };
 
+    // Días laborables por índice (0=domingo ... 6=sábado)
     const esLaborable: boolean[] = [false, false, false, false, false, false, false];
     Object.entries(workDays).forEach(([name, active]) => {
-        esLaborable[DAY_MAP[name]] = !!active;
+        if (active && DAY_MAP[name] !== undefined) {
+            esLaborable[DAY_MAP[name]] = true;
+        }
     });
 
+    // Feriados como strings 'YYYY-MM-DD'
     const feriadosSet = new Set<string>();
     holidays.forEach((h) => {
         if (h.checked && h.date) {
             try {
                 const f = new Date(h.date + 'T00:00:00');
-                if (!isNaN(f.getTime())) feriadosSet.add(f.toISOString().split('T')[0]);
+                if (!isNaN(f.getTime())) {
+                    feriadosSet.add(f.toISOString().split('T')[0]);
+                }
             } catch { /* ok */ }
         }
     });
 
+    // El día inicial cuenta como día 1.
+    // Si el día inicial no es laborable, se avanza al siguiente laborable
+    // y ese pasa a ser el día 1.
     let fechaActual = new Date(inicio);
-    let diasAgregados = 0;
-    while (diasAgregados < diasTotales) {
-        fechaActual.setDate(fechaActual.getDate() + 1);
+    let diasContados = 0;
+
+    while (diasContados < diasTotales) {
         const diaSemana = fechaActual.getDay();
         const fechaStr = fechaActual.toISOString().split('T')[0];
-        if (esLaborable[diaSemana] && !feriadosSet.has(fechaStr)) diasAgregados++;
+
+        if (esLaborable[diaSemana] && !feriadosSet.has(fechaStr)) {
+            diasContados++;
+            if (diasContados === diasTotales) break; // este es el día final
+        }
+
+        if (diasContados < diasTotales) {
+            fechaActual = new Date(fechaActual);
+            fechaActual.setDate(fechaActual.getDate() + 1);
+        }
     }
+
     return fechaActual;
 }
 const CronogramaIndex = ({
@@ -348,7 +371,10 @@ const CronogramaIndex = ({
         const tasks = gantt.getTaskByTime().map((t: any) => ({
             id: t.id, text: t.text,
             start_date: fmt(t.start_date), end_date: fmt(t.end_date),
-            duration: t.duration, parent: t.parent || 0,
+            duration: (t.start_date && t.end_date)
+                ? Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1
+                : t.duration,
+            parent: t.parent || 0,
             counter: t.counter, item: t.item, item_p: t.item_p || t.item,
             cost: t.cost || 0, predecessors: t.predecessors || '',
             progress: t.progress || 0, open: true,
@@ -498,6 +524,7 @@ const CronogramaIndex = ({
                 if (settings.projectStart && settings.projectDuration && settings.projectDuration > 0) {
                     const duracion = Number(settings.projectDuration);
                     if (!isNaN(duracion) && duracion > 0) {
+                        // ✅ DESPUÉS — agregar 1 día de margen visual a end_date pero NO al marker
                         limitDate = calcularFinLaborable(
                             settings.projectStart,
                             duracion,
@@ -508,10 +535,9 @@ const CronogramaIndex = ({
                         if (limitDate && !isNaN(limitDate.getTime())) {
                             (window as any).__projectLimitDate = limitDate;
 
-                            const viewEnd = autoScheduling
-                                ? (() => { const d = new Date(limitDate!); d.setDate(d.getDate() + 1); return d; })()
-                                : new Date(limitDate.getFullYear(), limitDate.getMonth() + 1, 0);
-
+                            // end_date necesita 1 día extra para que el marker sea visible
+                            const viewEnd = new Date(limitDate!);
+                            viewEnd.setDate(viewEnd.getDate() + 2); // ← +2 días para que el límite sea visible
                             gantt.config.end_date = viewEnd;
                             gantt.config.limit_view = autoScheduling;
 
@@ -530,7 +556,7 @@ const CronogramaIndex = ({
                     (gantt.config as any).schedule_from_end = settings.scheduleFromEnd;
                 }
 
-                gantt.config.skip_off_time = true;
+                gantt.config.skip_off_time = false;
                 gantt.config.work_time = false;
 
                 // ── Template celdas feriados / fin de semana ──────────────────
@@ -560,38 +586,52 @@ const CronogramaIndex = ({
                     return '';
                 };
             });
+            // ── Mover TODAS las tareas HOJA con los nuevos parámetros ─────────────
             if (realStartDate !== null && settings.projectDuration && settings.projectDuration > 0) {
                 const nuevaDuracion = settings.projectDuration;
 
-                gantt.batchUpdate(() => {
-                    gantt.eachTask((task: any) => {
-                        if (!gantt.hasChild(task.id)) {
-                            // Asignar fecha de inicio
-                            task.start_date = new Date(realStartDate as Date);
+                const allTasks: any[] = [];
+                gantt.eachTask((task: any) => {
+                    // ✅ Asegurar duración positiva
+                    let duracion = nuevaDuracion;
+                    if (duracion < 1 || isNaN(duracion) || duracion > 1000) {
+                        duracion = 5;
+                    }
 
-                            // Calcular fecha de fin correcta (inicio + duración - 1)
-                            const endDate = new Date(task.start_date);
-                            endDate.setDate(endDate.getDate() + nuevaDuracion - 1);
-                            task.end_date = endDate;
-
-                            // Asignar la duración explícitamente
-                            task.duration = nuevaDuracion;
-
-                            gantt.updateTask(task.id);
-                        }
+                    allTasks.push({
+                        id: task.id,
+                        text: task.text,
+                        parent: task.parent,
+                        cost: task.cost,
+                        item: task.item,
+                        originalItem: task.originalItem,
+                        progress: task.progress,
+                        owner: task.owner,
+                        type: task.type,
+                        $open: true,
+                        start_date: new Date(realStartDate as Date),
+                        duration: duracion  // ← usar duración limpia
                     });
                 });
 
-                // Recalcular padres
-                gantt.eachTask((task: any) => {
-                    if (gantt.hasChild(task.id)) {
-                        recalcParentDates(task.id);
-                    }
-                });
-                gantt.render();
-            }
+                const allLinks = gantt.getLinks();
 
-            setProjectMarkers(realStartDate, limitDate);
+                gantt.clearAll();
+
+                gantt.batchUpdate(() => {
+                    allTasks.forEach((task: any) => {
+                        gantt.addTask(task);
+                    });
+                    allLinks.forEach((link: any) => {
+                        gantt.addLink(link);
+                    });
+                });
+
+                gantt.render();
+                refreshKPIs();
+
+                setProjectMarkers(realStartDate, limitDate);
+            }
 
             let style = document.getElementById('pcl-feriado-style') as HTMLStyleElement | null;
             if (!style) {
@@ -601,21 +641,37 @@ const CronogramaIndex = ({
             }
             style.innerHTML = `.pcl-gantt-wrapper .gantt_task_cell.pcl-feriado-cell { background: rgba(251,146,60,0.4) !important; }`;
 
+            setProjectMarkers(realStartDate, limitDate);
             gantt.render();
+            if (gantt.config.start_date) setTimeout(() => gantt.showDate(gantt.config.start_date!), 100);
+            refreshKPIs();
+
+
             if (gantt.config.start_date) setTimeout(() => gantt.showDate(gantt.config.start_date!), 100);
             refreshKPIs();
 
         } catch (error) {
             console.error('[handleApplySettings]', error);
+            // Al final de handleApplySettings, antes de cerrar el modal
+            if (settings.workDays) {
+                localStorage.setItem('gantt_work_days', JSON.stringify(settings.workDays));
+            }
+            if (settings.workStartTime) {
+                localStorage.setItem('gantt_work_start', settings.workStartTime);
+            }
+            if (settings.workEndTime) {
+                localStorage.setItem('gantt_work_end', settings.workEndTime);
+            }
+
         } finally {
             setIsSettingsOpen(false);
         }
+
     }, [refreshKPIs, autoScheduling]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // INICIALIZACIÓN DEL GANTT
     // ─────────────────────────────────────────────────────────────────────────
-
     useEffect(() => {
         if (!ganttContainer.current) return;
 
@@ -636,10 +692,10 @@ const CronogramaIndex = ({
         gantt.config.row_height = 32;
         gantt.config.grid_width = 500;
         gantt.config.scale_height = 54;
-        gantt.config.min_column_width = 30;
+        gantt.config.min_column_width = 50;
         gantt.config.open_tree_initially = true;
-        gantt.config.work_time = true;
-        gantt.config.skip_off_time = true;
+        gantt.config.work_time = false;
+        gantt.config.skip_off_time = false;
         gantt.config.fit_tasks = true;
         gantt.config.auto_scheduling = true;
         gantt.config.auto_scheduling_strict = autoScheduling;
@@ -653,10 +709,18 @@ const CronogramaIndex = ({
         gantt.config.correct_work_time = true;
         gantt.config.grid_resize = true;
         gantt.config.grid_resize_rows = false;
+        gantt.config.show_task_cells = true;
+        gantt.config.link_radius = 0;
+        gantt.config.link_line_width = 2;  // grosor de línea
+        gantt.config.link_arrow_size = 4;
+        gantt.config.links_rounding = 0;
+        (gantt.config as any).link_line_radius = 0;
 
+
+        (gantt.config as any).show_grid_work_time = true;
         (gantt.config as any).auto_types = true;
         (gantt.config as any).smart_rendering = true;
-        (gantt.config as any).static_background = true;
+        (gantt.config as any).static_background = false;
         (gantt.config as any).auto_scheduling_move_projects = true;
         (gantt.config as any).auto_scheduling_initial = true;
         (gantt.config as any).auto_scheduling_compatibility = true;
@@ -666,8 +730,33 @@ const CronogramaIndex = ({
             finish_to_finish: '2', start_to_finish: '3',
         };
 
-        gantt.setWorkTime({ day: 6, hours: false });
-        gantt.setWorkTime({ day: 0, hours: false });
+        // ── Días laborables — restaurar desde localStorage si existe ──────────
+        const savedWorkDays = localStorage.getItem('gantt_work_days');
+        const savedWorkStart = localStorage.getItem('gantt_work_start') || '08:00';
+        const savedWorkEnd = localStorage.getItem('gantt_work_end') || '17:00';
+
+        if (savedWorkDays) {
+            const workDays = JSON.parse(savedWorkDays);
+            const DAY_MAP: Record<string, number> = {
+                domingo: 0, lunes: 1, martes: 2, miercoles: 3,
+                jueves: 4, viernes: 5, sabado: 6,
+            };
+
+            for (let i = 0; i <= 6; i++) gantt.setWorkTime({ day: i, hours: false } as any);
+            // Aplicar los guardados
+            Object.entries(workDays).forEach(([name, active]) => {
+                if (active) {
+                    gantt.setWorkTime({
+                        day: DAY_MAP[name],
+                        hours: [`${savedWorkStart}-${savedWorkEnd}`],
+                    } as any);
+                }
+            });
+        } else {
+            // Defaults: lun-vie laborables, sáb y dom no
+            gantt.setWorkTime({ day: 6, hours: false });
+            gantt.setWorkTime({ day: 0, hours: false });
+        }
 
         gantt.config.layout = {
             css: 'gantt_container',
@@ -691,28 +780,26 @@ const CronogramaIndex = ({
             ],
         };
 
+
         gantt.config.scales = [
             {
-                unit: 'month', step: 1,
-                format: (date: Date) => {
-                    const start = gantt.config.start_date || new Date();
-                    const monthDiff = (date.getFullYear() - start.getFullYear()) * 12
-                        + (date.getMonth() - start.getMonth());
-                    return `Mes ${monthDiff + 1}`;
-                },
+                unit: "month",
+                step: 1,
+                format: "%F, %Y" // Esto mostrará "Abril, 2026"
             },
             {
-                unit: 'day', step: 1,
-                format: (date: Date) => `${date.getDate()}/${date.getMonth() + 1}`,
-                css: (date: Date) => (gantt.isWorkTime(date) ? '' : 'pcl-weekend'),
-            },
+                unit: "day",
+                step: 1,
+                format: "%j" // %j muestra el número del día sin ceros a la izquierda (1, 2, 3...)
+                // O puedes usar "%d" para (01, 02, 03...)
+            }
         ];
 
         const editors = {
             text: { type: 'text', map_to: 'text' },
             date: { type: 'date', map_to: 'start_date' },
             endDate: { type: 'date', map_to: 'end_date' },
-            duration: { type: 'number', map_to: 'duration', min: 0, max: 9999 },
+            duration: { type: 'text', map_to: 'duration' }, // ← cambiar number por text
             cost: { type: 'text', map_to: 'cost' },
             progress: { type: 'number', map_to: 'progress', min: 0, max: 1 },
             owner: { type: 'text', map_to: 'owner' },
@@ -763,7 +850,10 @@ const CronogramaIndex = ({
             {
                 name: 'duration', label: 'DÍAS', align: 'center', width: 60,
                 resize: true, editor: editors.duration,
-                template: (t: any) => `${t.duration || 0}d`,
+                template: (t: any) => {
+
+                    return `${t.duration || 0}d`;
+                },
             },
             { name: 'start_date', label: 'INICIO', align: 'center', width: 95, resize: true, editor: editors.date },
             {
@@ -893,6 +983,25 @@ const CronogramaIndex = ({
 
         on('onAfterTaskUpdate', (id: any, item: any) => {
 
+            // ✅ Duración editada por usuario → recalcular end_date en días CALENDARIO
+            if (!isUpdatingRef.current && !isParsingPredRef.current) {
+                let task: any;
+                try { task = gantt.getTask(id); } catch { /* ok */ }
+                if (task?.start_date && task?.end_date && item.duration > 0) {
+                    const calDiff = Math.ceil(
+                        (new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / 86400000
+                    ) + 1;
+                    if (item.duration !== calDiff) {
+                        gantt.silent(() => {
+                            task.end_date = new Date(task.start_date);
+                            task.end_date.setDate(task.end_date.getDate() + item.duration - 1);
+                            gantt.updateTask(id);
+                        });
+                    }
+                }
+            }
+
+            // Predecesoras
             if (!isUpdatingRef.current && !isParsingPredRef.current) {
                 const rawText = String(item.predecessors ?? '').trim();
                 const currentLinksText = gantt.getLinks()
@@ -910,14 +1019,14 @@ const CronogramaIndex = ({
                 }
             }
 
-
+            // Costo y fechas del padre
             if (!isUpdatingRef.current) {
                 isUpdatingRef.current = true;
                 try {
                     if (item.parent && gantt.isTaskExists(item.parent)) {
                         updateParentCost(id);
                     }
-                    recalcParentDates(id); // siempre, independiente de si tiene padre
+                    recalcParentDates(id);
                 } finally {
                     isUpdatingRef.current = false;
                 }
@@ -925,7 +1034,6 @@ const CronogramaIndex = ({
 
             setTimeout(() => refreshKPIs(), 50);
         });
-
         const afterChange = () => {
             updateCountersAndItems();
             applyAutoScheduling();
@@ -977,19 +1085,60 @@ const CronogramaIndex = ({
 
         gantt.i18n.setLocale("es");
         gantt.init(ganttContainer.current);
+
+
         ganttInitialized.current = true;
-        //  ZOOM: Solo con la rueda del mouse
+        (gantt as any).config.editor_types.duration_calendar = {
+            show: function (id: any, column: any, config: any, placeholder: any) {
+                const task = gantt.getTask(id);
+                const currentDays = task.start_date && task.end_date
+                    ? Math.ceil((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / 86400000) + 1
+                    : task.duration || 0;
+                placeholder.innerHTML = `<input type="number" min="1" style="width:100%;height:100%;border:none;outline:none;padding:0 4px;font-size:13px;text-align:center;" value="${currentDays}">`;
+                const input = placeholder.querySelector('input');
+                input.focus();
+                input.select();
+            },
+            hide: function () { },
+            set_value: function (value: any, id: any, column: any, node: any) {
+                const input = node.querySelector('input');
+                if (input) input.value = value;
+            },
+            get_value: function (id: any, column: any, node: any) {
+                const input = node.querySelector('input');
+                return input ? parseInt(input.value) || 1 : 1;
+            },
+            is_changed: function (value: any, id: any, column: any, node: any) {
+                const input = node.querySelector('input');
+                const newVal = parseInt(input?.value) || 1;
+                const task = gantt.getTask(id);
+                const currentDays = task.start_date && task.end_date
+                    ? Math.ceil((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / 86400000) + 1
+                    : task.duration || 0;
+                return newVal !== currentDays;
+            },
+            is_valid: function (value: any, id: any, column: any, node: any) {
+                const input = node.querySelector('input');
+                return parseInt(input?.value) > 0;
+            },
+            save: function (id: any, column: any, node: any) { },
+            focus: function (node: any) {
+                const input = node.querySelector('input');
+                if (input) { input.focus(); input.select(); }
+            }
+        };
+
         const ganttContainerElement = ganttContainer.current;
 
         const getScaleByDays = (totalDays: number) => {
             if (totalDays <= 35) {
                 return [
-                    { unit: 'month', step: 1, format: 'Mes %m' },
-                    { unit: 'day', step: 1, format: '%d/%m' }
+                    { unit: 'month', step: 1, format: '%F, %Y' },
+                    { unit: 'day', step: 1, format: '%j' } // Cambiado de '%d/%m' a '%j'
                 ];
             } else if (totalDays <= 120) {
                 return [
-                    { unit: 'month', step: 1, format: 'Mes %m' },
+                    { unit: 'month', step: 1, format: '%F, %Y' },
                     { unit: 'week', step: 1, format: 'Sem %W' }
                 ];
             } else {
@@ -1038,7 +1187,7 @@ const CronogramaIndex = ({
             (gantt as any).__zoomHandler = handleWheelZoom;
         }
 
-
+        // ── Cargar datos ──────────────────────────────────────────────────────
         // ── Cargar datos ──────────────────────────────────────────────────────
         let rawData: { tasks: any[]; links: any[] };
         if (initialData?.tasks?.length || initialData?.links?.length) {
@@ -1049,52 +1198,61 @@ const CronogramaIndex = ({
             rawData = { tasks: [], links: [] };
         }
 
+        // ✅ LIMPIAR TAREAS ANTES DE CARGAR
+        const cleanTasks = rawData.tasks.map((task: any) => {
+            // Forzar duración positiva (mínimo 1, máximo 365)
+            let cleanDuration = task.duration;
+            if (cleanDuration <= 0 || isNaN(cleanDuration) || cleanDuration > 1000) {
+                cleanDuration = 5;
+            }
+
+            // Forzar fecha de inicio válida (año >= 2020)
+            let cleanStartDate = task.start_date ? new Date(task.start_date) : new Date();
+            if (isNaN(cleanStartDate.getTime()) || cleanStartDate.getFullYear() < 2020) {
+                cleanStartDate = new Date(2026, 4, 1); // 01/05/2026
+            }
+
+            // Crear tarea limpia SOLO con las propiedades necesarias
+            return {
+                id: task.id,
+                text: task.text,
+                parent: task.parent || 0,
+                cost: task.cost || 0,
+                item: task.item || '',
+                originalItem: task.originalItem || task.item || '',
+                progress: task.progress || 0,
+                owner: task.owner || '',
+                type: task.type,
+                $open: true,
+                start_date: cleanStartDate,
+                duration: cleanDuration
+                // ✅ NO incluir end_date
+            };
+        });
+
         gantt.clearAll();
 
-        if (rawData.tasks.length > 0) {
+        if (cleanTasks.length > 0) {
             gantt.batchUpdate(() => {
-                rawData.tasks.forEach((task: any) => {
-                    let startDate = task.start_date ? new Date(task.start_date) : new Date();
-                    let endDate = task.end_date ? new Date(task.end_date) : new Date();
-
-                    if (isNaN(startDate.getTime())) startDate = new Date();
-                    if (isNaN(endDate.getTime())) endDate = new Date(startDate);
-                    if (endDate < startDate) [startDate, endDate] = [endDate, startDate];
-
-                    let duration = task.duration;
-                    if (!duration || duration <= 0 || isNaN(duration) || duration > 1000) {
-                        const diff = Math.abs(endDate.getTime() - startDate.getTime());
-                        duration = Math.max(1, Math.ceil(diff / 86400000));
-                    }
-                    if (duration < 1 || duration > 1000 || isNaN(duration)) {
-                        duration = 5;
-                        endDate = new Date(startDate);
-                        endDate.setDate(endDate.getDate() + duration);
-                    }
-
-
-                    const hasChildren = rawData.tasks.some(
+                cleanTasks.forEach((task: any) => {
+                    const hasChildren = cleanTasks.some(
                         (other: any) => String(other.parent) === String(task.id)
                     );
 
                     gantt.addTask({
                         ...task,
-                        start_date: startDate,
-                        end_date: endDate,
-                        duration,
                         type: hasChildren ? gantt.config.types.project : gantt.config.types.task,
-                        $open: true,
                     });
                 });
                 rawData.links?.forEach((link: any) => gantt.addLink(link));
             });
-
 
             gantt.eachTask((task: any) => {
                 if (!gantt.hasChild(task.id)) recalcParentDates(task.id);
             });
         }
 
+        gantt.render();
 
         gantt.render();
         updateCountersAndItems();
@@ -1400,4 +1558,4 @@ const CronogramaIndex = ({
     );
 };
 
-export default CronogramaIndex; 
+export default CronogramaIndex;     
