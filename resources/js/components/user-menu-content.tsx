@@ -20,10 +20,10 @@ export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
 
     const handleLogout = (e: React.MouseEvent) => {
-        e.preventDefault(); // Evitamos que el Link actúe como un enlace normal
+        e.preventDefault();
         cleanup();
         // Usamos el router de Inertia para enviar el POST de salida
-        router.post(logout());
+        router.post(route('logout')); 
     };
 
     return (
@@ -43,20 +43,19 @@ export function UserMenuContent({ user }: Props) {
                         onClick={cleanup}
                     >
                         <Settings className="mr-2 h-4 w-4" />
-                        Configuración
+                        Configuracion
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-                {/* Cambiamos el Link por un botón para el Logout seguro */}
                 <button
                     className="flex w-full cursor-pointer items-center px-2 py-1.5 text-sm outline-none hover:bg-slate-100 dark:hover:bg-slate-800"
                     onClick={handleLogout}
                     data-test="logout-button"
                 >
                     <LogOut className="mr-2 h-4 w-4" />
-                    Cerrar Sesión
+                    Cerrar sesion
                 </button>
             </DropdownMenuItem>
         </>

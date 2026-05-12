@@ -29,6 +29,8 @@ use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use App\Http\Controllers\CronoMaterialesController;
+use App\Http\Controllers\CronoValorizadoController;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -167,6 +169,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
     Route::get('/{costoProject}', [CostoProjectController::class, 'show'])->name('show');
     Route::delete('/{costoProject}', [CostoProjectController::class, 'destroy'])->name('destroy');
     Route::post('/{costoProject}/migrate', [CostoProjectController::class, 'runMigration'])->name('migrate');
+    Route::put('/{costoProject}', [CostoProjectController::class, 'update'])->name('update');
 
     // ─── Módulos dentro de un proyecto (con middleware de BD dinámica) ────
     Route::middleware([SetCostosDatabase::class])
@@ -174,6 +177,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         ->name('module.')
         ->group(function () {
             Route::get('/{moduleType}', [CostoModuleController::class, 'show'])->name('show');
+
             Route::patch('/{moduleType}', [CostoModuleController::class, 'update'])->name('update');
         });
 
@@ -222,6 +226,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
                 Route::patch('/cisterna', [MetradoSanitariasController::class, 'updateCisterna'])->name('cisterna.update');
                 Route::get('/resumen', [MetradoSanitariasController::class, 'getResumen'])->name('resumen.show');
                 Route::patch('/resumen', [MetradoSanitariasController::class, 'updateResumen'])->name('resumen.update');
+                Route::post('/resumen/sync', [MetradoSanitariasController::class, 'syncResumen'])->name('resumen.sync');
             });
 
             Route::prefix('/metrado-electricas')->name('metrado-electricas.')->group(function () {
@@ -307,6 +312,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/', [EttpController::class, 'show'])->name('index');
             Route::post('/importar-metrados', [EttpController::class, 'importarMetrados'])->name('importar');
             Route::post('/guardar-general', [EttpController::class, 'guardarEspecificaciones'])->name('guardar');
+            Route::delete('/partida/{partidaId}', [EttpController::class, 'eliminarPartida'])->name('partida.eliminar');
             Route::get('/partida/{partidaId}/secciones', [EttpController::class, 'getSecciones'])->name('secciones');
             Route::put('/partida/{partidaId}/secciones', [EttpController::class, 'guardarSecciones'])->name('secciones.guardar');
             Route::delete('/seccion/{id}', [EttpController::class, 'eliminarSeccion'])->name('seccion.eliminar');
@@ -316,15 +322,20 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/eliminar-huerfanas', [EttpController::class, 'eliminarHuerfanas'])->name('huerfanas.eliminar');
         });
 }); // Cierre de costos
-
-// ─── CRONOGRAMA GANTT (Independiente) ─────────────────────────────────────────
+// ─── CRONOGRAMA GANTT (Configuración Final) ──────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
+   
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
+    Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');
+    Route::get('/module/crono_valorizado', [CronoValorizadoController::class, 'index'])->name('proyectos.cronograma.valorizado');
+    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']); 
+
+    // 3. Ruta para GUARDAR el Gantt
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
     // ETTS — Redirecciones heredadas (opcional)
-    Route::get('/costos/{costoProject}/ettp/test', [EttpController::class, 'testMetrados']);
-    Route::get('/module/etts', function () {
+    Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
+    Route::get('/module/etts', function() {
         return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);
     })->name('module.etts');
 });

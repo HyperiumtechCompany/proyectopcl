@@ -190,6 +190,7 @@ class PresupuestoController extends Controller
                 // Insert and capture new ID
                 $newId = $connection->table($tableName)->insertGetId($cleanedRow);
 
+
                 // ─── Sincronizar con Tablas Hijas si es ACU ──────────────────────
                 if ($subsection === 'acus') {
                     $this->syncAcuComponents(

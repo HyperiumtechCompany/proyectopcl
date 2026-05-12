@@ -94,7 +94,7 @@ const FORMULA_META_KEYS = new Set([
 
 const getCellRef = (key: string, rowIndex: number): string => {
   const colIndex = CI[key];
-  return colIndex === undefined ? '' : `${colLetter(colIndex)}`;
+  return colIndex === undefined ? '' : `${colLetter(colIndex)}${rowIndex}`;
 };
 const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): string => {
   const E = getCellRef('elsim', rowIndex);
@@ -107,65 +107,67 @@ const buildFormulaExpressionFromKey = (formulaKey: string, rowIndex: number): st
   switch (formulaKey) {
     case 'm2_v1':
     case 'm_v2':
-      return `=${L}+${A}*${N}*${H}`;
+        return `=(${L}+${A})*${N}*${E}`;
     case 'm2_v2':
     case 'm3_v3':
-      return `=(${L}+${A})*2*${N}*${H}`;
+        return `=(${L}+${A})*2*${H}*${N}`;
     case 'm2_v3':
-      return `=${L}*${A}*${N}`;
+        return `=${L}*${H}*${N}`;
     case 'm2_v4':
     case 'und_v3':
     case 'pza_v3':
-      return `=${L}*${A}*${N}`;
+        return `=${L}*${A}*${E}`;
     case 'm2_v5':
-      return `=(${L}+${A})*2*${H}`;
+        return `=(${L}+${A})*2*${H}`;
     case 'm3_v1':
     case 'm3_v2':
     case 'm3_v4':
     case 'm3_v7':
-      return `=${L}*${A}*${H}`;
+        return `=${L}*${A}*${H}*${N}`;
     case 'm3_v5':
-      return `=${L}*${A}*${H}-${K}`;
+        return `=${L}*${A}*${H}-${E}`;
     case 'm3_v6':
-      return `=${L}*${A}*${H}`;
+        return `=${L}*${A}*${H}*${E}`;
     case 'kg_vbase':
-      return KGM ? `=${KGM}*(${L}+${A})*${H}*${N}` : `=${K}*(${L}+${A})*${H}*${N}`;
+        return KGM
+            ? `=(${E}*(${L}+${A}+${H})*${N})*${KGM}`
+            : `=${E}*(${L}+${A}+${H})*${N}`;
     case 'kg_v1':
-      return `=${N}`;
+        return `=${L}*${K}`;
     case 'kg_v2':
-      return `=${L}*${A}*${N}`;
+        return `=${L}*${E}*${N}`;
     case 'kg_v3':
-      return `=(${L}+${A})*${N}`;
+        return `=(${L}+${A}+${H})*${N}`;
     case 'kg_v4':
-      return `=${L}*${A}*${N}`;
+        return `=${L}*${K}*${E}`;
     case 'kg_v5':
-      return K ? `=${K}` : '';
+        return K ? `=${K}` : '';
     case 'm_v1':
     case 'ml_v1':
-      return `=${N}`;
+        return `=${L}*${N}`;
     case 'm_v3':
     case 'ml_v3':
-      return `=${N}`;
+        return `=${L}*${E}`;
     case 'm_v4':
     case 'ml_v4':
-      return `=(${L}+${A})*2*${H}`;
+        return `=(${L}+${A})*2*${N}`;
     case 'ml_v2':
-      return `=(${L}+${A})*${N}`;
+        return `=(${L}+${A})*${N}`;
     case 'und_v1':
     case 'pza_v1':
     case 'glb_v1':
     case 'pto_v1':
-      return `=${N}`;
+        return `=${E}*${N}`;
     case 'und_v2':
     case 'pza_v2':
-      return `=${N}`;
+        return `=${N}`;
     case 'und_v4':
     case 'und_v5':
     case 'pza_v4':
     case 'pza_v5':
-      return `=${N}`;
+        return `=${E}`;
     default:
-      return '';
+        return '';
   }
 };
 const buildFormulaExpressionFromCustom = (expression: string, rowIndex: number): string => {
@@ -186,16 +188,16 @@ const buildFormulaExpressionFromCustom = (expression: string, rowIndex: number):
   let translated = expression;
   Object.entries(refs).forEach(([key, ref]) => {
     if (!ref) return;
-    translated = translated.replace(new RegExp(`\\b${key}\\b`, 'g'), ref);
+    translated = translated.replace(new RegExp('\\b' + key + '\\b', 'g'), ref);
   });
-    return translated.startsWith('=') ? translated : `=${translated}`;
+  return translated.startsWith('=') ? translated : '=' + translated;
 };
 export const evaluateCustomFormula = (expression: string, inputs: MeasureInputs): number => {
   try {
     const { elsim, largo, ancho, alto, nveces, kg, kgm } = inputs;
     const result = new Function(
       'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kg', 'kgm', 'Math',
-      `"use strict"; return (${expression});`
+      `"use strict"; return (${expression});`,
     )(elsim, largo, ancho, alto, nveces, kg, kgm, Math);
     return toNum(result);
   } catch {
@@ -273,7 +275,7 @@ export const buildRowFormulaMeta = ({
     formulaDisplay:
       value === undefined || isZeroLike(value)
         ? label
-        : `${label} = ${value}`,
+        : `${label} = ${formatNumber(value)}`,
   };
 };
 
@@ -927,21 +929,17 @@ export function buildResumenRows(
 }
 
 export function buildElectricasResumenRows(
-    modulos: Record<number, Record<string, any>[]>,
-    exterior: Record<string, any>[],
-    cisterna: Record<string, any>[],
-    moduleCount: number,
+    metrado: Record<string, any>[] | undefined,
     previousResumen: Record<string, any>[] = [],
 ): Record<string, any>[] {
+    const metradoSafe = metrado || [];
     type Agg = {
         partida: string;
         descripcion: string;
         unidad: string;
         level: number;
         kind: RowKind;
-        modulos: Record<number, number>;
-        exterior: number;
-        cisterna: number;
+        total: number;
     };
 
     const byKey: Record<string, Agg> = {};
@@ -972,79 +970,40 @@ export function buildElectricasResumenRows(
                 level: Math.max(1, toNum(row._level) || 1),
                 kind:
                     String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf',
-                modulos: {},
-                exterior: 0,
-                cisterna: 0,
+                total: 0,
             };
             orderedKeys.push(key);
         }
-
-        const current = byKey[key];
-        if (!current.descripcion) current.descripcion = trim0(row.descripcion);
-        if (!current.unidad) current.unidad = String(row.unidad ?? '');
-        current.level = Math.min(
-            current.level,
-            Math.max(1, toNum(row._level) || 1),
-        );
-        if (String(row._kind ?? 'leaf') === 'group') current.kind = 'group';
-        return current;
+        return byKey[key];
     };
 
-    const accumulate = (
-        rows: Record<string, any>[],
-        source: 'modulo' | 'exterior' | 'cisterna',
-        moduloNumber?: number,
-    ) => {
-        rows.forEach((row) => {
-            const entry = ensure(row);
-            if (!entry) return;
+    // Agregar desde metrado
+    metradoSafe.forEach((row) => {
+        const agg = ensure(row);
+        if (!agg) return;
 
-            const total = r4(toNum(row.total));
-            if (source === 'modulo' && moduloNumber !== undefined) {
-                entry.modulos[moduloNumber] = r4(
-                    (entry.modulos[moduloNumber] || 0) + total,
-                );
-            } else if (source === 'exterior') {
-                entry.exterior = r4(entry.exterior + total);
-            } else {
-                entry.cisterna = r4(entry.cisterna + total);
-            }
+        // Sumar valores numéricos relevantes (lon, area, vol, kg, und, total)
+        ['lon', 'area', 'vol', 'kg', 'und', 'total'].forEach((col) => {
+            const val = toNum(row[col]);
+            if (val) agg.total += val;
         });
-    };
-
-    for (let i = 1; i <= moduleCount; i++) {
-        accumulate(modulos[i] || [], 'modulo', i);
-    }
-    accumulate(exterior || [], 'exterior');
-    accumulate(cisterna || [], 'cisterna');
-
-    orderedKeys.sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true }),
-    );
-
-    return orderedKeys.map((key) => {
-        const item = byKey[key];
-        const previousRow = previousByKey[makeKey(item)] ?? null;
-        const row: Record<string, any> = {
-            _dbid: previousRow?._dbid ?? previousRow?.id ?? null,
-            partida: item.partida,
-            descripcion: item.descripcion,
-            unidad: item.unidad,
-            exterior: r4(item.exterior),
-            cisterna: r4(item.cisterna),
-            _level: item.level,
-            _kind: item.kind,
-        };
-
-        let total = r4(item.exterior + item.cisterna);
-        for (let i = 1; i <= moduleCount; i++) {
-            const columnKey = `modulo_${i}`;
-            const value = r4(item.modulos[i] || 0);
-            row[columnKey] = value;
-            total = r4(total + value);
-        }
-        row.total = total;
-
-        return row;
     });
+
+    // Convertir a filas
+    const rows: Record<string, any>[] = orderedKeys.map((key) => {
+        const agg = byKey[key];
+        const prev = previousByKey[makeKey(agg)];
+
+        return {
+            ...prev,
+            partida: agg.partida,
+            descripcion: agg.descripcion,
+            unidad: agg.unidad,
+            _level: agg.level,
+            _kind: agg.kind,
+            total: r4(agg.total),
+        };
+    });
+
+    return rows;
 }

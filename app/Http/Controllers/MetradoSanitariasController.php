@@ -131,6 +131,17 @@ class MetradoSanitariasController extends Controller
         return $this->updateSheet($costoProject, self::TABLE_RESUMEN, $request);
     }
 
+    public function syncResumen(CostoProject $costoProject): JsonResponse
+    {
+        $this->authorizeProject($costoProject);
+        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sincronizacion completada (backend stub)',
+        ]);
+    }
+
     private function queryTableRows(CostoProject $costoProject, string $table): array
     {
         return $this->queryRows($costoProject, $table);
