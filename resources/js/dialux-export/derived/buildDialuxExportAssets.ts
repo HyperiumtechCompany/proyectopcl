@@ -1,10 +1,10 @@
 import axios from 'axios';
-import * as productRoutes from '@/routes/dialux/products';
 import { buildContourSegments } from '@/hooks/dialux/isoluxContours';
 import type { DxfEntity, Vertex } from '@/hooks/dialux/useEditorStore';
-import { captureCompositeViewerBitmap } from '../assets/captureCompositeViewerBitmap';
-import { captureCadBaseBitmap } from '../assets/captureCadBaseBitmap';
+import * as productRoutes from '@/routes/dialux/products';
 import { capture3DViewerBitmap } from '../assets/capture3DViewerBitmap';
+import { captureCadBaseBitmap } from '../assets/captureCadBaseBitmap';
+import { captureCompositeViewerBitmap } from '../assets/captureCompositeViewerBitmap';
 import type {
     DialuxAmbientExport,
     DialuxAssetPurpose,
@@ -20,6 +20,8 @@ import type {
 const SVG_WIDTH = 1200;
 const SVG_HEIGHT = 780;
 const SVG_PADDING = 48;
+const PRINT_BITMAP_MIME_TYPE = 'image/jpeg' as const;
+const PRINT_BITMAP_QUALITY = 0.78;
 
 interface Bounds {
     minX: number;
@@ -35,6 +37,10 @@ interface Transform {
     bounds: Bounds;
     width: number;
     height: number;
+}
+
+function encodePrintBitmap(canvas: HTMLCanvasElement): string {
+    return canvas.toDataURL(PRINT_BITMAP_MIME_TYPE, PRINT_BITMAP_QUALITY);
 }
 
 export interface BuildDialuxExportAssetsOptions {
@@ -1391,8 +1397,8 @@ async function svgToBitmapAsset(asset: DialuxVectorAsset): Promise<DialuxBitmapA
                     title: asset.title,
                     purpose: asset.purpose,
                     kind: 'bitmap',
-                    mimeType: 'image/png',
-                    dataUrl: canvas.toDataURL('image/png'),
+                    mimeType: PRINT_BITMAP_MIME_TYPE,
+                    dataUrl: encodePrintBitmap(canvas),
                     width: asset.width,
                     height: asset.height,
                 });
@@ -1424,8 +1430,8 @@ async function svgToBitmapAsset(asset: DialuxVectorAsset): Promise<DialuxBitmapA
                         title: asset.title,
                         purpose: asset.purpose,
                         kind: 'bitmap',
-                        mimeType: 'image/png',
-                        dataUrl: canvas.toDataURL('image/png'),
+                        mimeType: PRINT_BITMAP_MIME_TYPE,
+                        dataUrl: encodePrintBitmap(canvas),
                         width: asset.width,
                         height: asset.height,
                     });
@@ -1471,8 +1477,8 @@ function rasterizeVectorAsset(asset: DialuxVectorAsset): Promise<DialuxBitmapAss
                     title: asset.title,
                     purpose: asset.purpose,
                     kind: 'bitmap',
-                    mimeType: 'image/png',
-                    dataUrl: canvas.toDataURL('image/png'),
+                    mimeType: PRINT_BITMAP_MIME_TYPE,
+                    dataUrl: encodePrintBitmap(canvas),
                     width: canvas.width,
                     height: canvas.height,
                 });

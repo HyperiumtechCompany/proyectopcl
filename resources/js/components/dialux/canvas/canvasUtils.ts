@@ -126,7 +126,8 @@ export function centroid(points: { x: number; y: number }[]): {
 
 /**
  * Grosor de pared en píxeles de pantalla.
- * Mínimo de 3px para siempre ser visible.
+ * Mínimo 3px para siempre ser visible.
+ * Máximo 20px para que nunca se dibuje como bloque sólido.
  */
 export function wallThickPx(
     thickness: number,
@@ -137,5 +138,5 @@ export function wallThickPx(
     ) => number,
     origin: { x: number; y: number },
 ): number {
-    return Math.max(3, screenDistance(safeNum(thickness), 0, origin));
+    return Math.min(20, Math.max(3, screenDistance(safeNum(thickness), 0, origin)));
 }

@@ -9,7 +9,6 @@
  * • Gestión de luminarias
  */
 
-import React, { useState } from 'react';
 import {
     BarChart3,
     Plus,
@@ -19,8 +18,9 @@ import {
     Lightbulb,
     TrendingUp,
 } from 'lucide-react';
-import { ProfessionalLightingReport } from './ProfessionalLightingReport';
+import React, { useState } from 'react';
 import type { RoomLightingCalculation } from '@/hooks/dialux/useEditorStore';
+import { ProfessionalLightingReport } from './ProfessionalLightingReport';
 
 interface LightingCalculationDashboardProps {
     projectName: string;

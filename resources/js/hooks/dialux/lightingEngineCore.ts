@@ -1,7 +1,4 @@
-import {
-    getRoomMarginalZone,
-    getRoomUsefulPlaneHeight,
-} from './roomLighting';
+import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
 import type { Fixture, LightingResult, Room } from './useEditorStore';
 
 const GRID_SPACING = 0.5;
@@ -61,7 +58,7 @@ function pointInPolygon(
         const vj = vertices[j];
 
         if (
-            (vi.y > py) !== (vj.y > py) &&
+            vi.y > py !== vj.y > py &&
             px < ((vj.x - vi.x) * (py - vi.y)) / (vj.y - vi.y) + vi.x
         ) {
             inside = !inside;
@@ -99,7 +96,8 @@ function buildGrid(room: Room, spacing: number, wpHeight: number) {
             const px = minX + (col + 0.5) * cellW;
             const py = minY + (row + 0.5) * cellH;
             const active =
-                room.vertices.length < 3 || pointInPolygon(px, py, room.vertices);
+                room.vertices.length < 3 ||
+                pointInPolygon(px, py, room.vertices);
 
             points.push({ x: px, y: py, z: wpHeight, active });
         }
@@ -144,7 +142,8 @@ function calculatePointByPoint(
     return points.map((point) =>
         point.active
             ? fixtures.reduce(
-                  (sum, fixture) => sum + illuminanceFromFixture(point, fixture),
+                  (sum, fixture) =>
+                      sum + illuminanceFromFixture(point, fixture),
                   0,
               )
             : null,
@@ -195,7 +194,9 @@ export function calculateLightingResult(
     }));
     const grid = buildGrid(room, GRID_SPACING, usefulPlaneHeight);
     const values = calculatePointByPoint(grid.points, enriched);
-    const activeValues = values.filter((value): value is number => value !== null);
+    const activeValues = values.filter(
+        (value): value is number => value !== null,
+    );
     const baseResult = {
         grid_rows: grid.rows,
         grid_cols: grid.cols,
@@ -221,10 +222,21 @@ export function calculateLightingResult(
         };
     }
 
-    const sum = activeValues.reduce((left, right) => left + right, 0);
+    let sum = 0;
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const value of activeValues) {
+        sum += value;
+        if (value < min) {
+            min = value;
+        }
+        if (value > max) {
+            max = value;
+        }
+    }
+
     const avg = sum / activeValues.length;
-    const min = Math.min(...activeValues);
-    const max = Math.max(...activeValues);
     const uniformity = avg > 0 ? min / avg : 0;
     const lb = avg / MATH_PI;
     const ugr = calculateUGR(bbox.cx, bbox.cy, enriched, lb, usefulPlaneHeight);

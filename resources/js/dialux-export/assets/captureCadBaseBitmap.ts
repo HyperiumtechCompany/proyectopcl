@@ -1,5 +1,12 @@
 import type { DialuxBitmapAsset } from '../domain/types';
 
+const CAD_CAPTURE_MIME_TYPE = 'image/jpeg' as const;
+const CAD_CAPTURE_QUALITY = 0.76;
+
+function encodePrintBitmap(canvas: HTMLCanvasElement): string {
+    return canvas.toDataURL(CAD_CAPTURE_MIME_TYPE, CAD_CAPTURE_QUALITY);
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -50,10 +57,10 @@ function readWebGLPixels(
         for (let col = 0; col < w; col++) {
             const src = (srcRow * w + col) * 4;
             const dst = (row * w + col) * 4;
-            inverted[dst]     = 255 - pixels[src];     // R invert
+            inverted[dst] = 255 - pixels[src]; // R invert
             inverted[dst + 1] = 255 - pixels[src + 1]; // G invert
             inverted[dst + 2] = 255 - pixels[src + 2]; // B invert
-            inverted[dst + 3] = 255;                    // full opacity
+            inverted[dst + 3] = 255; // full opacity
         }
     }
 
@@ -82,7 +89,7 @@ function readWebGLPixels(
     const dy = (targetHeight - dh) / 2;
     outCtx.drawImage(tmp, dx, dy, dw, dh);
 
-    return out.toDataURL('image/png');
+    return encodePrintBitmap(out);
 }
 
 /**
@@ -118,7 +125,8 @@ async function readCanvasViaDataUrl(
     const srcImg = new Image();
     await new Promise<void>((resolve, reject) => {
         srcImg.onload = () => resolve();
-        srcImg.onerror = () => reject(new Error('CAD canvas image failed to load'));
+        srcImg.onerror = () =>
+            reject(new Error('CAD canvas image failed to load'));
         srcImg.src = rawDataUrl;
     }).catch(() => null);
 
@@ -141,7 +149,7 @@ async function readCanvasViaDataUrl(
     }
     ctx.restore();
 
-    const result = out.toDataURL('image/png');
+    const result = encodePrintBitmap(out);
     return result.length > 2000 ? result : null;
 }
 
@@ -171,14 +179,17 @@ export async function captureCadBaseBitmap(
         return null;
     }
 
-    const cadContainer = document.querySelector(cadSelector) as HTMLElement | null;
+    const cadContainer = document.querySelector(
+        cadSelector,
+    ) as HTMLElement | null;
     if (!cadContainer) {
         console.warn('[dialux-export] CAD container not found:', cadSelector);
         return null;
     }
 
-    const canvases = Array.from(cadContainer.querySelectorAll('canvas'))
-        .filter((c) => c.width > 4 && c.height > 4);
+    const canvases = Array.from(cadContainer.querySelectorAll('canvas')).filter(
+        (c) => c.width > 4 && c.height > 4,
+    );
 
     if (canvases.length === 0) {
         console.warn('[dialux-export] No CAD canvas elements found.');
@@ -199,7 +210,7 @@ export async function captureCadBaseBitmap(
             title: 'Plano base CAD importado',
             purpose: 'cad-base',
             kind: 'bitmap',
-            mimeType: 'image/png',
+            mimeType: CAD_CAPTURE_MIME_TYPE,
             dataUrl: webglResult,
             width: targetWidth,
             height: targetHeight,
@@ -208,7 +219,11 @@ export async function captureCadBaseBitmap(
 
     // ── Strategy 2: 2D toDataURL with CSS filter ──────────────────────────────
     for (const canvas of canvases) {
-        const result = await readCanvasViaDataUrl(canvas, targetWidth, targetHeight);
+        const result = await readCanvasViaDataUrl(
+            canvas,
+            targetWidth,
+            targetHeight,
+        );
         if (result) {
             console.info('[dialux-export] CAD captured via toDataURL ✓');
             return {
@@ -216,7 +231,7 @@ export async function captureCadBaseBitmap(
                 title: 'Plano base CAD importado',
                 purpose: 'cad-base',
                 kind: 'bitmap',
-                mimeType: 'image/png',
+                mimeType: CAD_CAPTURE_MIME_TYPE,
                 dataUrl: result,
                 width: targetWidth,
                 height: targetHeight,
@@ -226,8 +241,8 @@ export async function captureCadBaseBitmap(
 
     console.warn(
         '[dialux-export] CAD bitmap capture failed (WebGL buffer empty + toDataURL blank).\n' +
-        'Ensure patchWebGLPreserveBuffer() is called at app startup before mlightcad initializes.\n' +
-        'Falling back to vectorial SVG DXF rendering.',
+            'Ensure patchWebGLPreserveBuffer() is called at app startup before mlightcad initializes.\n' +
+            'Falling back to vectorial SVG DXF rendering.',
     );
     return null;
 }

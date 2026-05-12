@@ -1,5 +1,10 @@
 import type { DialuxBitmapAsset } from '../domain/types';
 
+const MAX_CAPTURE_WIDTH = 1200;
+const MAX_CAPTURE_HEIGHT = 780;
+const VIEWER_CAPTURE_MIME_TYPE = 'image/jpeg' as const;
+const VIEWER_CAPTURE_QUALITY = 0.78;
+
 /**
  * Returns true when the canvas can be read without a SecurityError
  * (i.e. it is not tainted by cross-origin pixel data).
@@ -58,9 +63,17 @@ export async function captureCompositeViewerBitmap(
         return null;
     }
 
+    const scale = Math.min(
+        1,
+        MAX_CAPTURE_WIDTH / width,
+        MAX_CAPTURE_HEIGHT / height,
+    );
+    const outputWidth = Math.max(1, Math.round(width * scale));
+    const outputHeight = Math.max(1, Math.round(height * scale));
+
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
 
     const context = canvas.getContext('2d');
     if (!context) {
@@ -69,7 +82,8 @@ export async function captureCompositeViewerBitmap(
 
     // White background for formal print output
     context.fillStyle = '#f8fafc';
-    context.fillRect(0, 0, width, height);
+    context.fillRect(0, 0, outputWidth, outputHeight);
+    context.scale(scale, scale);
 
     // ── Step 1: Draw CAD canvas layers ───────────────────────────────────────
     const cadCanvases = Array.from(cadContainer.querySelectorAll('canvas'));
@@ -80,7 +94,7 @@ export async function captureCompositeViewerBitmap(
         if (!isSafeCanvas(sourceCanvas)) {
             console.warn(
                 '[dialux-export] Skipping tainted CAD canvas (cross-origin). ' +
-                'The composite capture will only contain the SVG overlay.',
+                    'The composite capture will only contain the SVG overlay.',
             );
             continue;
         }
@@ -92,7 +106,10 @@ export async function captureCompositeViewerBitmap(
             context.restore();
             drewAtLeastOneLayer = true;
         } catch (error) {
-            console.warn('[dialux-export] Failed to draw CAD canvas layer:', error);
+            console.warn(
+                '[dialux-export] Failed to draw CAD canvas layer:',
+                error,
+            );
         }
     }
 
@@ -100,7 +117,7 @@ export async function captureCompositeViewerBitmap(
     if (!drewAtLeastOneLayer) {
         console.warn(
             '[dialux-export] No readable CAD layers — composite capture aborted. ' +
-            'Caller should use the vectorial SVG fallback.',
+                'Caller should use the vectorial SVG fallback.',
         );
         return null;
     }
@@ -110,10 +127,14 @@ export async function captureCompositeViewerBitmap(
         // Strip external filter references that would taint the canvas after drawImage
         const svgClone = overlay.cloneNode(true) as SVGSVGElement;
         // Remove filter attributes that reference external resources
-        svgClone.querySelectorAll('[filter]').forEach((el) => el.removeAttribute('filter'));
+        svgClone
+            .querySelectorAll('[filter]')
+            .forEach((el) => el.removeAttribute('filter'));
 
         const svgString = new XMLSerializer().serializeToString(svgClone);
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const svgBlob = new Blob([svgString], {
+            type: 'image/svg+xml;charset=utf-8',
+        });
         const svgUrl = URL.createObjectURL(svgBlob);
 
         await new Promise<void>((resolve) => {
@@ -122,7 +143,10 @@ export async function captureCompositeViewerBitmap(
                 try {
                     context.drawImage(svgImage, 0, 0, width, height);
                 } catch (err) {
-                    console.warn('[dialux-export] Failed to composite SVG overlay:', err);
+                    console.warn(
+                        '[dialux-export] Failed to composite SVG overlay:',
+                        err,
+                    );
                 } finally {
                     URL.revokeObjectURL(svgUrl);
                     resolve();
@@ -130,26 +154,39 @@ export async function captureCompositeViewerBitmap(
             };
             svgImage.onerror = () => {
                 URL.revokeObjectURL(svgUrl);
-                console.warn('[dialux-export] SVG overlay image failed to load.');
+                console.warn(
+                    '[dialux-export] SVG overlay image failed to load.',
+                );
                 resolve(); // non-fatal: proceed without the overlay
             };
             svgImage.src = svgUrl;
         });
     } catch (error) {
-        console.warn('[dialux-export] SVG overlay capture failed (non-fatal):', error);
+        console.warn(
+            '[dialux-export] SVG overlay capture failed (non-fatal):',
+            error,
+        );
     }
 
     // ── Step 3: Validate output ───────────────────────────────────────────────
     let dataUrl: string;
     try {
-        dataUrl = canvas.toDataURL('image/png');
+        dataUrl = canvas.toDataURL(
+            VIEWER_CAPTURE_MIME_TYPE,
+            VIEWER_CAPTURE_QUALITY,
+        );
     } catch (error) {
-        console.warn('[dialux-export] Composite canvas.toDataURL() failed (tainted):', error);
+        console.warn(
+            '[dialux-export] Composite canvas.toDataURL() failed (tainted):',
+            error,
+        );
         return null;
     }
 
     if (dataUrl.length < 2000) {
-        console.warn('[dialux-export] Composite capture too small — discarding.');
+        console.warn(
+            '[dialux-export] Composite capture too small — discarding.',
+        );
         return null;
     }
 
@@ -158,9 +195,9 @@ export async function captureCompositeViewerBitmap(
         title: options.title ?? 'Captura del CAD Viewer',
         purpose: options.purpose ?? 'viewer-capture',
         kind: 'bitmap',
-        mimeType: 'image/png',
+        mimeType: VIEWER_CAPTURE_MIME_TYPE,
         dataUrl,
-        width,
-        height,
+        width: outputWidth,
+        height: outputHeight,
     };
 }

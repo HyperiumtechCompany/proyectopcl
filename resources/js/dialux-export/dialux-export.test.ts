@@ -400,6 +400,43 @@ describe('dialux export pipeline', () => {
         ).toBe(true);
     });
 
+    it('attaches the architectural plan to the formal ambient list page', () => {
+        const snapshot = buildDialuxExportSnapshot({
+            project: buildProjectFixture(),
+            activeSceneId: 'scene-1',
+            resultsByRoom: {},
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig: {
+                showGrid: true,
+                showIsolux: true,
+                show3DView: false,
+                isoluxMode: 'functional',
+                zoom: 1,
+                panX: 0,
+                panY: 0,
+                selectedId: null,
+            },
+        });
+        const documentModel = buildDialuxFormalDocument(snapshot, [
+            {
+                id: 'drawn-terrain-svg',
+                title: 'Plano arquitectonico',
+                purpose: 'drawn-terrain',
+                kind: 'vector',
+                mimeType: 'image/svg+xml',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="160"></svg>',
+                width: 300,
+                height: 160,
+            },
+        ]);
+
+        expect(
+            documentModel.pages.find((page) => page.kind === 'ambient-list')
+                ?.assetIds,
+        ).toEqual(['drawn-terrain-svg']);
+    });
+
     it('builds the document model with the planned sections', async () => {
         const snapshot = buildDialuxExportSnapshot({
             project: buildProjectFixture(),

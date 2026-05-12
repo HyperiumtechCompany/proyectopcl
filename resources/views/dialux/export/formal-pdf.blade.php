@@ -380,9 +380,17 @@ $renderAmbientProductCards = static function (array $detail, $pageAssets) use ($
         ?? collect($pageAssets)->firstWhere('id', 'formal-cover-svg')
         ?? collect($pageAssets)->firstWhere('id', 'viewer-capture')
         ?? collect($pageAssets)->first();
+    $landscapePageKinds = [
+        'terrain-cad',
+        'terrain-architectural',
+        'ambient-list',
+        'room-ambient-list',
+        'calculation-object-list',
+    ];
+    $isLandscapePage = in_array($page['kind'] ?? '', $landscapePageKinds, true);
 @endphp
 
-<section class="page {{ $page['kind'] === 'cover' ? 'cover-page' : '' }}">
+<section class="page {{ $page['kind'] === 'cover' ? 'cover-page' : '' }} {{ $isLandscapePage ? 'page-landscape' : '' }}">
     <div class="watermark">HYPERIUMTECH</div>
 
     {{-- ══ PORTADA ══════════════════════════════════════════ --}}
@@ -589,6 +597,17 @@ $renderAmbientProductCards = static function (array $detail, $pageAssets) use ($
 
             {{-- Lista de ambientes --}}
             @elseif ($page['kind'] === 'ambient-list')
+                @php
+                    $ambientListAsset = collect($pageAssets)->firstWhere('id', 'viewer-capture')
+                        ?? collect($pageAssets)->firstWhere('id', 'drawn-terrain-svg')
+                        ?? collect($pageAssets)->firstWhere('id', 'cad-base-bitmap')
+                        ?? collect($pageAssets)->first();
+                @endphp
+                @if (is_array($ambientListAsset))
+                    <div class="terrain-plan-wrap">
+                        {!! $renderAsset($ambientListAsset) !!}
+                    </div>
+                @endif
                 <div class="detail-block-title" style="margin-bottom:2mm;">Lista de locales / Escena de luz 1</div>
                 {!! $renderAmbientLocalBlocks($document['ambientDetails'] ?? []) !!}
 

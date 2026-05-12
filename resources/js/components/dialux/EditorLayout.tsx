@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useDialuxPdfExport } from '@/dialux-export';
 import { deriveAmbientSpaces } from '@/hooks/dialux/ambientSpaces';
 import {
     createScaleConfig,
@@ -18,7 +19,6 @@ import {
     useShow3DView,
 } from '@/hooks/dialux/useEditorStore';
 import { useLightingEngine } from '@/hooks/dialux/useLightingEngine';
-import { useDialuxPdfExport } from '@/dialux-export';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
 import { MlightcadLayerPanel } from './MlightcadLayerPanel';

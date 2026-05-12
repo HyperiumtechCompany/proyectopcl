@@ -1,0 +1,2475 @@
+{
+  "categorias": {
+    "vivienda": {
+      "nombre": "VIVIENDA",
+      "subcategorias": {
+        "1.1_zona_privada": {
+          "areas": [
+            {
+              "tipo": "Dormitorio",
+              "em_lux": 50,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Baño",
+              "em_lux": 100,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Baño (zona de espejo)",
+              "em_lux": 500,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Cocina",
+              "em_lux": 300,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Sala, Sala de estar",
+              "em_lux": 100,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Comedor",
+              "em_lux": 100,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Estudios, almacenes, depósitos, walking closet, cuartos de trabajo doméstico",
+              "em_lux": 500,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Patios, zonas abiertas",
+              "em_lux": 20,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            },
+            {
+              "tipo": "Estacionamientos bajo techo",
+              "em_lux": 50,
+              "ugr_l": null,
+              "uo": null,
+              "ra": null,
+              "requisitos": []
+            }
+          ]
+        },
+        "1.2_zonas_comunes": {
+          "areas": [
+            {
+              "tipo": "Vestíbulos de entrada",
+              "em_lux": 100,
+              "ugr_l": 22,
+              "uo": null,
+              "ra": 60,
+              "requisitos": []
+            },
+            {
+              "tipo": "Salas de estar (pública)",
+              "em_lux": 200,
+              "ugr_l": 22,
+              "uo": null,
+              "ra": 80,
+              "requisitos": []
+            },
+            {
+              "tipo": "Áreas de circulación y pasillos",
+              "em_lux": 100,
+              "ugr_l": 28,
+              "uo": 0.4,
+              "ra": 40,
+              "requisitos": [
+                "Iluminancia al nivel del suelo",
+                "Ra y UGR similares a áreas adyacentes",
+                "150 lux si hay vehículos",
+                "Zona de transición en entradas/salidas",
+                "Evitar deslumbramiento a conductores y peatones"
+              ]
+            },
+            {
+              "tipo": "Escaleras, escaleras mecánicas y transportadores",
+              "em_lux": 150,
+              "ugr_l": 25,
+              "uo": 0.4,
+              "ra": 40,
+              "requisitos": ["Contraste mejorado en escalones"]
+            },
+            {
+              "tipo": "Ascensores, montacargas",
+              "em_lux": 100,
+              "ugr_l": 25,
+              "uo": 0.4,
+              "ra": 40,
+              "requisitos": ["Iluminancia frente al montacargas: Em ≥ 200 lx"]
+            },
+            {
+              "tipo": "Rampas/andenes/patios de carga",
+              "em_lux": 150,
+              "ugr_l": 25,
+              "uo": 0.4,
+              "ra": 40,
+              "requisitos": []
+            }
+          ]
+        }
+      }
+    },
+    "educacion": {
+      "nombre": "EDUCACIÓN",
+      "areas": [
+        {
+          "tipo": "Sala de juegos",
+          "em_lux": 300,
+          "ugr_l": 22,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": [
+            "Evitar altas luminancias desde abajo con coberturas difusas"
+          ]
+        },
+        {
+          "tipo": "Guarderías",
+          "em_lux": 300,
+          "ugr_l": 22,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": [
+            "Evitar altas luminancias desde abajo con coberturas difusas"
+          ]
+        },
+        {
+          "tipo": "Sala de manualidades",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Aulas de profesores",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": ["Iluminación controlable"]
+        },
+        {
+          "tipo": "Aulas para clases nocturnas y educación de adultos",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": ["Iluminación controlable"]
+        },
+        {
+          "tipo": "Salas de lectura",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": ["Iluminación controlable para equipos A/V"]
+        },
+        {
+          "tipo": "Zona de pizarra",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.7,
+          "ra": 80,
+          "requisitos": [
+            "Evitar reflexiones especulares",
+            "Iluminancia vertical adecuada para presentador"
+          ]
+        },
+        {
+          "tipo": "Mesa de demostraciones",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.7,
+          "ra": 80,
+          "requisitos": ["750 lx en salas de lectura"]
+        },
+        {
+          "tipo": "Locales de artes y oficios",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales de artes (escuelas de arte)",
+          "em_lux": 750,
+          "ugr_l": 19,
+          "uo": 0.7,
+          "ra": 90,
+          "requisitos": ["5000 K ≤ TCP < 6500 K"]
+        },
+        {
+          "tipo": "Salas de dibujo técnico",
+          "em_lux": 750,
+          "ugr_l": 16,
+          "uo": 0.7,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales de prácticas y laboratorios",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Aulas de manualidades",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Taller de enseñanza",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales de prácticas de música",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales de prácticas de computación",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Laboratorio de idiomas",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales y talleres de preparación",
+          "em_lux": 500,
+          "ugr_l": 22,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Vestíbulo de entrada",
+          "em_lux": 200,
+          "ugr_l": 22,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Áreas de circulación, pasillos",
+          "em_lux": 100,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Escaleras",
+          "em_lux": 150,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales comunes de estudiantes y salas de reuniones",
+          "em_lux": 200,
+          "ugr_l": 22,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Locales de maestros",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Biblioteca: estanterías",
+          "em_lux": 200,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Biblioteca: áreas de lectura",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Almacenes de material de profesores",
+          "em_lux": 100,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Salas deportivas, gimnasios y piscinas",
+          "em_lux": 300,
+          "ugr_l": 22,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": [
+            "Ver Norma EN 12193 para entrenamiento si no hay norma internacional"
+          ]
+        },
+        {
+          "tipo": "Cocina",
+          "em_lux": 500,
+          "ugr_l": 22,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        }
+      ]
+    },
+    "salud": {
+      "nombre": "SALUD",
+      "subcategorias": {
+        "3.1_salas_uso_general": [
+          {
+            "tipo": "Salas de espera",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": [
+              "Evitar luminancias elevadas en campo de visión de pacientes"
+            ]
+          },
+          {
+            "tipo": "Corredores: durante el día",
+            "em_lux": 100,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Corredores: durante la noche",
+            "em_lux": 50,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Ambientes para curaciones",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas para consulta médica",
+            "em_lux": 500,
+            "ugr_l": 16,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["TCP ≥ 4000 K"]
+          },
+          {
+            "tipo": "Ascensores para personas y visitantes",
+            "em_lux": 100,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Ascensores de servicio y montacargas",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          }
+        ],
+        "3.2_salas_personal": [
+          {
+            "tipo": "Oficina del personal",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "3.3_salas_guardia_maternidad": [
+          {
+            "tipo": "Iluminación general",
+            "em_lux": 100,
+            "ugr_l": 19,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Iluminación para la lectura",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Exámenes generales",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Exámenes específicos y tratamiento de maternidad",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Iluminación nocturna, observación",
+            "em_lux": 5,
+            "ugr_l": null,
+            "uo": null,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Baños y tocadores para pacientes",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "3.4_salas_examenes_generales": [
+          {
+            "tipo": "Alumbrado general (Salas de examen)",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 5000 K"]
+          },
+          {
+            "tipo": "Examen y tratamiento",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          }
+        ],
+        "3.5_salas_examen_ocular": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 5000 K"]
+          },
+          {
+            "tipo": "Exámenes ocular",
+            "em_lux": 1000,
+            "ugr_l": null,
+            "uo": null,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Prueba de lectura y visión cromática",
+            "em_lux": 500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          }
+        ],
+        "3.6_salas_examen_auditivo": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Examen auditivo",
+            "em_lux": 1000,
+            "ugr_l": null,
+            "uo": null,
+            "ra": 90,
+            "requisitos": []
+          }
+        ],
+        "3.7_salas_escaner": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Escáners con aumentadores de imágenes y sistemas de TV",
+            "em_lux": 50,
+            "ugr_l": 19,
+            "uo": null,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "3.8_salas_parto_tratamiento": [
+          {
+            "tipo": "Salas de parto - Alumbrado general",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de parto - Examen y tratamiento",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de diálisis",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de dermatología",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de endoscopías",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de enyesar",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Baños de médicos",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Masaje y radioterapia",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "3.9_areas_operacion": [
+          {
+            "tipo": "Salas pre-operatorias y de recuperación",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Sala de operaciones",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Quirófano",
+            "em_lux": "10000-100000",
+            "ugr_l": null,
+            "uo": null,
+            "ra": null,
+            "requisitos": ["Em: 10,000 lx a 100,000 lx"]
+          }
+        ],
+        "3.10_uci_dentistas": [
+          {
+            "tipo": "UCI - Iluminación general",
+            "em_lux": 100,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "UCI - Exámenes sencillos",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "UCI - Exámenes y tratamiento",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "UCI - Vigilancia nocturna",
+            "em_lux": 20,
+            "ugr_l": 19,
+            "uo": null,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Dentistas - Iluminación general",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["Libre de deslumbramiento para paciente"]
+          },
+          {
+            "tipo": "Dentistas - En el paciente",
+            "em_lux": 1000,
+            "ugr_l": null,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Dentistas - Quirófano/Maquinado",
+            "em_lux": null,
+            "ugr_l": null,
+            "uo": null,
+            "ra": null,
+            "requisitos": ["Ver Norma EN ISO 9680"]
+          }
+        ],
+        "3.11_laboratorios_farmacias": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de colores",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["6000 K ≤ TCP ≤ 6500 K"]
+          }
+        ],
+        "3.12_descontaminacion": [
+          {
+            "tipo": "Salas de esterilización",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de desinfección",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "3.13_autopsias": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mesa de autopsias y disección",
+            "em_lux": 5000,
+            "ugr_l": null,
+            "uo": null,
+            "ra": 90,
+            "requisitos": ["Pueden requerirse valores > 5000 lx"]
+          }
+        ]
+      }
+    },
+    "industria": {
+      "nombre": "INDUSTRIA",
+      "subcategorias": {
+        "4.1_agricultura": [
+          {
+            "tipo": "Carga y operación de mercancías y equipos",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Edificación para ganadería",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Sala de veterinaria, establos para parir",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Preparación de alimentos, lechería, lavado",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Panaderías - Preparación y horneado",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Panaderías - Terminado, escarchado, decoración",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.2_cemento_concreto": [
+          {
+            "tipo": "Secado",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Reconocer colores de seguridad"]
+          },
+          {
+            "tipo": "Preparación de materiales, hornos y mezcladores",
+            "em_lux": 200,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Trabajo en máquinas en general",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Encofrado",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.3_ceramicas_vidrio": [
+          {
+            "tipo": "Secado",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": []
+          },
+          {
+            "tipo": "Preparación, trabajo en máquinas",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Esmaltado, laminado, prensado, vidrio",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Trituración, pulido, instrumentos de vidrio",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Trabajo de precisión - pintura a mano",
+            "em_lux": 750,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Trabajo de precisión - pintura a mano (alto Ra)",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Fabricación de piedras preciosas sintéticas",
+            "em_lux": 1500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          }
+        ],
+        "4.4_quimica_plasticos_caucho": [
+          {
+            "tipo": "Procesamiento operado a distancia",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Reconocer colores de seguridad"]
+          },
+          {
+            "tipo": "Procesamiento con intervención manual limitada",
+            "em_lux": 150,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Puestos de trabajo constantes en procesamiento",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mediciones precisas, laboratorios",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Producción farmacéutica",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Producción de neumáticos",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de colores",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Corte, acabado, inspección",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.5_industria_electrica": [
+          {
+            "tipo": "Fabricación de cable e hilos",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Bobinado - Bobinas grandes",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Bobinado - Bobinas medianas",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Bobinado - Bobinas pequeñas",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Impregnación de devanados",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Galvanización",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - obra gruesa",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - mediano",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - fino",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - de precisión",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Talleres de electrónica, ensayos, ajustes",
+            "em_lux": 1500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.6_alimentos": [
+          {
+            "tipo": "Cervecerías, malta, conservas, chocolates, azúcar, tabaco",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Clasificación, lavado, molienda, mezclado, envase",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mataderos, carnicerías, lecherías, refinerías",
+            "em_lux": 500,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Corte y clasificación de frutas y vegetales",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Alimentos finos, cocinas, tabacos",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de envases, control, decoración",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Laboratorios",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de colores",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          }
+        ],
+        "4.7_fundiciones_metales": [
+          {
+            "tipo": "Túneles, sótanos",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Reconocer colores de seguridad"]
+          },
+          {
+            "tipo": "Preparación de arena",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Desarenado",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Cubilote y mezclador",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Patio de fundición",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Desmoldeo",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Máquina moldeadora",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Moldeo manual y de machos",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fundición en coquillas",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.8_trabajo_metales": [
+          {
+            "tipo": "Forjado con estampa abierta",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Forjado por estampación, soldadura, extrusión",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Maquinado grueso/medio (tolerancias > 0.1 mm)",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Maquinado de precisión (tolerancias < 0.1 mm)",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Marcado, inspección",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Plantillas de dibujo de alambres y tuberías",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Maquinado de planchas > 5 mm",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Labrado de chapas < 5 mm",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fabricación de equipos de corte",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - grueso",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - medio",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - fino",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Montaje - de precisión",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Galvanización",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Preparación y pintura de superficies",
+            "em_lux": 750,
+            "ugr_l": 25,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mecánica de precisión, micromecánica",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.9_cuero": [
+          {
+            "tipo": "Trabajo en cubas, toneles, fosos",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Descarnado, raspado, pulido, limpieza",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Talabartería, calzado, cosido, corte",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Clasificación",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Teñido del cuero (a máquina)",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Control de la calidad",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección del color",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Elaboración de calzado",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Elaboración de guantes",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.10_papel": [
+          {
+            "tipo": "Molinos de pulpa, muelas verticales",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fabricación y procesamiento del papel",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Encuadernación de libros",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          }
+        ],
+        "4.11_centrales_electricas": [
+          {
+            "tipo": "Planta de suministro de combustible",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Colores de seguridad reconocibles"]
+          },
+          {
+            "tipo": "Casa de calderas",
+            "em_lux": 100,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de máquinas",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Locales auxiliares (bombas, condensadores, paneles)",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Cuartos de control",
+            "em_lux": 500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": [
+              "Paneles a menudo en vertical",
+              "Puede requerirse regulación de flujo luminoso"
+            ]
+          }
+        ],
+        "4.12_imprentas": [
+          {
+            "tipo": "Corte, dorado, estampado, grabado, imprentas",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Clasificación del papel e impresión a mano",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Linotipia, retoque, litografía",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de colores en impresión multicolor",
+            "em_lux": 1500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["5000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Grabado en acero y cobre",
+            "em_lux": 2000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.13_laminacion_siderurgia": [
+          {
+            "tipo": "Plantas sin intervención manual",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Reconocer colores de seguridad"]
+          },
+          {
+            "tipo": "Plantas con operación manual ocasional",
+            "em_lux": 150,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Plantas con operación manual continua",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Almacén de palanquilla",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Colores de seguridad reconocibles"]
+          },
+          {
+            "tipo": "Hornos",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Colores de seguridad reconocibles"]
+          },
+          {
+            "tipo": "Tren de laminación, bobinador, cizallamiento",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Plataformas y paneles de control",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Ensayo, medición e inspección",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Túneles, cintas transportadoras, sótanos",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Colores de seguridad reconocibles"]
+          }
+        ],
+        "4.14_textil": [
+          {
+            "tipo": "Baños, apertura de pacas",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Cardado, lavado, planchado, tejido, hilado",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Hilado, plegado, urdidura, tejido, tricotado",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Prevenir efectos estroboscópicos"]
+          },
+          {
+            "tipo": "Costura, tejidos finos de punto",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Diseño manual, dibujo de patrones",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Acabado, teñido",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Cuarto de secado",
+            "em_lux": 100,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Impresión automática en géneros",
+            "em_lux": 500,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Despinzado, batanado, galonado",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección de colores, control de tejidos",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Zurcido invisible",
+            "em_lux": 1500,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Fabricación de sombreros",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "4.15_vehiculos": [
+          {
+            "tipo": "Carrocería y ensamblaje",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Pintura, cámara de pintar, pulir",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Pintura: retoque, inspección",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Tapicería manual",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección final",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Servicios generales, reparación y ensayos",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Considerar iluminación local"]
+          }
+        ],
+        "4.16_madera": [
+          {
+            "tipo": "Procesamiento automático, madera contrachapada",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fosos de vapor",
+            "em_lux": 150,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Bastidor de sierra",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 60,
+            "requisitos": ["Prevenir efectos estroboscópicos"]
+          },
+          {
+            "tipo": "Banco de ebanista, encolado, montaje",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Pulido, pintado, ebanistería de fantasía",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Máquinas de carpintería (torneado, cepillado, corte)",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": ["Prevenir efectos estroboscópicos"]
+          },
+          {
+            "tipo": "Selección de maderas, mosaicos, incrustación",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Marquetería, incrustación en madera",
+            "em_lux": 750,
+            "ugr_l": 22,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Control de calidad, inspección",
+            "em_lux": 1000,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          }
+        ]
+      }
+    },
+    "comercio": {
+      "nombre": "COMERCIO",
+      "subcategorias": {
+        "5.1_tiendas": [
+          {
+            "tipo": "Área de ventas",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Área de cajas",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mostrador de envolver",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "5.2_areas_comunes": [
+          {
+            "tipo": "Vestíbulo de entrada",
+            "em_lux": 100,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["UGR sólo si es aplicable"]
+          },
+          {
+            "tipo": "Guardarropas",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salones",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Oficinas de taquillas",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "5.3_restaurantes_hoteles": [
+          {
+            "tipo": "Recepción/cajero, conserje",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Cocina",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Zona de transición entre cocina y restaurante"]
+          },
+          {
+            "tipo": "Restaurante, comedor, salón multiuso",
+            "em_lux": null,
+            "ugr_l": null,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Diseñar para crear atmósfera apropiada"]
+          },
+          {
+            "tipo": "Restaurante de autoservicio",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Buffet (comidas frías)",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de conferencias",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Iluminación controlable"]
+          },
+          {
+            "tipo": "Corredores",
+            "em_lux": 100,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["Niveles inferiores aceptables de noche"]
+          },
+          {
+            "tipo": "Cantinas, tabernas",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "5.4_teatros_cines": [
+          {
+            "tipo": "Teatros y salas de concierto",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas multipropósito",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": ["Iluminación a nivel del suelo"]
+          },
+          {
+            "tipo": "Locales de ejercicios, vestidores",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.5,
+            "ra": 80,
+            "requisitos": ["Iluminación de espejos libre de deslumbramiento"]
+          },
+          {
+            "tipo": "Museos (general)",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": ["Iluminación a nivel del suelo"]
+          }
+        ],
+        "5.5_ferias_exposiciones": [
+          {
+            "tipo": "Alumbrado general",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "5.6_peluquerias": [
+          {
+            "tipo": "Trabajo de peluquería",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 90,
+            "requisitos": []
+          }
+        ],
+        "5.7_joyeria_relojeria": [
+          {
+            "tipo": "Trabajo con piedras preciosas",
+            "em_lux": 1500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": ["4000 K ≤ TCP ≤ 6500 K"]
+          },
+          {
+            "tipo": "Manufactura de joyas",
+            "em_lux": 1000,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 90,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fabricación manual de relojes",
+            "em_lux": 1500,
+            "ugr_l": 16,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Fabricación automática de relojes",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "5.8_lavanderias": [
+          {
+            "tipo": "Entrada, marcado y clasificación",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Lavado normal y en seco",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Planchado, calandria",
+            "em_lux": 300,
+            "ugr_l": 25,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Inspección y arreglos",
+            "em_lux": 750,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          }
+        ]
+      }
+    },
+    "oficinas": {
+      "nombre": "OFICINAS",
+      "areas": [
+        {
+          "tipo": "Archivo, copia, circulación",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Escritura, mecanografía, lectura, procesamiento de datos",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Estación de trabajo CAD",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Salas de conferencias y reuniones",
+          "em_lux": 500,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Archivos",
+          "em_lux": 200,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        }
+      ]
+    },
+    "servicios_comunales": {
+      "nombre": "SERVICIOS COMUNALES",
+      "subcategorias": {
+        "7.1_museos": [
+          {
+            "tipo": "Obras exhibidas insensibles a la luz",
+            "em_lux": null,
+            "ugr_l": null,
+            "uo": null,
+            "ra": null,
+            "requisitos": ["Determinar por requisitos de presentación"]
+          },
+          {
+            "tipo": "Obras exhibidas sensibles a la luz",
+            "em_lux": null,
+            "ugr_l": null,
+            "uo": null,
+            "ra": null,
+            "requisitos": [
+              "Determinar por requisitos de presentación",
+              "Protección contra radiación dañina imprescindible"
+            ]
+          }
+        ],
+        "7.2_bibliotecas": [
+          {
+            "tipo": "Estanterías",
+            "em_lux": 200,
+            "ugr_l": 19,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Áreas de lectura",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mostradores",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "7.3_templos": [
+          {
+            "tipo": "Nave de iglesia",
+            "em_lux": 100,
+            "ugr_l": 25,
+            "uo": null,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Asientos, altar, púlpito",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": null,
+            "ra": 80,
+            "requisitos": []
+          }
+        ]
+      }
+    },
+    "recreacion_deportes": {
+      "nombre": "RECREACIÓN Y DEPORTES",
+      "areas": [
+        {
+          "tipo": "Salas para ejercicios físicos",
+          "em_lux": 300,
+          "ugr_l": 22,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": []
+        },
+        {
+          "tipo": "Vestuarios, salas de lavado, baños, servicios",
+          "em_lux": 200,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 80,
+          "requisitos": [
+            "En cada baño individual si está completamente cerrado"
+          ]
+        }
+      ]
+    },
+    "transporte_comunicaciones": {
+      "nombre": "TRANSPORTE Y COMUNICACIONES",
+      "subcategorias": {
+        "9.1_aeropuertos": [
+          {
+            "tipo": "Salones de llegadas/partidas, recogida de equipaje",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Áreas de conexión, escaladores, cintas transportadoras",
+            "em_lux": 150,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Mostradores de información, check-in",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Aduana y control de pasaportes",
+            "em_lux": 500,
+            "ugr_l": 19,
+            "uo": 0.7,
+            "ra": 80,
+            "requisitos": ["Proporcionar reconocimiento facial"]
+          },
+          {
+            "tipo": "Áreas de espera",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Depósitos de equipajes",
+            "em_lux": 200,
+            "ugr_l": 25,
+            "uo": 0.4,
+            "ra": 60,
+            "requisitos": []
+          },
+          {
+            "tipo": "Áreas de chequeo de seguridad",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Torre de control de tráfico",
+            "em_lux": 500,
+            "ugr_l": 16,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": [
+              "Iluminación regulable",
+              "Evitar deslumbramiento diurno",
+              "Evitar reflejos en ventanas"
+            ]
+          },
+          {
+            "tipo": "Hangares de pruebas y reparaciones",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Área de prueba de máquinas",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.6,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Áreas de medición en hangares",
+            "em_lux": 500,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          }
+        ],
+        "9.2_terrapuertos": [
+          {
+            "tipo": "Andenes completamente cubiertos",
+            "em_lux": 100,
+            "ugr_l": null,
+            "uo": null,
+            "ra": 40,
+            "requisitos": [
+              "Atención al borde de plataforma",
+              "Evitar deslumbramiento a conductores",
+              "Iluminancia a nivel del suelo"
+            ]
+          },
+          {
+            "tipo": "Pasos subterráneos de pasajeros",
+            "em_lux": 50,
+            "ugr_l": 28,
+            "uo": 0.5,
+            "ra": 40,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Sala de taquillas y vestíbulo",
+            "em_lux": 200,
+            "ugr_l": 28,
+            "uo": 0.5,
+            "ra": 40,
+            "requisitos": []
+          },
+          {
+            "tipo": "Oficinas de billetes, equipaje y contadores",
+            "em_lux": 300,
+            "ugr_l": 19,
+            "uo": 0.5,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de espera",
+            "em_lux": 200,
+            "ugr_l": 22,
+            "uo": 0.5,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Vestíbulos de entrada/estación",
+            "em_lux": 200,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 80,
+            "requisitos": []
+          },
+          {
+            "tipo": "Salas de contadores y máquinas",
+            "em_lux": 200,
+            "ugr_l": 28,
+            "uo": 0.4,
+            "ra": 60,
+            "requisitos": ["Colores de seguridad reconocibles"]
+          },
+          {
+            "tipo": "Túneles de acceso",
+            "em_lux": 50,
+            "ugr_l": null,
+            "uo": 0.4,
+            "ra": 20,
+            "requisitos": ["Iluminancia a nivel del suelo"]
+          },
+          {
+            "tipo": "Naves de mantenimiento y servicio",
+            "em_lux": 300,
+            "ugr_l": 22,
+            "uo": 0.4,
+            "ra": 60,
+            "requisitos": []
+          }
+        ]
+      }
+    },
+    "estacionamientos": {
+      "nombre": "ESTACIONAMIENTOS",
+      "areas": [
+        {
+          "tipo": "Rampas entrada/salida (día)",
+          "em_lux": 300,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 40,
+          "requisitos": [
+            "Iluminancia a nivel del suelo",
+            "Reconocer colores de seguridad"
+          ]
+        },
+        {
+          "tipo": "Rampas entrada/salida (noche)",
+          "em_lux": 75,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 40,
+          "requisitos": [
+            "Iluminancia a nivel del suelo",
+            "Reconocer colores de seguridad"
+          ]
+        },
+        {
+          "tipo": "Calles interiores",
+          "em_lux": 75,
+          "ugr_l": 25,
+          "uo": 0.4,
+          "ra": 40,
+          "requisitos": [
+            "Iluminancia a nivel del suelo",
+            "Reconocer colores de seguridad"
+          ]
+        },
+        {
+          "tipo": "Áreas de parqueo",
+          "em_lux": 75,
+          "ugr_l": null,
+          "uo": 0.4,
+          "ra": 40,
+          "requisitos": [
+            "Iluminancia a nivel del suelo",
+            "Reconocer colores de seguridad",
+            "Alta iluminancia vertical mejora reconocimiento facial"
+          ]
+        },
+        {
+          "tipo": "Caja",
+          "em_lux": 300,
+          "ugr_l": 19,
+          "uo": 0.6,
+          "ra": 80,
+          "requisitos": [
+            "Evitar reflejos en ventanas",
+            "Prevenir deslumbramiento desde exterior"
+          ]
+        }
+      ]
+    }
+  }
+}

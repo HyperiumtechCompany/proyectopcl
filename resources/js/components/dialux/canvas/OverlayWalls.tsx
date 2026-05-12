@@ -41,26 +41,16 @@ export const OverlayWalls = memo(function OverlayWalls({
                         <polyline
                             points={pts}
                             stroke="transparent"
-                            strokeWidth={safeNum(Math.max(thickPx + 10, 15))}
+                            strokeWidth={20}
                             fill="none"
                         />
-                        {/* Cuerpo visible */}
+                        {/* Cuerpo visible — pared interior: amarillo */}
                         <polyline
                             points={pts}
-                            stroke={isSelected ? '#94a3b8' : '#64748b'}
-                            strokeWidth={safeNum(thickPx)}
+                            stroke={isSelected ? '#fde047' : '#eab308'}
+                            strokeWidth={isSelected ? 3 : 2}
                             strokeLinecap="round"
                             fill="none"
-                            opacity={0.95}
-                        />
-                        {/* Highlight interior */}
-                        <polyline
-                            points={pts}
-                            stroke={isSelected ? '#e2e8f0' : '#94a3b8'}
-                            strokeWidth={safeNum(Math.max(1, thickPx - 4))}
-                            strokeLinecap="round"
-                            fill="none"
-                            opacity={0.3}
                         />
                         {/* Etiqueta de longitud */}
                         {totalLen > 0.1 && (

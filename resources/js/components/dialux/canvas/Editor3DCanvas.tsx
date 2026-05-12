@@ -26,11 +26,11 @@ import {
     Vector3,
 } from '@babylonjs/core';
 import React, { memo, useCallback, useEffect, useRef } from 'react';
-import { House3DBuilder } from '@/editor/renderers/3d/engines/House3DBuilder';
 import {
     resolveFixtureRenderHeight,
     resolveRoomCeilingHeight,
 } from '@/editor/renderers/3d/engines/fixtureHeights';
+import { House3DBuilder } from '@/editor/renderers/3d/engines/House3DBuilder';
 import { findAmbientSpaceAtPoint } from '@/hooks/dialux/ambientSpaces';
 import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 

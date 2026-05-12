@@ -4,11 +4,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import { patchWebGLPreserveBuffer } from './dialux-export/assets/patchWebGLPreserveBuffer';
 import { initializeTheme } from './hooks/use-appearance';
 // ── WebGL patch — MUST run before mlightcad creates its canvas context ────────
 // Forces preserveDrawingBuffer: true on every WebGL context so that
 // canvas.toDataURL() and gl.readPixels() return real pixel data for PDF export.
-import { patchWebGLPreserveBuffer } from './dialux-export/assets/patchWebGLPreserveBuffer';
 patchWebGLPreserveBuffer();
 //import Echo from 'laravel-echo';
 //import Pusher from 'pusher-js';

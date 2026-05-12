@@ -1,10 +1,14 @@
-import type { Scene } from './types';
 import { getActivityOptions } from './roomLighting';
+import type { Scene } from './types';
 import type { Fixture, Room, Vertex, Wall } from './types';
 
 // Logger condicional — silenciado en producción
-const isDev = typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
-const ambientLog = isDev ? console.log.bind(console, '[ambientSpaces]') : () => {};
+const isDev =
+    typeof import.meta !== 'undefined' &&
+    (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+const ambientLog = isDev
+    ? console.log.bind(console, '[ambientSpaces]')
+    : () => {};
 
 export interface DerivedAmbientSpace {
     id: string;
@@ -48,7 +52,8 @@ function polygonCentroid(vertices: Vertex[]): Vertex {
     if (vertices.length === 0) return { x: 0, y: 0 };
 
     const uniqueVertices =
-        vertices.length > 2 && pointsAlmostEqual(vertices[0], vertices[vertices.length - 1])
+        vertices.length > 2 &&
+        pointsAlmostEqual(vertices[0], vertices[vertices.length - 1])
             ? vertices.slice(0, -1)
             : vertices;
 
@@ -213,7 +218,7 @@ export function pointInPolygon(point: Vertex, vertices: Vertex[]): boolean {
         const b = vertices[j];
 
         if (
-            (a.y > point.y) !== (b.y > point.y) &&
+            a.y > point.y !== b.y > point.y &&
             point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x
         ) {
             inside = !inside;
@@ -463,8 +468,11 @@ function buildRasterRegions(room: Room, walls: Wall[]): RasterRegion[] {
                 const clearance =
                     Math.max(segment.thickness / 2, cellSize * 0.5) + EPSILON;
                 return (
-                    distancePointToSegment(center, segment.start, segment.end) <=
-                    clearance
+                    distancePointToSegment(
+                        center,
+                        segment.start,
+                        segment.end,
+                    ) <= clearance
                 );
             });
 
@@ -498,7 +506,8 @@ function buildRasterRegions(room: Room, walls: Wall[]): RasterRegion[] {
                     y: bounds.minY + (current.row + 0.5) * cellSize,
                 };
                 const nearRoomBoundary = room.vertices.some((vertex, index) => {
-                    const next = room.vertices[(index + 1) % room.vertices.length];
+                    const next =
+                        room.vertices[(index + 1) % room.vertices.length];
                     return (
                         distancePointToSegment(center, vertex, next) <=
                         cellSize * 1.15 + EPSILON
@@ -592,7 +601,10 @@ function fixturesForAmbient(
     }
 
     if (inside.length > 1) {
-        return inside.map((fixture) => ({ ...fixture, roomId: ambientRoom.id }));
+        return inside.map((fixture) => ({
+            ...fixture,
+            roomId: ambientRoom.id,
+        }));
     }
 
     return [];
@@ -612,9 +624,11 @@ function buildSingleAmbientSpace(
     const activity =
         ambientConfig?.activity ?? room.normativeActivity ?? undefined;
     const activityOption = activity
-        ? getActivityOptions(room.normativeCategory, room.normativeSection).find(
-              (option) => option.activity === activity,
-          ) ?? null
+        ? (getActivityOptions(
+              room.normativeStandard ?? 'en_12464',
+              room.normativeCategory,
+              room.normativeSection,
+          ).find((option) => option.activity === activity) ?? null)
         : null;
     const singleAmbientRoom: Room = {
         ...room,
@@ -622,14 +636,11 @@ function buildSingleAmbientSpace(
         name: ambientConfig?.name?.trim() || room.name,
         normativeActivity: activity,
         normativeLabel: activityOption?.label ?? room.normativeLabel,
-        illuminanceLux:
-            activityOption?.illuminanceLux ?? room.illuminanceLux,
+        illuminanceLux: activityOption?.illuminanceLux ?? room.illuminanceLux,
         norma: activityOption?.illuminanceLux ?? room.norma,
         ugrLimit: activityOption?.ugr ?? room.ugrLimit,
-        uniformityTarget:
-            activityOption?.uniformity ?? room.uniformityTarget,
-        colorRenderingRa:
-            activityOption?.ra ?? room.colorRenderingRa,
+        uniformityTarget: activityOption?.uniformity ?? room.uniformityTarget,
+        colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
         specificRequirements:
             activityOption?.specificRequirements ?? room.specificRequirements,
     };
@@ -699,9 +710,11 @@ function buildWallDefinedAmbientSpaces(
         const activity =
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
-            ? getActivityOptions(room.normativeCategory, room.normativeSection).find(
-                  (option) => option.activity === activity,
-              ) ?? null
+            ? (getActivityOptions(
+                  room.normativeStandard ?? 'en_12464',
+                  room.normativeCategory,
+                  room.normativeSection,
+              ).find((option) => option.activity === activity) ?? null)
             : null;
         const ambientRoom: Room = {
             ...room,
@@ -719,8 +732,7 @@ function buildWallDefinedAmbientSpaces(
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
-            colorRenderingRa:
-                activityOption?.ra ?? room.colorRenderingRa,
+            colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
@@ -778,9 +790,11 @@ export function deriveAmbientSpaces(
         const activity =
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
-            ? getActivityOptions(room.normativeCategory, room.normativeSection).find(
-                  (option) => option.activity === activity,
-              ) ?? null
+            ? (getActivityOptions(
+                  room.normativeStandard ?? 'en_12464',
+                  room.normativeCategory,
+                  room.normativeSection,
+              ).find((option) => option.activity === activity) ?? null)
             : null;
         const singleAmbientRoom: Room = {
             ...room,
@@ -794,15 +808,13 @@ export function deriveAmbientSpaces(
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
-            colorRenderingRa:
-                activityOption?.ra ?? room.colorRenderingRa,
+            colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
         };
         const centroid =
-            regions[0]?.centroid ??
-            findInteriorPoint(room.vertices);
+            regions[0]?.centroid ?? findInteriorPoint(room.vertices);
 
         const baseFixtures = fixtures.filter((fixture) =>
             pointInPolygon({ x: fixture.x, y: fixture.y }, room.vertices),
@@ -837,9 +849,11 @@ export function deriveAmbientSpaces(
         const activity =
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
-            ? getActivityOptions(room.normativeCategory, room.normativeSection).find(
-                  (option) => option.activity === activity,
-              ) ?? null
+            ? (getActivityOptions(
+                  room.normativeStandard ?? 'en_12464',
+                  room.normativeCategory,
+                  room.normativeSection,
+              ).find((option) => option.activity === activity) ?? null)
             : null;
         const ambientRoom: Room = {
             ...room,
@@ -857,8 +871,7 @@ export function deriveAmbientSpaces(
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
-            colorRenderingRa:
-                activityOption?.ra ?? room.colorRenderingRa,
+            colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
@@ -914,12 +927,16 @@ export function deriveSceneAmbientSpaces(scene: Scene): DerivedAmbientSpace[] {
                 return isContained;
             })
             .map((corridor, index) => {
-                const ambient = buildSingleAmbientSpace(corridor, scene.fixtures, {
-                    id: `${room.id}::${corridor.id}::ambient-1`,
-                    roomId: room.id,
-                    roomName: room.name,
-                    sourceRoom: corridor,
-                });
+                const ambient = buildSingleAmbientSpace(
+                    corridor,
+                    scene.fixtures,
+                    {
+                        id: `${room.id}::${corridor.id}::ambient-1`,
+                        roomId: room.id,
+                        roomName: room.name,
+                        sourceRoom: corridor,
+                    },
+                );
 
                 return {
                     ...ambient,

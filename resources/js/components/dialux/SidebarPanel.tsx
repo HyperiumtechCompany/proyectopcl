@@ -1,8 +1,8 @@
+import { Layers, Settings2 } from 'lucide-react';
 import React from 'react';
 import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import { ObjectsPanel } from './ObjectsPanel';
 import { PropertiesPanel } from './PropertiesPanel';
-import { Layers, Settings2 } from 'lucide-react';
 
 export const SidebarPanel: React.FC = () => {
     const store = useEditorStore();

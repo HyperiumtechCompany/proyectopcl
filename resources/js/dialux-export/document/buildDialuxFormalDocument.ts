@@ -452,22 +452,23 @@ function buildTechnicalPageSeeds(
     }
 
     // 4. Lista de locales (Ambients)
+    const architecturalAssetId = assets.some((a) => a.id === 'viewer-capture')
+        ? 'viewer-capture'
+        : (assets.some((a) => a.id === 'drawn-terrain-svg')
+            ? 'drawn-terrain-svg'
+            : cadAssetId);
+
     seeds.push({
         id: 'page-terrain-ambient-list',
         kind: 'ambient-list',
         sectionId: 'ambient-list',
         title: 'Lista de locales / Escena de luz 1',
         subtitle: 'Terreno 1 - Edificacion 1',
-        assetIds: [],
+        assetIds: architecturalAssetId ? [architecturalAssetId] : [],
         notes: []
     });
 
     // 5. Plano Arquitectónico (Recintos y luminarias sobre el CAD)
-    const architecturalAssetId = assets.some((a) => a.id === 'viewer-capture')
-        ? 'viewer-capture'
-        : (assets.some((a) => a.id === 'drawn-terrain-svg')
-            ? 'drawn-terrain-svg'
-            : cadAssetId);
 
     if (architecturalAssetId) {
         seeds.push({

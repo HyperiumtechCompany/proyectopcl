@@ -45,7 +45,7 @@ export interface Room {
     color: string;
     illuminanceLux?: number;
     fixtureLumens?: number;
-    normativeStandard?: 'en_12464' | 'ies_na';
+    normativeStandard?: 'en_12464' | 'ies_na' | 'rne_peru';
     normativeCategory?: string;
     normativeSection?: string;
     normativeActivity?: string;
@@ -149,6 +149,7 @@ export interface Fixture {
     ugrDiagramValue?: string | null;
     polarDiagramAssetId?: string | null;
     productPhotoAssetId?: string | null;
+    brandLogoAssetId?: string | null;
     lineDrawingAssetId?: string | null;
 }
 

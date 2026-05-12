@@ -1,11 +1,12 @@
 import axios from 'axios';
 import { useCallback, useState } from 'react';
-import * as dialuxRoutes from '@/routes/dialux';
 import { useEditorStore } from '@/hooks/dialux/useEditorStore';
+import * as dialuxRoutes from '@/routes/dialux';
+import { captureCadBaseBitmap } from './assets/captureCadBaseBitmap';
 import { buildDialuxExportAssets } from './derived/buildDialuxExportAssets';
 import { buildDialuxFormalDocument } from './document/buildDialuxFormalDocument';
+import type { DialuxFormalDocument } from './domain/types';
 import { buildDialuxExportSnapshot } from './snapshot/buildDialuxExportSnapshot';
-import { captureCadBaseBitmap } from './assets/captureCadBaseBitmap';
 
 export interface UseDialuxPdfExportResult {
     exportPdf: (targetWindow?: Window | null) => Promise<void>;
@@ -34,7 +35,9 @@ function wait(ms: number): Promise<void> {
     });
 }
 
-async function prepareCadCanvasForCapture(wasShowing3D: boolean): Promise<void> {
+async function prepareCadCanvasForCapture(
+    wasShowing3D: boolean,
+): Promise<void> {
     if (wasShowing3D) {
         useEditorStore.getState().toggle3DView();
     }
@@ -43,6 +46,59 @@ async function prepareCadCanvasForCapture(wasShowing3D: boolean): Promise<void> 
     window.dispatchEvent(new Event('resize'));
     await wait(120);
     await waitForTwoFrames();
+}
+
+function pruneUnusedAssets(
+    document: DialuxFormalDocument,
+): DialuxFormalDocument {
+    const referencedAssetIds = new Set<string>();
+
+    for (const page of document.pages) {
+        for (const assetId of page.assetIds) {
+            referencedAssetIds.add(assetId);
+        }
+    }
+
+    for (const ambient of document.ambientDetails) {
+        if (ambient.planAssetId) {
+            referencedAssetIds.add(ambient.planAssetId);
+        }
+        if (ambient.isoluxAssetId) {
+            referencedAssetIds.add(ambient.isoluxAssetId);
+        }
+        for (const luminaire of ambient.luminaires) {
+            [
+                luminaire.polarDiagramAssetId,
+                luminaire.productPhotoAssetId,
+                luminaire.brandLogoAssetId,
+                luminaire.lineDrawingAssetId,
+            ].forEach((assetId) => {
+                if (assetId) {
+                    referencedAssetIds.add(assetId);
+                }
+            });
+        }
+    }
+
+    for (const luminaire of document.luminaires) {
+        [
+            luminaire.polarDiagramAssetId,
+            luminaire.productPhotoAssetId,
+            luminaire.brandLogoAssetId,
+            luminaire.lineDrawingAssetId,
+        ].forEach((assetId) => {
+            if (assetId) {
+                referencedAssetIds.add(assetId);
+            }
+        });
+    }
+
+    return {
+        ...document,
+        assets: document.assets.filter((asset) =>
+            referencedAssetIds.has(asset.id),
+        ),
+    };
 }
 
 export function useDialuxPdfExport(): UseDialuxPdfExportResult {
@@ -61,6 +117,8 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                 'No hay un proyecto o una escena activa para exportar.',
             );
         }
+        const project = state.project;
+        const activeSceneId = state.activeSceneId;
 
         setIsExporting(true);
         setLastError(null);
@@ -78,16 +136,19 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             await prepareCadCanvasForCapture(wasShowing3D);
             preCapturedCadBitmap = await captureCadBaseBitmap(
                 '#cad-engine-container',
-                1200,
-                780,
+                900,
+                585,
             );
 
             // ── Step 2: Build the export snapshot from application state
             setExportStep('Preparando datos del proyecto...');
             const exportState = useEditorStore.getState();
+            const exportProject = exportState.project ?? project;
+            const exportActiveSceneId =
+                exportState.activeSceneId ?? activeSceneId;
             const snapshot = buildDialuxExportSnapshot({
-                project: exportState.project,
-                activeSceneId: exportState.activeSceneId,
+                project: exportProject,
+                activeSceneId: exportActiveSceneId,
                 resultsByRoom: exportState.resultsByRoom,
                 dxfEntities: exportState.dxfEntities,
                 dxfExtents: exportState.dxfExtents,
@@ -112,7 +173,9 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
 
             // ── Step 4: Compose the formal document
             setExportStep('Componiendo documento formal...');
-            const formalDocument = buildDialuxFormalDocument(snapshot, assets);
+            const formalDocument = pruneUnusedAssets(
+                buildDialuxFormalDocument(snapshot, assets),
+            );
 
             // ── Step 5: Send to server and download PDF
             setExportStep('Generando PDF en servidor...');
@@ -131,7 +194,8 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                     : null;
 
             link.href = objectUrl;
-            link.download = matchedFileName ?? `${formalDocument.fileBaseName}.pdf`;
+            link.download =
+                matchedFileName ?? `${formalDocument.fileBaseName}.pdf`;
             link.click();
             window.URL.revokeObjectURL(objectUrl);
         } catch (error) {
@@ -150,7 +214,10 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                         parsed,
                     );
                     const validationErrors = parsed['errors'];
-                    if (validationErrors && typeof validationErrors === 'object') {
+                    if (
+                        validationErrors &&
+                        typeof validationErrors === 'object'
+                    ) {
                         const firstMessages = (
                             Object.values(validationErrors) as string[][]
                         )

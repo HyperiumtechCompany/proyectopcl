@@ -16,6 +16,7 @@ import {
     resolveRoomCeilingHeight,
 } from '@/editor/renderers/3d/engines/fixtureHeights';
 import { findAmbientSpaceAtPoint } from '@/hooks/dialux/ambientSpaces';
+import { shouldEnableOverlayPointerEvents } from '@/hooks/dialux/cadInteraction';
 import {
     useCanvasInteraction,
     type CanvasPoint,
@@ -28,7 +29,6 @@ import {
 } from '@/hooks/dialux/useEditorStore';
 import { useMlightcadEngine } from '@/hooks/dialux/useMlightcadEngine';
 import { useWasmEngine } from '@/hooks/dialux/useWasmEngine';
-import { shouldEnableOverlayPointerEvents } from '@/hooks/dialux/cadInteraction';
 
 import { CalibrationDialog } from '../CalibrationDialog';
 import { CalibrationOverlay } from './CalibrationOverlay';
@@ -307,7 +307,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     vertices,
                     material: 'brick',
                     normativeUse: 'housing',
-                    thickness: 0.13,
+                    thickness: 0.08,
                     height: 2.4,
                     mortarJointMin: 0.01,
                     mortarJointMax: 0.015,
@@ -718,6 +718,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         zoom={zoom}
                         onSelect={store.setSelectedId}
                         screenPoint={screenPoint}
+                        screenDistance={screenDistance}
                     />
                     <OverlayWalls
                         walls={scene?.walls ?? []}

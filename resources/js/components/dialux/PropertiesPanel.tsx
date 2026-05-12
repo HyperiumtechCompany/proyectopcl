@@ -1,4 +1,15 @@
-import { AppWindow, Minus, Move, Square, Umbrella, Zap, DoorOpen, Target, Grid, PlusSquare } from 'lucide-react';
+import {
+    AppWindow,
+    Minus,
+    Move,
+    Square,
+    Umbrella,
+    Zap,
+    DoorOpen,
+    Target,
+    Grid,
+    PlusSquare,
+} from 'lucide-react';
 import React from 'react';
 import {
     deriveAmbientSpaces,
@@ -6,6 +17,7 @@ import {
 } from '@/hooks/dialux/ambientSpaces';
 import { calculatePolygonArea } from '@/hooks/dialux/lightingCalculations';
 import {
+    NORMATIVE_LABELS,
     buildRoomLightingInputs,
     findNormativeOption,
     getActivityOptions,
@@ -53,14 +65,14 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     if (room) {
         const corridorAmbient =
             room.roomType === 'corridor'
-                ? deriveSceneAmbientSpaces(scene).find(
+                ? (deriveSceneAmbientSpaces(scene).find(
                       (ambient) => ambient.sourceRoom.id === room.id,
-                  ) ?? null
+                  ) ?? null)
                 : null;
         const parentRoom = corridorAmbient
-            ? scene.rooms.find(
+            ? (scene.rooms.find(
                   (candidate) => candidate.id === corridorAmbient.roomId,
-              ) ?? null
+              ) ?? null)
             : null;
 
         return (
@@ -132,7 +144,9 @@ const RoomProps: React.FC<{
     room: Room;
     scene: Scene | null;
     parentRoom?: Room | null;
-    selectedAmbient?: ReturnType<typeof deriveSceneAmbientSpaces>[number] | null;
+    selectedAmbient?:
+        | ReturnType<typeof deriveSceneAmbientSpaces>[number]
+        | null;
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
 }> = ({ room, scene, parentRoom = null, selectedAmbient = null, onUpdate }) => {
     const store = useEditorStore();
@@ -154,24 +168,16 @@ const RoomProps: React.FC<{
               )
         : [];
     const normative = findNormativeOption(room);
-    const standard = room.normativeStandard || 'en_12464';
+    const standard =
+        room.normativeStandard ?? store.defaultRoomNormativeStandard;
     const categoryOptions = getCategoryOptions(standard);
     const sectionOptions = getSectionOptions(standard, room.normativeCategory);
+    const activityOptions = getActivityOptions(
+        standard,
+        room.normativeCategory,
+        room.normativeSection,
+    );
     const inputs = buildRoomLightingInputs(calculationRoom, fixturesInRoom);
-
-    const handleNormativeStandardChange = (value: string) => {
-        onUpdate({
-            normativeStandard: value as any,
-            normativeCategory: undefined,
-            normativeSection: undefined,
-            normativeActivity: undefined,
-            normativeLabel: undefined,
-            ugrLimit: undefined,
-            uniformityTarget: undefined,
-            colorRenderingRa: undefined,
-            specificRequirements: undefined,
-        });
-    };
 
     const handleNormativeCategoryChange = (value: string) => {
         onUpdate({
@@ -198,6 +204,23 @@ const RoomProps: React.FC<{
         });
     };
 
+    const handleNormativeActivityChange = (value: string) => {
+        const selectedOption = activityOptions.find(
+            (option) => option.activity === value,
+        );
+        onUpdate({
+            normativeActivity: value || undefined,
+            normativeLabel: selectedOption?.label || undefined,
+            illuminanceLux:
+                selectedOption?.illuminanceLux || inputs.illuminanceLux,
+            ugrLimit: selectedOption?.ugr || undefined,
+            uniformityTarget: selectedOption?.uniformity || undefined,
+            colorRenderingRa: selectedOption?.ra || undefined,
+            specificRequirements:
+                selectedOption?.specificRequirements || undefined,
+        });
+    };
+
     return (
         <div className="max-h-[600px] space-y-3 overflow-y-auto">
             <SectionWrapper
@@ -217,9 +240,15 @@ const RoomProps: React.FC<{
                     step={0.1}
                     onChange={(value) => onUpdate({ height: value })}
                 />
-                {isCorridorAmbient && parentRoom && parentRoom.id !== room.id && (
-                    <PropField label="Recinto" value={parentRoom.name} mono={false} />
-                )}
+                {isCorridorAmbient &&
+                    parentRoom &&
+                    parentRoom.id !== room.id && (
+                        <PropField
+                            label="Recinto"
+                            value={parentRoom.name}
+                            mono={false}
+                        />
+                    )}
                 {isCorridorAmbient && (
                     <PropField label="Tipo" value="Pasadizo" mono={false} />
                 )}
@@ -236,18 +265,13 @@ const RoomProps: React.FC<{
                     <p className="mb-1.5 text-[10px] font-semibold text-cyan-500">
                         Normativa y calculo
                     </p>
-                    <SelectField
+                    <PropField
                         label="Estandar"
-                        value={standard}
-                        options={[
-                            { value: 'en_12464', label: 'EN 12464-1 (Europa)' },
-                            { value: 'ies_na',   label: 'IESNA / IES HB-10 (EE. UU.)' },
-                            { value: 'rne_peru', label: 'RNE EM.010 / CNE (Perú)' },
-                        ]}
-                        onChange={handleNormativeStandardChange}
+                        value={NORMATIVE_LABELS[standard]}
+                        mono={false}
                     />
                     <SelectField
-                        label="Normativa"
+                        label="Categoria"
                         value={room.normativeCategory ?? ''}
                         options={categoryOptions.map((option) => ({
                             value: option,
@@ -266,6 +290,18 @@ const RoomProps: React.FC<{
                             }))}
                             placeholder="Selecciona"
                             onChange={handleNormativeSectionChange}
+                        />
+                    )}
+                    {activityOptions.length > 0 && (
+                        <SelectField
+                            label="Actividad"
+                            value={room.normativeActivity ?? ''}
+                            options={activityOptions.map((option) => ({
+                                value: option.activity,
+                                label: option.activity,
+                            }))}
+                            placeholder="Selecciona"
+                            onChange={handleNormativeActivityChange}
                         />
                     )}
                     <EditField
@@ -354,6 +390,7 @@ const WallProps: React.FC<{
             .find((ambient) => ambient.wallId === wall.id) ?? null;
     const activityOptions = ambientMatch
         ? getActivityOptions(
+              ambientMatch.sourceRoom.normativeStandard ?? 'en_12464',
               ambientMatch.sourceRoom.normativeCategory,
               ambientMatch.sourceRoom.normativeSection,
           )
@@ -491,39 +528,51 @@ const WallProps: React.FC<{
                                 Distribucion de focos (Grilla)
                             </p>
                         </div>
-                        
+
                         <div className="mt-2 grid grid-cols-2 gap-2">
                             <EditField
                                 label="Filas"
                                 value={store.ui.fixtureGridRows}
-                                min={1} max={10} step={1}
-                                onChange={(val) => store.setFixtureGridRows(val)}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={(val) =>
+                                    store.setFixtureGridRows(val)
+                                }
                             />
                             <EditField
                                 label="Columnas"
                                 value={store.ui.fixtureGridCols}
-                                min={1} max={10} step={1}
-                                onChange={(val) => store.setFixtureGridCols(val)}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={(val) =>
+                                    store.setFixtureGridCols(val)
+                                }
                             />
                         </div>
 
                         <button
                             type="button"
-                            onClick={() => store.addFixtureGrid({
-                                roomId: ambientMatch.sourceRoom.id,
-                                rows: store.ui.fixtureGridRows,
-                                columns: store.ui.fixtureGridCols,
-                                fixtureTemplate: store.ui.fixtureTemplate,
-                                ambientVertices: ambientMatch.room.vertices
-                            })}
+                            onClick={() =>
+                                store.addFixtureGrid({
+                                    roomId: ambientMatch.sourceRoom.id,
+                                    rows: store.ui.fixtureGridRows,
+                                    columns: store.ui.fixtureGridCols,
+                                    fixtureTemplate: store.ui.fixtureTemplate,
+                                    ambientVertices: ambientMatch.room.vertices,
+                                })
+                            }
                             className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-emerald-600/80 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-emerald-500"
                         >
                             <PlusSquare size={13} />
-                            Generar Grilla {store.ui.fixtureGridRows}×{store.ui.fixtureGridCols}
+                            Generar Grilla {store.ui.fixtureGridRows}×
+                            {store.ui.fixtureGridCols}
                         </button>
-                        
+
                         <p className="mt-1 px-1 text-[8px] leading-tight text-gray-500">
-                            Crea una distribucion de focos restringida al area de este ambiente.
+                            Crea una distribucion de focos restringida al area
+                            de este ambiente.
                         </p>
                     </div>
                 </>
@@ -740,7 +789,8 @@ const DoorProps: React.FC<{
         <div className="mb-2 flex items-start gap-2 rounded border border-emerald-700/50 bg-emerald-900/20 p-2">
             <Move size={14} className="mt-0.5 flex-shrink-0 text-emerald-400" />
             <p className="text-[9px] text-emerald-300">
-                Arrastra la puerta en el 2D para ajustar su posición sobre el muro.
+                Arrastra la puerta en el 2D para ajustar su posición sobre el
+                muro.
             </p>
         </div>
 
@@ -792,13 +842,15 @@ const DoorProps: React.FC<{
 
         {/* ── Controles de apertura ── */}
         <div className="my-2 space-y-1.5 border-t border-gray-800/60 pt-2">
-            <p className="text-[9px] font-semibold text-emerald-400/80 uppercase tracking-wider">Apertura</p>
+            <p className="text-[9px] font-semibold tracking-wider text-emerald-400/80 uppercase">
+                Apertura
+            </p>
 
             {/* Dirección: inward / outward */}
             <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
                 <span className="text-[10px] text-gray-500">Dirección</span>
                 <div className="flex gap-1">
-                    {(['inward', 'outward'] as const).map(dir => (
+                    {(['inward', 'outward'] as const).map((dir) => (
                         <button
                             key={dir}
                             type="button"
@@ -819,7 +871,7 @@ const DoorProps: React.FC<{
             <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
                 <span className="text-[10px] text-gray-500">Bisagra</span>
                 <div className="flex gap-1">
-                    {(['left', 'right'] as const).map(side => (
+                    {(['left', 'right'] as const).map((side) => (
                         <button
                             key={side}
                             type="button"
@@ -840,7 +892,6 @@ const DoorProps: React.FC<{
         <PropField label="ID" value={door.id.slice(0, 12)} />
     </SectionWrapper>
 );
-
 
 const CanopyProps: React.FC<{
     canopy: Canopy;
@@ -1024,7 +1075,7 @@ const FixtureProps: React.FC<{
                     <Target size={13} />
                     Centrar
                 </button>
-                
+
                 {fixture.roomId && (
                     <button
                         type="button"
@@ -1123,11 +1174,14 @@ const SelectField: React.FC<{
     onChange: (value: string) => void;
 }> = ({ label, value, options, placeholder = 'Selecciona', onChange }) => (
     <div className="flex min-w-0 items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-        <span className="shrink-0 truncate text-[10px] text-gray-500">{label}</span>
+        <span className="shrink-0 truncate text-[10px] text-gray-500">
+            {label}
+        </span>
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="min-w-0 max-w-[120px] flex-1 truncate rounded border border-gray-700/50 bg-gray-800/80 px-1.5 py-0.5 text-right text-[11px] text-gray-200 focus:border-blue-600/50 focus:outline-none">
+            className="max-w-[120px] min-w-0 flex-1 truncate rounded border border-gray-700/50 bg-gray-800/80 px-1.5 py-0.5 text-right text-[11px] text-gray-200 focus:border-blue-600/50 focus:outline-none"
+        >
             <option value="">{placeholder}</option>
             {options.map((o) => (
                 <option key={o.value} value={o.value}>

@@ -53,6 +53,7 @@ import {
     buildFixtureGridObjects,
     calculateCenteredOffsetOnWall,
 } from './fixtureGrid';
+import type { NormativeStandard } from './roomLighting';
 import type {
     DrawTool,
     SidebarTab,
@@ -110,10 +111,13 @@ interface EditorState {
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
     ui: UIState;
+    defaultRoomNormativeStandard: NormativeStandard;
 
     // ── Project ──────────────────────────────────────────────────────────────
     setProject: (project: Project) => void;
     setActiveScene: (sceneId: string) => void;
+    setDefaultRoomNormativeStandard: (standard: NormativeStandard) => void;
+    applyDefaultNormativeStandardToRooms: () => void;
 
     // ── Scale ────────────────────────────────────────────────────────────────
     setScaleConfig: (
@@ -193,6 +197,7 @@ export const useEditorStore = create<EditorState>()(
         resultsByRoom: {},
         dxfEntities: null,
         dxfExtents: null,
+        defaultRoomNormativeStandard: 'en_12464',
 
         ui: {
             activeTool: 'select',
@@ -235,6 +240,49 @@ export const useEditorStore = create<EditorState>()(
         // ── Project ───────────────────────────────────────────────────────────
         setProject: (project) => set({ project }),
         setActiveScene: (sceneId) => set({ activeSceneId: sceneId }),
+        setDefaultRoomNormativeStandard: (standard) =>
+            set({ defaultRoomNormativeStandard: standard }),
+        applyDefaultNormativeStandardToRooms: () =>
+            set((state) => {
+                if (!state.project) return state;
+
+                const defaultStandard =
+                    state.defaultRoomNormativeStandard ?? 'en_12464';
+
+                return {
+                    ...state,
+                    project: {
+                        ...state.project,
+                        scenes: state.project.scenes.map((scene) => ({
+                            ...scene,
+                            rooms: scene.rooms.map((room) => {
+                                if (
+                                    (room.normativeStandard ??
+                                        defaultStandard) === defaultStandard
+                                ) {
+                                    return {
+                                        ...room,
+                                        normativeStandard: defaultStandard,
+                                    };
+                                }
+
+                                return {
+                                    ...room,
+                                    normativeStandard: defaultStandard,
+                                    normativeCategory: undefined,
+                                    normativeSection: undefined,
+                                    normativeActivity: undefined,
+                                    normativeLabel: undefined,
+                                    ugrLimit: undefined,
+                                    uniformityTarget: undefined,
+                                    colorRenderingRa: undefined,
+                                    specificRequirements: undefined,
+                                };
+                            }),
+                        })),
+                    },
+                };
+            }),
 
         // ── Scale ─────────────────────────────────────────────────────────────
         setScaleConfig: (scaleConfig, rescaleObjects = false) => {
@@ -384,6 +432,10 @@ export const useEditorStore = create<EditorState>()(
                     fixtureLumens: 4000,
                     norma: 500,
                     fixtureFlux: 4000,
+                    normativeStandard:
+                        roomData.normativeStandard ??
+                        state.defaultRoomNormativeStandard ??
+                        'en_12464',
                     ...roomData,
                     id,
                 };

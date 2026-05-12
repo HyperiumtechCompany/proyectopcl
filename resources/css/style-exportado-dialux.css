@@ -2,6 +2,11 @@
     margin: 8mm 16mm 8mm 16mm;
 }
 
+@page landscape {
+    size: A4 landscape;
+    margin: 8mm 16mm 8mm 16mm;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -20,6 +25,11 @@ body {
     overflow: hidden;
     page-break-after: always;
     page-break-inside: avoid;
+}
+
+.page-landscape {
+    page: landscape;
+    height: 194mm;
 }
 
 .page:last-child {
@@ -376,20 +386,22 @@ body {
 
 .terrain-full .asset-align svg,
 .terrain-full .asset-align img {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    object-fit: cover;
-    object-position: center top;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center center;
 }
 
 .terrain-plan-wrap .asset-align svg,
 .terrain-plan-wrap .asset-align img {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    object-fit: cover;
-    object-position: center top;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center center;
 }
 
 .terrain-container .asset-align svg,
@@ -927,6 +939,26 @@ body {
 .terrain-plan-wrap {
     height: 174mm;
     margin-bottom: 4mm;
+}
+
+.page-landscape .terrain-full {
+    height: 154mm;
+}
+
+.page-landscape .terrain-plan-wrap {
+    height: 108mm;
+}
+
+.page-landscape .ambient-local-block {
+    margin-bottom: 4mm;
+}
+
+.page-landscape .ambient-local-title {
+    margin-bottom: 2.5mm;
+}
+
+.page-landscape .ambient-metric-row {
+    margin-bottom: 3mm;
 }
 
 /* Compat: old terrain-container used by glossary etc. */

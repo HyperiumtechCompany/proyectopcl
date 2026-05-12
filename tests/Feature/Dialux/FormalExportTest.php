@@ -775,7 +775,16 @@ test('formal dialux blade renders calculated local and calculation object values
                 'pageNumber' => 2,
                 'title' => 'Lista de locales / Escena de luz 1',
                 'subtitle' => 'Terreno 1 - Edificacion 1',
-                'assets' => [],
+                'assets' => [
+                    [
+                        'id' => 'drawn-terrain-svg',
+                        'title' => 'Plano arquitectonico',
+                        'purpose' => 'drawn-terrain',
+                        'kind' => 'vector',
+                        'mimeType' => 'image/svg+xml',
+                        'svg' => '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="160"><rect width="300" height="160" fill="#f8fafc" /></svg>',
+                    ],
+                ],
                 'notes' => [],
                 'ambientDetail' => null,
             ],
@@ -889,6 +898,9 @@ test('formal dialux blade renders calculated local and calculation object values
     $view->assertSee('80.0 W');
     $view->assertSee('100.0 lm/W');
     $view->assertSee('asset-align', false);
+    $view->assertSee('page-landscape', false);
+    $view->assertSee('terrain-plan-wrap', false);
+    $view->assertSee('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="160">', false);
 
     preg_match(
         '/<td rowspan="4"><strong>Plano &uacute;til<\/strong><\/td>.*?<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>/s',

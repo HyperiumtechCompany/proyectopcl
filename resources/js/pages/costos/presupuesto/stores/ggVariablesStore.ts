@@ -1,10 +1,10 @@
 // stores/ggVariablesStore.ts
 import { produce } from 'immer';
 import { create } from 'zustand';
+import type { TipoFilaVariable, GGVariableNode } from './ggTypes';
 import { useProjectParamsStore } from './projectParamsStore';
 import { useRemuneracionesStore } from './remuneracionesStore';
 
-import { TipoFilaVariable, GGVariableNode } from './ggTypes';
 
 interface GGVariablesState {
     nodes: GGVariableNode[];

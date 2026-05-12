@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
 import { AlertCircle, CheckCircle, Zap, TrendingUp } from 'lucide-react';
-import type { RoomLightingCalculation } from '@/hooks/dialux/useEditorStore';
+import React, { useState } from 'react';
 import {
     calculateLumensRequired,
     calculateExactQuantity,
@@ -10,6 +9,7 @@ import {
     validateCalculationInputs,
     formatCalculationResult,
 } from '@/hooks/dialux/lightingCalculations';
+import type { RoomLightingCalculation } from '@/hooks/dialux/useEditorStore';
 
 interface LightingCalculationPanelProps {
     roomId: string;

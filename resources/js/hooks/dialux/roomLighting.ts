@@ -1,11 +1,4 @@
 import {
-    en12464Regulations,
-    iesnaRegulations,
-    rnePeruRegulations,
-    type RawNormativeBranch,
-    type RawNormativeLeaf,
-} from './normativaData';
-import {
     calculateExactQuantity,
     calculateLumensRequired,
     calculatePolygonArea,
@@ -13,6 +6,13 @@ import {
     determineCoverage,
     estimateUniformity,
 } from './lightingCalculations';
+import {
+    en12464Regulations,
+    iesnaRegulations,
+    rnePeruRegulations,
+    type RawNormativeBranch,
+    type RawNormativeLeaf,
+} from './normativaData';
 import type { Fixture, Room } from './types';
 
 export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru';
