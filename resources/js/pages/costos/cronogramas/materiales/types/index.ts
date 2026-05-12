@@ -14,6 +14,7 @@ export interface DistribucionMensual {
 }
 
 export interface MaterialItem {
+    partida_origen: string;
     descripcion: string;
     unidad: string;
     tipo: 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'otros';

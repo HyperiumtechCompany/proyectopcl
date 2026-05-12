@@ -11,7 +11,7 @@ use Carbon\Carbon;
 class CronoMaterialesController extends Controller
 {
     // ──────────────────────────────────────────────────────────────────────────
-    // INDEX — Procesador industrial de materiales
+    // INDEX — Procesador industrial de materiales (5 tipos de insumos)
     // ──────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
@@ -124,29 +124,122 @@ class CronoMaterialesController extends Controller
             ->get()
             ->keyBy('partida');
 
-        // ── 9. Obtener materiales desde ACU ───────────────────────────────────
+        // ── 9. Obtener TODOS los insumos (5 tablas) ───────────────────────────
         $codigosPartidas = $leafTasks->pluck('item')->unique()->filter()->values()->toArray();
 
-        // Consulta maestra: cruza partidas con ACU y presupuesto_general
-        $materialesApu = DB::connection('mysql')
+        // MATERIALES 
+        $queryMateriales = DB::connection('mysql')
             ->table("{$db}.presupuesto_general as pg")
             ->join("{$db}.presupuesto_acus as pa", 'pa.partida', '=', 'pg.partida')
-            ->join("{$db}.acu_materiales as am", 'am.acu_id', '=', 'pa.id')
+            ->join("{$db}.acu_materiales as ins", 'ins.acu_id', '=', 'pa.id')
             ->where('pg.presupuesto_id', $presupuestoIdCorrecto)
             ->whereIn(DB::raw('TRIM(pg.partida)'), array_map('trim', $codigosPartidas))
             ->whereNull('pg.deleted_at')
             ->select([
                 DB::raw('TRIM(pg.partida) as partida'),
                 'pg.metrado as metrado_partida',
-                'pg.unidad as unidad_presupuesto',  // 🔥 NUEVO: unidad desde presupuesto_general
-                'am.descripcion as insumo_descripcion',
-                'am.unidad as insumo_unidad',
-                'am.cantidad as aporte_unitario',
-                'am.factor_desperdicio',
-                'am.precio_unitario as precio_apu',
-                'am.insumo_id',
-            ])
+                'pg.unidad as unidad_presupuesto',
+                'ins.descripcion as insumo_descripcion',
+                'ins.unidad as insumo_unidad',
+                'ins.cantidad as aporte_unitario',
+                DB::raw("1.05 as factor_desperdicio"),
+                'ins.precio_unitario as precio_apu',
+                'ins.insumo_id',
+                DB::raw("'materiales' as tipo_insumo"),
+            ]);
+
+        // MANO DE OBRA
+        $queryManoObra = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general as pg")
+            ->join("{$db}.presupuesto_acus as pa", 'pa.partida', '=', 'pg.partida')
+            ->join("{$db}.acu_mano_de_obra as ins", 'ins.acu_id', '=', 'pa.id')
+            ->where('pg.presupuesto_id', $presupuestoIdCorrecto)
+            ->whereIn(DB::raw('TRIM(pg.partida)'), array_map('trim', $codigosPartidas))
+            ->whereNull('pg.deleted_at')
+            ->select([
+                DB::raw('TRIM(pg.partida) as partida'),
+                'pg.metrado as metrado_partida',
+                'pg.unidad as unidad_presupuesto',
+                'ins.descripcion as insumo_descripcion',
+                'ins.unidad as insumo_unidad',
+                'ins.cantidad as aporte_unitario',
+                DB::raw("1.0 as factor_desperdicio"),
+                'ins.precio_unitario as precio_apu',
+                'ins.insumo_id',
+                DB::raw("'mano_de_obra' as tipo_insumo"),
+            ]);
+
+        // EQUIPOS (PRECIO_HORA)
+        $queryEquipos = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general as pg")
+            ->join("{$db}.presupuesto_acus as pa", 'pa.partida', '=', 'pg.partida')
+            ->join("{$db}.acu_equipos as ins", 'ins.acu_id', '=', 'pa.id')
+            ->where('pg.presupuesto_id', $presupuestoIdCorrecto)
+            ->whereIn(DB::raw('TRIM(pg.partida)'), array_map('trim', $codigosPartidas))
+            ->whereNull('pg.deleted_at')
+            ->select([
+                DB::raw('TRIM(pg.partida) as partida'),
+                'pg.metrado as metrado_partida',
+                'pg.unidad as unidad_presupuesto',
+                'ins.descripcion as insumo_descripcion',
+                'ins.unidad as insumo_unidad',
+                'ins.cantidad as aporte_unitario',
+                DB::raw("1.0 as factor_desperdicio"),
+                'ins.precio_hora as precio_apu',
+                'ins.insumo_id',
+                DB::raw("'equipos' as tipo_insumo"),
+            ]);
+
+        // SUBCONTRATOS
+        $querySubcontrratos = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general as pg")
+            ->join("{$db}.presupuesto_acus as pa", 'pa.partida', '=', 'pg.partida')
+            ->join("{$db}.acu_subcontratos as ins", 'ins.acu_id', '=', 'pa.id')
+            ->where('pg.presupuesto_id', $presupuestoIdCorrecto)
+            ->whereIn(DB::raw('TRIM(pg.partida)'), array_map('trim', $codigosPartidas))
+            ->whereNull('pg.deleted_at')
+            ->select([
+                DB::raw('TRIM(pg.partida) as partida'),
+                'pg.metrado as metrado_partida',
+                'pg.unidad as unidad_presupuesto',
+                'ins.descripcion as insumo_descripcion',
+                'ins.unidad as insumo_unidad',
+                'ins.cantidad as aporte_unitario',
+                DB::raw("1.0 as factor_desperdicio"),
+                'ins.precio_unitario as precio_apu',
+                'ins.insumo_id',
+                DB::raw("'subcontratos' as tipo_insumo"),
+            ]);
+
+            // SUBPARTIDAS
+        $querySubpartidas = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general as pg")
+            ->join("{$db}.presupuesto_acus as pa", 'pa.partida', '=', 'pg.partida')
+            ->join("{$db}.acu_subpartidas as ins", 'ins.acu_id', '=', 'pa.id')
+            ->where('pg.presupuesto_id', $presupuestoIdCorrecto)
+            ->whereIn(DB::raw('TRIM(pg.partida)'), array_map('trim', $codigosPartidas))
+            ->whereNull('pg.deleted_at')
+            ->select([
+                DB::raw('TRIM(pg.partida) as partida'),
+                'pg.metrado as metrado_partida',
+                'pg.unidad as unidad_presupuesto',
+                'ins.descripcion as insumo_descripcion',
+                'ins.unidad as insumo_unidad',
+                'ins.cantidad as aporte_unitario',
+                DB::raw("1.0 as factor_desperdicio"),
+                'ins.precio_unitario as precio_apu',
+                'ins.insumo_id',
+                DB::raw("'subpartidas' as tipo_insumo"),
+            ]);
+
+        // UNIR TODAS LAS CONSULTAS
+        $materialesApu = $queryMateriales
+            ->union($queryManoObra)
+            ->union($queryEquipos)
+            ->union($querySubcontrratos)
+            ->union($querySubpartidas)
             ->get();
+
 
         // ── 10. Obtener precios desde insumo_productos ────────────────────────
         $insumoIds = $materialesApu->pluck('insumo_id')->unique()->filter()->toArray();
@@ -156,8 +249,8 @@ class CronoMaterialesController extends Controller
             ->get()
             ->keyBy('id');
 
-        // ── 11. Procesar cada material ────────────────────────────────────────
-        $materialesAgrupados = [];
+        // ── 11. Procesar cada insumo ──────────────────────────────────────────
+        $insumosAgrupados = [];
 
         foreach ($materialesApu as $mat) {
             $insumoDescripcion = trim($mat->insumo_descripcion ?? '');
@@ -165,15 +258,16 @@ class CronoMaterialesController extends Controller
             
             $insumoId   = (int) $mat->insumo_id;
             $insumo     = $insumoProductos->get($insumoId);
-            $tipoInsumo = $insumo->tipo ?? 'materiales';
+            $tipoInsumo = $mat->tipo_insumo ?? $insumo->tipo ?? 'materiales';
             
-            // 🔥 PRIORIDAD DE UNIDAD: presupuesto_general.unidad > acu_materiales.unidad > insumo_productos.unidad_id
+            // PRIORIDAD DE UNIDAD: presupuesto_general.unidad > insumo_unidad
             $unidad = $mat->unidad_presupuesto ?? $mat->insumo_unidad ?? 'und';
             if (empty($unidad) || $unidad === 'und' || is_numeric($unidad)) {
                 $unidad = $insumo->unidad_id ?? 'und';
             }
             
             $precioReal = $insumo->costo_unitario ?? $mat->precio_apu ?? 0;
+            if ($precioReal == 0 || $precioReal === null) continue;
             
             $aporteUnitario = (float) ($mat->aporte_unitario ?? 0);
             $factorDesp     = (float) ($mat->factor_desperdicio ?? 1.0);
@@ -184,7 +278,7 @@ class CronoMaterialesController extends Controller
             
             if ($cantidadTotalPartida <= 0) continue;
             
-            // 🔥 REDONDEAR CANTIDAD TOTAL SEGÚN UNIDAD
+            // REDONDEAR CANTIDAD TOTAL SEGÚN UNIDAD
             $cantidadTotalPartidaRedondeada = $this->redondearPorUnidad($cantidadTotalPartida, $unidad);
             $costoTotalPartida = $cantidadTotalPartidaRedondeada * $precioReal;
             
@@ -196,8 +290,8 @@ class CronoMaterialesController extends Controller
             // Agrupar por partida + insumo para mostrar trazabilidad
             $agrupador = md5($partida . '|' . $insumoDescripcion . '|' . $unidad);
             
-            if (!isset($materialesAgrupados[$agrupador])) {
-                $materialesAgrupados[$agrupador] = [
+            if (!isset($insumosAgrupados[$agrupador])) {
+                $insumosAgrupados[$agrupador] = [
                     'partida_origen' => $partida,
                     'descripcion'    => $insumoDescripcion,
                     'unidad'         => $unidad,
@@ -209,8 +303,8 @@ class CronoMaterialesController extends Controller
                 ];
             }
             
-            $materialesAgrupados[$agrupador]['cantidad_total'] += $cantidadTotalPartidaRedondeada;
-            $materialesAgrupados[$agrupador]['costo_total']    += $costoTotalPartida;
+            $insumosAgrupados[$agrupador]['cantidad_total'] += $cantidadTotalPartidaRedondeada;
+            $insumosAgrupados[$agrupador]['costo_total']    += $costoTotalPartida;
             
             // Distribución mensual
             if ($valorizadoItem && !empty($valorizadoItem->distribucion_mensual)) {
@@ -221,8 +315,8 @@ class CronoMaterialesController extends Controller
                     $cantidadMesRedondeada = $this->redondearPorUnidad($cantidadMes, $unidad);
                     $montoMes    = $cantidadMesRedondeada * $precioReal;
                     
-                    $materialesAgrupados[$agrupador]['distribucion'][$key]['cantidad'] += $cantidadMesRedondeada;
-                    $materialesAgrupados[$agrupador]['distribucion'][$key]['monto']    += $montoMes;
+                    $insumosAgrupados[$agrupador]['distribucion'][$key]['cantidad'] += $cantidadMesRedondeada;
+                    $insumosAgrupados[$agrupador]['distribucion'][$key]['monto']    += $montoMes;
                 }
             } elseif ($diasData) {
                 $totalDias = $diasData['total_dias'];
@@ -235,82 +329,81 @@ class CronoMaterialesController extends Controller
                         $cantidadMesRedondeada = $this->redondearPorUnidad($cantidadMes, $unidad);
                         $montoMes    = $cantidadMesRedondeada * $precioReal;
                         
-                        $materialesAgrupados[$agrupador]['distribucion'][$key]['cantidad'] += $cantidadMesRedondeada;
-                        $materialesAgrupados[$agrupador]['distribucion'][$key]['monto']    += $montoMes;
+                        $insumosAgrupados[$agrupador]['distribucion'][$key]['cantidad'] += $cantidadMesRedondeada;
+                        $insumosAgrupados[$agrupador]['distribucion'][$key]['monto']    += $montoMes;
                     }
                 }
             } else {
                 $primerKey = $clavesPeriodos[0] ?? null;
                 if ($primerKey) {
-                    $materialesAgrupados[$agrupador]['distribucion'][$primerKey]['cantidad'] += $cantidadTotalPartidaRedondeada;
-                    $materialesAgrupados[$agrupador]['distribucion'][$primerKey]['monto']    += $costoTotalPartida;
+                    $insumosAgrupados[$agrupador]['distribucion'][$primerKey]['cantidad'] += $cantidadTotalPartidaRedondeada;
+                    $insumosAgrupados[$agrupador]['distribucion'][$primerKey]['monto']    += $costoTotalPartida;
                 }
             }
         }
 
         // ── 12. Ajustar residuos (precisión Delfín) ──────────────────────────
-        foreach ($materialesAgrupados as &$material) {
+        foreach ($insumosAgrupados as &$insumo) {
             $sumaCantidad = 0.0;
             $sumaMonto    = 0.0;
             $ultimaKey    = null;
             
             foreach ($clavesPeriodos as $key) {
-                $sumaCantidad += $material['distribucion'][$key]['cantidad'];
-                $sumaMonto    += $material['distribucion'][$key]['monto'];
+                $sumaCantidad += $insumo['distribucion'][$key]['cantidad'];
+                $sumaMonto    += $insumo['distribucion'][$key]['monto'];
                 $ultimaKey     = $key;
             }
             
-            $residuoCantidad = round($material['cantidad_total'] - $sumaCantidad, 4);
-            $residuoMonto    = round($material['costo_total'] - $sumaMonto, 2);
+            $residuoCantidad = round($insumo['cantidad_total'] - $sumaCantidad, 4);
+            $residuoMonto    = round($insumo['costo_total'] - $sumaMonto, 2);
             
             if ($ultimaKey && (abs($residuoCantidad) > 0.0001 || abs($residuoMonto) > 0.01)) {
-                $material['distribucion'][$ultimaKey]['cantidad'] += $residuoCantidad;
-                $material['distribucion'][$ultimaKey]['monto']    += $residuoMonto;
+                $insumo['distribucion'][$ultimaKey]['cantidad'] += $residuoCantidad;
+                $insumo['distribucion'][$ultimaKey]['monto']    += $residuoMonto;
                 
-                // Re-redondear después del ajuste
-                $material['distribucion'][$ultimaKey]['cantidad'] = $this->redondearPorUnidad($material['distribucion'][$ultimaKey]['cantidad'], $material['unidad']);
-                $material['distribucion'][$ultimaKey]['monto'] = round($material['distribucion'][$ultimaKey]['monto'], 2);
+                $insumo['distribucion'][$ultimaKey]['cantidad'] = $this->redondearPorUnidad($insumo['distribucion'][$ultimaKey]['cantidad'], $insumo['unidad']);
+                $insumo['distribucion'][$ultimaKey]['monto'] = round($insumo['distribucion'][$ultimaKey]['monto'], 2);
             }
         }
 
         // ── 13. Clasificar por tipo y ordenar ─────────────────────────────────
-        $tiposOrden = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'otros'];
-        $materialesPorTipo = [];
+        $tiposOrden = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas', 'otros'];
+        $insumosPorTipo = [];
         
         foreach ($tiposOrden as $tipo) {
-            $materialesPorTipo[$tipo] = [];
+            $insumosPorTipo[$tipo] = [];
         }
         
-        foreach ($materialesAgrupados as $material) {
-            $tipo = $material['tipo'];
-            if (!isset($materialesPorTipo[$tipo])) {
-                $materialesPorTipo[$tipo] = [];
+        foreach ($insumosAgrupados as $insumo) {
+            $tipo = $insumo['tipo'];
+            if (!isset($insumosPorTipo[$tipo])) {
+                $insumosPorTipo[$tipo] = [];
             }
             
             // Redondear valores finales según unidad
-            $material['cantidad_total'] = $this->redondearPorUnidad($material['cantidad_total'], $material['unidad']);
-            $material['costo_total']    = round($material['costo_total'], 2);
+            $insumo['cantidad_total'] = $this->redondearPorUnidad($insumo['cantidad_total'], $insumo['unidad']);
+            $insumo['costo_total']    = round($insumo['costo_total'], 2);
             
             foreach ($clavesPeriodos as $key) {
-                $material['distribucion'][$key]['cantidad'] = $this->redondearPorUnidad($material['distribucion'][$key]['cantidad'], $material['unidad']);
-                $material['distribucion'][$key]['monto']    = round($material['distribucion'][$key]['monto'], 2);
+                $insumo['distribucion'][$key]['cantidad'] = $this->redondearPorUnidad($insumo['distribucion'][$key]['cantidad'], $insumo['unidad']);
+                $insumo['distribucion'][$key]['monto']    = round($insumo['distribucion'][$key]['monto'], 2);
             }
             
-            $materialesPorTipo[$tipo][] = $material;
+            $insumosPorTipo[$tipo][] = $insumo;
         }
         
-        foreach ($materialesPorTipo as &$grupo) {
+        foreach ($insumosPorTipo as &$grupo) {
             $grupo = collect($grupo)->sortBy('descripcion')->values()->toArray();
         }
 
-        $materialesFinales = [];
-        foreach ($materialesPorTipo as $tipo => $items) {
+        $insumosFinales = [];
+        foreach ($insumosPorTipo as $tipo => $items) {
             foreach ($items as $item) {
-                $materialesFinales[] = $item;
+                $insumosFinales[] = $item;
             }
         }
 
-        $resumen = $this->calcularResumen($materialesFinales, $periodos, $leafTasks->count());
+        $resumen = $this->calcularResumen($insumosFinales, $periodos, $leafTasks->count());
 
         $estaGuardado = DB::connection('mysql')
             ->table("{$db}.cronograma_materiales")
@@ -320,8 +413,8 @@ class CronoMaterialesController extends Controller
         return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
             'project'           => (string) $projectId,
             'projectName'       => $costoProject->nombre,
-            'materiales'        => $materialesFinales,
-            'materialesPorTipo' => $materialesPorTipo,
+            'materiales'        => $insumosFinales,
+            'materialesPorTipo' => $insumosPorTipo,
             'periodos'          => $periodos,
             'resumen'           => $resumen,
             'estaGuardado'      => $estaGuardado,
@@ -434,36 +527,31 @@ class CronoMaterialesController extends Controller
 
     /**
      * 🔥 Redondea una cantidad según la unidad de medida
-     * - Unidades enteras: und, pza, bol, pln, p², bal, cja, rll, tub, var, par, jgo, set, kit, glb, gbl → 0 decimales
-     * - Unidades de medida: m³, m2, m, kg, gln, gal, l, t → 3 decimales
-     * - Por defecto: 2 decimales
      */
     private function redondearPorUnidad(float $cantidad, string $unidad): float
     {
         $unidad = strtolower(trim($unidad));
         
-        // Unidades que deben ser ENTERAS (sin decimales)
         $unidadesEnteras = [
             'und', 'pza', 'bol', 'pln', 'p²', 'p2', 'bal', 'cja', 'rll', 
             'tub', 'var', 'par', 'jgo', 'set', 'kit', 'glb', 'gbl', 'mes', 
             'día', 'dia', 'hor', 'hora', 'sem', 'semana', 'quin', 'quincena'
         ];
         
-        // Unidades que permiten 3 decimales (granel, líquidos, áreas, volúmenes)
         $unidadesDecimales = [
             'm³', 'm3', 'm²', 'm2', 'm', 'km', 'kg', 'gln', 'gal', 'l', 
             'lt', 't', 'tn', 'ml', 'cc', 'cm³', 'cm3', 'mm', 'ha', 'lb'
         ];
         
         if (in_array($unidad, $unidadesEnteras)) {
-            return round($cantidad, 0);  // Entero
+            return round($cantidad, 0);
         }
         
         if (in_array($unidad, $unidadesDecimales) || preg_match('/[³²]/', $unidad)) {
-            return round($cantidad, 3);  // 3 decimales
+            return round($cantidad, 3);
         }
         
-        return round($cantidad, 2);  // Default: 2 decimales
+        return round($cantidad, 2);
     }
 
     private function calcularResumen(array $materiales, array $periodos, int $totalPartidas): array
