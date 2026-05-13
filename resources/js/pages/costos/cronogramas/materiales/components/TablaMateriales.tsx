@@ -166,6 +166,7 @@ const DetalleInsumo: React.FC<{
                     {meta.label}
                 </span>
             </div>
+            
 
             {/* Grid de datos clave */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -173,6 +174,9 @@ const DetalleInsumo: React.FC<{
                 <InfoCard label="Precio Unit."  value={fmtSoles(material.precio)}            color="#0f766e" />
                 <InfoCard label="Cantidad Total" value={fmtNum(material.cantidad_total, 2)}  color="#1d4ed8" />
                 <InfoCard label="Costo Total"   value={fmtSoles(material.costo_total)}       color="#059669" />
+
+                {/* Descripcion de la partida*/}
+                <InfoCard label="Descripcion de la Partida" value={material.descripcion_partida || material.partida_origen || '__'} color="#0f766e" />
             </div>
 
             {/* Distribución mensual */}

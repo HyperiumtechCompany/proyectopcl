@@ -252,6 +252,17 @@ class CronoMaterialesController extends Controller
         // ── 11. Procesar cada insumo ──────────────────────────────────────────
         $insumosAgrupados = [];
 
+        // obtener todas las descripciones de todas las partidas para mejorar trazabilidad
+        $descripcionesPartidas = DB::connection('mysql')
+            ->table("{$db}.presupuesto_general")
+            ->where('presupuesto_id', $presupuestoIdCorrecto)
+            ->whereIn(DB::raw('TRIM(partida)'), array_map('trim', $codigosPartidas))
+            ->whereNull('deleted_at')
+            ->pluck('descripcion', DB::raw('TRIM(partida)'))
+            ->toArray();
+            
+
+
         foreach ($materialesApu as $mat) {
             $insumoDescripcion = trim($mat->insumo_descripcion ?? '');
             if (empty($insumoDescripcion)) continue;
@@ -282,24 +293,26 @@ class CronoMaterialesController extends Controller
             $cantidadTotalPartidaRedondeada = $this->redondearPorUnidad($cantidadTotalPartida, $unidad);
             $costoTotalPartida = $cantidadTotalPartidaRedondeada * $precioReal;
             
-            $partida        = trim($mat->partida);
-            $tarea          = $leafTasks->get($partida);
-            $diasData       = $diasPorMesTarea[$partida] ?? null;
-            $valorizadoItem = $valorizadoData->get($partida);
+            $partida               = trim($mat->partida);
+            $tarea                 = $leafTasks->get($partida);
+            $diasData              = $diasPorMesTarea[$partida] ?? null;
+            $valorizadoItem        = $valorizadoData->get($partida);
+            $partidaDescripcion    = $descripcionesPartidas[$partida] ??(string) $partida;
             
             // Agrupar por partida + insumo para mostrar trazabilidad
             $agrupador = md5($partida . '|' . $insumoDescripcion . '|' . $unidad);
             
             if (!isset($insumosAgrupados[$agrupador])) {
                 $insumosAgrupados[$agrupador] = [
-                    'partida_origen' => $partida,
-                    'descripcion'    => $insumoDescripcion,
-                    'unidad'         => $unidad,
-                    'tipo'           => $tipoInsumo,
-                    'precio'         => $precioReal,
-                    'cantidad_total' => 0.0,
-                    'costo_total'    => 0.0,
-                    'distribucion'   => array_fill_keys($clavesPeriodos, ['cantidad' => 0.0, 'monto' => 0.0]),
+                    'partida_origen'      => $partida,
+                    'descripcion_partida' => $partidaDescripcion,
+                    'descripcion'         => $insumoDescripcion,
+                    'unidad'              => $unidad,
+                    'tipo'                => $tipoInsumo,
+                    'precio'              => $precioReal,
+                    'cantidad_total'      => 0.0,
+                    'costo_total'         => 0.0,
+                    'distribucion'        => array_fill_keys($clavesPeriodos, ['cantidad' => 0.0, 'monto' => 0.0]),
                 ];
             }
             
