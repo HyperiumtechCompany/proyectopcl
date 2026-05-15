@@ -10,9 +10,7 @@ import HeaderMateriales from './components/HeaderMateriales';
 import ResumenCards from './components/ResumenCards';
 import TablaMateriales from './components/TablaMateriales';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const CronogramaMateriales: React.FC<CronogramaProps> = ({
     project,
     projectName,
