@@ -47,6 +47,10 @@ export type {
     DxfHatchEntity,
     DxfSplineEntity,
     DxfSolidEntity,
+    ProjectNormativeConfig,
+    Partition,
+    StairConfig,
+    StairFlight,
 } from './types';
 
 import {
@@ -74,8 +78,11 @@ import type {
     LightingResult,
     DxfEntity,
     DxfExtents,
+    ProjectNormativeConfig,
+    Partition,
 } from './types';
 import { getPeruWallPreset } from './wallNorms';
+import { buildDefaultStairConfig } from './stairNorms';
 
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
@@ -98,6 +105,8 @@ interface UIState {
     /** Configuración de la grilla de focos en el panel de luz */
     fixtureGridRows: number;
     fixtureGridCols: number;
+    /** Cuando true, el canvas 2D y 3D muestran todos los pisos visibles superpuestos */
+    showAllFloors: boolean;
 }
 
 // ─── Estado global ────────────────────────────────────────────────────────────
@@ -112,12 +121,16 @@ interface EditorState {
     dxfExtents: DxfExtents | null;
     ui: UIState;
     defaultRoomNormativeStandard: NormativeStandard;
+    /** Configuración normativa del proyecto (síncrona con backend) */
+    projectNormativeConfig: ProjectNormativeConfig | null;
 
     // ── Project ──────────────────────────────────────────────────────────────
     setProject: (project: Project) => void;
     setActiveScene: (sceneId: string) => void;
     setDefaultRoomNormativeStandard: (standard: NormativeStandard) => void;
     applyDefaultNormativeStandardToRooms: () => void;
+    setProjectNormativeConfig: (config: ProjectNormativeConfig | null) => void;
+    updateComplianceSummary: (summary: ProjectNormativeConfig['complianceSummary']) => void;
 
     // ── Scale ────────────────────────────────────────────────────────────────
     setScaleConfig: (
@@ -141,6 +154,7 @@ interface EditorState {
     addFixture: (fix: Omit<Fixture, 'id'>) => string;
     /** Genera una grilla de focos N×M centrada en el room indicado */
     addFixtureGrid: (config: FixtureGridConfig) => string[];
+    addPartition: (partition: Omit<Partition, 'id'>) => string;
 
     updateRoom: (id: string, patch: Partial<Omit<Room, 'id'>>) => void;
     updateWall: (id: string, patch: Partial<Omit<Wall, 'id'>>) => void;
@@ -148,6 +162,7 @@ interface EditorState {
     updateDoor: (id: string, patch: Partial<Omit<Door, 'id'>>) => void;
     updateCanopy: (id: string, patch: Partial<Omit<Canopy, 'id'>>) => void;
     updateFixture: (id: string, patch: Partial<Omit<Fixture, 'id'>>) => void;
+    updatePartition: (id: string, patch: Partial<Omit<Partition, 'id'>>) => void;
 
     /** Reposiciona una ventana al centro de su pared */
     centerWindowOnWall: (windowId: string) => void;
@@ -184,6 +199,30 @@ interface EditorState {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     activeScene: () => Scene | null;
+    /** Devuelve todos los pisos ordenados de sótano a planta alta */
+    getFloorsSorted: () => Scene[];
+
+    // ── Floor Management ─────────────────────────────────────────────────────
+    /** Crea un nuevo piso vacío. Devuelve el ID de la nueva Scene. */
+    addFloor: (name: string, floorIndex: number, floorHeight?: number) => string;
+    /** Elimina un piso (y cambia activeScene si era el activo) */
+    removeFloor: (sceneId: string) => void;
+    /**
+     * Duplica la geometría de un piso como nuevo piso.
+     * Genera IDs nuevos para todos los objetos del piso clonado.
+     */
+    duplicateFloor: (sourceSceneId: string, newFloorIndex: number, newName: string) => string;
+    /** Actualiza propiedades del piso (name, floorHeight, etc.) */
+    updateFloor: (sceneId: string, patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex'>>) => void;
+    /**
+     * Recalcula `floorElevation` de todos los pisos basándose en su
+     * `floorIndex` y `floorHeight`. Llamar tras cualquier reordenamiento.
+     */
+    reorderFloors: () => void;
+    /** Alterna la visibilidad de un piso individual en 2D y 3D */
+    toggleFloorVisibility: (sceneId: string) => void;
+    /** Alterna el modo "ver todos los pisos" superpuestos */
+    toggleAllFloors: () => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -198,9 +237,10 @@ export const useEditorStore = create<EditorState>()(
         dxfEntities: null,
         dxfExtents: null,
         defaultRoomNormativeStandard: 'en_12464',
+        projectNormativeConfig: null,
 
         ui: {
-            activeTool: 'select',
+            activeTool: 'pan',
             angleSnapMode: 'smart',
             zoom: 1,
             panX: 0,
@@ -235,6 +275,7 @@ export const useEditorStore = create<EditorState>()(
             },
             fixtureGridRows: 2,
             fixtureGridCols: 2,
+            showAllFloors: false,
         },
 
         // ── Project ───────────────────────────────────────────────────────────
@@ -242,6 +283,17 @@ export const useEditorStore = create<EditorState>()(
         setActiveScene: (sceneId) => set({ activeSceneId: sceneId }),
         setDefaultRoomNormativeStandard: (standard) =>
             set({ defaultRoomNormativeStandard: standard }),
+        setProjectNormativeConfig: (config) => set({ projectNormativeConfig: config }),
+        updateComplianceSummary: (summary) =>
+            set((state) => {
+                if (!state.projectNormativeConfig) return state;
+                return {
+                    projectNormativeConfig: {
+                        ...state.projectNormativeConfig,
+                        complianceSummary: summary,
+                    },
+                };
+            }),
         applyDefaultNormativeStandardToRooms: () =>
             set((state) => {
                 if (!state.project) return state;
@@ -427,6 +479,15 @@ export const useEditorStore = create<EditorState>()(
             const id = uuidv4();
             set((state) => {
                 if (!state.project || !state.activeSceneId) return state;
+
+                // Generar stairConfig por defecto para escaleras
+                const activeScene = state.activeScene();
+                const floorHeight = activeScene?.floorHeight ?? 3.0;
+                const stairConfig =
+                    roomData.roomType === 'stair' && !roomData.stairConfig
+                        ? buildDefaultStairConfig('housing', floorHeight)
+                        : roomData.stairConfig;
+
                 const room: Room = {
                     illuminanceLux: 500,
                     fixtureLumens: 4000,
@@ -438,6 +499,7 @@ export const useEditorStore = create<EditorState>()(
                         'en_12464',
                     ...roomData,
                     id,
+                    stairConfig,
                 };
                 return mutateScene(state, (s) => ({
                     ...s,
@@ -698,6 +760,29 @@ export const useEditorStore = create<EditorState>()(
                 }));
             }),
 
+        addPartition: (partitionData) => {
+            const id = uuidv4();
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          partitions: [...(sc.partitions ?? []), { id, ...partitionData }],
+                      })),
+            );
+            return id;
+        },
+
+        updatePartition: (id, patch) =>
+            set((s) =>
+                mutateScene(s, (sc) => ({
+                    ...sc,
+                    partitions: (sc.partitions ?? []).map((p) =>
+                        p.id === id ? { ...p, ...patch } : p,
+                    ),
+                })),
+            ),
+
         // ── Remover ───────────────────────────────────────────────────────────
         removeObject: (id) => {
             set((state) => {
@@ -710,10 +795,11 @@ export const useEditorStore = create<EditorState>()(
                         (w) => w.id !== id && w.wallId !== id,
                     ),
                     doors: (s.doors || []).filter(
-                        (d) => d.id !== id && d.wallId !== id,
+                        (d) => d.id !== id && d.wallId !== id && d.partitionId !== id,
                     ),
                     canopies: (s.canopies || []).filter((c) => c.id !== id),
                     fixtures: (s.fixtures || []).filter((f) => f.id !== id),
+                    partitions: (s.partitions ?? []).filter((p) => p.id !== id),
                 }));
                 return {
                     ...updated,
@@ -791,12 +877,195 @@ export const useEditorStore = create<EditorState>()(
         setDxfData: (entities, extents) =>
             set({ dxfEntities: entities, dxfExtents: extents }),
 
-        // ── Helper ────────────────────────────────────────────────────────────
+        // ── Helpers \u0026 Floor Management \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
         activeScene: () => {
             const { project, activeSceneId } = get();
             if (!project || !activeSceneId) return null;
             return project.scenes.find((s) => s.id === activeSceneId) ?? null;
         },
+
+        getFloorsSorted: () => {
+            const { project } = get();
+            if (!project) return [];
+            return [...project.scenes].sort((a, b) => (a.floorIndex ?? 0) - (b.floorIndex ?? 0));
+        },
+
+        addFloor: (name, floorIndex, floorHeight = 3.0) => {
+            const newId = uuidv4();
+            const { project } = get();
+            if (!project) return newId;
+
+            const newScene: Scene = {
+                id: newId,
+                name,
+                floorIndex,
+                floorElevation: 0, // ser\u00e1 recalculada por reorderFloors
+                floorHeight,
+                scaleConfig: project.scenes[0]?.scaleConfig ?? createScaleConfig('m', 1, 'Metros (1 = 1m)'),
+                rooms: [],
+                walls: [],
+                windows: [],
+                doors: [],
+                canopies: [],
+                fixtures: [],
+                partitions: [],
+                visible: true,
+            };
+
+            set((state) => ({
+                project: state.project
+                    ? { ...state.project, scenes: [...state.project.scenes, newScene] }
+                    : state.project,
+            }));
+
+            // Recalcular elevaciones tras agregar
+            get().reorderFloors();
+            return newId;
+        },
+
+        removeFloor: (sceneId) => {
+            set((state) => {
+                if (!state.project) return state;
+                const remaining = state.project.scenes.filter((s) => s.id !== sceneId);
+                if (remaining.length === 0) return state; // no dejar sin pisos
+                const newActiveId =
+                    state.activeSceneId === sceneId
+                        ? (remaining[0]?.id ?? null)
+                        : state.activeSceneId;
+                return {
+                    project: { ...state.project, scenes: remaining },
+                    activeSceneId: newActiveId,
+                };
+            });
+            get().reorderFloors();
+        },
+
+        duplicateFloor: (sourceSceneId, newFloorIndex, newName) => {
+            const newId = uuidv4();
+            set((state) => {
+                if (!state.project) return state;
+                const source = state.project.scenes.find((s) => s.id === sourceSceneId);
+                if (!source) return state;
+
+                /** Mapeo old ID → new ID para reasignar referencias cruzadas */
+                const idMap = new Map<string, string>();
+                const remapId = (oldId: string): string => {
+                    if (!idMap.has(oldId)) idMap.set(oldId, uuidv4());
+                    return idMap.get(oldId)!;
+                };
+
+                const cloned: Scene = {
+                    ...source,
+                    id: newId,
+                    name: newName,
+                    floorIndex: newFloorIndex,
+                    floorElevation: 0,
+                    rooms: source.rooms.map((r) => ({ ...r, id: remapId(r.id) })),
+                    walls: source.walls.map((w) => ({ ...w, id: remapId(w.id) })),
+                    windows: source.windows.map((win) => ({
+                        ...win,
+                        id: remapId(win.id),
+                        wallId: idMap.get(win.wallId) ?? win.wallId,
+                    })),
+                    doors: source.doors.map((d) => ({
+                        ...d,
+                        id: remapId(d.id),
+                        wallId: idMap.get(d.wallId) ?? d.wallId,
+                    })),
+                    canopies: source.canopies.map((c) => ({ ...c, id: remapId(c.id) })),
+                    fixtures: source.fixtures.map((f) => ({
+                        ...f,
+                        id: remapId(f.id),
+                        roomId: f.roomId ? (idMap.get(f.roomId) ?? f.roomId) : f.roomId,
+                    })),
+                    partitions: (source.partitions ?? []).map((p) => ({ ...p, id: remapId(p.id) })),
+                    visible: source.visible ?? true,
+                };
+
+                return {
+                    project: { ...state.project, scenes: [...state.project.scenes, cloned] },
+                };
+            });
+            get().reorderFloors();
+            return newId;
+        },
+
+        updateFloor: (sceneId, patch) => {
+            set((state) => {
+                if (!state.project) return state;
+                return {
+                    project: {
+                        ...state.project,
+                        scenes: state.project.scenes.map((s) =>
+                            s.id === sceneId ? { ...s, ...patch } : s,
+                        ),
+                    },
+                };
+            });
+            if ('floorIndex' in patch || 'floorHeight' in patch) {
+                get().reorderFloors();
+            }
+        },
+
+        reorderFloors: () => {
+            set((state) => {
+                if (!state.project) return state;
+
+                const sorted = [...state.project.scenes].sort(
+                    (a, b) => (a.floorIndex ?? 0) - (b.floorIndex ?? 0),
+                );
+
+                // Separar pisos negativos (s\u00f3tanos) y positivos (sobre rasante)
+                let elevationAbove = 0;
+                const elevationMap = new Map<string, number>();
+
+                // Calcular elevaciones ascendentes desde 0 hacia arriba
+                sorted
+                    .filter((s) => (s.floorIndex ?? 0) >= 0)
+                    .forEach((s) => {
+                        elevationMap.set(s.id, elevationAbove);
+                        elevationAbove += s.floorHeight ?? 3.0;
+                    });
+
+                // Calcular elevaciones descendentes para s\u00f3tanos
+                let elevationBelow = 0;
+                [...sorted]
+                    .filter((s) => (s.floorIndex ?? 0) < 0)
+                    .sort((a, b) => (b.floorIndex ?? 0) - (a.floorIndex ?? 0)) // -1 primero
+                    .forEach((s) => {
+                        elevationBelow -= s.floorHeight ?? 3.0;
+                        elevationMap.set(s.id, elevationBelow);
+                    });
+
+                return {
+                    project: {
+                        ...state.project,
+                        scenes: state.project.scenes.map((s) => ({
+                            ...s,
+                            floorElevation: elevationMap.get(s.id) ?? 0,
+                        })),
+                    },
+                };
+            });
+        },
+
+        toggleFloorVisibility: (sceneId) =>
+            set((state) => {
+                if (!state.project) return state;
+                return {
+                    project: {
+                        ...state.project,
+                        scenes: state.project.scenes.map((s) =>
+                            s.id === sceneId
+                                ? { ...s, visible: !(s.visible ?? true) }
+                                : s,
+                        ),
+                    },
+                };
+            }),
+
+        toggleAllFloors: () =>
+            set((s) => ({ ui: { ...s.ui, showAllFloors: !s.ui.showAllFloors } })),
     })),
 );
 
@@ -860,6 +1129,11 @@ function rescaleSceneEntities(scene: Scene, ratio: number): Scene {
             offsetAlongWall: d.offsetAlongWall * ratio,
             width: d.width * ratio,
             height: d.height * ratio,
+        })),
+        partitions: (scene.partitions ?? []).map((p) => ({
+            ...p,
+            vertices: p.vertices.map((v) => ({ x: v.x * ratio, y: v.y * ratio })),
+            thickness: p.thickness * ratio,
         })),
     };
 }

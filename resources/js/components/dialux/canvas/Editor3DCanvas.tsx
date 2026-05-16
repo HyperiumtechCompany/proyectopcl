@@ -163,19 +163,18 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
         const unsub = useEditorStore.subscribe(
             (state) => ({
                 sceneId: state.activeSceneId,
-                rooms: state.activeScene()?.rooms,
-                walls: state.activeScene()?.walls,
-                windows: state.activeScene()?.windows,
-                canopies: state.activeScene()?.canopies,
-                fixtures: state.activeScene()?.fixtures,
+                scenes: state.project?.scenes,
                 result: state.result,
                 showIsolux: state.ui.showIsolux,
                 isoluxMode: state.ui.isoluxMode,
                 showRoof: state.ui.showRoof,
+                showAllFloors: state.ui.showAllFloors,
             }),
-            ({ result, showIsolux, isoluxMode, showRoof }) => {
-                const editorScene = useEditorStore.getState().activeScene();
-                if (!builderRef.current || !editorScene) return;
+            ({ result, showIsolux, isoluxMode, showRoof, showAllFloors }) => {
+                const state = useEditorStore.getState();
+                const allScenes = state.project?.scenes ?? [];
+                const activeSceneId = state.activeSceneId;
+                if (!builderRef.current || allScenes.length === 0) return;
 
                 if (syncFrameRef.current !== null) {
                     cancelAnimationFrame(syncFrameRef.current);
@@ -185,16 +184,14 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     syncFrameRef.current = null;
                     if (!builderRef.current || scene.isDisposed) return;
 
-                    scene.lights
-                        .filter((light) => light.name.startsWith('light_'))
-                        .forEach((light) => light.dispose());
-
-                    builderRef.current.syncScene(
-                        editorScene,
+                    builderRef.current.syncAllFloors(
+                        allScenes,
                         result ?? null,
                         showIsolux,
                         isoluxMode,
                         showRoof,
+                        activeSceneId,
+                        showAllFloors,
                     );
                 });
             },

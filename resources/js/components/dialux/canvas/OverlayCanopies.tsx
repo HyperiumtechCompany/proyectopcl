@@ -12,26 +12,35 @@ interface Props {
     zoom: number;
     onSelect: (id: string) => void;
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
-    screenDistance: (dx: number, dy: number, origin: { x: number; y: number }) => number;
+    screenDistance: (
+        dx: number,
+        dy: number,
+        origin: { x: number; y: number },
+    ) => number;
 }
 
 export const OverlayCanopies = memo(function OverlayCanopies({
-    canopies, selectedId, zoom, onSelect, screenPoint, screenDistance,
+    canopies,
+    selectedId,
+    zoom,
+    onSelect,
+    screenPoint,
+    screenDistance,
 }: Props) {
     if (!canopies.length) return null;
     return (
         <g className="overlay-canopies">
-            {canopies.map(c => {
-                const p1    = screenPoint({ x: c.x1, y: c.y1 });
-                const p2    = screenPoint({ x: c.x2, y: c.y2 });
-                const wPx   = screenDistance(c.width, 0, { x: c.x1, y: c.y1 });
-                const dx    = p2.x - p1.x;
-                const dy    = p2.y - p1.y;
-                const len   = Math.hypot(dx, dy);
+            {canopies.map((c) => {
+                const p1 = screenPoint({ x: c.x1, y: c.y1 });
+                const p2 = screenPoint({ x: c.x2, y: c.y2 });
+                const wPx = screenDistance(c.width, 0, { x: c.x1, y: c.y1 });
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len = Math.hypot(dx, dy);
                 if (len < 1) return null;
 
                 const nx = -dy / len;
-                const ny =  dx / len;
+                const ny = dx / len;
                 const hw = wPx / 2;
                 const pts = [
                     `${p1.x - nx * hw},${p1.y - ny * hw}`,

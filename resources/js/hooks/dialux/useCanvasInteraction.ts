@@ -11,11 +11,14 @@ import type {
     Room,
 } from './useEditorStore';
 import { 
+    clampOpeningOffsetToWallSegment,
+    projectPointToWallProjection,
     useInteractionHelpers, 
     wallLength, 
     projectPointToWallOffset,
 } from './useInteractionHelpers';
 import { useSnap } from './useSnap';
+import { getCanopyDraftStart } from './cadInteraction';
 
 export interface CanvasPoint {
     x: number;
@@ -31,10 +34,19 @@ interface InteractionOptions {
     ) => CanvasPoint | null;
     dxfEntities: DxfEntity[] | null;
     walls: Wall[];
+    /** Zoom actual del canvas (≥1) para calcular el umbral de cierre adaptativo */
+    zoom?: number;
     onAddRoom: (verticesM: CanvasPoint[]) => void;
     onAddWall: (vertices: CanvasPoint[]) => void;
     onAddWindow: (wallId: string, offsetAlongWall: number) => void;
-    onAddDoor: (wallId: string, offsetAlongWall: number) => void;
+    onAddDoor: (
+        wallId: string,
+        offsetAlongWall: number,
+        placement?: {
+            segmentStartOffset: number;
+            segmentEndOffset: number;
+        },
+    ) => void;
     onAddCanopy: (x1: number, y1: number, x2: number, y2: number) => void;
     onAddFixture: (xM: number, yM: number) => void;
     onCalibrationMeasure: (
@@ -86,6 +98,10 @@ interface DrawState {
     dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | null;
 }
 
+function isWallTool(tool: string): boolean {
+    return tool === 'wall' || tool === 'education-wall';
+}
+
 export function useCanvasInteraction(opts: InteractionOptions) {
     const {
         activeTool,
@@ -93,6 +109,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         resolveCadOsnap,
         dxfEntities,
         walls,
+        zoom = 1,
         onAddRoom,
         onAddWall,
         onAddWindow,
@@ -116,6 +133,20 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveWindow,
         onMoveDoor,
     } = opts;
+
+    /**
+     * Umbral de cierre de polígono adaptativo al zoom.
+     * A zoom 1x → 20px. A zoom 2x → 10px. A zoom 4x → 8px (mínimo).
+     * Esto evita que muros cortos se autocierren prematuramente.
+     */
+    const closeThresholdPx = Math.max(8, 20 / zoom);
+
+    /**
+     * En modo libre, desactivar el snap a entidades DXF.
+     * El snap a muros propios y vértices de rooms sigue activo.
+     * Esto resuelve el problema de "dibujás 5m pero el snap te lleva a 7m".
+     */
+    const disableDxfSnap = angleSnapMode === 'free';
 
     const stateRef = useRef<DrawState>({
         isDrawing: false,
@@ -154,10 +185,15 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     );
 
     // ── Snapping Hook ──────────────────────────────────────────────────────────
+    // Extraer todos los vértices de rooms existentes para snap de alineación
+    const roomVerticesScene = rooms.flatMap((r) => r.vertices);
+
     const { resolveSnap, getGuideAngles, applyAngleSnap } = useSnap({
         dxfEntities,
         walls,
         sceneToCanvas,
+        extraVerticesScene: roomVerticesScene,
+        zoom,
     });
 
     // ── Interaction Helpers Hook ───────────────────────────────────────────────
@@ -180,20 +216,20 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
     // Helper local para determinar el punto previo para ortho snap
     const getPrevPointM = useCallback((tool: string, s: DrawState): CanvasPoint | null => {
-        if ((tool === 'room' || tool === 'corridor') && s.roomVertices.length > 0) return s.roomVertices[s.roomVertices.length - 1];
-        if (tool === 'wall' && s.wallVertices.length > 0) return s.wallVertices[s.wallVertices.length - 1];
-        if (tool === 'canopy' && s.isDrawing && s.wallStart) return canvasToScene(s.wallStart.x, s.wallStart.y);
+        if ((tool === 'room' || tool === 'corridor' || tool === 'stair') && s.roomVertices.length > 0) return s.roomVertices[s.roomVertices.length - 1];
+        if (isWallTool(tool) && s.wallVertices.length > 0) return s.wallVertices[s.wallVertices.length - 1];
+        if (tool === 'canopy' && s.isDrawing && s.wallStart) return s.wallStart;
         if (tool === 'calibrate' && s.calibrationStart) return s.calibrationStart;
         return null;
-    }, [canvasToScene]);
+    }, []);
 
     const getReferenceAngles = useCallback(
         (tool: string, s: DrawState, cx: number, cy: number): number[] => {
             const inferred = getGuideAngles(cx, cy);
             const vertices =
-                (tool === 'room' || tool === 'corridor')
+                (tool === 'room' || tool === 'corridor' || tool === 'stair')
                     ? s.roomVertices
-                    : tool === 'wall'
+                    : isWallTool(tool)
                       ? s.wallVertices
                       : [];
 
@@ -240,7 +276,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             const s = stateRef.current;
             const activeVerticesCanvas = (
-                (activeTool === 'room' || activeTool === 'corridor') ? s.roomVertices : (activeTool === 'wall' ? s.wallVertices : [])
+                (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') ? s.roomVertices : (isWallTool(activeTool) ? s.wallVertices : [])
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
@@ -250,7 +286,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             );
             const snapped = cadOsnapPoint
                 ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                : resolveSnap(rawX, rawY, activeVerticesCanvas);
+                : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
             const referenceAngles = getReferenceAngles(
                 activeTool,
                 s,
@@ -319,10 +355,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
 
 
-            if (activeTool === 'room' || activeTool === 'corridor') {
+            if (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') {
                 if (s.roomVertices.length > 2) {
                     const first = sceneToCanvas(s.roomVertices[0].x, s.roomVertices[0].y);
-                    if (Math.hypot(first.x - cx, first.y - cy) < 20) {
+                    // Umbral adaptativo al zoom: evita cierre prematuro en muros cortos
+                    if (Math.hypot(first.x - cx, first.y - cy) < closeThresholdPx) {
                         onAddRoom(s.roomVertices);
                         stateRef.current = { ...s, isDrawing: false, roomVertices: [], previewPoint: null };
                         setRoomVertices([]);
@@ -337,14 +374,15 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-            if (activeTool === 'wall') {
+            if (isWallTool(activeTool)) {
                 if (!s.wallVertices) s.wallVertices = [];
                 const newPoint = canvasToScene(cx, cy);
                 if (s.wallVertices.length > 0) {
                     const first = sceneToCanvas(s.wallVertices[0].x, s.wallVertices[0].y);
                     const newPointScreen = sceneToCanvas(newPoint.x, newPoint.y);
                     const dist = Math.hypot(newPointScreen.x - first.x, newPointScreen.y - first.y);
-                    if (dist < 20) {
+                    // Umbral adaptativo al zoom igual que para rooms
+                    if (dist < closeThresholdPx) {
                         onAddWall([...s.wallVertices, s.wallVertices[0]]);
                         s.wallVertices = [];
                         s.isDrawing = false;
@@ -365,12 +403,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             if (activeTool === 'door') {
                 const hit = findNearestWall(cx, cy);
-                if (hit) onAddDoor(hit.wall.id, hit.offset);
+                if (hit) onAddDoor(hit.wall.id, hit.offset, hit);
                 return;
             }
 
             if (activeTool === 'canopy') {
-                s.wallStart = { x: cx, y: cy };
+                s.wallStart = getCanopyDraftStart({ x: cx, y: cy }, canvasToScene);
                 s.isDrawing = true;
                 return;
             }
@@ -464,7 +502,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const rawY = e.clientY - rect.top;
 
             const activeVerticesCanvas = (
-                (activeTool === 'room' || activeTool === 'corridor') ? s.roomVertices : (activeTool === 'wall' ? s.wallVertices : [])
+                (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') ? s.roomVertices : (isWallTool(activeTool) ? s.wallVertices : [])
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
@@ -474,7 +512,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             );
             const snapped = cadOsnapPoint
                 ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                : resolveSnap(rawX, rawY, activeVerticesCanvas);
+                : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
             const referenceAngles = getReferenceAngles(
                 activeTool,
                 s,
@@ -492,7 +530,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const cx = finalPointCanvas.x;
             const cy = finalPointCanvas.y;
 
-            if ((activeTool === 'room' || activeTool === 'corridor') && s.roomVertices.length > 0) {
+            if ((activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') && s.roomVertices.length > 0) {
                 s.previewPoint = canvasToScene(cx, cy);
                 setPreviewPoint(s.previewPoint);
                 return;
@@ -502,7 +540,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 setCalibrationSnapPoint(canvasToScene(cx, cy));
             }
 
-            if (activeTool === 'wall' && s.wallVertices && s.wallVertices.length > 0) {
+            if (isWallTool(activeTool) && s.wallVertices && s.wallVertices.length > 0) {
                 setWallPreview([...s.wallVertices, canvasToScene(cx, cy)]);
                 return;
             }
@@ -559,8 +597,18 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     const wall = door ? walls.find((w) => w.id === door.wallId) : null;
                     if (door && wall) {
                         const wallLen = wallLength(wall.vertices);
-                        let newOffset = projectPointToWallOffset(currentScene, wall);
-                        newOffset = Math.max(0, Math.min(wallLen - door.width, newOffset));
+                        const projection = projectPointToWallProjection(currentScene, wall);
+                        const newOffset = projection
+                            ? clampOpeningOffsetToWallSegment(
+                                  projection,
+                                  door.width,
+                                  wallLen,
+                                  'center',
+                              )
+                            : Math.max(
+                                  0,
+                                  Math.min(wallLen - door.width, door.offsetAlongWall),
+                              );
                         onMoveDoor(s.dragObjectId, door.wallId, newOffset);
                     }
                     s.dragStartScene = currentScene;
@@ -615,7 +663,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
     const handleDoubleClick = useCallback(() => {
         const s = stateRef.current;
-        if (activeTool === 'wall' && s.wallVertices && s.wallVertices.length >= 2) {
+        if (isWallTool(activeTool) && s.wallVertices && s.wallVertices.length >= 2) {
             onAddWall(s.wallVertices);
             s.wallVertices = [];
             s.isDrawing = false;

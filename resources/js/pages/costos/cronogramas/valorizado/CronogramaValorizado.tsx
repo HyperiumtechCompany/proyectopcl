@@ -70,11 +70,17 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         try {
             await axios.post('/module/crono_valorizado/save', {
                 project_id: props.project,
+                modo_calculo: modoCalculo,
                 items: items.map(i => ({
                     item:        i.item,
                     descripcion: i.descripcion,
                     parcial:     i.parcial,
-                    distribucion: i.distribucion,
+                    distribucion: Object.fromEntries(
+                        props.periodos.map(periodo => [
+                            periodo.key,
+                            i.distribucion?.[periodo.key] ?? { monto: 0, porcentaje: 0 },
+                        ])
+                    ),
                     parent_id:   i.parent_id ?? null,
                 })),
             });
@@ -85,7 +91,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         } finally {
             setSaving(false);
         }
-    }, [props.project, items, showToast]);
+    }, [props.project, props.periodos, modoCalculo, items, showToast]);
 
     // ── ELIMINAR ──────────────────────────────────────────────────────────────
     const handleDelete = useCallback(async () => {

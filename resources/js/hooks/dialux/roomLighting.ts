@@ -15,12 +15,14 @@ import {
 } from './normativaData';
 import type { Fixture, Room } from './types';
 
-export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru';
+export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
 
 export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
     en_12464: 'EN 12464-1 (Europa)',
     ies_na:   'IESNA / IES HB-10 (EE. UU.)',
     rne_peru: 'RNE EM.010 / CNE (Perú)',
+    nfpa101:  'NFPA 101 - Life Safety Code (EE. UU.)',
+    ds024:    'DS-024-2016-EM - Minería (Perú)',
 };
 
 

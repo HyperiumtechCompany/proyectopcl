@@ -30,6 +30,10 @@ export const OverlayWalls = memo(function OverlayWalls({
                 const totalLen   = wallLengthM(w);
                 const screenVerts = w.vertices.map(v => screenPoint(v));
                 const ctr        = centroid(screenVerts);
+                const isEducationWall = w.normativeUse === 'education';
+                const wallStroke = isEducationWall ? '#22d3ee' : '#eab308';
+                const selectedStroke = isEducationWall ? '#67e8f9' : '#fde047';
+                const labelFill = isEducationWall ? '#67e8f9' : '#94a3b8';
 
                 return (
                     <g
@@ -47,7 +51,7 @@ export const OverlayWalls = memo(function OverlayWalls({
                         {/* Cuerpo visible — pared interior: amarillo */}
                         <polyline
                             points={pts}
-                            stroke={isSelected ? '#fde047' : '#eab308'}
+                            stroke={isSelected ? selectedStroke : wallStroke}
                             strokeWidth={isSelected ? 3 : 2}
                             strokeLinecap="round"
                             fill="none"
@@ -58,7 +62,7 @@ export const OverlayWalls = memo(function OverlayWalls({
                                 x={safeNum(ctr.x)}
                                 y={safeNum(ctr.y - thickPx / 2 - 4)}
                                 textAnchor="middle"
-                                fill="#94a3b8"
+                                fill={labelFill}
                                 fontSize={safeNum(Math.max(7, 9 * zoom))}
                                 fontFamily="monospace"
                                 pointerEvents="none"

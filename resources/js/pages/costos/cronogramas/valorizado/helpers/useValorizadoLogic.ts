@@ -101,6 +101,23 @@ const redistribuirGauss = (
     return nuevaDist;
 };
 
+const normalizarDistribucion = (
+    item: ItemValorizado,
+    periodos: Periodo[],
+): Record<string, DistribucionMes> => {
+    const normalizada: Record<string, DistribucionMes> = {};
+
+    periodos.forEach(p => {
+        const monto = item.distribucion?.[p.key]?.monto ?? 0;
+        normalizada[p.key] = {
+            monto,
+            porcentaje: item.parcial > 0 ? (monto / item.parcial) * 100 : 0,
+        };
+    });
+
+    return normalizada;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,7 +133,7 @@ export const useValorizadoLogic = (
     const [items, setItems]           = useState<ItemValorizado[]>(() =>
         initialItems.map(item => ({
             ...item,
-            distribucion: { ...item.distribucion },
+            distribucion: normalizarDistribucion(item, periodos),
         }))
     );
 
@@ -197,12 +214,10 @@ export const useValorizadoLogic = (
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
             const nuevaDist: Record<string, DistribucionMes> = {};
-            Object.keys(item.distribucion).forEach(k => {
-                nuevaDist[k] = { monto: 0, porcentaje: 0 };
-            });
+            periodos.forEach(p => { nuevaDist[p.key] = { monto: 0, porcentaje: 0 }; });
             return { ...item, distribucion: nuevaDist };
         }));
-    }, []);
+    }, [periodos]);
 
     // ── TOTAL POR FILA — suma de todos los meses de cada ítem ────────────────
     /**
@@ -212,13 +227,13 @@ export const useValorizadoLogic = (
     const totalesPorItem = useMemo(() => {
         const map: Record<string | number, number> = {};
         items.forEach(item => {
-            const suma = Object.values(item.distribucion).reduce(
-                (acc, v) => acc + (v.monto ?? 0), 0
+            const suma = periodos.reduce(
+                (acc, p) => acc + (item.distribucion?.[p.key]?.monto ?? 0), 0
             );
             map[item.id] = Math.round(suma * 100) / 100;
         });
         return map;
-    }, [items]);
+    }, [items, periodos]);
 
     // ── TOTALES POR COLUMNA — solo hojas (is_leaf) ────────────────────────────
     const totalesFinales = useMemo<Record<string, TotalesColumna>>(() => {
@@ -284,11 +299,11 @@ export const useValorizadoLogic = (
      * > 0.01 (1 céntimo) dispara alerta visual.
      */
     const getDesviacion = useCallback((item: ItemValorizado): number => {
-        const sumaDist = Object.values(item.distribucion).reduce(
-            (s, v) => s + (v.monto ?? 0), 0
+        const sumaDist = periodos.reduce(
+            (s, p) => s + (item.distribucion?.[p.key]?.monto ?? 0), 0
         );
         return Math.round(Math.abs(item.parcial - sumaDist) * 100) / 100;
-    }, []);
+    }, [periodos]);
 
     const desviaciones = useMemo(() => {
         const map: Record<string | number, number> = {};

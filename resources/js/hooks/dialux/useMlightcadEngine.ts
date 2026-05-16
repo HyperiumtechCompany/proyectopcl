@@ -687,52 +687,51 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 const modes = [
                     AcDbOsnapMode.EndPoint,
                     AcDbOsnapMode.MidPoint,
-                    AcDbOsnapMode.Center,
-                    AcDbOsnapMode.Quadrant,
-                    AcDbOsnapMode.Nearest,
+                    // Center/Quadrant/Nearest omitidos: causan crash en entidades
+                    // hatch con boundary_paths nulas ("Failed to convert hatch boundaries")
                 ];
 
                 for (const item of results) {
-                    const entity = modelSpace.getIdAt(item.id);
-                    const subGetOsnapPoints = entity?.subGetOsnapPoints;
-                    if (!subGetOsnapPoints) continue;
+                    try {
+                        const entity = modelSpace.getIdAt(item.id);
+                        const subGetOsnapPoints = entity?.subGetOsnapPoints;
+                        if (!subGetOsnapPoints) continue;
 
-                    const injectPoints = (gsMark?: string) => {
-                        for (const mode of modes) {
-                            const startIndex = osnapPoints.length;
-                            try {
-                                subGetOsnapPoints.call(entity,
-                                    mode,
-                                    { ...worldPoint, z: 0 },
-                                    {
-                                        x: lastPoint?.x ?? worldPoint.x,
-                                        y: lastPoint?.y ?? worldPoint.y,
-                                        z: 0,
-                                    },
-                                    osnapPoints,
-                                    gsMark,
-                                );
-                            } catch {
-                                // Geometría interna nula para este modo/entidad
-                                // → ignorar silenciosamente y continuar con el
-                                // siguiente modo.
-                                continue;
+                        const injectPoints = (gsMark?: string) => {
+                            for (const mode of modes) {
+                                const startIndex = osnapPoints.length;
+                                try {
+                                    subGetOsnapPoints.call(entity,
+                                        mode,
+                                        { ...worldPoint, z: 0 },
+                                        {
+                                            x: lastPoint?.x ?? worldPoint.x,
+                                            y: lastPoint?.y ?? worldPoint.y,
+                                            z: 0,
+                                        },
+                                        osnapPoints,
+                                        gsMark,
+                                    );
+                                } catch {
+                                    // Geometría interna nula (ej. hatch sin boundaries) → saltar modo
+                                    continue;
+                                }
+                                for (let i = startIndex; i < osnapPoints.length; i++) {
+                                    osnapPoints[i].type = mode;
+                                }
                             }
-                            for (
-                                let i = startIndex;
-                                i < osnapPoints.length;
-                                i++
-                            ) {
-                                osnapPoints[i].type = mode;
+                        };
+
+                        if (item.children?.length) {
+                            for (const child of item.children) {
+                                try { injectPoints(child.id); } catch { /* skip bad child */ }
                             }
+                        } else {
+                            injectPoints();
                         }
-                    };
-
-                    if (item.children?.length) {
-                        for (const child of item.children)
-                            injectPoints(child.id);
-                    } else {
-                        injectPoints();
+                    } catch {
+                        // Entidad con geometría corrupta (hatch, solid 3D, etc.) → ignorar
+                        continue;
                     }
                 }
 
@@ -774,7 +773,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 );
 
                 return best?.point
-                    ? { x: best.point.x, y: best.point.y }
+                    ? { x: best.point.x ?? 0, y: best.point.y ?? 0 }
                     : null;
             } catch (error) {
                 cadWarn('getOsnapPoint failed, fallback to local snap:', error);

@@ -18,6 +18,10 @@ import {
 import { findAmbientSpaceAtPoint } from '@/hooks/dialux/ambientSpaces';
 import { shouldEnableOverlayPointerEvents } from '@/hooks/dialux/cadInteraction';
 import {
+    clampOpeningOffsetToWallSegment,
+    wallLength,
+} from '@/hooks/dialux/useInteractionHelpers';
+import {
     useCanvasInteraction,
     type CanvasPoint,
 } from '@/hooks/dialux/useCanvasInteraction';
@@ -27,6 +31,7 @@ import {
     useActiveScene,
     useViewport,
 } from '@/hooks/dialux/useEditorStore';
+import { getPeruWallPreset } from '@/hooks/dialux/wallNorms';
 import { useMlightcadEngine } from '@/hooks/dialux/useMlightcadEngine';
 import { useWasmEngine } from '@/hooks/dialux/useWasmEngine';
 
@@ -49,18 +54,20 @@ import { OverlayPreviews } from './OverlayPreviews';
 import { OverlayRooms } from './OverlayRooms';
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
+import { OverlayPartitions } from './OverlayPartitions';
 
 // ─── Helpers locales ──────────────────────────────────────────────────────────
-
 
 const CURSOR_MAP: Record<string, string> = {
     select: 'default',
     room: 'crosshair',
     wall: 'crosshair',
+    'education-wall': 'crosshair',
     window: 'cell',
     door: 'cell',
     canopy: 'crosshair',
     corridor: 'crosshair',
+    stair: 'crosshair',
     fixture: 'cell',
     measure: 'crosshair',
     calibrate: 'crosshair',
@@ -70,10 +77,12 @@ const CURSOR_MAP: Record<string, string> = {
 const DRAWING_TOOLS = new Set([
     'room',
     'wall',
+    'education-wall',
     'window',
     'door',
     'canopy',
     'corridor',
+    'stair',
     'fixture',
     'measure',
     'calibrate',
@@ -96,6 +105,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const { zoom, panX, panY } = useViewport();
         const ui = store.ui;
         const resultsByRoom = useEditorStore((state) => state.resultsByRoom);
+        const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
+        const allScenes = useEditorStore((s) => s.project?.scenes ?? []);
+        const activeSceneId = useEditorStore((s) => s.activeSceneId);
         const engine = useMlightcadEngine();
         const { rescaleDxfEntities } = useWasmEngine();
 
@@ -256,9 +268,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             [cadView, effectiveScale, engine, hasCadView, worldPoint],
         );
 
-        // Herramientas que realmente necesitan OSNAP CAD (view.pick es costoso)
+        // Herramientas que realmente necesitan OSNAP CAD (view.pick es costoso).
+        // 'calibrate' excluido: solo necesita 2 puntos de referencia, el snap DXF
+        // del store es suficiente y evita crashes con hatches sin boundaries.
         const CAD_OSNAP_TOOLS = new Set([
-            'room', 'wall', 'corridor', 'calibrate', 'canopy',
+            'room',
+            'wall',
+            'education-wall',
+            'corridor',
+            'stair',
+            'canopy',
         ]);
 
         // ── Interacción ───────────────────────────────────────────────────────────
@@ -275,9 +294,33 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
+            zoom,
             resolveCadOsnap: CAD_OSNAP_TOOLS.has(ui.activeTool)
-                ? (scenePoint, lastPoint) =>
-                      engine.getOsnapPoint(scenePoint, { lastPoint })
+                ? (scenePoint, lastPoint) => {
+                      // scenePoint llega en metros (ya convertido por worldPoint).
+                      // getOsnapPoint/view.pick operan en coordenadas CAD nativas.
+                      // Debemos convertir en la frontera para evitar desfases
+                      // proporcionales al effectiveScale (hasta 1000x en planos mm).
+                      const cadPoint = {
+                          x: metersToCad(scenePoint.x, scaleConfig),
+                          y: metersToCad(scenePoint.y, scaleConfig),
+                      };
+                      const cadLast = lastPoint
+                          ? {
+                                x: metersToCad(lastPoint.x, scaleConfig),
+                                y: metersToCad(lastPoint.y, scaleConfig),
+                            }
+                          : null;
+                      const osnapCad = engine.getOsnapPoint(cadPoint, {
+                          lastPoint: cadLast,
+                      });
+                      if (!osnapCad) return null;
+                      // Retornar en metros para que el pipeline de snap sea consistente.
+                      return {
+                          x: cadToMeters(osnapCad.x, scaleConfig),
+                          y: cadToMeters(osnapCad.y, scaleConfig),
+                      };
+                  }
                 : undefined,
             dxfEntities: store.dxfEntities,
             walls: scene?.walls ?? [],
@@ -291,26 +334,43 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             doors: scene?.doors ?? [],
             onAddRoom: (verticesM) => {
                 const isCorridor = ui.activeTool === 'corridor';
+                const isStair = ui.activeTool === 'stair';
+                const stairCount = scene?.rooms.filter((r) => r.roomType === 'stair').length ?? 0;
+                const corridorCount = scene?.rooms.filter((r) => r.roomType === 'corridor').length ?? 0;
+                const roomCount = scene?.rooms.filter((r) => !r.roomType || r.roomType === 'room').length ?? 0;
                 const id = store.addRoom({
-                    name: isCorridor ? `Pasadizo ${(scene?.rooms.filter(r => r.roomType === 'corridor').length ?? 0) + 1}` : `Recinto ${(scene?.rooms.filter(r => r.roomType !== 'corridor').length ?? 0) + 1}`,
+                    name: isStair
+                        ? `Escalera ${stairCount + 1}`
+                        : isCorridor
+                          ? `Pasadizo ${corridorCount + 1}`
+                          : `Recinto ${roomCount + 1}`,
                     vertices: verticesM,
                     height: 2.7,
-                    roomType: isCorridor ? 'corridor' : 'room',
-                    color: isCorridor ? 'rgba(59, 130, 246, 0.4)' : 'rgba(56,189,248,0.25)', // Blue color for corridor
+                    roomType: isStair ? 'stair' : isCorridor ? 'corridor' : 'room',
+                    color: isStair
+                        ? 'rgba(251, 146, 60, 0.35)'
+                        : isCorridor
+                          ? 'rgba(59, 130, 246, 0.4)'
+                          : 'rgba(56,189,248,0.25)',
                 });
                 store.setSelectedId(id);
                 setRoomVertices([]);
                 setRoomPreviewPt(null);
             },
             onAddWall: (vertices) => {
+                const isEducationWall = ui.activeTool === 'education-wall';
+                const preset = getPeruWallPreset(
+                    'brick',
+                    isEducationWall ? 'education' : 'housing',
+                );
                 const id = store.addWall({
                     vertices,
-                    material: 'brick',
-                    normativeUse: 'housing',
-                    thickness: 0.08,
-                    height: 2.4,
-                    mortarJointMin: 0.01,
-                    mortarJointMax: 0.015,
+                    material: preset.material,
+                    normativeUse: preset.use,
+                    thickness: preset.recommendedThickness,
+                    height: preset.recommendedHeight,
+                    mortarJointMin: preset.mortarJointMin,
+                    mortarJointMax: preset.mortarJointMax,
                 });
                 store.setSelectedId(id);
                 setWallPreview(null);
@@ -328,12 +388,29 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     centered: false,
                 });
             },
-            onAddDoor: (wallId, offsetAlongWall) => {
+            onAddDoor: (wallId, offsetAlongWall, placement) => {
                 const t = ui.doorTemplate;
+                const wall = scene?.walls.find((candidate) => candidate.id === wallId);
+                const width = t.width ?? 0.9;
+                const openingOffset = wall
+                    ? clampOpeningOffsetToWallSegment(
+                          {
+                              offsetAlongWall,
+                              segmentStartOffset:
+                                  placement?.segmentStartOffset ?? 0,
+                              segmentEndOffset:
+                                  placement?.segmentEndOffset ??
+                                  wallLength(wall.vertices),
+                          },
+                          width,
+                          wallLength(wall.vertices),
+                          'center',
+                      )
+                    : offsetAlongWall;
                 store.addDoor({
                     wallId,
-                    offsetAlongWall,
-                    width: t.width ?? 0.9,
+                    offsetAlongWall: openingOffset,
+                    width,
                     height: t.height ?? 2.1,
                     doorType: t.doorType ?? 'single',
                     openingDirection: t.openingDirection ?? 'inward',
@@ -356,7 +433,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             onAddFixture: (xM, yM) => {
                 if (!scene) return;
-                const ambient = findAmbientSpaceAtPoint(scene, { x: xM, y: yM });
+                const ambient = findAmbientSpaceAtPoint(scene, {
+                    x: xM,
+                    y: yM,
+                });
 
                 const t = ui.fixtureTemplate;
                 const fixtureType = t.fixtureType ?? 'surface';
@@ -392,7 +472,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onCalibrationMeasure: (_sceneDistM, p1Screen, p2Screen) => {
                 // p1Screen, p2Screen son px en el SVG — measureCadDistanceFromScreen
                 // llama cadView.screenToWorld(px) para la distancia CAD nativa.
-                const cadDistance = measureCadDistanceFromScreen(p1Screen, p2Screen);
+                const cadDistance = measureCadDistanceFromScreen(
+                    p1Screen,
+                    p2Screen,
+                );
 
                 // Convertir px → metros para los overlays visuales.
                 const p1Scene = worldPoint(p1Screen.x, p1Screen.y);
@@ -469,7 +552,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
             rafId = requestAnimationFrame(tick);
             return () => cancelAnimationFrame(rafId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [hasCadView, engine]);
 
         // ── Inicialización del motor ───────────────────────────────────────────────
@@ -670,12 +753,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
                     {/* ── Grilla ── */}
                     {ui.showGrid && (
-                        <GridLayer 
-                            width={size.w} 
-                            height={size.h} 
-                            screenPoint={screenPoint} 
-                            worldPoint={worldPoint} 
-                            viewTick={viewTick} 
+                        <GridLayer
+                            width={size.w}
+                            height={size.h}
+                            screenPoint={screenPoint}
+                            worldPoint={worldPoint}
+                            viewTick={viewTick}
                         />
                     )}
 
@@ -694,7 +777,32 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 ),
                         )}
 
-                    {/* ── Geometría de la escena ── */}
+                    {/* ── Pisos fantasma (multi-floor ghost view) ── */}
+                    {showAllFloors && allScenes
+                        .filter((s) => s.id !== activeSceneId && (s.visible ?? true))
+                        .map((ghostScene) => (
+                            <g key={`ghost-${ghostScene.id}`} opacity={0.18}>
+                                <OverlayRooms
+                                    rooms={ghostScene.rooms ?? []}
+                                    selectedId={null}
+                                    zoom={zoom}
+                                    onSelect={() => undefined}
+                                    screenPoint={screenPoint}
+                                    screenDistance={screenDistance}
+                                />
+                                <OverlayWalls
+                                    walls={ghostScene.walls ?? []}
+                                    selectedId={null}
+                                    zoom={zoom}
+                                    onSelect={() => undefined}
+                                    screenPoint={screenPoint}
+                                    screenDistance={screenDistance}
+                                />
+                            </g>
+                        ))
+                    }
+
+                    {/* ── Geometría de la escena activa ── */}
                     <OverlayCanopies
                         canopies={scene?.canopies ?? []}
                         selectedId={ui.selectedId}
@@ -709,7 +817,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         wallPreview={wallPreview}
                         canopyPreview={canopyPreview}
                         screenPoint={screenPoint}
-                        measureCadDistanceFromScreen={measureCadDistanceFromScreen}
+                        measureCadDistanceFromScreen={
+                            measureCadDistanceFromScreen
+                        }
                         angleSnapMode={ui.angleSnapMode}
                     />
                     <OverlayRooms
@@ -744,6 +854,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         onSelect={store.setSelectedId}
                         screenPoint={screenPoint}
                     />
+                    <OverlayPartitions
+                        partitions={scene?.partitions ?? []}
+                        scaleX={(x) => screenPoint({x, y: 0}).x}
+                        scaleY={(y) => screenPoint({x: 0, y}).y}
+                        selectedId={ui.selectedId}
+                        onSelect={store.setSelectedId}
+                        opacity={1}
+                    />
                     <OverlayFixtures
                         fixtures={scene?.fixtures ?? []}
                         selectedId={ui.selectedId}
@@ -758,8 +876,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         screenPoint={screenPoint}
                         label={
                             pendingCalibration
-                                // Mostrar distancia CAD nativa + ayuda para el usuario
-                                ? `${pendingCalibration.cadDistance.toFixed(4)} ud CAD → ingresa la medida real`
+                                ? // Mostrar distancia CAD nativa + ayuda para el usuario
+                                  `${pendingCalibration.cadDistance.toFixed(4)} ud CAD → ingresa la medida real`
                                 : ui.activeTool === 'calibrate' &&
                                     visibleCalibrationLine
                                   ? 'Selecciona el segundo punto (Shift = ortogonal)'

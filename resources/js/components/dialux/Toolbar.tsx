@@ -79,6 +79,7 @@ const ANGLE_SNAP_OPTIONS: Array<{ value: AngleSnapMode; label: string; hint: str
     { value: 'free',       label: 'Libre',       hint: 'Sin restricción'    },
     { value: 'orthogonal', label: 'Ortogonal',   hint: '0 · 90 · 180 · 270°' },
     { value: 'diagonal',   label: 'Diagonal',    hint: '30 · 45 · 60°'      },
+    { value: 'fine',       label: 'Fino 15°',    hint: 'Cada 15° (24 ángulos)' },
 ];
 
 const ISOLUX_MODES: Array<{ value: IsoluxMode; label: string }> = [
@@ -1060,20 +1061,41 @@ const ConstruccionPanel: React.FC<{
     const [material, setMaterial] = useState<WindowMaterial>('Todos');
     const [activeTab, setActiveTab] = useState<'tools' | 'catalog'>('tools');
 
-    const TOOLS: Array<{ tool: DrawTool; icon: React.ReactNode; tip: string; sublabel?: string }> = [
-        { tool: 'room',     icon: <Square size={13} />,   tip: 'Recinto poligonal (R)',  sublabel: 'Polígono del recinto'    },
-        { tool: 'corridor', icon: <Layers size={13} />,   tip: 'Pasadizo',               sublabel: 'Polígono techo reflejado' },
-        { tool: 'wall',     icon: <Minus size={13} />,    tip: 'Pared (W)',              sublabel: 'Polilínea de pared'      },
-        { tool: 'window',   icon: <AppWindow size={13} />,tip: 'Ventana (N)',            sublabel: 'En pared existente'      },
-        { tool: 'door',     icon: <DoorOpen size={13} />, tip: 'Puerta (D)',             sublabel: 'En pared existente'      },
-        { tool: 'canopy',   icon: <Umbrella size={13} />, tip: 'Voladizo (C)',           sublabel: 'Protección solar'        },
+    const TOOL_GROUPS: Array<{
+        label: string;
+        tools: Array<{ tool: DrawTool; icon: React.ReactNode; tip: string; sublabel?: string }>;
+    }> = [
+        {
+            label: 'Espacios',
+            tools: [
+                { tool: 'room',     icon: <Square size={13} />,   tip: 'Recinto poligonal (R)',  sublabel: 'Polígono del recinto'    },
+                { tool: 'corridor', icon: <Layers size={13} />,   tip: 'Pasadizo',               sublabel: 'Polígono techo reflejado' },
+                { tool: 'stair',    icon: <Triangle size={13} />, tip: 'Escalera (E)',            sublabel: 'Caja de escalera'        },
+            ],
+        },
+        {
+            label: 'Muros',
+            tools: [
+                { tool: 'wall',     icon: <Minus size={13} />,    tip: 'Pared (W)',              sublabel: 'Polilínea de pared'      },
+                { tool: 'education-wall', icon: <Building2 size={13} />, tip: 'Muro colegio',    sublabel: 'Ingresos y salidas'     },
+            ],
+        },
+        {
+            label: 'Aberturas y cubierta',
+            tools: [
+                { tool: 'window',   icon: <AppWindow size={13} />,tip: 'Ventana (N)',            sublabel: 'En pared existente'      },
+                { tool: 'door',     icon: <DoorOpen size={13} />, tip: 'Puerta (D)',             sublabel: 'Entrada / salida'        },
+                { tool: 'canopy',   icon: <Umbrella size={13} />, tip: 'Voladizo (C)',           sublabel: 'Protección solar'        },
+            ],
+        },
     ];
+    const toolCount = TOOL_GROUPS.reduce((total, group) => total + group.tools.length, 0);
 
     return (
         <>
             <PanelTabs
                 tabs={[
-                    { id: 'tools',   label: 'Dibujo',    count: TOOLS.length },
+                    { id: 'tools',   label: 'Dibujo',    count: toolCount },
                     { id: 'catalog', label: 'Catálogo' },
                 ]}
                 activeTab={activeTab}
@@ -1083,9 +1105,18 @@ const ConstruccionPanel: React.FC<{
             {activeTab === 'tools' ? (
                 <>
                     <PanelCard tone="accent">
-                        <div className="grid grid-cols-2 gap-1">
-                            {TOOLS.map((t) => (
-                                <PanelToolBtn key={t.tool} {...t} active={activeTool} onSet={onSetTool} />
+                        <div className="space-y-2">
+                            {TOOL_GROUPS.map((group) => (
+                                <div key={group.label}>
+                                    <p className="mb-1 px-1 text-[9px] font-semibold tracking-[0.14em] text-gray-600 uppercase">
+                                        {group.label}
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        {group.tools.map((t) => (
+                                            <PanelToolBtn key={t.tool} {...t} active={activeTool} onSet={onSetTool} />
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     </PanelCard>
@@ -1493,7 +1524,7 @@ export const Toolbar: React.FC = () => {
         {
             id: 'construccion' as PanelId, ref: refs.construccion,
             icon: <Building2 size={15} />, label: 'Arq.',
-            hasActive: ['room', 'wall', 'window', 'door', 'corridor'].includes(activeTool),
+            hasActive: ['room', 'wall', 'education-wall', 'window', 'door', 'canopy', 'corridor', 'stair'].includes(activeTool),
         },
         {
             id: 'luz' as PanelId, ref: refs.luz,

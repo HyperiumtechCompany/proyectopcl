@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     buildRoomLightingInputs,
+    getActivityOptions,
     getRoomMarginalZone,
     getRoomUsefulPlaneHeight,
 } from './roomLighting';
@@ -53,5 +54,21 @@ describe('roomLighting', () => {
         expect(
             getRoomUsefulPlaneHeight({ ...baseRoom, usefulPlaneHeight: 0.75 }),
         ).toBe(0.75);
+    });
+
+    it('includes covered institutional entrances and patios in Peru education options', () => {
+        const options = getActivityOptions(
+            'rne_peru',
+            'Educación',
+            'Educación básica y técnica',
+        );
+
+        expect(options.map((option) => option.activity)).toEqual(
+            expect.arrayContaining([
+                'Entrada institucional techada',
+                'Patio educativo',
+                'Patio con columnas y tejado',
+            ]),
+        );
     });
 });

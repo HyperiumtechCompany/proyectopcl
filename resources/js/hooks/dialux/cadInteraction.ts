@@ -9,3 +9,15 @@ export function shouldEnableOverlayPointerEvents(
 
     return interactiveTools.has(activeTool);
 }
+
+export interface CadCanvasPoint {
+    x: number;
+    y: number;
+}
+
+export function getCanopyDraftStart(
+    canvasPoint: CadCanvasPoint,
+    canvasToScene: (x: number, y: number) => CadCanvasPoint,
+): CadCanvasPoint {
+    return canvasToScene(canvasPoint.x, canvasPoint.y);
+}

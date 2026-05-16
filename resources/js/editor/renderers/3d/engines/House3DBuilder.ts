@@ -23,6 +23,7 @@ import {
     HemisphericLight,
     DirectionalLight,
     ShadowGenerator,
+    TransformNode,
 } from '@babylonjs/core';
 
 import { DynamicTexture } from '@babylonjs/core';
@@ -80,6 +81,7 @@ export class House3DBuilder {
     private meshMap: Map<string, Mesh[]> = new Map();
     private shadowGen: ShadowGenerator | null = null;
     private warnedInvalidRooms: Set<string> = new Set();
+    private floorNodes: Map<string, TransformNode> = new Map();
 
     // Materiales estructurales cacheados (creados UNA vez)
     private matWall!: StandardMaterial;
@@ -98,6 +100,55 @@ export class House3DBuilder {
         this.scene = scene;
         this.camera = camera || null;
         this.initMaterials();
+    }
+
+    // ── Multi-piso ─────────────────────────────────────────────────────────────
+    /**
+     * Renderiza TODOS los pisos del proyecto apilados en Y según `floorElevation`.
+     * Reemplaza las llamadas directas a `syncScene` desde Editor3DCanvas.
+     */
+    syncAllFloors(
+        scenes: EditorScene[],
+        result: LightingResult | null = null,
+        showIsolux: boolean = false,
+        isoluxMode: IsoluxMode = 'functional',
+        showRoof: boolean = false,
+        activeSceneId: string | null = null,
+        showAllFloors: boolean = true,
+    ) {
+        // 1. Dispose meshes y nodos padre previos
+        this.floorNodes.forEach((node) => node.dispose());
+        this.floorNodes.clear();
+        this.meshMap.forEach((meshes) => meshes.forEach((m) => m.dispose()));
+        this.meshMap.clear();
+        this.scene.lights
+            .filter((l) => l.name.startsWith('light_'))
+            .forEach((l) => l.dispose());
+
+        // 2. Ordenar por floorIndex (sótano → ático)
+        const sorted = [...scenes].sort((a, b) => a.floorIndex - b.floorIndex);
+
+        // 3. Construir cada piso en su elevación
+        for (const floor of sorted) {
+            const isActive = floor.id === activeSceneId;
+            const isVisible = floor.visible ?? true;
+
+            if (!isActive && (!showAllFloors || !isVisible)) {
+                continue;
+            }
+
+            this.syncScene(
+                floor,
+                isActive ? result : null,
+                isActive ? showIsolux : false,
+                isoluxMode,
+                showRoof,
+                floor.floorElevation,
+                floor.id,
+            );
+        }
+
+        this.frameCamera();
     }
 
     // ── Materiales ─────────────────────────────────────────────────────────────
@@ -192,10 +243,21 @@ export class House3DBuilder {
         showIsolux?: boolean,
         isoluxMode: IsoluxMode = 'functional',
         showRoof: boolean = false,
+        yOffset: number = 0,
+        sceneId?: string,
     ) {
-        // 1. Dispose meshes previos
-        this.meshMap.forEach((meshes) => meshes.forEach((m) => m.dispose()));
-        this.meshMap.clear();
+        // 1. Dispose meshes previos de este escopo (no afectar otros pisos)
+        // Cuando se llama desde syncAllFloors, el dispose ya se hizo en bloque.
+        // Cuando se llama solo (compatibilidad), hacemos dispose total.
+        if (!sceneId) {
+            this.meshMap.forEach((meshes) => meshes.forEach((m) => m.dispose()));
+            this.meshMap.clear();
+        }
+
+        // 2. TransformNode padre para este piso
+        const floorNode = new TransformNode(`floor_node_${sceneId ?? 'single'}`, this.scene);
+        floorNode.position.y = yOffset;
+        if (sceneId) this.floorNodes.set(sceneId, floorNode);
 
         const rooms = editorScene.rooms || [];
         const walls = editorScene.walls || [];
@@ -204,21 +266,21 @@ export class House3DBuilder {
         // Para los pasadizos (corridor) se hereda la altura del recinto que los contiene.
         const recintoHeights = new Map(
             rooms
-                .filter((r) => r.roomType !== 'corridor')
+                .filter((r) => r.roomType !== 'corridor' && r.roomType !== 'stair')
                 .map((r) => [r.id, resolveRoomCeilingHeight(r, walls)]),
         );
 
         const roomHeights = new Map<string, number>();
         for (const room of rooms) {
-            if (room.roomType !== 'corridor') {
+            if (room.roomType !== 'corridor' && room.roomType !== 'stair') {
                 roomHeights.set(room.id, recintoHeights.get(room.id) ?? room.height);
             } else {
-                // El pasadizo hereda la altura del recinto que lo contiene (centroide dentro del recinto).
+                // El pasadizo/escalera hereda la altura del recinto que lo contiene.
                 const cx = room.vertices.reduce((s, v) => s + v.x, 0) / room.vertices.length;
                 const cy = room.vertices.reduce((s, v) => s + v.y, 0) / room.vertices.length;
                 const parent = rooms.find(
                     (r) =>
-                        r.roomType !== 'corridor' &&
+                        r.roomType !== 'corridor' && r.roomType !== 'stair' &&
                         this.pointInRoom(r, cx, cy),
                 );
                 const inheritedHeight = parent
@@ -229,31 +291,38 @@ export class House3DBuilder {
         }
 
         rooms.forEach((r) =>
-            this.buildRoom(r, showRoof, roomHeights.get(r.id) ?? r.height, editorScene.windows || [], editorScene.doors || [], editorScene.walls || []),
+            this.buildRoom(r, showRoof, roomHeights.get(r.id) ?? r.height, editorScene.windows || [], editorScene.doors || [], editorScene.walls || [], floorNode),
         );
         (editorScene.walls || []).forEach((w) =>
             this.buildWall(
                 w,
                 editorScene.windows || [],
                 editorScene.doors || [],
+                floorNode,
             ),
         );
-        (editorScene.canopies || []).forEach((c) => this.buildCanopy(c));
+        (editorScene.canopies || []).forEach((c) => this.buildCanopy(c, floorNode));
         (editorScene.fixtures || []).forEach((f) =>
             this.buildFixtureLight(
                 f,
                 this.resolveFixtureRoomHeight(f, rooms, roomHeights),
+                floorNode,
             ),
         );
         (editorScene.doors || []).forEach((d) =>
-            this.buildDoor(d, editorScene.walls || []),
+            this.buildDoor(d, editorScene.walls || [], floorNode),
+        );
+        (editorScene.partitions || []).forEach((p) =>
+            this.buildPartition(p, editorScene.doors || [], floorNode),
         );
 
         if (showIsolux && result) {
             this.buildIsolux(result, isoluxMode);
         }
 
-        this.frameCamera();
+        if (!sceneId) {
+            this.frameCamera();
+        }
     }
 
     public frameCamera() {
@@ -664,7 +733,8 @@ export class House3DBuilder {
         ceilingHeight: number = room.height,
         allWindows: Window[] = [],
         allDoors: Door[] = [],
-        allWalls: Wall[] = []
+        allWalls: Wall[] = [],
+        floorNode?: TransformNode,
     ) {
         const meshes: Mesh[] = [];
 
@@ -741,10 +811,139 @@ export class House3DBuilder {
                 meshes.push(fallbackSlab);
             }
             this.meshMap.set(room.id, meshes);
+            meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
             return;
         }
 
-        // ── Recinto: piso + paredes exteriores + techo opcional ──────────────
+        // ── Escalera: escalones apilados y descansos (basado en StairConfig) ──────────
+        if (room.roomType === 'stair') {
+            const bounds = this.getRoomBounds(room);
+            const stairW = Math.max(0.5, bounds.maxX - bounds.minX);
+            const stairD = Math.max(0.5, bounds.maxY - bounds.minY);
+            const stairCx = (bounds.minX + bounds.maxX) / 2;
+            const stairCz = (bounds.minY + bounds.maxY) / 2;
+
+            // Piso base de la escalera
+            const stairFloor = MeshBuilder.CreateBox(
+                `stair_floor_${room.id}`,
+                { width: stairW, height: 0.05, depth: stairD },
+                this.scene,
+            );
+            stairFloor.position.set(stairCx, -0.025, stairCz);
+            stairFloor.material = this.matFloor;
+            stairFloor.receiveShadows = true;
+            if (floorNode) stairFloor.parent = floorNode;
+            meshes.push(stairFloor);
+
+            if (room.stairConfig && room.stairConfig.flights.length > 0) {
+                const cfg = room.stairConfig;
+                let currentZ = stairCz - stairD / 2;
+                let currentX = stairCx - stairW / 2;
+                let currentHeight = 0;
+                let stepGlobalIndex = 0;
+
+                for (let f = 0; f < cfg.flights.length; f++) {
+                    const flight = cfg.flights[f];
+                    const tread = cfg.treadDepth;
+                    const riser = cfg.riserHeight;
+                    const w = cfg.stairWidth;
+
+                    // Construir peldaños del tramo
+                    for (let s = 0; s < flight.stepCount; s++) {
+                        const stepH = currentHeight + riser;
+                        let sX = stairCx;
+                        let sZ = stairCz;
+                        
+                        // Posicionar según la dirección (simplificado: asume U-shape o L-shape estándar)
+                        if (flight.direction === 'north') { // Avanza en Z-
+                            sZ = stairCz + stairD / 2 - (stepGlobalIndex * tread) - tread / 2;
+                            sX = stairCx - stairW / 2 + w / 2; // Lado izquierdo
+                        } else if (flight.direction === 'south') { // Avanza en Z+
+                            sZ = stairCz - stairD / 2 + (stepGlobalIndex * tread) + tread / 2;
+                            sX = stairCx + stairW / 2 - w / 2; // Lado derecho (U-turn)
+                        } else if (flight.direction === 'east') { // Avanza X+
+                            sZ = stairCz + stairD / 2 - w / 2;
+                            sX = stairCx - stairW / 2 + (stepGlobalIndex * tread) + tread / 2;
+                        }
+
+                        const step = MeshBuilder.CreateBox(
+                            `stair_step_${room.id}_${f}_${s}`,
+                            { width: flight.direction === 'north' || flight.direction === 'south' ? w : tread, 
+                              height: stepH, 
+                              depth: flight.direction === 'north' || flight.direction === 'south' ? tread : w },
+                            this.scene,
+                        );
+                        step.position.set(sX, stepH / 2, sZ);
+                        step.material = this.matWall;
+                        step.receiveShadows = true;
+                        this.shadowGen?.addShadowCaster(step);
+                        if (floorNode) step.parent = floorNode;
+                        meshes.push(step);
+
+                        currentHeight += riser;
+                        stepGlobalIndex++;
+                    }
+
+                    // Descanso (Landing)
+                    if (flight.hasLanding) {
+                        const lDepth = flight.landingDepth;
+                        let lX = stairCx;
+                        let lZ = stairCz;
+
+                        if (flight.direction === 'north') {
+                            lZ = stairCz + stairD / 2 - (stepGlobalIndex * tread) - lDepth / 2;
+                        } else if (flight.direction === 'south') {
+                            lZ = stairCz - stairD / 2 + (stepGlobalIndex * tread) + lDepth / 2;
+                        } else if (flight.direction === 'east') {
+                            sX = stairCx - stairW / 2 + (stepGlobalIndex * tread) + lDepth / 2;
+                        }
+
+                        const landing = MeshBuilder.CreateBox(
+                            `stair_landing_${room.id}_${f}`,
+                            { width: stairW, height: currentHeight, depth: lDepth },
+                            this.scene,
+                        );
+                        // El descanso ocupa todo el ancho de la caja de escalera
+                        landing.position.set(stairCx, currentHeight / 2, lZ);
+                        landing.material = this.matFloor; // o material distinto
+                        landing.receiveShadows = true;
+                        this.shadowGen?.addShadowCaster(landing);
+                        if (floorNode) landing.parent = floorNode;
+                        meshes.push(landing);
+
+                        // Reiniciar stepGlobalIndex para el siguiente tramo en la nueva dirección
+                        // (simplificación: en un U-turn real la Z del siguiente tramo arranca desde el descanso)
+                        stepGlobalIndex = 0; 
+                    }
+                }
+            } else {
+                // Fallback básico si no hay StairConfig
+                const riser = 0.175;   // 17.5 cm — altura de cada escalon
+                const tread = 0.28;    // 28 cm  — huella de cada escalon
+                const numSteps = Math.max(1, Math.round(ceilingHeight / riser));
+                const actualTread = Math.min(tread, stairD / numSteps);
+
+                for (let s = 0; s < numSteps; s++) {
+                    const stepH = riser * (s + 1);
+                    const stepZ = stairCz - stairD / 2 + actualTread * s + actualTread / 2;
+                    const step = MeshBuilder.CreateBox(
+                        `stair_step_${room.id}_${s}`,
+                        { width: stairW, height: stepH, depth: actualTread },
+                        this.scene,
+                    );
+                    step.position.set(stairCx, stepH / 2, stepZ);
+                    step.material = this.matWall;
+                    step.receiveShadows = true;
+                    this.shadowGen?.addShadowCaster(step);
+                    if (floorNode) step.parent = floorNode;
+                    meshes.push(step);
+                }
+            }
+
+            this.meshMap.set(room.id, meshes);
+            return;
+        }
+
         try {
             const floor = MeshBuilder.CreatePolygon(
                 `floor_${room.id}`,
@@ -764,6 +963,7 @@ export class House3DBuilder {
             }
             this.buildRoomFallback(room, meshes, showRoof, ceilingHeight);
             this.meshMap.set(room.id, meshes);
+            meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
             return;
         }
 
@@ -824,6 +1024,7 @@ export class House3DBuilder {
         }
 
         this.meshMap.set(room.id, meshes);
+        meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
     }
 
 
@@ -1009,6 +1210,98 @@ export class House3DBuilder {
         }
     }
 
+    // ── Partición (Partition) ──────────────────────────────────────────────────
+    /**
+     * Construye una partición (tabique ligero/cubículo).
+     * Reutiliza `buildWallSegment` para poder insertar puertas de partición.
+     */
+    private buildPartition(
+        partition: Partition,
+        allDoors: Door[] = [],
+        floorNode?: TransformNode,
+    ) {
+        const meshes: Mesh[] = [];
+        const vertices = partition.vertices;
+
+        for (let i = 0; i < vertices.length - 1; i++) {
+            const v1 = vertices[i];
+            const v2 = vertices[i + 1];
+            const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+            if (segLen < 0.01) continue;
+
+            const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+            const cx = (v1.x + v2.x) / 2;
+            const cy = (v1.y + v2.y) / 2;
+
+            let segStartOffset = 0;
+            for (let j = 0; j < i; j++) {
+                segStartOffset += Math.hypot(
+                    vertices[j + 1].x - vertices[j].x,
+                    vertices[j + 1].y - vertices[j].y,
+                );
+            }
+
+            const segmentDoors: any[] = [];
+            for (const d of allDoors.filter(door => door.partitionId === partition.id)) {
+                const dStart = d.offsetAlongWall;
+                const dEnd = d.offsetAlongWall + d.width;
+                const segEndOffset = segStartOffset + segLen;
+
+                if (dStart < segEndOffset - 0.01 && dEnd > segStartOffset + 0.01) {
+                    const ixStart = Math.max(dStart, segStartOffset);
+                    const ixEnd = Math.min(dEnd, segEndOffset);
+                    segmentDoors.push({
+                        id: d.id,
+                        width: ixEnd - ixStart,
+                        height: d.height,
+                        sillHeight: d.bottomGap ?? 0, // Las puertas de partición pueden tener bottomGap
+                        type: 'door' as const,
+                        localOffset: ixStart - segStartOffset,
+                    });
+                }
+            }
+
+            const allAps = [...segmentDoors].sort((a, b) => a.localOffset - b.localOffset);
+
+            // Determinar color base según partitionType
+            let pMat = this.matWall; // fallback
+            if (partition.partitionType === 'melamine') {
+                pMat = this.matDoor; // O un material nuevo para melamina
+            } else if (partition.partitionType === 'glass') {
+                pMat = this.matGlass;
+            }
+
+            // Usamos un array temporal de meshes para interceptar los creados por buildWallSegment
+            // y cambiarles el material o ajustarles el bottomGap
+            const tempMeshes: Mesh[] = [];
+            
+            this.buildWallSegment(
+                `partition_${partition.id}_seg${i}`,
+                v1, v2,
+                segLen,
+                partition.height,
+                partition.thickness,
+                angle,
+                cx, cy,
+                allAps,
+                tempMeshes,
+                false
+            );
+
+            // Aplicar bottomGap global de la partición elevando los meshes
+            tempMeshes.forEach(m => {
+                m.material = pMat;
+                if (partition.bottomGap > 0) {
+                    m.position.y += partition.bottomGap;
+                }
+                meshes.push(m);
+            });
+        }
+
+        this.meshMap.set(partition.id, meshes);
+        meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
+    }
+
     // ── Pared (Wall) ──────────────────────────────────────────────────────────
     /**
      * Construye una pared como una o varias cajas.
@@ -1018,6 +1311,7 @@ export class House3DBuilder {
         wall: Wall,
         allWindows: Window[],
         _allDoors: Door[] = [],
+        floorNode?: TransformNode,
     ) {
         const meshes: Mesh[] = [];
 
@@ -1104,6 +1398,7 @@ export class House3DBuilder {
         }
 
         this.meshMap.set(wall.id, meshes);
+        meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
     }
 
     /** Crea una caja orientada para pared */
@@ -1193,7 +1488,7 @@ export class House3DBuilder {
     }
 
     // ── Voladizo (Canopy) ─────────────────────────────────────────────────────
-    private buildCanopy(canopy: Canopy) {
+    private buildCanopy(canopy: Canopy, floorNode?: import('@babylonjs/core').TransformNode) {
         const depth = Math.hypot(canopy.x2 - canopy.x1, canopy.y2 - canopy.y1);
         if (depth < 0.01) return;
 
@@ -1222,6 +1517,7 @@ export class House3DBuilder {
         slab.receiveShadows = true;
         this.shadowGen?.addShadowCaster(slab);
 
+        slab.parent = floorNode ?? null;
         this.meshMap.set(canopy.id, [slab]);
     }
 
@@ -1235,7 +1531,7 @@ export class House3DBuilder {
      * aquí se representa visualmente la hoja sin CSG para mantener el
      * rendimiento del sistema.
      */
-    private buildDoor(door: Door, allWalls: Wall[]) {
+    private buildDoor(door: Door, allWalls: Wall[], floorNode?: import('@babylonjs/core').TransformNode) {
         const wall = allWalls.find((w) => w.id === door.wallId);
         if (!wall || wall.vertices.length < 2) return;
 
@@ -1336,6 +1632,7 @@ export class House3DBuilder {
         meshes.push(lintel);
 
         this.meshMap.set(door.id, meshes);
+        meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
     }
 
     // ── Fixture / Luminaria ───────────────────────────────────────────────────
@@ -1349,7 +1646,7 @@ export class House3DBuilder {
      *    También puedes agregar más fixtures desde el ObjectsPanel
      *    o desde la toolbar usando la herramienta ✦.
      */
-    buildFixtureLight(fixture: Fixture, ceilingHeight?: number): {
+    buildFixtureLight(fixture: Fixture, ceilingHeight?: number, floorNode?: import('@babylonjs/core').TransformNode): {
         meshes: Mesh[];
         light: PointLight | SpotLight;
     } {
@@ -1540,6 +1837,7 @@ export class House3DBuilder {
         }
 
         this.meshMap.set(fixture.id, meshes);
+        meshes.forEach(m => { if (floorNode) m.parent = floorNode; });
         return { meshes, light };
     }
 

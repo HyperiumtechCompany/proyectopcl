@@ -39,6 +39,7 @@ import {
     getWallPresetFromWall,
     getPeruWallPreset,
 } from '@/hooks/dialux/wallNorms';
+import type { Partition } from '@/hooks/dialux/types';
 
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const store = useEditorStore();
@@ -61,6 +62,16 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const door = scene.doors.find((d) => d.id === selectedId);
     const canopy = scene.canopies.find((c) => c.id === selectedId);
     const fixture = scene.fixtures.find((f) => f.id === selectedId);
+    const partition = scene.partitions?.find((p) => p.id === selectedId);
+
+    if (partition) {
+        return (
+            <PartitionProps
+                partition={partition}
+                onUpdate={(patch) => store.updatePartition(partition.id, patch)}
+            />
+        );
+    }
 
     if (room) {
         const corridorAmbient =
@@ -261,6 +272,68 @@ const RoomProps: React.FC<{
                     />
                 )}
 
+                {room.roomType === 'stair' && (
+                    <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
+                        <p className="mb-1.5 text-[10px] font-semibold text-orange-400">
+                            Configuración de Escalera
+                        </p>
+                        <SelectField
+                            label="Uso Normativo"
+                            value={room.stairConfig?.normativeUse ?? 'generic'}
+                            options={[
+                                { value: 'education', label: 'A.040 (Educación)' },
+                                { value: 'housing', label: 'A.010 (Vivienda)' },
+                                { value: 'generic', label: 'Libre' },
+                            ]}
+                            onChange={(val) => {
+                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
+                                onUpdate({ stairConfig: { ...st, normativeUse: val as any } });
+                            }}
+                        />
+                        <SelectField
+                            label="Orientación"
+                            value={room.stairConfig?.orientation ?? 'north'}
+                            options={[
+                                { value: 'north', label: 'Norte' },
+                                { value: 'south', label: 'Sur' },
+                                { value: 'east', label: 'Este' },
+                                { value: 'west', label: 'Oeste' },
+                            ]}
+                            onChange={(val) => {
+                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
+                                onUpdate({ stairConfig: { ...st, orientation: val as any } });
+                            }}
+                        />
+                        <EditField
+                            label="Contrahuella (m)"
+                            value={room.stairConfig?.riserHeight ?? 0.175}
+                            min={0.1} max={0.25} step={0.005}
+                            onChange={(val) => {
+                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
+                                onUpdate({ stairConfig: { ...st, riserHeight: val } });
+                            }}
+                        />
+                        <EditField
+                            label="Huella (m)"
+                            value={room.stairConfig?.treadDepth ?? 0.28}
+                            min={0.2} max={0.4} step={0.01}
+                            onChange={(val) => {
+                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
+                                onUpdate({ stairConfig: { ...st, treadDepth: val } });
+                            }}
+                        />
+                        <EditField
+                            label="Ancho de paso (m)"
+                            value={room.stairConfig?.stairWidth ?? 1.2}
+                            min={0.6} max={5} step={0.1}
+                            onChange={(val) => {
+                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
+                                onUpdate({ stairConfig: { ...st, stairWidth: val } });
+                            }}
+                        />
+                    </div>
+                )}
+
                 <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
                     <p className="mb-1.5 text-[10px] font-semibold text-cyan-500">
                         Normativa y calculo
@@ -439,7 +512,13 @@ const WallProps: React.FC<{
     };
 
     const handleUseChange = (value: string) => {
-        if (value !== 'housing' && value !== 'generic') return;
+        if (
+            value !== 'housing' &&
+            value !== 'education' &&
+            value !== 'generic'
+        ) {
+            return;
+        }
 
         const nextPreset = getPeruWallPreset(wall.material ?? 'brick', value);
 
@@ -591,6 +670,7 @@ const WallProps: React.FC<{
                 value={wall.normativeUse ?? 'housing'}
                 options={[
                     { value: 'housing', label: 'Vivienda' },
+                    { value: 'education', label: 'Educacion / colegio' },
                     { value: 'generic', label: 'Generico' },
                 ]}
                 onChange={handleUseChange}
@@ -1091,6 +1171,57 @@ const FixtureProps: React.FC<{
 
             <PropField label="ID" value={fixture.id.slice(0, 12)} />
         </SectionWrapper>
+    );
+};
+
+const PartitionProps: React.FC<{
+    partition: Partition;
+    onUpdate: (patch: Partial<Omit<Partition, 'id' | 'vertices'>>) => void;
+}> = ({ partition, onUpdate }) => {
+    return (
+        <div className="max-h-[600px] space-y-3 overflow-y-auto">
+            <SectionWrapper
+                icon={<Minus size={12} className="text-orange-400" />}
+                label="Partición / Separador"
+            >
+                <SelectField
+                    label="Tipo"
+                    value={partition.partitionType}
+                    options={[
+                        { value: 'melamine', label: 'Melamina (SS.HH)' },
+                        { value: 'drywall', label: 'Drywall' },
+                        { value: 'glass', label: 'Vidrio' },
+                        { value: 'masonry', label: 'Ladrillo' },
+                    ]}
+                    onChange={(val) => onUpdate({ partitionType: val as any })}
+                />
+                <EditField
+                    label="Grosor (m)"
+                    value={partition.thickness}
+                    min={0.01}
+                    max={0.5}
+                    step={0.01}
+                    onChange={(val) => onUpdate({ thickness: val })}
+                />
+                <EditField
+                    label="Altura (m)"
+                    value={partition.height}
+                    min={0.1}
+                    max={10}
+                    step={0.1}
+                    onChange={(val) => onUpdate({ height: val })}
+                />
+                <EditField
+                    label="Elevación base (m)"
+                    value={partition.bottomGap}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    onChange={(val) => onUpdate({ bottomGap: val })}
+                />
+                <PropField label="ID" value={partition.id.slice(0, 12)} />
+            </SectionWrapper>
+        </div>
     );
 };
 

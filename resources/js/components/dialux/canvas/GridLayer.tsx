@@ -12,13 +12,13 @@ interface GridLayerProps {
  * GridLayer — Capa SVG de grilla métrica de fondo
  * Dibuja líneas verticales y horizontales utilizando la cámara nativa CAD.
  */
-export const GridLayer = memo(function GridLayer({ 
-    width, 
-    height, 
-    screenPoint, 
+export const GridLayer = memo(function GridLayer({
+    width,
+    height,
+    screenPoint,
     worldPoint,
 }: GridLayerProps) {
-    if (width <= 0 ||  height <= 0) return null;
+    if (width <= 0 || height <= 0) return null;
 
     // Obtener los límites del mundo visibles en pantalla
     const wTopLeft = worldPoint(0, 0);
@@ -33,7 +33,7 @@ export const GridLayer = memo(function GridLayer({
     // Determinar la resolución de la grilla
     const viewWidthMeters = maxX - minX;
     if (viewWidthMeters > 500) return null; // Muy lejos para grilla
-    
+
     // Ajustar el paso de la grilla basado en el zoom
     let step = 1; // 1 metro por defecto
     if (viewWidthMeters > 100) step = 5;
@@ -59,25 +59,25 @@ export const GridLayer = memo(function GridLayer({
     return (
         <g className="grid-layer" opacity={0.3} pointerEvents="none">
             {vertLines.map((l, i) => (
-                <line 
-                    key={`v-${i}`} 
-                    x1={l.x} 
-                    y1={0} 
-                    x2={l.x} 
+                <line
+                    key={`v-${i}`}
+                    x1={l.x}
+                    y1={0}
+                    x2={l.x}
                     y2={height}
-                    stroke={l.isMain ? "#6b7280" : "#4b5563"} 
-                    strokeWidth={l.isMain ? 1 : 0.5} 
+                    stroke={l.isMain ? '#6b7280' : '#4b5563'}
+                    strokeWidth={l.isMain ? 1 : 0.5}
                 />
             ))}
             {horizLines.map((l, i) => (
-                <line 
-                    key={`h-${i}`} 
-                    x1={0} 
-                    y1={l.y} 
-                    x2={width} 
+                <line
+                    key={`h-${i}`}
+                    x1={0}
+                    y1={l.y}
+                    x2={width}
                     y2={l.y}
-                    stroke={l.isMain ? "#6b7280" : "#4b5563"} 
-                    strokeWidth={l.isMain ? 1 : 0.5} 
+                    stroke={l.isMain ? '#6b7280' : '#4b5563'}
+                    strokeWidth={l.isMain ? 1 : 0.5}
                 />
             ))}
         </g>

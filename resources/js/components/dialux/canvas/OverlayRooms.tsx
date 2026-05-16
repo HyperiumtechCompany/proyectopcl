@@ -1,9 +1,10 @@
 /**
- * OverlayRooms.tsx — Renderiza los recintos y pasadizos en el plano 2D
+ * OverlayRooms.tsx — Renderiza los recintos, pasadizos y escaleras en el plano 2D
  *
  * Jerarquía visual:
- *   Recinto  → paredes exteriores: contorno grueso gris-azulado, relleno sólido oscuro
- *   Pasadizo → proyección de losa de techo: patrón de líneas cruzadas + borde amarillo
+ *   Recinto   → paredes exteriores: contorno grueso gris-azulado, relleno sólido oscuro
+ *   Pasadizo  → proyección de losa de techo: patrón de líneas cruzadas + borde amarillo
+ *   Escalera  → patrón escalonado naranja: líneas paralelas + borde naranja
  */
 
 import React, { memo } from 'react';
@@ -25,18 +26,83 @@ export const OverlayRooms = memo(function OverlayRooms({
 }: Props) {
     if (!rooms.length) return null;
 
-    // Separar recintos y pasadizos para controlar el orden de capas
-    const recintos = rooms.filter(r => r.roomType !== 'corridor');
+    // Separar recintos, pasadizos y escaleras para controlar el orden de capas
+    const recintos = rooms.filter(r => !r.roomType || r.roomType === 'room');
     const pasadizos = rooms.filter(r => r.roomType === 'corridor');
+    const escaleras = rooms.filter(r => r.roomType === 'stair');
 
-    const renderRoom = (room: Room, isCorridor: boolean) => {
+    const renderRoom = (room: Room) => {
         const screenVertices = room.vertices.map(v => screenPoint({ x: v.x, y: v.y }));
         const pts = screenVertices.map(p => `${safeNum(p.x)},${safeNum(p.y)}`).join(' ');
         const ctr = centroid(screenVertices);
         const isSelected = selectedId === room.id;
 
-        if (isCorridor) {
+        if (room.roomType === 'stair') {
+            // ── Escalera: patrón de líneas paralelas diagonales + borde naranja ──
+            const patId = `hatch-stair-${room.id}`;
+            return (
+                <g
+                    key={room.id}
+                    style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                    onClick={() => onSelect(room.id)}
+                >
+                    <defs>
+                        <pattern
+                            id={patId}
+                            patternUnits="userSpaceOnUse"
+                            width={12} height={12}
+                        >
+                            {/* Líneas paralelas diagonal — simula proyección de escalones */}
+                            <line x1={0} y1={12} x2={12} y2={0}
+                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
+                            <line x1={-6} y1={12} x2={6} y2={0}
+                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
+                            <line x1={6} y1={12} x2={18} y2={0}
+                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
+                        </pattern>
+                    </defs>
+                    {/* Relleno base */}
+                    <polygon points={pts} fill="#7c2d12" fillOpacity={0.2} />
+                    {/* Patrón encima */}
+                    <polygon points={pts} fill={`url(#${patId})`} fillOpacity={1} />
+                    {/* Contorno */}
+                    <polygon
+                        points={pts}
+                        fill="none"
+                        stroke={isSelected ? '#fdba74' : '#f97316'}
+                        strokeWidth={isSelected ? 2.5 : 1.8}
+                        strokeLinejoin="miter"
+                    />
+                    {isSelected && (
+                        <polygon
+                            points={pts}
+                            fill="none"
+                            stroke="#fdba74"
+                            strokeWidth={6}
+                            strokeLinejoin="miter"
+                            opacity={0.3}
+                        />
+                    )}
+                    {/* Etiqueta */}
+                    <text
+                        x={safeNum(ctr.x)}
+                        y={safeNum(ctr.y)}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill={isSelected ? '#fdba74' : '#fb923c'}
+                        fontSize={safeNum(Math.max(8, 10 * zoom))}
+                        fontFamily="sans-serif"
+                        fontWeight={600}
+                        pointerEvents="none"
+                        letterSpacing={0.5}
+                    >
+                        {room.name}
+                    </text>
+                </g>
+            );
+        }
 
+        if (room.roomType === 'corridor') {
             // ── Pasadizo: proyección de losa de techo ────────────────────────────
             // Fondo translúcido cálido (representación de sombra de alero)
             // Patrón de líneas cruzadas aplicado como clipPath sobre el polígono
@@ -151,9 +217,12 @@ export const OverlayRooms = memo(function OverlayRooms({
     return (
         <g className="overlay-rooms">
             {/* Pasadizos primero (capa base) */}
-            {pasadizos.map(r => renderRoom(r, true))}
+            {pasadizos.map(r => renderRoom(r))}
+            {/* Escaleras (segunda capa) */}
+            {escaleras.map(r => renderRoom(r))}
             {/* Recintos encima */}
-            {recintos.map(r => renderRoom(r, false))}
+            {recintos.map(r => renderRoom(r))}
         </g>
     );
 });
+

@@ -14,6 +14,14 @@ interface SnapOptions {
     dxfEntities: DxfEntity[] | null;
     walls: Wall[];
     sceneToCanvas: (sx: number, sy: number) => CanvasPoint;
+    /** Extra vertices a incluir en el snap (ej. vértices de rooms existentes) */
+    extraVerticesScene?: CanvasPoint[];
+    /**
+     * Zoom actual del canvas (≥1).
+     * A mayor zoom, se reduce el radio de snap en píxeles para mayor precisión:
+     * se evita que a zoom 10x el snap aún «salte» a puntos alejados varios cm reales.
+     */
+    zoom?: number;
 }
 
 interface SegmentCandidate {
@@ -23,16 +31,47 @@ interface SegmentCandidate {
 }
 
 export function useSnap(opts: SnapOptions) {
-    const { dxfEntities, walls, sceneToCanvas } = opts;
+    const { dxfEntities, walls, sceneToCanvas, extraVerticesScene = [], zoom = 1 } = opts;
     const SMART_SNAP_MAX_DELTA_DEG = 12;
+
+    /**
+     * Factor de reducción de snap adaptativo al zoom.
+     * A zoom 1x → factor 1.0 (radio base completo).
+     * A zoom 4x → factor 0.5  (radio reducido a la mitad).
+     * A zoom 16x → factor 0.25 (radio reducido a un cuarto).
+     * Fórmula: 1 / sqrt(zoom) — garantiza que el área de snap en metros reales
+     * sea constante independientemente del nivel de zoom.
+     * Mínimo: 0.3 (nunca reducir más del 70 % para mantener usabilidad).
+     */
+    const zoomSnapFactor = Math.max(0.3, 1 / Math.sqrt(Math.max(1, zoom)));
+
+    /**
+     * Radio de snap en píxeles para endpoints DXF.
+     * Base 10px, reducido adaptativamente con el zoom.
+     */
+    const snapBasePx = 10 * zoomSnapFactor;
+    const SNAP_PX_SQ = snapBasePx * snapBasePx;
+
+    /**
+     * Radio de snap en píxeles para segmentos (proyección).
+     */
+    const segBasePx = 10 * zoomSnapFactor;
+    const SEG_SNAP_PX_SQ = segBasePx * segBasePx;
+
+    /**
+     * Radio de snap para muros propios (siempre activo).
+     * Base 14px — ligeramente más generoso que DXF para facilitar continuidad de muros.
+     */
+    const wallBasePx = 14 * zoomSnapFactor;
+    const WALL_SNAP_PX_SQ = wallBasePx * wallBasePx;
 
     // ── Snap a puntos DXF ─────────────────────────────────────────────────────
     const findSnapPoint = useCallback(
         (cx: number, cy: number): CanvasPoint | null => {
             if (!dxfEntities) return null;
-            const SNAP_DIST_SQ = 15 * 15;
+
             let closest: CanvasPoint | null = null;
-            let minDist = SNAP_DIST_SQ;
+            let minDist = SNAP_PX_SQ;
 
             const checkPoint = (pxM: number, pyM: number) => {
                 const p = sceneToCanvas(pxM, pyM);
@@ -69,15 +108,14 @@ export function useSnap(opts: SnapOptions) {
             }
             return closest;
         },
-        [dxfEntities, sceneToCanvas],
+        [dxfEntities, sceneToCanvas, SNAP_PX_SQ],
     );
 
-    // Snap a extremos de muros existentes
+    // Snap a extremos de muros existentes (siempre activo — construcción propia)
     const findWallSnapPoint = useCallback(
         (cx: number, cy: number): CanvasPoint | null => {
-            const SNAP_DIST_SQ = 18 * 18;
             let closest: CanvasPoint | null = null;
-            let minDist = SNAP_DIST_SQ;
+            let minDist = WALL_SNAP_PX_SQ;
 
             for (const w of walls) {
                 for (const v of w.vertices) {
@@ -91,12 +129,66 @@ export function useSnap(opts: SnapOptions) {
             }
             return closest;
         },
-        [walls, sceneToCanvas],
+        [walls, sceneToCanvas, WALL_SNAP_PX_SQ],
+    );
+
+    /**
+     * Snap a vértices extra (rooms existentes en escena, etc.)
+     */
+    const findExtraVertexSnap = useCallback(
+        (cx: number, cy: number): CanvasPoint | null => {
+            if (extraVerticesScene.length === 0) return null;
+            let closest: CanvasPoint | null = null;
+            let minDist = WALL_SNAP_PX_SQ;
+
+            for (const v of extraVerticesScene) {
+                const p = sceneToCanvas(v.x, v.y);
+                const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+                if (d2 < minDist) {
+                    minDist = d2;
+                    closest = p;
+                }
+            }
+            return closest;
+        },
+        [extraVerticesScene, sceneToCanvas, WALL_SNAP_PX_SQ],
+    );
+
+    /**
+     * Snap al punto medio de segmentos de muros.
+     * Útil para centrar puertas/ventanas.
+     */
+    const findMidpointSnap = useCallback(
+        (cx: number, cy: number): CanvasPoint | null => {
+            let closest: CanvasPoint | null = null;
+            let minDist = WALL_SNAP_PX_SQ;
+
+            const checkMid = (ax: number, ay: number, bx: number, by: number) => {
+                const mx = (ax + bx) / 2;
+                const my = (ay + by) / 2;
+                const p = sceneToCanvas(mx, my);
+                const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+                if (d2 < minDist) {
+                    minDist = d2;
+                    closest = p;
+                }
+            };
+
+            for (const w of walls) {
+                for (let i = 1; i < w.vertices.length; i++) {
+                    checkMid(
+                        w.vertices[i - 1].x, w.vertices[i - 1].y,
+                        w.vertices[i].x, w.vertices[i].y,
+                    );
+                }
+            }
+            return closest;
+        },
+        [walls, sceneToCanvas, WALL_SNAP_PX_SQ],
     );
 
     const findNearestGuideSegment = useCallback(
         (cx: number, cy: number): SegmentCandidate | null => {
-            const SNAP_DIST_SQ = 16 * 16;
             let best: SegmentCandidate | null = null;
 
             const considerSegment = (
@@ -116,17 +208,13 @@ export function useSnap(opts: SnapOptions) {
                 const px = start.x + dx * t;
                 const py = start.y + dy * t;
                 const distSq = (px - cx) ** 2 + (py - cy) ** 2;
-                if (distSq > SNAP_DIST_SQ) return;
+                if (distSq > SEG_SNAP_PX_SQ) return;
 
                 const angleDeg = normalizeAngleDeg(
                     (Math.atan2(dy, dx) * 180) / Math.PI,
                 );
                 if (!best || distSq < best.distSq) {
-                    best = {
-                        point: { x: px, y: py },
-                        distSq,
-                        angleDeg,
-                    };
+                    best = { point: { x: px, y: py }, distSq, angleDeg };
                 }
             };
 
@@ -168,13 +256,30 @@ export function useSnap(opts: SnapOptions) {
 
             return best;
         },
-        [dxfEntities, sceneToCanvas, walls],
+        [dxfEntities, sceneToCanvas, walls, SEG_SNAP_PX_SQ],
     );
 
-    // Snap: prioridad wall > dxf
+    /**
+     * Resolución de snap con prioridades:
+     *  1. Cierre de polígono (primer vértice del dibujo en curso)
+     *  2. Vértices extra de rooms existentes
+     *  3. Extremos de muros propios
+     *  4. Endpoints DXF (solo si !disableDxfSnap)
+     *  5. Proyección sobre segmentos DXF (solo si !disableDxfSnap)
+     *  6. Midpoints de muros
+     *
+     * CORRECCIÓN CRÍTICA: `disableDxfSnap = true` en modo libre para evitar que
+     * el snap DXF "secuestre" el cursor a puntos de plano que no corresponden a
+     * la geometría que el usuario intenta dibujar (ej. casa de 5m → snap lleva a 7m).
+     */
     const resolveSnap = useCallback(
-        (cx: number, cy: number, currentDrawingVertices: CanvasPoint[] = []): CanvasPoint => {
-            // First Priority: Snap to start of current drawing (to close polyline)
+        (
+            cx: number,
+            cy: number,
+            currentDrawingVertices: CanvasPoint[] = [],
+            disableDxfSnap = false,
+        ): CanvasPoint => {
+            // 1ª Prioridad: cierre de polígono
             if (currentDrawingVertices.length > 2) {
                 const first = currentDrawingVertices[0];
                 if (Math.hypot(first.x - cx, first.y - cy) < 20) {
@@ -182,15 +287,29 @@ export function useSnap(opts: SnapOptions) {
                 }
             }
 
+            // 2ª: vértices de rooms existentes
+            const extraSnap = findExtraVertexSnap(cx, cy);
+            if (extraSnap) return extraSnap;
+
+            // 3ª: extremos de muros propios (siempre activo)
             const wallSnap = findWallSnapPoint(cx, cy);
             if (wallSnap) return wallSnap;
-            const dxfSnap = findSnapPoint(cx, cy);
-            if (dxfSnap) return dxfSnap;
-            const segmentSnap = findNearestGuideSegment(cx, cy);
-            if (segmentSnap) return segmentSnap.point;
+
+            // 4ª-5ª: DXF solo si no está desactivado
+            if (!disableDxfSnap) {
+                const dxfSnap = findSnapPoint(cx, cy);
+                if (dxfSnap) return dxfSnap;
+                const segmentSnap = findNearestGuideSegment(cx, cy);
+                if (segmentSnap) return segmentSnap.point;
+            }
+
+            // 6ª: midpoints
+            const midSnap = findMidpointSnap(cx, cy);
+            if (midSnap) return midSnap;
+
             return { x: cx, y: cy };
         },
-        [findNearestGuideSegment, findWallSnapPoint, findSnapPoint],
+        [findExtraVertexSnap, findNearestGuideSegment, findWallSnapPoint, findSnapPoint, findMidpointSnap],
     );
 
     const getGuideAngles = useCallback(
@@ -229,6 +348,9 @@ export function useSnap(opts: SnapOptions) {
             let targetAngles: number[] = [];
             if (shiftKey || mode === 'orthogonal') {
                 targetAngles = [0, 90, 180, 270];
+            } else if (mode === 'fine') {
+                // Cada 15° — precisión máxima
+                targetAngles = Array.from({ length: 24 }, (_, i) => i * 15);
             } else if (mode === 'diagonal') {
                 targetAngles = [
                     0, 30, 45, 60, 90, 120, 135, 150,
@@ -241,6 +363,7 @@ export function useSnap(opts: SnapOptions) {
                     ...guideAngles,
                 ];
             } else {
+                // free — sin restricción angular
                 return { x: cx, y: cy };
             }
 
@@ -267,10 +390,19 @@ export function useSnap(opts: SnapOptions) {
             }
 
             const snappedAngleRad = (snappedAngleDeg * Math.PI) / 180;
+            
+            // Proyección ortogonal (O-Track CAD logic)
+            // En lugar de rotar el vector (que altera longitudes si se hace snap a puntos alejados),
+            // proyectamos el punto actual (cx, cy) sobre el vector direccional del ángulo.
+            const uX = Math.cos(snappedAngleRad);
+            const uY = Math.sin(snappedAngleRad);
+            
+            // Distancia proyectada (dot product)
+            const projectedDist = dx * uX + dy * uY;
 
             return {
-                x: prevPoint.x + Math.cos(snappedAngleRad) * distance,
-                y: prevPoint.y + Math.sin(snappedAngleRad) * distance,
+                x: prevPoint.x + uX * projectedDist,
+                y: prevPoint.y + uY * projectedDist,
             };
         },
         [sceneToCanvas],
@@ -282,6 +414,7 @@ export function useSnap(opts: SnapOptions) {
         applyAngleSnap,
         findWallSnapPoint,
         findSnapPoint,
+        findMidpointSnap,
     };
 }
 

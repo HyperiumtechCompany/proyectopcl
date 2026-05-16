@@ -412,21 +412,24 @@ const CronogramaIndex = ({
             const tasksMap = new Map<string, any>();
             const rootTasks: any[] = [];
 
+            const fmt = gantt.date.date_to_str('%Y-%m-%d %H:%i');
             partidas.forEach((partida: any) => {
+                if (!partida.codigo) return; // Skip if no codigo
                 const task = {
                     id: gantt.uid(), text: partida.descripcion,
-                    start_date: new Date(), end_date: gantt.date.add(new Date(), 5, 'day'),
+                    start_date: fmt(new Date()), end_date: fmt(gantt.date.add(new Date(), 5, 'day')),
                     duration: 5, progress: 0,
                     cost: parseFloat(partida.total) || 0,
-                    item: partida.partida, originalItem: partida.partida,
+                    item: partida.codigo, originalItem: partida.codigo,
                     unidad: partida.unidad || '', parent: 0, $open: true,
                 };
-                tasksMap.set(partida.partida, task);
+                tasksMap.set(partida.codigo, task);
                 rootTasks.push(task);
             });
 
             tasksMap.forEach((task) => {
                 const code = task.originalItem as string;
+                if (!code) return; // Skip if no code
                 const lastDot = code.lastIndexOf('.');
                 if (lastDot !== -1) {
                     const parentTask = tasksMap.get(code.substring(0, lastDot));
@@ -439,9 +442,9 @@ const CronogramaIndex = ({
             });
 
             gantt.clearAll();
-            gantt.batchUpdate(() => {
-                rootTasks.forEach((t) => gantt.addTask({ ...t, parent: 0 }));
-                tasksMap.forEach((t) => { if (t.parent !== 0) gantt.addTask(t); });
+            gantt.parse({
+                data: Array.from(tasksMap.values()),
+                links: []
             });
 
             // Marcar padres como "project" y propagar fechas bottom-up
@@ -459,7 +462,29 @@ const CronogramaIndex = ({
             markCriticalTasks();
             gantt.render();
             refreshKPIs();
-            showToast(`✅ ${partidas.length} partidas importadas`, 'success');
+
+            // Guardar en la base de datos
+            const pid = Number(project);
+            const tasks = gantt.getTaskByTime().map((t: any) => ({
+                id: t.id, text: t.text,
+                start_date: fmt(t.start_date), end_date: fmt(t.end_date),
+                duration: (t.start_date && t.end_date)
+                    ? Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) + 1
+                    : t.duration,
+                parent: t.parent || 0,
+                counter: t.counter, item: t.item, item_p: t.item_p || t.item,
+                cost: t.cost || 0, predecessors: t.predecessors || '',
+                progress: t.progress || 0, open: true,
+                originalItem: t.originalItem || t.item,
+                presupuesto_item_id: t.presupuesto_item_id || null,
+                unidad: t.unidad || '', owner: t.owner || '',
+            }));
+            const links = gantt.getLinks().map((l: any) => ({
+                id: l.id, source: l.source, target: l.target, type: l.type,
+            }));
+
+            await axios.post(`/cronograma/save/${pid}`, { tasks, links });
+            showToast(`✅ ${partidas.length} partidas importadas y guardadas`, 'success');
         } catch (err: any) {
             showToast(`❌ Error: ${err.message}`, 'error');
         } finally {
@@ -688,7 +713,7 @@ const CronogramaIndex = ({
         });
 
         gantt.config.date_format = '%Y-%m-%d %H:%i';
-        gantt.config.xml_date = '%d/%m/%Y';
+        gantt.config.xml_date = '%Y-%m-%d %H:%i';
         gantt.config.row_height = 32;
         gantt.config.grid_width = 500;
         gantt.config.scale_height = 54;
@@ -1198,6 +1223,8 @@ const CronogramaIndex = ({
             rawData = { tasks: [], links: [] };
         }
 
+        const fmt = gantt.date.date_to_str('%Y-%m-%d %H:%i');
+
         // ✅ LIMPIAR TAREAS ANTES DE CARGAR
         const cleanTasks = rawData.tasks.map((task: any) => {
             // Forzar duración positiva (mínimo 1, máximo 365)
@@ -1224,7 +1251,7 @@ const CronogramaIndex = ({
                 owner: task.owner || '',
                 type: task.type,
                 $open: true,
-                start_date: cleanStartDate,
+                start_date: fmt(cleanStartDate),
                 duration: cleanDuration
                 // ✅ NO incluir end_date
             };
@@ -1233,18 +1260,20 @@ const CronogramaIndex = ({
         gantt.clearAll();
 
         if (cleanTasks.length > 0) {
-            gantt.batchUpdate(() => {
-                cleanTasks.forEach((task: any) => {
-                    const hasChildren = cleanTasks.some(
-                        (other: any) => String(other.parent) === String(task.id)
-                    );
+            const parsedData = cleanTasks.map((task: any) => {
+                const hasChildren = cleanTasks.some(
+                    (other: any) => String(other.parent) === String(task.id)
+                );
 
-                    gantt.addTask({
-                        ...task,
-                        type: hasChildren ? gantt.config.types.project : gantt.config.types.task,
-                    });
-                });
-                rawData.links?.forEach((link: any) => gantt.addLink(link));
+                return {
+                    ...task,
+                    type: hasChildren ? gantt.config.types.project : gantt.config.types.task,
+                };
+            });
+
+            gantt.parse({
+                data: parsedData,
+                links: rawData.links || []
             });
 
             gantt.eachTask((task: any) => {

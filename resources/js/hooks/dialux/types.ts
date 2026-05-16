@@ -10,12 +10,12 @@
 // ─── Herramientas y UI ────────────────────────────────────────────────────────
 
 export type DrawTool =
-    | 'select' | 'room' | 'wall' | 'window' | 'door' | 'canopy' | 'corridor'
-    | 'fixture' | 'fixture-grid' | 'measure' | 'pan' | 'calibrate';
+    | 'select' | 'room' | 'wall' | 'education-wall' | 'window' | 'door' | 'canopy' | 'corridor' | 'stair'
+    | 'partition' | 'fixture' | 'fixture-grid' | 'measure' | 'pan' | 'calibrate';
 
-export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results';
+export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
-export type AngleSnapMode = 'smart' | 'free' | 'orthogonal' | 'diagonal';
+export type AngleSnapMode = 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
 
 // ─── Geometría 2D ─────────────────────────────────────────────────────────────
 
@@ -34,18 +34,75 @@ export interface AmbientConfig {
     activity?: string;
 }
 
+// ─── Escaleras ────────────────────────────────────────────────────────────────
+
+/**
+ * Tramo de escalera dentro de una caja de escalera.
+ * Un tramo es la secuencia de escalones entre dos descansos (o entre el
+ * arranque y el primer descanso / entre el último descanso y el destino).
+ */
+export interface StairFlight {
+    id: string;
+    /** Cantidad de escalones en este tramo */
+    stepCount: number;
+    /**
+     * Dirección de ascenso de este tramo vista desde arriba:
+     *   'north' = hacia Y negativo, 'south' = hacia Y positivo
+     *   'east'  = hacia X positivo, 'west'  = hacia X negativo
+     */
+    direction: 'north' | 'south' | 'east' | 'west';
+    /** Si hay descanso (plataforma de giro) después de este tramo */
+    hasLanding: boolean;
+    /** Profundidad del descanso en metros (default 1.20 — RNE mínimo) */
+    landingDepth: number;
+}
+
+/**
+ * Configuración completa de una escalera (solo cuando roomType === 'stair').
+ * Sigue la normativa RNE del Perú (A.010 vivienda / A.040 educación).
+ */
+export interface StairConfig {
+    /**
+     * Uso normativo que define los rangos permitidos:
+     *   'education' → RNE A.040: contrah. ≤0.17m, huella ≥0.30m, ancho ≥1.20m
+     *   'housing'   → RNE A.010: contrah. ≤0.175m, huella ≥0.28m, ancho ≥0.90m
+     *   'generic'   → Sin restricciones normativas específicas
+     */
+    normativeUse: 'education' | 'housing' | 'generic';
+    /** Dirección principal de ascenso (primer tramo) */
+    orientation: 'north' | 'south' | 'east' | 'west';
+    /** Altura de contrahuella en metros (cada escalón) */
+    riserHeight: number;
+    /** Profundidad de huella en metros (cada escalón) */
+    treadDepth: number;
+    /** Ancho útil de paso en metros */
+    stairWidth: number;
+    /**
+     * Tramos de escalera. Una escalera directa = 1 tramo sin landing.
+     * Escalera con descanso = [tramo1 (hasLanding=true), tramo2 (hasLanding=false)].
+     * Escalera multi-piso puede tener N tramos.
+     */
+    flights: StairFlight[];
+    /**
+     * ID opcional de un Room existente que actúa como Hall/Descanso
+     * cuando el descanso es un espacio arquitectónico completo con
+     * puertas, ventanas u otra geometría (caso C del plan).
+     */
+    linkedHallId?: string;
+}
+
 /** Recinto (espacio cerrado con polígono arbitrario) */
 export interface Room {
     id: string;
     name: string;
-    roomType?: 'room' | 'corridor';
+    roomType?: 'room' | 'corridor' | 'stair';
     /** Polígono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
     height: number;        // metros
     color: string;
     illuminanceLux?: number;
     fixtureLumens?: number;
-    normativeStandard?: 'en_12464' | 'ies_na' | 'rne_peru';
+    normativeStandard?: 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
     normativeCategory?: string;
     normativeSection?: string;
     normativeActivity?: string;
@@ -59,6 +116,33 @@ export interface Room {
     norma?: number;        // Nivel de lux requerido (EN 12464-1)
     fixtureFlux?: number;  // Lúmenes de la luminaria seleccionada (cálculo teórico)
     ambientConfigs?: Record<string, AmbientConfig>;
+    /** Configuración de escalera (solo cuando roomType === 'stair') */
+    stairConfig?: StairConfig;
+}
+
+/** Configuración normativa del proyecto (sincronizada con backend) */
+export interface ProjectNormativeConfig {
+    dialuxProjectId: string;
+    countryCode: string;                                     // ISO 3166-1 alpha-2
+    region: 'europe' | 'americas_usa' | 'americas_peru';
+    installationType: string | null;
+    primaryStandard: 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
+    referenceStandards: Array<'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024'>;
+    priorityOrder: string[];
+    autoDetectEnabled: boolean;
+    crossNormComparisonEnabled: boolean;
+    normativeVersion: string | null;
+    normsConsultedAt: string | null;
+    disclaimer: string | null;
+    notes: string | null;
+    /** Resumen del último cálculo de cumplimiento */
+    complianceSummary: {
+        totalRooms: number;
+        compliantRooms: number;
+        nonCompliantRooms: number;
+        warningRooms: number;
+        needsReviewRooms: number;
+    };
 }
 
 /** Pared: polilínea en planta */
@@ -68,7 +152,7 @@ export interface Wall {
     thickness: number;   // metros (default 0.20)
     height: number;      // metros (default 2.80)
     material?: 'brick' | 'adobe';
-    normativeUse?: 'housing' | 'generic';
+    normativeUse?: 'housing' | 'education' | 'generic';
     mortarJointMin?: number;
     mortarJointMax?: number;
 }
@@ -87,20 +171,75 @@ export interface Window {
     centered?: boolean;
 }
 
-/** Puerta colocada sobre una pared */
+/** Puerta colocada sobre una pared o partición */
 export interface Door {
     id: string;
     wallId: string;
     offsetAlongWall: number;   // metros desde el inicio de la pared
     width: number;             // metros (default 0.90)
     height: number;            // metros (default 2.10)
-    doorType?: 'single' | 'double' | 'sliding' | 'folding';
+    /**
+     * Tipo de puerta:
+     *   'single'   → puerta sencilla batiente (default)
+     *   'double'   → doble hoja
+     *   'sliding'  → corredera
+     *   'folding'  → plegable
+     *   'bathroom' → puerta de cubículo SS.HH (ancho 0.60-0.70m, gap inferior 0.15m)
+     */
+    doorType?: 'single' | 'double' | 'sliding' | 'folding' | 'bathroom';
     openingDirection?: 'inward' | 'outward';
     /** Lado donde está la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';
     openingAngle?: number;     // grados (default 90)
     /** Si true, el offset se recalcula automáticamente al centro de la pared */
     centered?: boolean;
+    /**
+     * ID de la partición donde está colocada la puerta.
+     * Mutuamente excluyente con wallId (se usa uno u otro).
+     */
+    partitionId?: string;
+    /**
+     * Espacio libre en la parte inferior (metros).
+     * Para 'bathroom': 0.15m. Para el resto: 0.
+     */
+    bottomGap?: number;
+}
+
+// ─── Particiones (Separadores SS.HH, Drywall, etc.) ─────────────────────────
+
+/**
+ * Partición ligera: tabique que no es una pared estructural.
+ * Casos de uso:
+ *   - Cubículos de SS.HH (melamina/plástico, altura parcial)
+ *   - Tabiques de drywall (piso-techo)
+ *   - Mamparas de vidrio
+ */
+export interface Partition {
+    id: string;
+    /** Polilínea que define la línea central de la partición (≥2 puntos, metros) */
+    vertices: Vertex[];
+    /** Grosor del tabique en metros */
+    thickness: number;
+    /** Altura total del tabique en metros */
+    height: number;
+    /**
+     * Material / tipo constructivo:
+     *   'melamine' → melamina o PVC, grosor típico 0.018-0.025m
+     *   'drywall'  → yeso-cartón, grosor típico 0.10-0.15m
+     *   'glass'    → mampara de vidrio
+     *   'masonry'  → tabique de ladrillo ligero
+     */
+    partitionType: 'melamine' | 'drywall' | 'glass' | 'masonry';
+    /**
+     * Si true, la partición NO llega al techo (ej: cubículo de baño).
+     * La altura efectiva está dada por `height`.
+     */
+    isPartialHeight: boolean;
+    /**
+     * Espacio libre desde el suelo hasta el inicio del tabique (metros).
+     * 0 en la mayoría de casos; 0.10-0.15 en cubículos de baño con soporte.
+     */
+    bottomGap: number;
 }
 
 /** Voladizo / alero */
@@ -211,6 +350,21 @@ export interface ModuleLightingCalculations {
 export interface Scene {
     id: string;
     name: string;
+    /**
+     * Índice del piso: 0 = planta baja, 1 = piso 1, -1 = sótano 1, etc.
+     * Determina el orden vertical y el cálculo de elevación.
+     */
+    floorIndex: number;
+    /**
+     * Elevación del suelo de este piso en metros (respecto al nivel 0).
+     * Se recalcula automáticamente al reordenar pisos.
+     */
+    floorElevation: number;
+    /**
+     * Altura libre piso-a-techo en metros. Default 3.0m.
+     * Afecta el offset vertical del siguiente piso en 3D.
+     */
+    floorHeight: number;
     scaleConfig: ScaleConfig;
     rooms: Room[];
     walls: Wall[];
@@ -218,6 +372,12 @@ export interface Scene {
     doors: Door[];
     canopies: Canopy[];
     fixtures: Fixture[];
+    partitions: Partition[];
+    /**
+     * Visibilidad del piso en el canvas 2D y en el modelo 3D.
+     * Default: true. Cuando false, la geometría se oculta sin eliminarla.
+     */
+    visible?: boolean;
 }
 
 // ─── Proyecto ─────────────────────────────────────────────────────────────────

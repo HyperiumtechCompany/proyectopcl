@@ -1,7 +1,7 @@
 import type { Wall } from './types';
 
 export type PeruWallMaterial = 'brick' | 'adobe';
-export type PeruWallUse = 'housing' | 'generic';
+export type PeruWallUse = 'housing' | 'education' | 'generic';
 
 export interface PeruWallPreset {
     material: PeruWallMaterial;
@@ -40,6 +40,22 @@ export const PERU_WALL_PRESETS: Record<
                 'Las juntas de mortero se controlan entre 10 mm y 15 mm.',
             ],
         },
+        education: {
+            material: 'brick',
+            use: 'education',
+            label: 'Ladrillo - Educacion / colegio',
+            minThickness: 0.13,
+            recommendedThickness: 0.15,
+            minHeight: 2.4,
+            recommendedHeight: 2.7,
+            mortarJointMin: BASE_JOINT_MIN,
+            mortarJointMax: BASE_JOINT_MAX,
+            notes: [
+                'Preset para muros interiores o divisorios en edificaciones educativas.',
+                'Usar mayor rigidez y altura libre que vivienda para aulas, pasillos y ambientes de colegio.',
+                'Las juntas de mortero se controlan entre 10 mm y 15 mm.',
+            ],
+        },
         generic: {
             material: 'brick',
             use: 'generic',
@@ -70,6 +86,22 @@ export const PERU_WALL_PRESETS: Record<
             notes: [
                 'En adobe, la app adopta 0.40 m como minimo operativo.',
                 'Para vivienda se mantiene la referencia de altura minima de ambientes de 2.30 m.',
+                'Las juntas se muestran en el rango operativo de 10 mm a 15 mm.',
+            ],
+        },
+        education: {
+            material: 'adobe',
+            use: 'education',
+            label: 'Adobe - Educacion / colegio',
+            minThickness: 0.4,
+            recommendedThickness: 0.45,
+            minHeight: 2.4,
+            recommendedHeight: 2.7,
+            mortarJointMin: BASE_JOINT_MIN,
+            mortarJointMax: BASE_JOINT_MAX,
+            notes: [
+                'Preset para muros de adobe en edificaciones educativas existentes o rurales.',
+                'Validar estructuralmente segun zona sismica y condicion del proyecto.',
                 'Las juntas se muestran en el rango operativo de 10 mm a 15 mm.',
             ],
         },

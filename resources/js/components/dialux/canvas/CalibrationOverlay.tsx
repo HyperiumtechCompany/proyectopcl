@@ -62,8 +62,18 @@ export const CalibrationOverlay = memo(function CalibrationOverlay({
                         markerStart="url(#calibration-arrow)"
                         markerEnd="url(#calibration-arrow)"
                     />
-                    <circle cx={screenLine.start.x} cy={screenLine.start.y} r={4} fill="#f59e0b" />
-                    <circle cx={screenLine.end.x} cy={screenLine.end.y} r={4} fill="#f59e0b" />
+                    <circle
+                        cx={screenLine.start.x}
+                        cy={screenLine.start.y}
+                        r={4}
+                        fill="#f59e0b"
+                    />
+                    <circle
+                        cx={screenLine.end.x}
+                        cy={screenLine.end.y}
+                        r={4}
+                        fill="#f59e0b"
+                    />
 
                     {label && (
                         <g transform={`translate(${midX}, ${midY})`}>

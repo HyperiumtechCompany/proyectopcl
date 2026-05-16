@@ -6,9 +6,12 @@ use App\Http\Controllers\CaidaTensionController;
 use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\CronogramaController;
+use App\Http\Controllers\CronoMaterialesController;
+use App\Http\Controllers\CronoValorizadoController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
+use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\EttpController;
 use App\Http\Controllers\InsumoProductoController;
@@ -29,8 +32,6 @@ use App\Http\Middleware\SetCostosDatabase;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use App\Http\Controllers\CronoMaterialesController;
-use App\Http\Controllers\CronoValorizadoController;
 
 Route::get('/', function () {
     return Inertia::render('welcome', [
@@ -56,6 +57,13 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
         Route::delete('/{productId}', [DialuxProductController::class, 'destroy'])->name('destroy');
         Route::post('/{productId}/assign', [DialuxProductController::class, 'assign'])->name('assign');
         Route::get('/{productId}/source', [DialuxProductController::class, 'downloadSource'])->name('source');
+    });
+
+    // ─── Normativa del Proyecto (config persistente) ─────────────────────────
+    Route::prefix('normative-config')->name('normative-config.')->group(function () {
+        Route::get('/{dialuxProjectId}', [DialuxNormativeConfigController::class, 'show'])->name('show');
+        Route::post('/', [DialuxNormativeConfigController::class, 'store'])->name('store');
+        Route::patch('/{dialuxProjectId}/compliance', [DialuxNormativeConfigController::class, 'updateCompliance'])->name('compliance.update');
     });
 });
 
@@ -324,18 +332,22 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
 }); // Cierre de costos
 // ─── CRONOGRAMA GANTT (Configuración Final) ──────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
-   
+
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
     Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');
     Route::get('/module/crono_valorizado', [CronoValorizadoController::class, 'index'])->name('proyectos.cronograma.valorizado');
-    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']); 
+    Route::post('/cronograma/materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
+    Route::delete('/cronograma/materiales/destroy', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
+    Route::post('/module/crono_valorizado/save', [CronoValorizadoController::class, 'store'])->name('proyectos.cronograma.valorizado.save');
+    Route::delete('/cronograma/valorizado/destroy', [CronoValorizadoController::class, 'destroy'])->name('proyectos.cronograma.valorizado.destroy');
+    Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']);
 
     // 3. Ruta para GUARDAR el Gantt
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
 
     // ETTS — Redirecciones heredadas (opcional)
-    Route::get('/costos/{costoProject}/ettp/test', [App\Http\Controllers\EttpController::class, 'testMetrados']);
-    Route::get('/module/etts', function() {
+    Route::get('/costos/{costoProject}/ettp/test', [EttpController::class, 'testMetrados']);
+    Route::get('/module/etts', function () {
         return redirect()->route('costos.ettp.index', ['costoProject' => request('project')]);
     })->name('module.etts');
 });

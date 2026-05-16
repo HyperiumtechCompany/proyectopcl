@@ -195,15 +195,15 @@ export const IsoluxLayer = memo(function IsoluxLayer({
                         mode === 'waves'
                             ? waveBackdropColor(lux, safeMaxLux)
                             : mode === 'temperature'
-                                ? colorForTemperatureLux(lux, safeMaxLux)
-                                : colorForFunctionalLux(lux, safeMaxLux);
+                              ? colorForTemperatureLux(lux, safeMaxLux)
+                              : colorForFunctionalLux(lux, safeMaxLux);
 
                     const stroke =
                         mode === 'temperature'
                             ? 'rgba(255,255,255,0.06)'
                             : mode === 'waves'
-                                ? 'rgba(148, 163, 184, 0.12)'
-                                : 'rgba(255,255,255,0.06)';
+                              ? 'rgba(148, 163, 184, 0.12)'
+                              : 'rgba(255,255,255,0.06)';
 
                     return (
                         <g key={index}>
@@ -251,7 +251,10 @@ export const IsoluxLayer = memo(function IsoluxLayer({
                                 y1={safeNum(segment.start.y)}
                                 x2={safeNum(segment.end.x)}
                                 y2={safeNum(segment.end.y)}
-                                stroke={waveStrokeColor(segment.level, safeMaxLux)}
+                                stroke={waveStrokeColor(
+                                    segment.level,
+                                    safeMaxLux,
+                                )}
                                 strokeWidth={strokeWidth}
                                 strokeLinecap="round"
                                 strokeOpacity={0.95}

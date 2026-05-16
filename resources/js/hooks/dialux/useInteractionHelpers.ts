@@ -78,11 +78,25 @@ export function projectPointToWallOffset(
     point: { x: number; y: number },
     wall: Wall,
 ): number {
-    const verts = wall.vertices;
-    if (verts.length < 2) return 0;
+    return projectPointToWallProjection(point, wall)?.offsetAlongWall ?? 0;
+}
 
-    let bestOffset = 0;
-    let bestDistSq = Number.POSITIVE_INFINITY;
+export interface WallProjection {
+    offsetAlongWall: number;
+    segmentStartOffset: number;
+    segmentEndOffset: number;
+    segmentIndex: number;
+    distanceSq: number;
+}
+
+export function projectPointToWallProjection(
+    point: { x: number; y: number },
+    wall: Wall,
+): WallProjection | null {
+    const verts = wall.vertices;
+    if (verts.length < 2) return null;
+
+    let bestProjection: WallProjection | null = null;
     let cumulativeOffset = 0;
 
     for (let i = 0; i < verts.length - 1; i++) {
@@ -101,24 +115,70 @@ export function projectPointToWallOffset(
         const nearY = a.y + t * dy;
         const distSq = (point.x - nearX) ** 2 + (point.y - nearY) ** 2;
 
-        if (distSq < bestDistSq) {
-            bestDistSq = distSq;
-            bestOffset = cumulativeOffset + t * segLen;
+        if (!bestProjection || distSq < bestProjection.distanceSq) {
+            bestProjection = {
+                offsetAlongWall: cumulativeOffset + t * segLen,
+                segmentStartOffset: cumulativeOffset,
+                segmentEndOffset: cumulativeOffset + segLen,
+                segmentIndex: i,
+                distanceSq: distSq,
+            };
         }
 
         cumulativeOffset += segLen;
     }
 
-    return bestOffset;
+    return bestProjection;
+}
+
+export function clampOpeningOffsetToWallSegment(
+    projection: Pick<
+        WallProjection,
+        'offsetAlongWall' | 'segmentStartOffset' | 'segmentEndOffset'
+    >,
+    openingWidth: number,
+    totalWallLength: number,
+    anchor: 'start' | 'center' = 'center',
+): number {
+    const width = Math.max(0, openingWidth);
+    const wallMaxStart = Math.max(0, totalWallLength - width);
+    const desiredStart =
+        anchor === 'center'
+            ? projection.offsetAlongWall - width / 2
+            : projection.offsetAlongWall;
+
+    const segmentMaxStart = projection.segmentEndOffset - width;
+
+    if (segmentMaxStart >= projection.segmentStartOffset) {
+        return Math.max(
+            projection.segmentStartOffset,
+            Math.min(segmentMaxStart, desiredStart),
+        );
+    }
+
+    return Math.max(0, Math.min(wallMaxStart, desiredStart));
 }
 
 export function useInteractionHelpers(opts: HelperOptions) {
     const { walls, fixtures, rooms, canopies, windows, doors, sceneToCanvas } = opts;
 
     const findNearestWall = useCallback(
-        (cx: number, cy: number): { wall: Wall; offset: number } | null => {
+        (cx: number, cy: number): {
+            wall: Wall;
+            offset: number;
+            segmentStartOffset: number;
+            segmentEndOffset: number;
+            segmentIndex: number;
+        } | null => {
             const MAX_DIST_PX = 20;
-            let best: { wall: Wall; offset: number; dist: number } | null = null;
+            let best: {
+                wall: Wall;
+                offset: number;
+                dist: number;
+                segmentStartOffset: number;
+                segmentEndOffset: number;
+                segmentIndex: number;
+            } | null = null;
 
             for (const w of walls) {
                 const vertices = w.vertices;
@@ -137,12 +197,23 @@ export function useInteractionHelpers(opts: HelperOptions) {
                             wall: w,
                             offset: cumulativeOffsetM + offsetM,
                             dist,
+                            segmentStartOffset: cumulativeOffsetM,
+                            segmentEndOffset: cumulativeOffsetM + segLenM,
+                            segmentIndex: i,
                         };
                     }
                     cumulativeOffsetM += Math.hypot(v2.x - v1.x, v2.y - v1.y);
                 }
             }
-            return best ? { wall: best.wall, offset: best.offset } : null;
+            return best
+                ? {
+                      wall: best.wall,
+                      offset: best.offset,
+                      segmentStartOffset: best.segmentStartOffset,
+                      segmentEndOffset: best.segmentEndOffset,
+                      segmentIndex: best.segmentIndex,
+                  }
+                : null;
         },
         [walls, sceneToCanvas],
     );

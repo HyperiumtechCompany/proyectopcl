@@ -38,7 +38,10 @@ const DEMO_PROJECT = {
     scenes: [
         {
             id: DEMO_SCENE_ID,
-            name: 'Planta 1',
+            name: 'Planta Baja',
+            floorIndex: 0,
+            floorElevation: 0,
+            floorHeight: 3.0,
             scaleConfig: createScaleConfig('m', 1, 'Metros (1 = 1m)'),
             rooms: [],
             walls: [],
@@ -46,6 +49,8 @@ const DEMO_PROJECT = {
             doors: [],
             canopies: [],
             fixtures: [],
+            partitions: [],
+            visible: true,
         },
     ],
 };
@@ -54,6 +59,7 @@ export const EditorLayout = memo(function EditorLayout() {
     const project = useEditorStore((s) => s.project);
     const projectName = useEditorStore((s) => s.project?.name ?? '-');
     const activeScene = useEditorStore((s) => s.activeScene());
+    const activeSceneId = useEditorStore((s) => s.activeSceneId);
     const isCalculating = useEditorStore((s) => s.isCalculating);
     const show3DView = useShow3DView();
     const showRoof = useEditorStore((s) => s.ui.showRoof);
@@ -73,10 +79,56 @@ export const EditorLayout = memo(function EditorLayout() {
     const removeObject = useEditorStore((s) => s.removeObject);
     const toggle3DView = useEditorStore((s) => s.toggle3DView);
     const toggleRoof = useEditorStore((s) => s.toggleRoof);
+    const addFloor = useEditorStore((s) => s.addFloor);
+    const removeFloor = useEditorStore((s) => s.removeFloor);
+    const duplicateFloor = useEditorStore((s) => s.duplicateFloor);
+    const getFloorsSorted = useEditorStore((s) => s.getFloorsSorted);
+    const toggleFloorVisibility = useEditorStore((s) => s.toggleFloorVisibility);
+    const toggleAllFloors = useEditorStore((s) => s.toggleAllFloors);
+    const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
+
     const [roomResults, setRoomResults] = useState<RoomResultSummary[]>([]);
     const [resultsModalOpen, setResultsModalOpen] = useState(false);
+    const [showFloorPanel, setShowFloorPanel] = useState(false);
     const engine = useLightingEngine();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
+
+    const floorsSorted = getFloorsSorted();
+
+    const handleAddFloorAbove = useCallback(() => {
+        const maxIndex = Math.max(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const newId = addFloor(`Piso ${maxIndex + 1}`, maxIndex + 1, 3.0);
+        setActiveScene(newId);
+    }, [addFloor, floorsSorted, setActiveScene]);
+
+    const handleAddBasement = useCallback(() => {
+        const minIndex = Math.min(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const newId = addFloor(`Sótano ${Math.abs(minIndex - 1)}`, minIndex - 1, 3.0);
+        setActiveScene(newId);
+    }, [addFloor, floorsSorted, setActiveScene]);
+
+    const handleDuplicateFloor = useCallback(() => {
+        if (!activeSceneId || !activeScene) return;
+        const maxIndex = Math.max(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const newId = duplicateFloor(
+            activeSceneId,
+            maxIndex + 1,
+            `${activeScene.name} (copia)`,
+        );
+        setActiveScene(newId);
+    }, [activeSceneId, activeScene, duplicateFloor, floorsSorted, setActiveScene]);
+
+    const handleRemoveFloor = useCallback(() => {
+        if (!activeSceneId || floorsSorted.length <= 1) return;
+        removeFloor(activeSceneId);
+    }, [activeSceneId, floorsSorted.length, removeFloor]);
+
+    const floorLabel = (f: { floorIndex: number; name: string }) => {
+        if (f.floorIndex === 0) return `PB · ${f.name}`;
+        if (f.floorIndex > 0) return `P${f.floorIndex} · ${f.name}`;
+        return `S${Math.abs(f.floorIndex)} · ${f.name}`;
+    };
+
 
     const handleExportPdf = useCallback(() => {
         void exportPdf().catch((error: unknown) => {
@@ -250,7 +302,140 @@ export const EditorLayout = memo(function EditorLayout() {
                     mlightcad
                 </div>
 
+                {/* ── Floor Navigator ── */}
+                {project && (
+                    <div className="relative flex items-center gap-1">
+                        {/* Active floor badge + dropdown toggle */}
+                        <button
+                            id="dialux-floor-selector"
+                            onClick={() => setShowFloorPanel((v) => !v)}
+                            title="Gestionar pisos"
+                            className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${
+                                showFloorPanel
+                                    ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
+                                    : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
+                            }`}
+                        >
+                            <span className="text-amber-400">⬛</span>
+                            <span>
+                                {activeScene
+                                    ? floorLabel({
+                                          floorIndex: activeScene.floorIndex ?? 0,
+                                          name: activeScene.name,
+                                      })
+                                    : '—'}
+                            </span>
+                            {floorsSorted.length > 1 && (
+                                <span className="ml-0.5 rounded bg-slate-700/60 px-1 text-[9px] text-slate-400">
+                                    {floorsSorted.length}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* Floor panel dropdown */}
+                        {showFloorPanel && (
+                            <div
+                                className="absolute top-full left-0 z-50 mt-1 min-w-52 rounded-lg border border-slate-700/60 bg-[#191c2c] shadow-2xl"
+                                onMouseLeave={() => setShowFloorPanel(false)}
+                            >
+                                <div className="border-b border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
+                                    Pisos del Proyecto
+                                </div>
+                                <div className="max-h-52 overflow-y-auto py-1">
+                                    {[...floorsSorted].reverse().map((floor) => (
+                                        <div
+                                            key={floor.id}
+                                            className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${
+                                                floor.id === activeSceneId
+                                                    ? 'bg-amber-900/30'
+                                                    : 'hover:bg-slate-800/60'
+                                            }`}
+                                        >
+                                            {/* Eye toggle */}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleFloorVisibility(floor.id); }}
+                                                title={(floor.visible ?? true) ? 'Ocultar piso' : 'Mostrar piso'}
+                                                className="shrink-0 rounded p-0.5 text-slate-500 hover:text-amber-300"
+                                            >
+                                                {(floor.visible ?? true)
+                                                    ? <Eye size={11} />
+                                                    : <EyeOff size={11} className="text-slate-700" />
+                                                }
+                                            </button>
+                                            {/* Floor selector */}
+                                            <button
+                                                onClick={() => { setActiveScene(floor.id); setShowFloorPanel(false); }}
+                                                className={`flex flex-1 items-center gap-2 text-left ${
+                                                    floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-400 hover:text-slate-100'
+                                                } ${ (floor.visible ?? true) ? '' : 'opacity-40' }`}
+                                            >
+                                                <span className="font-mono text-[9px] w-6 text-center text-slate-500">
+                                                    {floor.floorIndex === 0 ? 'PB' : floor.floorIndex > 0 ? `P${floor.floorIndex}` : `S${Math.abs(floor.floorIndex)}`}
+                                                </span>
+                                                <span className="flex-1 truncate">{floor.name}</span>
+                                                <span className="text-[9px] text-slate-600 font-mono">
+                                                    {(floor.floorElevation ?? 0).toFixed(1)}m
+                                                </span>
+                                                {floor.id === activeSceneId && (
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="border-t border-slate-700/40 p-1.5 space-y-1">
+                                    {/* Ver todos los pisos toggle */}
+                                    <button
+                                        onClick={toggleAllFloors}
+                                        className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
+                                            showAllFloors
+                                                ? 'bg-cyan-900/40 text-cyan-300'
+                                                : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-100'
+                                        }`}
+                                        title={showAllFloors ? 'Mostrar solo piso activo' : 'Ver todos los pisos superpuestos'}
+                                    >
+                                        <Eye size={11} />
+                                        {showAllFloors ? 'Modo: Todos los pisos' : 'Ver todos los pisos'}
+                                    </button>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        <button
+                                            onClick={() => { handleAddFloorAbove(); setShowFloorPanel(false); }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            title="Agregar piso arriba"
+                                        >
+                                            <span>↑</span> Piso arriba
+                                        </button>
+                                        <button
+                                            onClick={() => { handleAddBasement(); setShowFloorPanel(false); }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            title="Agregar sótano"
+                                        >
+                                            <span>↓</span> Sótano
+                                        </button>
+                                        <button
+                                            onClick={() => { handleDuplicateFloor(); setShowFloorPanel(false); }}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            title="Duplicar piso activo"
+                                        >
+                                            <span>⧉</span> Duplicar
+                                        </button>
+                                        <button
+                                            onClick={() => { handleRemoveFloor(); setShowFloorPanel(false); }}
+                                            disabled={floorsSorted.length <= 1}
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-500 hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-30"
+                                            title="Eliminar piso activo"
+                                        >
+                                            <span>✕</span> Eliminar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex-1" />
+
 
                 <button
                     onClick={toggle3DView}

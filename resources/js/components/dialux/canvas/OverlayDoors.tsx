@@ -43,7 +43,7 @@ function resolveDoorOnWall(
     if (verts.length < 2) return null;
 
     const offset = door.offsetAlongWall;
-    const width   = door.width;
+    const width = door.width;
     const hingeRight = (door as any).hingeDirection === 'right';
 
     let accumulated = 0;
@@ -62,7 +62,7 @@ function resolveDoorOnWall(
             const uy = dy / segLen;
             // Normal perpendicular a la pared (apunta hacia el interior del recinto)
             const nx = -uy;
-            const ny =  ux;
+            const ny = ux;
 
             // Punto de bisagra: si hingeRight, bisagra en el extremo de mayor offset (t1)
             const tp = hingeRight ? t1 : t0;
@@ -89,22 +89,27 @@ function resolveDoorOnWall(
 }
 
 export const OverlayDoors = memo(function OverlayDoors({
-    doors, walls, selectedId, zoom, onSelect, screenPoint,
+    doors,
+    walls,
+    selectedId,
+    zoom,
+    onSelect,
+    screenPoint,
 }: Props) {
     if (!doors.length) return null;
 
     return (
         <g className="overlay-doors">
-            {doors.map(door => {
-                const wall = walls.find(w => w.id === door.wallId);
+            {doors.map((door) => {
+                const wall = walls.find((w) => w.id === door.wallId);
                 if (!wall) return null;
 
                 const pos = resolveDoorOnWall(door, wall, screenPoint);
                 if (!pos) return null;
 
-                const isSelected     = selectedId === door.id;
-                const color          = isSelected ? '#6ee7b7' : '#34d399';
-                const strokeW        = isSelected ? 2.5 : 1.8;
+                const isSelected = selectedId === door.id;
+                const color = isSelected ? '#6ee7b7' : '#34d399';
+                const strokeW = isSelected ? 2.5 : 1.8;
 
                 const { hingeScreen, swingScreen, normalWorld, widthPx } = pos;
 
@@ -125,7 +130,8 @@ export const OverlayDoors = memo(function OverlayDoors({
                     x: normalScreenPt.x - normalBasePt.x,
                     y: normalScreenPt.y - normalBasePt.y,
                 };
-                const normalLen = Math.hypot(normalScreen.x, normalScreen.y) || 1;
+                const normalLen =
+                    Math.hypot(normalScreen.x, normalScreen.y) || 1;
                 const nxS = normalScreen.x / normalLen;
                 const nyS = normalScreen.y / normalLen;
                 const sign = openInward ? 1 : -1;
@@ -140,8 +146,8 @@ export const OverlayDoors = memo(function OverlayDoors({
                 const uy = umbralDy / umbralLen;
 
                 // Rotar 90° en dirección openInward/outward para el extremo del arco
-                const arcEndX = hingeScreen.x + (-uy * sign * widthPx);
-                const arcEndY = hingeScreen.y + ( ux * sign * widthPx);
+                const arcEndX = hingeScreen.x + -uy * sign * widthPx;
+                const arcEndY = hingeScreen.y + ux * sign * widthPx;
 
                 // sweep-flag del SVG: 1 = clockwise, 0 = counter-clockwise
                 // Lo determinamos con producto vectorial
@@ -240,7 +246,9 @@ export const OverlayDoors = memo(function OverlayDoors({
                                 pointerEvents="none"
                                 style={{ userSelect: 'none' }}
                             >
-                                {door.openingDirection === 'outward' ? '← hacia afuera' : '→ hacia adentro'}
+                                {door.openingDirection === 'outward'
+                                    ? '← hacia afuera'
+                                    : '→ hacia adentro'}
                             </text>
                         )}
                     </g>
