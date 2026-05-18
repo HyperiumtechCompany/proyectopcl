@@ -95,6 +95,13 @@ export interface StairConfig {
      * puertas, ventanas u otra geometría (caso C del plan).
      */
     linkedHallId?: string;
+    /**
+     * Elevación de arranque en metros (default 0).
+     * Úsalo cuando esta escalera es la segunda mitad de una escalera en U:
+     * la Escalera 2 debe arrancar desde la altura del descanso
+     * (ej. 1.75 m si la Escalera 1 tiene 10 escalones × 0.175 m).
+     */
+    startElevation?: number;
 }
 
 /** Recinto (espacio cerrado con polígono arbitrario) */

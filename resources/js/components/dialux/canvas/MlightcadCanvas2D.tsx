@@ -278,6 +278,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             'corridor',
             'stair',
             'canopy',
+            'partition',
         ]);
 
         // ── Interacción ───────────────────────────────────────────────────────────

@@ -269,7 +269,7 @@ const RoomProps: React.FC<{
                 )}
                 <PropField label="Vertices" value={`${room.vertices.length}`} />
                 <PropField label="Area" value={`${area.toFixed(2)} m2`} />
-                {!isCorridorAmbient && (
+                {!isCorridorAmbient && room.roomType !== 'stair' && (
                     <PropField
                         label="Ambientes"
                         value={`${ambientSpaces.length}`}
@@ -283,6 +283,7 @@ const RoomProps: React.FC<{
                     />
                 )}
 
+                {room.roomType !== 'stair' && (
                 <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
                     <p className="mb-1.5 text-[10px] font-semibold text-cyan-500">
                         Normativa y calculo
@@ -388,6 +389,7 @@ const RoomProps: React.FC<{
                         />
                     )}
                 </div>
+                )}
 
                 <PropField label="ID" value={room.id.slice(0, 12)} />
             </SectionWrapper>
@@ -412,11 +414,21 @@ const DIRECTION_LABELS: Record<StairFlight['direction'], string> = {
     west: 'Oeste ←',
 };
 
+/** Dirección opuesta para U-turn estándar */
+const OPPOSITE_DIR: Record<StairFlight['direction'], StairFlight['direction']> = {
+    north: 'south', south: 'north', east: 'west', west: 'east',
+};
+
 const StairConfigPanel: React.FC<{
     room: Room;
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
 }> = ({ room, onUpdate }) => {
     const st = room.stairConfig ?? DEFAULT_STAIR;
+
+    // Orientación efectiva: derivada del primer tramo si existen tramos.
+    // De este modo NO hay duplicación UI — un solo control de dirección.
+    const hasFlights = st.flights.length > 0;
+    const effectiveOrientation = hasFlights ? st.flights[0].direction : st.orientation;
 
     const updateSt = (patch: Partial<StairConfig>) =>
         onUpdate({ stairConfig: { ...st, ...patch } });
@@ -425,25 +437,41 @@ const StairConfigPanel: React.FC<{
         const flights = st.flights.map((f, i) =>
             i === index ? { ...f, ...patch } : f,
         );
-        updateSt({ flights });
+        // Si se cambia la dirección del tramo 0, sincronizar con stairConfig.orientation
+        const newOrientation = index === 0 && patch.direction
+            ? patch.direction
+            : st.orientation;
+        updateSt({ flights, orientation: newOrientation });
     };
 
     const addFlight = () => {
+        const prevDir = st.flights.length > 0
+            ? st.flights[st.flights.length - 1].direction
+            : st.orientation;
         const newFlight: StairFlight = {
             id: `flight-${Date.now()}`,
             stepCount: 8,
-            direction: st.orientation,
-            hasLanding: true,
-            landingDepth: 1.2,
+            // Dirección opuesta al tramo anterior (U-turn típico)
+            direction: OPPOSITE_DIR[prevDir],
+            hasLanding: false,
+            landingDepth: 0,
         };
-        updateSt({ flights: [...st.flights, newFlight] });
+        // El tramo anterior debe tener descanso para conectar
+        const prevFlights = st.flights.length > 0
+            ? st.flights.map((f, i) =>
+                i === st.flights.length - 1 ? { ...f, hasLanding: true, landingDepth: Math.max(f.landingDepth, 1.2) } : f,
+              )
+            : st.flights;
+        updateSt({ flights: [...prevFlights, newFlight] });
     };
 
     const removeFlight = (index: number) => {
-        updateSt({ flights: st.flights.filter((_, i) => i !== index) });
+        const remaining = st.flights.filter((_, i) => i !== index);
+        const newOrientation = remaining.length > 0 ? remaining[0].direction : st.orientation;
+        updateSt({ flights: remaining, orientation: newOrientation });
     };
 
-    const totalSteps = st.flights.length > 0
+    const totalSteps = hasFlights
         ? st.flights.reduce((sum, f) => sum + f.stepCount, 0)
         : st.stepCount;
     const totalHeight = (totalSteps * st.riserHeight).toFixed(2);
@@ -464,17 +492,23 @@ const StairConfigPanel: React.FC<{
                 ]}
                 onChange={(val) => updateSt({ normativeUse: val as StairConfig['normativeUse'] })}
             />
-            <SelectField
-                label="Orientación"
-                value={st.orientation}
-                options={[
-                    { value: 'north', label: 'Norte ↑' },
-                    { value: 'south', label: 'Sur ↓' },
-                    { value: 'east', label: 'Este →' },
-                    { value: 'west', label: 'Oeste ←' },
-                ]}
-                onChange={(val) => updateSt({ orientation: val as StairConfig['orientation'] })}
-            />
+
+            {/* Orientación solo para escalera directa (sin tramos).
+                Cuando hay tramos, la dirección la define el Tramo 1. */}
+            {!hasFlights && (
+                <SelectField
+                    label="Dirección"
+                    value={st.orientation}
+                    options={[
+                        { value: 'north', label: 'Norte ↑' },
+                        { value: 'south', label: 'Sur ↓' },
+                        { value: 'east', label: 'Este →' },
+                        { value: 'west', label: 'Oeste ←' },
+                    ]}
+                    onChange={(val) => updateSt({ orientation: val as StairConfig['orientation'] })}
+                />
+            )}
+
             <EditField
                 label="Contrahuella (m)"
                 value={st.riserHeight}
@@ -494,7 +528,14 @@ const StairConfigPanel: React.FC<{
                 onChange={(val) => updateSt({ stairWidth: val })}
             />
 
-            {st.flights.length === 0 && (
+            <EditField
+                label="Elev. arranque (m)"
+                value={st.startElevation ?? 0}
+                min={0} max={10} step={0.025}
+                onChange={(val) => updateSt({ startElevation: val })}
+            />
+
+            {!hasFlights && (
                 <EditField
                     label="Cant. escalones"
                     value={st.stepCount}
@@ -505,14 +546,14 @@ const StairConfigPanel: React.FC<{
 
             <PropField
                 label="Altura total"
-                value={`${totalHeight} m (${totalSteps} esc.)`}
+                value={`${(parseFloat(totalHeight) + (st.startElevation ?? 0)).toFixed(2)} m · ${totalSteps} esc. · Dir: ${DIRECTION_LABELS[effectiveOrientation]}`}
             />
 
             {/* ── Tramos ─────────────────────────────────────────── */}
             <div className="mt-2 border-t border-orange-900/40 pt-2">
                 <div className="mb-1.5 flex items-center justify-between">
                     <p className="text-[10px] font-semibold text-orange-300">
-                        Tramos ({st.flights.length})
+                        {hasFlights ? `Tramos (${st.flights.length})` : 'Escalera directa'}
                     </p>
                     <button
                         type="button"
@@ -520,9 +561,15 @@ const StairConfigPanel: React.FC<{
                         className="flex items-center gap-1 rounded bg-orange-700/60 px-1.5 py-0.5 text-[9px] text-orange-200 hover:bg-orange-600/60"
                     >
                         <Plus size={9} />
-                        Agregar tramo
+                        {hasFlights ? 'Agregar tramo' : 'Dividir en tramos'}
                     </button>
                 </div>
+
+                {!hasFlights && (
+                    <p className="text-[8px] text-gray-500 px-0.5 leading-tight">
+                        {st.stepCount} escalones · {DIRECTION_LABELS[st.orientation]} · sin descanso
+                    </p>
+                )}
 
                 {st.flights.map((flight, idx) => (
                     <div
@@ -556,36 +603,16 @@ const StairConfigPanel: React.FC<{
                             }))}
                             onChange={(val) => updateFlight(idx, { direction: val as StairFlight['direction'] })}
                         />
-                        <div className="flex items-center justify-between">
-                            <span className="text-[9px] text-gray-400">Descanso</span>
-                            <button
-                                type="button"
-                                onClick={() => updateFlight(idx, { hasLanding: !flight.hasLanding })}
-                                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                    flight.hasLanding
-                                        ? 'bg-amber-700/60 text-amber-200'
-                                        : 'bg-gray-700/60 text-gray-400'
-                                }`}
-                            >
-                                {flight.hasLanding ? 'Sí' : 'No'}
-                            </button>
-                        </div>
-                        {flight.hasLanding && (
+                        {idx < st.flights.length - 1 && (
                             <EditField
-                                label="Prof. descanso (m)"
-                                value={flight.landingDepth}
+                                label="Descanso (m)"
+                                value={flight.landingDepth > 0 ? flight.landingDepth : 1.2}
                                 min={0.6} max={3} step={0.1}
-                                onChange={(val) => updateFlight(idx, { landingDepth: val })}
+                                onChange={(val) => updateFlight(idx, { hasLanding: val > 0, landingDepth: val })}
                             />
                         )}
                     </div>
                 ))}
-
-                {st.flights.length === 0 && (
-                    <p className="text-[8px] text-gray-500 px-0.5">
-                        Sin tramos: escalera directa con {st.stepCount} escalones en dirección {DIRECTION_LABELS[st.orientation]}.
-                    </p>
-                )}
             </div>
         </div>
     );

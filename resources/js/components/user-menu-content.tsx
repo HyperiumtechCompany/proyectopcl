@@ -22,8 +22,7 @@ export function UserMenuContent({ user }: Props) {
     const handleLogout = (e: React.MouseEvent) => {
         e.preventDefault();
         cleanup();
-        // Usamos el router de Inertia para enviar el POST de salida
-        router.post(route('logout')); 
+        router.post(logout());
     };
 
     return (

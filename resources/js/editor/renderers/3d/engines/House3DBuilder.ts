@@ -815,128 +815,270 @@ export class House3DBuilder {
             return;
         }
 
-        // ── Escalera: escalones apilados y descansos (basado en StairConfig) ──────────
+        // ── Escalera: escalones apilados, descansos y pasamanos ──────────────────────
         if (room.roomType === 'stair') {
-            const bounds = this.getRoomBounds(room);
-            const stairW = Math.max(0.5, bounds.maxX - bounds.minX);
-            const stairD = Math.max(0.5, bounds.maxY - bounds.minY);
+            const bounds  = this.getRoomBounds(room);
+            const stairW  = Math.max(0.5, bounds.maxX - bounds.minX);
+            const stairD  = Math.max(0.5, bounds.maxY - bounds.minY);
             const stairCx = (bounds.minX + bounds.maxX) / 2;
             const stairCz = (bounds.minY + bounds.maxY) / 2;
 
-            // Piso base de la escalera
+            // Elevación de arranque (para escaleras que comienzan desde un descanso intermedio)
+            const startElev = room.stairConfig?.startElevation ?? 0;
+
+            // Piso base elevado al nivel de arranque
             const stairFloor = MeshBuilder.CreateBox(
                 `stair_floor_${room.id}`,
                 { width: stairW, height: 0.05, depth: stairD },
                 this.scene,
             );
-            stairFloor.position.set(stairCx, -0.025, stairCz);
+            stairFloor.position.set(stairCx, startElev - 0.025, stairCz);
             stairFloor.material = this.matFloor;
             stairFloor.receiveShadows = true;
             if (floorNode) stairFloor.parent = floorNode;
             meshes.push(stairFloor);
 
+            // Relleno vertical bajo el piso si la escalera arranca elevada
+            if (startElev > 0.1) {
+                const fill = MeshBuilder.CreateBox(
+                    `stair_fill_${room.id}`,
+                    { width: stairW, height: startElev, depth: stairD },
+                    this.scene,
+                );
+                fill.position.set(stairCx, startElev / 2, stairCz);
+                fill.material = this.matWall;
+                fill.receiveShadows = true;
+                if (floorNode) fill.parent = floorNode;
+                meshes.push(fill);
+            }
+
+            // ── Helper: crear pasamano a lo largo de un tramo ─────────────────
+            const addRail = (
+                x0: number, z0: number,
+                x1: number, z1: number,
+                yBase: number, yTop: number,
+                id: string,
+            ) => {
+                const RAIL_H   = 0.90;  // altura sobre el escalón
+                const RAIL_R   = 0.04;  // grosor del pasamano
+                const POST_W   = 0.05;
+                const railY    = yTop + RAIL_H;
+                const len      = Math.hypot(x1 - x0, z1 - z0);
+                const angle    = Math.atan2(z1 - z0, x1 - x0);
+                const cx = (x0 + x1) / 2;
+                const cz = (z0 + z1) / 2;
+
+                // Barra horizontal del pasamano
+                const bar = MeshBuilder.CreateBox(`rail_bar_${id}`,
+                    { width: len, height: RAIL_R, depth: RAIL_R }, this.scene);
+                bar.position.set(cx, railY, cz);
+                bar.rotation.y = -angle;
+                bar.material   = this.matFrame;
+                if (floorNode) bar.parent = floorNode;
+                meshes.push(bar);
+
+                // Poste inicial
+                const post0 = MeshBuilder.CreateBox(`rail_post0_${id}`,
+                    { width: POST_W, height: railY - yBase, depth: POST_W }, this.scene);
+                post0.position.set(x0, yBase + (railY - yBase) / 2, z0);
+                post0.material = this.matFrame;
+                if (floorNode) post0.parent = floorNode;
+                meshes.push(post0);
+
+                // Poste final
+                const post1 = MeshBuilder.CreateBox(`rail_post1_${id}`,
+                    { width: POST_W, height: railY - yTop + RAIL_H, depth: POST_W }, this.scene);
+                post1.position.set(x1, yTop + (railY - yTop + RAIL_H) / 2 - RAIL_H / 2, z1);
+                post1.material = this.matFrame;
+                if (floorNode) post1.parent = floorNode;
+                meshes.push(post1);
+            };
+
             if (room.stairConfig && room.stairConfig.flights.length > 0) {
-                const cfg = room.stairConfig;
-                let currentZ = stairCz - stairD / 2;
-                let currentX = stairCx - stairW / 2;
-                let currentHeight = 0;
-                let stepGlobalIndex = 0;
+                const cfg   = room.stairConfig;
+                const tread = cfg.treadDepth;
+                const riser = cfg.riserHeight;
+
+                // ── Distribuir tramos en carriles según su eje ─────────────────
+                // Tramos N/S se apilan en X; tramos E/W se apilan en Z.
+                // Ejemplo: 2 tramos N/S → carril 0 en la mitad izquierda, carril 1 en la derecha.
+                const nsCount = cfg.flights.filter(f =>
+                    f.direction === 'north' || f.direction === 'south').length;
+                const ewCount = cfg.flights.filter(f =>
+                    f.direction === 'east'  || f.direction === 'west').length;
+                let nsLane = 0;
+                let ewLane = 0;
+
+                // Cursor de posición y altura
+                const firstDir = cfg.flights[0].direction;
+                let cursorZ = firstDir === 'north'
+                    ? stairCz + stairD / 2
+                    : stairCz - stairD / 2;
+                let cursorX = firstDir === 'west'
+                    ? stairCx + stairW / 2
+                    : stairCx - stairW / 2;
+                let cursorH = 0;   // altura relativa al startElev
 
                 for (let f = 0; f < cfg.flights.length; f++) {
                     const flight = cfg.flights[f];
-                    const tread = cfg.treadDepth;
-                    const riser = cfg.riserHeight;
-                    const w = cfg.stairWidth;
+                    if (flight.stepCount <= 0) continue;
 
-                    // Construir peldaños del tramo
+                    const isNS  = flight.direction === 'north' || flight.direction === 'south';
+                    const signZ = flight.direction === 'south' ? +1 : -1;
+                    const signX = flight.direction === 'east'  ? +1 : -1;
+
+                    // Centro del carril en el eje perpendicular al movimiento
+                    let flightCx: number;
+                    let flightCz: number;
+                    let laneStepW: number;
+
+                    if (isNS) {
+                        // Dividir ancho de habitación entre todos los tramos N/S
+                        const laneW = stairW / Math.max(1, nsCount);
+                        flightCx  = bounds.minX + (nsLane + 0.5) * laneW;
+                        flightCz  = stairCz;           // irrelevante, se usa cursorZ
+                        laneStepW = Math.min(cfg.stairWidth, laneW);
+                        nsLane++;
+                    } else {
+                        // Dividir profundidad entre todos los tramos E/W
+                        const laneD = stairD / Math.max(1, ewCount);
+                        flightCx  = stairCx;
+                        flightCz  = bounds.minY + (ewLane + 0.5) * laneD;
+                        laneStepW = Math.min(cfg.stairWidth, laneD);
+                        ewLane++;
+                    }
+
+                    // Primera y última posición del tramo (para el pasamano)
+                    const hStart = startElev + cursorH;
+                    let firstSZ = 0, firstSX = 0, lastSZ = 0, lastSX = 0;
+
                     for (let s = 0; s < flight.stepCount; s++) {
-                        const stepH = currentHeight + riser;
-                        let sX = stairCx;
-                        let sZ = stairCz;
-                        
-                        // Posicionar según la dirección (simplificado: asume U-shape o L-shape estándar)
-                        if (flight.direction === 'north') { // Avanza en Z-
-                            sZ = stairCz + stairD / 2 - (stepGlobalIndex * tread) - tread / 2;
-                            sX = stairCx - stairW / 2 + w / 2; // Lado izquierdo
-                        } else if (flight.direction === 'south') { // Avanza en Z+
-                            sZ = stairCz - stairD / 2 + (stepGlobalIndex * tread) + tread / 2;
-                            sX = stairCx + stairW / 2 - w / 2; // Lado derecho (U-turn)
-                        } else if (flight.direction === 'east') { // Avanza X+
-                            sZ = stairCz + stairD / 2 - w / 2;
-                            sX = stairCx - stairW / 2 + (stepGlobalIndex * tread) + tread / 2;
-                        }
+                        cursorH += riser;
+                        const sZ = isNS
+                            ? cursorZ + signZ * (s + 0.5) * tread
+                            : flightCz;
+                        const sX = isNS
+                            ? flightCx
+                            : cursorX + signX * (s + 0.5) * tread;
+
+                        if (s === 0)                      { firstSZ = sZ; firstSX = sX; }
+                        if (s === flight.stepCount - 1)   { lastSZ  = sZ; lastSX  = sX; }
 
                         const step = MeshBuilder.CreateBox(
                             `stair_step_${room.id}_${f}_${s}`,
-                            { width: flight.direction === 'north' || flight.direction === 'south' ? w : tread, 
-                              height: stepH, 
-                              depth: flight.direction === 'north' || flight.direction === 'south' ? tread : w },
+                            {
+                                width:  isNS ? laneStepW : tread,
+                                height: cursorH,          // desde startElev hasta la cara superior
+                                depth:  isNS ? tread      : laneStepW,
+                            },
                             this.scene,
                         );
-                        step.position.set(sX, stepH / 2, sZ);
+                        step.position.set(sX, startElev + cursorH / 2, sZ);
                         step.material = this.matWall;
                         step.receiveShadows = true;
                         this.shadowGen?.addShadowCaster(step);
                         if (floorNode) step.parent = floorNode;
                         meshes.push(step);
-
-                        currentHeight += riser;
-                        stepGlobalIndex++;
                     }
 
-                    // Descanso (Landing)
-                    if (flight.hasLanding) {
-                        const lDepth = flight.landingDepth;
-                        let lX = stairCx;
-                        let lZ = stairCz;
+                    // Pasamano lateral (borde exterior del carril)
+                    const railOffX = isNS ? laneStepW / 2 : 0;
+                    const railOffZ = isNS ? 0 : laneStepW / 2;
+                    addRail(
+                        firstSX + railOffX, firstSZ + railOffZ,
+                        lastSX  + railOffX, lastSZ  + railOffZ,
+                        hStart,
+                        startElev + cursorH,
+                        `${room.id}_${f}`,
+                    );
 
-                        if (flight.direction === 'north') {
-                            lZ = stairCz + stairD / 2 - (stepGlobalIndex * tread) - lDepth / 2;
-                        } else if (flight.direction === 'south') {
-                            lZ = stairCz - stairD / 2 + (stepGlobalIndex * tread) + lDepth / 2;
-                        } else if (flight.direction === 'east') {
-                            sX = stairCx - stairW / 2 + (stepGlobalIndex * tread) + lDepth / 2;
-                        }
+                    // Avanzar cursor al final del tramo
+                    if (isNS) cursorZ += signZ * flight.stepCount * tread;
+                    else      cursorX += signX * flight.stepCount * tread;
 
+                    // ── Descanso entre tramos ──────────────────────────────────
+                    if (flight.hasLanding && flight.landingDepth > 0) {
+                        const lD      = flight.landingDepth;
+                        const landH   = cursorH + 0.04;  // losa del descanso levemente más alta
+                        const lX = isNS ? stairCx                  : cursorX + signX * lD / 2;
+                        const lZ = isNS ? cursorZ + signZ * lD / 2 : stairCz;
                         const landing = MeshBuilder.CreateBox(
                             `stair_landing_${room.id}_${f}`,
-                            { width: stairW, height: currentHeight, depth: lDepth },
+                            {
+                                width:  isNS ? stairW : lD,
+                                height: landH,
+                                depth:  isNS ? lD     : stairD,
+                            },
                             this.scene,
                         );
-                        // El descanso ocupa todo el ancho de la caja de escalera
-                        landing.position.set(stairCx, currentHeight / 2, lZ);
-                        landing.material = this.matFloor; // o material distinto
+                        landing.position.set(lX, startElev + landH / 2, lZ);
+                        landing.material = this.matFloor;
                         landing.receiveShadows = true;
                         this.shadowGen?.addShadowCaster(landing);
                         if (floorNode) landing.parent = floorNode;
                         meshes.push(landing);
 
-                        // Reiniciar stepGlobalIndex para el siguiente tramo en la nueva dirección
-                        // (simplificación: en un U-turn real la Z del siguiente tramo arranca desde el descanso)
-                        stepGlobalIndex = 0; 
+                        if (isNS) cursorZ += signZ * lD;
+                        else      cursorX += signX * lD;
                     }
                 }
             } else {
-                // Fallback básico si no hay StairConfig
-                const riser = 0.175;   // 17.5 cm — altura de cada escalon
-                const tread = 0.28;    // 28 cm  — huella de cada escalon
-                const numSteps = Math.max(1, Math.round(ceilingHeight / riser));
-                const actualTread = Math.min(tread, stairD / numSteps);
+                // ── Escalera sin tramos: escalones simples en la dirección config ──
+                const cfg      = room.stairConfig;
+                const riser    = cfg?.riserHeight ?? 0.175;
+                const tread    = cfg?.treadDepth  ?? 0.28;
+                const stepW    = Math.min(cfg?.stairWidth ?? stairW, stairW);
+                const orient   = cfg?.orientation ?? 'south';
+                const numSteps = cfg?.stepCount
+                    ?? Math.max(1, Math.round((ceilingHeight - startElev) / riser));
+                const isNS     = orient === 'north' || orient === 'south';
+                const signZ    = orient === 'south' ? +1 : -1;
+                const signX    = orient === 'east'  ? +1 : -1;
+                const startZ   = orient === 'north'
+                    ? stairCz + stairD / 2 : stairCz - stairD / 2;
+                const startX   = orient === 'west'
+                    ? stairCx + stairW / 2 : stairCx - stairW / 2;
+                const actualTread = isNS
+                    ? Math.min(tread, stairD / numSteps)
+                    : Math.min(tread, stairW / numSteps);
+
+                let firstSX = 0, firstSZ = 0, lastSX = 0, lastSZ = 0;
 
                 for (let s = 0; s < numSteps; s++) {
-                    const stepH = riser * (s + 1);
-                    const stepZ = stairCz - stairD / 2 + actualTread * s + actualTread / 2;
+                    const relH = riser * (s + 1);
+                    const sZ   = isNS ? startZ + signZ * (s + 0.5) * actualTread : stairCz;
+                    const sX   = isNS ? stairCx : startX + signX * (s + 0.5) * actualTread;
+                    if (s === 0)            { firstSX = sX; firstSZ = sZ; }
+                    if (s === numSteps - 1) { lastSX  = sX; lastSZ  = sZ; }
+
                     const step = MeshBuilder.CreateBox(
                         `stair_step_${room.id}_${s}`,
-                        { width: stairW, height: stepH, depth: actualTread },
+                        {
+                            width:  isNS ? stepW : actualTread,
+                            height: relH,
+                            depth:  isNS ? actualTread : stepW,
+                        },
                         this.scene,
                     );
-                    step.position.set(stairCx, stepH / 2, stepZ);
+                    step.position.set(sX, startElev + relH / 2, sZ);
                     step.material = this.matWall;
                     step.receiveShadows = true;
                     this.shadowGen?.addShadowCaster(step);
                     if (floorNode) step.parent = floorNode;
                     meshes.push(step);
+                }
+
+                // Pasamano para escalera directa
+                if (numSteps > 0) {
+                    const railOffX = isNS ? stepW / 2 : 0;
+                    const railOffZ = isNS ? 0 : stepW / 2;
+                    addRail(
+                        firstSX + railOffX, firstSZ + railOffZ,
+                        lastSX  + railOffX, lastSZ  + railOffZ,
+                        startElev,
+                        startElev + riser * numSteps,
+                        `${room.id}_0`,
+                    );
                 }
             }
 

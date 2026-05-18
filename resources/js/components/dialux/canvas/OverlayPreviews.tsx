@@ -17,14 +17,14 @@ interface Props {
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => number;
-    angleSnapMode?: 'smart' | 'free' | 'orthogonal' | 'diagonal';
+    angleSnapMode?: 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
 }
 
 function renderLabel(
     p1: CanvasPoint,
     p2: CanvasPoint,
     measureCadDistanceFromScreen?: (p1: CanvasPoint, p2: CanvasPoint) => number,
-    angleSnapMode: 'smart' | 'free' | 'orthogonal' | 'diagonal' = 'free',
+    angleSnapMode: 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine' = 'free',
 ) {
     if (!measureCadDistanceFromScreen) return null;
 
