@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Log;
 class CronoMaterialesController extends Controller
 {
     // ──────────────────────────────────────────────────────────────────────────
@@ -300,7 +300,28 @@ class CronoMaterialesController extends Controller
             $partidaDescripcion    = $descripcionesPartidas[$partida] ??(string) $partida;
             
             // Agrupar por partida + insumo para mostrar trazabilidad
-            $agrupador = md5($partida . '|' . $insumoDescripcion . '|' . $unidad);
+            $agrupador = md5($insumoDescripcion . '|' . $tipoInsumo);
+
+
+            // USAR EL PRECIO DEL CATÁLOGO COMO FUENTE DE VERDAD
+            $precioReal = $insumo->costo_unitario ?? $precioReal;
+
+            // Inicializar array de control de precios si no existe (debe estar antes del foreach)
+            if (!isset($precioPorInsumo)) {
+                $precioPorInsumo = [];
+            }
+            
+            // Validar consistencia de precios 
+            if (isset($precioPorInsumo[$insumoDescripcion])) {
+                if ($precioPorInsumo[$insumoDescripcion] != $precioReal) {
+                    Log::warning("Precio inconsistente para insumo '{$insumoDescripcion}': " .
+                    "precio previo = {$precioPorInsumo[$insumoDescripcion]}, " .
+                    "nuevo precio = {$precioReal}. Usando precio del catálogo.");
+
+                }
+            } else { 
+                $precioPorInsumo[$insumoDescripcion] = $precioReal;
+            }
             
             if (!isset($insumosAgrupados[$agrupador])) {
                 $insumosAgrupados[$agrupador] = [
