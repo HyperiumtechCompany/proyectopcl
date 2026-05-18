@@ -78,6 +78,12 @@ export interface StairConfig {
     /** Ancho útil de paso en metros */
     stairWidth: number;
     /**
+     * Cantidad total de escalones (suma de todos los tramos).
+     * En escaleras simples (1 tramo, sin flights), este campo gobierna.
+     * En escaleras con flights, se calcula sumando flight.stepCount.
+     */
+    stepCount: number;
+    /**
      * Tramos de escalera. Una escalera directa = 1 tramo sin landing.
      * Escalera con descanso = [tramo1 (hasLanding=true), tramo2 (hasLanding=false)].
      * Escalera multi-piso puede tener N tramos.
@@ -155,6 +161,18 @@ export interface Wall {
     normativeUse?: 'housing' | 'education' | 'generic';
     mortarJointMin?: number;
     mortarJointMax?: number;
+    /**
+     * Tipo de muro:
+     *   'interior' → tabique interior (default)
+     *   'exterior' → muro perimetral del edificio
+     *   'cerco'    → cerco perimétrico exterior (columnas + panel)
+     */
+    wallType?: 'interior' | 'exterior' | 'cerco';
+    /**
+     * Espaciado entre columnas/postes del cerco en metros (solo para wallType === 'cerco').
+     * Default 3.0 m (típico RNE para cerco de ladrillo con columnas).
+     */
+    postSpacing?: number;
 }
 
 /** Ventana colocada sobre una pared */

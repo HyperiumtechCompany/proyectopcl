@@ -221,6 +221,7 @@ export function buildDefaultStairConfig(
         riserHeight: preset.recommendedRiserHeight,
         treadDepth: preset.recommendedTreadDepth,
         stairWidth: preset.recommendedStairWidth,
+        stepCount: totalSteps,
         flights,
     };
 }

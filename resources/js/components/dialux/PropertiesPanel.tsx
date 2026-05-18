@@ -9,6 +9,10 @@ import {
     Target,
     Grid,
     PlusSquare,
+    Plus,
+    Trash2,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -39,7 +43,7 @@ import {
     getWallPresetFromWall,
     getPeruWallPreset,
 } from '@/hooks/dialux/wallNorms';
-import type { Partition } from '@/hooks/dialux/types';
+import type { Partition, StairConfig, StairFlight } from '@/hooks/dialux/types';
 
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const store = useEditorStore();
@@ -273,65 +277,10 @@ const RoomProps: React.FC<{
                 )}
 
                 {room.roomType === 'stair' && (
-                    <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
-                        <p className="mb-1.5 text-[10px] font-semibold text-orange-400">
-                            Configuración de Escalera
-                        </p>
-                        <SelectField
-                            label="Uso Normativo"
-                            value={room.stairConfig?.normativeUse ?? 'generic'}
-                            options={[
-                                { value: 'education', label: 'A.040 (Educación)' },
-                                { value: 'housing', label: 'A.010 (Vivienda)' },
-                                { value: 'generic', label: 'Libre' },
-                            ]}
-                            onChange={(val) => {
-                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
-                                onUpdate({ stairConfig: { ...st, normativeUse: val as any } });
-                            }}
-                        />
-                        <SelectField
-                            label="Orientación"
-                            value={room.stairConfig?.orientation ?? 'north'}
-                            options={[
-                                { value: 'north', label: 'Norte' },
-                                { value: 'south', label: 'Sur' },
-                                { value: 'east', label: 'Este' },
-                                { value: 'west', label: 'Oeste' },
-                            ]}
-                            onChange={(val) => {
-                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
-                                onUpdate({ stairConfig: { ...st, orientation: val as any } });
-                            }}
-                        />
-                        <EditField
-                            label="Contrahuella (m)"
-                            value={room.stairConfig?.riserHeight ?? 0.175}
-                            min={0.1} max={0.25} step={0.005}
-                            onChange={(val) => {
-                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
-                                onUpdate({ stairConfig: { ...st, riserHeight: val } });
-                            }}
-                        />
-                        <EditField
-                            label="Huella (m)"
-                            value={room.stairConfig?.treadDepth ?? 0.28}
-                            min={0.2} max={0.4} step={0.01}
-                            onChange={(val) => {
-                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
-                                onUpdate({ stairConfig: { ...st, treadDepth: val } });
-                            }}
-                        />
-                        <EditField
-                            label="Ancho de paso (m)"
-                            value={room.stairConfig?.stairWidth ?? 1.2}
-                            min={0.6} max={5} step={0.1}
-                            onChange={(val) => {
-                                const st = room.stairConfig ?? { normativeUse: 'generic', orientation: 'north', riserHeight: 0.175, treadDepth: 0.28, stairWidth: 1.2, flights: [] };
-                                onUpdate({ stairConfig: { ...st, stairWidth: val } });
-                            }}
-                        />
-                    </div>
+                    <StairConfigPanel
+                        room={room}
+                        onUpdate={onUpdate}
+                    />
                 )}
 
                 <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
@@ -442,6 +391,202 @@ const RoomProps: React.FC<{
 
                 <PropField label="ID" value={room.id.slice(0, 12)} />
             </SectionWrapper>
+        </div>
+    );
+};
+
+const DEFAULT_STAIR: StairConfig = {
+    normativeUse: 'generic',
+    orientation: 'north',
+    riserHeight: 0.175,
+    treadDepth: 0.28,
+    stairWidth: 1.2,
+    stepCount: 17,
+    flights: [],
+};
+
+const DIRECTION_LABELS: Record<StairFlight['direction'], string> = {
+    north: 'Norte ↑',
+    south: 'Sur ↓',
+    east: 'Este →',
+    west: 'Oeste ←',
+};
+
+const StairConfigPanel: React.FC<{
+    room: Room;
+    onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
+}> = ({ room, onUpdate }) => {
+    const st = room.stairConfig ?? DEFAULT_STAIR;
+
+    const updateSt = (patch: Partial<StairConfig>) =>
+        onUpdate({ stairConfig: { ...st, ...patch } });
+
+    const updateFlight = (index: number, patch: Partial<StairFlight>) => {
+        const flights = st.flights.map((f, i) =>
+            i === index ? { ...f, ...patch } : f,
+        );
+        updateSt({ flights });
+    };
+
+    const addFlight = () => {
+        const newFlight: StairFlight = {
+            id: `flight-${Date.now()}`,
+            stepCount: 8,
+            direction: st.orientation,
+            hasLanding: true,
+            landingDepth: 1.2,
+        };
+        updateSt({ flights: [...st.flights, newFlight] });
+    };
+
+    const removeFlight = (index: number) => {
+        updateSt({ flights: st.flights.filter((_, i) => i !== index) });
+    };
+
+    const totalSteps = st.flights.length > 0
+        ? st.flights.reduce((sum, f) => sum + f.stepCount, 0)
+        : st.stepCount;
+    const totalHeight = (totalSteps * st.riserHeight).toFixed(2);
+
+    return (
+        <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
+            <p className="mb-1.5 text-[10px] font-semibold text-orange-400">
+                Configuración de Escalera
+            </p>
+
+            <SelectField
+                label="Uso Normativo"
+                value={st.normativeUse}
+                options={[
+                    { value: 'education', label: 'A.040 (Educación)' },
+                    { value: 'housing', label: 'A.010 (Vivienda)' },
+                    { value: 'generic', label: 'Libre' },
+                ]}
+                onChange={(val) => updateSt({ normativeUse: val as StairConfig['normativeUse'] })}
+            />
+            <SelectField
+                label="Orientación"
+                value={st.orientation}
+                options={[
+                    { value: 'north', label: 'Norte ↑' },
+                    { value: 'south', label: 'Sur ↓' },
+                    { value: 'east', label: 'Este →' },
+                    { value: 'west', label: 'Oeste ←' },
+                ]}
+                onChange={(val) => updateSt({ orientation: val as StairConfig['orientation'] })}
+            />
+            <EditField
+                label="Contrahuella (m)"
+                value={st.riserHeight}
+                min={0.1} max={0.25} step={0.005}
+                onChange={(val) => updateSt({ riserHeight: val })}
+            />
+            <EditField
+                label="Huella (m)"
+                value={st.treadDepth}
+                min={0.2} max={0.4} step={0.01}
+                onChange={(val) => updateSt({ treadDepth: val })}
+            />
+            <EditField
+                label="Ancho paso (m)"
+                value={st.stairWidth}
+                min={0.6} max={5} step={0.1}
+                onChange={(val) => updateSt({ stairWidth: val })}
+            />
+
+            {st.flights.length === 0 && (
+                <EditField
+                    label="Cant. escalones"
+                    value={st.stepCount}
+                    min={2} max={80} step={1}
+                    onChange={(val) => updateSt({ stepCount: val })}
+                />
+            )}
+
+            <PropField
+                label="Altura total"
+                value={`${totalHeight} m (${totalSteps} esc.)`}
+            />
+
+            {/* ── Tramos ─────────────────────────────────────────── */}
+            <div className="mt-2 border-t border-orange-900/40 pt-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-orange-300">
+                        Tramos ({st.flights.length})
+                    </p>
+                    <button
+                        type="button"
+                        onClick={addFlight}
+                        className="flex items-center gap-1 rounded bg-orange-700/60 px-1.5 py-0.5 text-[9px] text-orange-200 hover:bg-orange-600/60"
+                    >
+                        <Plus size={9} />
+                        Agregar tramo
+                    </button>
+                </div>
+
+                {st.flights.map((flight, idx) => (
+                    <div
+                        key={flight.id}
+                        className="mb-2 rounded border border-orange-900/50 bg-orange-950/20 p-1.5 space-y-1"
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-semibold text-orange-300">
+                                Tramo {idx + 1}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => removeFlight(idx)}
+                                className="text-red-400 hover:text-red-300"
+                            >
+                                <Trash2 size={9} />
+                            </button>
+                        </div>
+                        <EditField
+                            label="Escalones"
+                            value={flight.stepCount}
+                            min={1} max={40} step={1}
+                            onChange={(val) => updateFlight(idx, { stepCount: val })}
+                        />
+                        <SelectField
+                            label="Dirección"
+                            value={flight.direction}
+                            options={Object.entries(DIRECTION_LABELS).map(([v, l]) => ({
+                                value: v,
+                                label: l,
+                            }))}
+                            onChange={(val) => updateFlight(idx, { direction: val as StairFlight['direction'] })}
+                        />
+                        <div className="flex items-center justify-between">
+                            <span className="text-[9px] text-gray-400">Descanso</span>
+                            <button
+                                type="button"
+                                onClick={() => updateFlight(idx, { hasLanding: !flight.hasLanding })}
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                                    flight.hasLanding
+                                        ? 'bg-amber-700/60 text-amber-200'
+                                        : 'bg-gray-700/60 text-gray-400'
+                                }`}
+                            >
+                                {flight.hasLanding ? 'Sí' : 'No'}
+                            </button>
+                        </div>
+                        {flight.hasLanding && (
+                            <EditField
+                                label="Prof. descanso (m)"
+                                value={flight.landingDepth}
+                                min={0.6} max={3} step={0.1}
+                                onChange={(val) => updateFlight(idx, { landingDepth: val })}
+                            />
+                        )}
+                    </div>
+                ))}
+
+                {st.flights.length === 0 && (
+                    <p className="text-[8px] text-gray-500 px-0.5">
+                        Sin tramos: escalera directa con {st.stepCount} escalones en dirección {DIRECTION_LABELS[st.orientation]}.
+                    </p>
+                )}
+            </div>
         </div>
     );
 };
@@ -657,6 +802,16 @@ const WallProps: React.FC<{
                 </>
             )}
             <SelectField
+                label="Tipo de muro"
+                value={wall.wallType ?? 'interior'}
+                options={[
+                    { value: 'interior', label: 'Interior' },
+                    { value: 'exterior', label: 'Exterior' },
+                    { value: 'cerco', label: 'Cerco perimétrico' },
+                ]}
+                onChange={(val) => onUpdate({ wallType: val as 'interior' | 'exterior' | 'cerco' })}
+            />
+            <SelectField
                 label="Material"
                 value={wall.material ?? 'brick'}
                 options={[
@@ -690,6 +845,26 @@ const WallProps: React.FC<{
                 max={20}
                 step={0.1}
                 onChange={(value) => onUpdate({ height: value })}
+            />
+            {wall.wallType === 'cerco' && (
+                <EditField
+                    label="Esp. postes (m)"
+                    value={wall.postSpacing ?? 3.0}
+                    min={0.5}
+                    max={10}
+                    step={0.25}
+                    onChange={(value) => onUpdate({ postSpacing: value })}
+                />
+            )}
+            <PropField
+                label="Orientación"
+                value={(() => {
+                    const dx = end.x - start.x;
+                    const dy = end.y - start.y;
+                    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
+                    const norm = ((deg % 180) + 180) % 180;
+                    return `${norm.toFixed(1)}°`;
+                })()}
             />
             <PropField
                 label="Espesor min."

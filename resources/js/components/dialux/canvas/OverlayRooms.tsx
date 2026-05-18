@@ -38,8 +38,18 @@ export const OverlayRooms = memo(function OverlayRooms({
         const isSelected = selectedId === room.id;
 
         if (room.roomType === 'stair') {
-            // ── Escalera: patrón de líneas paralelas diagonales + borde naranja ──
-            const patId = `hatch-stair-${room.id}`;
+            // ── Escalera: líneas perpendiculares a la dirección de ascenso ──────
+            const patId   = `hatch-stair-${room.id}`;
+            const clipId  = `clip-stair-${room.id}`;
+            const orient  = room.stairConfig?.orientation ?? 'north';
+            const isHorizontalAscent = orient === 'east' || orient === 'west';
+            // Líneas de escalón son perpendiculares al movimiento:
+            //   N/S → líneas horizontales   E/O → líneas verticales
+            const stepPx  = Math.max(8, 11 * zoom);
+            const arrowMap: Record<string, string> = {
+                north: '↑', south: '↓', east: '→', west: '←',
+            };
+
             return (
                 <g
                     key={room.id}
@@ -47,24 +57,39 @@ export const OverlayRooms = memo(function OverlayRooms({
                     onClick={() => onSelect(room.id)}
                 >
                     <defs>
+                        <clipPath id={clipId}>
+                            <polygon points={pts} />
+                        </clipPath>
                         <pattern
                             id={patId}
                             patternUnits="userSpaceOnUse"
-                            width={12} height={12}
+                            width={isHorizontalAscent ? stepPx : 200}
+                            height={isHorizontalAscent ? 200 : stepPx}
                         >
-                            {/* Líneas paralelas diagonal — simula proyección de escalones */}
-                            <line x1={0} y1={12} x2={12} y2={0}
-                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
-                            <line x1={-6} y1={12} x2={6} y2={0}
-                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
-                            <line x1={6} y1={12} x2={18} y2={0}
-                                stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.6} />
+                            {isHorizontalAscent
+                                ? /* Líneas verticales — ascenso E/O */
+                                  <line x1={0} y1={0} x2={0} y2={200}
+                                      stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.65} />
+                                : /* Líneas horizontales — ascenso N/S */
+                                  <line x1={0} y1={0} x2={200} y2={0}
+                                      stroke="#fb923c" strokeWidth={1.2} strokeOpacity={0.65} />
+                            }
                         </pattern>
                     </defs>
+
                     {/* Relleno base */}
-                    <polygon points={pts} fill="#7c2d12" fillOpacity={0.2} />
-                    {/* Patrón encima */}
-                    <polygon points={pts} fill={`url(#${patId})`} fillOpacity={1} />
+                    <polygon points={pts} fill="#7c2d12" fillOpacity={0.22} />
+
+                    {/* Patrón de escalones recortado al polígono */}
+                    <rect
+                        x={Math.min(...screenVertices.map(p => p.x)) - 5}
+                        y={Math.min(...screenVertices.map(p => p.y)) - 5}
+                        width={Math.max(...screenVertices.map(p => p.x)) - Math.min(...screenVertices.map(p => p.x)) + 10}
+                        height={Math.max(...screenVertices.map(p => p.y)) - Math.min(...screenVertices.map(p => p.y)) + 10}
+                        fill={`url(#${patId})`}
+                        clipPath={`url(#${clipId})`}
+                    />
+
                     {/* Contorno */}
                     <polygon
                         points={pts}
@@ -83,14 +108,30 @@ export const OverlayRooms = memo(function OverlayRooms({
                             opacity={0.3}
                         />
                     )}
+
+                    {/* Flecha de dirección de ascenso */}
+                    <text
+                        x={safeNum(ctr.x)}
+                        y={safeNum(ctr.y - Math.max(7, 9 * zoom))}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#fdba74"
+                        fontSize={safeNum(Math.max(10, 14 * zoom))}
+                        fontFamily="sans-serif"
+                        fontWeight={700}
+                        pointerEvents="none"
+                    >
+                        {arrowMap[orient]}
+                    </text>
+
                     {/* Etiqueta */}
                     <text
                         x={safeNum(ctr.x)}
-                        y={safeNum(ctr.y)}
+                        y={safeNum(ctr.y + Math.max(6, 8 * zoom))}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         fill={isSelected ? '#fdba74' : '#fb923c'}
-                        fontSize={safeNum(Math.max(8, 10 * zoom))}
+                        fontSize={safeNum(Math.max(7, 9 * zoom))}
                         fontFamily="sans-serif"
                         fontWeight={600}
                         pointerEvents="none"
