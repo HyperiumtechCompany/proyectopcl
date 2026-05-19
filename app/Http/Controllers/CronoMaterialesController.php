@@ -37,6 +37,7 @@ class CronoMaterialesController extends Controller
                 'resumen'      => $this->resumenVacio(),
                 'estaGuardado' => false,
                 'sinGantt'     => true,
+                'projectData'  => $costoProject,
             ]);
         }
 
@@ -65,6 +66,7 @@ class CronoMaterialesController extends Controller
                 'resumen'      => $this->resumenVacio(),
                 'estaGuardado' => false,
                 'sinGantt'     => false,
+                'projectData'  => $costoProject,
             ]);
         }
 
@@ -453,6 +455,7 @@ class CronoMaterialesController extends Controller
             'resumen'           => $resumen,
             'estaGuardado'      => $estaGuardado,
             'sinGantt'          => false,
+            'projectData'       => $costoProject,
         ]);
     }
 

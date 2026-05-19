@@ -1,16 +1,13 @@
-import React, { useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Info, TrendingUp, BarChart3, Wallet, Activity } from 'lucide-react';
+import React from 'react';
+import { AlertTriangle, CheckCircle2, Info, TrendingUp, BarChart3, Activity, Calendar, Zap } from 'lucide-react';
 import { ResumenProyecto } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
 interface CurvaSPoint {
-    mes:        string;
-    key:        string;
-    mensual:    number;
-    acumulado:  number;
-    porcentaje: number;
+    mes:         string;
+    key:         string;
+    mensual:     number;
+    acumulado:   number;
+    porcentaje:  number;
 }
 
 interface Props {
@@ -18,381 +15,229 @@ interface Props {
     sinGantt:     boolean;
     curvaSData:   CurvaSPoint[];
     mesPicoKey:   string;
-    resumen?:     ResumenProyecto;
+    resumen?:     ResumenProyecto;  
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILIDADES
-// ─────────────────────────────────────────────────────────────────────────────
 const fmt = (v: number) =>
     new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(v);
 
-const fmtK = (v: number): string => {
-    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}k`;
-    return v.toFixed(0);
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRÁFICO SVG — HISTOGRAMA + CURVA S
-// ─────────────────────────────────────────────────────────────────────────────
-const CurvaSChart: React.FC<{ data: CurvaSPoint[]; mesPicoKey: string }> = ({ data, mesPicoKey }) => {
-    const W = 1000, H = 310;
-    const ML = 56, MR = 30, MT = 40, MB = 48;
-    const CW  = W - ML - MR;
-    const CH  = H - MT - MB;
-
-    const total = data[data.length - 1]?.acumulado ?? 1;
-    const barW  = CW / data.length;
-    const pad   = Math.max(1.5, barW * 0.12);
-
-    const toY = (pct: number) => MT + CH - (pct / 100) * CH;
-    const toX = (i: number)   => ML + (i + 0.5) * barW;
-
-    // Puntos de la curva S
-    const pts = data.map((d, i) => ({ x: toX(i), y: toY(d.porcentaje), pct: d.porcentaje }));
-
-    // Path bezier suave
-    const curvePath = pts.reduce((acc, pt, i) => {
-        if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-        const prev = pts[i - 1];
-        const cpx  = ((prev.x + pt.x) / 2).toFixed(1);
-        return `${acc} C ${cpx} ${prev.y.toFixed(1)}, ${cpx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-    }, '');
-
-    // Área relleno bajo la curva
-    const last  = pts[pts.length - 1];
-    const first = pts[0];
-    const areaPath = `${curvePath} L ${last.x.toFixed(1)} ${(MT + CH).toFixed(1)} L ${first.x.toFixed(1)} ${(MT + CH).toFixed(1)} Z`;
-
-    // ¿cada cuántos meses mostrar etiqueta?
-    const labelStep = Math.max(1, Math.ceil(data.length / 9));
-
-    return (
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-            <defs>
-                <linearGradient id="rcBarBlue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#60a5fa" />
-                    <stop offset="100%" stopColor="#1e40af" />
-                </linearGradient>
-                <linearGradient id="rcBarAmber" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#fbbf24" />
-                    <stop offset="100%" stopColor="#b45309" />
-                </linearGradient>
-                <linearGradient id="rcArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#ea580c" stopOpacity="0.16" />
-                    <stop offset="100%" stopColor="#ea580c" stopOpacity="0.01" />
-                </linearGradient>
-            </defs>
-
-            {/* Fondo área gráfico */}
-            <rect x={ML} y={MT} width={CW} height={CH} fill="#f8fafc" rx="3" />
-
-            {/* Grillas horizontales */}
-            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(pct => {
-                const y      = toY(pct);
-                const isMaj  = pct % 20 === 0;
-                return (
-                    <g key={pct}>
-                        <line x1={ML} y1={y} x2={W - MR} y2={y}
-                              stroke={isMaj ? '#cbd5e1' : '#e2e8f0'}
-                              strokeWidth={isMaj ? 0.9 : 0.45}
-                              strokeDasharray={pct === 0 || pct === 100 ? '0' : isMaj ? '5 4' : '2 4'} />
-                        {isMaj && (
-                            <text x={ML - 7} y={y + 3.5} textAnchor="end"
-                                  fontSize="10" fill="#94a3b8"
-                                  fontFamily="'Courier New', monospace" fontWeight="700">
-                                {pct}%
-                            </text>
-                        )}
-                    </g>
-                );
-            })}
-
-            {/* Línea 100% en verde */}
-            <line x1={ML} y1={toY(100)} x2={W - MR} y2={toY(100)}
-                  stroke="#10b981" strokeWidth="1.2" strokeDasharray="6 3" opacity="0.6" />
-            <rect x={W - MR - 30} y={toY(100) - 10} width={30} height={13}
-                  fill="#f0fdf4" stroke="#6ee7b7" strokeWidth="0.8" rx="2" />
-            <text x={W - MR - 15} y={toY(100) - 0.5}
-                  textAnchor="middle" fontSize="8" fill="#059669" fontWeight="800">100%</text>
-
-            {/* BARRAS */}
-            {data.map((d, i) => {
-                const barPct = total > 0 ? (d.mensual / total) * 100 : 0;
-                const bH     = Math.max((barPct / 100) * CH, 2);
-                const bX     = ML + i * barW + pad;
-                const bW     = barW - pad * 2;
-                const bY     = MT + CH - bH;
-                const isPico = d.key === mesPicoKey;
-
-                return (
-                    <g key={`b-${d.key}`}>
-                        {/* Sombra */}
-                        <rect x={bX + 1.5} y={bY + 3} width={bW} height={bH}
-                              fill={isPico ? '#78350f' : '#1e3a8a'} opacity="0.1" rx="2" />
-                        {/* Barra */}
-                        <rect x={bX} y={bY} width={bW} height={bH}
-                              fill={isPico ? 'url(#rcBarAmber)' : 'url(#rcBarBlue)'} rx="2" />
-                        {/* Brillo */}
-                        <rect x={bX + 1} y={bY} width={bW - 2} height={Math.min(4, bH * 0.3)}
-                              fill="white" opacity="0.22" rx="1" />
-                        {/* % mensual encima (si hay espacio) */}
-                        {bH > 22 && (
-                            <text x={bX + bW / 2} y={bY - 5}
-                                  textAnchor="middle" fontSize="8"
-                                  fill={isPico ? '#78350f' : '#1e3a8a'} fontWeight="800"
-                                  fontFamily="'Courier New', monospace">
-                                {barPct.toFixed(1)}%
-                            </text>
-                        )}
-                        {/* Valor dentro */}
-                        {bH > 40 && (
-                            <text x={bX + bW / 2} y={bY + bH / 2 + 4}
-                                  textAnchor="middle" fontSize="7.5"
-                                  fill="white" fontWeight="700" opacity="0.85">
-                                {fmtK(d.mensual)}
-                            </text>
-                        )}
-                        {/* Etiqueta eje X — mes */}
-                        <text x={toX(i)} y={MT + CH + 14}
-                              textAnchor="middle" fontSize="9"
-                              fill={isPico ? '#b45309' : '#475569'}
-                              fontWeight={isPico ? '800' : '600'}
-                              fontFamily="system-ui, sans-serif">
-                            {d.mes.split(' ')[0]}
-                        </text>
-                        {/* Año */}
-                        <text x={toX(i)} y={MT + CH + 27}
-                              textAnchor="middle" fontSize="7.5"
-                              fill="#94a3b8" fontWeight="600">
-                            {d.mes.split(' ')[1] ?? ''}
-                        </text>
-                    </g>
-                );
-            })}
-
-            {/* Área bajo la curva */}
-            <path d={areaPath} fill="url(#rcArea)" />
-
-            {/* Trazo blanco de fondo (halo) */}
-            <path d={curvePath} fill="none"
-                  stroke="white" strokeWidth="5"
-                  strokeLinecap="round" strokeLinejoin="round" opacity="0.45" />
-            {/* Curva principal */}
-            <path d={curvePath} fill="none"
-                  stroke="#ea580c" strokeWidth="2.8"
-                  strokeLinecap="round" strokeLinejoin="round" />
-
-            {/* NODOS + ETIQUETAS DE % ACUMULADO */}
-            {pts.map((pt, i) => {
-                const showLabel = (i % labelStep === 0) || i === data.length - 1 || data[i].key === mesPicoKey;
-                const isPico    = data[i].key === mesPicoKey;
-                const pct       = pt.pct;
-                const labelUp   = pt.y > MT + 24;
-                const ly        = labelUp ? pt.y - 21 : pt.y + 18;
-
-                return (
-                    <g key={`n-${i}`}>
-                        {/* Halo del nodo */}
-                        {showLabel && (
-                            <circle cx={pt.x} cy={pt.y} r={7.5}
-                                fill={isPico ? '#fef3c7' : '#fff7ed'}
-                                stroke={isPico ? '#d97706' : '#ea580c'}
-                                strokeWidth="1.2" opacity="0.55" />
-                        )}
-                        {/* Nodo */}
-                        <circle cx={pt.x} cy={pt.y}
-                            r={showLabel ? 4.5 : 2.2}
-                            fill="white"
-                            stroke={isPico ? '#d97706' : '#ea580c'}
-                            strokeWidth={showLabel ? 2.2 : 1.4} />
-
-                        {/* Etiqueta */}
-                        {showLabel && (
-                            <g>
-                                <line x1={pt.x} y1={labelUp ? pt.y - 5 : pt.y + 5}
-                                      x2={pt.x} y2={labelUp ? ly + 11 : ly - 1}
-                                      stroke={isPico ? '#d97706' : '#ea580c'}
-                                      strokeWidth="1" strokeDasharray="2 2" opacity="0.55" />
-                                <rect x={pt.x - 17} y={ly - 10} width={34} height={13}
-                                      fill={isPico ? '#fffbeb' : '#fff7ed'}
-                                      stroke={isPico ? '#fcd34d' : '#fed7aa'}
-                                      strokeWidth="0.8" rx="3" opacity="0.96" />
-                                <text x={pt.x} y={ly}
-                                      textAnchor="middle" fontSize="8.5"
-                                      fill={isPico ? '#92400e' : '#c2410c'}
-                                      fontWeight="800"
-                                      fontFamily="'Courier New', monospace">
-                                    {pct.toFixed(1)}%
-                                </text>
-                            </g>
-                        )}
-                    </g>
-                );
-            })}
-
-            {/* EJES */}
-            <line x1={ML} y1={MT} x2={ML} y2={MT + CH} stroke="#64748b" strokeWidth="1.5" />
-            <line x1={ML} y1={MT + CH} x2={W - MR} y2={MT + CH} stroke="#64748b" strokeWidth="1.5" />
-
-            {/* Título eje Y */}
-            <text x={13} y={MT + CH / 2} textAnchor="middle"
-                  fontSize="9.5" fill="#475569" fontWeight="800"
-                  fontFamily="system-ui, sans-serif" letterSpacing="0.06em"
-                  transform={`rotate(-90, 13, ${MT + CH / 2})`}>
-                AVANCE ACUMULADO (%)
-            </text>
-        </svg>
-    );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const ResumenCards: React.FC<Props> = ({ estaGuardado, sinGantt, curvaSData, mesPicoKey, resumen }) => {
-    const totalAcumulado = curvaSData[curvaSData.length - 1]?.acumulado ?? 0;
-    const mesPico        = curvaSData.find(d => d.key === mesPicoKey);
-
-    const hitos = useMemo(() =>
-        [25, 50, 75, 100].map(target => {
-            const p = curvaSData.find(d => d.porcentaje >= target);
-            return p ? { mes: p.mes, pct: target, key: p.key } : null;
-        }).filter(Boolean) as { mes: string; pct: number; key: string }[]
-    , [curvaSData]);
-
-    const banner = sinGantt
-        ? { cls: 'bg-amber-950  border-amber-700  text-amber-100',   bar: 'bg-amber-500',   icon: <AlertTriangle className="w-4 h-4 text-amber-400  flex-shrink-0" />, title: 'Sin datos de Cronograma General (Gantt)',           sub: 'Complete el Cronograma General con fechas de inicio y fin antes de calcular materiales.' }
-        : estaGuardado
-        ? { cls: 'bg-emerald-950 border-emerald-700 text-emerald-100', bar: 'bg-emerald-500', icon: <CheckCircle2  className="w-4 h-4 text-emerald-400 flex-shrink-0" />, title: 'Cronograma sincronizado con la base de datos',     sub: 'Datos en cronograma_materiales. Use "Limpiar" para recalcular desde el Gantt y el APU.' }
-        : { cls: 'bg-blue-950   border-blue-700   text-blue-100',     bar: 'bg-blue-500',    icon: <Info           className="w-4 h-4 text-blue-400   flex-shrink-0" />, title: 'Vista dinámica — calculado en tiempo real desde APU', sub: 'Los insumos se calculan desde el APU y el Gantt. Guarde para persistirlos en la BD.' };
+    // Cálculos de control de ingeniería
+    const totalInsumos   = curvaSData[curvaSData.length - 1]?.acumulado ?? 0;
+    const maxMensual     = Math.max(...curvaSData.map(d => d.mensual), 1);
+    
+    // Simulación de avance acumulado planificado vs real para el cuadro de variación formal
+    const ultimoPuntoConDatos = curvaSData.filter(d => d.mensual > 0).pop();
+    const porcentajePlanificado = 100; // Meta final del proyecto
+    const porcentajeActual      = ultimoPuntoConDatos?.porcentaje ?? 0;
+    const variacionPorcentual   = porcentajePlanificado - porcentajeActual;
 
     return (
-        <div className="flex flex-col gap-3 mb-4">
-
-            {/* BANNER */}
-            <div className={`flex items-start gap-0 rounded-xl border overflow-hidden ${banner.cls}`}>
-                <div className={`w-1 self-stretch flex-shrink-0 ${banner.bar}`} />
-                <div className="flex items-start gap-3 px-4 py-3">
-                    <div className="mt-0.5">{banner.icon}</div>
-                    <div>
-                        <p className="text-[11px] font-black uppercase tracking-widest">{banner.title}</p>
-                        <p className="text-[10px] opacity-60 mt-0.5 leading-relaxed">{banner.sub}</p>
-                    </div>
+        <div className="space-y-6 mb-6">
+            
+            {/* BANNER DE ESTADO TÉCNICO */}
+            <div className={`flex items-center gap-4 p-4 rounded-xl border shadow-sm transition-all duration-300 ${
+                sinGantt
+                    ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                    : estaGuardado
+                    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-xl'
+                    : 'bg-blue-50/70 border-blue-200 text-blue-900'
+            }`}>
+                <div className="flex-shrink-0">
+                    {sinGantt ? (
+                        <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500"><AlertTriangle className="w-5 h-5" /></div>
+                    ) : estaGuardado ? (
+                        <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 animate-pulse"><CheckCircle2 className="w-5 h-5" /></div>
+                    ) : (
+                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500"><Info className="w-5 h-5" /></div>
+                    )}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black uppercase tracking-wider">
+                        {sinGantt
+                            ? 'ESTADO: Base de datos desvinculada del Cronograma General'
+                            : estaGuardado
+                            ? 'ESTADO: Matriz de Materiales Sincronizada y Persistida (Producción)'
+                            : 'ESTADO: Simulación Dinámica en Memoria Volátil'}
+                    </p>
+                    <p className="text-[11px] opacity-75 mt-0.5 font-medium truncate">
+                        {sinGantt
+                            ? 'Requiere asignación de dependencias temporales en el módulo Gantt principal.'
+                            : estaGuardado
+                            ? 'Bloque de costos de insumos conciliado con las tablas dinámicas de Laragon/MySQL.'
+                            : 'Cálculo algorítmico en tiempo real desde el APU. Cambios no escritos en el backend.'}
+                    </p>
                 </div>
             </div>
 
-            {/* KPI CARDS */}
             {curvaSData.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <KpiCard label="Total Insumos"     value={fmt(totalAcumulado)}
-                        sub="presupuesto directo"
-                        icon={<Wallet   className="w-5 h-5 text-blue-600"   />} ring="blue-200"   iconBg="bg-blue-50"   val="text-slate-800" />
-                    <KpiCard label="Mes Pico"           value={mesPico?.mes ?? mesPicoKey ?? '—'}
-                        sub={mesPico ? fmt(mesPico.mensual) : 'sin datos'}
-                        icon={<BarChart3 className="w-5 h-5 text-amber-500" />} ring="amber-200"  iconBg="bg-amber-50"  val="text-amber-700" />
-                    <KpiCard label="Duración Proyecto"  value={`${curvaSData.length} meses`}
-                        sub={curvaSData.length > 0 ? `${curvaSData[0].mes} → ${curvaSData[curvaSData.length-1].mes}` : ''}
-                        icon={<Activity  className="w-5 h-5 text-violet-600"/>} ring="violet-200" iconBg="bg-violet-50" val="text-violet-700" />
-                    <KpiCard label="Promedio Mensual"   value={curvaSData.length > 0 ? fmt(totalAcumulado / curvaSData.length) : '—'}
-                        sub="inversión promedio"
-                        icon={<TrendingUp className="w-5 h-5 text-emerald-600"/>} ring="emerald-200" iconBg="bg-emerald-50" val="text-emerald-700" />
-                </div>
-            )}
-
-            {/* PANEL CURVA S */}
-            {curvaSData.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-800 to-slate-700 border-b border-slate-700">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-white/10 rounded-lg">
-                                <TrendingUp className="w-4 h-4 text-white" />
+                <>
+                    {/* PANEL SUPERIOR: CUADRO DE VARIACIÓN DE ALTA INGENIERÍA */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        
+                        {/* Card 1: Costo Presupuestado */}
+                        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Presupuesto Insumos</span>
+                                <span className="text-xl font-black text-slate-800 tracking-tight">{fmt(totalInsumos)}</span>
                             </div>
-                            <div>
-                                <h3 className="text-[11px] font-black text-white uppercase tracking-widest">
-                                    Curva S — Distribución Financiera Mensual de Insumos
-                                </h3>
-                                <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                                    Histograma de consumo mensual + avance acumulado · Ingeniería Civil
-                                </p>
-                            </div>
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-600"><Activity className="w-5 h-5" /></div>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-black bg-white/10 text-white rounded-lg px-3 py-1.5 border border-white/20">
-                            <span className="text-slate-300">Total:</span>
-                            <span className="text-emerald-300">{fmt(totalAcumulado)}</span>
+
+                        {/* Card 2: Mes Crítico */}
+                        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Pico de Desembolso</span>
+                                <span className="text-xl font-black text-blue-600 tracking-tight">{mesPicoKey || 'N/A'}</span>
+                            </div>
+                            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl text-blue-600"><Calendar className="w-5 h-5" /></div>
+                        </div>
+
+                        {/* Card 3: Cuadro Matemático de Variación Estilo Excel Patrón */}
+                        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md text-white grid grid-cols-3 gap-2 items-center">
+                            <div className="text-center border-r border-slate-800">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Avance Planificado</span>
+                                <span className="text-lg font-black text-amber-400">{porcentajePlanificado.toFixed(2)}%</span>
+                            </div>
+                            <div className="text-center border-r border-slate-800">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Avance Real Calc.</span>
+                                <span className="text-lg font-black text-emerald-400">{porcentajeActual.toFixed(2)}%</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Desviación / Brecha</span>
+                                <span className={`text-lg font-black ${variacionPorcentual === 0 ? 'text-slate-300' : 'text-rose-400'}`}>
+                                    {variacionPorcentual.toFixed(2)}%
+                                </span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Gráfico */}
-                    <div className="px-3 pt-5 pb-1">
-                        <CurvaSChart data={curvaSData} mesPicoKey={mesPicoKey} />
-                    </div>
-
-                    {/* Leyenda + Hitos */}
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3 border-t border-slate-100 bg-slate-50/80">
-
-                        {/* Series */}
-                        <div className="flex items-center gap-4 text-[9px] font-bold text-slate-500">
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-5 h-3 rounded" style={{ background: 'linear-gradient(to top, #1e40af, #60a5fa)' }} />
-                                Consumo Mensual
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-5 h-3 rounded" style={{ background: 'linear-gradient(to top, #b45309, #fbbf24)' }} />
-                                Mes Pico
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-5 h-0.5 rounded" style={{ background: '#ea580c' }} />
-                                <span className="w-2 h-2 rounded-full bg-white border-2 border-orange-500 -ml-1" />
-                                Curva S Acumulada
-                            </span>
+                    {/* GRAN GRÁFICO AVANZADO: HISTOGRAMA INTEGRADO CON CURVA S */}
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                        <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-pink-500" />
+                                <div>
+                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                                        Curva S de Avance Físico-Financiero Acumulado
+                                    </h3>
+                                    <p className="text-[10px] text-slate-400 font-medium">Línea de base técnica y distribución analítica por periodo</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500">
+                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-blue-600 rounded-sm" /> Inversión Mensual</span>
+                                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-amber-500 rounded-sm" /> Hito Mayor Consumo</span>
+                                <span className="flex items-center gap-1.5"><span className="w-3.5 h-0.5 bg-pink-500 inline-block relative after:w-1.5 after:h-1.5 after:bg-white after:border-2 after:border-pink-500 after:rounded-full after:absolute after:-top-[3px] after:left-1" /> Trayectoria Curva S</span>
+                            </div>
                         </div>
 
-                        {/* Hitos de avance */}
-                        {hitos.length > 0 && (
-                            <div className="flex items-center gap-2 ml-auto flex-wrap">
-                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Hitos:</span>
-                                {hitos.map(h => (
-                                    <div key={h.key}
-                                         className="flex items-center gap-1 bg-white border border-orange-100 rounded-lg px-2 py-1 shadow-sm">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                                        <span className="text-[9px] font-black text-orange-700">{h.pct}%</span>
-                                        <span className="text-[9px] text-slate-400 font-semibold">{h.mes}</span>
-                                    </div>
-                                ))}
+                        {/* Área del Lienzo del Gráfico */}
+                        <div className="relative h-72 w-full mt-4 flex select-none">
+                            
+                            {/* EJE Y IZQUIERDO: Escala Financiera (Montos en Soles) */}
+                            <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between text-[9px] font-bold text-slate-400 text-right pr-2 border-r border-slate-100 z-10 bg-white/90">
+                                <span>{fmt(maxMensual)}</span>
+                                <span>{fmt(maxMensual * 0.75)}</span>
+                                <span>{fmt(maxMensual * 0.5)}</span>
+                                <span>{fmt(maxMensual * 0.25)}</span>
+                                <span>S/. 0</span>
                             </div>
-                        )}
+
+                            {/* EJE Y DERECHO: Escala Porcentual (0% - 100% de la Curva S) */}
+                            <div className="absolute right-0 top-0 bottom-0 w-12 flex flex-col justify-between text-[9px] font-bold text-slate-400 text-left pl-2 border-l border-slate-100 z-10 bg-white/90">
+                                <span>100.00%</span>
+                                <span>75.00%</span>
+                                <span>50.00%</span>
+                                <span>25.00%</span>
+                                <span>0.00%</span>
+                            </div>
+
+                            {/* CUADRÍCULA DE CONTROL TÉCNICO (Grid Lines de Fondo) */}
+                            <div className="absolute inset-x-12 inset-y-0 flex flex-col justify-between pointer-events-none">
+                                <div className="w-full border-t stroke-dasharray border-slate-100" />
+                                <div className="w-full border-t stroke-dasharray border-slate-100" />
+                                <div className="w-full border-t stroke-dasharray border-slate-100" />
+                                <div className="w-full border-t stroke-dasharray border-slate-100" />
+                                <div className="w-full border-b border-slate-200" />
+                            </div>
+
+                            {/* CONTENEDOR DE BARRAS Y ESFERAS DE CÁLCULO */}
+                            <div className="flex-1 mx-12 h-full flex items-end gap-3 px-2 relative z-0">
+                                {curvaSData.map((d) => {
+                                    const altoBarra = (d.mensual / maxMensual) * 100;
+                                    const isPico = d.key === mesPicoKey;
+
+                                    return (
+                                        <div key={d.key} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                                            
+                                            {/* TOOLTIP EMPRESARIAL FLOTANTE */}
+                                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-slate-950 text-white text-[10px] rounded-xl p-3 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 shadow-2xl border border-slate-800 w-44">
+                                                <div className="font-black text-slate-300 mb-1.5 border-b border-slate-800 pb-1.5 text-center flex items-center justify-center gap-1">
+                                                    <Zap className="w-3 h-3 text-amber-400" /> {d.mes}
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-400">Desembolso:</span>
+                                                        <span className="font-black text-blue-400">{fmt(d.mensual)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-400">Acumulado S:</span>
+                                                        <span className="font-black text-pink-400">{d.porcentaje.toFixed(2)}%</span>
+                                                    </div>
+                                                    <div className="flex justify-between pt-1 border-t border-slate-900 text-[9px]">
+                                                        <span className="text-slate-500">Monto Acum.:</span>
+                                                        <span className="font-bold text-slate-300">{fmt(d.acumulado)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* INTERSECCIÓN DE LA CURVA S (Nodo Matemático basado en Porcentaje Acumulado) */}
+                                            <div 
+                                                className="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-pink-500 shadow-md z-20 group-hover:bg-pink-500 group-hover:scale-125 transition-all duration-300"
+                                                style={{ bottom: `calc(${d.porcentaje}% - 5px)` }}
+                                            />
+
+                                            {/* HISTOGRAMA (Barra de consumo mensual) */}
+                                            <div className="w-full h-full flex items-end">
+                                                <div
+                                                    className={`w-full rounded-t transition-all duration-300 relative group-hover:opacity-90 ${
+                                                        isPico 
+                                                            ? 'bg-gradient-to-t from-amber-500 to-amber-400 shadow-lg shadow-amber-500/10' 
+                                                            : 'bg-gradient-to-t from-slate-200 to-slate-100 border-x border-t border-slate-300/40 group-hover:from-blue-600 group-hover:to-blue-500 group-hover:border-transparent'
+                                                    }`}
+                                                    style={{ height: `${Math.max(altoBarra, 3)}%` }}
+                                                >
+                                                    {/* Marcador estático superior de la barra */}
+                                                    <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-black text-slate-400 opacity-100 group-hover:text-blue-600 transition-colors whitespace-nowrap">
+                                                        {d.mensual > 0 ? `${(d.mensual / 1000).toFixed(0)}k` : ''}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* EJE X: Identificadores de los periodos */}
+                                            <span className="absolute -bottom-5 text-[9px] text-slate-500 font-black tracking-tighter truncate w-full text-center">
+                                                {d.mes.toUpperCase()}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* SUB-EJE INFERIOR: PORCENTAJES ESCRITOS COMPLETO (Estilo Reporte Técnico) */}
+                        <div className="mt-8 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                            {curvaSData.map(d => (
+                                <div key={`footer-${d.key}`} className="bg-slate-50/60 border border-slate-100 rounded-lg p-2 text-center">
+                                    <span className="text-[9px] font-bold text-slate-400 block uppercase">{d.mes}</span>
+                                    <span className="text-xs font-black text-slate-700 mt-0.5 block">{d.porcentaje.toFixed(1)}%</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                </>
             )}
         </div>
     );
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// KPI CARD AUXILIAR
-// ─────────────────────────────────────────────────────────────────────────────
-const KpiCard: React.FC<{
-    label:   string;
-    value:   string;
-    sub:     string;
-    icon:    React.ReactNode;
-    ring:    string;
-    iconBg:  string;
-    val:     string;
-}> = ({ label, value, sub, icon, ring, iconBg, val }) => (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center justify-between group hover:border-${ring} hover:shadow-md transition-all`}>
-        <div className="min-w-0">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-            <p className={`text-[15px] font-black leading-tight truncate ${val}`}>{value}</p>
-            <p className="text-[9px] text-slate-400 font-semibold mt-0.5 truncate">{sub}</p>
-        </div>
-        <div className={`p-2.5 rounded-lg ${iconBg} ml-3 flex-shrink-0 group-hover:scale-110 transition-transform`}>
-            {icon}
-        </div>
-    </div>
-);
 
 export default ResumenCards;

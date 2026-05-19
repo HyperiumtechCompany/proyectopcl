@@ -20,7 +20,9 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
     resumen,
     estaGuardado,
     sinGantt = false,
+    projectData,
 }) => {
+    console.log('📋 projectData en componente:', projectData);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(estaGuardado);
@@ -95,8 +97,8 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
 
     // ── EXPORTAR ──────────────────────────────────────────────────────────────
     const handleExportExcel = useCallback(() => {
-        exportarMaterialesExcel(todosMateriales, periodos, projectName || project, viewMode);
-    }, [todosMateriales, periodos, projectName, project, viewMode]);
+        exportarMaterialesExcel(todosMateriales, periodos, projectName || project, viewMode, filtro.tipoFiltro, projectData);
+    }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
     // ── BREADCRUMBS ───────────────────────────────────────────────────────────
     const breadcrumbs = [
@@ -128,14 +130,6 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                         onExportExcel={handleExportExcel}
                     />
 
-                    {/* RESUMEN + CURVA S */}
-                    <ResumenCards
-                        estaGuardado={estaGuardadoUI}
-                        sinGantt={sinGantt}
-                        curvaSData={curvaSData}
-                        mesPicoKey={mesPicoKey}
-                    />
-
                     {/* TABLA PRINCIPAL */}
                     {!sinGantt && (
                         <TablaMateriales
@@ -155,6 +149,14 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                             getIntensidad={getIntensidad}
                         />
                     )}
+
+                    {/* RESUMEN + CURVA S */}
+                    <ResumenCards
+                        estaGuardado={estaGuardadoUI}
+                        sinGantt={sinGantt}
+                        curvaSData={curvaSData}
+                        mesPicoKey={mesPicoKey}
+                    />
 
                     {/* Sin Gantt */}
                     {sinGantt && (

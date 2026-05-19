@@ -61,6 +61,7 @@ export interface CronogramaProps {
     resumen:            ResumenProyecto;
     estaGuardado:       boolean;
     sinGantt?:          boolean;
+    projectData:        any; // Agregado para recibir projectData desde el backend
 }
 
 export type ViewMode  = 'cantidad' | 'monto';
