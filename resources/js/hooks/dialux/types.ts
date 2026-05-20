@@ -34,6 +34,19 @@ export interface AmbientConfig {
     activity?: string;
 }
 
+export type CorridorType =
+    | 'roof_only'
+    | 'normal'
+    | 'roof_floor'
+    | 'concrete_railings'
+    | 'metal_railings';
+
+export interface CorridorConfig {
+    type?: CorridorType;
+    slabThickness?: number;
+    railingHeight?: number;
+}
+
 // ─── Escaleras ────────────────────────────────────────────────────────────────
 
 /**
@@ -77,6 +90,10 @@ export interface StairConfig {
     treadDepth: number;
     /** Ancho útil de paso en metros */
     stairWidth: number;
+    /** Separación libre entre tramos paralelos en metros. 0 = tramos pegados. */
+    flightGap?: number;
+    /** Muestra barandas/pasamanos en el render 3D. Default false por ahora. */
+    showRailings?: boolean;
     /**
      * Cantidad total de escalones (suma de todos los tramos).
      * En escaleras simples (1 tramo, sin flights), este campo gobierna.
@@ -129,6 +146,7 @@ export interface Room {
     norma?: number;        // Nivel de lux requerido (EN 12464-1)
     fixtureFlux?: number;  // Lúmenes de la luminaria seleccionada (cálculo teórico)
     ambientConfigs?: Record<string, AmbientConfig>;
+    corridorConfig?: CorridorConfig;
     /** Configuración de escalera (solo cuando roomType === 'stair') */
     stairConfig?: StairConfig;
 }

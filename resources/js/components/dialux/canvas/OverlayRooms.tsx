@@ -131,7 +131,7 @@ const CorridorPolygon = memo(function CorridorPolygon({
 });
 
 const StairPolygon = memo(function StairPolygon({
-    room, screenVerts, pts, ctr, isSelected, zoom, onSelect,
+    room, screenVerts, pts, ctr, isSelected, zoom, onSelect, screenDistance,
 }: {
     room: Room;
     screenVerts: { x: number; y: number }[];
@@ -140,6 +140,7 @@ const StairPolygon = memo(function StairPolygon({
     isSelected: boolean;
     zoom: number;
     onSelect: (id: string) => void;
+    screenDistance?: (dx: number, dy: number, origin: { x: number; y: number }) => number;
 }) {
     const sc         = room.stairConfig;
     const flights    = sc?.flights ?? [];
@@ -187,6 +188,14 @@ const StairPolygon = memo(function StairPolygon({
     // Rectángulos de mitad izquierda/derecha (para U-stair NS) o arriba/abajo (U-stair EW)
     const halfMidX = (bb.minX + bb.maxX) / 2;
     const halfMidY = (bb.minY + bb.maxY) / 2;
+    const flightGapPx = isUStair && sc?.flightGap
+        ? Math.max(0, screenDistance?.(
+            isHorizontalAscent ? 0 : sc.flightGap,
+            isHorizontalAscent ? sc.flightGap : 0,
+            { x: 0, y: 0 },
+        ) ?? 0)
+        : 0;
+    const halfGapPx = flightGapPx / 2;
 
     return (
         <g
@@ -239,22 +248,34 @@ const StairPolygon = memo(function StairPolygon({
                     <rect
                         x={isHorizontalAscent ? bb.minX - 2 : bb.minX - 2}
                         y={isHorizontalAscent ? bb.minY - 2 : bb.minY - 2}
-                        width={isHorizontalAscent ? bb.w + 4 : halfMidX - bb.minX + 2}
-                        height={isHorizontalAscent ? halfMidY - bb.minY + 2 : bb.h + 4}
+                        width={isHorizontalAscent ? bb.w + 4 : halfMidX - halfGapPx - bb.minX + 2}
+                        height={isHorizontalAscent ? halfMidY - halfGapPx - bb.minY + 2 : bb.h + 4}
                         fill={`url(#${patId})`}
                         clipPath={`url(#${clipId})`}
                         pointerEvents="none"
                     />
                     {/* Mitad 1 — segundo tramo (patrón opuesto) */}
                     <rect
-                        x={isHorizontalAscent ? bb.minX - 2 : halfMidX - 2}
-                        y={isHorizontalAscent ? halfMidY - 2 : bb.minY - 2}
-                        width={isHorizontalAscent ? bb.w + 4 : bb.maxX - halfMidX + 4}
-                        height={isHorizontalAscent ? bb.maxY - halfMidY + 4 : bb.h + 4}
+                        x={isHorizontalAscent ? bb.minX - 2 : halfMidX + halfGapPx - 2}
+                        y={isHorizontalAscent ? halfMidY + halfGapPx - 2 : bb.minY - 2}
+                        width={isHorizontalAscent ? bb.w + 4 : bb.maxX - halfMidX - halfGapPx + 4}
+                        height={isHorizontalAscent ? bb.maxY - halfMidY - halfGapPx + 4 : bb.h + 4}
                         fill={`url(#${patId2})`}
                         clipPath={`url(#${clipId})`}
                         pointerEvents="none"
                     />
+                    {flightGapPx > 0 && (
+                        <rect
+                            x={isHorizontalAscent ? bb.minX : halfMidX - halfGapPx}
+                            y={isHorizontalAscent ? halfMidY - halfGapPx : bb.minY}
+                            width={isHorizontalAscent ? bb.w : flightGapPx}
+                            height={isHorizontalAscent ? flightGapPx : bb.h}
+                            fill="#020617"
+                            fillOpacity={0.55}
+                            clipPath={`url(#${clipId})`}
+                            pointerEvents="none"
+                        />
+                    )}
                     {/* Línea divisoria del descanso en el centro */}
                     <line
                         x1={isHorizontalAscent ? bb.minX : halfMidX}
@@ -373,7 +394,7 @@ const StairPolygon = memo(function StairPolygon({
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export const OverlayRooms = memo(function OverlayRooms({
-    rooms, selectedId, zoom, onSelect, screenPoint,
+    rooms, selectedId, zoom, onSelect, screenPoint, screenDistance,
 }: Props) {
     if (!rooms.length) return null;
 
@@ -398,6 +419,7 @@ export const OverlayRooms = memo(function OverlayRooms({
                     isSelected={sel}
                     zoom={zoom}
                     onSelect={onSelect}
+                    screenDistance={screenDistance}
                 />
             );
         }

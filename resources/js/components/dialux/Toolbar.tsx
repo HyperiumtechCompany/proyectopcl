@@ -1410,7 +1410,7 @@ export const Toolbar: React.FC = () => {
     const scaleConfig = useScaleConfig();
 
     const { activeTool, angleSnapMode, showGrid, showIsolux, isoluxMode } = store.ui;
-    const { isParsing, parseDxf, rescaleDxfEntities } = wasmEngine;
+    const { isParsing, parseDxf } = wasmEngine;
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1467,11 +1467,17 @@ export const Toolbar: React.FC = () => {
                 setTimeout(async () => {
                     const ext = engine.getDocumentExtents?.();
                     if (ext) {
-                        const suggested = store.detectScaleFromExtents({
-                            min_x: ext.minX, min_y: ext.minY, max_x: ext.maxX, max_y: ext.maxY,
-                        });
-                        setDetectedScale(suggested);
-                        await applyScaleConfig(suggested);
+                        if (store.activeScene()?.scaleConfig.isCalibrated) {
+                            // If the scene is already calibrated (e.g., reloading DXF for a floor), preserve its scale!
+                            setDetectedScale(store.activeScene()!.scaleConfig);
+                            await applyScaleConfig(store.activeScene()!.scaleConfig, false);
+                        } else {
+                            const suggested = store.detectScaleFromExtents({
+                                min_x: ext.minX, min_y: ext.minY, max_x: ext.maxX, max_y: ext.maxY,
+                            });
+                            setDetectedScale(suggested);
+                            await applyScaleConfig(suggested, true);
+                        }
                     } else setDetectedScale(null);
                     setIsImportModalOpen(true);
                 }, 500);
@@ -1483,17 +1489,16 @@ export const Toolbar: React.FC = () => {
     );
 
     const applyScaleConfig = useCallback(
-        async (config: ScaleConfig) => {
+        async (config: ScaleConfig, rescaleObjects = true) => {
             const prevEffective = getEffectiveScale(scaleConfig);
-            store.setScaleConfig(config, true);
+            store.setScaleConfig(config, rescaleObjects);
             setDetectedScale(config);
             setScaleConfirmed(true);
             if (pendingFile?.name.toLowerCase().endsWith('.dxf')) {
-                if (store.dxfEntities) rescaleDxfEntities(prevEffective, getEffectiveScale(config));
-                else await parseDxf?.(pendingFile, getEffectiveScale(config));
+                await parseDxf?.(pendingFile, getEffectiveScale(config));
             }
         },
-        [parseDxf, pendingFile, rescaleDxfEntities, scaleConfig, store],
+        [parseDxf, pendingFile, scaleConfig, store],
     );
 
     const handleCommand = useCallback((cmd: string) => {
@@ -1508,10 +1513,8 @@ export const Toolbar: React.FC = () => {
     }, [store]);
 
     const handleResetCalibration = useCallback(() => {
-        const prev = getEffectiveScale(scaleConfig);
-        const next = store.resetCalibration();
-        if (next && store.dxfEntities) rescaleDxfEntities(prev, getEffectiveScale(next));
-    }, [rescaleDxfEntities, scaleConfig, store]);
+        store.resetCalibration();
+    }, [store]);
 
     const handleResetView = useCallback(() => {
         store.setZoom(1);

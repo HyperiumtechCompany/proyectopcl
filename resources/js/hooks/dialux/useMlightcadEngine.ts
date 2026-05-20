@@ -502,7 +502,9 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 return;
             }
 
-            const before = view.screenToWorld(screenPoint);
+            const dpr = window.devicePixelRatio || 1;
+            const spPhysical = { x: screenPoint.x * dpr, y: screenPoint.y * dpr };
+            const before = view.screenToWorld(spPhysical);
             const currentCenter = view.center;
             const nextZoom = Math.min(
                 1000,
@@ -510,7 +512,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
             );
 
             view.flyTo(currentCenter, nextZoom);
-            const after = view.screenToWorld(screenPoint);
+            const after = view.screenToWorld(spPhysical);
             const nextCenter = {
                 x: currentCenter.x + (before.x - after.x),
                 y: currentCenter.y + (before.y - after.y),

@@ -43,7 +43,20 @@ import {
     getWallPresetFromWall,
     getPeruWallPreset,
 } from '@/hooks/dialux/wallNorms';
-import type { Partition, StairConfig, StairFlight } from '@/hooks/dialux/types';
+import type {
+    CorridorType,
+    Partition,
+    StairConfig,
+    StairFlight,
+} from '@/hooks/dialux/types';
+
+const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
+    { value: 'roof_only', label: 'Solo techo' },
+    { value: 'normal', label: 'Normal' },
+    { value: 'roof_floor', label: 'Techo y piso' },
+    { value: 'concrete_railings', label: 'Baranda cemento' },
+    { value: 'metal_railings', label: 'Baranda metal' },
+];
 
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const store = useEditorStore();
@@ -236,6 +249,21 @@ const RoomProps: React.FC<{
         });
     };
 
+    const handleCorridorTypeChange = (value: string) => {
+        const corridorType = CORRIDOR_TYPE_OPTIONS.find(
+            (option) => option.value === value,
+        )?.value;
+
+        if (!corridorType) return;
+
+        onUpdate({
+            corridorConfig: {
+                ...(room.corridorConfig ?? {}),
+                type: corridorType,
+            },
+        });
+    };
+
     return (
         <div className="max-h-[600px] space-y-3 overflow-y-auto">
             <SectionWrapper
@@ -265,7 +293,34 @@ const RoomProps: React.FC<{
                         />
                     )}
                 {isCorridorAmbient && (
-                    <PropField label="Tipo" value="Pasadizo" mono={false} />
+                    <>
+                        <SelectField
+                            label="Tipo"
+                            value={room.corridorConfig?.type ?? 'roof_only'}
+                            options={CORRIDOR_TYPE_OPTIONS}
+                            onChange={handleCorridorTypeChange}
+                        />
+                        {(room.corridorConfig?.type ===
+                            'concrete_railings' ||
+                            room.corridorConfig?.type ===
+                                'metal_railings') && (
+                            <EditField
+                                label="Alto baranda (m)"
+                                value={room.corridorConfig?.railingHeight ?? 1.05}
+                                min={0.6}
+                                max={1.5}
+                                step={0.05}
+                                onChange={(value) =>
+                                    onUpdate({
+                                        corridorConfig: {
+                                            ...(room.corridorConfig ?? {}),
+                                            railingHeight: value,
+                                        },
+                                    })
+                                }
+                            />
+                        )}
+                    </>
                 )}
                 <PropField label="Vertices" value={`${room.vertices.length}`} />
                 <PropField label="Area" value={`${area.toFixed(2)} m2`} />
@@ -403,8 +458,13 @@ const DEFAULT_STAIR: StairConfig = {
     riserHeight: 0.175,
     treadDepth: 0.28,
     stairWidth: 1.2,
-    stepCount: 17,
-    flights: [],
+    flightGap: 0.4,
+    showRailings: false,
+    stepCount: 20,
+    flights: [
+        { id: 'flight-1', stepCount: 10, direction: 'north', hasLanding: true, landingDepth: 1.2 },
+        { id: 'flight-2', stepCount: 10, direction: 'south', hasLanding: false, landingDepth: 0 },
+    ],
 };
 
 const DIRECTION_LABELS: Record<StairFlight['direction'], string> = {
@@ -527,6 +587,15 @@ const StairConfigPanel: React.FC<{
                 min={0.6} max={5} step={0.1}
                 onChange={(val) => updateSt({ stairWidth: val })}
             />
+
+            {hasFlights && (
+                <EditField
+                    label="Separación tramos (m)"
+                    value={st.flightGap ?? 0}
+                    min={0} max={2} step={0.05}
+                    onChange={(val) => updateSt({ flightGap: val })}
+                />
+            )}
 
             <EditField
                 label="Elev. arranque (m)"

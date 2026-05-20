@@ -198,7 +198,7 @@ trait HandleMetradoSpreadsheet
             ->where('presupuesto_id', $presupuestoId)
             ->orderBy('item_order')
             ->get()
-            ->map(fn($r) => (array)$r)
+            ->map(fn ($r) => (array) $r)
             ->toArray();
     }
 

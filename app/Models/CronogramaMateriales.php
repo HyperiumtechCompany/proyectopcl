@@ -24,7 +24,6 @@ class CronogramaMateriales extends Model
     /** cast de atributos.
      * esto convierte el JSON de la base de datos en un Array de PHP automaticamente.
      */
-
     protected $casts = [
         'distribucion_mensual' => 'array',
         'cantidad_total' => 'float',

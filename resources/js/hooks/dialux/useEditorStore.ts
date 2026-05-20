@@ -138,6 +138,9 @@ interface EditorState {
         rescaleObjects?: boolean,
     ) => void;
     rescaleScene: (ratio: number) => void;
+    
+    // --- DXF Entities ---
+    setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => void;
     detectScaleFromExtents: (extents: DxfExtents) => ScaleConfig;
     applyCalibration: (
         cadDistance: number,
@@ -195,7 +198,6 @@ interface EditorState {
     setCalculating: (val: boolean) => void;
     setResult: (result: LightingResult | null) => void;
     setResultsByRoom: (results: Record<string, LightingResult>) => void;
-    setDxfData: (entities: DxfEntity[], extents: DxfExtents) => void;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     activeScene: () => Scene | null;
@@ -356,12 +358,17 @@ export const useEditorStore = create<EditorState>()(
                         prevEffective !== nextEffective
                     ) {
                         const ratio = nextEffective / prevEffective;
-                        // No podemos llamar a rescaleScene aquí directamente sobre 'set' de forma limpia
-                        // si queremos usar mutateScene, así que lo hacemos inline o pre-calculamos.
-                        return mutateScene(state, (s) => ({
+                        const nextState = mutateScene(state, (s) => ({
                             ...rescaleSceneEntities(s, ratio),
                             scaleConfig: normalized,
                         }));
+                        if (nextState.dxfEntities) {
+                            nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
+                        }
+                        if (nextState.dxfExtents) {
+                            nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
+                        }
+                        return nextState;
                     }
                 }
 
@@ -373,10 +380,17 @@ export const useEditorStore = create<EditorState>()(
         },
 
         rescaleScene: (ratio) => {
-            if (!(ratio > 0) || ratio === 1) return;
-            set((state) =>
-                mutateScene(state, (s) => rescaleSceneEntities(s, ratio)),
-            );
+            if (ratio === 1) return;
+            set((state) => {
+                const nextState = mutateScene(state, (s) => rescaleSceneEntities(s, ratio));
+                if (nextState.dxfEntities) {
+                    nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
+                }
+                if (nextState.dxfExtents) {
+                    nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
+                }
+                return nextState;
+            });
         },
         detectScaleFromExtents: (extents) => {
             // Un archivo DXF de una casa promedio en metros (ej. 20x20)
@@ -424,10 +438,17 @@ export const useEditorStore = create<EditorState>()(
                     prevEffective !== nextEffective
                 ) {
                     const ratio = nextEffective / prevEffective;
-                    return mutateScene(state, (s) => ({
+                    const nextState = mutateScene(state, (s) => ({
                         ...rescaleSceneEntities(s, ratio),
                         scaleConfig: nextScale!,
                     }));
+                    if (nextState.dxfEntities) {
+                        nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
+                    }
+                    if (nextState.dxfExtents) {
+                        nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
+                    }
+                    return nextState;
                 }
 
                 return mutateScene(state, (s) => ({
@@ -460,10 +481,17 @@ export const useEditorStore = create<EditorState>()(
                     prevEffective !== nextEffective
                 ) {
                     const ratio = nextEffective / prevEffective;
-                    return mutateScene(state, (s) => ({
+                    const nextState = mutateScene(state, (s) => ({
                         ...rescaleSceneEntities(s, ratio),
                         scaleConfig: nextScale!,
                     }));
+                    if (nextState.dxfEntities) {
+                        nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
+                    }
+                    if (nextState.dxfExtents) {
+                        nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
+                    }
+                    return nextState;
                 }
 
                 return mutateScene(state, (s) => ({
@@ -1136,6 +1164,45 @@ function rescaleSceneEntities(scene: Scene, ratio: number): Scene {
             thickness: p.thickness * ratio,
         })),
     };
+}
+
+function rescaleDxfExtents(extents: DxfExtents, ratio: number): DxfExtents {
+    return {
+        min_x: extents.min_x * ratio,
+        min_y: extents.min_y * ratio,
+        max_x: extents.max_x * ratio,
+        max_y: extents.max_y * ratio,
+    };
+}
+
+function rescaleDxfEntities(entities: DxfEntity[], ratio: number): DxfEntity[] {
+    return entities.map((ent) => {
+        switch (ent.type) {
+            case 'line':
+                return { ...ent, x1: ent.x1 * ratio, y1: ent.y1 * ratio, x2: ent.x2 * ratio, y2: ent.y2 * ratio };
+            case 'polyline':
+            case 'polygon':
+            case 'solid':
+                return { ...ent, vertices: ent.vertices.map(([x, y]) => [x * ratio, y * ratio] as [number, number]) };
+            case 'circle':
+            case 'arc':
+                return { ...ent, cx: ent.cx * ratio, cy: ent.cy * ratio, r: ent.r * ratio };
+            case 'ellipse':
+                return { ...ent, cx: ent.cx * ratio, cy: ent.cy * ratio, major_x: ent.major_x * ratio, major_y: ent.major_y * ratio };
+            case 'text':
+                return { ...ent, x: ent.x * ratio, y: ent.y * ratio, height: ent.height * ratio };
+            case 'point':
+                return { ...ent, x: ent.x * ratio, y: ent.y * ratio };
+            case 'rectangle':
+                return { ...ent, x: ent.x * ratio, y: ent.y * ratio, width: ent.width * ratio, height: ent.height * ratio };
+            case 'spline':
+                return { ...ent, control_points: ent.control_points.map(([x, y]) => [x * ratio, y * ratio] as [number, number]) };
+            case 'hatch':
+                return { ...ent, boundary_paths: ent.boundary_paths.map(path => path.map(([x, y]) => [x * ratio, y * ratio] as [number, number])) };
+            default:
+                return ent;
+        }
+    });
 }
 
 function normalizeFiniteNumber(value: unknown, fallback: number): number {

@@ -176,25 +176,8 @@ export const useWasmEngine = () => {
         [store],
     );
 
-    const rescaleDxfEntities = useCallback(
-        (currentFactor: number, newFactor: number) => {
-            if (!(currentFactor > 0) || !(newFactor > 0)) return;
-            const entities = store.dxfEntities;
-            const extents = store.dxfExtents;
-            if (!entities || !extents) return;
-
-            const ratio = newFactor / currentFactor;
-            store.setDxfData(
-                scaleDxfEntities(entities, ratio),
-                scaleDxfExtents(extents, ratio),
-            );
-        },
-        [store],
-    );
-
     return {
         parseDxf,
-        rescaleDxfEntities,
         isParsing,
     };
 };
