@@ -130,9 +130,18 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         return key;
     }, [totalesFinales]);
 
+    const displayName = React.useMemo(() => {
+        const nombreCompleto = props.projectName || `Proyecto ${props.project}`;
+        const match = nombreCompleto.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N°?\s*\d+)/i);
+        if (match) return match[0];
+
+        if (nombreCompleto.length > 30) return `Proyecto ${props.project}`;
+        return nombreCompleto;
+    }, [props.projectName, props.project]);
+
     const breadcrumbs = [
-        { title: 'Costos',      href: '/costos' },
-        { title: props.projectName || `Proyecto ${props.project}`, href: `/costos/${props.project}` },
+        { title: 'Costos', href: '/costos' },
+        { title: displayName, href: `/costos/${props.project}` },
         { title: 'Cronograma Valorizado', href: '#' },
     ];
 

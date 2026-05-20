@@ -271,11 +271,14 @@ class CronoValorizadoController extends Controller
         if (!$projectId) abort(422, 'Project ID requerido');
 
         $costoProject = CostoProject::findOrFail($projectId);
-        $db           = $costoProject->database_name;
+        $db = $costoProject->database_name;
 
+        // OBTENER EL PREUPUESTO_ID CORRECTO
+        $presupuestoId = $costoProject->presupuesto_id ?? 2;
+        
         $deleted = DB::connection('mysql')
             ->table("{$db}.cronograma_valorizado")
-            ->where('presupuesto_id', $projectId)
+            ->where('presupuesto_id', $presupuestoId)
             ->delete();
 
         return response()->json([

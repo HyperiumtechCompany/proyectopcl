@@ -101,11 +101,24 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
     }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
     // ── BREADCRUMBS ───────────────────────────────────────────────────────────
-    const breadcrumbs = [
+
+    const displayName = useMemo(() => {
+        if (projectData?.nombre_corto) return projectData.nombre_corto;
+        if (projectName) {
+            const match = projectName.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N°?\s*\d+)/i);
+            if (match) return match[0];
+            if (projectName.length > 30) return `Proyecto ${project}`;
+            return projectName;
+        }
+
+        return `Proyecto ${project}`;
+    }, [projectData, projectName, project]);
+
+    const breadcrumbs = useMemo(() => [
         { title: 'Costos', href: '/costos' },
-        { title: projectName || `Proyecto ${project}`, href: `/costos/${project}` },
+        { title: displayName, href: `/costos/${project}` },
         { title: 'Cronograma Materiales', href: '#' },
-    ];
+    ], [displayName, project]);
 
     // ── RENDER ────────────────────────────────────────────────────────────────
     return (
@@ -171,7 +184,7 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                                 y fin de cada partida, y guardarlo.
                             </p>
                             <a
-                                href={`/cronograma/general?project=${project}`}
+                                href={`/module/crono_general?project=${project}`}
                                 className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
                             >
                                 Ir al Cronograma General →

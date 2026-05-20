@@ -509,6 +509,7 @@ class CronoMaterialesController extends Controller
                     'presupuesto_id'       => $presupuestoId,
                     'item_order'           => $idx + 1,
                     'descripcion'          => $mat['descripcion'],
+                    'partida_origen'       => $mat['partida_origen'] ?? null,
                     'unidad'               => $mat['unidad'] ?? '',
                     'cantidad_total'       => $mat['cantidad_total'],
                     'precio_unitario'      => $mat['precio'],
