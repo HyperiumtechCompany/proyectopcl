@@ -19,15 +19,11 @@ import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
 } from '@/hooks/dialux/ambientSpaces';
-import { calculatePolygonArea } from '@/hooks/dialux/lightingCalculations';
+import { calculatePolygonArea, calculatePolygonPerimeter } from '@/hooks/dialux/lightingCalculations';
 import {
     NORMATIVE_LABELS,
     buildRoomLightingInputs,
-    findNormativeOption,
-    getActivityOptions,
-    getCategoryOptions,
     getFixturesForRoom,
-    getSectionOptions,
 } from '@/hooks/dialux/roomLighting';
 import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import type {
@@ -56,6 +52,8 @@ const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
     { value: 'roof_floor', label: 'Techo y piso' },
     { value: 'concrete_railings', label: 'Baranda cemento' },
     { value: 'metal_railings', label: 'Baranda metal' },
+    { value: 'ramp', label: 'Rampa' },
+    { value: 'sidewalk', label: 'Vereda (Piso sin barandas)' },
 ];
 
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
@@ -181,6 +179,7 @@ const RoomProps: React.FC<{
     const isCorridorAmbient = room.roomType === 'corridor';
     const calculationRoom = selectedAmbient?.room ?? room;
     const area = calculatePolygonArea(calculationRoom.vertices);
+    const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
     const fixturesInRoom = selectedAmbient
         ? selectedAmbient.fixtures
         : scene
@@ -195,59 +194,14 @@ const RoomProps: React.FC<{
                   (ambient) => ambient.roomId === room.id,
               )
         : [];
-    const normative = findNormativeOption(room);
     const standard =
         room.normativeStandard ?? store.defaultRoomNormativeStandard;
-    const categoryOptions = getCategoryOptions(standard);
-    const sectionOptions = getSectionOptions(standard, room.normativeCategory);
-    const activityOptions = getActivityOptions(
-        standard,
-        room.normativeCategory,
-        room.normativeSection,
-    );
     const inputs = buildRoomLightingInputs(calculationRoom, fixturesInRoom);
 
-    const handleNormativeCategoryChange = (value: string) => {
-        onUpdate({
-            normativeCategory: value || undefined,
-            normativeSection: undefined,
-            normativeActivity: undefined,
-            normativeLabel: undefined,
-            ugrLimit: undefined,
-            uniformityTarget: undefined,
-            colorRenderingRa: undefined,
-            specificRequirements: undefined,
-        });
-    };
-
-    const handleNormativeSectionChange = (value: string) => {
-        onUpdate({
-            normativeSection: value || undefined,
-            normativeActivity: undefined,
-            normativeLabel: undefined,
-            ugrLimit: undefined,
-            uniformityTarget: undefined,
-            colorRenderingRa: undefined,
-            specificRequirements: undefined,
-        });
-    };
-
-    const handleNormativeActivityChange = (value: string) => {
-        const selectedOption = activityOptions.find(
-            (option) => option.activity === value,
-        );
-        onUpdate({
-            normativeActivity: value || undefined,
-            normativeLabel: selectedOption?.label || undefined,
-            illuminanceLux:
-                selectedOption?.illuminanceLux || inputs.illuminanceLux,
-            ugrLimit: selectedOption?.ugr || undefined,
-            uniformityTarget: selectedOption?.uniformity || undefined,
-            colorRenderingRa: selectedOption?.ra || undefined,
-            specificRequirements:
-                selectedOption?.specificRequirements || undefined,
-        });
-    };
+    // Sección Construcción — preset del material del recinto
+    const roomMaterial = (room.material ?? 'brick') as 'brick' | 'adobe';
+    const roomUse = (room.normativeUse ?? 'housing') as 'housing' | 'education' | 'generic';
+    const constructionPreset = getPeruWallPreset(roomMaterial, roomUse);
 
     const handleCorridorTypeChange = (value: string) => {
         const corridorType = CORRIDOR_TYPE_OPTIONS.find(
@@ -266,9 +220,10 @@ const RoomProps: React.FC<{
 
     return (
         <div className="max-h-[600px] space-y-3 overflow-y-auto">
+            {/* ── Sección Geometría ── */}
             <SectionWrapper
                 icon={<Square size={12} className="text-blue-400" />}
-                label={isCorridorAmbient ? 'Ambiente' : 'Recinto'}
+                label={isCorridorAmbient ? 'Pasadizo' : 'Recinto'}
             >
                 <TextField
                     label="Nombre"
@@ -300,10 +255,8 @@ const RoomProps: React.FC<{
                             options={CORRIDOR_TYPE_OPTIONS}
                             onChange={handleCorridorTypeChange}
                         />
-                        {(room.corridorConfig?.type ===
-                            'concrete_railings' ||
-                            room.corridorConfig?.type ===
-                                'metal_railings') && (
+                        {(room.corridorConfig?.type === 'concrete_railings' ||
+                            room.corridorConfig?.type === 'metal_railings') && (
                             <EditField
                                 label="Alto baranda (m)"
                                 value={room.corridorConfig?.railingHeight ?? 1.05}
@@ -320,10 +273,63 @@ const RoomProps: React.FC<{
                                 }
                             />
                         )}
+                        {room.corridorConfig?.type === 'ramp' && (
+                            <>
+                                <EditField
+                                    label="Pendiente (%)"
+                                    value={room.corridorConfig?.rampSlope ?? 8}
+                                    min={1}
+                                    max={20}
+                                    step={0.5}
+                                    onChange={(value) =>
+                                        onUpdate({
+                                            corridorConfig: {
+                                                ...(room.corridorConfig ?? {}),
+                                                rampSlope: value,
+                                            },
+                                        })
+                                    }
+                                />
+                                <SelectField
+                                    label="Dirección sube"
+                                    value={room.corridorConfig?.rampDirection ?? 'north'}
+                                    options={[
+                                        { value: 'north', label: 'Norte ↑' },
+                                        { value: 'south', label: 'Sur ↓' },
+                                        { value: 'east', label: 'Este →' },
+                                        { value: 'west', label: 'Oeste ←' },
+                                    ]}
+                                    onChange={(value) =>
+                                        onUpdate({
+                                            corridorConfig: {
+                                                ...(room.corridorConfig ?? {}),
+                                                rampDirection: value as 'north' | 'south' | 'east' | 'west',
+                                            },
+                                        })
+                                    }
+                                />
+                                <EditField
+                                    label="Alto baranda (m)"
+                                    value={room.corridorConfig?.railingHeight ?? 1.0}
+                                    min={0.6}
+                                    max={1.5}
+                                    step={0.05}
+                                    onChange={(value) =>
+                                        onUpdate({
+                                            corridorConfig: {
+                                                ...(room.corridorConfig ?? {}),
+                                                railingHeight: value,
+                                            },
+                                        })
+                                    }
+                                />
+                            </>
+                        )}
                     </>
                 )}
-                <PropField label="Vertices" value={`${room.vertices.length}`} />
-                <PropField label="Area" value={`${area.toFixed(2)} m2`} />
+                <PropField label="Vértices" value={`${room.vertices.length}`} />
+                <PropField label="Área" value={`${area.toFixed(4)} m²`} />
+                <PropField label="Perímetro" value={`${perimeter.toFixed(4)} m`} />
                 {!isCorridorAmbient && room.roomType !== 'stair' && (
                     <PropField
                         label="Ambientes"
@@ -337,51 +343,55 @@ const RoomProps: React.FC<{
                         onUpdate={onUpdate}
                     />
                 )}
+            </SectionWrapper>
 
-                {room.roomType !== 'stair' && (
-                <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
-                    <p className="mb-1.5 text-[10px] font-semibold text-cyan-500">
-                        Normativa y calculo
-                    </p>
+            {/* ── Sección Construcción (solo en Recinto, no pasadizo ni escalera) ── */}
+            {!isCorridorAmbient && room.roomType !== 'stair' && (
+                <SectionWrapper
+                    icon={<Square size={12} className="text-orange-400" />}
+                    label="Construcción"
+                >
+                    <SelectField
+                        label="Material estruct."
+                        value={roomMaterial}
+                        options={[
+                            { value: 'brick', label: 'Ladrillo' },
+                            { value: 'adobe', label: 'Adobe' },
+                        ]}
+                        onChange={(val) => onUpdate({ material: val as 'brick' | 'adobe' })}
+                    />
+                    <SelectField
+                        label="Tipo edificación"
+                        value={roomUse}
+                        options={[
+                            { value: 'housing', label: 'Vivienda (A.010)' },
+                            { value: 'education', label: 'Educación (A.040)' },
+                            { value: 'generic', label: 'Genérico' },
+                        ]}
+                        onChange={(val) => onUpdate({ normativeUse: val as 'housing' | 'education' | 'generic' })}
+                    />
                     <PropField
-                        label="Estandar"
+                        label="Espesor pared rec."
+                        value={`${constructionPreset.recommendedThickness.toFixed(2)} m`}
+                    />
+                    <PropField
+                        label="Altura mín. permit."
+                        value={`${constructionPreset.minHeight.toFixed(2)} m`}
+                    />
+                </SectionWrapper>
+            )}
+
+            {/* ── Sección Iluminación (solo recinto normal) ── */}
+            {!isCorridorAmbient && room.roomType !== 'stair' && (
+                <SectionWrapper
+                    icon={<Zap size={12} className="text-yellow-400" />}
+                    label="Iluminación"
+                >
+                    <PropField
+                        label="Estándar"
                         value={NORMATIVE_LABELS[standard]}
                         mono={false}
                     />
-                    <SelectField
-                        label="Categoria"
-                        value={room.normativeCategory ?? ''}
-                        options={categoryOptions.map((option) => ({
-                            value: option,
-                            label: option,
-                        }))}
-                        placeholder="Selecciona"
-                        onChange={handleNormativeCategoryChange}
-                    />
-                    {sectionOptions.length > 0 && (
-                        <SelectField
-                            label="Jerarquia"
-                            value={room.normativeSection ?? ''}
-                            options={sectionOptions.map((option) => ({
-                                value: option,
-                                label: option,
-                            }))}
-                            placeholder="Selecciona"
-                            onChange={handleNormativeSectionChange}
-                        />
-                    )}
-                    {activityOptions.length > 0 && (
-                        <SelectField
-                            label="Actividad"
-                            value={room.normativeActivity ?? ''}
-                            options={activityOptions.map((option) => ({
-                                value: option.activity,
-                                label: option.activity,
-                            }))}
-                            placeholder="Selecciona"
-                            onChange={handleNormativeActivityChange}
-                        />
-                    )}
                     <EditField
                         label="Iluminancia (lux)"
                         value={inputs.illuminanceLux}
@@ -392,62 +402,32 @@ const RoomProps: React.FC<{
                             onUpdate({ illuminanceLux: value, norma: value })
                         }
                     />
-                    <EditField
-                        label="Flujo base (lm)"
-                        value={room.fixtureLumens ?? room.fixtureFlux ?? 4000}
-                        min={100}
-                        max={50000}
-                        step={100}
-                        onChange={(value) =>
-                            onUpdate({
-                                fixtureLumens: value,
-                                fixtureFlux: value,
-                            })
-                        }
+                    <PropField
+                        label="Luminarias"
+                        value={`${fixturesInRoom.length}`}
                     />
                     <PropField
                         label="Lm detectados"
                         value={
                             inputs.detectedFixtureLumens
-                                ? `${inputs.detectedFixtureLumens} lm`
-                                : 'Sin luminaria en recinto'
+                                ? `${inputs.detectedFixtureLumens.toLocaleString()} lm`
+                                : '—'
                         }
                     />
                     <PropField
-                        label="Luminarias en recinto"
-                        value={`${fixturesInRoom.length}`}
+                        label="Lm requeridos"
+                        value={`${inputs.lumensRequired.toFixed(0).toLocaleString()} lm`}
                     />
                     <PropField
-                        label="Lm Requeridos"
-                        value={`${inputs.lumensRequired.toFixed(0)}`}
-                    />
-                    <PropField
-                        label="Cant. Optima"
+                        label="Cant. óptima"
                         value={`${inputs.exactQuantity.toFixed(2)}`}
                     />
                     <PropField
-                        label="Cant. Simetria"
+                        label="Cant. simetría"
                         value={`${inputs.roundedQuantity}`}
                     />
-                    {normative?.label && (
-                        <PropField
-                            label="Aplicacion"
-                            value={normative.label}
-                            mono={false}
-                        />
-                    )}
-                    {room.specificRequirements && (
-                        <PropField
-                            label="Req. esp."
-                            value={room.specificRequirements}
-                            mono={false}
-                        />
-                    )}
-                </div>
-                )}
-
-                <PropField label="ID" value={room.id.slice(0, 12)} />
-            </SectionWrapper>
+                </SectionWrapper>
+            )}
         </div>
     );
 };
@@ -618,6 +598,38 @@ const StairConfigPanel: React.FC<{
                 value={`${(parseFloat(totalHeight) + (st.startElevation ?? 0)).toFixed(2)} m · ${totalSteps} esc. · Dir: ${DIRECTION_LABELS[effectiveOrientation]}`}
             />
 
+            {/* ── Opciones 3D ────────────────────────────────────────── */}
+            <div className="mt-1.5 flex flex-col gap-0.5 rounded border border-orange-900/40 bg-orange-950/20 p-1.5">
+                <p className="mb-1 text-[9px] font-semibold text-orange-300">Opciones 3D</p>
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-orange-500"
+                        checked={st.hasBaseSlab !== false}
+                        onChange={(e) => updateSt({ hasBaseSlab: e.target.checked })}
+                    />
+                    <span className="text-[9px] text-gray-300">Base sólida bajo escalones</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-orange-500"
+                        checked={st.isInterFloor === true}
+                        onChange={(e) => updateSt({ isInterFloor: e.target.checked })}
+                    />
+                    <span className="text-[9px] text-gray-300">Conecta con piso superior</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-orange-500"
+                        checked={st.showRailings === true}
+                        onChange={(e) => updateSt({ showRailings: e.target.checked })}
+                    />
+                    <span className="text-[9px] text-gray-300">Mostrar pasamanos</span>
+                </label>
+            </div>
+
             {/* ── Tramos ─────────────────────────────────────────── */}
             <div className="mt-2 border-t border-orange-900/40 pt-2">
                 <div className="mb-1.5 flex items-center justify-between">
@@ -702,13 +714,6 @@ const WallProps: React.FC<{
                 deriveAmbientSpaces(room, scene.walls, scene.fixtures),
             )
             .find((ambient) => ambient.wallId === wall.id) ?? null;
-    const activityOptions = ambientMatch
-        ? getActivityOptions(
-              ambientMatch.sourceRoom.normativeStandard ?? 'en_12464',
-              ambientMatch.sourceRoom.normativeCategory,
-              ambientMatch.sourceRoom.normativeSection,
-          )
-        : [];
     let len = 0;
 
     if (verts.length > 1) {
@@ -793,138 +798,24 @@ const WallProps: React.FC<{
     return (
         <SectionWrapper
             icon={<Minus size={12} className="text-slate-400" />}
-            label={ambientMatch ? 'Ambiente' : 'Pared'}
+            label={ambientMatch ? 'Ambiente • Pared' : 'Pared'}
         >
-            <PropField label="Longitud" value={`${len.toFixed(2)} m`} />
-            {ambientMatch && (
-                <>
-                    <TextField
-                        label="Nombre ambiente"
-                        value={
-                            ambientMatch.sourceRoom.ambientConfigs?.[
-                                ambientMatch.configKey
-                            ]?.name ?? ambientMatch.name
-                        }
-                        onChange={(value) =>
-                            updateAmbientConfig({ name: value })
-                        }
-                    />
-                    <SelectField
-                        label="Tipo ambiente"
-                        value={
-                            ambientMatch.sourceRoom.ambientConfigs?.[
-                                ambientMatch.configKey
-                            ]?.activity ??
-                            ambientMatch.activity ??
-                            ''
-                        }
-                        options={activityOptions.map((option) => ({
-                            value: option.activity,
-                            label: option.activity,
-                        }))}
-                        placeholder="Selecciona"
-                        onChange={(value) =>
-                            updateAmbientConfig({
-                                activity: value || undefined,
-                            })
-                        }
-                    />
-                    <PropField
-                        label="Area ambiente"
-                        value={`${ambientMatch.area.toFixed(2)} m2`}
-                    />
-                    <PropField
-                        label="Centro"
-                        value={`${ambientMatch.centroid.x.toFixed(2)}, ${ambientMatch.centroid.y.toFixed(2)}`}
-                    />
-                    <PropField
-                        label="Luminarias"
-                        value={`${ambientMatch.fixtures.length}`}
-                    />
-                    <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
-                        <div className="flex items-center gap-2 text-emerald-500">
-                            <Grid size={12} />
-                            <p className="text-[10px] font-semibold uppercase">
-                                Distribucion de focos (Grilla)
-                            </p>
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                            <EditField
-                                label="Filas"
-                                value={store.ui.fixtureGridRows}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={(val) =>
-                                    store.setFixtureGridRows(val)
-                                }
-                            />
-                            <EditField
-                                label="Columnas"
-                                value={store.ui.fixtureGridCols}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={(val) =>
-                                    store.setFixtureGridCols(val)
-                                }
-                            />
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                store.addFixtureGrid({
-                                    roomId: ambientMatch.sourceRoom.id,
-                                    rows: store.ui.fixtureGridRows,
-                                    columns: store.ui.fixtureGridCols,
-                                    fixtureTemplate: store.ui.fixtureTemplate,
-                                    ambientVertices: ambientMatch.room.vertices,
-                                })
-                            }
-                            className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-emerald-600/80 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-emerald-500"
-                        >
-                            <PlusSquare size={13} />
-                            Generar Grilla {store.ui.fixtureGridRows}×
-                            {store.ui.fixtureGridCols}
-                        </button>
-
-                        <p className="mt-1 px-1 text-[8px] leading-tight text-gray-500">
-                            Crea una distribucion de focos restringida al area
-                            de este ambiente.
-                        </p>
-                    </div>
-                </>
-            )}
-            <SelectField
-                label="Tipo de muro"
-                value={wall.wallType ?? 'interior'}
-                options={[
-                    { value: 'interior', label: 'Interior' },
-                    { value: 'exterior', label: 'Exterior' },
-                    { value: 'cerco', label: 'Cerco perimétrico' },
-                ]}
-                onChange={(val) => onUpdate({ wallType: val as 'interior' | 'exterior' | 'cerco' })}
+            {/* Tipo de muro: solo lectura (se elige en el Toolbar) */}
+            <PropField
+                label="Tipo"
+                value={
+                    wall.wallType === 'cerco'
+                        ? 'Cerco perimétrico'
+                        : wall.wallType === 'exterior'
+                          ? 'Exterior'
+                          : 'Interior'
+                }
+                mono={false}
             />
-            <SelectField
-                label="Material"
-                value={wall.material ?? 'brick'}
-                options={[
-                    { value: 'brick', label: 'Ladrillo' },
-                    { value: 'adobe', label: 'Adobe' },
-                ]}
-                onChange={handleMaterialChange}
-            />
-            <SelectField
-                label="Uso Peru"
-                value={wall.normativeUse ?? 'housing'}
-                options={[
-                    { value: 'housing', label: 'Vivienda' },
-                    { value: 'education', label: 'Educacion / colegio' },
-                    { value: 'generic', label: 'Generico' },
-                ]}
-                onChange={handleUseChange}
+            <PropField label="Longitud" value={`${len.toFixed(4)} m`} />
+            <PropField
+                label="Superficie"
+                value={`${(len * wall.height).toFixed(4)} m²`}
             />
             <EditField
                 label="Espesor (m)"
@@ -953,89 +844,91 @@ const WallProps: React.FC<{
                 />
             )}
             <PropField
-                label="Orientación"
-                value={(() => {
-                    const dx = end.x - start.x;
-                    const dy = end.y - start.y;
-                    const deg = Math.atan2(dy, dx) * 180 / Math.PI;
-                    const norm = ((deg % 180) + 180) % 180;
-                    return `${norm.toFixed(1)}°`;
-                })()}
-            />
-            <PropField
-                label="Espesor min."
-                value={`${preset.minThickness.toFixed(2)} m`}
-            />
-            <PropField
-                label="Altura min."
-                value={`${preset.minHeight.toFixed(2)} m`}
-            />
-            <PropField
-                label="Junta mortero"
-                value={`${(wall.mortarJointMin ?? preset.mortarJointMin).toFixed(3)} - ${(wall.mortarJointMax ?? preset.mortarJointMax).toFixed(3)} m`}
-            />
-            <PropField
                 label="Estado"
                 value={
                     wall.thickness >= preset.minThickness &&
                     wall.height >= preset.minHeight
-                        ? 'Cumple preset'
-                        : 'Revisar minimos'
+                        ? '✅ Cumple'
+                        : '⚠️ Revisar mínimos'
                 }
                 mono={false}
             />
-            {preset.notes.map((note, index) => (
-                <PropField
-                    key={`${wall.id}-note-${index}`}
-                    label={index === 0 ? 'Norma PE' : 'Detalle'}
-                    value={note}
-                    mono={false}
-                />
-            ))}
 
-            <div className="mt-2 mb-1 border-t border-gray-700/50 pt-1">
-                <p className="mb-1.5 text-[10px] font-semibold text-cyan-500">
-                    Vertices
-                </p>
-            </div>
-            <EditField
-                label="X1 (m)"
-                value={start.x}
-                min={-50}
-                max={50}
-                step={0.1}
-                onChange={(value) => handleVertexChange(0, 'x', value)}
-            />
-            <EditField
-                label="Y1 (m)"
-                value={start.y}
-                min={-50}
-                max={50}
-                step={0.1}
-                onChange={(value) => handleVertexChange(0, 'y', value)}
-            />
-            <EditField
-                label="X2 (m)"
-                value={end.x}
-                min={-50}
-                max={50}
-                step={0.1}
-                onChange={(value) =>
-                    handleVertexChange(verts.length - 1, 'x', value)
-                }
-            />
-            <EditField
-                label="Y2 (m)"
-                value={end.y}
-                min={-50}
-                max={50}
-                step={0.1}
-                onChange={(value) =>
-                    handleVertexChange(verts.length - 1, 'y', value)
-                }
-            />
-            <PropField label="Vertices" value={`${verts.length}`} />
-            <PropField label="ID" value={wall.id.slice(0, 12)} />
+            {/* Sección de ambiente (grilla de focos) */}
+            {ambientMatch && (
+                <>
+                    <div className="my-1 border-t border-gray-700/50 pt-1">
+                        <p className="mb-1 text-[10px] font-semibold text-cyan-500">
+                            Ambiente: {ambientMatch.name}
+                        </p>
+                    </div>
+                    <TextField
+                        label="Nombre"
+                        value={
+                            ambientMatch.sourceRoom.ambientConfigs?.[
+                                ambientMatch.configKey
+                            ]?.name ?? ambientMatch.name
+                        }
+                        onChange={(value) =>
+                            updateAmbientConfig({ name: value })
+                        }
+                    />
+                    <PropField
+                        label="Área ambiente"
+                        value={`${ambientMatch.area.toFixed(4)} m²`}
+                    />
+                    <PropField
+                        label="Luminarias"
+                        value={`${ambientMatch.fixtures.length}`}
+                    />
+                    <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
+                        <div className="flex items-center gap-2 text-emerald-500">
+                            <Grid size={12} />
+                            <p className="text-[10px] font-semibold uppercase">
+                                Grilla de focos
+                            </p>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            <EditField
+                                label="Filas"
+                                value={store.ui.fixtureGridRows}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={(val) =>
+                                    store.setFixtureGridRows(val)
+                                }
+                            />
+                            <EditField
+                                label="Columnas"
+                                value={store.ui.fixtureGridCols}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={(val) =>
+                                    store.setFixtureGridCols(val)
+                                }
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                store.addFixtureGrid({
+                                    roomId: ambientMatch.sourceRoom.id,
+                                    rows: store.ui.fixtureGridRows,
+                                    columns: store.ui.fixtureGridCols,
+                                    fixtureTemplate: store.ui.fixtureTemplate,
+                                    ambientVertices: ambientMatch.room.vertices,
+                                })
+                            }
+                            className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-emerald-600/80 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-emerald-500"
+                        >
+                            <PlusSquare size={13} />
+                            Generar {store.ui.fixtureGridRows}×{store.ui.fixtureGridCols}
+                        </button>
+                    </div>
+                </>
+            )}
         </SectionWrapper>
     );
 };
@@ -1187,6 +1080,7 @@ const DoorProps: React.FC<{
                 { value: 'double', label: 'Doble' },
                 { value: 'sliding', label: 'Corrediza' },
                 { value: 'folding', label: 'Plegable' },
+                { value: 'opening', label: 'Vano Abierto' },
             ]}
             onChange={(value) => onUpdate({ doorType: value as any })}
         />
@@ -1449,12 +1343,14 @@ const PartitionProps: React.FC<{
     partition: Partition;
     onUpdate: (patch: Partial<Omit<Partition, 'id' | 'vertices'>>) => void;
 }> = ({ partition, onUpdate }) => {
+    const length = calculatePolygonPerimeter(partition.vertices, false);
     return (
         <div className="max-h-[600px] space-y-3 overflow-y-auto">
             <SectionWrapper
                 icon={<Minus size={12} className="text-orange-400" />}
                 label="Partición / Separador"
             >
+                <PropField label="Longitud" value={`${length.toFixed(4)} m`} />
                 <SelectField
                     label="Tipo"
                     value={partition.partitionType}

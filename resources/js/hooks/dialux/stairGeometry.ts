@@ -10,7 +10,9 @@ export type CorridorRenderType =
     | 'normal'
     | 'roof_floor'
     | 'concrete_railings'
-    | 'metal_railings';
+    | 'metal_railings'
+    | 'ramp'
+    | 'sidewalk';
 
 export interface CorridorRenderFlags {
     hasRoof: boolean;
@@ -40,6 +42,22 @@ export function getCorridorRenderFlags(
     if (corridorType === 'normal' || corridorType === 'roof_floor') {
         return {
             hasRoof: true,
+            hasFloor: true,
+            railingMaterial: null,
+        };
+    }
+
+    if (corridorType === 'ramp') {
+        return {
+            hasRoof: false,
+            hasFloor: true,
+            railingMaterial: 'metal',
+        };
+    }
+
+    if (corridorType === 'sidewalk') {
+        return {
+            hasRoof: false,
             hasFloor: true,
             railingMaterial: null,
         };

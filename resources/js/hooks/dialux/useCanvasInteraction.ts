@@ -54,6 +54,8 @@ interface InteractionOptions {
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => void;
+    /** Llamado cuando el usuario cierra el polígono de medición de área */
+    onMeasureAreaFinish: (verticesM: CanvasPoint[]) => void;
     onSelectObject: (id: string | null) => void;
     onPanChange: (dx: number, dy: number) => void;
     onDoubleClick: () => void;
@@ -90,8 +92,8 @@ interface DrawState {
     canopyPreview: { start: CanvasPoint; end: CanvasPoint } | null;
     /** Punto inicial de calibración en coordenadas de ESCENA (metros) — para preview/snap. */
     calibrationStart: CanvasPoint | null;
-    /** Punto inicial de calibración en coordenadas de PANTALLA (px) — para screenToWorld nativo. */
-    calibrationStartScreen: CanvasPoint | null;
+    /** Vértices acumulados para la herramienta measure-area (metros de escena). */
+    measureAreaVertices: CanvasPoint[];
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
@@ -117,6 +119,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onAddCanopy,
         onAddFixture,
         onCalibrationMeasure,
+        onMeasureAreaFinish,
         onSelectObject,
         onPanChange,
         onDoubleClick,
@@ -159,7 +162,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         wallPreview: null,
         canopyPreview: null,
         calibrationStart: null,
-        calibrationStartScreen: null,
+        measureAreaVertices: [],
         isDragging: false,
         dragStartScene: null,
         dragObjectId: null,
@@ -169,7 +172,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     useEffect(() => {
         if (activeTool !== 'calibrate') {
             stateRef.current.calibrationStart = null;
-            stateRef.current.calibrationStartScreen = null;
+        }
+        if (activeTool !== 'measure-area') {
+            stateRef.current.measureAreaVertices = [];
         }
     }, [activeTool]);
 
@@ -220,6 +225,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         if (isWallTool(tool) && s.wallVertices.length > 0) return s.wallVertices[s.wallVertices.length - 1];
         if (tool === 'canopy' && s.isDrawing && s.wallStart) return s.wallStart;
         if (tool === 'calibrate' && s.calibrationStart) return s.calibrationStart;
+        if (tool === 'measure-area' && s.measureAreaVertices.length > 0) return s.measureAreaVertices[s.measureAreaVertices.length - 1];
         return null;
     }, []);
 
@@ -268,6 +274,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
             setCalibrationSnapPoint: (p: CanvasPoint | null) => void,
+            setMeasureAreaVertices: (v: CanvasPoint[]) => void,
         ) => {
             const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
             if (isNaN(rect.left) || isNaN(rect.top)) return;
@@ -310,21 +317,37 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
+            if (activeTool === 'measure-area') {
+                const scenePoint = canvasToScene(cx, cy);
+                if (s.measureAreaVertices.length >= 2) {
+                    const first = sceneToCanvas(s.measureAreaVertices[0].x, s.measureAreaVertices[0].y);
+                    if (Math.hypot(first.x - cx, first.y - cy) < closeThresholdPx) {
+                        // Cerrar polígono
+                        if (s.measureAreaVertices.length >= 3) {
+                            onMeasureAreaFinish([...s.measureAreaVertices]);
+                        }
+                        stateRef.current.measureAreaVertices = [];
+                        setMeasureAreaVertices([]);
+                        return;
+                    }
+                }
+                s.measureAreaVertices.push(scenePoint);
+                setMeasureAreaVertices([...s.measureAreaVertices]);
+                return;
+            }
+
             if (activeTool === 'calibrate') {
                 if (!s.calibrationStart) {
-                    // Primer clic: guardar en ESCENA (para preview/snap visual)
-                    // y en PANTALLA (para screenToWorld nativo del motor CAD).
+                    // Primer clic: guardar en ESCENA
                     const scenePoint = canvasToScene(cx, cy);
-                    s.calibrationStart       = scenePoint;
-                    s.calibrationStartScreen = { x: cx, y: cy };  // ← píxeles reales SVG
+                    s.calibrationStart = scenePoint;
                     setCalibrationPreview({ start: scenePoint, end: scenePoint });
                     setCalibrationSnapPoint(scenePoint);
                     return;
                 }
 
                 // Segundo clic.
-                const endScene  = canvasToScene(cx, cy);
-                const endScreen = { x: cx, y: cy };  // ← píxeles reales SVG
+                const endScene = canvasToScene(cx, cy);
 
                 const sceneDistanceM = Math.hypot(
                     endScene.x - s.calibrationStart.x,
@@ -334,22 +357,18 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 if (sceneDistanceM > 0) {
                     setCalibrationPreview({ start: s.calibrationStart, end: endScene });
                     setCalibrationSnapPoint(endScene);
-                    // ✅ SE PASAN COORDENADAS DE PANTALLA (px) — NO de escena (metros).
-                    // measureCadDistanceFromScreen llama cadView.screenToWorld(px) para
-                    // obtener la distancia en unidades CAD nativas (mm, cm, m según DXF).
-                    // Si se pasan metros como si fueran px → 1.8 m interpretado como 1.8 px
-                    // → coordenada CAD absurda → cadDistance erróneo → 26,742 m².
+                    // Pasamos coordenadas de escena (metros) al canvas para recuperar
+                    // la distancia CAD nativa pura dividiendo por effectiveScale.
                     onCalibrationMeasure(
                         sceneDistanceM,
-                        s.calibrationStartScreen!,  // px
-                        endScreen,                   // px
+                        s.calibrationStart, // metros
+                        endScene,           // metros
                     );
                 } else {
                     setCalibrationPreview(null);
                     setCalibrationSnapPoint(null);
                 }
                 s.calibrationStart       = null;
-                s.calibrationStartScreen = null;
                 s.isDrawing = false;
                 return;
             }
@@ -475,7 +494,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         [
             activeTool, angleSnapMode, canvasToScene, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM,
             findNearestWall, findNearestFixture, findNearestRoom, findNearestCanopy, findNearestWindow, findNearestDoor,
-            onAddFixture, onCalibrationMeasure, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
+            onAddFixture, onCalibrationMeasure, onMeasureAreaFinish, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
+            closeThresholdPx,
         ],
     );
 
@@ -533,6 +553,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if ((activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') && s.roomVertices.length > 0) {
                 s.previewPoint = canvasToScene(cx, cy);
                 setPreviewPoint(s.previewPoint);
+                return;
+            }
+
+            if (activeTool === 'measure-area' && s.measureAreaVertices.length > 0) {
+                setPreviewPoint(canvasToScene(cx, cy));
                 return;
             }
 
@@ -668,8 +693,14 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             s.wallVertices = [];
             s.isDrawing = false;
             onDoubleClick();
+            return;
         }
-    }, [activeTool, onAddWall, onDoubleClick]);
+        if (activeTool === 'measure-area' && s.measureAreaVertices.length >= 3) {
+            onMeasureAreaFinish([...s.measureAreaVertices]);
+            stateRef.current.measureAreaVertices = [];
+            onDoubleClick();
+        }
+    }, [activeTool, onAddWall, onMeasureAreaFinish, onDoubleClick]);
 
     return {
         onMouseDown,

@@ -28,6 +28,30 @@ export function calculatePolygonArea(
 }
 
 /**
+ * Calcula el perímetro de un polígono cerrado usando sus vértices (en metros).
+ * Para una polilínea abierta (pared/pasadizo lineal), suma solo los segmentos.
+ * Si se pasa `closed=true`, incluye el segmento del último al primer vértice.
+ */
+export function calculatePolygonPerimeter(
+    vertices: { x: number; y: number }[],
+    closed = true,
+): number {
+    if (vertices.length < 2) return 0;
+
+    let perimeter = 0;
+    const n = vertices.length;
+    const segments = closed ? n : n - 1;
+
+    for (let i = 0; i < segments; i++) {
+        const a = vertices[i];
+        const b = vertices[(i + 1) % n];
+        perimeter += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+
+    return perimeter;
+}
+
+/**
  * Cálculo de lúmenes requeridos según fórmula: ((area * norma) / 0.8) / 0.99
  * donde:
  *   - area: área del recinto en m²

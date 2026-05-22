@@ -102,6 +102,8 @@ interface UIState {
     fixtureTemplate: Partial<Fixture>;
     windowTemplate: Partial<Window>;
     doorTemplate: Partial<Door>;
+    /** Tipo de muro que se creará al dibujar con la herramienta 'wall' */
+    wallTypeTemplate: 'interior' | 'exterior' | 'cerco';
     /** Configuración de la grilla de focos en el panel de luz */
     fixtureGridRows: number;
     fixtureGridCols: number;
@@ -191,6 +193,7 @@ interface EditorState {
     setFixtureTemplate: (t: Partial<Fixture>) => void;
     setWindowTemplate: (t: Partial<Window>) => void;
     setDoorTemplate: (t: Partial<Door>) => void;
+    setWallTypeTemplate: (type: 'interior' | 'exterior' | 'cerco') => void;
     setFixtureGridRows: (rows: number) => void;
     setFixtureGridCols: (cols: number) => void;
 
@@ -275,6 +278,7 @@ export const useEditorStore = create<EditorState>()(
                 width: 0.9,
                 height: 2.1,
             },
+            wallTypeTemplate: 'interior',
             fixtureGridRows: 2,
             fixtureGridCols: 2,
             showAllFloors: false,
@@ -889,6 +893,8 @@ export const useEditorStore = create<EditorState>()(
             set((s) => ({
                 ui: { ...s.ui, doorTemplate: { ...s.ui.doorTemplate, ...t } },
             })),
+        setWallTypeTemplate: (type) =>
+            set((s) => ({ ui: { ...s.ui, wallTypeTemplate: type } })),
         setFixtureGridRows: (rows) =>
             set((s) => ({
                 ui: { ...s.ui, fixtureGridRows: Math.max(1, rows) },
@@ -1142,26 +1148,22 @@ function rescaleSceneEntities(scene: Scene, ratio: number): Scene {
             y1: c.y1 * ratio,
             x2: c.x2 * ratio,
             y2: c.y2 * ratio,
-            width: c.width * ratio,
+            // width is explicitly in meters, do not scale
         })),
-        // Windows/Doors are relative to walls (offsetAlongWall), so rescale offset + dimensions
+        // Windows/Doors are relative to walls (offsetAlongWall), so rescale offset.
+        // width/height/sillHeight are explicitly in meters, do not scale them.
         windows: (scene.windows || []).map((w) => ({
             ...w,
             offsetAlongWall: w.offsetAlongWall * ratio,
-            width: w.width * ratio,
-            height: w.height * ratio,
-            sillHeight: w.sillHeight * ratio,
         })),
         doors: (scene.doors || []).map((d) => ({
             ...d,
             offsetAlongWall: d.offsetAlongWall * ratio,
-            width: d.width * ratio,
-            height: d.height * ratio,
         })),
         partitions: (scene.partitions ?? []).map((p) => ({
             ...p,
             vertices: p.vertices.map((v) => ({ x: v.x * ratio, y: v.y * ratio })),
-            thickness: p.thickness * ratio,
+            // thickness is explicitly in meters, do not scale
         })),
     };
 }

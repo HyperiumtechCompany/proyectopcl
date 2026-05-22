@@ -11,7 +11,7 @@
 
 export type DrawTool =
     | 'select' | 'room' | 'wall' | 'education-wall' | 'window' | 'door' | 'canopy' | 'corridor' | 'stair'
-    | 'partition' | 'fixture' | 'fixture-grid' | 'measure' | 'pan' | 'calibrate';
+    | 'partition' | 'fixture' | 'fixture-grid' | 'measure' | 'measure-area' | 'pan' | 'calibrate';
 
 export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
@@ -39,12 +39,26 @@ export type CorridorType =
     | 'normal'
     | 'roof_floor'
     | 'concrete_railings'
-    | 'metal_railings';
+    | 'metal_railings'
+    /** Bereda / rampa inclinada (pendiente configurable) */
+    | 'ramp'
+    /** Vereda plana (sin techo, sin barandas) */
+    | 'sidewalk';
 
 export interface CorridorConfig {
     type?: CorridorType;
     slabThickness?: number;
     railingHeight?: number;
+    /**
+     * Pendiente de la rampa en porcentaje (solo para type === 'ramp').
+     * RNE permite máximo 12% para discapacitados. Default 8%.
+     */
+    rampSlope?: number;
+    /**
+     * Dirección de ascenso de la rampa: hacia dónde sube.
+     * Default: 'north' (hacia -Y en el plano).
+     */
+    rampDirection?: 'north' | 'south' | 'east' | 'west';
 }
 
 // ─── Escaleras ────────────────────────────────────────────────────────────────
@@ -119,6 +133,19 @@ export interface StairConfig {
      * (ej. 1.75 m si la Escalera 1 tiene 10 escalones × 0.175 m).
      */
     startElevation?: number;
+    /**
+     * Si true (default), la escalera tiene una losa/base sólida bajo los escalones.
+     * Usar true para escaleras entre pisos (la losa del siguiente piso cubre la cima).
+     * Usar false para escaleras simples dentro de un mismo nivel (sin losa superior).
+     */
+    hasBaseSlab?: boolean;
+    /**
+     * Si true, esta escalera conecta con el piso superior del proyecto.
+     * Afecta cómo se calcula la altura máxima en resolveSceneStackHeight:
+     * no contribuye a la elevación del siguiente piso (la escalera es un objeto
+     * dentro del piso, no define su altura).
+     */
+    isInterFloor?: boolean;
 }
 
 /** Recinto (espacio cerrado con polígono arbitrario) */
@@ -149,6 +176,10 @@ export interface Room {
     corridorConfig?: CorridorConfig;
     /** Configuración de escalera (solo cuando roomType === 'stair') */
     stairConfig?: StairConfig;
+    /** Material de construcción de la envolvente del recinto (para cálculo de muros) */
+    material?: 'brick' | 'adobe';
+    /** Uso normativo del recinto (vivienda / educación / genérico) */
+    normativeUse?: 'housing' | 'education' | 'generic';
 }
 
 /** Configuración normativa del proyecto (sincronizada con backend) */
@@ -228,8 +259,9 @@ export interface Door {
      *   'sliding'  → corredera
      *   'folding'  → plegable
      *   'bathroom' → puerta de cubículo SS.HH (ancho 0.60-0.70m, gap inferior 0.15m)
+     *   'opening'  → solo vano (hueco sin panel ni marco)
      */
-    doorType?: 'single' | 'double' | 'sliding' | 'folding' | 'bathroom';
+    doorType?: 'single' | 'double' | 'sliding' | 'folding' | 'bathroom' | 'opening';
     openingDirection?: 'inward' | 'outward';
     /** Lado donde está la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';

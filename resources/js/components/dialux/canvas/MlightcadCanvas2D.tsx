@@ -55,6 +55,7 @@ import { OverlayRooms } from './OverlayRooms';
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayPartitions } from './OverlayPartitions';
+import { OverlayMeasureArea } from './OverlayMeasureArea';
 
 // ─── Helpers locales ──────────────────────────────────────────────────────────
 
@@ -70,6 +71,7 @@ const CURSOR_MAP: Record<string, string> = {
     stair: 'crosshair',
     fixture: 'cell',
     measure: 'crosshair',
+    'measure-area': 'crosshair',
     calibrate: 'crosshair',
     pan: 'grab',
 };
@@ -85,6 +87,7 @@ const DRAWING_TOOLS = new Set([
     'stair',
     'fixture',
     'measure',
+    'measure-area',
     'calibrate',
     'pan',
 ]);
@@ -138,6 +141,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             start: CanvasPoint;
             end: CanvasPoint;
         } | null>(null);
+        /** Vértices en progreso para la herramienta measure-area */
+        const [measureAreaVertices, setMeasureAreaVertices] = useState<CanvasPoint[]>([]);
+        /** Punto de preview dinámico del cursor para measure-area */
+        const [measureAreaPreviewPt, setMeasureAreaPreviewPt] = useState<CanvasPoint | null>(null);
+        /** Medición congelada al cerrar el polígono (para mantenerla visible) */
+        const [measureAreaFrozen, setMeasureAreaFrozen] = useState<CanvasPoint[] | null>(null);
         const [isDragging, setIsDragging] = useState(false);
         const [viewTick, setViewTick] = useState(0);
         const scaleConfig = normalizeScaleConfig(scene?.scaleConfig);
@@ -232,9 +241,17 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         y: cadToMeters(safeNum(w?.y), scaleConfig),
                     };
                 }
-                return { x: 0, y: 0 };
+                // Fallback cuando el motor CAD no tiene vista inicializada.
+                // Invertir la transformación: px/zoom - pan, luego convertir
+                // píxeles a metros usando el factor de escala efectivo.
+                const pxPerM = getCanvasScalePxPerMeter(scaleConfig);
+                const scaledPxPerM = pxPerM > 0 ? pxPerM : 1;
+                return {
+                    x: (px - panX) / (scaledPxPerM * zoom),
+                    y: (py - panY) / (scaledPxPerM * zoom),
+                };
             },
-            [hasCadView, cadView, scaleConfig],
+            [hasCadView, cadView, scaleConfig, panX, panY, zoom],
         );
 
         /**
@@ -317,9 +334,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 y: metersToCad(lastPoint.y, scaleConfig),
                             }
                           : null;
-                      const osnapCad = engine.getOsnapPoint(cadPoint, {
-                          lastPoint: cadLast,
-                      });
+                      let osnapCad = null;
+                      try {
+                          osnapCad = engine.getOsnapPoint(cadPoint, {
+                              lastPoint: cadLast,
+                          });
+                      } catch (err) {
+                          console.warn('[DIAlux] engine.getOsnapPoint threw an error (malformed DXF entity?):', err);
+                      }
                       if (!osnapCad) return null;
                       // Retornar en metros para que el pipeline de snap sea consistente.
                       return {
@@ -399,12 +421,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         : undefined,
                     corridorConfig: isCorridor
                         ? {
-                              ...ui.corridorTemplate,
-                              type: ui.corridorTemplate.type ?? 'roof_only',
+                              ...(ui.corridorTemplate || {}),
+                              type: ui.corridorTemplate?.type ?? 'roof_only',
                               slabThickness:
-                                  ui.corridorTemplate.slabThickness ?? 0.2,
+                                  ui.corridorTemplate?.slabThickness ?? 0.2,
                               railingHeight:
-                                  ui.corridorTemplate.railingHeight ?? 1.05,
+                                  ui.corridorTemplate?.railingHeight ?? 1.05,
                           }
                         : undefined,
                 });
@@ -414,12 +436,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             onAddWall: (vertices) => {
                 const isEducationWall = ui.activeTool === 'education-wall';
+                const wallType = isEducationWall ? 'interior' : (ui.wallTypeTemplate ?? 'interior');
                 const preset = getPeruWallPreset(
                     'brick',
                     isEducationWall ? 'education' : 'housing',
                 );
                 const id = store.addWall({
                     vertices,
+                    wallType,
                     material: preset.material,
                     normativeUse: preset.use,
                     thickness: preset.recommendedThickness,
@@ -526,17 +550,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 });
                 store.setSelectedId(id);
             },
-            onCalibrationMeasure: (_sceneDistM, p1Screen, p2Screen) => {
-                // p1Screen, p2Screen son px en el SVG — measureCadDistanceFromScreen
-                // llama cadView.screenToWorld(px) para la distancia CAD nativa.
-                const cadDistance = measureCadDistanceFromScreen(
-                    p1Screen,
-                    p2Screen,
-                );
-
-                // Convertir px → metros para los overlays visuales.
-                const p1Scene = worldPoint(p1Screen.x, p1Screen.y);
-                const p2Scene = worldPoint(p2Screen.x, p2Screen.y);
+            onCalibrationMeasure: (sceneDistM, p1Scene, p2Scene) => {
+                // Recuperar la distancia CAD exacta usando el factor actual.
+                // sceneDistM ya contiene la distancia exacta en metros, derivada del OSNAP CAD si se activó.
+                // Dividir por effectiveScale nos devuelve la distancia CAD nativa pura sin pasar por píxeles de pantalla.
+                const scale = effectiveScale > 0 ? effectiveScale : 1;
+                const cadDistance = sceneDistM / scale;
 
                 setCalibrationLine({ start: p1Scene, end: p2Scene });
                 setPendingCalibration({
@@ -546,12 +565,24 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 });
             },
 
+            /**
+             * onMeasureAreaFinish: el usuario cerró el polígono de medición.
+             * Los vértices ya están en metros calibrados (pasaron por worldPoint)
+             * → el área calculada aquí es idéntica a la de los recintos DIAlux.
+             */
+            onMeasureAreaFinish: (verticesM) => {
+                setMeasureAreaFrozen(verticesM);
+                setMeasureAreaVertices([]);
+                setMeasureAreaPreviewPt(null);
+            },
+
             onSelectObject: (id) => store.setSelectedId(id),
             onPanChange: (dx, dy) => store.setPan(panX + dx, panY + dy),
             onDoubleClick: () => {
                 setRoomPreviewPt(null);
                 setWallPreview(null);
                 setCanopyPreview(null);
+                setMeasureAreaPreviewPt(null);
             },
             onMoveFixture: (id, x, y) => store.updateFixture(id, { x, y }),
             onMoveRoom: (id, dx, dy) => {
@@ -754,7 +785,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         overflow: 'visible',
                     }}
                     onMouseDown={(e) => {
-                        if (isInteractiveMode)
+                        if (isInteractiveMode) {
+                            if (ui.activeTool !== 'measure-area') setMeasureAreaFrozen(null);
                             onMouseDown(
                                 e,
                                 setRoomVertices,
@@ -762,13 +794,18 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 setCanopyPreview,
                                 setCalibrationLine,
                                 setCalibrationSnapPoint,
+                                setMeasureAreaVertices,
                             );
+                        }
                     }}
                     onMouseMove={(e) => {
                         if (isInteractiveMode)
                             onMouseMove(
                                 e,
-                                setRoomPreviewPt,
+                                (pt) => {
+                                    if (ui.activeTool === 'measure-area') setMeasureAreaPreviewPt(pt);
+                                    else setRoomPreviewPt(pt);
+                                },
                                 setWallPreview,
                                 setCanopyPreview,
                                 setCalibrationLine,
@@ -948,6 +985,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                   : null
                         }
                     />
+                    <OverlayMeasureArea
+                        vertices={measureAreaVertices.length > 0 ? measureAreaVertices : (measureAreaFrozen ?? [])}
+                        previewPoint={measureAreaPreviewPt}
+                        isClosed={measureAreaFrozen !== null && measureAreaVertices.length === 0}
+                        screenPoint={screenPoint}
+                        zoom={zoom}
+                    />
                 </svg>
 
                 <CalibrationDialog
@@ -1024,6 +1068,18 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         >
                             Fit
                         </button>
+                    </div>
+                )}
+
+                {/* ── Badge de calibración activa ── */}
+                {scaleConfig.isCalibrated && scaleConfig.calibrationFactor !== 1 && (
+                    <div className="absolute top-14 right-3 z-30 flex items-center gap-2 rounded-lg border border-amber-900/60 bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
+                        <div className="text-amber-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
+                        </div>
+                        <span className="font-mono text-amber-300 font-semibold" title="Los objetos arquitectónicos están escalados con este factor.">
+                            Calibrado ×{scaleConfig.calibrationFactor.toFixed(4)}
+                        </span>
                     </div>
                 )}
 

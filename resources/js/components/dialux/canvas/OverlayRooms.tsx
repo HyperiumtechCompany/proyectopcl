@@ -9,6 +9,10 @@
 
 import { memo } from 'react';
 import type { Room, StairFlight } from '@/hooks/dialux/types';
+import {
+    calculatePolygonArea,
+    calculatePolygonPerimeter,
+} from '@/hooks/dialux/lightingCalculations';
 import { safeNum, centroid } from './canvasUtils';
 
 type ScreenFn = (p: { x: number; y: number }) => { x: number; y: number };
@@ -51,6 +55,12 @@ const RoomPolygon = memo(function RoomPolygon({
     zoom: number;
     onSelect: (id: string) => void;
 }) {
+    const area = calculatePolygonArea(room.vertices);
+    const perimeter = calculatePolygonPerimeter(room.vertices);
+    const labelFontSize = safeNum(Math.max(9, 11 * zoom));
+    const subFontSize = safeNum(Math.max(7, 8.5 * zoom));
+    const lineOffset = safeNum(Math.max(10, 13 * zoom));
+    const showMetrics = zoom >= 0.4 && area > 0;
     return (
         <g
             style={{ pointerEvents: 'auto', cursor: 'pointer' }}
@@ -71,15 +81,27 @@ const RoomPolygon = memo(function RoomPolygon({
                 strokeLinejoin="miter"
             />
             <text
-                x={safeNum(ctr.x)} y={safeNum(ctr.y)}
+                x={safeNum(ctr.x)} y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
                 textAnchor="middle" dominantBaseline="middle"
                 fill={isSelected ? '#e2e8f0' : '#93c5fd'}
-                fontSize={safeNum(Math.max(9, 11 * zoom))}
+                fontSize={labelFontSize}
                 fontFamily="sans-serif" fontWeight={600}
                 pointerEvents="none"
             >
                 {room.name}
             </text>
+            {showMetrics && (
+                <text
+                    x={safeNum(ctr.x)} y={safeNum(ctr.y + lineOffset / 2)}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="#60a5fa"
+                    fontSize={subFontSize}
+                    fontFamily="monospace" fontWeight={400}
+                    pointerEvents="none"
+                >
+                    {`${area.toFixed(2)}m²  Ø${perimeter.toFixed(2)}m`}
+                </text>
+            )}
         </g>
     );
 });
@@ -94,6 +116,12 @@ const CorridorPolygon = memo(function CorridorPolygon({
     zoom: number;
     onSelect: (id: string) => void;
 }) {
+    const area = calculatePolygonArea(room.vertices);
+    const perimeter = calculatePolygonPerimeter(room.vertices);
+    const subFontSize = safeNum(Math.max(7, 8.5 * zoom));
+    const labelFontSize = safeNum(Math.max(8, 10 * zoom));
+    const lineOffset = safeNum(Math.max(10, 13 * zoom));
+    const showMetrics = zoom >= 0.4 && area > 0;
     const patId = `hatch-pasadizo-${room.id}`;
     return (
         <g
@@ -117,15 +145,27 @@ const CorridorPolygon = memo(function CorridorPolygon({
                 strokeDasharray={isSelected ? '0' : '6,3'}
             />
             <text
-                x={safeNum(ctr.x)} y={safeNum(ctr.y)}
+                x={safeNum(ctr.x)} y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
                 textAnchor="middle" dominantBaseline="middle"
                 fill={isSelected ? '#fbbf24' : '#d97706'}
-                fontSize={safeNum(Math.max(8, 10 * zoom))}
+                fontSize={labelFontSize}
                 fontFamily="sans-serif" fontWeight={600}
                 pointerEvents="none" letterSpacing={0.5}
             >
                 {room.name}
             </text>
+            {showMetrics && (
+                <text
+                    x={safeNum(ctr.x)} y={safeNum(ctr.y + lineOffset / 2)}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="#fbbf24"
+                    fontSize={subFontSize}
+                    fontFamily="monospace" fontWeight={400}
+                    pointerEvents="none"
+                >
+                    {`${area.toFixed(2)}m²  Ø${perimeter.toFixed(2)}m`}
+                </text>
+            )}
         </g>
     );
 });

@@ -437,8 +437,8 @@ const PanelSep = ({ label }: { label?: string }) => (
 );
 
 /** Color-coded section header band, like DIALux */
-const SectionBand = ({ label, icon }: { label: string; icon?: React.ReactNode }) => (
-    <div className="flex items-center gap-1.5 rounded bg-gray-800/60 px-2 py-1.5 mb-1.5">
+const SectionBand = ({ label, icon, className }: { label: string; icon?: React.ReactNode; className?: string }) => (
+    <div className={`flex items-center gap-1.5 rounded bg-gray-800/60 px-2 py-1.5 mb-1.5 ${className ?? ''}`}>
         {icon && <span className="text-gray-500 shrink-0">{icon}</span>}
         <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
             {label}
@@ -1056,10 +1056,18 @@ const HerramientasPanel: React.FC<{ onExecute: (cmd: string) => void; isReady: b
 const ConstruccionPanel: React.FC<{
     activeTool: DrawTool; onSetTool: (t: DrawTool) => void;
     angleSnapMode: AngleSnapMode; onSetAngleSnap: (v: AngleSnapMode) => void;
-}> = ({ activeTool, onSetTool, angleSnapMode, onSetAngleSnap }) => {
+    wallTypeTemplate: 'interior' | 'exterior' | 'cerco';
+    onSetWallType: (t: 'interior' | 'exterior' | 'cerco') => void;
+}> = ({ activeTool, onSetTool, angleSnapMode, onSetAngleSnap, wallTypeTemplate, onSetWallType }) => {
     const [search, setSearch] = useState('');
     const [material, setMaterial] = useState<WindowMaterial>('Todos');
     const [activeTab, setActiveTab] = useState<'tools' | 'catalog'>('tools');
+
+    const WALL_TYPE_OPTIONS: Array<{ value: 'interior' | 'exterior' | 'cerco'; label: string; color: string }> = [
+        { value: 'interior', label: 'Interior', color: 'text-slate-300' },
+        { value: 'exterior', label: 'Exterior', color: 'text-blue-400' },
+        { value: 'cerco',    label: 'Cerco',    color: 'text-amber-400' },
+    ];
 
     const TOOL_GROUPS: Array<{
         label: string;
@@ -1116,6 +1124,28 @@ const ConstruccionPanel: React.FC<{
                                             <PanelToolBtn key={t.tool} {...t} active={activeTool} onSet={onSetTool} />
                                         ))}
                                     </div>
+                                    {/* Selector de tipo de muro — justo bajo los botones de Muros */}
+                                    {group.label === 'Muros' && (
+                                        <div className="mt-1.5 rounded border border-gray-700/60 bg-gray-900/60 p-1.5">
+                                            <p className="mb-1 text-[8px] font-bold tracking-widest text-gray-600 uppercase">Tipo de muro</p>
+                                            <div className="flex gap-1">
+                                                {WALL_TYPE_OPTIONS.map((opt) => (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        onClick={() => onSetWallType(opt.value)}
+                                                        className={`flex-1 rounded py-1 text-[9px] font-semibold transition-colors ${
+                                                            wallTypeTemplate === opt.value
+                                                                ? `bg-gray-700 ${opt.color} ring-1 ring-gray-500`
+                                                                : 'text-gray-600 hover:text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -1235,18 +1265,34 @@ const LuzPanel: React.FC<{
 const MedirPanel: React.FC<{
     activeTool: DrawTool; onSetTool: (t: DrawTool) => void;
     onExecute: (cmd: string) => void; isReady: boolean;
-}> = ({ activeTool, onSetTool, onExecute, isReady }) => (
-    <>
-        <SectionBand label="Medición" icon={<Ruler size={11} />} />
-        <PanelToolBtn tool="measure" icon={<Ruler size={13} />} active={activeTool}
-            onSet={onSetTool} tip="Medir distancia (M)" sublabel="Entre dos puntos" />
-        <PanelCadBtn command="measurearea"  title="Medir área"     icon={<Square size={13} />}  onExecute={onExecute} isReady={isReady} />
-        <PanelCadBtn command="measureangle" title="Medir ángulo"   icon={<RotateCw size={13} />} onExecute={onExecute} isReady={isReady} />
-        <PanelSep />
-        <PanelCadBtn command="clearmeasurements" title="Limpiar mediciones"
-            icon={<Trash2 size={13} />} onExecute={onExecute} isReady={isReady} />
-    </>
-);
+    scaleConfig: ScaleConfig;
+}> = ({ activeTool, onSetTool, onExecute, isReady, scaleConfig }) => {
+    const isCalibrated = scaleConfig.isCalibrated && scaleConfig.calibrationFactor !== 1;
+    return (
+        <>
+            <SectionBand label="Herramientas DIAlux" icon={<Ruler size={11} />} />
+            <PanelToolBtn tool="measure" icon={<Ruler size={13} />} active={activeTool}
+                onSet={onSetTool} tip="Medir distancia" sublabel="Punto a punto" />
+            <PanelToolBtn tool="measure-area" icon={<Square size={13} />} active={activeTool}
+                onSet={onSetTool} tip="Medir área" sublabel="Polígono (click)" />
+
+            <SectionBand label="Herramientas CAD (Motor)" icon={<Grid size={11} />} className="mt-2" />
+            {isCalibrated && (
+                <div className="mx-2 mb-2 rounded bg-amber-950/50 p-2 text-[10px] leading-tight text-amber-200 ring-1 ring-amber-900/50">
+                    <span className="font-semibold text-amber-400">Atención:</span> Escala activa (×{scaleConfig.calibrationFactor.toFixed(4)}).
+                    Las herramientas nativas medirán en unidades originales. Usa las de DIAlux arriba.
+                </div>
+            )}
+            <div className={isCalibrated ? 'opacity-50 grayscale' : ''}>
+                <PanelCadBtn command="measurearea"  title="Área CAD"     icon={<Square size={13} />}  onExecute={onExecute} isReady={isReady} />
+                <PanelCadBtn command="measureangle" title="Ángulo CAD"   icon={<RotateCw size={13} />} onExecute={onExecute} isReady={isReady} />
+                <PanelSep />
+                <PanelCadBtn command="clearmeasurements" title="Limpiar marcas CAD"
+                    icon={<Trash2 size={13} />} onExecute={onExecute} isReady={isReady} />
+            </div>
+        </>
+    );
+};
 
 /* ── Vista Panel ─────────────────────────────────────────────────────────── */
 const VistaPanel: React.FC<{
@@ -1352,24 +1398,6 @@ const ExportacionPanel: React.FC<{
                     <RotateCcw size={11} />Reset
                 </Button>
             </div>
-        </PanelCard>
-
-        <PanelCard title="Normativa de referencia">
-            <select
-                value={defaultNormativeStandard}
-                onChange={(e) => onDefaultNormativeStandardChange(e.target.value as NormativeStandard)}
-                className="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1.5
-                    text-[11px] text-gray-200 outline-none focus:ring-1 focus:ring-cyan-500/40 mb-2"
-            >
-                {Object.entries(NORMATIVE_LABELS).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                ))}
-            </select>
-            <Button variant="outline" size="sm"
-                className="w-full justify-center gap-2 border-emerald-800/40 bg-emerald-950/20 text-emerald-200 hover:bg-emerald-900/40"
-                onClick={onApplyStandardToAllRooms}>
-                <Scale size={11} /><span className="text-[10.5px]">Aplicar a todos los recintos</span>
-            </Button>
         </PanelCard>
 
         <PanelCard title="Exportar reporte">
@@ -1643,7 +1671,9 @@ export const Toolbar: React.FC = () => {
                 <FloatingPanelPortal title="Construcción" icon={<Building2 size={12} />}
                     anchorRef={refs.construccion} onClose={closePanel} width="md">
                     <ConstruccionPanel activeTool={activeTool} onSetTool={store.setTool}
-                        angleSnapMode={angleSnapMode} onSetAngleSnap={store.setAngleSnapMode} />
+                        angleSnapMode={angleSnapMode} onSetAngleSnap={store.setAngleSnapMode}
+                        wallTypeTemplate={store.ui.wallTypeTemplate}
+                        onSetWallType={store.setWallTypeTemplate} />
                 </FloatingPanelPortal>
             )}
 
@@ -1671,7 +1701,8 @@ export const Toolbar: React.FC = () => {
                 <FloatingPanelPortal title="Medición" icon={<Ruler size={13} />}
                     anchorRef={refs.medir} onClose={closePanel}>
                     <MedirPanel activeTool={activeTool} onSetTool={store.setTool}
-                        onExecute={handleCommand} isReady={isReady} />
+                        onExecute={handleCommand} isReady={isReady}
+                        scaleConfig={store.activeScene()?.scaleConfig ?? createScaleConfig('m', 1, 'Metros (1 = 1m)')} />
                 </FloatingPanelPortal>
             )}
 

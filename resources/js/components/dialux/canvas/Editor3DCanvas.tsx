@@ -169,8 +169,12 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                 isoluxMode: state.ui.isoluxMode,
                 showRoof: state.ui.showRoof,
                 showAllFloors: state.ui.showAllFloors,
+                // Serialize visibilities so toggling a floor's visibility triggers re-render
+                sceneVisibilities: state.project?.scenes
+                    .map((s) => `${s.id}:${s.visible ?? true}`)
+                    .join(','),
             }),
-            ({ result, showIsolux, isoluxMode, showRoof, showAllFloors }) => {
+            (_snapshot) => {
                 const state = useEditorStore.getState();
                 const allScenes = state.project?.scenes ?? [];
                 const activeSceneId = state.activeSceneId;
@@ -184,14 +188,15 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     syncFrameRef.current = null;
                     if (!builderRef.current || scene.isDisposed) return;
 
+                    const freshState = useEditorStore.getState();
                     builderRef.current.syncAllFloors(
-                        allScenes,
-                        result ?? null,
-                        showIsolux,
-                        isoluxMode,
-                        showRoof,
-                        activeSceneId,
-                        showAllFloors,
+                        freshState.project?.scenes ?? [],
+                        freshState.result ?? null,
+                        freshState.ui.showIsolux,
+                        freshState.ui.isoluxMode,
+                        freshState.ui.showRoof,
+                        freshState.activeSceneId,
+                        freshState.ui.showAllFloors,
                     );
                 });
             },

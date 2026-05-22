@@ -104,6 +104,9 @@ export class House3DBuilder {
     /** Cache de materiales por color de fixture — evita N instancias de StandardMaterial */
     private matFixtureCache: Map<string, StandardMaterial> = new Map();
 
+    /** Cache de materiales para marcadores de escalera (entrada verde / salida amarillo) */
+    private matStairMarkerCache: Map<string, StandardMaterial> = new Map();
+
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
         this.camera = camera || null;
@@ -142,7 +145,9 @@ export class House3DBuilder {
         );
 
         // 3. Construir cada piso en su elevación visual
-        for (const floor of sorted) {
+        for (let i = 0; i < sorted.length; i++) {
+            const floor = sorted[i];
+            const floorBelow = i > 0 ? sorted[i - 1] : undefined;
             const isActive = floor.id === activeSceneId;
             const isVisible = floor.visible ?? true;
 
@@ -158,6 +163,7 @@ export class House3DBuilder {
                 showRoof,
                 displayElevations.get(floor.id) ?? floor.floorElevation,
                 floor.id,
+                floorBelow,
             );
         }
 
@@ -202,6 +208,26 @@ export class House3DBuilder {
             specularIntensity,
             specularIntensity,
         );
+        return m;
+    }
+
+    /**
+     * Crea (o retorna desde caché) un material para el primer/último escalón.
+     *   'entry' = verde suave (primer escalón — entrada)
+     *   'exit'  = amarillo suave (último escalón — salida/descanso)
+     */
+    private getOrCreateStairMarkerMat(type: 'entry' | 'exit'): StandardMaterial {
+        const cached = this.matStairMarkerCache.get(type);
+        if (cached) return cached;
+
+        const m = new StandardMaterial(`mat_stair_${type}`, this.scene);
+        if (type === 'entry') {
+            m.diffuseColor = new Color3(0.2, 0.65, 0.3); // verde entrada
+        } else {
+            m.diffuseColor = new Color3(0.85, 0.72, 0.1); // amarillo salida
+        }
+        m.specularColor = new Color3(0.05, 0.05, 0.05);
+        this.matStairMarkerCache.set(type, m);
         return m;
     }
 
@@ -703,10 +729,16 @@ export class House3DBuilder {
     ): number {
         const rooms = editorScene.rooms || [];
         const walls = editorScene.walls || [];
-        const slabThickness = showRoof ? DEFAULT_STRUCTURAL_SLAB_THICKNESS : 0;
+        // Always include at least a minimal slab thickness between floors so that
+        // floors are visually separated (no z-fighting or gaps when showRoof=false).
+        const slabThickness = DEFAULT_STRUCTURAL_SLAB_THICKNESS;
         const roomHeight = rooms.reduce((maxHeight, room) => {
+            // Stairs are internal objects — they must NOT push the floor stack height
+            // beyond the tallest regular room. If the stair is interFloor, it connects
+            // to the next floor but its height is bounded by the room that contains it.
             if (room.roomType === 'stair') {
-                return Math.max(maxHeight, this.resolveStairHeight(room));
+                // Contribute only the stair's own room height (same as its parent recinto)
+                return Math.max(maxHeight, resolveRoomCeilingHeight(room, walls));
             }
 
             return Math.max(
@@ -754,7 +786,7 @@ export class House3DBuilder {
                 return this.pointInRoom(room, center.x, center.y);
             })
             .map((stair) =>
-                this.expandPolygonShape(this.sanitizeRoomShape(stair), 0.03),
+                this.expandPolygonShape(this.sanitizeRoomShape(stair), -0.01),
             )
             .filter((hole) => hole.length >= 3);
     }
@@ -768,6 +800,67 @@ export class House3DBuilder {
                 room.vertices.reduce((sum, vertex) => sum + vertex.y, 0) /
                 room.vertices.length,
         };
+    }
+
+    private isEdgeSharedWithOtherRoom(
+        v1: { x: number; z: number },
+        v2: { x: number; z: number },
+        myRoomId: string,
+        allRooms: Room[]
+    ): boolean {
+        const EPSILON = 0.05; // 5 cm de tolerancia
+
+        const segmentsOverlap = (
+            a1: { x: number; z: number },
+            a2: { x: number; z: number },
+            b1: { x: number; z: number },
+            b2: { x: number; z: number }
+        ) => {
+            if (
+                Math.max(a1.x, a2.x) < Math.min(b1.x, b2.x) - EPSILON ||
+                Math.min(a1.x, a2.x) > Math.max(b1.x, b2.x) + EPSILON ||
+                Math.max(a1.z, a2.z) < Math.min(b1.z, b2.z) - EPSILON ||
+                Math.min(a1.z, a2.z) > Math.max(b1.z, b2.z) + EPSILON
+            ) {
+                return false;
+            }
+
+            const cross = (a2.x - a1.x) * (b2.z - b1.z) - (a2.z - a1.z) * (b2.x - b1.x);
+            if (Math.abs(cross) > EPSILON) return false;
+
+            const lenSq = (a2.x - a1.x) ** 2 + (a2.z - a1.z) ** 2;
+            if (lenSq < 0.0001) return false;
+            const t = ((b1.x - a1.x) * (a2.x - a1.x) + (b1.z - a1.z) * (a2.z - a1.z)) / lenSq;
+            
+            const projX = a1.x + t * (a2.x - a1.x);
+            const projZ = a1.z + t * (a2.z - a1.z);
+            const distSq = (b1.x - projX) ** 2 + (b1.z - projZ) ** 2;
+            if (distSq > EPSILON * EPSILON) return false;
+
+            const isHorizontal = Math.abs(a2.x - a1.x) > Math.abs(a2.z - a1.z);
+            const aMin = isHorizontal ? Math.min(a1.x, a2.x) : Math.min(a1.z, a2.z);
+            const aMax = isHorizontal ? Math.max(a1.x, a2.x) : Math.max(a1.z, a2.z);
+            const bMin = isHorizontal ? Math.min(b1.x, b2.x) : Math.min(b1.z, b2.z);
+            const bMax = isHorizontal ? Math.max(b1.x, b2.x) : Math.max(b1.z, b2.z);
+
+            const overlapMin = Math.max(aMin, bMin);
+            const overlapMax = Math.min(aMax, bMax);
+
+            return overlapMax - overlapMin > 0.1;
+        };
+
+        for (const r of allRooms) {
+            if (r.id === myRoomId) continue;
+            const pts = this.sanitizeRoomShape(r);
+            for (let i = 0; i < pts.length; i++) {
+                const p1 = pts[i];
+                const p2 = pts[(i + 1) % pts.length];
+                if (segmentsOverlap(v1, v2, p1, p2)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private buildRoomFallback(
@@ -884,6 +977,7 @@ export class House3DBuilder {
         allWalls: Wall[] = [],
         floorNode?: TransformNode,
         allRooms: Room[] = [],
+        floorBelow?: EditorScene,
     ) {
         const meshes: Mesh[] = [];
 
@@ -917,6 +1011,85 @@ export class House3DBuilder {
                 EXTERIOR_WALL_THICKNESS / 2,
             );
             const floorThickness = 0.05;
+            // ── BEREDA / RAMPA ─────────────────────────────────────────────────
+            if (corridorType === 'ramp') {
+                const rampSlopePercent = room.corridorConfig?.rampSlope ?? 8;
+                const rampDirection = room.corridorConfig?.rampDirection ?? 'north';
+                const bounds = this.getRoomBounds(room);
+                const rampW = Math.max(0.1, bounds.maxX - bounds.minX);
+                const rampD = Math.max(0.1, bounds.maxY - bounds.minY);
+                const rampCx = (bounds.minX + bounds.maxX) / 2;
+                const rampCz = (bounds.minY + bounds.maxY) / 2;
+
+                // Slope angle from percentage (e.g., 8% → arctan(0.08))
+                const slopeAngle = Math.atan(rampSlopePercent / 100);
+
+                // Height difference across the ramp span
+                const isNS = rampDirection === 'north' || rampDirection === 'south';
+                const rampSpan = isNS ? rampD : rampW;
+                const rampHeightDiff = rampSpan * Math.tan(slopeAngle);
+
+                // Build ramp as a flat box, then rotate it around the appropriate axis
+                const rampFloor = MeshBuilder.CreateBox(
+                    `ramp_floor_${room.id}`,
+                    { width: rampW, height: floorThickness, depth: rampD },
+                    this.scene,
+                );
+                rampFloor.position.set(rampCx, rampHeightDiff / 2, rampCz);
+                if (rampDirection === 'north' || rampDirection === 'south') {
+                    rampFloor.rotation.x =
+                        rampDirection === 'south' ? slopeAngle : -slopeAngle;
+                } else {
+                    rampFloor.rotation.z =
+                        rampDirection === 'east' ? -slopeAngle : slopeAngle;
+                }
+                rampFloor.material = this.matFloor;
+                rampFloor.receiveShadows = true;
+                meshes.push(rampFloor);
+
+                // Railings along the ramp sides
+                const railingHeight = room.corridorConfig?.railingHeight ?? 1.0;
+                const RAIL_THICKNESS = 0.05;
+                const topOfRamp = rampHeightDiff;
+
+                // Two side rails (left & right of ramp direction)
+                const railPositions = isNS
+                    ? [bounds.minX + RAIL_THICKNESS / 2, bounds.maxX - RAIL_THICKNESS / 2]
+                    : [bounds.minY + RAIL_THICKNESS / 2, bounds.maxY - RAIL_THICKNESS / 2];
+
+                for (const railPos of railPositions) {
+                    const rail = MeshBuilder.CreateBox(
+                        `ramp_rail_${room.id}_${railPos}`,
+                        {
+                            width: isNS ? RAIL_THICKNESS : rampW,
+                            height: railingHeight,
+                            depth: isNS ? rampD : RAIL_THICKNESS,
+                        },
+                        this.scene,
+                    );
+                    rail.position.set(
+                        isNS ? railPos : rampCx,
+                        topOfRamp / 2 + railingHeight / 2,
+                        isNS ? rampCz : railPos,
+                    );
+                    if (isNS) {
+                        rail.rotation.x =
+                            rampDirection === 'south' ? slopeAngle : -slopeAngle;
+                    } else {
+                        rail.rotation.z =
+                            rampDirection === 'east' ? -slopeAngle : slopeAngle;
+                    }
+                    rail.material = this.matFrame;
+                    meshes.push(rail);
+                }
+
+                this.meshMap.set(room.id, meshes);
+                meshes.forEach((m) => {
+                    if (floorNode) m.parent = floorNode;
+                });
+                return;
+            }
+
             // ── Pasadizo: losa de voladizo — se activa/desactiva con showRoof ──
             //
             // CreatePolygon extruda hacia -Y. position.y = ceilingHeight + SLAB_THICKNESS
@@ -934,8 +1107,13 @@ export class House3DBuilder {
                         },
                         this.scene,
                     );
-                    floor.position.y = -floorThickness / 2;
-                    floor.material = this.matFloor;
+                    if (corridorType === 'sidewalk') {
+                        floor.position.y = 0.01;
+                        floor.material = this.matPasadizoSlab;
+                    } else {
+                        floor.position.y = -floorThickness / 2;
+                        floor.material = this.matFloor;
+                    }
                     floor.receiveShadows = true;
                     meshes.push(floor);
                 } catch {
@@ -978,7 +1156,7 @@ export class House3DBuilder {
                     },
                     this.scene,
                 );
-                slab.position.y = ceilingHeight + SLAB_THICKNESS;
+                slab.position.y = ceilingHeight + SLAB_THICKNESS + 0.002;
                 slab.material = this.matPasadizoSlab;
                 slab.receiveShadows = true;
                 this.shadowGen?.addShadowCaster(slab);
@@ -1006,7 +1184,7 @@ export class House3DBuilder {
                 );
                 fallbackSlab.position.set(
                     bcx,
-                    ceilingHeight + SLAB_THICKNESS / 2,
+                    ceilingHeight + SLAB_THICKNESS / 2 + 0.002,
                     bcz,
                 );
                 fallbackSlab.material = this.matPasadizoSlab;
@@ -1029,6 +1207,12 @@ export class House3DBuilder {
                     const v2 = shape[(i + 1) % shape.length];
                     const segLen = Math.hypot(v2.x - v1.x, v2.z - v1.z);
                     if (segLen < 0.05) continue;
+
+                    // Si este segmento del pasadizo/rampa toca a otro ambiente (ej. escalera o pasadizo),
+                    // NO dibujamos baranda para permitir el ingreso fluido.
+                    if (this.isEdgeSharedWithOtherRoom(v1, v2, room.id, allRooms)) {
+                        continue;
+                    }
 
                     const angle = Math.atan2(v2.z - v1.z, v2.x - v1.x);
                     const cx = (v1.x + v2.x) / 2;
@@ -1110,31 +1294,12 @@ export class House3DBuilder {
             // Elevación de arranque (para escaleras que comienzan desde un descanso intermedio)
             const startElev = room.stairConfig?.startElevation ?? 0;
 
-            // Piso base elevado al nivel de arranque
-            const stairFloor = MeshBuilder.CreateBox(
-                `stair_floor_${room.id}`,
-                { width: stairW, height: 0.05, depth: stairD },
-                this.scene,
-            );
-            stairFloor.position.set(stairCx, startElev - 0.025, stairCz);
-            stairFloor.material = this.matFloor;
-            stairFloor.receiveShadows = true;
-            if (floorNode) stairFloor.parent = floorNode;
-            meshes.push(stairFloor);
+            // Only create a base slab if hasBaseSlab is not explicitly false.
+            // hasBaseSlab defaults to true for stairs connecting floors.
+            const shouldCreateBaseSlab = room.stairConfig?.hasBaseSlab !== false;
 
-            // Relleno vertical bajo el piso si la escalera arranca elevada
-            if (startElev > 0.1) {
-                const fill = MeshBuilder.CreateBox(
-                    `stair_fill_${room.id}`,
-                    { width: stairW, height: startElev, depth: stairD },
-                    this.scene,
-                );
-                fill.position.set(stairCx, startElev / 2, stairCz);
-                fill.material = this.matWall;
-                fill.receiveShadows = true;
-                if (floorNode) fill.parent = floorNode;
-                meshes.push(fill);
-            }
+            // We no longer create a massive stairFloor or fill box covering the entire stair bounds.
+            // Support is provided by the individual inclined slabs and landings.
 
             // ── Helper: crear pasamano a lo largo de un tramo ─────────────────
             const addRail = (
@@ -1201,7 +1366,13 @@ export class House3DBuilder {
             if (room.stairConfig && room.stairConfig.flights.length > 0) {
                 const cfg = room.stairConfig;
                 const tread = cfg.treadDepth;
-                const riser = cfg.riserHeight;
+                
+                const totalSteps = cfg.flights.reduce((sum, f) => sum + f.stepCount, 0);
+                const isInterFloor = cfg.isInterFloor !== false;
+                const totalHeight = isInterFloor ? ceilingHeight + SLAB_THICKNESS - startElev : ceilingHeight - startElev;
+                // Ajuste matemático exacto para que la escalera conecte perfectamente con el siguiente nivel
+                const riser = totalSteps > 0 ? totalHeight / totalSteps : cfg.riserHeight;
+                
                 const showRailings = cfg.showRailings ?? false;
                 const isUStair =
                     cfg.flights.length === 2 &&
@@ -1323,17 +1494,39 @@ export class House3DBuilder {
                             lastSX = sX;
                         }
 
+                        // Bug #6: color-code first step (entry=green) and last step (exit=yellow)
+                        const isEntryStep = f === 0 && s === 0;
+                        const isExitStep =
+                            f === cfg.flights.length - 1 &&
+                            s === flight.stepCount - 1;
+
+                        const isInterFloor = cfg.isInterFloor !== false; // defaults to true
+                        const maxStairHeight = isInterFloor ? ceilingHeight + SLAB_THICKNESS : ceilingHeight;
+                        
+                        // Bug #3: clamp step height so stairs never penetrate the next floor
+                        const clampedCursorH = Math.min(cursorH, maxStairHeight - startElev);
+                        // Extend bottomFaceY down by 5cm so the step box merges smoothly into the tilted slab
+                        const bottomFaceY = startElev + cursorH - riser - 0.05;
+                        const topFaceY = startElev + clampedCursorH;
+                        const stepThickness = Math.max(0.01, topFaceY - bottomFaceY);
+
                         const step = MeshBuilder.CreateBox(
                             `stair_step_${room.id}_${f}_${s}`,
                             {
                                 width: isNS ? laneStepW : fittedTread,
-                                height: cursorH, // desde startElev hasta la cara superior
+                                height: stepThickness,
                                 depth: isNS ? fittedTread : laneStepW,
                             },
                             this.scene,
                         );
-                        step.position.set(sX, startElev + cursorH / 2, sZ);
-                        step.material = this.matWall;
+                        step.position.set(sX, bottomFaceY + stepThickness / 2, sZ);
+                        if (isEntryStep) {
+                            step.material = this.getOrCreateStairMarkerMat('entry');
+                        } else if (isExitStep) {
+                            step.material = this.getOrCreateStairMarkerMat('exit');
+                        } else {
+                            step.material = this.matWall;
+                        }
                         step.receiveShadows = true;
                         this.shadowGen?.addShadowCaster(step);
                         if (floorNode) step.parent = floorNode;
@@ -1355,6 +1548,42 @@ export class House3DBuilder {
                         );
                     }
 
+                    // ── Losa inclinada estructural del tramo ─────────────────────
+                    if (shouldCreateBaseSlab) {
+                        const SLAB_T = 0.15; // 15cm
+                        const flightLen = flight.stepCount * fittedTread;
+                        const flightH = cursorH - (hStart - startElev);
+                        const slope = Math.atan2(flightH, flightLen);
+                        const slabLen = Math.hypot(flightLen, flightH);
+                        
+                        const slab = MeshBuilder.CreateBox(
+                            `stair_slab_${room.id}_${f}`,
+                            {
+                                width: isNS ? laneStepW : slabLen,
+                                height: SLAB_T,
+                                depth: isNS ? slabLen : laneStepW,
+                            },
+                            this.scene
+                        );
+                        
+                        const midX = (firstSX + lastSX) / 2;
+                        const midZ = (firstSZ + lastSZ) / 2;
+                        // Posicionar debajo del escalón (restando SLAB_T/2 y ajustando por el riser)
+                        const midY = startElev + (cursorH - flightH) + flightH / 2 - riser / 2 - (SLAB_T / 2) * Math.cos(slope);
+                        slab.position.set(midX, midY, midZ);
+                        
+                        if (isNS) {
+                            slab.rotation.x = signZ > 0 ? slope : -slope;
+                        } else {
+                            // Left-handed Z rotation: positive angle rotates +X to +Y (up)
+                            slab.rotation.z = signX > 0 ? slope : -slope;
+                        }
+                        slab.material = this.matWall;
+                        slab.receiveShadows = true;
+                        if (floorNode) slab.parent = floorNode;
+                        meshes.push(slab);
+                    }
+
                     // Avanzar cursor al final del tramo
                     if (isNS) cursorZ += signZ * flight.stepCount * fittedTread;
                     else cursorX += signX * flight.stepCount * fittedTread;
@@ -1362,19 +1591,22 @@ export class House3DBuilder {
                     // ── Descanso entre tramos ──────────────────────────────────
                     if (flight.hasLanding && flight.landingDepth > 0) {
                         const lD = flight.landingDepth;
-                        const landH = cursorH + 0.04; // losa del descanso levemente más alta
+                        const landH = cursorH; // tope del descanso
+                        const landThickness = 0.15;
                         const lX = isNS ? stairCx : cursorX + (signX * lD) / 2;
                         const lZ = isNS ? cursorZ + (signZ * lD) / 2 : stairCz;
+                        
+                        // Losa del descanso
                         const landing = MeshBuilder.CreateBox(
                             `stair_landing_${room.id}_${f}`,
                             {
                                 width: isNS ? stairW : lD,
-                                height: landH,
+                                height: landThickness,
                                 depth: isNS ? lD : stairD,
                             },
                             this.scene,
                         );
-                        landing.position.set(lX, startElev + landH / 2, lZ);
+                        landing.position.set(lX, startElev + landH - landThickness / 2, lZ);
                         landing.material = this.matFloor;
                         landing.receiveShadows = true;
                         this.shadowGen?.addShadowCaster(landing);
@@ -1394,16 +1626,16 @@ export class House3DBuilder {
                 // ── Escalera sin tramos: escalones simples en la dirección config ──
                 const cfg = room.stairConfig;
                 const showRailings = cfg?.showRailings ?? false;
-                const riser = cfg?.riserHeight ?? 0.175;
-                const tread = cfg?.treadDepth ?? 0.28;
                 const stepW = Math.min(cfg?.stairWidth ?? stairW, stairW);
                 const orient = cfg?.orientation ?? 'south';
-                const numSteps =
-                    cfg?.stepCount ??
-                    Math.max(
-                        1,
-                        Math.round((ceilingHeight - startElev) / riser),
-                    );
+                
+                const isInterFloor = cfg?.isInterFloor !== false;
+                const totalHeight = isInterFloor ? ceilingHeight + SLAB_THICKNESS - startElev : ceilingHeight - startElev;
+                const riserCfg = cfg?.riserHeight ?? 0.175;
+                const numSteps = cfg?.stepCount ?? Math.max(1, Math.round(totalHeight / riserCfg));
+                const riser = numSteps > 0 ? totalHeight / numSteps : riserCfg;
+                const tread = cfg?.treadDepth ?? 0.28;
+
                 const isNS = orient === 'north' || orient === 'south';
                 const signZ = orient === 'south' ? +1 : -1;
                 const signX = orient === 'east' ? +1 : -1;
@@ -1424,8 +1656,17 @@ export class House3DBuilder {
                     lastSX = 0,
                     lastSZ = 0;
 
+                const maxStairHeight = isInterFloor ? ceilingHeight + SLAB_THICKNESS : ceilingHeight;
+
                 for (let s = 0; s < numSteps; s++) {
                     const relH = riser * (s + 1);
+                    // Bug #3: clamp step height so stairs never penetrate the next floor
+                    const clampedRelH = Math.min(relH, maxStairHeight - startElev);
+                    // Extend down by 5cm to merge into slab
+                    const bottomFaceY = startElev + relH - riser - 0.05;
+                    const topFaceY = startElev + clampedRelH;
+                    const stepThickness = Math.max(0.01, topFaceY - bottomFaceY);
+
                     const sZ = isNS
                         ? startZ + signZ * (s + 0.5) * actualTread
                         : stairCz;
@@ -1441,17 +1682,27 @@ export class House3DBuilder {
                         lastSZ = sZ;
                     }
 
+                    const stepIsFirst = s === 0;
+                    const stepIsLast = s === numSteps - 1;
+
                     const step = MeshBuilder.CreateBox(
                         `stair_step_${room.id}_${s}`,
                         {
                             width: isNS ? stepW : actualTread,
-                            height: relH,
+                            height: stepThickness,
                             depth: isNS ? actualTread : stepW,
                         },
                         this.scene,
                     );
-                    step.position.set(sX, startElev + relH / 2, sZ);
-                    step.material = this.matWall;
+                    step.position.set(sX, bottomFaceY + stepThickness / 2, sZ);
+                    // Bug #6: color-code first step (entry=green) and last step (exit=yellow)
+                    if (stepIsFirst) {
+                        step.material = this.getOrCreateStairMarkerMat('entry');
+                    } else if (stepIsLast) {
+                        step.material = this.getOrCreateStairMarkerMat('exit');
+                    } else {
+                        step.material = this.matWall;
+                    }
                     step.receiveShadows = true;
                     this.shadowGen?.addShadowCaster(step);
                     if (floorNode) step.parent = floorNode;
@@ -1472,6 +1723,42 @@ export class House3DBuilder {
                         `${room.id}_0`,
                     );
                 }
+
+                // ── Losa inclinada estructural para escalera simple ─────────────────────
+                if (shouldCreateBaseSlab) {
+                    const SLAB_T = 0.15; // 15cm
+                    const flightLen = numSteps * actualTread;
+                    const flightH = numSteps * riser;
+                    const slope = Math.atan2(flightH, flightLen);
+                    const slabLen = Math.hypot(flightLen, flightH);
+                    
+                    const slab = MeshBuilder.CreateBox(
+                        `stair_slab_${room.id}`,
+                        {
+                            width: isNS ? stepW : slabLen,
+                            height: SLAB_T,
+                            depth: isNS ? slabLen : stepW,
+                        },
+                        this.scene
+                    );
+                    
+                    const midX = (firstSX + lastSX) / 2;
+                    const midZ = (firstSZ + lastSZ) / 2;
+                    // Posicionar debajo del escalón (restando SLAB_T/2 y ajustando por el riser)
+                    const midY = startElev + flightH / 2 - riser / 2 - (SLAB_T / 2) * Math.cos(slope);
+                    slab.position.set(midX, midY, midZ);
+                    
+                    if (isNS) {
+                        slab.rotation.x = signZ > 0 ? slope : -slope;
+                    } else {
+                        // Left-handed Z rotation: positive angle rotates +X to +Y (up)
+                        slab.rotation.z = signX > 0 ? slope : -slope;
+                    }
+                    slab.material = this.matWall;
+                    slab.receiveShadows = true;
+                    if (floorNode) slab.parent = floorNode;
+                    meshes.push(slab);
+                }
             }
 
             this.meshMap.set(room.id, meshes);
@@ -1479,9 +1766,10 @@ export class House3DBuilder {
         }
 
         try {
+            const floorHoles = floorBelow ? this.getRoomStairHoles(room, floorBelow.rooms || []) : [];
             const floor = MeshBuilder.CreatePolygon(
                 `floor_${room.id}`,
-                { shape, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
+                { shape, holes: floorHoles, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
                 this.scene,
             );
             floor.position.y = -0.025;
@@ -1521,6 +1809,8 @@ export class House3DBuilder {
                 allWindows,
                 allDoors,
                 allWalls,
+                allRooms,
+                room.id
             );
 
             this.buildWallSegment(
@@ -1584,6 +1874,8 @@ export class House3DBuilder {
         allWindows: Window[],
         allDoors: Door[],
         allWalls: Wall[],
+        allRooms?: Room[],
+        currentRoomId?: string
     ) {
         const aps: any[] = [];
         const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
@@ -1620,6 +1912,75 @@ export class House3DBuilder {
 
         allWindows.forEach((w) => checkAperture(w, 'window'));
         allDoors.forEach((d) => checkAperture(d, 'door'));
+
+        // Virtual apertures for corridors and stairs
+        if (allRooms && currentRoomId) {
+            const EPSILON = 0.05;
+            const a1 = v1;
+            const a2 = v2;
+            const lenSq = (a2.x - a1.x) ** 2 + (a2.y - a1.y) ** 2;
+            const isHorizontal = Math.abs(a2.x - a1.x) > Math.abs(a2.y - a1.y);
+
+            for (const r of allRooms) {
+                if (r.id === currentRoomId) continue;
+                if (r.roomType !== 'corridor' && r.roomType !== 'stair') continue;
+
+                for (let i = 0; i < r.vertices.length; i++) {
+                    const b1 = r.vertices[i];
+                    const b2 = r.vertices[(i + 1) % r.vertices.length];
+
+                    if (
+                        Math.max(a1.x, a2.x) < Math.min(b1.x, b2.x) - EPSILON ||
+                        Math.min(a1.x, a2.x) > Math.max(b1.x, b2.x) + EPSILON ||
+                        Math.max(a1.y, a2.y) < Math.min(b1.y, b2.y) - EPSILON ||
+                        Math.min(a1.y, a2.y) > Math.max(b1.y, b2.y) + EPSILON
+                    ) {
+                        continue;
+                    }
+
+                    const cross = (a2.x - a1.x) * (b2.y - b1.y) - (a2.y - a1.y) * (b2.x - b1.x);
+                    if (Math.abs(cross) > EPSILON) continue;
+
+                    const t = ((b1.x - a1.x) * (a2.x - a1.x) + (b1.y - a1.y) * (a2.y - a1.y)) / lenSq;
+                    const projX = a1.x + t * (a2.x - a1.x);
+                    const projY = a1.y + t * (a2.y - a1.y);
+                    const distSq = (b1.x - projX) ** 2 + (b1.y - projY) ** 2;
+                    if (distSq > EPSILON * EPSILON) continue;
+
+                    const aMin = isHorizontal ? Math.min(a1.x, a2.x) : Math.min(a1.y, a2.y);
+                    const aMax = isHorizontal ? Math.max(a1.x, a2.x) : Math.max(a1.y, a2.y);
+                    const bMin = isHorizontal ? Math.min(b1.x, b2.x) : Math.min(b1.y, b2.y);
+                    const bMax = isHorizontal ? Math.max(b1.x, b2.x) : Math.max(b1.y, b2.y);
+
+                    const overlapMin = Math.max(aMin, bMin);
+                    const overlapMax = Math.min(aMax, bMax);
+
+                    if (overlapMax - overlapMin > 0.05) {
+                        const tb1 = ((b1.x - a1.x) * (a2.x - a1.x) + (b1.y - a1.y) * (a2.y - a1.y)) / lenSq;
+                        const tb2 = ((b2.x - a1.x) * (a2.x - a1.x) + (b2.y - a1.y) * (a2.y - a1.y)) / lenSq;
+
+                        let tMin = Math.min(tb1, tb2);
+                        let tMax = Math.max(tb1, tb2);
+
+                        tMin = Math.max(0, tMin);
+                        tMax = Math.min(1, tMax);
+
+                        const actualOverlapLen = (tMax - tMin) * segLen;
+
+                        if (actualOverlapLen > 0.05) {
+                            aps.push({
+                                id: `virtual_ap_${r.id}_${i}`,
+                                type: 'door',
+                                localOffset: tMin * segLen,
+                                width: actualOverlapLen,
+                                height: 3.0,
+                                sillHeight: 0,
+                            });
+                        }
+                    }
+                }
+            }
+        }
 
         return aps.sort((a, b) => a.localOffset - b.localOffset);
     }
@@ -2178,6 +2539,12 @@ export class House3DBuilder {
         const H = door.height;
         const D = wall.thickness;
         const meshes: Mesh[] = [];
+
+        // Si la puerta es tipo 'opening', es solo el vano, no dibujamos hoja ni marcos
+        if (door.doorType === 'opening') {
+            this.meshMap.set(door.id, meshes);
+            return;
+        }
 
         // Hoja de puerta (caja delgada)
         const leaf = MeshBuilder.CreateBox(

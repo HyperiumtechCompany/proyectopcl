@@ -615,6 +615,16 @@ const doorCatalog: {
     template: Partial<Door>;
 }[] = [
     {
+        label: 'Vano Abierto (Hueco)',
+        icon: <Maximize2 size={13} />,
+        template: {
+            doorType: 'opening',
+            width: 0.9,
+            height: 2.1,
+            openingDirection: 'inward',
+        },
+    },
+    {
         label: 'Puerta Principal',
         icon: <ArrowRight size={13} />,
         template: {
@@ -733,25 +743,47 @@ const corridorCatalog: CorridorCatalogItem[] = [
             railingHeight: 1.05,
         },
     },
+    {
+        label: 'Vereda (Piso sin barandas)',
+        description: 'Piso a nivel de suelo, transitable',
+        icon: <Layers size={13} />,
+        template: {
+            type: 'sidewalk',
+            slabThickness: 0.2,
+            railingHeight: 0,
+        },
+    },
+    {
+        label: 'Rampa',
+        description: 'Superficie inclinada',
+        icon: <LayoutGrid size={13} />,
+        template: {
+            type: 'ramp',
+            slabThickness: 0.2,
+            railingHeight: 1.05,
+            rampSlope: 8,
+            rampDirection: 'north',
+        },
+    },
 ];
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
-const isFixtureMatch = (a: Partial<Fixture>, b: Partial<Fixture>) =>
-    a.fixtureType === b.fixtureType &&
-    a.fixtureShape === b.fixtureShape &&
-    a.lumens === b.lumens;
+const isFixtureMatch = (a?: Partial<Fixture>, b?: Partial<Fixture>) =>
+    a?.fixtureType === b?.fixtureType &&
+    a?.fixtureShape === b?.fixtureShape &&
+    a?.lumens === b?.lumens;
 
-const isWindowMatch = (a: Partial<Window>, b: Partial<Window>) =>
-    a.windowType === b.windowType &&
-    a.windowShape === b.windowShape &&
-    a.width === b.width;
+const isWindowMatch = (a?: Partial<Window>, b?: Partial<Window>) =>
+    a?.windowType === b?.windowType &&
+    a?.windowShape === b?.windowShape &&
+    a?.width === b?.width;
 
-const isDoorMatch = (a: Partial<Door>, b: Partial<Door>) =>
-    a.doorType === b.doorType && a.width === b.width;
+const isDoorMatch = (a?: Partial<Door>, b?: Partial<Door>) =>
+    a?.doorType === b?.doorType && a?.width === b?.width;
 
-const isCorridorMatch = (a: CorridorConfig, b: CorridorConfig) =>
-    (a.type ?? 'roof_only') === (b.type ?? 'roof_only');
+const isCorridorMatch = (a?: CorridorConfig, b?: CorridorConfig) =>
+    (a?.type ?? 'roof_only') === (b?.type ?? 'roof_only');
 
 /* ─── Componente principal ───────────────────────────────────────────────── */
 
