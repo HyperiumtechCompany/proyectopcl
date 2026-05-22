@@ -9,7 +9,7 @@ import HeaderValorizado from './components/HeaderValorizado';
 import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
 import { exportarExcel, exportarPDF } from './helpers/exportHelpers'; 
-
+import CronogramaDesembolsos from './components/CronogramaDesembolsos';
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +42,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     const [deleting,       setDeleting]       = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
     const [modoCalculo,    setModoCalculo]    = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
+    const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
 
     const { toasts, show: showToast } = useToast();
 
@@ -210,6 +211,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 onExportExcel={handleExportExcel}
                                 onExportPDF={handleExportPDF}
                                 totalDesviadas={totalDesviadas}
+                                onOpenDesembolso={() => setMostrarDesembolso(true)}
                             />
 
                             <ResumenFinanciero
@@ -243,6 +245,24 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                         </>
                     )}
                 </div>
+
+                {/* Panel de Cronograma de Desembolsos */}
+                {mostrarDesembolso && (
+                <CronogramaDesembolsos
+                periodos={props.periodos}
+                totalPresupuesto={props.totalPresupuesto}
+                valorizacionesMensuales={totalesFinales}
+                totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
+                diasPorMes={props.diasPorMes || {}}
+                onClose={() => setMostrarDesembolso(false)}
+                />
+                )}
+                
+
+                
+                
+
+
             </div>
 
             {/* Toast container */}

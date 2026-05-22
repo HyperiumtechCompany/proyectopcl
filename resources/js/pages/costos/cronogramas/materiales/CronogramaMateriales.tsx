@@ -42,6 +42,9 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
         return [];
     }, [materiales, materialesPorTipo]);
 
+    console.log('🔍 Tipos en todosMateriales:', [...new Set(todosMateriales.map(m => m.tipo))]);
+console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materialesPorTipo) : 'vacio');
+
     const {
         viewMode, setViewMode,
         sortField, sortDir, toggleSort,

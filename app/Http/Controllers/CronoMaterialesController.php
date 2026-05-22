@@ -242,6 +242,8 @@ class CronoMaterialesController extends Controller
             ->union($querySubpartidas)
             ->get();
 
+    
+
 
         // ── 10. Obtener precios desde insumo_productos ────────────────────────
         $insumoIds = $materialesApu->pluck('insumo_id')->unique()->filter()->toArray();
@@ -432,7 +434,7 @@ class CronoMaterialesController extends Controller
             $grupo = collect($grupo)->sortBy('descripcion')->values()->toArray();
         }
 
-        $insumosFinales = [];
+                $insumosFinales = [];
         foreach ($insumosPorTipo as $tipo => $items) {
             foreach ($items as $item) {
                 $insumosFinales[] = $item;
@@ -445,7 +447,10 @@ class CronoMaterialesController extends Controller
             ->table("{$db}.cronograma_materiales")
             ->where('presupuesto_id', $presupuestoIdCorrecto)
             ->exists();
+        
+        
 
+        // SI NO HAY DATOS GUARDADOS, RECALCULAR DESDE ACU
         return Inertia::render('costos/cronogramas/materiales/CronogramaMateriales', [
             'project'           => (string) $projectId,
             'projectName'       => $costoProject->nombre,

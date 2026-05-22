@@ -2,9 +2,7 @@
 import { saveAs } from 'file-saver';
 import { MaterialItem, Periodo, ViewMode } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CATÁLOGO DE TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
+
 const TIPO_META: Record<string, {
     label:       string;
     headerArgb:  string;
@@ -29,9 +27,7 @@ const actualLastCol = (logicalTotalCols: number): number => actualCol(logicalTot
 const MONTH_BANDS = ['FFE8F1FA', 'FFFFF3D8', 'FFEAF4EA', 'FFFFE6D5', 'FFFFF0B8', 'FFDCE8F8', 'FFE2F0D9', 'FFE5E7EB'];
 const getMonthBand = (index: number): string => MONTH_BANDS[index % MONTH_BANDS.length];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS DE ESTILO EXCELJS
-// ─────────────────────────────────────────────────────────────────────────────
+
 const mkFont = (opts: Partial<ExcelJS.Font>): Partial<ExcelJS.Font> => ({
     name: 'Calibri', size: 11, ...opts,
 });
@@ -133,9 +129,8 @@ const STYLES = {
     }),
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // UTILIDADES
-// ─────────────────────────────────────────────────────────────────────────────
 const fmtNum = (v: number, dec = 2) =>
     v.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
@@ -184,9 +179,7 @@ const agruparPorTipo = (materiales: MaterialItem[]): Map<string, MaterialItem[]>
     return mapa;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // HELPER: extrae el código modular desde projectData.codigos_modulares
-// ─────────────────────────────────────────────────────────────────────────────
 const extraerCodigoModular = (projectData: any): string => {
     try {
         const raw = projectData.codigos_modulares ?? projectData.codigo_modular;
@@ -202,9 +195,7 @@ const extraerCodigoModular = (projectData: any): string => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // HELPER: calcula duración del proyecto en días calendario
-// ─────────────────────────────────────────────────────────────────────────────
 const calcularDuracion = (projectData: any): string => {
     try {
         if (!projectData.fecha_inicio || !projectData.fecha_fin) return '';
@@ -217,9 +208,7 @@ const calcularDuracion = (projectData: any): string => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // HELPER: descarga una imagen desde storage de Laravel y devuelve ArrayBuffer
-// ─────────────────────────────────────────────────────────────────────────────
 const fetchImageBuffer = async (
     relativePath: string,
 ): Promise<{ buffer: ArrayBuffer; extension: 'png' | 'jpeg' | 'gif' | 'bmp' } | null> => {
@@ -244,12 +233,9 @@ const fetchImageBuffer = async (
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER: incrustar imagen en worksheet sin usar Buffer de Node.js
-// ─────────────────────────────────────────────────────────────────────────────
 const addImageToSheet = (
     ws:      ExcelJS.Worksheet,
-    imgData: { buffer: ArrayBuffer; extension: 'png' | 'jpeg' | 'gif' | 'bmp' },
+    imgData: { buffer: ArrayBuffer; extension: string }, // Cambiado a string para admitir cualquier extensión
     colIni:  number,   // columna Excel real (1-based), inclusivo
     rowIni:  number,   // fila Excel real (1-based), inclusivo
     colFin:  number,   // columna Excel real (1-based), exclusivo (br)
@@ -257,30 +243,35 @@ const addImageToSheet = (
 ): void => {
     // ExcelJS acepta Uint8Array directamente — sin Buffer de Node
     const uint8 = new Uint8Array(imgData.buffer);
+    
+    // Forzamos la extensión con "as any" para evitar que rechace 'bmp' o strings genéricos
     const imgId = ws.workbook.addImage({
         buffer:    uint8 as any,
-        extension: imgData.extension,
+        extension: imgData.extension as any,
     });
+    
+    // Corregimos los objetos 'tl' y 'br' mapeando los valores nativos que exige TypeScript
     ws.addImage(imgId, {
-        tl: { col: colIni - 1, row: rowIni - 1 },   // 0-based
-        br: { col: colFin - 1, row: rowFin - 1 },   // 0-based exclusivo
+        tl: { 
+            col: colIni - 1, 
+            row: rowIni - 1,
+            nativeCol: colIni - 1,
+            nativeRow: rowIni - 1,
+            nativeColOff: 0,
+            nativeRowOff: 0
+        } as any, // 0-based inclusivo
+        br: { 
+            col: colFin - 1, 
+            row: rowFin - 1,
+            nativeCol: colFin - 1,
+            nativeRow: rowFin - 1,
+            nativeColOff: 0,
+            nativeRowOff: 0
+        } as any, // 0-based exclusivo
         editAs: 'oneCell',
     });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BUILDER ENCABEZADO — réplica exacta del ejemplo de referencia (fondo claro)
-//
-//  ┌────────────┬──────────────────────────────────────────────┬────────────┐
-//  │            │  "NOMBRE COMPLETO DEL PROYECTO..."           │            │
-//  │  LOGO IZQ  │   CUI: XXXX; CÓD.MOD: XXXX; CÓD.LOCAL: XXX │  LOGO DER  │  ← fila 1 (h=90)
-//  │            │   I.E: XXXX   UNIDAD EJECUTORA: nombre       │            │
-//  └────────────┴──────────────────────────────────────────────┴────────────┘
-//  Luego filas de datos secundarios (fecha, ubicación, etc.) — sin color
-//
-// Todo con borde exterior grueso gris, fondo blanco/gris muy claro.
-// Retorna la primera fila libre.
-// ─────────────────────────────────────────────────────────────────────────────
 async function buildReportHeader(
     ws:          ExcelJS.Worksheet,
     projectData: any,
@@ -289,19 +280,13 @@ async function buildReportHeader(
     totalCols:   number,
 ): Promise<number> {
 
-    // ── Colores — igual al ejemplo blanco ────────────────────────────────────
+    // ── Colores — igual al ejemplo blanco 
     const BG_HEADER   = 'FFFFFFFF';   // blanco puro — zona logos+texto
     const BG_BORDER   = 'FFB0B0B0';   // gris borde exterior visible
-    const BG_LBL      = 'FFE2E8F0';   // gris muy suave — labels
-    const BG_VAL      = 'FFFFFFFF';   // blanco — valores
-    const BG_FOOT     = 'FFF1F5F9';   // gris clarísimo — fila fechas
     const BG_SEP      = 'FF64748B';   // separador antes de la tabla
     const TX_TITULO   = 'FF0F172A';   // negro casi puro — texto principal
-    const TX_SUB      = 'FF1E3A5F';   // azul oscuro — subtítulos/valores
-    const TX_GRIS     = 'FF475569';   // gris oscuro — labels
-    const TX_FECHA    = 'FF334155';
 
-    // ── Helper merge ─────────────────────────────────────────────────────────
+    // ── Helper merge 
     const mr = (
         r1: number, lc1: number, r2: number, lc2: number,
         val: ExcelJS.CellValue,
@@ -319,55 +304,40 @@ async function buildReportHeader(
         if (h !== undefined) ws.getRow(r1).height = h;
     };
 
-    // ── Extraer datos ─────────────────────────────────────────────────────────
+    // ── Extraer datos 
     const nombre      = (projectData?.nombre || 'SIN NOMBRE').toUpperCase();
     const cui         = projectData?.codigo_cui       || '-';
     const codigoLocal = projectData?.codigo_local     || '-';
     const modular     = extraerCodigoModular(projectData);
-    const uei         = projectData?.uei              || '-';
     const unidadEjec  = projectData?.unidad_ejecutora || '-';
 
-    const ubicacion = [
-        projectData?.departamento_id,
-        projectData?.provincia_id,
-        projectData?.distrito_id,
-        projectData?.centro_poblado,
-    ].filter(Boolean).join('-') || 'SIN UBICACIÓN';
-
-    const fechaHoy = new Date().toLocaleDateString('es-PE');
-    const duracion = calcularDuracion(projectData);
-    const fIni     = projectData?.fecha_inicio
-        ? new Date(projectData.fecha_inicio).toLocaleDateString('es-PE') : '-';
-    const fFin     = projectData?.fecha_fin
-        ? new Date(projectData.fecha_fin).toLocaleDateString('es-PE') : '-';
 
     // Nombre corto I.E.
     const mIE    = nombre.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N[°Oº]?\s*\d+)/i);
     const ieName = mIE ? mIE[0].trim() : nombre.split('-')[0].trim();
 
-    // ── Cargar logos ──────────────────────────────────────────────────────────
+    // ── Cargar logos 
     const [imgIzq, imgDer] = await Promise.all([
         fetchImageBuffer(projectData?.plantilla_logo_izq || ''),
         fetchImageBuffer(projectData?.plantilla_logo_der || ''),
     ]);
     const tieneLogos = !!(imgIzq || imgDer);
 
-    // ── Anchos de logo (columnas lógicas) ─────────────────────────────────────
+    // ── Anchos de logo (columnas lógicas) 
     // Logo izq: cols 1..LW   |   Centro: LW+1..totalCols-LW   |   Logo der: totalCols-LW+1..totalCols
     const LW        = tieneLogos ? 2 : 0;
     const cIni      = LW + 1;           // inicio centro
     const cFin      = totalCols - LW;   // fin centro
 
-    // ── Borde exterior del bloque de encabezado principal ────────────────────
+    // ── Borde exterior del bloque de encabezado principal 
     const sBordeExt: Partial<ExcelJS.Borders> = {
         top:    { style: 'medium', color: { argb: BG_BORDER } },
         bottom: { style: 'medium', color: { argb: BG_BORDER } },
         left:   { style: 'medium', color: { argb: BG_BORDER } },
         right:  { style: 'medium', color: { argb: BG_BORDER } },
     };
-    const sBordeFino: Partial<ExcelJS.Borders> = mkBorder('FFB0B8C8');
 
-    // ── FILA 1: Logo izq | nombre+info | Logo der — bloque principal ─────────
+    // ── FILA 1: Logo izq | nombre+info | Logo der — bloque principal 
     //  Tiene 3 sub-filas de texto dentro del mismo bloque de logo:
     //    sub-fila A: nombre del proyecto (bold, grande)
     //    sub-fila B: CUI + Cód.Modular + Cód.Local
@@ -423,87 +393,18 @@ async function buildReportHeader(
         );
     }
 
-    // ── FILA 2: Fecha de generación (span completo, fondo claro) ─────────────
-    mr(2, 1, 2, totalCols, `FECHA: ${fechaHoy}`, {
-        font:      mkFont({ bold: true, size: 9, color: { argb: TX_FECHA } }),
-        fill:      mkFill(BG_FOOT),
-        alignment: mkAlign('left', 'middle'),
-        border:    sBordeFino,
-    }, 18);
-
-    // ── FILA 3: I.E. nombre  |  CÓDIGO UNIFICADO: | valor ───────────────────
-    const MID     = Math.max(4, Math.floor(totalCols * 0.55));
-    const LBL_INI = MID + 1;
-    const LBL_FIN = MID + 3;
-    const VAL_INI = LBL_FIN + 1;
-    const VAL_FIN = totalCols;
-
-    const sLbl: Partial<ExcelJS.Style> = {
-        font:      mkFont({ bold: true, size: 8, color: { argb: TX_GRIS } }),
-        fill:      mkFill(BG_LBL),
-        alignment: mkAlign('right', 'middle'),
-        border:    { ...sBordeFino, right: { style: 'thin', color: { argb: BG_BORDER } } },
-    };
-    const sVal: Partial<ExcelJS.Style> = {
-        font:      mkFont({ bold: true, size: 9, color: { argb: TX_SUB } }),
-        fill:      mkFill(BG_VAL),
-        alignment: mkAlign('left', 'middle'),
-        border:    sBordeFino,
-    };
-    const sIzqBold: Partial<ExcelJS.Style> = {
-        font:      mkFont({ bold: true, size: 10, color: { argb: TX_TITULO } }),
-        fill:      mkFill(BG_VAL),
-        alignment: mkAlign('left', 'middle'),
-        border:    sBordeFino,
-    };
-    const sIzq: Partial<ExcelJS.Style> = {
-        font:      mkFont({ size: 8, color: { argb: TX_TITULO } }),
-        fill:      mkFill(BG_VAL),
-        alignment: mkAlign('left', 'middle'),
-        border:    sBordeFino,
-    };
-    const sFoot: Partial<ExcelJS.Style> = {
-        font:      mkFont({ bold: true, size: 8, color: { argb: TX_GRIS } }),
-        fill:      mkFill(BG_FOOT),
-        alignment: mkAlign('center', 'middle'),
-        border:    { ...sBordeFino, top: { style: 'thin', color: { argb: BG_BORDER } } },
-    };
-
-    // Fila 3 — I.E.
-    mr(3, 1, 3, MID, ieName, sIzqBold, 22);
-    mr(3, LBL_INI, 3, LBL_FIN, 'CÓDIGO UNIFICADO (CUI):', sLbl);
-    mr(3, VAL_INI, 3, VAL_FIN, cui, sVal);
-
-    // Fila 4 — Ubicación
-    mr(4, 1, 4, MID, `UBICACIÓN: ${ubicacion}`, sIzq, 18);
-    mr(4, LBL_INI, 4, LBL_FIN, 'CÓDIGO MODULAR:', sLbl);
-    mr(4, VAL_INI, 4, VAL_FIN, modular, sVal);
-
-    // Fila 5 — UEI
-    mr(5, 1, 5, MID, `UEI: ${uei}`, sIzq, 18);
-    mr(5, LBL_INI, 5, LBL_FIN, 'UNIDAD EJECUTORA:', sLbl);
-    mr(5, VAL_INI, 5, VAL_FIN, unidadEjec, sIzq);
-
-    // Fila 6 — Fechas + Duración
-    const mid6 = Math.floor(totalCols / 2);
-    mr(6, 1,       6, mid6,      `INICIO: ${fIni}   →   FIN: ${fFin}`, sFoot, 18);
-    mr(6, mid6+1,  6, totalCols, duracion ? `DURACIÓN: ${duracion}` : `CÓDIGO LOCAL: ${codigoLocal}`, sFoot, 18);
-
-    // ── Separador antes de encabezados de tabla ───────────────────────────────
-    ws.getRow(7).height = 4;
+    // ── Separador fino debajo del bloque de logos 
+    ws.getRow(2).height = 4;
     for (let lc = 1; lc <= totalCols; lc++) {
-        ws.getCell(7, actualCol(lc)).style = {
+        ws.getCell(2, actualCol(lc)).style = {
             fill:   mkFill(BG_SEP),
             border: mkBorder(BG_SEP, 'thin'),
         };
     }
 
-    return 8;   // primera fila libre = encabezados de columnas de la tabla
+    return 3;   // primera fila libre = encabezados de columnas de la tabla
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildColumnHeaders — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
 function buildColumnHeaders(
     ws:          ExcelJS.Worksheet,
     periodos:    Periodo[],
@@ -557,9 +458,7 @@ function buildColumnHeaders(
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildSectionHeader — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
+
 function buildSectionHeader(
     ws:        ExcelJS.Worksheet,
     tipo:      string,
@@ -580,9 +479,7 @@ function buildSectionHeader(
     ws.getRow(rowNum).height = 18;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildDataRow — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
+
 function buildDataRow(
     ws:         ExcelJS.Worksheet,
     material:   MaterialItem,
@@ -651,9 +548,7 @@ function buildDataRow(
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildSubtotalRow — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
+
 function buildSubtotalRow(
     ws:         ExcelJS.Worksheet,
     tipo:       string,
@@ -704,9 +599,6 @@ function buildSubtotalRow(
     ws.getCell(rowNum, col + 1).style = STYLES.sectionTotal('FFF3F4F6', 'FF374151');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildGrandTotalRow — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
 function buildGrandTotalRow(
     ws:         ExcelJS.Worksheet,
     materiales: MaterialItem[],
@@ -749,9 +641,7 @@ function buildGrandTotalRow(
     ws.getCell(rowNum, col + 1).style = STYLES.grandTotal('FF111827');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildPctRow — sin cambios
-// ─────────────────────────────────────────────────────────────────────────────
+
 function buildPctRow(
     ws:         ExcelJS.Worksheet,
     materiales: MaterialItem[],
@@ -799,9 +689,6 @@ function buildPctRow(
     ws.getCell(rowNum, col + 1).style = { ...STYLES.pct(), fill: mkFill('FFF3F4F6') };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildResumenSheet — sin cambios, pero recibe projectData completo
-// ─────────────────────────────────────────────────────────────────────────────
 function buildResumenSheet(
     wb:          ExcelJS.Workbook,
     materiales:  MaterialItem[],
@@ -938,11 +825,9 @@ function buildResumenSheet(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL EXPORTADORA
-// ─────────────────────────────────────────────────────────────────────────────
 /**
- * Exporta el cronograma de materiales a Excel de forma profesional.
+ * Exporta el cronograma de materiales a Excel.
  *
  * @param materiales        Lista de insumos YA filtrada por el componente padre
  * @param periodos          Períodos del proyecto
@@ -952,6 +837,7 @@ function buildResumenSheet(
  * @param projectData       Objeto COMPLETO de costo_projects (con codigo_cui,
  *                          codigos_modulares, departamento_id, etc.)
  */
+
 export const exportarMaterialesExcel = async (
     materiales:        MaterialItem[],
     periodos:          Periodo[],
@@ -968,13 +854,13 @@ export const exportarMaterialesExcel = async (
     // Unificar projectData: si solo llega projectName, construimos un objeto mínimo
     const pd = projectData ?? { nombre: projectName };
 
-    // ── Meta del filtro activo ───────────────────────────────────────────────
+    // ── Meta del filtro activo 
     const filtroEsTodo = !tipoFiltroActivo;
     const tipoLabel    = filtroEsTodo
         ? 'INSUMOS GENERALES'
         : getTipoMeta(tipoFiltroActivo).label;
 
-    // ── Mes pico ─────────────────────────────────────────────────────────────
+    // ── Mes pico 
     const montoPorMes = periodos.map(p => ({
         key:   p.key,
         monto: materiales.reduce((s, m) => s + getMonto(m, p.key), 0),
@@ -984,11 +870,11 @@ export const exportarMaterialesExcel = async (
         montoPorMes[0],
     ).key;
 
-    // ── Dimensiones ───────────────────────────────────────────────────────────
+    // ── Dimensiones 
     const COL_FIXED  = 6;
     const TOTAL_COLS = COL_FIXED + periodos.length * 2 + 2;
 
-    // ── Crear workbook ────────────────────────────────────────────────────────
+    // ── Crear workbook 
     const wb = new ExcelJS.Workbook();
     wb.creator        = 'PCL – Cronograma Materiales';
     wb.lastModifiedBy = 'PCL';
@@ -996,9 +882,7 @@ export const exportarMaterialesExcel = async (
     wb.modified       = new Date();
     wb.calcProperties.fullCalcOnLoad = true;
 
-    // ─────────────────────────────────────────────────────────────────────────
     // HOJA PRINCIPAL
-    // ─────────────────────────────────────────────────────────────────────────
     const sheetName = filtroEsTodo ? 'Cronograma General' : tipoLabel;
     const ws = wb.addWorksheet(sheetName, {
         pageSetup: {
@@ -1020,13 +904,13 @@ export const exportarMaterialesExcel = async (
 
     setupCronogramaColumns(ws, periodos, COL_FIXED);
 
-    // ── Encabezado reporte — async (carga logos si los hay) ──────────────────
+    // ── Encabezado reporte — async (carga logos si los hay) 
     const firstDataRow = await buildReportHeader(ws, pd, tipoLabel, viewMode, TOTAL_COLS);
 
-    // ── Encabezados de columna (2 filas: firstDataRow y firstDataRow+1) ──────
+    // ── Encabezados de columna (2 filas: firstDataRow y firstDataRow+1) 
     buildColumnHeaders(ws, periodos, viewMode, mesPicoKey, firstDataRow, COL_FIXED);
 
-    // ── Datos (desde firstDataRow+2) ─────────────────────────────────────────
+    // ── Datos (desde firstDataRow+2) 
     let currentRow = firstDataRow + 2;
 
     materiales.forEach((mat, i) => {
@@ -1034,22 +918,18 @@ export const exportarMaterialesExcel = async (
         currentRow++;
     });
 
-    // ── Fila de porcentajes ──────────────────────────────────────────────────
+    // ── Fila de porcentajes 
     buildPctRow(ws, materiales, periodos, mesPicoKey, currentRow, COL_FIXED);
     currentRow++;
 
-    // ── Totales generales ────────────────────────────────────────────────────
+    // ── Totales generales 
     buildGrandTotalRow(ws, materiales, periodos, mesPicoKey, currentRow, COL_FIXED);
     currentRow++;
 
-    // ─────────────────────────────────────────────────────────────────────────
     // HOJA DE RESUMEN EJECUTIVO
-    // ─────────────────────────────────────────────────────────────────────────
     buildResumenSheet(wb, materiales, periodos, pd, tipoLabel, mesPicoKey);
 
-    // ─────────────────────────────────────────────────────────────────────────
     // SI ES "TODO": hojas adicionales por tipo (para navegación rápida)
-    // ─────────────────────────────────────────────────────────────────────────
     if (filtroEsTodo) {
         const grupos = agruparPorTipo(materiales);
 
@@ -1078,7 +958,6 @@ export const exportarMaterialesExcel = async (
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // GENERAR Y DESCARGAR
     // ─────────────────────────────────────────────────────────────────────────
     const buffer = await wb.xlsx.writeBuffer();
