@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Wall, Fixture, Room, Canopy, Window, Door } from './useEditorStore';
+import type { Wall, Fixture, Room, Canopy, Window, Door, LightSwitch } from './useEditorStore';
 
 export interface CanvasPoint { x: number; y: number; }
 interface HelperOptions {
@@ -9,6 +9,7 @@ interface HelperOptions {
     canopies: Canopy[];
     windows: Window[];
     doors: Door[];
+    lightSwitches: LightSwitch[];
     sceneToCanvas: (sx: number, sy: number) => CanvasPoint;
 }
 
@@ -160,7 +161,7 @@ export function clampOpeningOffsetToWallSegment(
 }
 
 export function useInteractionHelpers(opts: HelperOptions) {
-    const { walls, fixtures, rooms, canopies, windows, doors, sceneToCanvas } = opts;
+    const { walls, fixtures, rooms, canopies, windows, doors, lightSwitches, sceneToCanvas } = opts;
 
     const findNearestWall = useCallback(
         (cx: number, cy: number): {
@@ -333,6 +334,25 @@ export function useInteractionHelpers(opts: HelperOptions) {
         [doors, walls, sceneToCanvas],
     );
 
+    const findNearestLightSwitch = useCallback(
+        (cx: number, cy: number): { id: string; x: number; y: number } | null => {
+            const SNAP_DIST_PX = 15;
+            let closest: { id: string; x: number; y: number } | null = null;
+            let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
+
+            for (const s of lightSwitches) {
+                const p = sceneToCanvas(s.x, s.y);
+                const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+                if (d2 < minDist) {
+                    minDist = d2;
+                    closest = { id: s.id, x: s.x, y: s.y };
+                }
+            }
+            return closest;
+        },
+        [lightSwitches, sceneToCanvas],
+    );
+
     return {
         findNearestWall,
         findNearestFixture,
@@ -340,5 +360,6 @@ export function useInteractionHelpers(opts: HelperOptions) {
         findNearestCanopy,
         findNearestWindow,
         findNearestDoor,
+        findNearestLightSwitch,
     };
 }

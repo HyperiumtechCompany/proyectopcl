@@ -24,7 +24,7 @@ import {
     Circle, Triangle, Move, PenTool, Spline, FilePlus, RotateCw, X,
     Wrench, Building2, Eye, FileInput, Lightbulb, DoorOpen, Search,
     Tag, Type, BookOpen, ChevronDown, CheckCircle2, AlertCircle,
-    Gauge, Scale, Info,
+    Gauge, Scale, Info, ToggleLeft, Link2,
 } from 'lucide-react';
 import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -1213,6 +1213,8 @@ const LuzPanel: React.FC<{
                         <div className="grid grid-cols-2 gap-1">
                             <PanelToolBtn tool="fixture"      icon={<Zap size={13} />}  active={activeTool} onSet={onSetTool} tip="Luminaria (F)"       sublabel="Colocar unitaria" />
                             <PanelToolBtn tool="fixture-grid" icon={<Grid size={13} />} active={activeTool} onSet={onSetTool} tip="Grilla de focos (G)" sublabel="Distribución N×M" />
+                            <PanelToolBtn tool="switch"       icon={<ToggleLeft size={13} />} active={activeTool} onSet={onSetTool} tip="Interruptor (I)" sublabel="Luz en pared" />
+                            <PanelToolBtn tool="wire"         icon={<Link2 size={13} />} active={activeTool} onSet={onSetTool} tip="Cableado (U)" sublabel="Conectar focos" />
                         </div>
                     </PanelCard>
                     <PanelSep label="Config. de grilla" />
@@ -1560,7 +1562,7 @@ export const Toolbar: React.FC = () => {
         {
             id: 'luz' as PanelId, ref: refs.luz,
             icon: <Lightbulb size={15} />, label: 'Luz',
-            hasActive: ['fixture', 'fixture-grid'].includes(activeTool),
+            hasActive: ['fixture', 'fixture-grid', 'switch', 'wire'].includes(activeTool),
         },
         {
             id: 'normativa' as PanelId, ref: refs.normativa,

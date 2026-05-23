@@ -27,6 +27,7 @@ export type {
     Door,
     Canopy,
     Fixture,
+    LightSwitch,
     FixtureGridConfig,
     RoomLightingCalculation,
     ModuleLightingCalculations,
@@ -99,6 +100,7 @@ interface UIState {
     isoluxMode: IsoluxMode;
     sidebarTab: SidebarTab;
     selectedId: string | null;
+    selectedFixtureIds: string[];
     fixtureTemplate: Partial<Fixture>;
     windowTemplate: Partial<Window>;
     doorTemplate: Partial<Door>;
@@ -160,6 +162,7 @@ interface EditorState {
     /** Genera una grilla de focos N×M centrada en el room indicado */
     addFixtureGrid: (config: FixtureGridConfig) => string[];
     addPartition: (partition: Omit<Partition, 'id'>) => string;
+    addLightSwitch: (lightSwitch: Omit<LightSwitch, 'id' | 'connectedFixtureIds'>) => string;
 
     updateRoom: (id: string, patch: Partial<Omit<Room, 'id'>>) => void;
     updateWall: (id: string, patch: Partial<Omit<Wall, 'id'>>) => void;
@@ -167,7 +170,9 @@ interface EditorState {
     updateDoor: (id: string, patch: Partial<Omit<Door, 'id'>>) => void;
     updateCanopy: (id: string, patch: Partial<Omit<Canopy, 'id'>>) => void;
     updateFixture: (id: string, patch: Partial<Omit<Fixture, 'id'>>) => void;
+    updateFixtures: (ids: string[], patch: Partial<Omit<Fixture, 'id'>>) => void;
     updatePartition: (id: string, patch: Partial<Omit<Partition, 'id'>>) => void;
+    updateLightSwitch: (id: string, patch: Partial<Omit<LightSwitch, 'id'>>) => void;
 
     /** Reposiciona una ventana al centro de su pared */
     centerWindowOnWall: (windowId: string) => void;
@@ -183,6 +188,9 @@ interface EditorState {
     setAngleSnapMode: (mode: AngleSnapMode) => void;
     setSidebarTab: (tab: SidebarTab) => void;
     setSelectedId: (id: string | null) => void;
+    setSelectedFixtureIds: (ids: string[]) => void;
+    toggleFixtureSelection: (id: string) => void;
+    clearFixtureSelection: () => void;
     setZoom: (zoom: number) => void;
     setPan: (x: number, y: number) => void;
     toggle3DView: () => void;
@@ -257,6 +265,7 @@ export const useEditorStore = create<EditorState>()(
             isoluxMode: 'functional',
             sidebarTab: 'objects',
             selectedId: null,
+            selectedFixtureIds: [],
             fixtureTemplate: {
                 fixtureType: 'recessed',
                 fixtureShape: 'round',
@@ -731,6 +740,15 @@ export const useEditorStore = create<EditorState>()(
                     ),
                 })),
             ),
+        updateFixtures: (ids, patch) =>
+            set((s) =>
+                mutateScene(s, (sc) => ({
+                    ...sc,
+                    fixtures: sc.fixtures.map((f) =>
+                        ids.includes(f.id) ? { ...f, ...patch } : f,
+                    ),
+                })),
+            ),
 
         centerWindowOnWall: (windowId) =>
             set((state) => {
@@ -814,6 +832,33 @@ export const useEditorStore = create<EditorState>()(
                     ),
                 })),
             ),
+        
+        addLightSwitch: (lightSwitchData) => {
+            const id = uuidv4();
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          lightSwitches: [...(sc.lightSwitches || []), { id, connectedFixtureIds: [], ...lightSwitchData } as any],
+                      })),
+            );
+            return id;
+        },
+
+        updateLightSwitch: (id, patch) => {
+            set((s) => {
+                if (!s.project || !s.activeSceneId) return s;
+                return mutateScene(s, (sc) => {
+                    const lsArray = sc.lightSwitches || [];
+                    const idx = lsArray.findIndex((x) => x.id === id);
+                    if (idx < 0) return sc;
+                    const updated = [...lsArray];
+                    updated[idx] = { ...updated[idx], ...patch };
+                    return { ...sc, lightSwitches: updated };
+                });
+            });
+        },
 
         // ── Remover ───────────────────────────────────────────────────────────
         removeObject: (id) => {
@@ -831,6 +876,7 @@ export const useEditorStore = create<EditorState>()(
                     ),
                     canopies: (s.canopies || []).filter((c) => c.id !== id),
                     fixtures: (s.fixtures || []).filter((f) => f.id !== id),
+                    lightSwitches: (s.lightSwitches || []).filter((ls) => ls.id !== id),
                     partitions: (s.partitions ?? []).filter((p) => p.id !== id),
                 }));
                 return {
@@ -841,6 +887,7 @@ export const useEditorStore = create<EditorState>()(
                             state.ui.selectedId === id
                                 ? null
                                 : state.ui.selectedId,
+                        selectedFixtureIds: state.ui.selectedFixtureIds.filter(fid => fid !== id),
                     },
                     result: null,
                     resultsByRoom: Object.fromEntries(
@@ -862,7 +909,32 @@ export const useEditorStore = create<EditorState>()(
         setSidebarTab: (tab) =>
             set((s) => ({ ui: { ...s.ui, sidebarTab: tab } })),
         setSelectedId: (id) =>
-            set((s) => ({ ui: { ...s.ui, selectedId: id } })),
+            set((s) => {
+                // Si seleccionamos otra cosa, limpiamos selectedFixtureIds si id no es fixture
+                // O limpiamos selectedFixtureIds y si id es fixture, lo agregamos
+                const activeScene = get().activeScene();
+                let isFixture = false;
+                if (activeScene && id) {
+                    isFixture = activeScene.fixtures.some(f => f.id === id);
+                }
+                return {
+                    ui: {
+                        ...s.ui,
+                        selectedId: id,
+                        selectedFixtureIds: isFixture && id ? [id] : [],
+                    }
+                };
+            }),
+        setSelectedFixtureIds: (ids) =>
+            set((s) => ({ ui: { ...s.ui, selectedFixtureIds: ids, selectedId: ids.length === 1 ? ids[0] : null } })),
+        toggleFixtureSelection: (id) =>
+            set((s) => {
+                const current = s.ui.selectedFixtureIds;
+                const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+                return { ui: { ...s.ui, selectedFixtureIds: next, selectedId: next.length === 1 ? next[0] : null } };
+            }),
+        clearFixtureSelection: () =>
+            set((s) => ({ ui: { ...s.ui, selectedFixtureIds: [], selectedId: null } })),
         setZoom: (zoom) => set((s) => ({ ui: { ...s.ui, zoom } })),
         setPan: (x, y) => set((s) => ({ ui: { ...s.ui, panX: x, panY: y } })),
         toggle3DView: () =>

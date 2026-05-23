@@ -246,6 +246,12 @@ export const EditorLayout = memo(function EditorLayout() {
                 case 'w':
                     setTool('wall');
                     break;
+                case 'i':
+                    setTool('switch');
+                    break;
+                case 'u':
+                    setTool('wire');
+                    break;
                 case 'n':
                     setTool('window');
                     break;

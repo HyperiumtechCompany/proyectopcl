@@ -491,9 +491,9 @@ export const OverlayRooms = memo(function OverlayRooms({
 
     return (
         <g className="overlay-rooms">
+            {recintos.map(renderOne)}
             {pasadizos.map(renderOne)}
             {escaleras.map(renderOne)}
-            {recintos.map(renderOne)}
         </g>
     );
 });

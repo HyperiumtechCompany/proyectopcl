@@ -20,9 +20,9 @@ import { safeNum } from './canvasUtils';
 
 interface Props {
     fixtures: Fixture[];
-    selectedId: string | null;
+    selectedFixtureIds: string[];
     zoom: number;
-    onSelect: (id: string) => void;
+    onSelect: (id: string, multi: boolean) => void;
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
     screenDistance: (
         dx: number,
@@ -142,7 +142,7 @@ function getFixtureIcon(fx: Fixture): string {
 
 export const OverlayFixtures = memo(function OverlayFixtures({
     fixtures,
-    selectedId,
+    selectedFixtureIds,
     zoom,
     onSelect,
     screenPoint,
@@ -185,7 +185,7 @@ export const OverlayFixtures = memo(function OverlayFixtures({
 
             {fixtures.map((fx) => {
                 const fp = screenPoint({ x: fx.x, y: fx.y });
-                const isSelected = selectedId === fx.id;
+                const isSelected = selectedFixtureIds.includes(fx.id);
                 const baseR = Math.max(
                     6,
                     screenDistance(0.12, 0, { x: fx.x, y: fx.y }),
@@ -206,7 +206,12 @@ export const OverlayFixtures = memo(function OverlayFixtures({
                     <g
                         key={fx.id}
                         style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-                        onClick={() => onSelect(fx.id)}
+                        onClick={(e) => {
+                            if (e.ctrlKey) {
+                                e.stopPropagation();
+                            }
+                            onSelect(fx.id, e.ctrlKey);
+                        }}
                     >
                         {/* ── Halo exterior difuso ── */}
                         {shape === 'round' || shape === 'square' ? (

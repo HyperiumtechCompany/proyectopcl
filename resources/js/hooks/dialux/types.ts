@@ -11,7 +11,7 @@
 
 export type DrawTool =
     | 'select' | 'room' | 'wall' | 'education-wall' | 'window' | 'door' | 'canopy' | 'corridor' | 'stair'
-    | 'partition' | 'fixture' | 'fixture-grid' | 'measure' | 'measure-area' | 'pan' | 'calibrate';
+    | 'partition' | 'fixture' | 'fixture-grid' | 'switch' | 'wire' | 'measure' | 'measure-area' | 'pan' | 'calibrate';
 
 export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
@@ -55,10 +55,11 @@ export interface CorridorConfig {
      */
     rampSlope?: number;
     /**
-     * Dirección de ascenso de la rampa: hacia dónde sube.
+     * Dirección de flujo principal (ingreso/salida).
+     * Determina en qué bordes se hacen los huecos virtuales.
      * Default: 'north' (hacia -Y en el plano).
      */
-    rampDirection?: 'north' | 'south' | 'east' | 'west';
+    direction?: 'north' | 'south' | 'east' | 'west';
 }
 
 // ─── Escaleras ────────────────────────────────────────────────────────────────
@@ -367,6 +368,17 @@ export interface Fixture {
     lineDrawingAssetId?: string | null;
 }
 
+/** Interruptor de luz */
+export interface LightSwitch {
+    id: string;
+    x: number;
+    y: number;
+    mountingHeight: number; // Altura de montaje en metros (default 1.20m)
+    type: 'single' | 'double' | 'triple' | 'two-way'; // Simple, Doble, Triple, Conmutado
+    wallId?: string; // Pared donde está colocado
+    connectedFixtureIds: string[]; // Luminarias controladas
+}
+
 /** Configuración para inserción de grilla de luminarias */
 export interface FixtureGridConfig {
     rows: number;                       // filas de focos (≥1)
@@ -447,6 +459,7 @@ export interface Scene {
     doors: Door[];
     canopies: Canopy[];
     fixtures: Fixture[];
+    lightSwitches: LightSwitch[];
     partitions: Partition[];
     /**
      * Visibilidad del piso en el canvas 2D y en el modelo 3D.

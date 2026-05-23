@@ -9,6 +9,7 @@ import type {
     Door,
     Canopy,
     Room,
+    LightSwitch,
 } from './useEditorStore';
 import { 
     clampOpeningOffsetToWallSegment,
@@ -16,6 +17,7 @@ import {
     useInteractionHelpers, 
     wallLength, 
     projectPointToWallOffset,
+    resolveOffsetOnWall,
 } from './useInteractionHelpers';
 import { useSnap } from './useSnap';
 import { getCanopyDraftStart } from './cadInteraction';
@@ -49,25 +51,29 @@ interface InteractionOptions {
     ) => void;
     onAddCanopy: (x1: number, y1: number, x2: number, y2: number) => void;
     onAddFixture: (xM: number, yM: number) => void;
+    onAddFixtureGrid?: (roomId: string) => void;
     onCalibrationMeasure: (
         cadDistance: number,
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => void;
     /** Llamado cuando el usuario cierra el polígono de medición de área */
-    onMeasureAreaFinish: (verticesM: CanvasPoint[]) => void;
-    onSelectObject: (id: string | null) => void;
+    onMeasureAreaFinish: (vertices: CanvasPoint[]) => void;
+    onSelectObject: (id: string | null, multi?: boolean) => void;
     onPanChange: (dx: number, dy: number) => void;
     onDoubleClick: () => void;
     screenToScene: (cx: number, cy: number) => CanvasPoint;
     sceneToScreen: (sx: number, sy: number) => CanvasPoint;
     selectedId: string | null;
+    selectedFixtureIds: string[];
     fixtures: Fixture[];
+    lightSwitches: LightSwitch[];
     rooms: Room[];
     canopies: Canopy[];
     windows: Window[];
     doors: Door[];
     onMoveFixture: (id: string, x: number, y: number) => void;
+    onMoveFixtures: (ids: string[], dx: number, dy: number) => void;
     onMoveRoom: (id: string, dx: number, dy: number) => void;
     onMoveCanopy: (
         id: string,
@@ -78,6 +84,9 @@ interface InteractionOptions {
     ) => void;
     onMoveWindow: (id: string, wallId: string, offsetAlongWall: number) => void;
     onMoveDoor:   (id: string, wallId: string, offsetAlongWall: number) => void;
+    onAddLightSwitch: (x: number, y: number, wallId?: string) => void;
+    onMoveLightSwitch: (id: string, x: number, y: number, wallId?: string) => void;
+    onConnectWire?: (switchId: string, fixtureId: string) => void;
 }
 
 interface DrawState {
@@ -94,10 +103,11 @@ interface DrawState {
     calibrationStart: CanvasPoint | null;
     /** Vértices acumulados para la herramienta measure-area (metros de escena). */
     measureAreaVertices: CanvasPoint[];
+    wireStartNode: { type: 'switch' | 'fixture'; id: string } | null;
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
-    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | null;
+    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | null;
 }
 
 function isWallTool(tool: string): boolean {
@@ -118,6 +128,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onAddDoor,
         onAddCanopy,
         onAddFixture,
+        onAddFixtureGrid,
+        onAddLightSwitch,
         onCalibrationMeasure,
         onMeasureAreaFinish,
         onSelectObject,
@@ -126,15 +138,20 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         screenToScene,
         sceneToScreen,
         fixtures,
+        lightSwitches,
         rooms,
         canopies,
         windows,
         doors,
+        selectedFixtureIds,
         onMoveFixture,
+        onMoveFixtures,
         onMoveRoom,
         onMoveCanopy,
         onMoveWindow,
         onMoveDoor,
+        onMoveLightSwitch,
+        onConnectWire,
     } = opts;
 
     /**
@@ -163,6 +180,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         canopyPreview: null,
         calibrationStart: null,
         measureAreaVertices: [],
+        wireStartNode: null,
         isDragging: false,
         dragStartScene: null,
         dragObjectId: null,
@@ -201,7 +219,6 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         zoom,
     });
 
-    // ── Interaction Helpers Hook ───────────────────────────────────────────────
     const {
         findNearestWall,
         findNearestFixture,
@@ -209,6 +226,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         findNearestCanopy,
         findNearestWindow,
         findNearestDoor,
+        findNearestLightSwitch,
     } = useInteractionHelpers({
         walls,
         fixtures,
@@ -216,6 +234,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         canopies,
         windows,
         doors,
+        lightSwitches,
         sceneToCanvas,
     });
 
@@ -287,33 +306,49 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const cadOsnapPoint = resolveCadOsnap?.(
+            const noSnapTools = ['switch', 'wire', 'fixture', 'fixture-grid', 'select', 'pan'];
+            const shouldSnap = !noSnapTools.includes(activeTool);
+
+            const cadOsnapPoint = shouldSnap ? resolveCadOsnap?.(
                 canvasToScene(rawX, rawY),
                 prevPointM,
-            );
-            const snapped = cadOsnapPoint
-                ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
-            const referenceAngles = getReferenceAngles(
-                activeTool,
-                s,
-                snapped.x,
-                snapped.y,
-            );
-            const finalPointCanvas = applyAngleSnap(
-                snapped.x,
-                snapped.y,
-                prevPointM,
-                angleSnapMode,
-                e.shiftKey,
-                referenceAngles,
-            );
-            const cx = finalPointCanvas.x;
-            const cy = finalPointCanvas.y;
+            ) : null;
+            let cx = rawX;
+            let cy = rawY;
+
+            if (shouldSnap) {
+                const snapped = cadOsnapPoint
+                    ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
+                    : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
+                const referenceAngles = getReferenceAngles(
+                    activeTool,
+                    s,
+                    snapped.x,
+                    snapped.y,
+                );
+                const finalPointCanvas = applyAngleSnap(
+                    snapped.x,
+                    snapped.y,
+                    prevPointM,
+                    angleSnapMode,
+                    e.shiftKey,
+                    referenceAngles,
+                );
+                cx = finalPointCanvas.x;
+                cy = finalPointCanvas.y;
+            }
 
             if (activeTool === 'fixture') {
                 const sc = canvasToScene(cx, cy);
                 onAddFixture(sc.x, sc.y);
+                return;
+            }
+
+            if (activeTool === 'fixture-grid') {
+                const roomHit = findNearestRoom(cx, cy);
+                if (roomHit && onAddFixtureGrid) {
+                    onAddFixtureGrid(roomHit.id);
+                }
                 return;
             }
 
@@ -426,6 +461,55 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
+            if (activeTool === 'switch') {
+                // El switch se puede poner en la pared, o libre.
+                // Intentamos anclarlo a la pared más cercana, si no, lo ponemos libre.
+                const hit = findNearestWall(cx, cy);
+                const scenePoint = canvasToScene(cx, cy);
+                if (hit) {
+                    const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                    if (wallPos) {
+                        onAddLightSwitch(wallPos.x, wallPos.y, hit.wall.id);
+                    } else {
+                        onAddLightSwitch(scenePoint.x, scenePoint.y);
+                    }
+                } else {
+                    onAddLightSwitch(scenePoint.x, scenePoint.y);
+                }
+                return;
+            }
+
+            if (activeTool === 'wire') {
+                const switchHit = findNearestLightSwitch(cx, cy);
+                const fixtureHit = findNearestFixture(cx, cy);
+
+                if (switchHit) {
+                    if (s.wireStartNode?.type === 'fixture') {
+                        onConnectWire?.(switchHit.id, s.wireStartNode.id);
+                        // Convertir el switch en el nuevo punto de inicio para seguir cableando
+                        s.wireStartNode = { type: 'switch', id: switchHit.id };
+                    } else {
+                        s.wireStartNode = { type: 'switch', id: switchHit.id };
+                    }
+                    return;
+                }
+
+                if (fixtureHit) {
+                    if (s.wireStartNode?.type === 'switch') {
+                        onConnectWire?.(s.wireStartNode.id, fixtureHit.id);
+                        // No limpiar s.wireStartNode, mantener el switch seleccionado
+                        // para que el usuario pueda seguir haciendo clic en más focos.
+                    } else {
+                        s.wireStartNode = { type: 'fixture', id: fixtureHit.id };
+                    }
+                    return;
+                }
+                
+                // Si clicamos al vacio, cancelar
+                s.wireStartNode = null;
+                return;
+            }
+
             if (activeTool === 'canopy') {
                 s.wallStart = getCanopyDraftStart({ x: cx, y: cy }, canvasToScene);
                 s.isDrawing = true;
@@ -440,11 +524,29 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (activeTool === 'select') {
                 const fixtureHit = findNearestFixture(cx, cy);
                 if (fixtureHit) {
-                    onSelectObject(fixtureHit.id);
+                    if (e.ctrlKey) {
+                        onSelectObject(fixtureHit.id, true);
+                    } else {
+                        onSelectObject(fixtureHit.id, false);
+                    }
                     s.isDragging = true;
                     s.dragStartScene = canvasToScene(cx, cy);
                     s.dragObjectId = fixtureHit.id;
                     s.dragObjectType = 'fixture';
+                    return;
+                }
+
+                const switchHit = findNearestLightSwitch(cx, cy);
+                if (switchHit) {
+                    if (e.ctrlKey) {
+                        onSelectObject(switchHit.id, true);
+                    } else {
+                        onSelectObject(switchHit.id, false);
+                    }
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(cx, cy);
+                    s.dragObjectId = switchHit.id;
+                    s.dragObjectType = 'switch';
                     return;
                 }
 
@@ -526,29 +628,37 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const cadOsnapPoint = resolveCadOsnap?.(
+            const noSnapTools = ['switch', 'wire', 'fixture', 'fixture-grid', 'select', 'pan'];
+            const shouldSnap = !noSnapTools.includes(activeTool);
+
+            const cadOsnapPoint = shouldSnap ? resolveCadOsnap?.(
                 canvasToScene(rawX, rawY),
                 prevPointM,
-            );
-            const snapped = cadOsnapPoint
-                ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
-            const referenceAngles = getReferenceAngles(
-                activeTool,
-                s,
-                snapped.x,
-                snapped.y,
-            );
-            const finalPointCanvas = applyAngleSnap(
-                snapped.x,
-                snapped.y,
-                prevPointM,
-                angleSnapMode,
-                e.shiftKey,
-                referenceAngles,
-            );
-            const cx = finalPointCanvas.x;
-            const cy = finalPointCanvas.y;
+            ) : null;
+            let cx = rawX;
+            let cy = rawY;
+
+            if (shouldSnap) {
+                const snapped = cadOsnapPoint
+                    ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
+                    : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
+                const referenceAngles = getReferenceAngles(
+                    activeTool,
+                    s,
+                    snapped.x,
+                    snapped.y,
+                );
+                const finalPointCanvas = applyAngleSnap(
+                    snapped.x,
+                    snapped.y,
+                    prevPointM,
+                    angleSnapMode,
+                    e.shiftKey,
+                    referenceAngles,
+                );
+                cx = finalPointCanvas.x;
+                cy = finalPointCanvas.y;
+            }
 
             if ((activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') && s.roomVertices.length > 0) {
                 s.previewPoint = canvasToScene(cx, cy);
@@ -594,8 +704,14 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 const dyM = currentScene.y - s.dragStartScene.y;
 
                 if (s.dragObjectType === 'fixture') {
-                    const fixture = fixtures.find((f) => f.id === s.dragObjectId);
-                    if (fixture) onMoveFixture(s.dragObjectId, fixture.x + dxM, fixture.y + dyM);
+                    if (selectedFixtureIds.includes(s.dragObjectId)) {
+                        // Mover múltiples luminarias
+                        onMoveFixtures(selectedFixtureIds, dxM, dyM);
+                    } else {
+                        // Mover una sola (fallback o click en una no seleccionada que arrastró)
+                        const fixture = fixtures.find((f) => f.id === s.dragObjectId);
+                        if (fixture) onMoveFixture(s.dragObjectId, fixture.x + dxM, fixture.y + dyM);
+                    }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'room') {
                     const room = rooms.find((r) => r.id === s.dragObjectId);
@@ -605,6 +721,26 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     const canopy = canopies.find((c) => c.id === s.dragObjectId);
                     if (canopy) {
                         onMoveCanopy(s.dragObjectId, canopy.x1 + dxM, canopy.y1 + dyM, canopy.x2 + dxM, canopy.y2 + dyM);
+                    }
+                    s.dragStartScene = currentScene;
+                } else if (s.dragObjectType === 'switch') {
+                    const lSwitch = lightSwitches.find((sw) => sw.id === s.dragObjectId);
+                    if (lSwitch) {
+                        // Movemos el switch. Si intentan anclarlo a otra pared, buscaremos la más cercana a currentScene
+                        const newX = lSwitch.x + dxM;
+                        const newY = lSwitch.y + dyM;
+                        // Intentar anclar a la pared más cercana
+                        const hit = findNearestWall(cx, cy);
+                        if (hit) {
+                            const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                            if (wallPos) {
+                                onMoveLightSwitch(s.dragObjectId, wallPos.x, wallPos.y, hit.wall.id);
+                            } else {
+                                onMoveLightSwitch(s.dragObjectId, newX, newY, hit.wall.id);
+                            }
+                        } else {
+                            onMoveLightSwitch(s.dragObjectId, newX, newY, undefined); // sin pared
+                        }
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'window') {

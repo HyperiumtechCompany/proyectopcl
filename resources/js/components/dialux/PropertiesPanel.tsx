@@ -44,6 +44,7 @@ import type {
     Partition,
     StairConfig,
     StairFlight,
+    LightSwitch,
 } from '@/hooks/dialux/types';
 
 const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
@@ -56,18 +57,63 @@ const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
     { value: 'sidewalk', label: 'Vereda (Piso sin barandas)' },
 ];
 
+function LightSwitchProps({
+    lightSwitch,
+    onUpdate,
+}: {
+    lightSwitch: LightSwitch;
+    onUpdate: (patch: Partial<LightSwitch>) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-3">
+            <SectionWrapper title="Interruptor" icon={<Zap size={15} />}>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <SelectField
+                        label="Tipo"
+                        value={lightSwitch.type}
+                        onChange={(val) => onUpdate({ type: val as any })}
+                        options={[
+                            { value: 'single', label: 'Simple S(f)' },
+                            { value: 'double', label: 'Doble 2Sc(d,3)' },
+                            { value: 'two-way', label: 'Conmutado Sc(c)' },
+                        ]}
+                    />
+                    <EditField
+                        label="Altura (m)"
+                        value={lightSwitch.mountingHeight}
+                        onChange={(val) => onUpdate({ mountingHeight: val })}
+                        step={0.05}
+                    />
+                </div>
+            </SectionWrapper>
+        </div>
+    );
+}
+
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const store = useEditorStore();
     const scene = store.activeScene();
     const selectedId = store.ui.selectedId;
+    const selectedFixtureIds = store.ui.selectedFixtureIds;
 
-    if (!selectedId || !scene) {
+    if (!selectedId && selectedFixtureIds.length === 0) {
         return (
             <div className="px-2 py-6 text-center">
                 <p className="text-[10px] text-gray-600">
                     Selecciona un objeto para ver sus propiedades
                 </p>
             </div>
+        );
+    }
+
+    if (selectedFixtureIds.length > 1 && scene) {
+        return (
+            <FixtureProps
+                fixture={scene.fixtures.find(f => f.id === selectedFixtureIds[0])!}
+                onUpdate={(patch) => store.updateFixtures(selectedFixtureIds, patch)}
+                multiple={true}
+                count={selectedFixtureIds.length}
+            />
         );
     }
 
@@ -78,12 +124,22 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const canopy = scene.canopies.find((c) => c.id === selectedId);
     const fixture = scene.fixtures.find((f) => f.id === selectedId);
     const partition = scene.partitions?.find((p) => p.id === selectedId);
+    const lightSwitch = scene.lightSwitches?.find((s) => s.id === selectedId);
 
     if (partition) {
         return (
             <PartitionProps
                 partition={partition}
                 onUpdate={(patch) => store.updatePartition(partition.id, patch)}
+            />
+        );
+    }
+
+    if (lightSwitch) {
+        return (
+            <LightSwitchProps
+                lightSwitch={lightSwitch}
+                onUpdate={(patch) => store.updateLightSwitch(lightSwitch.id, patch)}
             />
         );
     }
@@ -159,6 +215,8 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
             <FixtureProps
                 fixture={fixture}
                 onUpdate={(patch) => store.updateFixture(fixture.id, patch)}
+                multiple={false}
+                count={1}
             />
         );
     }
@@ -290,40 +348,44 @@ const RoomProps: React.FC<{
                                         })
                                     }
                                 />
-                                <SelectField
-                                    label="Dirección sube"
-                                    value={room.corridorConfig?.rampDirection ?? 'north'}
-                                    options={[
-                                        { value: 'north', label: 'Norte ↑' },
-                                        { value: 'south', label: 'Sur ↓' },
-                                        { value: 'east', label: 'Este →' },
-                                        { value: 'west', label: 'Oeste ←' },
-                                    ]}
-                                    onChange={(value) =>
-                                        onUpdate({
-                                            corridorConfig: {
-                                                ...(room.corridorConfig ?? {}),
-                                                rampDirection: value as 'north' | 'south' | 'east' | 'west',
-                                            },
-                                        })
-                                    }
-                                />
-                                <EditField
-                                    label="Alto baranda (m)"
-                                    value={room.corridorConfig?.railingHeight ?? 1.0}
-                                    min={0.6}
-                                    max={1.5}
-                                    step={0.05}
-                                    onChange={(value) =>
-                                        onUpdate({
-                                            corridorConfig: {
-                                                ...(room.corridorConfig ?? {}),
-                                                railingHeight: value,
-                                            },
-                                        })
-                                    }
-                                />
                             </>
+                        )}
+                        {(room.corridorConfig?.type === 'ramp' || room.corridorConfig?.type === 'roof_floor') && (
+                            <SelectField
+                                label={room.corridorConfig?.type === 'ramp' ? "Dirección sube" : "Dirección flujo"}
+                                value={room.corridorConfig?.direction ?? 'north'}
+                                options={[
+                                    { value: 'north', label: 'Norte ↑' },
+                                    { value: 'south', label: 'Sur ↓' },
+                                    { value: 'east', label: 'Este →' },
+                                    { value: 'west', label: 'Oeste ←' },
+                                ]}
+                                onChange={(value) =>
+                                    onUpdate({
+                                        corridorConfig: {
+                                            ...(room.corridorConfig ?? {}),
+                                            direction: value as 'north' | 'south' | 'east' | 'west',
+                                        },
+                                    })
+                                }
+                            />
+                        )}
+                        {room.corridorConfig?.type === 'ramp' && (
+                            <EditField
+                                label="Alto baranda (m)"
+                                value={room.corridorConfig?.railingHeight ?? 1.0}
+                                min={0.6}
+                                max={1.5}
+                                step={0.05}
+                                onChange={(value) =>
+                                    onUpdate({
+                                        corridorConfig: {
+                                            ...(room.corridorConfig ?? {}),
+                                            railingHeight: value,
+                                        },
+                                    })
+                                }
+                            />
                         )}
                     </>
                 )}
@@ -402,10 +464,24 @@ const RoomProps: React.FC<{
                             onUpdate({ illuminanceLux: value, norma: value })
                         }
                     />
-                    <PropField
-                        label="Luminarias"
-                        value={`${fixturesInRoom.length}`}
-                    />
+                    <div className="flex items-center justify-between">
+                        <PropField
+                            label="Luminarias"
+                            value={`${fixturesInRoom.length}`}
+                        />
+                        {fixturesInRoom.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    store.setSelectedId(null);
+                                    store.setSelectedFixtureIds(fixturesInRoom.map((f) => f.id));
+                                }}
+                                className="ml-2 rounded bg-blue-600/20 px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-600/40"
+                            >
+                                Seleccionar Todas
+                            </button>
+                        )}
+                    </div>
                     <PropField
                         label="Lm detectados"
                         value={
@@ -427,6 +503,55 @@ const RoomProps: React.FC<{
                         value={`${inputs.roundedQuantity}`}
                     />
                 </SectionWrapper>
+            )}
+
+            {/* ── Sección Grilla de Luminarias ── */}
+            {room.roomType !== 'stair' && (
+                <div className="mt-4 border-t border-gray-800/80 pt-3">
+                    <div className="flex items-center gap-2 text-emerald-500">
+                        <Zap size={12} />
+                        <p className="text-[10px] font-semibold uppercase">
+                            Generar Grilla de Focos
+                        </p>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                        <EditField
+                            label="Filas"
+                            value={store.ui.fixtureGridRows}
+                            min={1}
+                            max={20}
+                            step={1}
+                            onChange={(val) => store.setFixtureGridRows(val)}
+                        />
+                        <EditField
+                            label="Columnas"
+                            value={store.ui.fixtureGridCols}
+                            min={1}
+                            max={20}
+                            step={1}
+                            onChange={(val) => store.setFixtureGridCols(val)}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const newIds = store.addFixtureGrid({
+                                roomId: room.id,
+                                rows: store.ui.fixtureGridRows,
+                                columns: store.ui.fixtureGridCols,
+                                fixtureTemplate: store.ui.fixtureTemplate,
+                                ambientVertices: calculationRoom.vertices,
+                            });
+                            if (newIds.length > 0) {
+                                store.setSelectedId(null);
+                                store.setSelectedFixtureIds(newIds);
+                            }
+                        }}
+                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
+                    >
+                        Generar Grilla {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
+                    </button>
+                </div>
             )}
         </div>
     );
@@ -739,43 +864,7 @@ const WallProps: React.FC<{
         onUpdate({ vertices: newVertices });
     };
 
-    const handleMaterialChange = (value: string) => {
-        if (value !== 'brick' && value !== 'adobe') return;
 
-        const nextPreset = getPeruWallPreset(
-            value,
-            wall.normativeUse ?? 'housing',
-        );
-
-        onUpdate({
-            material: nextPreset.material,
-            normativeUse: nextPreset.use,
-            thickness: nextPreset.recommendedThickness,
-            height: nextPreset.recommendedHeight,
-            mortarJointMin: nextPreset.mortarJointMin,
-            mortarJointMax: nextPreset.mortarJointMax,
-        });
-    };
-
-    const handleUseChange = (value: string) => {
-        if (
-            value !== 'housing' &&
-            value !== 'education' &&
-            value !== 'generic'
-        ) {
-            return;
-        }
-
-        const nextPreset = getPeruWallPreset(wall.material ?? 'brick', value);
-
-        onUpdate({
-            normativeUse: nextPreset.use,
-            thickness: nextPreset.recommendedThickness,
-            height: nextPreset.recommendedHeight,
-            mortarJointMin: nextPreset.mortarJointMin,
-            mortarJointMax: nextPreset.mortarJointMax,
-        });
-    };
 
     const updateAmbientConfig = (
         patch: Partial<NonNullable<Room['ambientConfigs']>[string]>,
@@ -877,10 +966,24 @@ const WallProps: React.FC<{
                         label="Área ambiente"
                         value={`${ambientMatch.area.toFixed(4)} m²`}
                     />
-                    <PropField
-                        label="Luminarias"
-                        value={`${ambientMatch.fixtures.length}`}
-                    />
+                    <div className="flex items-center justify-between">
+                        <PropField
+                            label="Luminarias"
+                            value={`${ambientMatch.fixtures.length}`}
+                        />
+                        {ambientMatch.fixtures.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    store.setSelectedId(null);
+                                    store.setSelectedFixtureIds(ambientMatch.fixtures.map((f) => f.id));
+                                }}
+                                className="ml-2 rounded bg-blue-600/20 px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-600/40"
+                            >
+                                Seleccionar Todas
+                            </button>
+                        )}
+                    </div>
                     <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
                         <div className="flex items-center gap-2 text-emerald-500">
                             <Grid size={12} />
@@ -912,15 +1015,19 @@ const WallProps: React.FC<{
                         </div>
                         <button
                             type="button"
-                            onClick={() =>
-                                store.addFixtureGrid({
-                                    roomId: ambientMatch.sourceRoom.id,
-                                    rows: store.ui.fixtureGridRows,
-                                    columns: store.ui.fixtureGridCols,
-                                    fixtureTemplate: store.ui.fixtureTemplate,
-                                    ambientVertices: ambientMatch.room.vertices,
-                                })
+                        onClick={() => {
+                            const newIds = store.addFixtureGrid({
+                                roomId: ambientMatch.sourceRoom.id,
+                                rows: store.ui.fixtureGridRows,
+                                columns: store.ui.fixtureGridCols,
+                                fixtureTemplate: store.ui.fixtureTemplate,
+                                ambientVertices: ambientMatch.room.vertices,
+                            });
+                            if (newIds.length > 0) {
+                                store.setSelectedId(null);
+                                store.setSelectedFixtureIds(newIds);
                             }
+                        }}
                             className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-emerald-600/80 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-emerald-500"
                         >
                             <PlusSquare size={13} />
@@ -1216,12 +1323,14 @@ const CanopyProps: React.FC<{
 const FixtureProps: React.FC<{
     fixture: Fixture;
     onUpdate: (patch: Partial<Omit<Fixture, 'id'>>) => void;
-}> = ({ fixture, onUpdate }) => {
+    multiple?: boolean;
+    count?: number;
+}> = ({ fixture, onUpdate, multiple, count }) => {
     const store = useEditorStore();
     return (
         <SectionWrapper
             icon={<Zap size={12} className="text-amber-400" />}
-            label="Luminaria"
+            label={multiple ? `Luminarias múltiples (${count})` : "Luminaria"}
         >
             <div className="mb-2 flex items-start gap-2 rounded border border-amber-700/50 bg-amber-900/20 p-2">
                 <Move
@@ -1229,8 +1338,9 @@ const FixtureProps: React.FC<{
                     className="mt-0.5 flex-shrink-0 text-amber-400"
                 />
                 <p className="text-[9px] text-amber-300">
-                    Selecciona esta luminaria en el canvas y arrastrala para
-                    moverla dentro del recinto.
+                    {multiple 
+                        ? "Estás editando múltiples luminarias. Los cambios de posición afectarán a todas por igual."
+                        : "Selecciona esta luminaria en el canvas y arrastrala para moverla dentro del recinto."}
                 </p>
             </div>
 
@@ -1313,15 +1423,21 @@ const FixtureProps: React.FC<{
             <div className="mt-3 flex gap-2">
                 <button
                     type="button"
-                    onClick={() => store.centerFixtureInRoom(fixture.id)}
+                    onClick={() => {
+                        if (multiple) {
+                            store.ui.selectedFixtureIds.forEach(id => store.centerFixtureInRoom(id));
+                        } else {
+                            store.centerFixtureInRoom(fixture.id);
+                        }
+                    }}
                     className="flex flex-1 items-center justify-center gap-2 rounded border border-amber-700/50 bg-amber-950/40 py-1.5 text-[10px] text-amber-200 transition-colors hover:bg-amber-800/40"
-                    title="Centrar esta luminaria en el recinto"
+                    title={multiple ? "Centrar todas en sus recintos" : "Centrar esta luminaria en el recinto"}
                 >
                     <Target size={13} />
                     Centrar
                 </button>
 
-                {fixture.roomId && (
+                {!multiple && fixture.roomId && (
                     <button
                         type="button"
                         onClick={() => store.setTool('fixture-grid')}
@@ -1334,7 +1450,7 @@ const FixtureProps: React.FC<{
                 )}
             </div>
 
-            <PropField label="ID" value={fixture.id.slice(0, 12)} />
+            {!multiple && <PropField label="ID" value={fixture.id.slice(0, 12)} />}
         </SectionWrapper>
     );
 };

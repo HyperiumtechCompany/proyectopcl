@@ -50,6 +50,8 @@ import { IsoluxLayer } from './IsoluxLayer';
 import { OverlayCanopies } from './OverlayCanopies';
 import { OverlayDoors } from './OverlayDoors';
 import { OverlayFixtures } from './OverlayFixtures';
+import { OverlayLightSwitches } from './OverlayLightSwitches';
+import { OverlayWires } from './OverlayWires';
 import { OverlayPreviews } from './OverlayPreviews';
 import { OverlayRooms } from './OverlayRooms';
 import { OverlayWalls } from './OverlayWalls';
@@ -70,6 +72,9 @@ const CURSOR_MAP: Record<string, string> = {
     corridor: 'crosshair',
     stair: 'crosshair',
     fixture: 'cell',
+    'fixture-grid': 'cell',
+    switch: 'cell',
+    wire: 'crosshair',
     measure: 'crosshair',
     'measure-area': 'crosshair',
     calibrate: 'crosshair',
@@ -86,6 +91,9 @@ const DRAWING_TOOLS = new Set([
     'corridor',
     'stair',
     'fixture',
+    'fixture-grid',
+    'switch',
+    'wire',
     'measure',
     'measure-area',
     'calibrate',
@@ -109,7 +117,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const ui = store.ui;
         const resultsByRoom = useEditorStore((state) => state.resultsByRoom);
         const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
-        const allScenes = useEditorStore((s) => s.project?.scenes ?? []);
+        const allScenes = useEditorStore((s) => s.project?.scenes) ?? [];
         const activeSceneId = useEditorStore((s) => s.activeSceneId);
         const engine = useMlightcadEngine();
         const { } = useWasmEngine();
@@ -356,10 +364,36 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             sceneToScreen: (sx, sy) => screenPoint({ x: sx, y: sy }),
             selectedId: ui.selectedId,
             fixtures: scene?.fixtures ?? [],
+            selectedFixtureIds: ui.selectedFixtureIds ?? [],
+            lightSwitches: scene?.lightSwitches ?? [],
             rooms: scene?.rooms ?? [],
             canopies: scene?.canopies ?? [],
             windows: scene?.windows ?? [],
             doors: scene?.doors ?? [],
+            onMoveFixture: (id, x, y) => store.updateFixture(id, { x, y }),
+            onMoveFixtures: (ids, dx, dy) => {
+                const fixtures = scene?.fixtures ?? [];
+                ids.forEach((id) => {
+                    const fixture = fixtures.find((f) => f.id === id);
+                    if (fixture) {
+                        store.updateFixture(id, { x: fixture.x + dx, y: fixture.y + dy });
+                    }
+                });
+            },
+            onMoveLightSwitch: (id, x, y, wallId) => {
+                store.updateLightSwitch(id, { x, y, wallId });
+            },
+            onConnectWire: (switchId, fixtureId) => {
+                const sw = scene?.lightSwitches?.find(s => s.id === switchId);
+                if (!sw) return;
+                const connected = sw.connectedFixtureIds || [];
+                if (connected.includes(fixtureId)) {
+                    store.updateLightSwitch(switchId, { connectedFixtureIds: connected.filter(id => id !== fixtureId) });
+                } else {
+                    store.updateLightSwitch(switchId, { connectedFixtureIds: [...connected, fixtureId] });
+                }
+                // Limpiar la herramienta después de conectar o dejarla para más
+            },
             onAddRoom: (verticesM) => {
                 const isCorridor = ui.activeTool === 'corridor';
                 const isStair = ui.activeTool === 'stair';
@@ -533,8 +567,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 );
                 const id = store.addFixture({
                     name: t.name ?? `Luminaria ${ambient?.name ?? 'exterior'}`,
-                    x: ambient?.centroid.x ?? xM,
-                    y: ambient?.centroid.y ?? yM,
+                    x: xM,
+                    y: yM,
                     z: fixtureHeight,
                     lumens: t.lumens ?? 4000,
                     power: t.power,
@@ -547,6 +581,29 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     productSourceFormat: t.productSourceFormat,
                     lightColor: t.lightColor ?? '#fff5e1',
                     roomId: ambient?.room.id,
+                });
+                store.setSelectedId(id);
+            },
+            onAddFixtureGrid: (roomId) => {
+                const newIds = store.addFixtureGrid({
+                    roomId,
+                    rows: ui.fixtureGridRows,
+                    columns: ui.fixtureGridCols,
+                    fixtureTemplate: ui.fixtureTemplate,
+                });
+                if (newIds.length > 0) {
+                    store.setSelectedId(null);
+                    store.setSelectedFixtureIds(newIds);
+                    store.setTool('select');
+                }
+            },
+            onAddLightSwitch: (x, y, wallId) => {
+                const id = store.addLightSwitch({
+                    x,
+                    y,
+                    wallId,
+                    type: 'single', // Default to single
+                    mountingHeight: 1.20,
                 });
                 store.setSelectedId(id);
             },
@@ -576,7 +633,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 setMeasureAreaPreviewPt(null);
             },
 
-            onSelectObject: (id) => store.setSelectedId(id),
+            onSelectObject: (id, multi) => {
+                if (multi && id) {
+                    store.toggleFixtureSelection(id);
+                } else {
+                    store.setSelectedId(id);
+                }
+            },
             onPanChange: (dx, dy) => store.setPan(panX + dx, panY + dy),
             onDoubleClick: () => {
                 setRoomPreviewPt(null);
@@ -965,11 +1028,32 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     />
                     <OverlayFixtures
                         fixtures={scene?.fixtures ?? []}
-                        selectedId={ui.selectedId}
+                        selectedFixtureIds={ui.selectedFixtureIds ?? []}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={(id, multi) => {
+                            if (multi) {
+                                store.toggleFixtureSelection(id);
+                            } else {
+                                store.setSelectedId(id);
+                            }
+                        }}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
+                    />
+                    <OverlayWires
+                        lightSwitches={scene?.lightSwitches ?? []}
+                        fixtures={scene?.fixtures ?? []}
+                        zoom={zoom}
+                        screenPoint={screenPoint}
+                    />
+                    <OverlayLightSwitches
+                        lightSwitches={scene?.lightSwitches ?? []}
+                        selectedId={ui.selectedId}
+                        zoom={zoom}
+                        onSelect={(id, multi) => {
+                            store.setSelectedId(id); // For switches, we just select them
+                        }}
+                        screenPoint={screenPoint}
                     />
                     <CalibrationOverlay
                         line={visibleCalibrationLine}

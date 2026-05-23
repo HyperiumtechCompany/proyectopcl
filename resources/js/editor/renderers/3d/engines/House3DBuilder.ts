@@ -46,6 +46,8 @@ import type {
     Door,
     Canopy,
     Fixture,
+    LightSwitch,
+    Partition,
     Scene as EditorScene,
     LightingResult,
     IsoluxMode,
@@ -287,6 +289,7 @@ export class House3DBuilder {
         showRoof: boolean = false,
         yOffset: number = 0,
         sceneId?: string,
+        floorBelow?: EditorScene,
     ) {
         // 1. Dispose meshes previos de este escopo (no afectar otros pisos)
         // Cuando se llama desde syncAllFloors, el dispose ya se hizo en bloque.
@@ -357,6 +360,7 @@ export class House3DBuilder {
                 editorScene.walls || [],
                 floorNode,
                 rooms,
+                floorBelow,
             ),
         );
         (editorScene.walls || []).forEach((w) =>
@@ -364,6 +368,7 @@ export class House3DBuilder {
                 w,
                 editorScene.windows || [],
                 editorScene.doors || [],
+                rooms,
                 floorNode,
             ),
         );
@@ -376,6 +381,9 @@ export class House3DBuilder {
                 this.resolveFixtureRoomHeight(f, rooms, roomHeights),
                 floorNode,
             ),
+        );
+        (editorScene.lightSwitches || []).forEach((ls) =>
+            this.buildLightSwitch(ls, floorNode, editorScene.fixtures || [], editorScene.walls || []),
         );
         (editorScene.doors || []).forEach((d) =>
             this.buildDoor(d, editorScene.walls || [], floorNode),
@@ -781,9 +789,8 @@ export class House3DBuilder {
             .filter((candidate) => candidate.roomType === 'stair')
             .filter((candidate) => candidate.id !== room.id)
             .filter((candidate) => {
-                const center = this.getRoomCenter(candidate);
-
-                return this.pointInRoom(room, center.x, center.y);
+                return candidate.vertices.some(v => this.pointInRoom(room, v.x, v.y)) ||
+                       room.vertices.some(v => this.pointInRoom(candidate, v.x, v.y));
             })
             .map((stair) =>
                 this.expandPolygonShape(this.sanitizeRoomShape(stair), -0.01),
@@ -1096,12 +1103,16 @@ export class House3DBuilder {
             // coloca la cara inferior exactamente en ceilingHeight (tope de paredes).
             // Se expande el polígono en EXTERIOR_WALL_THICKNESS / 2 para sellar
             // contra las paredes del recinto sin juntas visibles.
+            const floorHoles = floorBelow ? this.getRoomStairHoles(room, floorBelow.rooms || []) : [];
+            floorHoles.push(...this.getRoomStairHoles(room, allRooms));
+
             if (renderFlags.hasFloor) {
                 try {
                     const floor = MeshBuilder.CreatePolygon(
                         `pasadizo_floor_${room.id}`,
                         {
                             shape: corridorShape,
+                            holes: floorHoles,
                             depth: floorThickness,
                             sideOrientation: Mesh.DOUBLESIDE,
                         },
@@ -1151,6 +1162,7 @@ export class House3DBuilder {
                     `pasadizo_slab_${room.id}`,
                     {
                         shape: corridorShape,
+                        holes: floorHoles,
                         depth: SLAB_THICKNESS,
                         sideOrientation: Mesh.DOUBLESIDE,
                     },
@@ -1767,6 +1779,9 @@ export class House3DBuilder {
 
         try {
             const floorHoles = floorBelow ? this.getRoomStairHoles(room, floorBelow.rooms || []) : [];
+            if (room.roomType === 'corridor') {
+                floorHoles.push(...this.getRoomStairHoles(room, allRooms));
+            }
             const floor = MeshBuilder.CreatePolygon(
                 `floor_${room.id}`,
                 { shape, holes: floorHoles, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
@@ -1913,73 +1928,89 @@ export class House3DBuilder {
         allWindows.forEach((w) => checkAperture(w, 'window'));
         allDoors.forEach((d) => checkAperture(d, 'door'));
 
-        // Virtual apertures for corridors and stairs
-        if (allRooms && currentRoomId) {
-            const EPSILON = 0.05;
-            const a1 = v1;
-            const a2 = v2;
-            const lenSq = (a2.x - a1.x) ** 2 + (a2.y - a1.y) ** 2;
-            const isHorizontal = Math.abs(a2.x - a1.x) > Math.abs(a2.y - a1.y);
+        // ── Virtual apertures: solo pasadizo tipo Techo y piso perfora paredes ──
+        // Las ESCALERAS no perforan paredes exteriores (van verticalmente, no horizontalmente)
+        if (allRooms) {
+            allRooms.forEach(r => {
+                if (r.id === currentRoomId) return;
 
-            for (const r of allRooms) {
-                if (r.id === currentRoomId) continue;
-                if (r.roomType !== 'corridor' && r.roomType !== 'stair') continue;
+                // Solo corridors de tipo roof_floor perforan muros del recinto
+                const isRoofFloorCorridor = r.roomType === 'corridor' && r.corridorConfig?.type === 'roof_floor';
+                if (!isRoofFloorCorridor) return;
 
-                for (let i = 0; i < r.vertices.length; i++) {
-                    const b1 = r.vertices[i];
-                    const b2 = r.vertices[(i + 1) % r.vertices.length];
+                // Dirección de flujo seleccionada en el panel
+                const dir = r.corridorConfig?.direction;
 
-                    if (
-                        Math.max(a1.x, a2.x) < Math.min(b1.x, b2.x) - EPSILON ||
-                        Math.min(a1.x, a2.x) > Math.max(b1.x, b2.x) + EPSILON ||
-                        Math.max(a1.y, a2.y) < Math.min(b1.y, b2.y) - EPSILON ||
-                        Math.min(a1.y, a2.y) > Math.max(b1.y, b2.y) + EPSILON
-                    ) {
-                        continue;
+                // Límites 2D del pasadizo (r.vertices son coordenadas 2D {x,y})
+                const rVerts = r.vertices;
+                const rMinX = Math.min(...rVerts.map(v => v.x));
+                const rMaxX = Math.max(...rVerts.map(v => v.x));
+                const rMinY = Math.min(...rVerts.map(v => v.y));
+                const rMaxY = Math.max(...rVerts.map(v => v.y));
+
+                const pts = this.sanitizeRoomShape(r);
+                for (let i = 0; i < pts.length; i++) {
+                    const p1 = pts[i];
+                    const p2 = pts[(i + 1) % pts.length];
+
+                    // sanitizeRoomShape devuelve Vector3; el eje 2D-Y queda en .z
+                    const p1x = p1.x; const p1y = p1.z;
+                    const p2x = p2.x; const p2y = p2.z;
+
+                    const pLen = Math.hypot(p2x - p1x, p2y - p1y);
+                    if (pLen < 0.01) continue;
+
+                    // ── Filtro de dirección ──────────────────────────────────────
+                    // Si hay dirección elegida, sólo la arista del lado correcto perfora
+                    if (dir) {
+                        const midEx = (p1x + p2x) / 2;
+                        const midEy = (p1y + p2y) / 2;
+                        const tol = 0.5; // 50 cm de tolerancia para encontrar la arista
+
+                        let isSelectedEdge = false;
+                        // En 2D del canvas, Y crece hacia abajo → Norte = minY, Sur = maxY
+                        if (dir === 'north' && Math.abs(midEy - rMinY) < tol) isSelectedEdge = true;
+                        if (dir === 'south' && Math.abs(midEy - rMaxY) < tol) isSelectedEdge = true;
+                        if (dir === 'east'  && Math.abs(midEx - rMaxX) < tol) isSelectedEdge = true;
+                        if (dir === 'west'  && Math.abs(midEx - rMinX) < tol) isSelectedEdge = true;
+
+                        if (!isSelectedEdge) continue;
                     }
 
-                    const cross = (a2.x - a1.x) * (b2.y - b1.y) - (a2.y - a1.y) * (b2.x - b1.x);
-                    if (Math.abs(cross) > EPSILON) continue;
+                    const wdx = (v2.x - v1.x) / segLen;
+                    const wdy = (v2.y - v1.y) / segLen;
+                    const pdx = (p2x - p1x) / pLen;
+                    const pdy = (p2y - p1y) / pLen;
 
-                    const t = ((b1.x - a1.x) * (a2.x - a1.x) + (b1.y - a1.y) * (a2.y - a1.y)) / lenSq;
-                    const projX = a1.x + t * (a2.x - a1.x);
-                    const projY = a1.y + t * (a2.y - a1.y);
-                    const distSq = (b1.x - projX) ** 2 + (b1.y - projY) ** 2;
-                    if (distSq > EPSILON * EPSILON) continue;
+                    const cross = wdx * pdy - wdy * pdx;
+                    if (Math.abs(cross) > 0.1) continue; // no son paralelos
 
-                    const aMin = isHorizontal ? Math.min(a1.x, a2.x) : Math.min(a1.y, a2.y);
-                    const aMax = isHorizontal ? Math.max(a1.x, a2.x) : Math.max(a1.y, a2.y);
-                    const bMin = isHorizontal ? Math.min(b1.x, b2.x) : Math.min(b1.y, b2.y);
-                    const bMax = isHorizontal ? Math.max(b1.x, b2.x) : Math.max(b1.y, b2.y);
+                    // Distancia perpendicular — la arista del pasadizo debe estar sobre la pared
+                    const distPerp = Math.abs((p1x - v1.x) * (-wdy) + (p1y - v1.y) * wdx);
+                    if (distPerp > 0.35) continue;
 
-                    const overlapMin = Math.max(aMin, bMin);
-                    const overlapMax = Math.min(aMax, bMax);
+                    // Traslape 1D sobre el segmento de muro
+                    const t1 = (p1x - v1.x) * dx + (p1y - v1.y) * dy;
+                    const t2 = (p2x - v1.x) * dx + (p2y - v1.y) * dy;
 
-                    if (overlapMax - overlapMin > 0.05) {
-                        const tb1 = ((b1.x - a1.x) * (a2.x - a1.x) + (b1.y - a1.y) * (a2.y - a1.y)) / lenSq;
-                        const tb2 = ((b2.x - a1.x) * (a2.x - a1.x) + (b2.y - a1.y) * (a2.y - a1.y)) / lenSq;
+                    const overlapStart = Math.max(0, Math.min(t1, t2));
+                    const overlapEnd   = Math.min(segLen, Math.max(t1, t2));
+                    const overlapLen   = overlapEnd - overlapStart;
 
-                        let tMin = Math.min(tb1, tb2);
-                        let tMax = Math.max(tb1, tb2);
-
-                        tMin = Math.max(0, tMin);
-                        tMax = Math.min(1, tMax);
-
-                        const actualOverlapLen = (tMax - tMin) * segLen;
-
-                        if (actualOverlapLen > 0.05) {
-                            aps.push({
-                                id: `virtual_ap_${r.id}_${i}`,
-                                type: 'door',
-                                localOffset: tMin * segLen,
-                                width: actualOverlapLen,
-                                height: 3.0,
-                                sillHeight: 0,
-                            });
-                        }
+                    if (overlapLen > 0.1) {
+                        aps.push({
+                            id: `virtual_${r.id}_${i}`,
+                            type: 'door',
+                            doorType: 'opening',
+                            localOffset: overlapStart,
+                            width: overlapLen,
+                            height: r.height ?? 3.0,
+                            sillHeight: 0,
+                            isVirtual: true,
+                        });
                     }
                 }
-            }
+            });
         }
 
         return aps.sort((a, b) => a.localOffset - b.localOffset);
@@ -2280,6 +2311,7 @@ export class House3DBuilder {
         wall: Wall,
         allWindows: Window[],
         _allDoors: Door[] = [],
+        allRooms?: Room[],
         floorNode?: TransformNode,
     ) {
         const meshes: Mesh[] = [];
@@ -2358,7 +2390,88 @@ export class House3DBuilder {
                 }
             }
 
-            const allAps = [...segmentWindows, ...segmentDoors].sort(
+            const virtualAps: any[] = [];
+            // Virtual apertures: solo pasadizo tipo Techo y piso perfora muros
+            // Las escaleras NO perforan paredes exteriores
+            if (allRooms) {
+                const dx = (v2.x - v1.x) / segLen;
+                const dy = (v2.y - v1.y) / segLen;
+
+                allRooms.forEach(r => {
+                    // Solo corridors tipo roof_floor crean huecos en paredes
+                    const isRoofFloorCorridor = r.roomType === 'corridor' && r.corridorConfig?.type === 'roof_floor';
+                    if (!isRoofFloorCorridor) return;
+
+                    const dir = r.corridorConfig?.direction;
+
+                    const rVerts = r.vertices;
+                    const rMinX = Math.min(...rVerts.map(v => v.x));
+                    const rMaxX = Math.max(...rVerts.map(v => v.x));
+                    const rMinY = Math.min(...rVerts.map(v => v.y));
+                    const rMaxY = Math.max(...rVerts.map(v => v.y));
+
+                    const pts = this.sanitizeRoomShape(r);
+                    for (let k = 0; k < pts.length; k++) {
+                        const p1 = pts[k];
+                        const p2 = pts[(k + 1) % pts.length];
+
+                        // sanitizeRoomShape devuelve Vector3; el eje 2D-Y queda en .z
+                        const p1x = p1.x; const p1y = p1.z;
+                        const p2x = p2.x; const p2y = p2.z;
+
+                        const pLen = Math.hypot(p2x - p1x, p2y - p1y);
+                        if (pLen < 0.01) continue;
+
+                        // ── Filtro de dirección ──────────────────────────────────
+                        if (dir) {
+                            const midEx = (p1x + p2x) / 2;
+                            const midEy = (p1y + p2y) / 2;
+                            const tol = 0.5;
+
+                            let isSelectedEdge = false;
+                            if (dir === 'north' && Math.abs(midEy - rMinY) < tol) isSelectedEdge = true;
+                            if (dir === 'south' && Math.abs(midEy - rMaxY) < tol) isSelectedEdge = true;
+                            if (dir === 'east'  && Math.abs(midEx - rMaxX) < tol) isSelectedEdge = true;
+                            if (dir === 'west'  && Math.abs(midEx - rMinX) < tol) isSelectedEdge = true;
+
+                            if (!isSelectedEdge) continue;
+                        }
+
+                        const wdx = (v2.x - v1.x) / segLen;
+                        const wdy = (v2.y - v1.y) / segLen;
+                        const pdx = (p2x - p1x) / pLen;
+                        const pdy = (p2y - p1y) / pLen;
+
+                        const cross = wdx * pdy - wdy * pdx;
+                        if (Math.abs(cross) > 0.1) continue;
+
+                        const distPerp = Math.abs((p1x - v1.x) * (-wdy) + (p1y - v1.y) * wdx);
+                        if (distPerp > 0.35) continue;
+
+                        const t1 = (p1x - v1.x) * dx + (p1y - v1.y) * dy;
+                        const t2 = (p2x - v1.x) * dx + (p2y - v1.y) * dy;
+
+                        const overlapStart = Math.max(0, Math.min(t1, t2));
+                        const overlapEnd   = Math.min(segLen, Math.max(t1, t2));
+                        const overlapLen   = overlapEnd - overlapStart;
+
+                        if (overlapLen > 0.1) {
+                            virtualAps.push({
+                                id: `virtual_wall_${r.id}_${k}`,
+                                type: 'door',
+                                doorType: 'opening',
+                                localOffset: overlapStart,
+                                width: overlapLen,
+                                height: r.height ?? 3.0,
+                                sillHeight: 0,
+                                isVirtual: true,
+                            });
+                        }
+                    }
+                });
+            }
+
+            const allAps = [...segmentWindows, ...segmentDoors, ...virtualAps].sort(
                 (a, b) => a.localOffset - b.localOffset,
             );
 
@@ -2636,6 +2749,183 @@ export class House3DBuilder {
             if (floorNode) m.parent = floorNode;
         });
     }
+
+    // ── Interruptor / LightSwitch ──────────────────────────────────────────────
+    private buildLightSwitch(
+        ls: LightSwitch,
+        floorNode: TransformNode,
+        fixtures: Fixture[],
+        walls: Wall[] = [],
+    ) {
+        const meshes: Mesh[] = [];
+
+        // ── Caja del interruptor (plástico blanco en la pared) ──
+        const width = 0.08;
+        const height = 0.12;
+        const depth = 0.015;
+
+        const body = MeshBuilder.CreateBox(
+            `switch_${ls.id}`,
+            { width, height, depth },
+            this.scene,
+        );
+
+        const mat = new StandardMaterial(`mat_switch_${ls.id}`, this.scene);
+        mat.diffuseColor = new Color3(0.92, 0.92, 0.92);
+        mat.specularColor = new Color3(0.3, 0.3, 0.3);
+        body.material = mat;
+
+        // Posición base
+        body.position.x = ls.x;
+        body.position.y = ls.mountingHeight ?? 1.2;
+        body.position.z = ls.y;
+
+        // Orientar pegado a la pared
+        let wallAngle = 0;
+        const wall = walls.find(w => w.id === ls.wallId);
+        if (wall && wall.vertices.length >= 2) {
+            let minDist = Infinity;
+            for (let i = 0; i < wall.vertices.length - 1; i++) {
+                const v1 = wall.vertices[i];
+                const v2 = wall.vertices[i + 1];
+                const px = v2.x - v1.x;
+                const py = v2.y - v1.y;
+                const norm = px * px + py * py;
+                if (norm < 0.00001) continue;
+                let u = ((ls.x - v1.x) * px + (ls.y - v1.y) * py) / norm;
+                u = Math.max(0, Math.min(1, u));
+                const dx = v1.x + u * px - ls.x;
+                const dy = v1.y + u * py - ls.y;
+                const dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    wallAngle = Math.atan2(py, px);
+                }
+            }
+            body.rotation.y = -wallAngle;
+            const offsetDist = (wall.thickness / 2) + (depth / 2);
+            body.position.x = ls.x - Math.sin(wallAngle) * offsetDist;
+            body.position.z = ls.y + Math.cos(wallAngle) * offsetDist;
+        }
+
+        // Tecla del interruptor (detalle visual)
+        const rocker = MeshBuilder.CreateBox(
+            `switch_rocker_${ls.id}`,
+            { width: width * 0.55, height: height * 0.55, depth: depth * 0.6 },
+            this.scene,
+        );
+        const rockerMat = new StandardMaterial(`mat_rocker_${ls.id}`, this.scene);
+        rockerMat.diffuseColor = new Color3(0.75, 0.75, 0.8);
+        rocker.material = rockerMat;
+        rocker.position.copyFrom(body.position);
+        rocker.rotation.copyFrom(body.rotation);
+        // Offset hacia afuera (+depth/2 en la dirección normal de la pared)
+        rocker.position.x -= Math.sin(wallAngle) * (depth * 0.35);
+        rocker.position.z += Math.cos(wallAngle) * (depth * 0.35);
+        rocker.parent = floorNode;
+        meshes.push(rocker);
+
+        body.parent = floorNode;
+        meshes.push(body);
+
+        // ── Puntos de conduit en la pared/techo (simulan el cable embutido) ──
+        // En lugar de una topología estrella, dibujamos en cadena (daisy-chain)
+        const dotMat = new StandardMaterial(`mat_wire_dots_${ls.id}`, this.scene);
+        dotMat.diffuseColor = new Color3(0.9, 0.2, 0.2);  // rojo
+        dotMat.specularColor = new Color3(0.1, 0.1, 0.1);
+
+        if (ls.connectedFixtureIds && ls.connectedFixtureIds.length > 0) {
+            const nodes: { id: string, x: number, y: number, z: number, isSwitch: boolean }[] = [];
+            
+            // Nodo 0: Interruptor
+            nodes.push({
+                id: ls.id,
+                x: body.position.x,
+                y: body.position.y,
+                z: body.position.z,
+                isSwitch: true
+            });
+
+            // Siguientes nodos: Focos en orden
+            ls.connectedFixtureIds.forEach((fId) => {
+                const fix = fixtures.find(f => f.id === fId);
+                if (fix) {
+                    nodes.push({
+                        id: fix.id,
+                        x: fix.x,
+                        y: resolveFixtureRenderHeight(fix, 2.4),
+                        z: fix.y,
+                        isSwitch: false
+                    });
+                }
+            });
+
+            const DOT_R = 0.018;
+
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const p1 = nodes[i];
+                const p2 = nodes[i + 1];
+
+                if (p1.isSwitch && !p2.isSwitch) {
+                    // Segmento Switch -> Fixture (sube por la pared, luego por el techo)
+                    const STEPS = 6;
+                    // Subida por la pared
+                    for (let s = 0; s <= STEPS; s++) {
+                        const t = s / STEPS;
+                        const dotY = p1.y + t * (p2.y - p1.y);
+                        const dot = MeshBuilder.CreateSphere(
+                            `conduit_v_${ls.id}_${i}_${s}`,
+                            { diameter: DOT_R * 2, segments: 4 },
+                            this.scene,
+                        );
+                        dot.material = dotMat;
+                        dot.position.set(p1.x, dotY, p1.z);
+                        dot.parent = floorNode;
+                        meshes.push(dot);
+                    }
+                    // Tramo techo
+                    const STEPS2 = 8;
+                    for (let s = 1; s <= STEPS2; s++) {
+                        const t = s / STEPS2;
+                        const dotX = p1.x + t * (p2.x - p1.x);
+                        const dotZ = p1.z + t * (p2.z - p1.z);
+                        const dot = MeshBuilder.CreateSphere(
+                            `conduit_h_${ls.id}_${i}_${s}`,
+                            { diameter: DOT_R * 2, segments: 4 },
+                            this.scene,
+                        );
+                        dot.material = dotMat;
+                        dot.position.set(dotX, p2.y, dotZ);
+                        dot.parent = floorNode;
+                        meshes.push(dot);
+                    }
+                } else {
+                    // Segmento Fixture -> Fixture (todo por el techo)
+                    const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
+                    const STEPS = Math.max(4, Math.floor(dist * 4)); // densidad de puntos basada en la distancia
+                    for (let s = 1; s <= STEPS; s++) {
+                        const t = s / STEPS;
+                        const dotX = p1.x + t * (p2.x - p1.x);
+                        const dotY = p1.y + t * (p2.y - p1.y);
+                        const dotZ = p1.z + t * (p2.z - p1.z);
+                        
+                        const dot = MeshBuilder.CreateSphere(
+                            `conduit_roof_${ls.id}_${i}_${s}`,
+                            { diameter: DOT_R * 2, segments: 4 },
+                            this.scene,
+                        );
+                        dot.material = dotMat;
+                        dot.position.set(dotX, dotY, dotZ);
+                        dot.parent = floorNode;
+                        meshes.push(dot);
+                    }
+                }
+            }
+        }
+
+        this.meshMap.set(ls.id, meshes);
+    }
+
 
     // ── Fixture / Luminaria ───────────────────────────────────────────────────
     /**
