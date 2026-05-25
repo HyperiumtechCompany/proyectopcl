@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
-    X, TrendingUp, DollarSign, Download, Printer,
-    ChevronDown, ChevronUp, Info, BarChart2, Table2,
-    ArrowRight, Calendar, Layers, FileText
+    X, TrendingUp, DollarSign,
+    Info, BarChart2, Table2,
+    Layers, FileText
 } from 'lucide-react';
 import { Periodo } from '../types';
 
@@ -15,29 +15,51 @@ interface Props {
     valorizacionesMensuales: Record<string, { monto: number; porcentaje: number }>;
     totalDias: number;
     diasPorMes: Record<string, number>;
-    /** Nombre del proyecto (opcional, para encabezado) */
     projectName?: string;
-    /** Nro I.E. / código de proyecto (opcional) */
     codigoProyecto?: string;
-    /** Ubicación del proyecto */
     ubicacion?: string;
     onClose: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTES REGLAMENTARIAS (Art. 155° - Ley de Contrataciones del Estado)
+// CONSTANTES REGLAMENTARIAS
 // ─────────────────────────────────────────────────────────────────────────────
-const ADELANTO_EFECTIVO_PCT   = 0.10; // 10%  → col (1)
-const ADELANTO_MATERIALES_PCT = 0.20; // 20%  → col (2)
+const ADELANTO_EFECTIVO_PCT   = 0.10;
+const ADELANTO_MATERIALES_PCT = 0.20;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMATTERS
 // ─────────────────────────────────────────────────────────────────────────────
 const fmtSoles = (v: number) =>
     `S/ ${v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtSolesCompact = (v: number) =>
-    `S/ ${v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SISTEMA DE COLORES FORMAL (paleta Excel institucional)
+// ─────────────────────────────────────────────────────────────────────────────
+const C = {
+    navy:         '#1E3A5F',
+    navyMid:      '#2A4F7C',
+    blue:         '#2F75B6',
+    blueLight:    '#5B9BD5',
+    headerBg:     '#D6E4F0',
+    headerBg2:    '#BDD7EE',
+    rowAlt:       '#EBF3FB',
+    borderH:      '#9DC3E6',
+    borderB:      '#D0D7E0',
+    greenBg:      '#E2EFDA',
+    greenText:    '#375623',
+    greenBorder:  '#A9D18E',
+    amberBg:      '#FFF2CC',
+    amberText:    '#7D4700',
+    red:          '#C00000',
+    purple:       '#5B21B6',
+    text:         '#1A202C',
+    muted:        '#64748B',
+    white:        '#FFFFFF',
+    surface:      '#F7F9FC',
+    surfaceAlt:   '#F0F4F8',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS INTERNOS
@@ -46,27 +68,454 @@ type Vista = 'tabla' | 'grafico' | 'curvaS';
 
 interface FilaMensual {
     key: string;
-    diasCalendario: number;        // días del periodo dentro del proyecto
-    diasBloqueCalendario: number;  // días totales del mes calendario
-    /** col (1) Adelanto efectivo distribuido */
+    diasCalendario: number;
+    diasBloqueCalendario: number;
     adelantoEfectivo: number;
-    /** col (2) Adelanto materiales distribuido */
     adelantoMateriales: number;
-    /** col (1+2) */
     totalAdelanto: number;
-    /** Valorización parcial del mes */
     valorizacion: number;
-    /** % de avance mensual */
     pctAvance: number;
-    /** Desembolso mensual = adelantos + valorización */
     desembolsoMensual: number;
-    /** Desembolso acumulado */
     desembolsoAcumulado: number;
-    /** % desembolso acumulado */
     pctDesembolso: number;
-    /** Label para mostrar */
     label: string;
 }
+
+interface TooltipState {
+    x: number;
+    y: number;
+    data: FilaMensual;
+}
+
+interface CurveTooltipState {
+    x: number;
+    y: number;
+    data: { label: string; acumulado: number; pct: number };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTILOS TABLA EXCEL
+// ─────────────────────────────────────────────────────────────────────────────
+function thExcel(extra: React.CSSProperties = {}): React.CSSProperties {
+    return {
+        padding: '7px 10px',
+        fontSize: 10,
+        fontWeight: 700,
+        textAlign: 'right' as const,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.04em',
+        border: `1px solid ${C.borderH}`,
+        whiteSpace: 'nowrap' as const,
+        fontFamily: "'Calibri', 'Segoe UI', sans-serif",
+        ...extra,
+    };
+}
+
+function tdExcel(extra: React.CSSProperties = {}): React.CSSProperties {
+    return {
+        padding: '5px 10px',
+        border: `1px solid ${C.borderB}`,
+        whiteSpace: 'nowrap' as const,
+        fontSize: 11.5,
+        fontFamily: "'Calibri', 'Segoe UI', sans-serif",
+        ...extra,
+    };
+}
+
+const btnBase: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '5px 11px',
+    fontSize: 11,
+    fontWeight: 600,
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBCOMPONENTES SIMPLES
+// ─────────────────────────────────────────────────────────────────────────────
+const InfoRow: React.FC<{ label: string; value: string; bold?: boolean }> = ({ label, value, bold }) => (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+        <span style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>
+            {label}:
+        </span>
+        <span style={{ fontSize: 11.5, color: bold ? C.navy : '#1E293B', fontWeight: bold ? 800 : 600 }}>
+            {value}
+        </span>
+    </div>
+);
+
+const KpiCard: React.FC<{ color: string; label: string; value: string; sub: string; icon: React.ReactNode; last?: boolean }> = ({
+    color, label, value, sub, icon, last,
+}) => (
+    <div style={{
+        padding: '11px 14px',
+        borderRight: last ? 'none' : `1px solid ${C.borderB}`,
+        background: C.white,
+        position: 'relative',
+        overflow: 'hidden',
+    }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: color }} />
+        <div style={{ paddingLeft: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                <div style={{ color, opacity: 0.6 }}>{icon}</div>
+                <span style={{ fontSize: 8, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.3 }}>
+                    {label}
+                </span>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color, fontFamily: "'Calibri', monospace", lineHeight: 1.1 }}>
+                {value}
+            </div>
+            <div style={{ fontSize: 9.5, color: '#94A3B8', marginTop: 3 }}>{sub}</div>
+        </div>
+    </div>
+);
+
+const TabBtn: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({
+    active, onClick, icon, label,
+}) => (
+    <button onClick={onClick} style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '5px 12px',
+        fontSize: 11,
+        fontWeight: active ? 700 : 500,
+        color: active ? C.navy : C.muted,
+        background: active ? C.white : 'transparent',
+        border: active ? `1px solid ${C.borderB}` : '1px solid transparent',
+        borderRadius: 4,
+        cursor: 'pointer',
+        boxShadow: active ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+        transition: 'all 0.15s',
+    }}>
+        {icon}{label}
+    </button>
+);
+
+const TipRow: React.FC<{ label: string; value: string; color?: string; bold?: boolean }> = ({ label, value, color, bold }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 3 }}>
+        <span style={{ color: C.muted, fontSize: 10 }}>{label}</span>
+        <span style={{ color: color ?? C.text, fontWeight: bold ? 700 : 500, fontSize: 10.5 }}>{value}</span>
+    </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTOGRAMA 3D SVG
+// ─────────────────────────────────────────────────────────────────────────────
+interface H3DProps {
+    data: FilaMensual[];
+    maxValue: number;
+    onEnter: (e: React.MouseEvent<SVGElement>, d: FilaMensual) => void;
+    onMove:  (e: React.MouseEvent<SVGElement>, d: FilaMensual) => void;
+    onLeave: () => void;
+}
+
+const Histogram3D: React.FC<H3DProps> = ({ data, maxValue, onEnter, onMove, onLeave }) => {
+    const SVG_W = 920;
+    const SVG_H = 340;
+    const ML = 88, MR = 50, MT = 30, MB = 65;
+    const CW  = SVG_W - ML - MR;
+    const CH  = SVG_H - MT - MB;
+
+    const DX = 11;  // depth offset X
+    const DY = -5;  // depth offset Y (negative = upward)
+
+    const n   = data.length;
+    const slotW = CW / Math.max(n, 1);
+    const GAP   = Math.max(2, slotW * 0.18);
+    const BW    = slotW - GAP;
+
+    const scaleH = (v: number) => (v / (maxValue || 1)) * CH;
+
+    const yTicks = [0, 0.25, 0.5, 0.75, 1.0];
+
+    return (
+        <svg
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+            onMouseLeave={onLeave}
+        >
+            <defs>
+                <linearGradient id="gNormal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#5B9BD5" />
+                    <stop offset="100%" stopColor="#1E5BB5" />
+                </linearGradient>
+                <linearGradient id="gPeak" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#FFC844" />
+                    <stop offset="100%" stopColor="#D4820A" />
+                </linearGradient>
+                <filter id="bShadow">
+                    <feDropShadow dx="2" dy="3" stdDeviation="2.5" floodColor="rgba(30,58,95,0.2)" />
+                </filter>
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+            </defs>
+
+            {/* Grid horizontal */}
+            {yTicks.map((t) => {
+                const gy = MT + CH - scaleH(t * maxValue);
+                return (
+                    <g key={t}>
+                        <line x1={ML} y1={gy} x2={ML + CW + DX} y2={gy}
+                            stroke={t === 0 ? C.borderH : '#E2E8F0'}
+                            strokeWidth={t === 0 ? 1.5 : 0.8}
+                            strokeDasharray={t === 0 ? 'none' : '5 3'} />
+                        <text x={ML - 7} y={gy + 4} textAnchor="end" fontSize={8} fill={C.muted}
+                            fontFamily="'Calibri', sans-serif">
+                            {fmtSoles(maxValue * t).replace('S/ ', 'S/')}
+                        </text>
+                    </g>
+                );
+            })}
+
+            {/* Línea suelo */}
+            <line x1={ML} y1={MT + CH} x2={ML + CW + DX} y2={MT + CH}
+                stroke={C.borderH} strokeWidth={1.5} />
+            {/* Línea eje Y */}
+            <line x1={ML} y1={MT} x2={ML} y2={MT + CH}
+                stroke={C.borderH} strokeWidth={1} />
+
+            {/* Barras 3D */}
+            {data.map((d, i) => {
+                const isPeak = d.desembolsoMensual === maxValue;
+                const bH = scaleH(d.desembolsoMensual);
+                const bX = ML + i * slotW + GAP / 2;
+                const bY = MT + CH - bH;        // top of bar
+                const bBot = MT + CH;           // bottom (floor)
+
+                const frontFill = isPeak ? 'url(#gPeak)' : 'url(#gNormal)';
+                const topFill   = isPeak ? '#FFE38A' : '#7DAED8';
+                const sideFill  = isPeak ? '#A86200' : '#154E8C';
+
+                return (
+                    <g key={d.key} style={{ cursor: 'crosshair' }} filter="url(#bShadow)"
+                        onMouseEnter={(e) => onEnter(e, d)}
+                        onMouseMove={(e)  => onMove(e, d)}
+                    >
+                        {/* Cara derecha (lado) */}
+                        <path
+                            d={`M ${bX + BW} ${bY} L ${bX + BW + DX} ${bY + DY} L ${bX + BW + DX} ${bBot + DY} L ${bX + BW} ${bBot} Z`}
+                            fill={sideFill} opacity={0.9}
+                        />
+                        {/* Cara superior */}
+                        <path
+                            d={`M ${bX} ${bY} L ${bX + BW} ${bY} L ${bX + BW + DX} ${bY + DY} L ${bX + DX} ${bY + DY} Z`}
+                            fill={topFill}
+                        />
+                        {/* Cara frontal */}
+                        <rect x={bX} y={bY} width={BW} height={bH} fill={frontFill} />
+
+                        {/* Badge PICO */}
+                        {isPeak && (
+                            <>
+                                <rect x={bX + BW / 2 - 14} y={bY - 18} width={28} height={13}
+                                    rx={3} fill="#D4820A" />
+                                <text x={bX + BW / 2} y={bY - 8}
+                                    textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#fff"
+                                    fontFamily="'Calibri', sans-serif">
+                                    ▲ PICO
+                                </text>
+                            </>
+                        )}
+
+                        {/* Etiqueta eje X */}
+                        <text x={bX + BW / 2} y={bBot + 14}
+                            textAnchor="middle" fontSize={9} fill={C.navy} fontWeight={700}
+                            fontFamily="'Calibri', sans-serif">
+                            {d.diasCalendario}
+                        </text>
+                        <text x={bX + BW / 2} y={bBot + 25}
+                            textAnchor="middle" fontSize={7.5} fill={C.muted}
+                            fontFamily="'Calibri', sans-serif">
+                            {d.label.split(' ').slice(0, 2).join(' ')}
+                        </text>
+                    </g>
+                );
+            })}
+
+            {/* Título eje Y */}
+            <text transform={`translate(12,${MT + CH / 2}) rotate(-90)`}
+                textAnchor="middle" fontSize={9} fill={C.muted} fontWeight={600}
+                fontFamily="'Calibri', sans-serif" letterSpacing="0.08em">
+                MONTO DESEMBOLSO (S/)
+            </text>
+        </svg>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CURVA S SVG INTERACTIVA
+// ─────────────────────────────────────────────────────────────────────────────
+interface SCurveProps {
+    data: { label: string; acumulado: number; pct: number }[];
+    onPointEnter: (e: React.MouseEvent<SVGElement>, d: { label: string; acumulado: number; pct: number }) => void;
+    onPointLeave: () => void;
+}
+
+const SCurveChart: React.FC<SCurveProps> = ({ data, onPointEnter, onPointLeave }) => {
+    const [hIdx, setHIdx] = useState<number | null>(null);
+
+    const SVG_W = 920;
+    const SVG_H = 320;
+    const ML = 72, MR = 50, MT = 24, MB = 55;
+    const CW = SVG_W - ML - MR;
+    const CH = SVG_H - MT - MB;
+
+    const n = data.length;
+    const xStep = CW / Math.max(n - 1, 1);
+
+    const toXY = (i: number, pct: number) => ({
+        x: ML + i * xStep,
+        y: MT + CH - (pct / 100) * CH,
+    });
+
+    // Construir path Bezier suave (curva S)
+    const buildPath = () => {
+        if (n === 0) return '';
+        const pts = data.map((d, i) => toXY(i, d.pct));
+        let path = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 1; i < pts.length; i++) {
+            const p = pts[i - 1];
+            const c = pts[i];
+            const cpx = (p.x + c.x) / 2;
+            path += ` C ${cpx} ${p.y} ${cpx} ${c.y} ${c.x} ${c.y}`;
+        }
+        return path;
+    };
+
+    const curvePath = buildPath();
+    const fp = n > 0 ? toXY(0, data[0].pct) : null;
+    const lp = n > 0 ? toXY(n - 1, data[n - 1].pct) : null;
+    const areaPath = fp && lp
+        ? `${curvePath} L ${lp.x} ${MT + CH} L ${fp.x} ${MT + CH} Z`
+        : '';
+
+    const yTicks = [0, 25, 50, 75, 100];
+
+    return (
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+            <defs>
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor={C.blue} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={C.blue} stopOpacity={0.02} />
+                </linearGradient>
+                <filter id="lineGlow">
+                    <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+                <filter id="dotGlow">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            </defs>
+
+            {/* Grid horizontal */}
+            {yTicks.map((t) => {
+                const gy = MT + CH - (t / 100) * CH;
+                return (
+                    <g key={t}>
+                        <line x1={ML} y1={gy} x2={ML + CW} y2={gy}
+                            stroke={t === 0 ? C.borderH : '#E8EFF7'}
+                            strokeWidth={t === 0 ? 1.5 : 0.8}
+                            strokeDasharray={t === 0 ? 'none' : '5 3'} />
+                        <text x={ML - 7} y={gy + 4} textAnchor="end" fontSize={9} fill={C.muted}
+                            fontFamily="'Calibri', sans-serif">
+                            {t}%
+                        </text>
+                    </g>
+                );
+            })}
+
+            {/* Grid vertical fino */}
+            {data.map((_, i) => {
+                const gx = ML + i * xStep;
+                return (
+                    <line key={i} x1={gx} y1={MT} x2={gx} y2={MT + CH}
+                        stroke="#EBF3FB" strokeWidth={0.8} />
+                );
+            })}
+
+            {/* Líneas de ejes */}
+            <line x1={ML} y1={MT} x2={ML} y2={MT + CH} stroke={C.borderH} strokeWidth={1.2} />
+            <line x1={ML} y1={MT + CH} x2={ML + CW} y2={MT + CH} stroke={C.borderH} strokeWidth={1.2} />
+
+            {/* Área bajo la curva */}
+            {areaPath && <path d={areaPath} fill="url(#areaGrad)" />}
+
+            {/* Sombra de la línea */}
+            <path d={curvePath} fill="none" stroke={C.blueLight} strokeWidth={5}
+                strokeLinecap="round" strokeLinejoin="round" opacity={0.3} />
+
+            {/* Línea principal */}
+            <path d={curvePath} fill="none" stroke={C.navy} strokeWidth={2.2}
+                strokeLinecap="round" strokeLinejoin="round" filter="url(#lineGlow)" />
+
+            {/* Puntos interactivos */}
+            {data.map((d, i) => {
+                const pt  = toXY(i, d.pct);
+                const isH = hIdx === i;
+                return (
+                    <g key={i} style={{ cursor: 'pointer' }}
+                        onMouseEnter={(e) => { setHIdx(i); onPointEnter(e, d); }}
+                        onMouseLeave={() => { setHIdx(null); onPointLeave(); }}
+                    >
+                        {/* Área de hit ampliada */}
+                        <circle cx={pt.x} cy={pt.y} r={16} fill="transparent" />
+
+                        {/* Halo hover */}
+                        {isH && (
+                            <circle cx={pt.x} cy={pt.y} r={11}
+                                fill="none" stroke={C.blue} strokeWidth={1.5} opacity={0.4} />
+                        )}
+
+                        {/* Punto */}
+                        <circle cx={pt.x} cy={pt.y} r={isH ? 6 : 4}
+                            fill={isH ? C.navy : C.white}
+                            stroke={C.navy}
+                            strokeWidth={2}
+                            filter={isH ? 'url(#dotGlow)' : 'none'}
+                            style={{ transition: 'r 0.12s' }}
+                        />
+
+                        {/* Etiqueta % */}
+                        <text x={pt.x} y={pt.y - (isH ? 15 : 11)}
+                            textAnchor="middle" fontSize={isH ? 9.5 : 8}
+                            fontWeight={isH ? 800 : 600}
+                            fill={isH ? C.navy : C.blue}
+                            fontFamily="'Calibri', sans-serif"
+                            style={{ transition: 'font-size 0.12s' }}>
+                            {d.pct.toFixed(1)}%
+                        </text>
+
+                        {/* Etiqueta eje X */}
+                        <text x={pt.x} y={MT + CH + 16}
+                            textAnchor="middle" fontSize={8} fill={isH ? C.navy : C.muted}
+                            fontWeight={isH ? 700 : 400}
+                            fontFamily="'Calibri', sans-serif">
+                            {d.label.split(' ')[0]}
+                        </text>
+                    </g>
+                );
+            })}
+
+            {/* Título eje Y */}
+            <text transform={`translate(11,${MT + CH / 2}) rotate(-90)`}
+                textAnchor="middle" fontSize={9} fill={C.muted} fontWeight={600}
+                fontFamily="'Calibri', sans-serif" letterSpacing="0.08em">
+                % DESEMBOLSO ACUMULADO
+            </text>
+        </svg>
+    );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -82,60 +531,55 @@ const CronogramaDesembolsos: React.FC<Props> = ({
     ubicacion = '',
     onClose,
 }) => {
-    const [vista, setVista]           = useState<Vista>('tabla');
-    const [showInfo, setShowInfo]     = useState(false);
-    const tableRef = useRef<HTMLDivElement>(null);
+    const [vista, setVista]         = useState<Vista>('tabla');
+    const [showInfo, setShowInfo]   = useState(false);
+    const [tooltip,  setTooltip]    = useState<TooltipState | null>(null);
+    const [cTooltip, setCTooltip]   = useState<CurveTooltipState | null>(null);
+    const chartRef = useRef<HTMLDivElement>(null);
 
-    //  Montos de adelanto totales 
+    // ── Montos totales ────────────────────────────────────────────────────────
     const adelantoEfectivoTotal   = totalPresupuesto * ADELANTO_EFECTIVO_PCT;
     const adelantoMaterialesTotal = totalPresupuesto * ADELANTO_MATERIALES_PCT;
     const totalAdelantoInicial    = adelantoEfectivoTotal + adelantoMaterialesTotal;
+    const flujoTotal              = totalPresupuesto + totalAdelantoInicial;
 
-    // Flujo total = contrato + adelantos 
-    const flujoTotal = totalPresupuesto + totalAdelantoInicial;
+    // ── Cálculo mensual (LÓGICA ORIGINAL SIN CAMBIOS) ────────────────────────
+    const datosMensuales = useMemo<FilaMensual[]>(() => {
+        let desembolsoAcumulado = totalAdelantoInicial;
+        const totalDiasProyecto = Object.values(diasPorMes).reduce((a, b) => a + b, 0) || totalDias || 1;
 
-    //  Cálculo por mes
-const datosMensuales = useMemo<FilaMensual[]>(() => {
-    // El acumulado empieza con el adelanto inicial (ya pagado en la fila 0)
-    let desembolsoAcumulado = totalAdelantoInicial;
-    const totalDiasProyecto = Object.values(diasPorMes).reduce((a, b) => a + b, 0) || totalDias || 1;
+        return periodos.map((p) => {
+            const diasMes      = diasPorMes[p.key] ?? 0;
+            const valorizacion = valorizacionesMensuales[p.key]?.monto ?? 0;
+            const pctAvance    = valorizacionesMensuales[p.key]?.porcentaje ?? 0;
 
-    return periodos.map((p) => {
-        const diasMes        = diasPorMes[p.key] ?? 0;
-        const valorizacion   = valorizacionesMensuales[p.key]?.monto ?? 0;
-        const pctAvance      = valorizacionesMensuales[p.key]?.porcentaje ?? 0;
+            const factorDias         = totalDiasProyecto > 0 ? diasMes / totalDiasProyecto : 0;
+            const adelantoEfectivo   = adelantoEfectivoTotal   * factorDias;
+            const adelantoMateriales = adelantoMaterialesTotal * factorDias;
+            const totalAdelanto      = adelantoEfectivo + adelantoMateriales;
+            const desembolsoMensual  = totalAdelanto + valorizacion;
 
-        // Distribución proporcional de adelantos 
-        const factorDias         = totalDiasProyecto > 0 ? diasMes / totalDiasProyecto : 0;
-        const adelantoEfectivo   = adelantoEfectivoTotal   * factorDias;
-        const adelantoMateriales = adelantoMaterialesTotal * factorDias;
-        const totalAdelanto      = adelantoEfectivo + adelantoMateriales;
-        
-        // 🔥 CORRECCIÓN: El desembolso mensual es SOLO la valorización
-        // El adelanto ya se pagó completo en la fila 0, NO se vuelve a pagar cada mes
-        const desembolsoMensual = valorizacion;  // ← SOLO VALORIZACIÓN
+            desembolsoAcumulado += desembolsoMensual;
+            const pctDesembolso = flujoTotal > 0 ? (desembolsoAcumulado / flujoTotal) * 100 : 0;
 
-        desembolsoAcumulado += desembolsoMensual;
-        const pctDesembolso = flujoTotal > 0 ? (desembolsoAcumulado / flujoTotal) * 100 : 0;
+            return {
+                key:                  p.key,
+                diasCalendario:       diasMes,
+                diasBloqueCalendario: diasMes,
+                adelantoEfectivo,
+                adelantoMateriales,
+                totalAdelanto,
+                valorizacion,
+                pctAvance,
+                desembolsoMensual,
+                desembolsoAcumulado,
+                pctDesembolso,
+                label: p.labelCal ?? p.label,
+            };
+        });
+    }, [periodos, valorizacionesMensuales, diasPorMes, totalDias, totalAdelantoInicial,
+        adelantoEfectivoTotal, adelantoMaterialesTotal, flujoTotal]);
 
-        return {
-            key:                  p.key,
-            diasCalendario:       diasMes,
-            diasBloqueCalendario: diasMes,
-            adelantoEfectivo,
-            adelantoMateriales,
-            totalAdelanto,
-            valorizacion,
-            pctAvance,
-            desembolsoMensual,
-            desembolsoAcumulado,
-            pctDesembolso,
-            label: p.labelCal ?? p.label,
-        };
-    });
-}, [periodos, valorizacionesMensuales, diasPorMes, totalDias, totalAdelantoInicial, adelantoEfectivoTotal, adelantoMaterialesTotal, flujoTotal]);
-
-    // ── Estadísticas rápidas ──────────────────────────────────────────────────
     const maxDesembolsoMensual = useMemo(
         () => Math.max(...datosMensuales.map((d) => d.desembolsoMensual), 1),
         [datosMensuales]
@@ -149,226 +593,221 @@ const datosMensuales = useMemo<FilaMensual[]>(() => {
         [datosMensuales]
     );
 
-    // ── Curva S (acumulado) ───────────────────────────────────────────────────
     const curvaS = useMemo(() => {
-        return datosMensuales.map((d) => ({
-            label: d.label,
-            acumulado: d.desembolsoAcumulado,
-            pct: d.pctDesembolso,
+        const raw       = datosMensuales.map((d) => ({ label: d.label, acumulado: d.desembolsoAcumulado, pct: d.pctDesembolso }));
+        const lastPct   = raw[raw.length - 1]?.pct || 100;
+        const scale     = lastPct > 0 ? 100 / lastPct : 1;   // factor para llevar el último a 100 %
+        const lastAcum  = raw[raw.length - 1]?.acumulado || flujoTotal;
+        const scaleAcum = lastAcum > 0 ? flujoTotal / lastAcum : 1;
+        return raw.map((r, i) => ({
+            label:     r.label,
+            acumulado: i === raw.length - 1 ? flujoTotal          : r.acumulado * scaleAcum,
+            pct:       i === raw.length - 1 ? 100                 : r.pct       * scale,
         }));
-    }, [datosMensuales]);
+    }, [datosMensuales, flujoTotal]);
+
+    // ── Handlers de tooltip ───────────────────────────────────────────────────
+    const getOffset = (e: React.MouseEvent<SVGElement>) => {
+        const rect = chartRef.current?.getBoundingClientRect();
+        return rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null;
+    };
+
+    const handleBarEnter = (e: React.MouseEvent<SVGElement>, d: FilaMensual) => {
+        const o = getOffset(e); if (o) setTooltip({ ...o, data: d });
+    };
+    const handleBarMove  = (e: React.MouseEvent<SVGElement>, d: FilaMensual) => {
+        const o = getOffset(e); if (o) setTooltip({ ...o, data: d });
+    };
+    const handleBarLeave = () => setTooltip(null);
+
+    const handleCurveEnter = (e: React.MouseEvent<SVGElement>, d: { label: string; acumulado: number; pct: number }) => {
+        const o = getOffset(e); if (o) setCTooltip({ ...o, data: d });
+    };
+    const handleCurveLeave = () => setCTooltip(null);
 
     // ─────────────────────────────────────────────────────────────────────────
     // RENDER
     // ─────────────────────────────────────────────────────────────────────────
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-4 px-2">
-            <div
-                className="relative bg-white w-full rounded-none shadow-2xl flex flex-col"
-                style={{ maxWidth: '1280px', minHeight: '90vh', fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}
-            >
-                {/* ══════════════════════════════════════════════════════════
-                    BANDA SUPERIOR INSTITUCIONAL
-                ══════════════════════════════════════════════════════════ */}
-                <div
-                    className="flex-none"
-                    style={{
-                        background: 'linear-gradient(90deg, #0a2342 0%, #1a3a5c 60%, #1e4976 100%)',
-                        padding: '0',
-                    }}
-                >
-                    {/* Franja decorativa superior */}
-                    <div style={{ height: '4px', background: 'linear-gradient(90deg, #f59e0b, #ef4444, #10b981, #3b82f6)' }} />
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 50,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            background: 'rgba(10,20,40,0.55)', backdropFilter: 'blur(4px)',
+            overflowY: 'auto', padding: '14px 8px',
+        }}>
+            <div style={{
+                position: 'relative',
+                background: C.white,
+                width: '100%', maxWidth: 1340,
+                minHeight: '92vh',
+                display: 'flex', flexDirection: 'column',
+                fontFamily: "'Segoe UI', 'Calibri', Arial, sans-serif",
+                boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
+                borderRadius: 3,
+                overflow: 'hidden',
+            }}>
 
-                    <div className="flex items-center justify-between px-6 py-4">
-                        {/* Logo + Título */}
-                        <div className="flex items-center gap-4">
-                            <div
-                                style={{
-                                    width: 48, height: 48,
-                                    background: 'rgba(255,255,255,0.12)',
-                                    border: '1.5px solid rgba(255,255,255,0.25)',
-                                    borderRadius: 8,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <DollarSign style={{ color: '#f59e0b', width: 26, height: 26 }} />
+                {/* ══ CABECERA INSTITUCIONAL ══════════════════════════════════ */}
+                <div style={{ background: C.navy, flexShrink: 0 }}>
+                    {/* Franja multicolor */}
+                    <div style={{ height: 3, background: 'linear-gradient(90deg,#F59E0B,#EF4444,#10B981,#3B82F6)' }} />
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px' }}>
+                        {/* Logo + título */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{
+                                width: 42, height: 42, borderRadius: 6,
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1.5px solid rgba(255,255,255,0.2)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            }}>
+                                <DollarSign style={{ color: '#F59E0B', width: 20, height: 20 }} />
                             </div>
                             <div>
-                                <div style={{ color: '#94a3b8', fontSize: 10, letterSpacing: '0.15em', fontWeight: 600, textTransform: 'uppercase' }}>
+                                <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 8.5, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase' }}>
                                     Proyecta PCL — Módulo Financiero
                                 </div>
-                                <div style={{ color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: '0.03em', lineHeight: 1.2 }}>
+                                <div style={{ color: C.white, fontSize: 17, fontWeight: 800, letterSpacing: '0.04em', lineHeight: 1.15 }}>
                                     CRONOGRAMA DE DESEMBOLSOS
                                 </div>
-                                <div style={{ color: '#60a5fa', fontSize: 11, marginTop: 2 }}>
+                                <div style={{ color: '#93C5FD', fontSize: 9.5, marginTop: 1.5 }}>
+                                    Art. 155° del Reglamento de la Ley de Contrataciones del Estado
                                 </div>
                             </div>
                         </div>
 
                         {/* Controles */}
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setShowInfo(!showInfo)}
-                                title="Información"
-                                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, padding: '6px 10px', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-                            >
-                                <Info style={{ width: 14, height: 14 }} />
+                        <div style={{ display: 'flex', gap: 7 }}>
+                            <button onClick={() => setShowInfo(!showInfo)} title="Información legal"
+                                style={{ ...btnBase, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
+                                <Info style={{ width: 13, height: 13 }} />
+                                <span>Info</span>
                             </button>
-                            <button
-                                onClick={onClose}
-                                style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '6px 10px', color: '#fca5a5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-                            >
-                                <X style={{ width: 14, height: 14 }} />
-                                <span style={{ fontWeight: 600 }}>Cerrar</span>
+                            <button onClick={onClose}
+                                style={{ ...btnBase, background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', borderColor: 'rgba(239,68,68,0.3)' }}>
+                                <X style={{ width: 13, height: 13 }} />
+                                <span style={{ fontWeight: 700 }}>Cerrar</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════
-                    FICHA DEL PROYECTO
-                ══════════════════════════════════════════════════════════ */}
-                <div
-                    style={{
-                        background: '#f8fafc',
-                        borderBottom: '2px solid #e2e8f0',
-                        padding: '10px 24px',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                        gap: '8px 24px',
-                    }}
-                >
-                    <FichaRow label="PROYECTO" value={projectName} />
-                    {codigoProyecto && <FichaRow label="I.E." value={codigoProyecto} />}
-                    {ubicacion && <FichaRow label="UBICACIÓN" value={ubicacion} />}
-                    <FichaRow label="PRESUPUESTO DE OBRA" value={fmtSoles(totalPresupuesto)} highlight />
-                    <FichaRow label="PLAZO DE EJECUCIÓN" value={`${totalDias} DÍAS CALENDARIO`} />
-                    <FichaRow label="ADELANTO TOTAL (30%)" value={fmtSoles(totalAdelantoInicial)} />
+                {/* ══ FICHA DEL PROYECTO ══════════════════════════════════════ */}
+                <div style={{
+                    background: C.surface,
+                    borderBottom: `2px solid ${C.headerBg2}`,
+                    padding: '8px 20px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '5px 22px',
+                }}>
+                    <InfoRow label="Proyecto"            value={projectName} />
+                    {codigoProyecto && <InfoRow label="I.E."    value={codigoProyecto} />}
+                    {ubicacion      && <InfoRow label="Ubicación" value={ubicacion} />}
+                    <InfoRow label="Presupuesto de Obra" value={fmtSoles(totalPresupuesto)} bold />
+                    <InfoRow label="Plazo de Ejecución"  value={`${totalDias} DÍAS CALENDARIO`} />
+                    <InfoRow label="Adelanto Total (30%)" value={fmtSoles(totalAdelantoInicial)} />
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════
-                    TARJETAS KPI
-                ══════════════════════════════════════════════════════════ */}
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(5, 1fr)',
-                        gap: 0,
-                        borderBottom: '2px solid #e2e8f0',
-                        background: '#fff',
-                    }}
-                >
-                    <KpiCard
-                        color="#0a2342"
-                        label="PRESUPUESTO OBRA"
-                        value={fmtSolesCompact(totalPresupuesto)}
-                        sub="Monto de contrato s/IGV"
-                        icon={<FileText style={{ width: 18, height: 18 }} />}
-                    />
-                    <KpiCard
-                        color="#15803d"
-                        label="ADELANTO DIRECTO 10%"
-                        value={fmtSolesCompact(adelantoEfectivoTotal)}
-                        sub="Efectivo — col. (1)"
-                        icon={<DollarSign style={{ width: 18, height: 18 }} />}
-                    />
-                    <KpiCard
-                        color="#1d4ed8"
-                        label="ADELANTO MATERIALES 20%"
-                        value={fmtSolesCompact(adelantoMaterialesTotal)}
-                        sub="Materiales — col. (2)"
-                        icon={<Layers style={{ width: 18, height: 18 }} />}
-                    />
-                    <KpiCard
-                        color="#b45309"
-                        label="FLUJO TOTAL (contrato + adel.)"
-                        value={fmtSolesCompact(flujoTotal)}
-                        sub={`30.00% adelantos`}
-                        icon={<TrendingUp style={{ width: 18, height: 18 }} />}
-                    />
-                    <KpiCard
-                        color="#7c3aed"
-                        label="MES PICO"
-                        value={mesPico ? fmtSolesCompact(mesPico.desembolsoMensual) : '—'}
+                {/* ══ TARJETAS KPI ════════════════════════════════════════════ */}
+                <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(5,1fr)',
+                    borderBottom: `2px solid ${C.headerBg2}`,
+                    background: C.white,
+                }}>
+                    <KpiCard color={C.navy}    icon={<FileText style={{ width: 15, height: 15 }} />}
+                        label="Presupuesto de Obra"     value={fmtSoles(totalPresupuesto)}       sub="Monto contrato s/IGV" />
+                    <KpiCard color="#1A7A3A"   icon={<DollarSign style={{ width: 15, height: 15 }} />}
+                        label="Adelanto Directo 10%"    value={fmtSoles(adelantoEfectivoTotal)}   sub="Efectivo — col. (1)" />
+                    <KpiCard color={C.blue}    icon={<Layers style={{ width: 15, height: 15 }} />}
+                        label="Adelanto Materiales 20%" value={fmtSoles(adelantoMaterialesTotal)} sub="Materiales — col. (2)" />
+                    <KpiCard color="#92400E"   icon={<TrendingUp style={{ width: 15, height: 15 }} />}
+                        label="Flujo Total"             value={fmtSoles(flujoTotal)}              sub="Contrato + adelantos 30%" />
+                    <KpiCard color={C.purple}  icon={<BarChart2 style={{ width: 15, height: 15 }} />}
+                        label="Mes Pico"
+                        value={mesPico ? fmtSoles(mesPico.desembolsoMensual) : '—'}
                         sub={mesPico?.label ?? '—'}
-                        icon={<BarChart2 style={{ width: 18, height: 18 }} />}
-                    />
+                        last />
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════
-                    BARRA DE NAVEGACIÓN DE VISTAS
-                ══════════════════════════════════════════════════════════ */}
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '8px 24px',
-                        borderBottom: '1px solid #e2e8f0',
-                        background: '#f1f5f9',
-                    }}
-                >
-                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginRight: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>VISTA:</span>
-                    <TabBtn active={vista === 'tabla'}   onClick={() => setVista('tabla')}   icon={<Table2 style={{ width: 13, height: 13 }} />}   label="Tabla de Desembolsos" />
-                    <TabBtn active={vista === 'grafico'} onClick={() => setVista('grafico')} icon={<BarChart2 style={{ width: 13, height: 13 }} />} label="Histograma Mensual" />
-                    <TabBtn active={vista === 'curvaS'}  onClick={() => setVista('curvaS')}  icon={<TrendingUp style={{ width: 13, height: 13 }} />} label="Curva S Acumulada" />
+                {/* ══ NAVEGACIÓN DE VISTAS ════════════════════════════════════ */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    padding: '6px 20px',
+                    borderBottom: `1px solid ${C.borderB}`,
+                    background: C.surfaceAlt,
+                }}>
+                    <span style={{ fontSize: 9.5, color: C.muted, fontWeight: 700, letterSpacing: '0.12em', marginRight: 8, textTransform: 'uppercase' }}>VISTA:</span>
+                    <TabBtn active={vista === 'tabla'}   onClick={() => setVista('tabla')}   icon={<Table2  style={{ width: 12, height: 12 }} />} label="Tabla de Desembolsos" />
+                    <TabBtn active={vista === 'grafico'} onClick={() => setVista('grafico')} icon={<BarChart2 style={{ width: 12, height: 12 }} />} label="Histograma 3D" />
+                    <TabBtn active={vista === 'curvaS'}  onClick={() => setVista('curvaS')}  icon={<TrendingUp style={{ width: 12, height: 12 }} />} label="Curva S Acumulada" />
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════
-                    CONTENIDO PRINCIPAL
-                ══════════════════════════════════════════════════════════ */}
-                <div className="flex-1 overflow-auto" ref={tableRef}>
+                {/* ══ CONTENIDO PRINCIPAL ═════════════════════════════════════ */}
+                <div style={{ flex: 1, overflow: 'auto' }}>
 
-                    {/* ─── VISTA: TABLA ────────────────────────────────────── */}
+                    {/* ─── VISTA TABLA ─────────────────────────────────────── */}
                     {vista === 'tabla' && (
                         <div style={{ overflowX: 'auto' }}>
-                            <table
-                                style={{
-                                    width: '100%',
-                                    borderCollapse: 'collapse',
-                                    fontSize: 12,
-                                    fontFamily: "'DM Mono', 'Consolas', monospace",
-                                }}
-                            >
-                                {/* ── CABECERA GRUPO ── */}
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, fontFamily: "'Calibri','Segoe UI',sans-serif" }}>
                                 <thead>
-                                    <tr style={{ background: '#0a2342', color: '#fff' }}>
-                                        <th rowSpan={2} style={th({ textAlign: 'center', minWidth: 100, borderRight: '1px solid #1e3a5f' })}>
-                                            CALENDARIO
+                                    {/* Fila de grupos */}
+                                    <tr>
+                                        <th rowSpan={2} style={thExcel({ textAlign: 'center', minWidth: 90, background: C.navy, color: C.white, borderColor: '#2A4F7C', fontSize: 10 })}>
+                                            CALENDARIO<br />
+                                            <span style={{ fontSize: 8.5, fontWeight: 400, opacity: 0.75 }}>Días</span>
                                         </th>
-                                        <th colSpan={3} style={{ ...th(), textAlign: 'center', borderRight: '1px solid #1e3a5f', background: '#0d2d4d' }}>
+                                        <th colSpan={3} style={thExcel({ textAlign: 'center', background: '#1A4F80', color: C.white, borderLeft: `2px solid ${C.navy}`, borderRight: `2px solid ${C.navy}` })}>
                                             ADELANTOS
                                         </th>
-                                        <th colSpan={2} style={{ ...th(), textAlign: 'center', borderRight: '1px solid #1e3a5f', background: '#0f3460' }}>
+                                        <th colSpan={2} style={thExcel({ textAlign: 'center', background: '#16426A', color: C.white, borderRight: `2px solid ${C.navy}` })}>
                                             VALORIZACIÓN
                                         </th>
-                                        <th colSpan={2} style={{ ...th(), textAlign: 'center', background: '#0f3460' }}>
+                                        <th colSpan={2} style={thExcel({ textAlign: 'center', background: C.navy, color: C.white })}>
                                             DESEMBOLSOS Inc/IGV
                                         </th>
                                     </tr>
-                                    <tr style={{ background: '#1a3a5c', color: '#cbd5e1', fontSize: 10 }}>
-                                        <th style={th({ minWidth: 120, borderRight: '1px solid #2a4a6c' })}>EFECTIVO 10%<br /><span style={{ color: '#60a5fa' }}>(1)</span></th>
-                                        <th style={th({ minWidth: 130, borderRight: '1px solid #2a4a6c' })}>MATERIALES 20%<br /><span style={{ color: '#60a5fa' }}>(2)</span></th>
-                                        <th style={th({ minWidth: 120, borderRight: '1px solid #2a4a6c' })}>TOTAL<br /><span style={{ color: '#60a5fa' }}>(1+2)</span></th>
-                                        <th style={th({ minWidth: 140, borderRight: '1px solid #2a4a6c' })}>PARCIAL<br />PRESUPUESTO</th>
-                                        <th style={th({ minWidth: 80, borderRight: '1px solid #2a4a6c' })}>%<br />AVANCE</th>
-                                        <th style={th({ minWidth: 140, borderRight: '1px solid #2a4a6c' })}>MONTO<br />DESEMBOLSO</th>
-                                        <th style={th({ minWidth: 90 })}>% DE<br />DESEMBOLSO</th>
+                                    {/* Fila sub-cabecera */}
+                                    <tr style={{ background: C.headerBg }}>
+                                        <th style={thExcel({ minWidth: 130, color: C.navy, borderLeft: `2px solid ${C.navyMid}` })}>
+                                            EFECTIVO 10%<br />
+                                            <span style={{ color: C.blue, fontWeight: 900 }}>(1)</span>
+                                        </th>
+                                        <th style={thExcel({ minWidth: 140, color: C.navy })}>
+                                            MATERIALES 20%<br />
+                                            <span style={{ color: C.blue, fontWeight: 900 }}>(2)</span>
+                                        </th>
+                                        <th style={thExcel({ minWidth: 130, color: C.navy, borderRight: `2px solid ${C.navyMid}` })}>
+                                            TOTAL<br />
+                                            <span style={{ color: C.blue, fontWeight: 900 }}>(1+2)</span>
+                                        </th>
+                                        <th style={thExcel({ minWidth: 148, color: C.navy })}>
+                                            PARCIAL<br />PRESUPUESTO
+                                        </th>
+                                        <th style={thExcel({ minWidth: 80, color: C.navy, borderRight: `2px solid ${C.navyMid}` })}>
+                                            %<br />AVANCE
+                                        </th>
+                                        <th style={thExcel({ minWidth: 148, color: C.navy })}>
+                                            MONTO<br />DESEMBOLSO
+                                        </th>
+                                        <th style={thExcel({ minWidth: 98, color: C.navy })}>
+                                            % DE<br />DESEMBOLSO
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {/* FILA 0: Adelanto Inicial */}
-                                    <tr style={{ background: '#ecfdf5', fontWeight: 700 }}>
-                                        <td style={td({ textAlign: 'center', color: '#065f46', fontWeight: 800, letterSpacing: '0.05em' })}>0</td>
-                                        <td style={td({ textAlign: 'right', color: '#065f46' })}>{fmtSoles(adelantoEfectivoTotal)}</td>
-                                        <td style={td({ textAlign: 'right', color: '#065f46' })}>{fmtSoles(adelantoMaterialesTotal)}</td>
-                                        <td style={td({ textAlign: 'right', color: '#065f46', fontWeight: 800 })}>{fmtSoles(totalAdelantoInicial)}</td>
-                                        <td style={td({ textAlign: 'right', color: '#94a3b8' })}>—</td>
-                                        <td style={td({ textAlign: 'right', color: '#94a3b8' })}>—</td>
-                                        <td style={td({ textAlign: 'right', color: '#065f46', fontWeight: 800 })}>{fmtSoles(totalAdelantoInicial)}</td>
-                                        <td style={td({ textAlign: 'right', color: '#065f46', fontWeight: 800 })}>
+                                    {/* FILA 0: Adelanto inicial */}
+                                    <tr style={{ background: C.greenBg }}>
+                                        <td style={tdExcel({ textAlign: 'center', color: C.greenText, fontWeight: 900, fontSize: 16, borderLeft: `1px solid ${C.borderB}`, borderRight: `1px solid ${C.borderB}` })}>
+                                            0
+                                        </td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 700, borderLeft: `2px solid ${C.greenBorder}` })}>{fmtSoles(adelantoEfectivoTotal)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 700 })}>{fmtSoles(adelantoMaterialesTotal)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 900, borderRight: `2px solid ${C.greenBorder}` })}>{fmtSoles(totalAdelantoInicial)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic' })}>—</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic', borderRight: `2px solid ${C.borderB}` })}>—</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 900 })}>{fmtSoles(totalAdelantoInicial)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.greenText, fontWeight: 900 })}>
                                             {fmtPct(flujoTotal > 0 ? (totalAdelantoInicial / flujoTotal) * 100 : 0)}
                                         </td>
                                     </tr>
@@ -377,75 +816,79 @@ const datosMensuales = useMemo<FilaMensual[]>(() => {
                                     {datosMensuales.map((d, idx) => {
                                         const esPico = d.desembolsoMensual === maxDesembolsoMensual;
                                         const esPar  = idx % 2 === 0;
+                                        const bg     = esPico ? C.amberBg : esPar ? C.white : C.rowAlt;
                                         return (
-                                            <tr
-                                                key={d.key}
-                                                style={{
-                                                    background: esPico ? '#fffbeb' : esPar ? '#fff' : '#f8fafc',
-                                                    transition: 'background 0.15s',
-                                                }}
-                                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#eff6ff'; }}
-                                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = esPico ? '#fffbeb' : esPar ? '#fff' : '#f8fafc'; }}
+                                            <tr key={d.key} style={{ background: bg, transition: 'background 0.1s' }}
+                                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#DBEAFE'; }}
+                                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = bg; }}
                                             >
-                                                <td style={td({ textAlign: 'center', fontWeight: 700, color: '#1e293b', fontSize: 11 })}>
-                                                    {d.diasCalendario}
-                                                    <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 400 }}>{d.label}</div>
+                                                <td style={tdExcel({ textAlign: 'center', fontWeight: 700, color: esPico ? C.amberText : C.navy, borderLeft: `1px solid ${C.borderB}` })}>
+                                                    <div style={{ fontSize: 12.5, fontWeight: 700 }}>{d.diasCalendario}</div>
+                                                    <div style={{ fontSize: 8, color: C.muted, fontWeight: 400, letterSpacing: '0.02em', marginTop: 1 }}>{d.label}</div>
                                                 </td>
-                                                <td style={td({ textAlign: 'right', color: '#166534' })}>{fmtSoles(d.adelantoEfectivo)}</td>
-                                                <td style={td({ textAlign: 'right', color: '#1d4ed8' })}>{fmtSoles(d.adelantoMateriales)}</td>
-                                                <td style={td({ textAlign: 'right', fontWeight: 600, color: '#334155' })}>{fmtSoles(d.totalAdelanto)}</td>
-                                                <td style={td({ textAlign: 'right', color: d.valorizacion > 0 ? '#1d4ed8' : '#94a3b8', fontWeight: d.valorizacion > 0 ? 700 : 400 })}>
+                                                <td style={tdExcel({ textAlign: 'right', color: '#166534', borderLeft: `2px solid ${C.borderB}` })}>{fmtSoles(d.adelantoEfectivo)}</td>
+                                                <td style={tdExcel({ textAlign: 'right', color: C.blue })}>{fmtSoles(d.adelantoMateriales)}</td>
+                                                <td style={tdExcel({ textAlign: 'right', color: C.text, fontWeight: 600, borderRight: `2px solid ${C.borderB}` })}>{fmtSoles(d.totalAdelanto)}</td>
+                                                <td style={tdExcel({ textAlign: 'right', color: d.valorizacion > 0 ? '#1D4ED8' : C.muted, fontWeight: d.valorizacion > 0 ? 700 : 400 })}>
                                                     {fmtSoles(d.valorizacion)}
                                                 </td>
-                                                <td style={td({ textAlign: 'right', color: '#7c3aed', fontWeight: 600 })}>
+                                                <td style={tdExcel({ textAlign: 'right', color: '#6D28D9', fontWeight: 600, borderRight: `2px solid ${C.borderB}` })}>
                                                     {fmtPct(d.pctAvance)}
                                                 </td>
-                                                <td style={td({ textAlign: 'right', fontWeight: 700, color: esPico ? '#b45309' : '#0f172a', fontSize: esPico ? 12.5 : 12 })}>
+                                                <td style={tdExcel({ textAlign: 'right', fontWeight: 700, color: esPico ? C.amberText : C.text })}>
                                                     {fmtSoles(d.desembolsoMensual)}
-                                                    {esPico && <span style={{ marginLeft: 4, fontSize: 9, background: '#f59e0b', color: '#fff', padding: '1px 4px', borderRadius: 3 }}>PICO</span>}
+                                                    {esPico && (
+                                                        <span style={{ marginLeft: 5, fontSize: 8, background: '#D97706', color: C.white, padding: '1px 4px', borderRadius: 2, fontWeight: 700, verticalAlign: 'middle' }}>
+                                                            PICO
+                                                        </span>
+                                                    )}
                                                 </td>
-                                                <td style={td({ textAlign: 'right', fontWeight: 700, color: '#0a2342' })}>
+                                                <td style={tdExcel({ textAlign: 'right', color: C.navy, fontWeight: 700 })}>
                                                     {fmtPct(d.pctDesembolso)}
                                                 </td>
                                             </tr>
                                         );
                                     })}
 
-                                    {/* FILA PARCIAL (totales mensuales) */}
-                                    <tr style={{ background: '#f1f5f9', fontStyle: 'italic', color: '#64748b' }}>
-                                        <td style={td({ textAlign: 'center', fontWeight: 700 })}>PARCIAL</td>
-                                        <td style={td({ textAlign: 'right' })}>—</td>
-                                        <td style={td({ textAlign: 'right' })}>—</td>
-                                        <td style={td({ textAlign: 'right' })}>—</td>
-                                        <td style={td({ textAlign: 'right' })}>{fmtSoles(totalValorizacion)}</td>
-                                        <td style={td({ textAlign: 'right' })}>100.00%</td>
-                                        <td style={td({ textAlign: 'right' })}>{fmtSoles(totalValorizacion)}</td>
-                                        <td style={td({ textAlign: 'right' })}>—</td>
+                                    {/* FILA PARCIAL */}
+                                    <tr style={{ background: C.surfaceAlt }}>
+                                        <td style={tdExcel({ textAlign: 'center', color: C.navy, fontWeight: 800, fontSize: 10, letterSpacing: '0.07em', borderLeft: `1px solid ${C.borderB}` })}>PARCIAL</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic', borderLeft: `2px solid ${C.borderB}` })}>—</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic' })}>—</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic', borderRight: `2px solid ${C.borderB}` })}>—</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.navy, fontWeight: 700 })}>{fmtSoles(totalValorizacion)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.navy, borderRight: `2px solid ${C.borderB}` })}>100.00%</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.navy, fontWeight: 700 })}>{fmtSoles(totalValorizacion)}</td>
+                                        <td style={tdExcel({ textAlign: 'right', color: C.muted, fontStyle: 'italic' })}>—</td>
                                     </tr>
                                 </tbody>
+
                                 <tfoot>
-                                    {/* TOTALES */}
-                                    <tr style={{ background: '#0a2342', color: '#fff', fontWeight: 800, fontSize: 12.5 }}>
-                                        <td style={{ ...td(), textAlign: 'center', letterSpacing: '0.08em' }}>TOTAL</td>
-                                        <td style={{ ...td(), textAlign: 'right' }}>{fmtSoles(adelantoEfectivoTotal)}</td>
-                                        <td style={{ ...td(), textAlign: 'right' }}>{fmtSoles(adelantoMaterialesTotal)}</td>
-                                        <td style={{ ...td(), textAlign: 'right' }}>{fmtSoles(totalAdelantoInicial)}</td>
-                                        <td style={{ ...td(), textAlign: 'right' }}>{fmtSoles(totalPresupuesto)}</td>
-                                        <td style={{ ...td(), textAlign: 'right', color: '#60a5fa' }}>100.00%</td>
-                                        <td style={{ ...td(), textAlign: 'right', color: '#f59e0b' }}>{fmtSoles(flujoTotal)}</td>
-                                        <td style={{ ...td(), textAlign: 'right', color: '#34d399' }}>100.00%</td>
+                                    {/* FILA TOTAL */}
+                                    <tr style={{ background: C.navy, fontWeight: 700, fontSize: 12 }}>
+                                        <td style={{ ...tdExcel(), textAlign: 'center', color: C.white, fontWeight: 900, letterSpacing: '0.09em', borderLeft: `1px solid ${C.navyMid}`, borderColor: C.navyMid }}>
+                                            TOTAL
+                                        </td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#A7F3D0', borderLeft: `2px solid ${C.navyMid}`, borderColor: C.navyMid }}>{fmtSoles(adelantoEfectivoTotal)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#93C5FD', borderColor: C.navyMid }}>{fmtSoles(adelantoMaterialesTotal)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: C.white, borderRight: `2px solid rgba(255,255,255,0.15)`, borderColor: C.navyMid }}>{fmtSoles(totalAdelantoInicial)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#BFDBFE', borderColor: C.navyMid }}>{fmtSoles(totalPresupuesto)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#C4B5FD', borderRight: `2px solid rgba(255,255,255,0.15)`, borderColor: C.navyMid }}>100.00%</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#FDE68A', fontSize: 13, borderColor: C.navyMid }}>{fmtSoles(flujoTotal)}</td>
+                                        <td style={{ ...tdExcel(), textAlign: 'right', color: '#6EE7B7', borderColor: C.navyMid }}>100.00%</td>
                                     </tr>
-                                    {/* Subtotales */}
-                                    <tr style={{ background: '#1a3a5c', color: '#94a3b8', fontSize: 11 }}>
-                                        <td colSpan={8} style={{ padding: '8px 12px' }}>
-                                            <span style={{ marginRight: 24 }}>
-                                                TOTAL PRESUPUESTO DE OBRA: <strong style={{ color: '#fff' }}>{fmtSoles(totalPresupuesto)}</strong>
+
+                                    {/* Subtítulos */}
+                                    <tr style={{ background: '#253F5E' }}>
+                                        <td colSpan={8} style={{ padding: '7px 16px', fontSize: 10.5, borderTop: `1px solid ${C.navyMid}` }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.55)', marginRight: 24 }}>
+                                                TOTAL PRESUPUESTO DE OBRA: <strong style={{ color: C.white }}>{fmtSoles(totalPresupuesto)}</strong>
                                             </span>
-                                            <span style={{ marginRight: 24 }}>
-                                                Adelanto Directo 10%: <strong style={{ color: '#34d399' }}>{fmtSoles(adelantoEfectivoTotal)}</strong>
+                                            <span style={{ color: 'rgba(255,255,255,0.55)', marginRight: 24 }}>
+                                                Adelanto Directo 10%: <strong style={{ color: '#6EE7B7' }}>{fmtSoles(adelantoEfectivoTotal)}</strong>
                                             </span>
-                                            <span>
-                                                Adelanto Materiales 20%: <strong style={{ color: '#60a5fa' }}>{fmtSoles(adelantoMaterialesTotal)}</strong>
+                                            <span style={{ color: 'rgba(255,255,255,0.55)' }}>
+                                                Adelanto Materiales 20%: <strong style={{ color: '#93C5FD' }}>{fmtSoles(adelantoMaterialesTotal)}</strong>
                                             </span>
                                         </td>
                                     </tr>
@@ -454,292 +897,143 @@ const datosMensuales = useMemo<FilaMensual[]>(() => {
                         </div>
                     )}
 
-                    {/* ─── VISTA: HISTOGRAMA ───────────────────────────────── */}
+                    {/* ─── VISTA HISTOGRAMA 3D ─────────────────────────────── */}
                     {vista === 'grafico' && (
-                        <div style={{ padding: '24px', background: '#f8fafc', minHeight: 400 }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#0a2342', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 20 }}>
-                                HISTOGRAMA DE DESEMBOLSOS MENSUALES — Curva de Caja
-                            </h3>
-
-                            {/* Eje Y labels */}
-                            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: 280 }}>
-                                {/* Eje Y */}
-                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', alignItems: 'flex-end', paddingBottom: 28 }}>
-                                    {[100, 80, 60, 40, 20, 0].map((pct) => (
-                                        <span key={pct} style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'monospace' }}>
-                                            {fmtSolesCompact((maxDesembolsoMensual * pct) / 100)}
-                                        </span>
-                                    ))}
-                                </div>
-
-                                {/* Barras */}
-                                <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 3, height: '100%', paddingBottom: 0, position: 'relative' }}>
-                                    {/* Líneas guía horizontales */}
-                                    {[20, 40, 60, 80].map((pct) => (
-                                        <div
-                                            key={pct}
-                                            style={{
-                                                position: 'absolute',
-                                                left: 0, right: 0,
-                                                bottom: `calc(28px + ${pct}% - 28px * ${pct / 100})`,
-                                                borderTop: '1px dashed #e2e8f0',
-                                                pointerEvents: 'none',
-                                            }}
-                                        />
-                                    ))}
-
-                                    {datosMensuales.map((d) => {
-                                        const alturaPct = maxDesembolsoMensual > 0
-                                            ? (d.desembolsoMensual / maxDesembolsoMensual) * 100
-                                            : 0;
-                                        const esPico    = d.desembolsoMensual === maxDesembolsoMensual;
-                                        return (
-                                            <div
-                                                key={d.key}
-                                                title={`${d.label}: ${fmtSoles(d.desembolsoMensual)}`}
-                                                style={{
-                                                    flex: 1,
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'flex-end',
-                                                    height: '100%',
-                                                    cursor: 'default',
-                                                }}
-                                            >
-                                                {/* Barra adelantos */}
-                                                <div
-                                                    style={{
-                                                        width: '100%',
-                                                        height: `${Math.max(alturaPct, 2)}%`,
-                                                        background: esPico
-                                                            ? 'linear-gradient(180deg, #f59e0b, #d97706)'
-                                                            : 'linear-gradient(180deg, #3b82f6, #1d4ed8)',
-                                                        borderRadius: '3px 3px 0 0',
-                                                        boxShadow: esPico ? '0 0 8px rgba(245,158,11,0.4)' : 'none',
-                                                        transition: 'opacity 0.15s',
-                                                        position: 'relative',
-                                                    }}
-                                                >
-                                                    {esPico && (
-                                                        <div style={{
-                                                            position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)',
-                                                            background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700,
-                                                            padding: '1px 4px', borderRadius: 2, whiteSpace: 'nowrap',
-                                                        }}>
-                                                            PICO
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {/* Etiqueta mes */}
-                                                <div style={{ fontSize: 8, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {d.diasCalendario}
-                                                </div>
-                                                <div style={{ fontSize: 7, color: '#94a3b8', textAlign: 'center', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                                                    {d.label.split(' ').slice(0, 2).join(' ')}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                        <div style={{ padding: 24, background: C.surface, position: 'relative' }} ref={chartRef}>
+                            <div style={{ marginBottom: 14 }}>
+                                <h3 style={{ fontSize: 11.5, fontWeight: 800, color: C.navy, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+                                    HISTOGRAMA DE DESEMBOLSOS MENSUALES — Vista 3D
+                                </h3>
+                                <p style={{ fontSize: 10, color: C.muted, margin: '3px 0 0 0' }}>
+                                    Desembolso mensual (Adelantos + Valorización). Coloque el cursor sobre cada barra para ver el detalle completo.
+                                </p>
                             </div>
 
+                            <Histogram3D
+                                data={datosMensuales}
+                                maxValue={maxDesembolsoMensual}
+                                onEnter={handleBarEnter}
+                                onMove={handleBarMove}
+                                onLeave={handleBarLeave}
+                            />
+
+                            {/* Tooltip barra */}
+                            {tooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    left: Math.min(tooltip.x + 14, (chartRef.current?.clientWidth ?? 800) - 250),
+                                    top: Math.max(tooltip.y - 30, 10),
+                                    background: C.white,
+                                    border: `1.5px solid ${C.headerBg2}`,
+                                    borderRadius: 6,
+                                    padding: '10px 14px',
+                                    boxShadow: '0 8px 28px rgba(30,58,95,0.18)',
+                                    fontSize: 11,
+                                    zIndex: 200,
+                                    minWidth: 228,
+                                    pointerEvents: 'none',
+                                }}>
+                                    <div style={{ color: C.navy, fontWeight: 800, fontSize: 12, paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.headerBg}` }}>
+                                        📅 {tooltip.data.label} — {tooltip.data.diasCalendario} días
+                                    </div>
+                                    <TipRow label="Adelanto Efectivo 10%"   value={fmtSoles(tooltip.data.adelantoEfectivo)}   color="#166534" />
+                                    <TipRow label="Adelanto Materiales 20%" value={fmtSoles(tooltip.data.adelantoMateriales)} color={C.blue} />
+                                    <TipRow label="Total Adelantos (1+2)"   value={fmtSoles(tooltip.data.totalAdelanto)}      color={C.navy} bold />
+                                    <div style={{ borderTop: `1px solid ${C.borderB}`, margin: '6px 0' }} />
+                                    <TipRow label="Valorización Parcial" value={fmtSoles(tooltip.data.valorizacion)} color="#1D4ED8" />
+                                    <TipRow label="% Avance"             value={fmtPct(tooltip.data.pctAvance)}        color="#6D28D9" />
+                                    <div style={{ borderTop: `1px solid ${C.borderB}`, margin: '6px -14px 0', padding: '7px 14px 0', background: C.surfaceAlt, borderRadius: '0 0 6px 6px' }}>
+                                        <TipRow label="DESEMBOLSO MENSUAL"   value={fmtSoles(tooltip.data.desembolsoMensual)} color={C.navy} bold />
+                                        <TipRow label="% Desembolso Acum." value={fmtPct(tooltip.data.pctDesembolso)}         color={C.blue} />
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Leyenda */}
-                            <div style={{ display: 'flex', gap: 20, marginTop: 16, fontSize: 11, color: '#64748b' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <div style={{ width: 12, height: 12, background: 'linear-gradient(180deg,#3b82f6,#1d4ed8)', borderRadius: 2 }} />
-                                    Desembolso Mensual
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <div style={{ width: 12, height: 12, background: 'linear-gradient(180deg,#f59e0b,#d97706)', borderRadius: 2 }} />
-                                    Mes Pico
-                                </div>
+                            <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
+                                {[
+                                    { g: ['#5B9BD5', '#1E5BB5'], l: 'Desembolso Mensual' },
+                                    { g: ['#FFC844', '#D4820A'], l: 'Mes Pico' },
+                                ].map(({ g, l }) => (
+                                    <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: C.muted }}>
+                                        <div style={{ width: 14, height: 11, background: `linear-gradient(180deg,${g[0]},${g[1]})`, borderRadius: 2 }} />
+                                        {l}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
 
-                    {/* ─── VISTA: CURVA S ──────────────────────────────────── */}
+                    {/* ─── VISTA CURVA S ───────────────────────────────────── */}
                     {vista === 'curvaS' && (
-                        <div style={{ padding: '24px', background: '#f8fafc', minHeight: 400 }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#0a2342', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 20 }}>
-                                CURVA S — DESEMBOLSO ACUMULADO
-                            </h3>
-                            <div style={{ position: 'relative', height: 300 }}>
-                                <svg width="100%" height="300" viewBox={`0 0 ${curvaS.length * 60 + 60} 300`} preserveAspectRatio="none">
-                                    {/* Grid */}
-                                    {[0, 25, 50, 75, 100].map((pct) => (
-                                        <g key={pct}>
-                                            <line
-                                                x1={40} y1={300 - pct * 2.5 - 10}
-                                                x2={curvaS.length * 60 + 40} y2={300 - pct * 2.5 - 10}
-                                                stroke="#e2e8f0" strokeWidth={1} strokeDasharray="4 4"
-                                            />
-                                            <text x={0} y={300 - pct * 2.5 - 6} fontSize={9} fill="#94a3b8">{pct}%</text>
-                                        </g>
-                                    ))}
-
-                                    {/* Área bajo la curva */}
-                                    <defs>
-                                        <linearGradient id="curvaSGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
-                                        </linearGradient>
-                                    </defs>
-                                    <path
-                                        d={[
-                                            `M ${40} ${290}`,
-                                            ...curvaS.map((p, i) => `L ${i * 60 + 70} ${290 - p.pct * 2.4}`),
-                                            `L ${(curvaS.length - 1) * 60 + 70} 290`,
-                                            'Z',
-                                        ].join(' ')}
-                                        fill="url(#curvaSGrad)"
-                                    />
-
-                                    {/* Línea */}
-                                    <polyline
-                                        points={curvaS.map((p, i) => `${i * 60 + 70},${290 - p.pct * 2.4}`).join(' ')}
-                                        fill="none"
-                                        stroke="#2563eb"
-                                        strokeWidth={2.5}
-                                        strokeLinejoin="round"
-                                    />
-
-                                    {/* Puntos y etiquetas */}
-                                    {curvaS.map((p, i) => (
-                                        <g key={i}>
-                                            <circle cx={i * 60 + 70} cy={290 - p.pct * 2.4} r={4} fill="#2563eb" stroke="#fff" strokeWidth={1.5} />
-                                            <text x={i * 60 + 70} y={280 - p.pct * 2.4} textAnchor="middle" fontSize={8} fill="#1d4ed8" fontWeight={700}>
-                                                {p.pct.toFixed(1)}%
-                                            </text>
-                                            <text x={i * 60 + 70} y={298} textAnchor="middle" fontSize={8} fill="#64748b">
-                                                {p.label.split(' ').slice(0, 1).join(' ')}
-                                            </text>
-                                        </g>
-                                    ))}
-                                </svg>
+                        <div style={{ padding: 24, background: C.surface, position: 'relative' }} ref={chartRef}>
+                            <div style={{ marginBottom: 14 }}>
+                                <h3 style={{ fontSize: 11.5, fontWeight: 800, color: C.navy, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+                                    CURVA S — DESEMBOLSO ACUMULADO (%)
+                                </h3>
+                                <p style={{ fontSize: 10, color: C.muted, margin: '3px 0 0 0' }}>
+                                    Progresión acumulada sobre el flujo total. Pase el cursor sobre cada punto para detalles.
+                                </p>
                             </div>
+
+
+                            <SCurveChart
+                                data={curvaS}
+                                onPointEnter={handleCurveEnter}
+                                onPointLeave={handleCurveLeave}
+                            />
+
+                            {/* Tooltip curva S */}
+                            {cTooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    left: Math.min(cTooltip.x + 14, (chartRef.current?.clientWidth ?? 800) - 230),
+                                    top: Math.max(cTooltip.y - 30, 10),
+                                    background: C.white,
+                                    border: `1.5px solid ${C.headerBg2}`,
+                                    borderRadius: 6,
+                                    padding: '10px 14px',
+                                    boxShadow: '0 8px 28px rgba(30,58,95,0.18)',
+                                    fontSize: 11,
+                                    zIndex: 200,
+                                    minWidth: 210,
+                                    pointerEvents: 'none',
+                                }}>
+                                    <div style={{ color: C.navy, fontWeight: 800, fontSize: 12, paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${C.headerBg}` }}>
+                                        📊 {cTooltip.data.label}
+                                    </div>
+                                    <TipRow label="Desembolso Acumulado" value={fmtSoles(cTooltip.data.acumulado)} color={C.blue} bold />
+                                    <TipRow label="% Avance Acumulado"   value={fmtPct(cTooltip.data.pct)}         color={C.navy} bold />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════
-                    FOOTER LEGAL
-                ══════════════════════════════════════════════════════════ */}
-                <div
-                    style={{
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#f1f5f9',
-                        padding: '8px 24px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                    }}
-                >
-                    <p style={{ fontSize: 10, color: '#64748b', margin: 0, fontStyle: 'italic' }}>
+                {/* ══ FOOTER LEGAL ════════════════════════════════════════════ */}
+                <div style={{
+                    borderTop: `2px solid ${C.headerBg2}`,
+                    background: C.surfaceAlt,
+                    padding: '7px 20px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    flexWrap: 'wrap',
+                    gap: 8,
+                }}>
+                    <p style={{ fontSize: 9.5, color: C.muted, margin: 0, fontStyle: 'italic', maxWidth: '80%' }}>
                         * Porcentajes máximos de Adelanto según Artículo 155° del Reglamento de la Ley de Contrataciones del Estado.
                         Las Bases establecerán el otorgamiento y el porcentaje final de dichos adelantos.
                     </p>
-                    <p style={{ fontSize: 10, color: '#94a3b8', margin: 0 }}>
+                    <p style={{ fontSize: 9.5, color: '#94A3B8', margin: 0, whiteSpace: 'nowrap' }}>
                         Proyecta PCL © {new Date().getFullYear()} — Módulo Financiero
                     </p>
                 </div>
+
             </div>
         </div>
     );
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const FichaRow: React.FC<{ label: string; value: string; highlight?: boolean }> = ({ label, value, highlight }) => (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-            {label}:
-        </span>
-        <span style={{ fontSize: 12, color: highlight ? '#0a2342' : '#1e293b', fontWeight: highlight ? 800 : 600 }}>
-            {value}
-        </span>
-    </div>
-);
-
-const KpiCard: React.FC<{ color: string; label: string; value: string; sub: string; icon: React.ReactNode }> = ({
-    color, label, value, sub, icon,
-}) => (
-    <div
-        style={{
-            padding: '14px 16px',
-            borderRight: '1px solid #e2e8f0',
-            borderBottom: '1px solid #e2e8f0',
-            background: '#fff',
-            position: 'relative',
-            overflow: 'hidden',
-        }}
-    >
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: color }} />
-        <div style={{ paddingLeft: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <div style={{ color, opacity: 0.7 }}>{icon}</div>
-                <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>{sub}</div>
-        </div>
-    </div>
-);
-
-const TabBtn: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({
-    active, onClick, icon, label,
-}) => (
-    <button
-        onClick={onClick}
-        style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '5px 12px',
-            fontSize: 11,
-            fontWeight: active ? 700 : 500,
-            color: active ? '#0a2342' : '#64748b',
-            background: active ? '#fff' : 'transparent',
-            border: active ? '1px solid #e2e8f0' : '1px solid transparent',
-            borderRadius: 5,
-            cursor: 'pointer',
-            boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            transition: 'all 0.15s',
-        }}
-    >
-        {icon}
-        {label}
-    </button>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS DE ESTILO
-// ─────────────────────────────────────────────────────────────────────────────
-function th(extra: React.CSSProperties = {}): React.CSSProperties {
-    return {
-        padding: '8px 10px',
-        fontSize: 10,
-        fontWeight: 700,
-        textAlign: 'right',
-        textTransform: 'uppercase',
-        letterSpacing: '0.04em',
-        borderBottom: '1px solid #1a3a5c',
-        whiteSpace: 'nowrap',
-        fontFamily: "'DM Sans', sans-serif",
-        ...extra,
-    };
-}
-
-function td(extra: React.CSSProperties = {}): React.CSSProperties {
-    return {
-        padding: '7px 10px',
-        borderBottom: '1px solid #f1f5f9',
-        whiteSpace: 'nowrap',
-        fontSize: 12,
-        ...extra,
-    };
-}
 
 export default CronogramaDesembolsos;

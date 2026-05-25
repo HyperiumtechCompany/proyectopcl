@@ -134,18 +134,33 @@ class CronoValorizadoController extends Controller
             );
         }
 
-        // 🔥 ENRIQUECER CON DATOS DE PRESUPUESTO (METRADOS, PRECIOS, UNIDADES)
         $allItems = $this->enriquecerConPresupuesto($allItems, $presupuesto);
+        foreach ($allItems as &$item) {
+            if (!$item['is_leaf']) {
+                $item['parcial'] = array_sum(array_column(
+                    array_filter($allItems, fn($hijo) => 
+                    str_starts_with($hijo['item'], $item['item'] . '.') && $hijo['is_leaf']
+                    ), 'parcial'
+                ));
+
+                foreach ($item['distribucion'] as $key => $value) {
+                    $item['distribucion'][$key]['monto'] = 0;
+                    $item['distribucion'][$key]['porcentaje'] = 0;
+                }
+            }
+        }
+
+        $totalPresupuestoReal = $totalPresupuesto;
 
         // ── 7. Resumen ───────────────────────────────────────────────────────
-        $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
+        $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuestoReal);
 
         return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
             'project'          => (string) $projectId,
             'projectName'      => $costoProject->nombre,
             'items'            => $allItems,
             'periodos'         => $periodos,
-            'totalPresupuesto' => $totalPresupuesto,
+            'totalPresupuesto' => $totalPresupuestoReal,
             'resumen'          => $resumen,
             'sinGantt'         => false,
             'estaGuardado'     => $estaGuardado,
@@ -610,9 +625,11 @@ class CronoValorizadoController extends Controller
             $id       = (string) $row->gantt_id;
             $partida  = trim($row->partida ?? '');
             $task     = $tasks->get($id) ?? [];
-
             $pItem   = $presupuesto->get($partida);
-            
+            $nivel = substr_count($partida, '.');
+            $isLeaf = $nivel > 0; 
+
+
             // 🔥 REGLA BIDIRECCIONAL: El último en editar define el costo
             $costoGeneral = (float) ($task['cost'] ?? 0);
             $costoPresupuesto = $pItem ? (float) ($pItem->parcial ?? 0) : 0;
@@ -629,7 +646,6 @@ class CronoValorizadoController extends Controller
                 $parcial = $costoPresupuesto;  // Gana el presupuesto
             }
             
-            $isLeaf  = $pItem ? (bool) ($pItem->is_leaf ?? true) : false;
 
             $valRow = $valorizadoGuardado->get($partida);
             if ($valRow) {
@@ -693,49 +709,54 @@ class CronoValorizadoController extends Controller
     }
 
     private function calcularResumen(array $items, array $periodos, float $totalPresupuesto): array
-    {
-        if (empty($periodos) || $totalPresupuesto <= 0) {
-            return $this->resumenVacio();
-        }
-
-        $hojas = array_filter($items, fn($i) => $i['is_leaf']);
-
-        $acumuladoMensual = [];
-        $acum             = 0.0;
-
-        foreach ($periodos as $p) {
-            $montoMes = array_sum(
-                array_map(fn($i) => (float) ($i['distribucion'][$p['key']]['monto'] ?? 0), $hojas)
-            );
-            $acum += $montoMes;
-            $acumuladoMensual[$p['key']] = ['mensual' => $montoMes, 'acumulado' => $acum];
-        }
-
-        $mesPicoKey   = '';
-        $mesPicoLabel = null;
-        $mesPicoMonto = 0.0;
-
-        foreach ($periodos as $p) {
-            $v = $acumuladoMensual[$p['key']];
-            if ($v['mensual'] > $mesPicoMonto) {
-                $mesPicoMonto = $v['mensual'];
-                $mesPicoKey   = $p['key'];
-                $mesPicoLabel = $p['labelCal'];
-            }
-        }
-
-        return [
-            'total_partidas'    => count($hojas),
-            'presupuesto_total' => round($totalPresupuesto, 2),
-            'duracion_meses'    => count($periodos),
-            'mes_pico'          => $mesPicoLabel,
-            'mes_pico_key'      => $mesPicoKey,
-            'monto_mes_pico'    => round($mesPicoMonto, 2),
-            'pct_mes_pico'      => $totalPresupuesto > 0
-                ? round(($mesPicoMonto / $totalPresupuesto) * 100, 2)
-                : 0.0,
-        ];
+{
+    if (empty($periodos)) {
+        return $this->resumenVacio();
     }
+
+    $hojas = array_filter($items, fn($i) => $i['is_leaf']);
+    $totalReal = array_sum(array_map(fn($i) => $i['parcial'], $hojas));
+    
+    if ($totalReal <= 0) {
+        return $this->resumenVacio();
+    }
+
+    $acumuladoMensual = [];
+    $acum             = 0.0;
+
+    foreach ($periodos as $p) {
+        $montoMes = array_sum(
+            array_map(fn($i) => (float) ($i['distribucion'][$p['key']]['monto'] ?? 0), $hojas)
+        );
+        $acum += $montoMes;
+        $acumuladoMensual[$p['key']] = ['mensual' => $montoMes, 'acumulado' => $acum];
+    }
+
+    $mesPicoKey   = '';
+    $mesPicoLabel = null;
+    $mesPicoMonto = 0.0;
+
+    foreach ($periodos as $p) {
+        $v = $acumuladoMensual[$p['key']];
+        if ($v['mensual'] > $mesPicoMonto) {
+            $mesPicoMonto = $v['mensual'];
+            $mesPicoKey   = $p['key'];
+            $mesPicoLabel = $p['labelCal'];
+        }
+    }
+
+    return [
+        'total_partidas'    => count($hojas),
+        'presupuesto_total' => round($totalReal, 2),
+        'duracion_meses'    => count($periodos),
+        'mes_pico'          => $mesPicoLabel,
+        'mes_pico_key'      => $mesPicoKey,
+        'monto_mes_pico'    => round($mesPicoMonto, 2),
+        'pct_mes_pico'      => $totalReal > 0
+            ? round(($mesPicoMonto / $totalReal) * 100, 2)
+            : 0.0,
+    ];
+}
 
     private function resumenVacio(): array
     {
