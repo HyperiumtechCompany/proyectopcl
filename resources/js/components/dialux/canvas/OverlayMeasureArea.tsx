@@ -16,9 +16,9 @@
  */
 
 import { memo, useMemo } from 'react';
+import { calculatePolygonArea } from '@/hooks/dialux/lightingCalculations';
 import type { CanvasPoint } from '@/hooks/dialux/useCanvasInteraction';
 import { safeNum, pointsToSvgString, centroid } from './canvasUtils';
-import { calculatePolygonArea } from '@/hooks/dialux/lightingCalculations';
 
 type ScreenFn = (p: { x: number; y: number }) => { x: number; y: number };
 

@@ -71,7 +71,7 @@ const WallItem = memo(function WallItem({
         }
         return markers;
     // screenPoint cambia con pan/zoom — recalcular también en ese caso
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [isCerco, w.vertices, w.postSpacing, screenPoint]);
 
     return (

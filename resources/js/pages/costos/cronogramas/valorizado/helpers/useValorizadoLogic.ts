@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import {
+import type {
     ItemValorizado, Periodo, ViewMode, ModoCalculo,
     TotalesColumna, DistribucionMes,
 } from '../types';

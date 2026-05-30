@@ -47,6 +47,7 @@ import type {
     Canopy,
     Fixture,
     LightSwitch,
+    Conductor,
     Partition,
     Scene as EditorScene,
     LightingResult,
@@ -86,28 +87,28 @@ function hexToColor3(hex: string): Color3 {
 // ─── Clase principal ──────────────────────────────────────────────────────────
 
 export class House3DBuilder {
-    private scene: Scene;
-    private camera: ArcRotateCamera | null;
-    private meshMap: Map<string, Mesh[]> = new Map();
-    private shadowGen: ShadowGenerator | null = null;
-    private warnedInvalidRooms: Set<string> = new Set();
-    private floorNodes: Map<string, TransformNode> = new Map();
+    scene: Scene;
+    camera: ArcRotateCamera | null;
+    meshMap: Map<string, Mesh[]> = new Map();
+    shadowGen: ShadowGenerator | null = null;
+    warnedInvalidRooms: Set<string> = new Set();
+    floorNodes: Map<string, TransformNode> = new Map();
 
     // Materiales estructurales cacheados (creados UNA vez)
-    private matWall!: StandardMaterial;
-    private matFloor!: StandardMaterial;
-    private matCeiling!: StandardMaterial;
-    private matGlass!: StandardMaterial;
-    private matFrame!: StandardMaterial;
-    private matCanopy!: StandardMaterial;
-    private matDoor!: StandardMaterial; // madera de puerta
-    private matPasadizoSlab!: StandardMaterial; // losa de pasadizo (voladizo/techo)
+    matWall!: StandardMaterial;
+    matFloor!: StandardMaterial;
+    matCeiling!: StandardMaterial;
+    matGlass!: StandardMaterial;
+    matFrame!: StandardMaterial;
+    matCanopy!: StandardMaterial;
+    matDoor!: StandardMaterial; // madera de puerta
+    matPasadizoSlab!: StandardMaterial; // losa de pasadizo (voladizo/techo)
 
     /** Cache de materiales por color de fixture — evita N instancias de StandardMaterial */
-    private matFixtureCache: Map<string, StandardMaterial> = new Map();
+    matFixtureCache: Map<string, StandardMaterial> = new Map();
 
     /** Cache de materiales para marcadores de escalera (entrada verde / salida amarillo) */
-    private matStairMarkerCache: Map<string, StandardMaterial> = new Map();
+    matStairMarkerCache: Map<string, StandardMaterial> = new Map();
 
     constructor(scene: Scene, camera?: ArcRotateCamera) {
         this.scene = scene;
@@ -173,7 +174,7 @@ export class House3DBuilder {
     }
 
     // ── Materiales ─────────────────────────────────────────────────────────────
-    private initMaterials() {
+    initMaterials() {
         this.matWall = this.makeMat('mat_wall', HEX_WALL, 0.0);
         this.matFloor = this.makeMat('mat_floor', HEX_FLOOR, 0.05);
         this.matCeiling = this.makeMat('mat_ceiling', HEX_CEILING, 0.0);
@@ -198,7 +199,7 @@ export class House3DBuilder {
         this.matGlass.backFaceCulling = false;
     }
 
-    private makeMat(
+    makeMat(
         name: string,
         hex: string,
         specularIntensity: number,
@@ -218,7 +219,7 @@ export class House3DBuilder {
      *   'entry' = verde suave (primer escalón — entrada)
      *   'exit'  = amarillo suave (último escalón — salida/descanso)
      */
-    private getOrCreateStairMarkerMat(type: 'entry' | 'exit'): StandardMaterial {
+    getOrCreateStairMarkerMat(type: 'entry' | 'exit'): StandardMaterial {
         const cached = this.matStairMarkerCache.get(type);
         if (cached) return cached;
 
@@ -264,7 +265,7 @@ export class House3DBuilder {
     }
 
     /** Elimina todas las luces de fixtures */
-    private disposeFixtureLights() {
+    disposeFixtureLights() {
         this.scene.lights
             .filter((l) => l.name.startsWith('light_'))
             .forEach((l) => l.dispose());
@@ -383,7 +384,7 @@ export class House3DBuilder {
             ),
         );
         (editorScene.lightSwitches || []).forEach((ls) =>
-            this.buildLightSwitch(ls, floorNode, editorScene.fixtures || [], editorScene.walls || []),
+            this.buildLightSwitch(ls, floorNode, editorScene.fixtures || [], editorScene.walls || [], editorScene.conductors ?? [], editorScene.rooms || []),
         );
         (editorScene.doors || []).forEach((d) =>
             this.buildDoor(d, editorScene.walls || [], floorNode),
@@ -437,7 +438,7 @@ export class House3DBuilder {
     }
 
     // ── Isolux ────────────────────────────────────────────────────────────────
-    private buildIsolux(
+    buildIsolux(
         result: LightingResult,
         mode: IsoluxMode = 'functional',
     ) {
@@ -524,7 +525,7 @@ export class House3DBuilder {
         this.meshMap.set('isolux', [plane]);
     }
 
-    private colorForIsoluxCell(lux: number, maxLux: number, mode: IsoluxMode) {
+    colorForIsoluxCell(lux: number, maxLux: number, mode: IsoluxMode) {
         const ratio = Math.min(1, Math.max(0, lux / Math.max(maxLux, 1)));
 
         if (mode === 'temperature') {
@@ -545,7 +546,7 @@ export class House3DBuilder {
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
-    private waveStrokeColor(level: number, maxLux: number) {
+    waveStrokeColor(level: number, maxLux: number) {
         const ratio = Math.min(1, Math.max(0, level / Math.max(maxLux, 1)));
         const hue = 205 - ratio * 28;
         const saturation = 90 - ratio * 12;
@@ -553,7 +554,7 @@ export class House3DBuilder {
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
-    private sanitizeRoomShape(room: Room): Vector3[] {
+    sanitizeRoomShape(room: Room): Vector3[] {
         const uniqueVertices = room.vertices.filter((vertex, index, array) => {
             const previous =
                 index === 0 ? array[array.length - 1] : array[index - 1];
@@ -587,7 +588,7 @@ export class House3DBuilder {
         );
     }
 
-    private getRoomBounds(room: Room) {
+    getRoomBounds(room: Room) {
         const xs = room.vertices.map((vertex) => vertex.x);
         const ys = room.vertices.map((vertex) => vertex.y);
 
@@ -604,7 +605,7 @@ export class House3DBuilder {
      * Usa la dirección miter en cada esquina calculada a partir de las normales de los segmentos,
      * detectando correctamente la orientación (winding) del polígono.
      */
-    private expandPolygonShape(shape: Vector3[], amount: number): Vector3[] {
+    expandPolygonShape(shape: Vector3[], amount: number): Vector3[] {
         const n = shape.length;
         if (n < 3) return shape;
 
@@ -673,7 +674,7 @@ export class House3DBuilder {
         });
     }
 
-    private pointInRoom(room: Room, x: number, y: number): boolean {
+    pointInRoom(room: Room, x: number, y: number): boolean {
         let inside = false;
         const vertices = room.vertices;
 
@@ -692,7 +693,7 @@ export class House3DBuilder {
         return inside;
     }
 
-    private resolveFixtureRoomHeight(
+    resolveFixtureRoomHeight(
         fixture: Fixture,
         rooms: Room[],
         roomHeights: Map<string, number>,
@@ -706,7 +707,7 @@ export class House3DBuilder {
         return room ? roomHeights.get(room.id) : undefined;
     }
 
-    private resolveDisplayElevations(
+    resolveDisplayElevations(
         floors: EditorScene[],
         showRoof: boolean,
     ): Map<string, number> {
@@ -731,7 +732,7 @@ export class House3DBuilder {
         return displayElevations;
     }
 
-    private resolveSceneStackHeight(
+    resolveSceneStackHeight(
         editorScene: EditorScene,
         showRoof: boolean,
     ): number {
@@ -761,7 +762,7 @@ export class House3DBuilder {
         return Math.max(0.05, roomHeight);
     }
 
-    private resolveStairHeight(room: Room): number {
+    resolveStairHeight(room: Room): number {
         const cfg = room.stairConfig;
         const startElevation = cfg?.startElevation ?? 0;
 
@@ -784,7 +785,7 @@ export class House3DBuilder {
         );
     }
 
-    private getRoomStairHoles(room: Room, rooms: Room[]): Vector3[][] {
+    getRoomStairHoles(room: Room, rooms: Room[]): Vector3[][] {
         return rooms
             .filter((candidate) => candidate.roomType === 'stair')
             .filter((candidate) => candidate.id !== room.id)
@@ -798,7 +799,7 @@ export class House3DBuilder {
             .filter((hole) => hole.length >= 3);
     }
 
-    private getRoomCenter(room: Room): { x: number; y: number } {
+    getRoomCenter(room: Room): { x: number; y: number } {
         return {
             x:
                 room.vertices.reduce((sum, vertex) => sum + vertex.x, 0) /
@@ -809,7 +810,7 @@ export class House3DBuilder {
         };
     }
 
-    private isEdgeSharedWithOtherRoom(
+    isEdgeSharedWithOtherRoom(
         v1: { x: number; z: number },
         v2: { x: number; z: number },
         myRoomId: string,
@@ -870,7 +871,7 @@ export class House3DBuilder {
         return false;
     }
 
-    private buildRoomFallback(
+    buildRoomFallback(
         room: Room,
         meshes: Mesh[],
         showRoof: boolean,
@@ -892,34 +893,32 @@ export class House3DBuilder {
         floor.receiveShadows = true;
         meshes.push(floor);
 
-        // Paredes perimetrales también en fallback (para Recinto)
+        // Paredes perimetrales también en fallback (para Recinto y Pasadizo)
         const WALL_THICKNESS = 0.2;
-        if (room.roomType !== 'corridor') {
-            const verts = room.vertices;
-            for (let i = 0; i < verts.length; i++) {
-                const v1 = verts[i];
-                const v2 = verts[(i + 1) % verts.length];
-                const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
-                if (segLen < 0.01) continue;
-                const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
-                const cx = (v1.x + v2.x) / 2;
-                const cz = (v1.y + v2.y) / 2;
-                const wallBox = MeshBuilder.CreateBox(
-                    `recinto_wall_fb_${room.id}_${i}`,
-                    {
-                        width: segLen + WALL_THICKNESS,
-                        height: ceilingHeight,
-                        depth: WALL_THICKNESS,
-                    },
-                    this.scene,
-                );
-                wallBox.position.set(cx, ceilingHeight / 2, cz);
-                wallBox.rotation.y = -angle;
-                wallBox.material = this.matWall;
-                wallBox.receiveShadows = true;
-                this.shadowGen?.addShadowCaster(wallBox);
-                meshes.push(wallBox);
-            }
+        const verts = room.vertices;
+        for (let i = 0; i < verts.length; i++) {
+            const v1 = verts[i];
+            const v2 = verts[(i + 1) % verts.length];
+            const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+            if (segLen < 0.01) continue;
+            const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+            const cx = (v1.x + v2.x) / 2;
+            const cz = (v1.y + v2.y) / 2;
+            const wallBox = MeshBuilder.CreateBox(
+                `recinto_wall_fb_${room.id}_${i}`,
+                {
+                    width: segLen + WALL_THICKNESS,
+                    height: ceilingHeight,
+                    depth: WALL_THICKNESS,
+                },
+                this.scene,
+            );
+            wallBox.position.set(cx, ceilingHeight / 2, cz);
+            wallBox.rotation.y = -angle;
+            wallBox.material = this.matWall;
+            wallBox.receiveShadows = true;
+            this.shadowGen?.addShadowCaster(wallBox);
+            meshes.push(wallBox);
         }
 
         if (showRoof) {
@@ -934,30 +933,27 @@ export class House3DBuilder {
             meshes.push(ceiling);
 
             // Borde perimetral del techo para cubrir paredes en fallback
-            if (room.roomType !== 'corridor') {
-                const verts = room.vertices;
-                for (let i = 0; i < verts.length; i++) {
-                    const v1 = verts[i];
-                    const v2 = verts[(i + 1) % verts.length];
-                    const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
-                    if (segLen < 0.01) continue;
-                    const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
-                    const cx = (v1.x + v2.x) / 2;
-                    const cz = (v1.y + v2.y) / 2;
-                    const roofEdge = MeshBuilder.CreateBox(
-                        `recinto_roof_edge_fb_${room.id}_${i}`,
-                        {
-                            width: segLen + WALL_THICKNESS,
-                            height: 0.2,
-                            depth: WALL_THICKNESS,
-                        },
-                        this.scene,
-                    );
-                    roofEdge.position.set(cx, ceilingHeight + 0.1, cz);
-                    roofEdge.rotation.y = -angle;
-                    roofEdge.material = this.matCeiling;
-                    meshes.push(roofEdge);
-                }
+            for (let i = 0; i < verts.length; i++) {
+                const v1 = verts[i];
+                const v2 = verts[(i + 1) % verts.length];
+                const segLen = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+                if (segLen < 0.01) continue;
+                const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+                const cx = (v1.x + v2.x) / 2;
+                const cz = (v1.y + v2.y) / 2;
+                const roofEdge = MeshBuilder.CreateBox(
+                    `recinto_roof_edge_fb_${room.id}_${i}`,
+                    {
+                        width: segLen + WALL_THICKNESS,
+                        height: 0.2,
+                        depth: WALL_THICKNESS,
+                    },
+                    this.scene,
+                );
+                roofEdge.position.set(cx, ceilingHeight + 0.1, cz);
+                roofEdge.rotation.y = -angle;
+                roofEdge.material = this.matCeiling;
+                meshes.push(roofEdge);
             }
         }
     }
@@ -975,7 +971,7 @@ export class House3DBuilder {
      *     - cara inferior = position.y
      *     - cara superior = position.y + depth
      */
-    private buildRoom(
+    buildRoom(
         room: Room,
         showRoof: boolean,
         ceilingHeight: number = room.height,
@@ -1883,7 +1879,7 @@ export class House3DBuilder {
         });
     }
 
-    private getAperturesForSegment(
+    getAperturesForSegment(
         v1: { x: number; y: number },
         v2: { x: number; y: number },
         allWindows: Window[],
@@ -2016,7 +2012,7 @@ export class House3DBuilder {
         return aps.sort((a, b) => a.localOffset - b.localOffset);
     }
 
-    private buildWallSegment(
+    buildWallSegment(
         idPrefix: string,
         v1: { x: number; y: number },
         v2: { x: number; y: number },
@@ -2204,7 +2200,7 @@ export class House3DBuilder {
      * Construye una partición (tabique ligero/cubículo).
      * Reutiliza `buildWallSegment` para poder insertar puertas de partición.
      */
-    private buildPartition(
+    buildPartition(
         partition: Partition,
         allDoors: Door[] = [],
         floorNode?: TransformNode,
@@ -2307,7 +2303,7 @@ export class House3DBuilder {
      * Construye una pared como una o varias cajas.
      * Cuando hay ventanas: divide en segmentos para crear los huecos.
      */
-    private buildWall(
+    buildWall(
         wall: Wall,
         allWindows: Window[],
         _allDoors: Door[] = [],
@@ -2498,7 +2494,28 @@ export class House3DBuilder {
     }
 
     /** Crea una caja orientada para pared */
-    private createWallBox(
+    createPolygon(
+        name: string,
+        length: number,
+        height: number,
+        thickness: number,
+        _x: number,
+        yCenter: number,
+    ): Mesh {
+        const box = MeshBuilder.CreateBox(
+            name,
+            {
+                width: length,
+                height,
+                depth: thickness,
+            },
+            this.scene,
+        );
+        box.position.y = yCenter;
+        return box;
+    }
+
+    createWallBox(
         name: string,
         length: number,
         height: number,
@@ -2520,7 +2537,7 @@ export class House3DBuilder {
     }
 
     /** Posiciona una caja de pared en el centro de la pared */
-    private positionWallBox(
+    positionWallBox(
         mesh: Mesh,
         cx: number,
         cz: number,
@@ -2531,7 +2548,7 @@ export class House3DBuilder {
         mesh.rotation.y = -angleRad;
     }
 
-    private getWallVertices(wall: Wall) {
+    getWallVertices(wall: Wall) {
         return wall.vertices.length >= 2 ? wall.vertices : [];
     }
 
@@ -2539,7 +2556,7 @@ export class House3DBuilder {
      * Retorna el punto y ángulo en la polilínea de pared a un offset (m) desde el inicio.
      * Recibe el array de vértices ya calculado para el segmento actual.
      */
-    private getPointAtOffset(
+    getPointAtOffset(
         vertices: { x: number; y: number }[],
         offsetM: number,
     ): { x: number; y: number; angle: number } {
@@ -2571,7 +2588,7 @@ export class House3DBuilder {
     }
 
     /** Posiciona una caja a un offset (metros) a lo largo de un segmento de vértices */
-    private positionWallBoxOffset(
+    positionWallBoxOffset(
         mesh: Mesh,
         vertices: { x: number; y: number }[],
         offsetM: number,
@@ -2584,7 +2601,7 @@ export class House3DBuilder {
     }
 
     // ── Voladizo (Canopy) ─────────────────────────────────────────────────────
-    private buildCanopy(
+    buildCanopy(
         canopy: Canopy,
         floorNode?: import('@babylonjs/core').TransformNode,
     ) {
@@ -2634,7 +2651,7 @@ export class House3DBuilder {
      * aquí se representa visualmente la hoja sin CSG para mantener el
      * rendimiento del sistema.
      */
-    private buildDoor(
+    buildDoor(
         door: Door,
         allWalls: Wall[],
         floorNode?: import('@babylonjs/core').TransformNode,
@@ -2751,11 +2768,13 @@ export class House3DBuilder {
     }
 
     // ── Interruptor / LightSwitch ──────────────────────────────────────────────
-    private buildLightSwitch(
+    buildLightSwitch(
         ls: LightSwitch,
         floorNode: TransformNode,
         fixtures: Fixture[],
         walls: Wall[] = [],
+        conductors: Conductor[] = [],
+        rooms: Room[] = [],
     ) {
         const meshes: Mesh[] = [];
 
@@ -2782,12 +2801,18 @@ export class House3DBuilder {
 
         // Orientar pegado a la pared
         let wallAngle = 0;
-        const wall = walls.find(w => w.id === ls.wallId);
-        if (wall && wall.vertices.length >= 2) {
-            let minDist = Infinity;
-            for (let i = 0; i < wall.vertices.length - 1; i++) {
-                const v1 = wall.vertices[i];
-                const v2 = wall.vertices[i + 1];
+        let wallThickness = 0.15; // default
+
+        // Helper to find nearest segment
+        let minDist = Infinity;
+        let bestV1: {x: number, y: number} | null = null;
+        let bestV2: {x: number, y: number} | null = null;
+
+        const checkVertices = (vertices: {x: number, y: number}[], thickness: number) => {
+            if (vertices.length < 2) return;
+            for (let i = 0; i < vertices.length - 1; i++) {
+                const v1 = vertices[i];
+                const v2 = vertices[i + 1];
                 const px = v2.x - v1.x;
                 const py = v2.y - v1.y;
                 const norm = px * px + py * py;
@@ -2800,13 +2825,36 @@ export class House3DBuilder {
                 if (dist < minDist) {
                     minDist = dist;
                     wallAngle = Math.atan2(py, px);
+                    bestV1 = v1;
+                    bestV2 = v2;
+                    wallThickness = thickness;
                 }
             }
-            body.rotation.y = -wallAngle;
-            const offsetDist = (wall.thickness / 2) + (depth / 2);
-            body.position.x = ls.x - Math.sin(wallAngle) * offsetDist;
-            body.position.z = ls.y + Math.cos(wallAngle) * offsetDist;
+        };
+
+        // Try snapping to explicit walls
+        const wall = walls.find(w => w.id === ls.wallId);
+        if (wall) {
+            checkVertices(wall.vertices, wall.thickness);
+        } else {
+            // Check all walls and room boundaries if no explicit wall ID matches
+            walls.forEach(w => checkVertices(w.vertices, w.thickness));
+            rooms.forEach(r => {
+                const closedVertices = [...r.vertices, r.vertices[0]];
+                checkVertices(closedVertices, 0.15); // standard thickness for rooms
+            });
         }
+
+        if (bestV1 && bestV2) {
+            body.rotation.y = -wallAngle;
+            // Solo aplicamos offset si esta realmente cerca del segmento
+            if (minDist < 0.25) { // 0.5m^2 dist sq
+                const offsetDist = (wallThickness / 2) + (depth / 2);
+                body.position.x = ls.x - Math.sin(wallAngle) * offsetDist;
+                body.position.z = ls.y + Math.cos(wallAngle) * offsetDist;
+            }
+        }
+
 
         // Tecla del interruptor (detalle visual)
         const rocker = MeshBuilder.CreateBox(
@@ -2828,96 +2876,95 @@ export class House3DBuilder {
         body.parent = floorNode;
         meshes.push(body);
 
-        // ── Puntos de conduit en la pared/techo (simulan el cable embutido) ──
-        // En lugar de una topología estrella, dibujamos en cadena (daisy-chain)
+        // ── Puntos de conduit (simulan el cable embutido en pared/techo o piso) ──
         const dotMat = new StandardMaterial(`mat_wire_dots_${ls.id}`, this.scene);
         dotMat.diffuseColor = new Color3(0.9, 0.2, 0.2);  // rojo
         dotMat.specularColor = new Color3(0.1, 0.1, 0.1);
 
-        if (ls.connectedFixtureIds && ls.connectedFixtureIds.length > 0) {
-            const nodes: { id: string, x: number, y: number, z: number, isSwitch: boolean }[] = [];
-            
-            // Nodo 0: Interruptor
+        // Usar Conductor si existe; si no, caer en connectedFixtureIds legacy
+        const conductor = conductors.find((c) => c.switchId === ls.id);
+        const fixtureIds = conductor?.fixtureIds ?? ls.connectedFixtureIds ?? [];
+        const routeType = conductor?.routeType ?? 'wall_ceiling';
+
+        if (fixtureIds.length > 0) {
+            type Node3D = { id: string; x: number; y: number; z: number; isSwitch: boolean };
+            const nodes: Node3D[] = [];
+
+            // Nodo 0: interruptor
             nodes.push({
                 id: ls.id,
                 x: body.position.x,
                 y: body.position.y,
                 z: body.position.z,
-                isSwitch: true
+                isSwitch: true,
             });
 
-            // Siguientes nodos: Focos en orden
-            ls.connectedFixtureIds.forEach((fId) => {
-                const fix = fixtures.find(f => f.id === fId);
+            // Nodos 1…n: luminarias en orden
+            fixtureIds.forEach((fId) => {
+                const fix = fixtures.find((f) => f.id === fId);
                 if (fix) {
                     nodes.push({
                         id: fix.id,
                         x: fix.x,
                         y: resolveFixtureRenderHeight(fix, 2.4),
                         z: fix.y,
-                        isSwitch: false
+                        isSwitch: false,
                     });
                 }
             });
 
             const DOT_R = 0.018;
+            const FLOOR_Y = 0.05; // altura del conduit en piso (5cm S.N.P.T.)
+
+            const makeDot = (name: string, x: number, y: number, z: number) => {
+                const d = MeshBuilder.CreateSphere(name, { diameter: DOT_R * 2, segments: 4 }, this.scene);
+                d.material = dotMat;
+                d.position.set(x, y, z);
+                d.parent = floorNode;
+                meshes.push(d);
+            };
 
             for (let i = 0; i < nodes.length - 1; i++) {
                 const p1 = nodes[i];
                 const p2 = nodes[i + 1];
+                const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.z - p1.z) ** 2);
+                const hSteps = Math.max(4, Math.floor(dist * 4));
 
-                if (p1.isSwitch && !p2.isSwitch) {
-                    // Segmento Switch -> Fixture (sube por la pared, luego por el techo)
-                    const STEPS = 6;
-                    // Subida por la pared
-                    for (let s = 0; s <= STEPS; s++) {
-                        const t = s / STEPS;
-                        const dotY = p1.y + t * (p2.y - p1.y);
-                        const dot = MeshBuilder.CreateSphere(
-                            `conduit_v_${ls.id}_${i}_${s}`,
-                            { diameter: DOT_R * 2, segments: 4 },
-                            this.scene,
-                        );
-                        dot.material = dotMat;
-                        dot.position.set(p1.x, dotY, p1.z);
-                        dot.parent = floorNode;
-                        meshes.push(dot);
+                if (routeType === 'floor') {
+                    // ── Ruta por piso: baja por la pared, va horizontal a nivel de piso, sube ──
+                    if (p1.isSwitch) {
+                        // Bajada desde el interruptor hasta el piso
+                        const vSteps = Math.max(3, Math.floor(p1.y * 4));
+                        for (let s = 0; s <= vSteps; s++) {
+                            const t = s / vSteps;
+                            makeDot(`cdt_fd_${ls.id}_${i}_${s}`, p1.x, p1.y - t * (p1.y - FLOOR_Y), p1.z);
+                        }
                     }
-                    // Tramo techo
-                    const STEPS2 = 8;
-                    for (let s = 1; s <= STEPS2; s++) {
-                        const t = s / STEPS2;
-                        const dotX = p1.x + t * (p2.x - p1.x);
-                        const dotZ = p1.z + t * (p2.z - p1.z);
-                        const dot = MeshBuilder.CreateSphere(
-                            `conduit_h_${ls.id}_${i}_${s}`,
-                            { diameter: DOT_R * 2, segments: 4 },
-                            this.scene,
-                        );
-                        dot.material = dotMat;
-                        dot.position.set(dotX, p2.y, dotZ);
-                        dot.parent = floorNode;
-                        meshes.push(dot);
+                    // Tramo horizontal al nivel del piso (switch o fixture anterior → base del próximo)
+                    for (let s = 1; s <= hSteps; s++) {
+                        const t = s / hSteps;
+                        makeDot(`cdt_fh_${ls.id}_${i}_${s}`, p1.x + t * (p2.x - p1.x), FLOOR_Y, p1.z + t * (p2.z - p1.z));
+                    }
+                    // Subida hasta la luminaria destino
+                    const vUpSteps = Math.max(3, Math.floor(p2.y * 4));
+                    for (let s = 1; s <= vUpSteps; s++) {
+                        const t = s / vUpSteps;
+                        makeDot(`cdt_fu_${ls.id}_${i}_${s}`, p2.x, FLOOR_Y + t * (p2.y - FLOOR_Y), p2.z);
                     }
                 } else {
-                    // Segmento Fixture -> Fixture (todo por el techo)
-                    const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
-                    const STEPS = Math.max(4, Math.floor(dist * 4)); // densidad de puntos basada en la distancia
-                    for (let s = 1; s <= STEPS; s++) {
-                        const t = s / STEPS;
-                        const dotX = p1.x + t * (p2.x - p1.x);
-                        const dotY = p1.y + t * (p2.y - p1.y);
-                        const dotZ = p1.z + t * (p2.z - p1.z);
-                        
-                        const dot = MeshBuilder.CreateSphere(
-                            `conduit_roof_${ls.id}_${i}_${s}`,
-                            { diameter: DOT_R * 2, segments: 4 },
-                            this.scene,
-                        );
-                        dot.material = dotMat;
-                        dot.position.set(dotX, dotY, dotZ);
-                        dot.parent = floorNode;
-                        meshes.push(dot);
+                    // ── Ruta por pared/techo: sube a techo, va horizontal, baja a luminaria ──
+                    if (p1.isSwitch) {
+                        // Subida por la pared desde el interruptor
+                        const vSteps = Math.max(4, Math.floor((p2.y - p1.y) * 4));
+                        for (let s = 0; s <= vSteps; s++) {
+                            const t = s / vSteps;
+                            makeDot(`cdt_wv_${ls.id}_${i}_${s}`, p1.x, p1.y + t * (p2.y - p1.y), p1.z);
+                        }
+                    }
+                    // Tramo horizontal al nivel del techo
+                    for (let s = 1; s <= hSteps; s++) {
+                        const t = s / hSteps;
+                        makeDot(`cdt_wh_${ls.id}_${i}_${s}`, p1.x + t * (p2.x - p1.x), p2.y, p1.z + t * (p2.z - p1.z));
                     }
                 }
             }
@@ -2942,6 +2989,8 @@ export class House3DBuilder {
         fixture: Fixture,
         ceilingHeight?: number,
         floorNode?: import('@babylonjs/core').TransformNode,
+        walls: Wall[] = [],
+        rooms: Room[] = [],
     ): {
         meshes: Mesh[];
         light: PointLight | SpotLight;
@@ -3099,7 +3148,72 @@ export class House3DBuilder {
             this.matFixtureCache.set(lc, matFix);
         }
         body.material = matFix;
-        body.position.set(bx, by, bz);
+        
+        // --- WALL ALIGNMENT ---
+        let fixtureWallAngle = 0;
+        let isWallMounted = false;
+        if (fixture.wallId) {
+            // Helper to find nearest segment
+            let minDist = Infinity;
+            let bestV1: {x: number, y: number} | null = null;
+            let bestV2: {x: number, y: number} | null = null;
+            let wallThickness = 0.15;
+
+            const checkVertices = (vertices: {x: number, y: number}[], thickness: number) => {
+                if (vertices.length < 2) return;
+                for (let i = 0; i < vertices.length - 1; i++) {
+                    const v1 = vertices[i];
+                    const v2 = vertices[i + 1];
+                    const px = v2.x - v1.x;
+                    const py = v2.y - v1.y;
+                    const norm = px * px + py * py;
+                    if (norm < 0.00001) continue;
+                    let u = ((bx - v1.x) * px + (bz - v1.y) * py) / norm;
+                    u = Math.max(0, Math.min(1, u));
+                    const dx = v1.x + u * px - bx;
+                    const dy = v1.y + u * py - bz;
+                    const dist = dx * dx + dy * dy;
+                    if (dist < minDist) {
+                        minDist = dist;
+                        fixtureWallAngle = Math.atan2(py, px);
+                        bestV1 = v1;
+                        bestV2 = v2;
+                        wallThickness = thickness;
+                    }
+                }
+            };
+
+            const wall = walls.find(w => w.id === fixture.wallId);
+            if (wall) {
+                checkVertices(wall.vertices, wall.thickness);
+            } else {
+                // If it's on a corridor/room edge
+                walls.forEach(w => checkVertices(w.vertices, w.thickness));
+                rooms.forEach(r => {
+                    const closedVertices = [...r.vertices, r.vertices[0]];
+                    checkVertices(closedVertices, 0.15);
+                });
+            }
+
+            if (bestV1 && bestV2 && minDist < 0.25) {
+                isWallMounted = true;
+                // Rotate the fixture so it faces outward from the wall
+                body.rotation.x = Math.PI / 2; // Flat against wall instead of ceiling
+                body.rotation.y = -fixtureWallAngle;
+                
+                const offsetDist = (wallThickness / 2);
+                body.position.set(
+                    bx - Math.sin(fixtureWallAngle) * offsetDist,
+                    by,
+                    bz + Math.cos(fixtureWallAngle) * offsetDist
+                );
+            }
+        }
+        
+        if (!isWallMounted) {
+            body.position.set(bx, by, bz);
+        }
+
         this.shadowGen?.addShadowCaster(body);
         meshes.push(body);
 
@@ -3120,8 +3234,10 @@ export class House3DBuilder {
         ) {
             const spot = new SpotLight(
                 `light_${fixture.id}`,
-                new Vector3(bx, by, bz),
-                new Vector3(0, -1, 0), // apunta hacia abajo
+                new Vector3(body.position.x, body.position.y, body.position.z),
+                isWallMounted 
+                    ? new Vector3(-Math.sin(fixtureWallAngle), 0, Math.cos(fixtureWallAngle)) 
+                    : new Vector3(0, -1, 0), // apunta hacia abajo
                 Math.PI / 3, // ángulo de apertura 60°
                 2, // exponente de caída
                 this.scene,
@@ -3134,7 +3250,7 @@ export class House3DBuilder {
         } else {
             const pt = new PointLight(
                 `light_${fixture.id}`,
-                new Vector3(bx, by, bz),
+                new Vector3(body.position.x, body.position.y, body.position.z),
                 this.scene,
             );
             pt.diffuse = lightColor;

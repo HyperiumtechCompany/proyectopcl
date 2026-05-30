@@ -1,13 +1,13 @@
-import React, { useState, useCallback } from 'react';
-import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import React, { useState, useCallback } from 'react';
+import AppLayout from '@/layouts/app-layout';
 
-import { CronogramaProps }      from './types';
-import { useCronogramaLogic }   from './helpers/useCronogramaLogic';
 import HeaderMateriales         from './components/HeaderMateriales';
 import ResumenCards             from './components/ResumenCards';
 import TablaMateriales          from './components/TablaMateriales';
+import { useCronogramaLogic }   from './helpers/useCronogramaLogic';
+import type { CronogramaProps }      from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILIDADES DE EXPORTACIÓN A EXCEL (simple CSV con BOM para UTF-8)

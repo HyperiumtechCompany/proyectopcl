@@ -5,8 +5,8 @@
  * entre el store Zustand y el backend Laravel.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ProjectNormativeConfig } from './types';
 import { useEditorStore } from './useEditorStore';
 

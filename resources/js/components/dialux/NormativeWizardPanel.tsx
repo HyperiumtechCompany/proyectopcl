@@ -23,7 +23,6 @@ import {
     XCircle,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNormativeConfig } from '@/hooks/dialux/useNormativeConfig';
 import {
     type ComplianceStatus,
     evaluateCompliance,
@@ -36,8 +35,9 @@ import {
     findBestMatchActivity,
     computeOverallStatus,
 } from '@/hooks/dialux/normativeEngine';
-import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import type { NormativeStandard } from '@/hooks/dialux/roomLighting';
+import { useEditorStore } from '@/hooks/dialux/useEditorStore';
+import { useNormativeConfig } from '@/hooks/dialux/useNormativeConfig';
 import { NormativeCompliancePanel } from './NormativeCompliancePanel';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────

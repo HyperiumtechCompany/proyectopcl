@@ -1,23 +1,28 @@
 /**
- * types.ts — Tipos de dominio del editor DIAlux
+ * types.ts Ã¢â‚¬â€ Tipos de dominio del editor DIAlux
  *
  * Separados del store para permitir:
- *   1. Importarlos sin arrastrar la lógica del store.
+ *   1. Importarlos sin arrastrar la lÃƒÂ³gica del store.
  *   2. Reutilizarlos en Rust/WASM bridge y en tests.
- *   3. Compilación más rápida (menos interdependencias).
+ *   3. CompilaciÃƒÂ³n mÃƒÂ¡s rÃƒÂ¡pida (menos interdependencias).
  */
 
-// ─── Herramientas y UI ────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Herramientas y UI Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export type DrawTool =
     | 'select' | 'room' | 'wall' | 'education-wall' | 'window' | 'door' | 'canopy' | 'corridor' | 'stair'
-    | 'partition' | 'fixture' | 'fixture-grid' | 'switch' | 'wire' | 'measure' | 'measure-area' | 'pan' | 'calibrate';
+    | 'partition' | 'fixture' | 'fixture-grid' | 'switch' | 'wire' | 'measure' | 'measure-area' | 'pan' | 'calibrate'
+    | 'elec-meter' | 'elec-main-panel' | 'elec-sub-panel'
+    | 'elec-transfer' | 'elec-arrival' | 'elec-junction-box'
+    | 'elec-earth-pit' | 'elec-facp'
+    | 'elec-outlet-floor' | 'elec-outlet-waterproof'
+    | 'elec-outlet-ceiling' | 'elec-outlet-rack';
 
 export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
 export type AngleSnapMode = 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
 
-// ─── Geometría 2D ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GeometrÃƒÂ­a 2D Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface ScaleConfig {
     unit: 'mm' | 'cm' | 'm';
@@ -51,61 +56,66 @@ export interface CorridorConfig {
     railingHeight?: number;
     /**
      * Pendiente de la rampa en porcentaje (solo para type === 'ramp').
-     * RNE permite máximo 12% para discapacitados. Default 8%.
+     * RNE permite mÃƒÂ¡ximo 12% para discapacitados. Default 8%.
      */
     rampSlope?: number;
     /**
-     * Dirección de flujo principal (ingreso/salida).
-     * Determina en qué bordes se hacen los huecos virtuales.
+     * DirecciÃƒÂ³n de flujo principal (ingreso/salida).
+     * Determina en quÃƒÂ© bordes se hacen los huecos virtuales.
      * Default: 'north' (hacia -Y en el plano).
      */
     direction?: 'north' | 'south' | 'east' | 'west';
+    /**
+     * Alias usado en algunos componentes y renderers para rampas.
+     * Se mantiene por compatibilidad con plantillas existentes.
+     */
+    rampDirection?: 'north' | 'south' | 'east' | 'west';
 }
 
-// ─── Escaleras ────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Escaleras Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /**
  * Tramo de escalera dentro de una caja de escalera.
  * Un tramo es la secuencia de escalones entre dos descansos (o entre el
- * arranque y el primer descanso / entre el último descanso y el destino).
+ * arranque y el primer descanso / entre el ÃƒÂºltimo descanso y el destino).
  */
 export interface StairFlight {
     id: string;
     /** Cantidad de escalones en este tramo */
     stepCount: number;
     /**
-     * Dirección de ascenso de este tramo vista desde arriba:
+     * DirecciÃƒÂ³n de ascenso de este tramo vista desde arriba:
      *   'north' = hacia Y negativo, 'south' = hacia Y positivo
      *   'east'  = hacia X positivo, 'west'  = hacia X negativo
      */
     direction: 'north' | 'south' | 'east' | 'west';
-    /** Si hay descanso (plataforma de giro) después de este tramo */
+    /** Si hay descanso (plataforma de giro) despuÃƒÂ©s de este tramo */
     hasLanding: boolean;
-    /** Profundidad del descanso en metros (default 1.20 — RNE mínimo) */
+    /** Profundidad del descanso en metros (default 1.20 Ã¢â‚¬â€ RNE mÃƒÂ­nimo) */
     landingDepth: number;
 }
 
 /**
- * Configuración completa de una escalera (solo cuando roomType === 'stair').
- * Sigue la normativa RNE del Perú (A.010 vivienda / A.040 educación).
+ * ConfiguraciÃƒÂ³n completa de una escalera (solo cuando roomType === 'stair').
+ * Sigue la normativa RNE del PerÃƒÂº (A.010 vivienda / A.040 educaciÃƒÂ³n).
  */
 export interface StairConfig {
     /**
      * Uso normativo que define los rangos permitidos:
-     *   'education' → RNE A.040: contrah. ≤0.17m, huella ≥0.30m, ancho ≥1.20m
-     *   'housing'   → RNE A.010: contrah. ≤0.175m, huella ≥0.28m, ancho ≥0.90m
-     *   'generic'   → Sin restricciones normativas específicas
+     *   'education' Ã¢â€ â€™ RNE A.040: contrah. Ã¢â€°Â¤0.17m, huella Ã¢â€°Â¥0.30m, ancho Ã¢â€°Â¥1.20m
+     *   'housing'   Ã¢â€ â€™ RNE A.010: contrah. Ã¢â€°Â¤0.175m, huella Ã¢â€°Â¥0.28m, ancho Ã¢â€°Â¥0.90m
+     *   'generic'   Ã¢â€ â€™ Sin restricciones normativas especÃƒÂ­ficas
      */
     normativeUse: 'education' | 'housing' | 'generic';
-    /** Dirección principal de ascenso (primer tramo) */
+    /** DirecciÃƒÂ³n principal de ascenso (primer tramo) */
     orientation: 'north' | 'south' | 'east' | 'west';
-    /** Altura de contrahuella en metros (cada escalón) */
+    /** Altura de contrahuella en metros (cada escalÃƒÂ³n) */
     riserHeight: number;
-    /** Profundidad de huella en metros (cada escalón) */
+    /** Profundidad de huella en metros (cada escalÃƒÂ³n) */
     treadDepth: number;
-    /** Ancho útil de paso en metros */
+    /** Ancho ÃƒÂºtil de paso en metros */
     stairWidth: number;
-    /** Separación libre entre tramos paralelos en metros. 0 = tramos pegados. */
+    /** SeparaciÃƒÂ³n libre entre tramos paralelos en metros. 0 = tramos pegados. */
     flightGap?: number;
     /** Muestra barandas/pasamanos en el render 3D. Default false por ahora. */
     showRailings?: boolean;
@@ -122,39 +132,46 @@ export interface StairConfig {
      */
     flights: StairFlight[];
     /**
-     * ID opcional de un Room existente que actúa como Hall/Descanso
-     * cuando el descanso es un espacio arquitectónico completo con
-     * puertas, ventanas u otra geometría (caso C del plan).
+     * ID opcional de un Room existente que actÃƒÂºa como Hall/Descanso
+     * cuando el descanso es un espacio arquitectÃƒÂ³nico completo con
+     * puertas, ventanas u otra geometrÃƒÂ­a (caso C del plan).
      */
     linkedHallId?: string;
     /**
-     * Elevación de arranque en metros (default 0).
-     * Úsalo cuando esta escalera es la segunda mitad de una escalera en U:
+     * ElevaciÃƒÂ³n de arranque en metros (default 0).
+     * ÃƒÅ¡salo cuando esta escalera es la segunda mitad de una escalera en U:
      * la Escalera 2 debe arrancar desde la altura del descanso
-     * (ej. 1.75 m si la Escalera 1 tiene 10 escalones × 0.175 m).
+     * (ej. 1.75 m si la Escalera 1 tiene 10 escalones Ãƒâ€” 0.175 m).
      */
     startElevation?: number;
     /**
-     * Si true (default), la escalera tiene una losa/base sólida bajo los escalones.
+     * Si true (default), la escalera tiene una losa/base sÃƒÂ³lida bajo los escalones.
      * Usar true para escaleras entre pisos (la losa del siguiente piso cubre la cima).
      * Usar false para escaleras simples dentro de un mismo nivel (sin losa superior).
      */
     hasBaseSlab?: boolean;
     /**
      * Si true, esta escalera conecta con el piso superior del proyecto.
-     * Afecta cómo se calcula la altura máxima en resolveSceneStackHeight:
-     * no contribuye a la elevación del siguiente piso (la escalera es un objeto
+     * Afecta cÃƒÂ³mo se calcula la altura mÃƒÂ¡xima en resolveSceneStackHeight:
+     * no contribuye a la elevaciÃƒÂ³n del siguiente piso (la escalera es un objeto
      * dentro del piso, no define su altura).
      */
     isInterFloor?: boolean;
 }
 
-/** Recinto (espacio cerrado con polígono arbitrario) */
+/** Recinto (espacio cerrado con polÃƒÂ­gono arbitrario) */
 export interface Room {
     id: string;
     name: string;
-    roomType?: 'room' | 'corridor' | 'stair';
-    /** Polígono arbitrario en metros en el plano XY de la escena */
+    /**
+     * Categoría del espacio:
+     *   'room'     → Recinto (envolvente exterior del edificio, sin iluminación propia)
+     *   'ambient'  → Ambiente interior (espacio habitable con iluminación/normativa)
+     *   'corridor' → Pasadizo (ambiente con configuración propia)
+     *   'stair'    → Escalera
+     */
+    roomType?: 'room' | 'ambient' | 'corridor' | 'stair';
+    /** PolÃƒÂ­gono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
     height: number;        // metros
     color: string;
@@ -172,18 +189,18 @@ export interface Room {
     usefulPlaneHeight?: number | null;
     marginalZone?: number | null;
     norma?: number;        // Nivel de lux requerido (EN 12464-1)
-    fixtureFlux?: number;  // Lúmenes de la luminaria seleccionada (cálculo teórico)
+    fixtureFlux?: number;  // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
     ambientConfigs?: Record<string, AmbientConfig>;
     corridorConfig?: CorridorConfig;
-    /** Configuración de escalera (solo cuando roomType === 'stair') */
+    /** ConfiguraciÃƒÂ³n de escalera (solo cuando roomType === 'stair') */
     stairConfig?: StairConfig;
-    /** Material de construcción de la envolvente del recinto (para cálculo de muros) */
+    /** Material de construcciÃƒÂ³n de la envolvente del recinto (para cÃƒÂ¡lculo de muros) */
     material?: 'brick' | 'adobe';
-    /** Uso normativo del recinto (vivienda / educación / genérico) */
+    /** Uso normativo del recinto (vivienda / educaciÃƒÂ³n / genÃƒÂ©rico) */
     normativeUse?: 'housing' | 'education' | 'generic';
 }
 
-/** Configuración normativa del proyecto (sincronizada con backend) */
+/** ConfiguraciÃƒÂ³n normativa del proyecto (sincronizada con backend) */
 export interface ProjectNormativeConfig {
     dialuxProjectId: string;
     countryCode: string;                                     // ISO 3166-1 alpha-2
@@ -198,7 +215,7 @@ export interface ProjectNormativeConfig {
     normsConsultedAt: string | null;
     disclaimer: string | null;
     notes: string | null;
-    /** Resumen del último cálculo de cumplimiento */
+    /** Resumen del ÃƒÂºltimo cÃƒÂ¡lculo de cumplimiento */
     complianceSummary: {
         totalRooms: number;
         compliantRooms: number;
@@ -208,10 +225,10 @@ export interface ProjectNormativeConfig {
     };
 }
 
-/** Pared: polilínea en planta */
+/** Pared: polilÃƒÂ­nea en planta */
 export interface Wall {
     id: string;
-    vertices: Vertex[];  // ≥ 2 puntos, en metros
+    vertices: Vertex[];  // Ã¢â€°Â¥ 2 puntos, en metros
     thickness: number;   // metros (default 0.20)
     height: number;      // metros (default 2.80)
     material?: 'brick' | 'adobe';
@@ -220,16 +237,24 @@ export interface Wall {
     mortarJointMax?: number;
     /**
      * Tipo de muro:
-     *   'interior' → tabique interior (default)
-     *   'exterior' → muro perimetral del edificio
-     *   'cerco'    → cerco perimétrico exterior (columnas + panel)
+     *   'interior' Ã¢â€ â€™ tabique interior (default)
+     *   'exterior' Ã¢â€ â€™ muro perimetral del edificio
+     *   'cerco'    Ã¢â€ â€™ cerco perimÃƒÂ©trico exterior (columnas + panel)
      */
     wallType?: 'interior' | 'exterior' | 'cerco';
     /**
      * Espaciado entre columnas/postes del cerco en metros (solo para wallType === 'cerco').
-     * Default 3.0 m (típico RNE para cerco de ladrillo con columnas).
+     * Default 3.0 m (tÃƒÂ­pico RNE para cerco de ladrillo con columnas).
      */
     postSpacing?: number;
+    /** Configuración de iluminación para paredes interiores */
+    illuminanceLux?: number;
+    normativeCategory?: string;
+    normativeSection?: string;
+    normativeActivity?: string;
+    fixtureLumens?: number;
+    fixtureType?: 'recessed' | 'surface' | 'pendant' | 'spot' | 'strip' | 'panel' | 'tube';
+    fixtureShape?: 'round' | 'square' | 'rectangular' | 'cylindrical';
 }
 
 /** Ventana colocada sobre una pared */
@@ -242,11 +267,11 @@ export interface Window {
     sillHeight: number;       // altura del antepecho en metros (default 0.90)
     windowType?: 'fixed' | 'sliding' | 'casement' | 'awning' | 'bathroom';
     windowShape?: 'rectangular' | 'arched' | 'circular';
-    /** Si true, el offset se recalcula automáticamente al centro de la pared */
+    /** Si true, el offset se recalcula automÃƒÂ¡ticamente al centro de la pared */
     centered?: boolean;
 }
 
-/** Puerta colocada sobre una pared o partición */
+/** Puerta colocada sobre una pared o particiÃƒÂ³n */
 export interface Door {
     id: string;
     wallId: string;
@@ -255,22 +280,22 @@ export interface Door {
     height: number;            // metros (default 2.10)
     /**
      * Tipo de puerta:
-     *   'single'   → puerta sencilla batiente (default)
-     *   'double'   → doble hoja
-     *   'sliding'  → corredera
-     *   'folding'  → plegable
-     *   'bathroom' → puerta de cubículo SS.HH (ancho 0.60-0.70m, gap inferior 0.15m)
-     *   'opening'  → solo vano (hueco sin panel ni marco)
+     *   'single'   Ã¢â€ â€™ puerta sencilla batiente (default)
+     *   'double'   Ã¢â€ â€™ doble hoja
+     *   'sliding'  Ã¢â€ â€™ corredera
+     *   'folding'  Ã¢â€ â€™ plegable
+     *   'bathroom' Ã¢â€ â€™ puerta de cubÃƒÂ­culo SS.HH (ancho 0.60-0.70m, gap inferior 0.15m)
+     *   'opening'  Ã¢â€ â€™ solo vano (hueco sin panel ni marco)
      */
     doorType?: 'single' | 'double' | 'sliding' | 'folding' | 'bathroom' | 'opening';
     openingDirection?: 'inward' | 'outward';
-    /** Lado donde está la bisagra: 'left' = inicio de la pared, 'right' = fin */
+    /** Lado donde estÃƒÂ¡ la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';
     openingAngle?: number;     // grados (default 90)
-    /** Si true, el offset se recalcula automáticamente al centro de la pared */
+    /** Si true, el offset se recalcula automÃƒÂ¡ticamente al centro de la pared */
     centered?: boolean;
     /**
-     * ID de la partición donde está colocada la puerta.
+     * ID de la particiÃƒÂ³n donde estÃƒÂ¡ colocada la puerta.
      * Mutuamente excluyente con wallId (se usa uno u otro).
      */
     partitionId?: string;
@@ -281,18 +306,18 @@ export interface Door {
     bottomGap?: number;
 }
 
-// ─── Particiones (Separadores SS.HH, Drywall, etc.) ─────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Particiones (Separadores SS.HH, Drywall, etc.) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 /**
- * Partición ligera: tabique que no es una pared estructural.
+ * ParticiÃƒÂ³n ligera: tabique que no es una pared estructural.
  * Casos de uso:
- *   - Cubículos de SS.HH (melamina/plástico, altura parcial)
+ *   - CubÃƒÂ­culos de SS.HH (melamina/plÃƒÂ¡stico, altura parcial)
  *   - Tabiques de drywall (piso-techo)
  *   - Mamparas de vidrio
  */
 export interface Partition {
     id: string;
-    /** Polilínea que define la línea central de la partición (≥2 puntos, metros) */
+    /** PolilÃƒÂ­nea que define la lÃƒÂ­nea central de la particiÃƒÂ³n (Ã¢â€°Â¥2 puntos, metros) */
     vertices: Vertex[];
     /** Grosor del tabique en metros */
     thickness: number;
@@ -300,20 +325,20 @@ export interface Partition {
     height: number;
     /**
      * Material / tipo constructivo:
-     *   'melamine' → melamina o PVC, grosor típico 0.018-0.025m
-     *   'drywall'  → yeso-cartón, grosor típico 0.10-0.15m
-     *   'glass'    → mampara de vidrio
-     *   'masonry'  → tabique de ladrillo ligero
+     *   'melamine' Ã¢â€ â€™ melamina o PVC, grosor tÃƒÂ­pico 0.018-0.025m
+     *   'drywall'  Ã¢â€ â€™ yeso-cartÃƒÂ³n, grosor tÃƒÂ­pico 0.10-0.15m
+     *   'glass'    Ã¢â€ â€™ mampara de vidrio
+     *   'masonry'  Ã¢â€ â€™ tabique de ladrillo ligero
      */
     partitionType: 'melamine' | 'drywall' | 'glass' | 'masonry';
     /**
-     * Si true, la partición NO llega al techo (ej: cubículo de baño).
-     * La altura efectiva está dada por `height`.
+     * Si true, la particiÃƒÂ³n NO llega al techo (ej: cubÃƒÂ­culo de baÃƒÂ±o).
+     * La altura efectiva estÃƒÂ¡ dada por `height`.
      */
     isPartialHeight: boolean;
     /**
      * Espacio libre desde el suelo hasta el inicio del tabique (metros).
-     * 0 en la mayoría de casos; 0.10-0.15 en cubículos de baño con soporte.
+     * 0 en la mayorÃƒÂ­a de casos; 0.10-0.15 en cubÃƒÂ­culos de baÃƒÂ±o con soporte.
      */
     bottomGap: number;
 }
@@ -332,7 +357,7 @@ export interface Canopy {
 export interface Fixture {
     id: string;
     name: string;
-    x: number; y: number; z: number;  // posición en metros en la escena
+    x: number; y: number; z: number;  // posiciÃƒÂ³n en metros en la escena
     lumens: number;
     power?: number;
     efficiency: number;  // 0-1, factor de aprovechamiento
@@ -343,8 +368,8 @@ export interface Fixture {
     articleNumber?: string;
     productId?: number;
     productSourceFormat?: string;
-    lightColor: string;  // hex, e.g. '#fff5e1' blanco cálido
-    wallId?: string;     // opcional: ID de la pared donde está colocada (para drag/drop)
+    lightColor: string;  // hex, e.g. '#fff5e1' blanco cÃƒÂ¡lido
+    wallId?: string;     // opcional: ID de la pared donde estÃƒÂ¡ colocada (para drag/drop)
     roomId?: string;     // opcional: ID del recinto al que pertenece
     gridGroupId?: string; // opcional: ID de grupo de grilla para conectar visualmente
     cct?: number | null;
@@ -366,6 +391,13 @@ export interface Fixture {
     productPhotoAssetId?: string | null;
     brandLogoAssetId?: string | null;
     lineDrawingAssetId?: string | null;
+    // Ã¢â€ â‚¬Ã¢â€ â‚¬ Campos del catÃƒÂ¡logo real Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
+    mountingHeight?: number;     // Altura de montaje S.N.P.T. en metros (ej: 3.50)
+    ip?: string;                 // Grado de protecciÃƒÂ³n (ej: "IP20", "IP65")
+    ik?: string;                 // Resistencia a impacto (ej: "IK02", "IK07")
+    /** SÃƒÂ­mbolo CAD asociado: 'rect_red'|'rect_green'|'rect_white'|'circle_black'|'circle_magenta'|'spot_yellow'|'spot_orange'|'emergency'|'emergency_perm' */
+    catalogSymbol?: string;
+    emergencyType?: 'none' | 'emergency' | 'permanent';
 }
 
 /** Interruptor de luz */
@@ -373,36 +405,153 @@ export interface LightSwitch {
     id: string;
     x: number;
     y: number;
-    mountingHeight: number; // Altura de montaje en metros (default 1.20m)
+    mountingHeight: number; // Altura de montaje en metros (default 1.40m)
     type: 'single' | 'double' | 'triple' | 'two-way'; // Simple, Doble, Triple, Conmutado
-    wallId?: string; // Pared donde está colocado
+    wallId?: string; // Pared donde estÃƒÂ¡ colocado
     connectedFixtureIds: string[]; // Luminarias controladas
+    label?: string; // Etiqueta visible: "S(a)", "Sc(a)", "2S(a)", etc.
 }
 
-/** Configuración para inserción de grilla de luminarias */
+/** Conductor eléctrico punto a punto */
+export interface Conductor {
+    id: string;
+    sourceId: string;              // ID origen (Interruptor, Tablero o Luminaria)
+    targetId: string;              // ID destino (Luminaria o Interruptor)
+    circuitGroupId?: string;       // ID para agrupar cables de una misma tirada
+    wireCount: number;             // Número de conductores (2, 3, 4)
+    wireLabel?: string;            // Etiqueta visible: F+N+T, 2F+T, 3F, etc.
+    routeType: 'floor' | 'wall_ceiling'; // Empotrado en piso o pared/techo
+    tubeSize: number;              // Diámetro de tubería en mm (20mm default)
+    conductorType: string;         // Tipo: "Cu LSOH", "N2XOH", etc.
+    waypoints: Array<{ x: number; y: number }>; // Puntos de ruta opcionales
+}
+
+export const CONDUCTOR_WIRE_OPTIONS = [
+    { value: 'F+N+T', label: 'F+N+T', count: 3 },
+    { value: '2F+N+T', label: '2F+N+T', count: 4 },
+    { value: '2F+2N+T', label: '2F+2N+T', count: 5 },
+    { value: '3F+N+T', label: '3F+N+T', count: 5 },
+    { value: '4F+N+T', label: '4F+N+T', count: 6 },
+    { value: '5F+N+T', label: '5F+N+T', count: 7 },
+    { value: '6F+N+T', label: '6F+N+T', count: 8 },
+    { value: 'F+T', label: 'F+T', count: 2 },
+    { value: '2F+T', label: '2F+T', count: 3 },
+    { value: '3F+T', label: '3F+T', count: 4 },
+    { value: '4F+T', label: '4F+T', count: 5 },
+    { value: '5F+T', label: '5F+T', count: 6 },
+    { value: '6F+T', label: '6F+T', count: 7 },
+    { value: '2F', label: '2F', count: 2 },
+    { value: '3F', label: '3F', count: 3 },
+    { value: '4F', label: '4F', count: 4 },
+    { value: '6F', label: '6F', count: 6 },
+] as const;
+
+// Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬ Dispositivos ElÃƒÂ©ctricos Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
+
+/**
+ * Tipo de dispositivo elÃƒÂ©ctrico insertable en plano.
+ * Cada tipo tiene su propia simbologÃƒÂ­a CAD y defaults de montaje.
+ */
+export type ElectricalDeviceType =
+    | 'meter'
+    | 'main_panel'
+    | 'sub_panel'
+    | 'transfer_switch'
+    | 'arrival_panel'
+    | 'junction_box'
+    | 'earth_pit'
+    | 'facp'
+    | 'outlet_floor'
+    | 'outlet_waterproof'
+    | 'outlet_ceiling'
+    | 'outlet_rack';
+
+/** Propiedades tecnicas especificas de cada dispositivo */
+export interface ElectricalDeviceProperties {
+    voltage?: string;
+    phases?: string;
+    boxSize?: string;
+    boxMaterial?: string;
+    circuitCount?: number;
+    current?: string;
+    breakerType?: string;
+}
+
+/** Dispositivo electrico colocado en el plano 2D */
+export interface ElectricalDevice {
+    id: string;
+    type: ElectricalDeviceType;
+    x: number;
+    y: number;
+    label: string;
+    mountingHeight: number;
+    wallId?: string;
+    connectedDeviceIds: string[];
+    connectedFixtureIds?: string[];
+    connectedSwitchIds?: string[];
+    properties: ElectricalDeviceProperties;
+    wireProps?: Record<string, {
+        wireCount: number;
+        wireLabel?: string;
+        routeType: 'floor' | 'wall_ceiling';
+        tubeSize: number;
+        conductorType: string;
+    }>;
+}
+
+/** Defaults de montaje y label por tipo de dispositivo */
+export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
+    label: string;
+    mountingHeight: number;
+    properties: ElectricalDeviceProperties;
+}> = {
+    meter:             { label: 'Medidor',    mountingHeight: 1.20, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
+    main_panel:        { label: 'TG',         mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
+    sub_panel:         { label: 'TD-01',      mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
+    transfer_switch:   { label: 'ATS',        mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
+    arrival_panel:     { label: 'T.Llegada',  mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
+    junction_box:      { label: 'C-01',       mountingHeight: 0.40, properties: { boxSize: '100x100x50', boxMaterial: 'RECTO' } },
+    earth_pit:         { label: 'PAT',        mountingHeight: 0.00, properties: {} },
+    facp:              { label: 'FACP',       mountingHeight: 1.40, properties: { voltage: '220V', phases: '1O' } },
+    outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_waterproof: { label: 'T',          mountingHeight: 1.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+};
+
+/** Caja de pase independiente (legacy Ã¢â‚¬â€ usar ElectricalDevice type=junction_box) */
+export interface JunctionBox {
+    id: string;
+    x: number;
+    y: number;
+    size: '100x100x50' | '100x55x50';
+    label?: string;
+}
+
+/** ConfiguraciÃƒÂ³n para inserciÃƒÂ³n de grilla de luminarias */
 export interface FixtureGridConfig {
-    rows: number;                       // filas de focos (≥1)
-    columns: number;                    // columnas de focos (≥1)
-    roomId: string;                     // recinto donde se coloca la grilla
+    rows: number;                       // filas de focos (Ã¢â€°Â¥1)
+    columns: number;                    // columnas de focos (Ã¢â€°Â¥1)
+    roomId?: string | null;             // recinto donde se coloca la grilla (null = usar ambientVertices directamente)
     fixtureTemplate: Partial<Fixture>;  // template para cada foco
     mountingHeight?: number;            // altura de montaje (default 2.7m)
-    ambientVertices?: Vertex[];         // vértices del ambiente derivado (si se omite, usa room.vertices)
+    ambientVertices?: Vertex[];         // vÃƒÂ©rtices del ambiente derivado (si se omite, usa room.vertices)
 }
 
-// ─── Cálculos de Iluminación (Lighting Calculations) ───────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CÃƒÂ¡lculos de IluminaciÃƒÂ³n (Lighting Calculations) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-/** Cálculo de iluminación para un recinto específico */
+/** CÃƒÂ¡lculo de iluminaciÃƒÂ³n para un recinto especÃƒÂ­fico */
 export interface RoomLightingCalculation {
     id: string;
     roomId: string;
     name: string;
     
     // Entrada: Datos del recinto
-    area: number;                    // m², calculada del polígono
+    area: number;                    // mÃ‚Â², calculada del polÃƒÂ­gono
     scaledUnit: 'mm' | 'cm' | 'm';  // unidad de medida escalada
     normaLux: number;               // 200, 300, o 500 lux (EN 12464-1)
     
-    // Paso 1: Cálculo de lúmenes requeridos
+    // Paso 1: CÃƒÂ¡lculo de lÃƒÂºmenes requeridos
     lumensRequired: number;          // ((area * normaLux) / 0.8) / 0.99
     
     // Entrada: Tipo de luminaria seleccionada
@@ -413,11 +562,11 @@ export interface RoomLightingCalculation {
     exactQuantity: number;          // lumensRequired / fixtureLumens
     roundedQuantity: number;        // CEIL(exactQuantity)
     
-    // Paso 3: Recomendación final del usuario
+    // Paso 3: RecomendaciÃƒÂ³n final del usuario
     recommendedQuantity: number;    // cantidad que el usuario finalmente considera
     
     // Resultado: Resumen
-    uniformityEstimate?: number;    // estimación de uniformidad (0-1)
+    uniformityEstimate?: number;    // estimaciÃƒÂ³n de uniformidad (0-1)
     coverage?: 'optimal' | 'insufficient' | 'excessive';
     
     // Metadata
@@ -425,26 +574,26 @@ export interface RoomLightingCalculation {
     updatedAt: string;
 }
 
-/** Colección de cálculos por módulo (cada módulo tiene al menos un recinto) */
+/** ColecciÃƒÂ³n de cÃƒÂ¡lculos por mÃƒÂ³dulo (cada mÃƒÂ³dulo tiene al menos un recinto) */
 export interface ModuleLightingCalculations {
     id: string;
     moduleName: string;
     calculations: RoomLightingCalculation[];
 }
 
-// ─── Escena ───────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Escena Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface Scene {
     id: string;
     name: string;
     /**
-     * Índice del piso: 0 = planta baja, 1 = piso 1, -1 = sótano 1, etc.
-     * Determina el orden vertical y el cálculo de elevación.
+     * ÃƒÂndice del piso: 0 = planta baja, 1 = piso 1, -1 = sÃƒÂ³tano 1, etc.
+     * Determina el orden vertical y el cÃƒÂ¡lculo de elevaciÃƒÂ³n.
      */
     floorIndex: number;
     /**
-     * Elevación del suelo de este piso en metros (respecto al nivel 0).
-     * Se recalcula automáticamente al reordenar pisos.
+     * ElevaciÃƒÂ³n del suelo de este piso en metros (respecto al nivel 0).
+     * Se recalcula automÃƒÂ¡ticamente al reordenar pisos.
      */
     floorElevation: number;
     /**
@@ -460,15 +609,19 @@ export interface Scene {
     canopies: Canopy[];
     fixtures: Fixture[];
     lightSwitches: LightSwitch[];
+    conductors?: Conductor[];
+    junctionBoxes?: JunctionBox[];
+    /** Dispositivos elÃƒÂ©ctricos: medidor, tableros, ATS, cajas de pase */
+    electricalDevices?: ElectricalDevice[];
     partitions: Partition[];
     /**
      * Visibilidad del piso en el canvas 2D y en el modelo 3D.
-     * Default: true. Cuando false, la geometría se oculta sin eliminarla.
+     * Default: true. Cuando false, la geometrÃƒÂ­a se oculta sin eliminarla.
      */
     visible?: boolean;
 }
 
-// ─── Proyecto ─────────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Proyecto Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface Project {
     id: string;
@@ -478,7 +631,7 @@ export interface Project {
     scenes: Scene[];
 }
 
-// ─── Resultados lumínicos ─────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Resultados lumÃƒÂ­nicos Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface LightingResult {
     avg_lux: number;
@@ -499,7 +652,7 @@ export interface LightingResult {
     marginal_zone?: number;
 }
 
-// ─── Entidades DXF ────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Entidades DXF Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface DxfLineEntity {
     id: string; type: 'line';

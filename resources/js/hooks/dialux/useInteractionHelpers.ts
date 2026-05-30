@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Wall, Fixture, Room, Canopy, Window, Door, LightSwitch } from './useEditorStore';
+import type { Wall, Fixture, Room, Canopy, Window, Door, LightSwitch, ElectricalDevice } from './useEditorStore';
 
 export interface CanvasPoint { x: number; y: number; }
 interface HelperOptions {
@@ -10,6 +10,7 @@ interface HelperOptions {
     windows: Window[];
     doors: Door[];
     lightSwitches: LightSwitch[];
+    electricalDevices?: ElectricalDevice[];
     sceneToCanvas: (sx: number, sy: number) => CanvasPoint;
 }
 
@@ -160,8 +161,9 @@ export function clampOpeningOffsetToWallSegment(
     return Math.max(0, Math.min(wallMaxStart, desiredStart));
 }
 
-export function useInteractionHelpers(opts: HelperOptions) {
-    const { walls, fixtures, rooms, canopies, windows, doors, lightSwitches, sceneToCanvas } = opts;
+export function useInteractionHelpers({
+    walls, fixtures, rooms, canopies, windows, doors, lightSwitches, electricalDevices = [], sceneToCanvas,
+}: HelperOptions) {
 
     const findNearestWall = useCallback(
         (cx: number, cy: number): {
@@ -353,6 +355,25 @@ export function useInteractionHelpers(opts: HelperOptions) {
         [lightSwitches, sceneToCanvas],
     );
 
+    const findNearestElectricalDevice = useCallback(
+        (cx: number, cy: number): { id: string; x: number; y: number } | null => {
+            const SNAP_DIST_PX = 20;
+            let closest: { id: string; x: number; y: number } | null = null;
+            let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
+
+            for (const dev of electricalDevices) {
+                const p = sceneToCanvas(dev.x, dev.y);
+                const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+                if (d2 < minDist) {
+                    minDist = d2;
+                    closest = { id: dev.id, x: dev.x, y: dev.y };
+                }
+            }
+            return closest;
+        },
+        [electricalDevices, sceneToCanvas],
+    );
+
     return {
         findNearestWall,
         findNearestFixture,
@@ -361,5 +382,6 @@ export function useInteractionHelpers(opts: HelperOptions) {
         findNearestWindow,
         findNearestDoor,
         findNearestLightSwitch,
+        findNearestElectricalDevice,
     };
 }

@@ -20,9 +20,9 @@
  *  - DS-024-2016-EM: Reglamento de Seguridad en Minería - MEM Perú (estructura base).
  */
 
-import type { NormativeStandard } from './roomLighting';
 import { en12464Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
 import type { RawNormativeLeaf, RawNormativeBranch } from './normativaData';
+import type { NormativeStandard } from './roomLighting';
 import type { LightingResult, Room } from './types';
 
 // ─── Tipos del Motor ──────────────────────────────────────────────────────────

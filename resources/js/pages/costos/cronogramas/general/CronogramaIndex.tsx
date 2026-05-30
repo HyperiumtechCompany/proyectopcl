@@ -1177,8 +1177,8 @@ const CronogramaIndex = ({
         const handleWheelZoom = (e: WheelEvent) => {
             e.preventDefault();
 
-            let startDate = gantt.config.start_date;
-            let endDate = gantt.config.end_date;
+            const startDate = gantt.config.start_date;
+            const endDate = gantt.config.end_date;
 
             if (!startDate || !endDate) return;
 

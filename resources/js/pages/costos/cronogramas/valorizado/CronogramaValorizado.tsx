@@ -1,14 +1,14 @@
-import React, { useState, useCallback, useRef } from 'react';
-import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import React, { useState, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { ValorizadoProps, ModoCalculo } from './types';
-import { useValorizadoLogic } from './helpers/useValorizadoLogic';
+import AppLayout from '@/layouts/app-layout';
 import HeaderValorizado from './components/HeaderValorizado';
 import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
 import { exportarExcel, exportarPDF } from './helpers/exportHelpers'; 
+import { useValorizadoLogic } from './helpers/useValorizadoLogic';
+import type { ValorizadoProps, ModoCalculo } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST

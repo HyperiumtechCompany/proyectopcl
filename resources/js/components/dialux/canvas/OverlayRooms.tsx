@@ -8,11 +8,11 @@
  */
 
 import { memo } from 'react';
-import type { Room, StairFlight } from '@/hooks/dialux/types';
 import {
     calculatePolygonArea,
     calculatePolygonPerimeter,
 } from '@/hooks/dialux/lightingCalculations';
+import type { Room, StairFlight } from '@/hooks/dialux/types';
 import { safeNum, centroid } from './canvasUtils';
 
 type ScreenFn = (p: { x: number; y: number }) => { x: number; y: number };
@@ -439,6 +439,7 @@ export const OverlayRooms = memo(function OverlayRooms({
     if (!rooms.length) return null;
 
     const recintos  = rooms.filter(r => !r.roomType || r.roomType === 'room');
+    const ambientes = rooms.filter(r => r.roomType === 'ambient');
     const pasadizos = rooms.filter(r => r.roomType === 'corridor');
     const escaleras = rooms.filter(r => r.roomType === 'stair');
 
@@ -492,6 +493,7 @@ export const OverlayRooms = memo(function OverlayRooms({
     return (
         <g className="overlay-rooms">
             {recintos.map(renderOne)}
+            {ambientes.map(renderOne)}
             {pasadizos.map(renderOne)}
             {escaleras.map(renderOne)}
         </g>

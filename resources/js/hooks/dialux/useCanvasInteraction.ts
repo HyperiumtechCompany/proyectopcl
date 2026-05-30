@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { getCanopyDraftStart } from './cadInteraction';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -10,6 +11,8 @@ import type {
     Canopy,
     Room,
     LightSwitch,
+    ElectricalDevice,
+    ElectricalDeviceType,
 } from './useEditorStore';
 import { 
     clampOpeningOffsetToWallSegment,
@@ -20,7 +23,6 @@ import {
     resolveOffsetOnWall,
 } from './useInteractionHelpers';
 import { useSnap } from './useSnap';
-import { getCanopyDraftStart } from './cadInteraction';
 
 export interface CanvasPoint {
     x: number;
@@ -57,6 +59,7 @@ interface InteractionOptions {
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => void;
+    electricalDeviceTemplate?: { type: ElectricalDeviceType; label?: string } | null;
     /** Llamado cuando el usuario cierra el polígono de medición de área */
     onMeasureAreaFinish: (vertices: CanvasPoint[]) => void;
     onSelectObject: (id: string | null, multi?: boolean) => void;
@@ -86,7 +89,10 @@ interface InteractionOptions {
     onMoveDoor:   (id: string, wallId: string, offsetAlongWall: number) => void;
     onAddLightSwitch: (x: number, y: number, wallId?: string) => void;
     onMoveLightSwitch: (id: string, x: number, y: number, wallId?: string) => void;
-    onConnectWire?: (switchId: string, fixtureId: string) => void;
+    onMoveElectricalDevice?: (id: string, x: number, y: number, wallId?: string) => void;
+    onConnectWire?: (sourceId: string, targetId: string) => void;
+    onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
+    electricalDevices?: ElectricalDevice[];
 }
 
 interface DrawState {
@@ -103,11 +109,11 @@ interface DrawState {
     calibrationStart: CanvasPoint | null;
     /** Vértices acumulados para la herramienta measure-area (metros de escena). */
     measureAreaVertices: CanvasPoint[];
-    wireStartNode: { type: 'switch' | 'fixture'; id: string } | null;
+    wireStartNode: { type: 'switch' | 'fixture' | 'device'; id: string } | null;
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
-    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | null;
+    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | 'electrical-device' | null;
 }
 
 function isWallTool(tool: string): boolean {
@@ -143,6 +149,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         canopies,
         windows,
         doors,
+        electricalDeviceTemplate,
         selectedFixtureIds,
         onMoveFixture,
         onMoveFixtures,
@@ -151,7 +158,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveWindow,
         onMoveDoor,
         onMoveLightSwitch,
+        onMoveElectricalDevice,
         onConnectWire,
+        onAddElectricalDevice,
+        electricalDevices = [],
     } = opts;
 
     /**
@@ -227,6 +237,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         findNearestWindow,
         findNearestDoor,
         findNearestLightSwitch,
+        findNearestElectricalDevice,
     } = useInteractionHelpers({
         walls,
         fixtures,
@@ -235,6 +246,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         windows,
         doors,
         lightSwitches,
+        electricalDevices,
         sceneToCanvas,
     });
 
@@ -479,36 +491,78 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
+            // ── Herramientas de dispositivos eléctricos ──────────────────────
+            if (activeTool.startsWith('elec-')) {
+                const hit = findNearestWall(cx, cy);
+                const scenePoint = canvasToScene(cx, cy);
+                if (hit) {
+                    const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                    if (wallPos) {
+                        onAddElectricalDevice?.(wallPos.x, wallPos.y, hit.wall.id);
+                    } else {
+                        onAddElectricalDevice?.(scenePoint.x, scenePoint.y);
+                    }
+                } else {
+                    onAddElectricalDevice?.(scenePoint.x, scenePoint.y);
+                }
+                return;
+            }
+
+
+
             if (activeTool === 'wire') {
-                const switchHit = findNearestLightSwitch(cx, cy);
+                const scPt = canvasToScene(cx, cy);
+
+                // ── Recoger todos los candidatos con su distancia real ──────
+                const switchHit  = findNearestLightSwitch(cx, cy);
                 const fixtureHit = findNearestFixture(cx, cy);
+                const deviceHit  = findNearestElectricalDevice(cx, cy);
 
-                if (switchHit) {
-                    if (s.wireStartNode?.type === 'fixture') {
-                        onConnectWire?.(switchHit.id, s.wireStartNode.id);
-                        // Convertir el switch en el nuevo punto de inicio para seguir cableando
-                        s.wireStartNode = { type: 'switch', id: switchHit.id };
-                    } else {
-                        s.wireStartNode = { type: 'switch', id: switchHit.id };
+                // Función helper: distancia px al nodo (ya tenemos sus coords escena)
+                const dist2Switch  = switchHit  ? (() => { const p = sceneToCanvas(switchHit.x,  switchHit.y);  return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
+                const dist2Fixture = fixtureHit ? (() => { const p = sceneToCanvas(fixtureHit.x, fixtureHit.y); return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
+                const dist2Device  = deviceHit  ? (() => { const p = sceneToCanvas(deviceHit.x,  deviceHit.y);  return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
+
+                // El candidato más cercano gana (switch 15px, fixture 18px, device 18px — reducido para no solapar)
+                const SNAP_SW  = 15 * 15;
+                const SNAP_FIX = 18 * 18;
+                const SNAP_DEV = 18 * 18;
+
+                const hasSw  = switchHit  && dist2Switch  <= SNAP_SW;
+                const hasFix = fixtureHit && dist2Fixture <= SNAP_FIX;
+                const hasDev = deviceHit  && dist2Device  <= SNAP_DEV;
+
+                // Determinar ganador: el que tenga menor distancia entre los válidos
+                type NodeHit = { kind: 'switch' | 'fixture' | 'device'; id: string; x: number; y: number; dist2: number };
+                const candidates: NodeHit[] = [];
+                if (hasSw)  candidates.push({ kind: 'switch',  id: switchHit!.id,  x: switchHit!.x,  y: switchHit!.y,  dist2: dist2Switch });
+                if (hasFix) candidates.push({ kind: 'fixture', id: fixtureHit!.id, x: fixtureHit!.x, y: fixtureHit!.y, dist2: dist2Fixture });
+                if (hasDev) candidates.push({ kind: 'device',  id: deviceHit!.id,  x: deviceHit!.x,  y: deviceHit!.y,  dist2: dist2Device });
+                candidates.sort((a, b) => a.dist2 - b.dist2);
+                const winner = candidates[0] ?? null;
+
+                if (winner) {
+                    const start = s.wireStartNode;
+
+                    if (start && start.id !== winner.id) {
+                        onConnectWire?.(start.id, winner.id);
                     }
+                    s.wireStartNode = { type: winner.kind, id: winner.id };
                     return;
                 }
 
-                if (fixtureHit) {
-                    if (s.wireStartNode?.type === 'switch') {
-                        onConnectWire?.(s.wireStartNode.id, fixtureHit.id);
-                        // No limpiar s.wireStartNode, mantener el switch seleccionado
-                        // para que el usuario pueda seguir haciendo clic en más focos.
-                    } else {
-                        s.wireStartNode = { type: 'fixture', id: fixtureHit.id };
-                    }
+                // Clic en vacío: si hay un conductor activo desde un switch, agregar waypoint
+                if (s.wireStartNode?.type === 'switch') {
+                    onAddWaypoint?.(s.wireStartNode.id, scPt.x, scPt.y);
                     return;
                 }
-                
-                // Si clicamos al vacio, cancelar
+
+                // Clic en vacío sin nada → cancelar
                 s.wireStartNode = null;
                 return;
             }
+
+
 
             if (activeTool === 'canopy') {
                 s.wallStart = getCanopyDraftStart({ x: cx, y: cy }, canvasToScene);
@@ -547,6 +601,17 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     s.dragStartScene = canvasToScene(cx, cy);
                     s.dragObjectId = switchHit.id;
                     s.dragObjectType = 'switch';
+                    return;
+                }
+
+                // Equipos eléctricos (tableros, cajas de pase, medidores, etc.)
+                const elecDeviceHit = findNearestElectricalDevice(cx, cy);
+                if (elecDeviceHit) {
+                    onSelectObject(elecDeviceHit.id);
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(cx, cy);
+                    s.dragObjectId = elecDeviceHit.id;
+                    s.dragObjectType = 'electrical-device';
                     return;
                 }
 
@@ -595,8 +660,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         },
         [
             activeTool, angleSnapMode, canvasToScene, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM,
-            findNearestWall, findNearestFixture, findNearestRoom, findNearestCanopy, findNearestWindow, findNearestDoor,
+            findNearestWall, findNearestFixture, findNearestRoom, findNearestCanopy, findNearestWindow, findNearestDoor, findNearestLightSwitch, findNearestElectricalDevice,
             onAddFixture, onCalibrationMeasure, onMeasureAreaFinish, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
+            onAddLightSwitch, onAddElectricalDevice, onConnectWire,
             closeThresholdPx,
         ],
     );
@@ -616,6 +682,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
             setCalibrationSnapPoint: (p: CanvasPoint | null) => void,
+            setTempElectricalDevice: (p: { x: number; y: number; type: ElectricalDeviceType; label: string } | null) => void,
         ) => {
             const s = stateRef.current;
             const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
@@ -675,6 +742,27 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 setCalibrationSnapPoint(canvasToScene(cx, cy));
             }
 
+            if (activeTool.startsWith('elec-') && electricalDeviceTemplate) {
+                const hit = findNearestWall(cx, cy);
+                let finalX = canvasToScene(cx, cy).x;
+                let finalY = canvasToScene(cx, cy).y;
+                if (hit) {
+                    const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                    if (wallPos) {
+                        finalX = wallPos.x;
+                        finalY = wallPos.y;
+                    }
+                }
+                setTempElectricalDevice({
+                    x: finalX,
+                    y: finalY,
+                    type: electricalDeviceTemplate.type,
+                    label: electricalDeviceTemplate.label ?? '?',
+                });
+            } else {
+                setTempElectricalDevice(null);
+            }
+
             if (isWallTool(activeTool) && s.wallVertices && s.wallVertices.length > 0) {
                 setWallPreview([...s.wallVertices, canvasToScene(cx, cy)]);
                 return;
@@ -721,6 +809,25 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     const canopy = canopies.find((c) => c.id === s.dragObjectId);
                     if (canopy) {
                         onMoveCanopy(s.dragObjectId, canopy.x1 + dxM, canopy.y1 + dyM, canopy.x2 + dxM, canopy.y2 + dyM);
+                    }
+                    s.dragStartScene = currentScene;
+                } else if (s.dragObjectType === 'electrical-device') {
+                    const dev = electricalDevices.find((d) => d.id === s.dragObjectId);
+                    if (dev) {
+                        const newX = dev.x + dxM;
+                        const newY = dev.y + dyM;
+                        // Intentar anclar a la pared más cercana
+                        const hit = findNearestWall(cx, cy);
+                        if (hit) {
+                            const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                            if (wallPos) {
+                                onMoveElectricalDevice?.(s.dragObjectId, wallPos.x, wallPos.y, hit.wall.id);
+                            } else {
+                                onMoveElectricalDevice?.(s.dragObjectId, newX, newY, hit.wall.id);
+                            }
+                        } else {
+                            onMoveElectricalDevice?.(s.dragObjectId, newX, newY, undefined);
+                        }
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'switch') {
@@ -778,7 +885,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         },
         [
             activeTool, angleSnapMode, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM, canvasToScene,
-            onPanChange, fixtures, rooms, canopies, windows, doors, walls, onMoveFixture, onMoveRoom, onMoveCanopy, onMoveWindow, onMoveDoor,
+            onPanChange, fixtures, rooms, canopies, windows, doors, walls, lightSwitches, electricalDevices,
+            onMoveFixture, onMoveFixtures, onMoveRoom, onMoveCanopy, onMoveWindow, onMoveDoor, onMoveLightSwitch, onMoveElectricalDevice,
+            findNearestWall, selectedFixtureIds,
         ],
     );
 

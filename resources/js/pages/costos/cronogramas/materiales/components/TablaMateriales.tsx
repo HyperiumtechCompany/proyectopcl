@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Filter } from 'lucide-react';
-import { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import React, { useRef } from 'react';
+import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
 interface Props {
     materiales:       Material[];

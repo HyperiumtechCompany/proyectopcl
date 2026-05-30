@@ -22,8 +22,8 @@ import {
     findBestMatchActivity,
     NORMATIVE_STANDARDS_META,
 } from '@/hooks/dialux/normativeEngine';
-import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import type { LightingResult, Room } from '@/hooks/dialux/types';
+import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import { NormativeComparisonModal } from './NormativeComparisonModal';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────

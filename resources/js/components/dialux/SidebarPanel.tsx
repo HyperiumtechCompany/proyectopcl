@@ -18,7 +18,7 @@ export const SidebarPanel: React.FC = () => {
     return (
         <aside
             id="dialux-sidebar-right"
-            className="flex w-72 min-w-0 shrink-0 flex-col overflow-hidden border-l border-gray-800/50 bg-[#13141a]"
+            className="flex w-52 min-w-0 shrink-0 flex-col overflow-hidden border-l border-gray-800/50 bg-[#13141a] md:w-60 lg:w-72"
         >
             {/* ── Tabs ─────────────────────────────────────────────────── */}
             <div className="flex shrink-0 items-stretch border-b border-gray-800/50 bg-[#0f1014]">

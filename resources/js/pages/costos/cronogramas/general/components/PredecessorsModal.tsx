@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
+import React, { useState, useEffect, useCallback } from 'react';
 
 // Importamos las funciones centralizadas del helper
 // ya no duplicamos la lógica de fechas aquí

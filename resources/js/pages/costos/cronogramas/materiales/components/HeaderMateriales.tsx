@@ -1,7 +1,7 @@
-import React from 'react';
-import { Package, Save, Trash2, ArrowLeft, Download, BarChart2 } from 'lucide-react';
 import { Link } from '@inertiajs/react';
-import { ViewMode, ResumenProyecto } from '../types';
+import { Package, Save, Trash2, ArrowLeft, Download, BarChart2 } from 'lucide-react';
+import React from 'react';
+import type { ViewMode, ResumenProyecto } from '../types';
 
 interface Props {
     project:      string;

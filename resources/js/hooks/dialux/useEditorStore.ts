@@ -28,6 +28,11 @@ export type {
     Canopy,
     Fixture,
     LightSwitch,
+    Conductor,
+    JunctionBox,
+    ElectricalDevice,
+    ElectricalDeviceType,
+    ElectricalDeviceProperties,
     FixtureGridConfig,
     RoomLightingCalculation,
     ModuleLightingCalculations,
@@ -52,13 +57,16 @@ export type {
     Partition,
     StairConfig,
     StairFlight,
+    CorridorConfig,
 } from './types';
+
 
 import {
     buildFixtureGridObjects,
     calculateCenteredOffsetOnWall,
 } from './fixtureGrid';
 import type { NormativeStandard } from './roomLighting';
+import { buildDefaultStairConfig } from './stairNorms';
 import type {
     DrawTool,
     SidebarTab,
@@ -71,6 +79,12 @@ import type {
     Door,
     Canopy,
     Fixture,
+    LightSwitch,
+    Conductor,
+    JunctionBox,
+    ElectricalDevice,
+    ElectricalDeviceType,
+    ElectricalDeviceProperties,
     FixtureGridConfig,
     RoomLightingCalculation,
     ModuleLightingCalculations,
@@ -81,9 +95,9 @@ import type {
     DxfExtents,
     ProjectNormativeConfig,
     Partition,
+    CorridorConfig,
 } from './types';
 import { getPeruWallPreset } from './wallNorms';
-import { buildDefaultStairConfig } from './stairNorms';
 
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
@@ -104,8 +118,19 @@ interface UIState {
     fixtureTemplate: Partial<Fixture>;
     windowTemplate: Partial<Window>;
     doorTemplate: Partial<Door>;
+    corridorTemplate: CorridorConfig;
+    switchTemplate: { type: LightSwitch['type']; mountingHeight: number; label?: string };
+    junctionBoxTemplate: { size: JunctionBox['size'] };
+    /** Template para el dispositivo eléctrico activo (tipo que se insertará al hacer clic) */
+    electricalDeviceTemplate: { type: ElectricalDeviceType; label?: string } | null;
     /** Tipo de muro que se creará al dibujar con la herramienta 'wall' */
     wallTypeTemplate: 'interior' | 'exterior' | 'cerco';
+    /**
+     * Tipo de espacio que se creará al dibujar con la herramienta 'room':
+     *   'room'    → Recinto (envolvente exterior, sin iluminación)
+     *   'ambient' → Ambiente interior (espacio habitable con normativa)
+     */
+    roomTypeTemplate: 'room' | 'ambient';
     /** Configuración de la grilla de focos en el panel de luz */
     fixtureGridRows: number;
     fixtureGridCols: number;
@@ -133,6 +158,13 @@ interface EditorState {
     setActiveScene: (sceneId: string) => void;
     setDefaultRoomNormativeStandard: (standard: NormativeStandard) => void;
     applyDefaultNormativeStandardToRooms: () => void;
+    applyNormativeProfileToRooms: (opts: {
+        standard: NormativeStandard;
+        normaLux: number;
+        ugrLimit?: number;
+        uniformityTarget?: number;
+        colorRenderingRa?: number;
+    }) => void;
     setProjectNormativeConfig: (config: ProjectNormativeConfig | null) => void;
     updateComplianceSummary: (summary: ProjectNormativeConfig['complianceSummary']) => void;
 
@@ -145,6 +177,7 @@ interface EditorState {
     
     // --- DXF Entities ---
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => void;
+    setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) => void;
     detectScaleFromExtents: (extents: DxfExtents) => ScaleConfig;
     applyCalibration: (
         cadDistance: number,
@@ -163,6 +196,9 @@ interface EditorState {
     addFixtureGrid: (config: FixtureGridConfig) => string[];
     addPartition: (partition: Omit<Partition, 'id'>) => string;
     addLightSwitch: (lightSwitch: Omit<LightSwitch, 'id' | 'connectedFixtureIds'>) => string;
+    addConductor: (conductor: Omit<Conductor, 'id'>) => string;
+    addJunctionBox: (box: Omit<JunctionBox, 'id'>) => string;
+    addElectricalDevice: (device: Omit<ElectricalDevice, 'id'>) => string;
 
     updateRoom: (id: string, patch: Partial<Omit<Room, 'id'>>) => void;
     updateWall: (id: string, patch: Partial<Omit<Wall, 'id'>>) => void;
@@ -173,6 +209,10 @@ interface EditorState {
     updateFixtures: (ids: string[], patch: Partial<Omit<Fixture, 'id'>>) => void;
     updatePartition: (id: string, patch: Partial<Omit<Partition, 'id'>>) => void;
     updateLightSwitch: (id: string, patch: Partial<Omit<LightSwitch, 'id'>>) => void;
+    updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
+    updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
+    updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
+    setElectricalDeviceTemplate: (type: ElectricalDeviceType, label?: string) => void;
 
     /** Reposiciona una ventana al centro de su pared */
     centerWindowOnWall: (windowId: string) => void;
@@ -201,7 +241,11 @@ interface EditorState {
     setFixtureTemplate: (t: Partial<Fixture>) => void;
     setWindowTemplate: (t: Partial<Window>) => void;
     setDoorTemplate: (t: Partial<Door>) => void;
+    setCorridorTemplate: (template: CorridorConfig) => void;
+    setSwitchTemplate: (template: { type: LightSwitch['type']; mountingHeight: number; label?: string }) => void;
+    setJunctionBoxTemplate: (template: { size: JunctionBox['size'] }) => void;
     setWallTypeTemplate: (type: 'interior' | 'exterior' | 'cerco') => void;
+    setRoomTypeTemplate: (type: 'room' | 'ambient') => void;
     setFixtureGridRows: (rows: number) => void;
     setFixtureGridCols: (cols: number) => void;
 
@@ -287,7 +331,16 @@ export const useEditorStore = create<EditorState>()(
                 width: 0.9,
                 height: 2.1,
             },
+            corridorTemplate: {
+                type: 'roof_only',
+                slabThickness: 0.2,
+                railingHeight: 1.05,
+            },
+            switchTemplate: { type: 'single', mountingHeight: 1.4, label: 'S(a)' },
+            junctionBoxTemplate: { size: '100x100x50' },
+            electricalDeviceTemplate: null,
             wallTypeTemplate: 'interior',
+            roomTypeTemplate: 'room',
             fixtureGridRows: 2,
             fixtureGridCols: 2,
             showAllFloors: false,
@@ -351,6 +404,36 @@ export const useEditorStore = create<EditorState>()(
                 };
             }),
 
+        applyNormativeProfileToRooms: (opts) =>
+            set((state) => {
+                if (!state.project) return state;
+                return {
+                    ...state,
+                    defaultRoomNormativeStandard: opts.standard,
+                    project: {
+                        ...state.project,
+                        scenes: state.project.scenes.map((scene) => ({
+                            ...scene,
+                            rooms: scene.rooms.map((room) => {
+                                // Recintos (outer shells) and stairs have no lighting — skip them
+                                const isAmbiente =
+                                    room.roomType === 'ambient' || room.roomType === 'corridor';
+                                if (!isAmbiente) return room;
+                                return {
+                                    ...room,
+                                    normativeStandard: opts.standard,
+                                    norma: opts.normaLux,
+                                    illuminanceLux: opts.normaLux,
+                                    ugrLimit: opts.ugrLimit ?? room.ugrLimit,
+                                    uniformityTarget: opts.uniformityTarget ?? room.uniformityTarget,
+                                    colorRenderingRa: opts.colorRenderingRa ?? room.colorRenderingRa,
+                                };
+                            }),
+                        })),
+                    },
+                };
+            }),
+
         // ── Scale ─────────────────────────────────────────────────────────────
         setScaleConfig: (scaleConfig, rescaleObjects = false) => {
             const normalized = normalizeScaleConfig(scaleConfig);
@@ -371,40 +454,40 @@ export const useEditorStore = create<EditorState>()(
                         prevEffective !== nextEffective
                     ) {
                         const ratio = nextEffective / prevEffective;
-                        const nextState = mutateScene(state, (s) => ({
+                        const mutated = mutateScene(state, (s) => ({
                             ...rescaleSceneEntities(s, ratio),
                             scaleConfig: normalized,
                         }));
-                        if (nextState.dxfEntities) {
-                            nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
-                        }
-                        if (nextState.dxfExtents) {
-                            nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
-                        }
-                        return nextState;
+                        return {
+                            ...state,
+                            ...mutated,
+                            dxfEntities: state.dxfEntities
+                                ? rescaleDxfEntities(state.dxfEntities, ratio)
+                                : state.dxfEntities,
+                            dxfExtents: state.dxfExtents
+                                ? rescaleDxfExtents(state.dxfExtents, ratio)
+                                : state.dxfExtents,
+                        };
                     }
                 }
 
-                return mutateScene(state, (s) => ({
-                    ...s,
-                    scaleConfig: normalized,
-                }));
+                return { ...state, ...mutateScene(state, (s) => ({ ...s, scaleConfig: normalized })) };
             });
         },
 
         rescaleScene: (ratio) => {
             if (ratio === 1) return;
-            set((state) => {
-                const nextState = mutateScene(state, (s) => rescaleSceneEntities(s, ratio));
-                if (nextState.dxfEntities) {
-                    nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
-                }
-                if (nextState.dxfExtents) {
-                    nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
-                }
-                return nextState;
-            });
+            set((state) => ({
+                ...state,
+                ...mutateScene(state, (s) => rescaleSceneEntities(s, ratio)),
+                dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
+                dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+            }));
         },
+        setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => {
+            set({ dxfEntities: entities, dxfExtents: extents ?? null });
+        },
+
         detectScaleFromExtents: (extents) => {
             // Un archivo DXF de una casa promedio en metros (ej. 20x20)
             // tendrá extents de min=0 max=20.
@@ -451,23 +534,15 @@ export const useEditorStore = create<EditorState>()(
                     prevEffective !== nextEffective
                 ) {
                     const ratio = nextEffective / prevEffective;
-                    const nextState = mutateScene(state, (s) => ({
-                        ...rescaleSceneEntities(s, ratio),
-                        scaleConfig: nextScale!,
-                    }));
-                    if (nextState.dxfEntities) {
-                        nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
-                    }
-                    if (nextState.dxfExtents) {
-                        nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
-                    }
-                    return nextState;
+                    return {
+                        ...state,
+                        ...mutateScene(state, (s) => ({ ...rescaleSceneEntities(s, ratio), scaleConfig: nextScale! })),
+                        dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
+                        dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+                    };
                 }
 
-                return mutateScene(state, (s) => ({
-                    ...s,
-                    scaleConfig: nextScale!,
-                }));
+                return { ...state, ...mutateScene(state, (s) => ({ ...s, scaleConfig: nextScale! })) };
             });
             return nextScale;
         },
@@ -494,23 +569,15 @@ export const useEditorStore = create<EditorState>()(
                     prevEffective !== nextEffective
                 ) {
                     const ratio = nextEffective / prevEffective;
-                    const nextState = mutateScene(state, (s) => ({
-                        ...rescaleSceneEntities(s, ratio),
-                        scaleConfig: nextScale!,
-                    }));
-                    if (nextState.dxfEntities) {
-                        nextState.dxfEntities = rescaleDxfEntities(nextState.dxfEntities, ratio);
-                    }
-                    if (nextState.dxfExtents) {
-                        nextState.dxfExtents = rescaleDxfExtents(nextState.dxfExtents, ratio);
-                    }
-                    return nextState;
+                    return {
+                        ...state,
+                        ...mutateScene(state, (s) => ({ ...rescaleSceneEntities(s, ratio), scaleConfig: nextScale! })),
+                        dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
+                        dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+                    };
                 }
 
-                return mutateScene(state, (s) => ({
-                    ...s,
-                    scaleConfig: nextScale!,
-                }));
+                return { ...state, ...mutateScene(state, (s) => ({ ...s, scaleConfig: nextScale! })) };
             });
             return nextScale;
         },
@@ -659,10 +726,16 @@ export const useEditorStore = create<EditorState>()(
         addFixtureGrid: (config) => {
             const scene = get().activeScene();
             if (!scene) return [];
-            const room = scene.rooms.find((r) => r.id === config.roomId);
-            if (!room) return [];
 
-            const vertices = config.ambientVertices ?? room.vertices;
+            let vertices: import('./types').Vertex[];
+            if (config.roomId) {
+                const room = scene.rooms.find((r) => r.id === config.roomId);
+                if (!room) return [];
+                vertices = config.ambientVertices ?? room.vertices;
+            } else {
+                if (!config.ambientVertices || config.ambientVertices.length < 3) return [];
+                vertices = config.ambientVertices;
+            }
             const fixtureData = buildFixtureGridObjects(
                 config,
                 vertices,
@@ -860,25 +933,171 @@ export const useEditorStore = create<EditorState>()(
             });
         },
 
+        addConductor: (conductorData) => {
+            const id = uuidv4();
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          conductors: [...(sc.conductors ?? []), { id, ...conductorData }],
+                      })),
+            );
+            return id;
+        },
+
+        updateConductor: (id, patch) => {
+            set((s) => {
+                if (!s.project || !s.activeSceneId) return s;
+                return mutateScene(s, (sc) => {
+                    const arr = sc.conductors ?? [];
+                    const idx = arr.findIndex((x) => x.id === id);
+                    if (idx < 0) return sc;
+                    const updated = [...arr];
+                    updated[idx] = { ...updated[idx], ...patch };
+                    return { ...sc, conductors: updated };
+                });
+            });
+        },
+
+        addJunctionBox: (boxData) => {
+            const id = uuidv4();
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          junctionBoxes: [...(sc.junctionBoxes ?? []), { id, ...boxData }],
+                      })),
+            );
+            return id;
+        },
+
+        updateJunctionBox: (id, patch) => {
+            set((s) => {
+                if (!s.project || !s.activeSceneId) return s;
+                return mutateScene(s, (sc) => {
+                    const arr = sc.junctionBoxes ?? [];
+                    const idx = arr.findIndex((x) => x.id === id);
+                    if (idx < 0) return sc;
+                    const updated = [...arr];
+                    updated[idx] = { ...updated[idx], ...patch };
+                    return { ...sc, junctionBoxes: updated };
+                });
+            });
+        },
+
+        addElectricalDevice: (deviceData) => {
+            const id = uuidv4();
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          electricalDevices: [
+                              ...(sc.electricalDevices ?? []),
+                              { id, ...deviceData },
+                          ],
+                      })),
+            );
+            return id;
+        },
+
+        updateElectricalDevice: (id, patch) => {
+            set((s) => {
+                if (!s.project || !s.activeSceneId) return s;
+                return mutateScene(s, (sc) => {
+                    const arr = sc.electricalDevices ?? [];
+                    const idx = arr.findIndex((x) => x.id === id);
+                    if (idx < 0) return sc;
+                    const updated = [...arr];
+                    updated[idx] = { ...updated[idx], ...patch };
+                    return { ...sc, electricalDevices: updated };
+                });
+            });
+        },
+
+        setElectricalDeviceTemplate: (type, label) =>
+            set((s) => ({ ui: { ...s.ui, electricalDeviceTemplate: { type, label } } })),
+
         // ── Remover ───────────────────────────────────────────────────────────
         removeObject: (id) => {
             set((state) => {
                 if (!state.project || !state.activeSceneId) return state;
-                const updated = mutateScene(state, (s) => ({
-                    ...s,
-                    rooms: (s.rooms || []).filter((r) => r.id !== id),
-                    walls: (s.walls || []).filter((w) => w.id !== id),
-                    windows: (s.windows || []).filter(
-                        (w) => w.id !== id && w.wallId !== id,
-                    ),
-                    doors: (s.doors || []).filter(
-                        (d) => d.id !== id && d.wallId !== id && d.partitionId !== id,
-                    ),
-                    canopies: (s.canopies || []).filter((c) => c.id !== id),
-                    fixtures: (s.fixtures || []).filter((f) => f.id !== id),
-                    lightSwitches: (s.lightSwitches || []).filter((ls) => ls.id !== id),
-                    partitions: (s.partitions ?? []).filter((p) => p.id !== id),
-                }));
+                const updated = mutateScene(state, (s) => {
+                    // Find what we're deleting for cascade logic
+                    const conductorToRemove = (s.conductors ?? []).find((c) => c.id === id);
+                    const isSwitchId = (s.lightSwitches || []).some((ls) => ls.id === id);
+                    const isDeviceId = (s.electricalDevices || []).some((ed) => ed.id === id);
+                    const isFixtureId = (s.fixtures || []).some((f) => f.id === id);
+
+                    // lightSwitches: remove target; if deleting a conductor also clear its switch's fixtureIds
+                    let lightSwitches = (s.lightSwitches || []).filter((ls) => ls.id !== id);
+                    let electricalDevices = (s.electricalDevices || []).filter((ed) => ed.id !== id);
+
+                    if (conductorToRemove) {
+                        const { sourceId, targetId } = conductorToRemove;
+                        lightSwitches = lightSwitches.map((ls) =>
+                            ls.id === sourceId || ls.id === targetId
+                                ? { ...ls, connectedFixtureIds: (ls.connectedFixtureIds || []).filter(fid => fid !== sourceId && fid !== targetId) }
+                                : ls
+                        );
+                        electricalDevices = electricalDevices.map((ed) =>
+                            ed.id === sourceId || ed.id === targetId
+                                ? { ...ed, connectedFixtureIds: (ed.connectedFixtureIds || []).filter(fid => fid !== sourceId && fid !== targetId) }
+                                : ed
+                        );
+                    }
+
+                    // conductors: remove target; if deleting a node also remove its conductors
+                    const conductors = (s.conductors ?? []).filter(
+                        (c) => c.id !== id && 
+                               !(isSwitchId && (c.sourceId === id || c.targetId === id)) &&
+                               !(isDeviceId && (c.sourceId === id || c.targetId === id)) &&
+                               !(isFixtureId && (c.sourceId === id || c.targetId === id))
+                    );
+
+                    // handle virtual wire segments deletion
+                    if (id.startsWith('wire:dev-')) {
+                        const parts = id.split(':');
+                        const type = parts[1]; // dev-fix, dev-sw, dev-dev
+                        const devId = parts[2];
+                        const targetId = parts[3];
+                        
+                        electricalDevices = electricalDevices.map((ed) => {
+                            if (ed.id !== devId) return ed;
+                            if (type === 'dev-fix') {
+                                return { ...ed, connectedFixtureIds: (ed.connectedFixtureIds ?? []).filter(fid => fid !== targetId) };
+                            }
+                            if (type === 'dev-sw') {
+                                return { ...ed, connectedSwitchIds: (ed.connectedSwitchIds ?? []).filter(sid => sid !== targetId) };
+                            }
+                            if (type === 'dev-dev') {
+                                return { ...ed, connectedDeviceIds: (ed.connectedDeviceIds ?? []).filter(did => did !== targetId) };
+                            }
+                            return ed;
+                        });
+                    }
+
+                    return {
+                        ...s,
+                        rooms: (s.rooms || []).filter((r) => r.id !== id),
+                        walls: (s.walls || []).filter((w) => w.id !== id),
+                        windows: (s.windows || []).filter(
+                            (w) => w.id !== id && w.wallId !== id,
+                        ),
+                        doors: (s.doors || []).filter(
+                            (d) => d.id !== id && d.wallId !== id && d.partitionId !== id,
+                        ),
+                        canopies: (s.canopies || []).filter((c) => c.id !== id),
+                        fixtures: (s.fixtures || []).filter((f) => f.id !== id),
+                        lightSwitches,
+                        partitions: (s.partitions ?? []).filter((p) => p.id !== id),
+                        conductors,
+                        junctionBoxes: (s.junctionBoxes ?? []).filter((jb) => jb.id !== id),
+                        electricalDevices,
+                    };
+                });
                 return {
                     ...updated,
                     ui: {
@@ -965,8 +1184,21 @@ export const useEditorStore = create<EditorState>()(
             set((s) => ({
                 ui: { ...s.ui, doorTemplate: { ...s.ui.doorTemplate, ...t } },
             })),
+        setCorridorTemplate: (template) =>
+            set((s) => ({
+                ui: {
+                    ...s.ui,
+                    corridorTemplate: { ...s.ui.corridorTemplate, ...template },
+                },
+            })),
+        setSwitchTemplate: (template) =>
+            set((s) => ({ ui: { ...s.ui, switchTemplate: { ...s.ui.switchTemplate, ...template } } })),
+        setJunctionBoxTemplate: (template) =>
+            set((s) => ({ ui: { ...s.ui, junctionBoxTemplate: { ...s.ui.junctionBoxTemplate, ...template } } })),
         setWallTypeTemplate: (type) =>
             set((s) => ({ ui: { ...s.ui, wallTypeTemplate: type } })),
+        setRoomTypeTemplate: (type) =>
+            set((s) => ({ ui: { ...s.ui, roomTypeTemplate: type } })),
         setFixtureGridRows: (rows) =>
             set((s) => ({
                 ui: { ...s.ui, fixtureGridRows: Math.max(1, rows) },
@@ -980,7 +1212,7 @@ export const useEditorStore = create<EditorState>()(
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
-        setDxfData: (entities, extents) =>
+        setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) =>
             set({ dxfEntities: entities, dxfExtents: extents }),
 
         // ── Helpers \u0026 Floor Management \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1014,6 +1246,9 @@ export const useEditorStore = create<EditorState>()(
                 doors: [],
                 canopies: [],
                 fixtures: [],
+                lightSwitches: [],
+                conductors: [],
+                junctionBoxes: [],
                 partitions: [],
                 visible: true,
             };

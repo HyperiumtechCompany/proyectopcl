@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { gantt } from 'dhtmlx-gantt';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface WorkDays {
     lunes: boolean;
@@ -193,7 +193,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             }
         });
 
-        let fechaActual = new Date(inicio);
+        const fechaActual = new Date(inicio);
         let diasAgregados = 0;
 
         // ✅ Contar el día de inicio SIN saltarlo
@@ -237,7 +237,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
             }
         });
 
-        let fecha = new Date(start);
+        const fecha = new Date(start);
         let dias = 0;
 
         // ✅ CORRECCIÓN: Contar el día de inicio también

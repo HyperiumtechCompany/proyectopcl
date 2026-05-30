@@ -1,7 +1,7 @@
-import React from 'react';
-import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Link } from '@inertiajs/react';
-import { ViewMode } from '../types';
+import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle } from 'lucide-react';
+import React from 'react';
+import type { ViewMode } from '../types';
 
 interface Props {
     project:         string;

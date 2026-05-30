@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOOK PRINCIPAL — toda la lógica de cálculo y estado de la UI

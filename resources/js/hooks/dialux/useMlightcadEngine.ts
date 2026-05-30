@@ -393,7 +393,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // â”€â”€ newDocument â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ——— newDocument —————————————————————————————————————————————————————————————————————————————————
     const newDocument = useCallback(async (): Promise<void> => {
         const dm = _docManager;
         if (!dm) {
@@ -414,7 +414,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
         }
     }, [syncDocumentState]);
 
-    // â”€â”€ safeExecute (interno) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ——— safeExecute (interno) ——————————————————————————————————————————————————————————————————————
     const safeExecute = useCallback((cmd: string): void => {
         const dm = _docManager;
         // Requiere documento activo: evita que zoomToWindow y otros comandos
@@ -453,7 +453,8 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                         Number.isFinite(view.internalCamera.zoom)
                       ? view.internalCamera.zoom
                       : null;
-            const center = view.center ?? { x: 0, y: 0 };
+            let center = { x: 0, y: 0 };
+            try { center = view.center ?? center; } catch (e) {}
 
             if (currentZoom && typeof view.flyTo === 'function') {
                 const nextZoom = Math.min(
@@ -471,7 +472,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 return;
             }
 
-            safeExecute('zoom');
+            cadWarn('Native zoom and zoomToFitDrawing not supported by this engine version');
         },
         [getCurrentView, safeExecute],
     );
@@ -479,11 +480,14 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
     const zoomAt = useCallback(
         (screenPoint: { x: number; y: number }, factor: number): void => {
             const view = getCurrentView();
+            let centerValid = false;
+            try { centerValid = !!view?.center; } catch(e) {}
+            
             if (
                 !view ||
                 typeof view.flyTo !== 'function' ||
                 typeof view.screenToWorld !== 'function' ||
-                !view.center
+                !centerValid
             ) {
                 zoomByFactor(factor);
                 return;
@@ -525,7 +529,12 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
     );
 
     // â”€â”€ Controles de vista â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const fitToView = useCallback(() => safeExecute('zoom'), [safeExecute]);
+    const fitToView = useCallback(() => {
+        const view = getCurrentView();
+        if (view && typeof view.zoomToFitDrawing === 'function') {
+            view.zoomToFitDrawing();
+        }
+    }, [getCurrentView]);
     const zoomIn = useCallback(() => zoomByFactor(1.2), [zoomByFactor]);
     const zoomOut = useCallback(() => zoomByFactor(1 / 1.2), [zoomByFactor]);
     const sendCommand = useCallback(
@@ -548,12 +557,12 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
             if (view && typeof view.setViewOrigin === 'function') {
                 view.setViewOrigin({ x: 0, y: 0 });
             } else if (view && typeof view.setCenter === 'function') {
-                // Alternativa: centrar lejos del origen para que el (0,0) quede abajo-izq
                 view.setCenter({ x: 5, y: 5 });
             }
-            // Usar comandos para asegurar que el eje Y apunta hacia arriba y
-            // el origen estÃ¡ visible en la esquina inferior-izquierda
-            safeExecute('zoom');
+            
+            if (view && typeof view.zoomToFitDrawing === 'function') {
+                view.zoomToFitDrawing();
+            }
             cadLog('setViewOrigin: first-quadrant view configured');
         } catch (e) {
             cadWarn('setViewOrigin error (non-critical):', e);

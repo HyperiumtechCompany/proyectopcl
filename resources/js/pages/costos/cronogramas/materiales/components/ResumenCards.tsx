@@ -1,5 +1,5 @@
-import React from 'react';
 import { AlertTriangle, CheckCircle2, Info, TrendingUp } from 'lucide-react';
+import React from 'react';
 
 interface CurvaSPoint {
     mes:        string;

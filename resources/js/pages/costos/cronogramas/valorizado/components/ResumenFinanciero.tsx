@@ -1,5 +1,5 @@
-import React from 'react';
 import { DollarSign, TrendingUp, Calendar, BarChart2, Zap, Info } from 'lucide-react';
+import React from 'react';
 
 interface CurvaSPoint {
     mes:          string;

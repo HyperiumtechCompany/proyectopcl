@@ -963,9 +963,19 @@ export function findAmbientSpaceAtPoint(
     point: Vertex,
 ): DerivedAmbientSpace | null {
     const ambients = deriveSceneAmbientSpaces(scene);
-    const containingAmbients = ambients.filter((ambient) =>
-        pointInPolygon(point, ambient.room.vertices),
-    );
+    const containingAmbients = ambients.filter((ambient) => {
+        if (pointInPolygon(point, ambient.room.vertices)) return true;
+        // Permitir que luminarias/interruptores colocados sobre la pared interna 
+        // pertenezcan al ambiente adyacente (tolerancia de 10cm)
+        for (let i = 0; i < ambient.room.vertices.length; i++) {
+            const a = ambient.room.vertices[i];
+            const b = ambient.room.vertices[(i + 1) % ambient.room.vertices.length];
+            if (distancePointToSegment(point, a, b) <= 0.1) {
+                return true;
+            }
+        }
+        return false;
+    });
 
     if (containingAmbients.length === 0) {
         return null;

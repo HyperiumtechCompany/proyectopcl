@@ -1,5 +1,6 @@
 import React from 'react';
-import { Partition, Vertex } from '@/hooks/dialux/types';
+import type { Partition} from '@/hooks/dialux/types';
+import { Vertex } from '@/hooks/dialux/types';
 
 interface OverlayPartitionsProps {
     partitions: Partition[];

@@ -6,23 +6,18 @@ import {
     Minimize2,
     Columns,
     ArrowRight,
-    RectangleHorizontal,
-    Zap,
-    Lightbulb,
-    Disc,
     Frame,
-    Sun,
     Upload,
     LayoutGrid,
-    Lamp,
-    Flame,
     Shield,
     Layers,
+    ToggleLeft,
+    Box,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
-import type { Fixture, Window, Door } from '@/hooks/dialux/useEditorStore';
-import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import type { CorridorConfig } from '@/hooks/dialux/types';
+import type { Fixture, Window, Door, LightSwitch, JunctionBox } from '@/hooks/dialux/useEditorStore';
+import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import * as productRoutes from '@/routes/dialux/products';
 
 interface CatalogPanelProps {
@@ -31,7 +26,9 @@ interface CatalogPanelProps {
         | 'windows'
         | 'doors'
         | 'corridors'
-        | 'architecture';
+        | 'architecture'
+        | 'switches'
+        | 'junctionboxes';
     filterBrand?: string;
     filterMaterial?: string;
     search?: string;
@@ -144,324 +141,294 @@ const toFixtureShape = (
         : 'rectangular';
 };
 
+// ── Símbolo SVG inline del catálogo (miniatura 16×16) ────────────────────────
+const CatalogSymbolIcon: React.FC<{ symbol: string }> = ({ symbol }) => {
+    switch (symbol) {
+        case 'rect_red':
+            return <svg width="16" height="10" viewBox="0 0 16 10"><rect x="1" y="1" width="14" height="8" fill="none" stroke="#ef4444" strokeWidth="1.5" /></svg>;
+        case 'rect_green':
+            return <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#22c55e" strokeWidth="1.5" /></svg>;
+        case 'rect_white':
+            return <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="#e5e7eb" strokeWidth="1.5" /></svg>;
+        case 'circle_black':
+            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#1f2937" stroke="#374151" strokeWidth="1" /></svg>;
+        case 'circle_magenta':
+            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#d946ef" strokeWidth="1.5" /></svg>;
+        case 'spot_yellow':
+            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#eab308" strokeWidth="1.5" /><line x1="7" y1="1" x2="7" y2="13" stroke="#eab308" strokeWidth="0.8" /><line x1="1" y1="7" x2="13" y2="7" stroke="#eab308" strokeWidth="0.8" /></svg>;
+        case 'spot_orange':
+            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#f97316" strokeWidth="1.5" /><line x1="7" y1="2" x2="7" y2="12" stroke="#f97316" strokeWidth="0.8" /></svg>;
+        case 'emergency':
+            return <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" fill="none" stroke="#10b981" strokeWidth="1.2" /><line x1="2" y1="2" x2="12" y2="12" stroke="#10b981" strokeWidth="1.2" /><line x1="12" y1="2" x2="2" y2="12" stroke="#10b981" strokeWidth="1.2" /></svg>;
+        case 'emergency_perm':
+            return <svg width="16" height="10" viewBox="0 0 16 10"><rect x="1" y="1" width="14" height="8" fill="none" stroke="#10b981" strokeWidth="1.2" /><text x="8" y="7" textAnchor="middle" fontSize="5" fill="#10b981">S</text></svg>;
+        default:
+            return <Circle size={13} />;
+    }
+};
+
 const fixtureCatalog: FixtureCatalogItem[] = [
+    // ── Paneles LED empotrados ────────────────────────────────────────────────
     {
-        label: 'Downlight LED 10W',
-        brand: 'Philips',
-        icon: <Circle size={13} />,
-        lumens: 800,
-        power: 10,
-        cct: '4000K',
+        label: 'Led 54W — 0.60×1.20m empotrado',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="rect_red" />,
+        lumens: 6000,
+        power: 54,
+        cct: '6500K',
         template: {
-            fixtureType: 'recessed',
-            fixtureShape: 'round',
-            lumens: 800,
-            efficiency: 0.85,
-            lightColor: '#fff5e1',
+            name: 'Led 54W 0.60×1.20m',
+            fixtureType: 'panel',
+            fixtureShape: 'rectangular',
+            lumens: 6000,
+            power: 54,
+            efficiency: 0.9,
+            lightColor: '#f0f8ff',
+            dimensions: { length: 1.2, width: 0.6, height: 0.06 },
+            mountingHeight: 3.5,
+            ip: 'IP20',
+            ik: 'IK02',
+            catalogSymbol: 'rect_red',
         },
     },
     {
-        label: 'Downlight LED 18W',
-        brand: 'Philips',
-        icon: <Circle size={13} />,
-        lumens: 1600,
-        power: 18,
-        cct: '4000K',
+        label: 'Led 36W — 0.60×0.60m empotrado',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="rect_green" />,
+        lumens: 4320,
+        power: 36,
+        cct: '6500K',
         template: {
-            fixtureType: 'recessed',
-            fixtureShape: 'round',
-            lumens: 1600,
-            efficiency: 0.88,
-            lightColor: '#fff5e1',
+            name: 'Led 36W 0.60×0.60m',
+            fixtureType: 'panel',
+            fixtureShape: 'rectangular',
+            lumens: 4320,
+            power: 36,
+            efficiency: 0.9,
+            lightColor: '#f0f8ff',
+            dimensions: { length: 0.6, width: 0.6, height: 0.06 },
+            mountingHeight: 3.5,
+            ip: 'IP20',
+            ik: 'IK02',
+            catalogSymbol: 'rect_green',
         },
     },
     {
-        label: 'Empotrado Cuadrado 15W',
-        brand: 'Osram',
-        icon: <Square size={13} />,
-        lumens: 1350,
-        power: 15,
-        cct: '3000K',
+        label: 'Led 26W — 0.20×0.20m empotrado',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="rect_white" />,
+        lumens: 2580,
+        power: 26,
+        cct: '6500K',
         template: {
-            fixtureType: 'recessed',
+            name: 'Led 26W 0.20×0.20m',
+            fixtureType: 'panel',
             fixtureShape: 'square',
-            lumens: 1350,
-            efficiency: 0.85,
-            lightColor: '#fffaeb',
+            lumens: 2580,
+            power: 26,
+            efficiency: 0.9,
+            lightColor: '#f0f8ff',
+            dimensions: { length: 0.2, width: 0.2, height: 0.05 },
+            mountingHeight: 3.5,
+            ip: 'IP20',
+            ik: 'IK02',
+            catalogSymbol: 'rect_white',
+        },
+    },
+    // ── Downlights ───────────────────────────────────────────────────────────
+    {
+        label: 'Downlight adosada 14W — D=190mm',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="circle_black" />,
+        lumens: 1508,
+        power: 14,
+        cct: '6500K',
+        template: {
+            name: 'Downlight adosada 14W',
+            fixtureType: 'surface',
+            fixtureShape: 'round',
+            lumens: 1508,
+            power: 14,
+            efficiency: 0.88,
+            lightColor: '#f0f8ff',
+            dimensions: { length: 0.19, width: 0.19, height: 0.08 },
+            mountingHeight: 3.5,
+            ip: 'IP20',
+            ik: 'IK02',
+            catalogSymbol: 'circle_black',
         },
     },
     {
-        label: 'Ojo de Buey Slim 6W',
-        brand: 'Ledvance',
-        icon: <Circle size={13} />,
-        lumens: 600,
-        power: 6,
-        cct: '4000K',
+        label: 'Downlight empotrado 21W — D=190mm',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="circle_magenta" />,
+        lumens: 2014,
+        power: 21,
+        cct: '6500K',
         template: {
+            name: 'Downlight empotrado 21W',
             fixtureType: 'recessed',
             fixtureShape: 'round',
-            lumens: 600,
-            efficiency: 0.85,
-            lightColor: '#f0f8ff',
-        },
-    },
-    {
-        label: 'Panel LED 60×60 36W',
-        brand: 'Philips',
-        icon: <LayoutGrid size={13} />,
-        lumens: 3600,
-        power: 36,
-        cct: '4000K',
-        template: {
-            fixtureType: 'panel',
-            fixtureShape: 'rectangular',
-            lumens: 3600,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-        },
-    },
-    {
-        label: 'Panel LED 120×30 40W',
-        brand: 'Osram',
-        icon: <RectangleHorizontal size={13} />,
-        lumens: 4000,
-        power: 40,
-        cct: '4000K',
-        template: {
-            fixtureType: 'panel',
-            fixtureShape: 'rectangular',
-            lumens: 4000,
-            efficiency: 0.92,
-            lightColor: '#f0f8ff',
-        },
-    },
-    {
-        label: 'Panel LED 120×60 72W',
-        brand: 'GE',
-        icon: <RectangleHorizontal size={13} />,
-        lumens: 7200,
-        power: 72,
-        cct: '4000K',
-        template: {
-            fixtureType: 'panel',
-            fixtureShape: 'rectangular',
-            lumens: 7200,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-        },
-    },
-    {
-        label: 'Regleta LED T8 18W',
-        brand: 'Ledvance',
-        icon: <Minimize2 size={13} />,
-        lumens: 1600,
-        power: 18,
-        cct: '6500K',
-        template: {
-            fixtureType: 'tube',
-            fixtureShape: 'cylindrical',
-            lumens: 1600,
-            efficiency: 0.85,
-            lightColor: '#f0f0ff',
-        },
-    },
-    {
-        label: 'Regleta LED T8 36W',
-        brand: 'Ledvance',
-        icon: <Minimize2 size={13} />,
-        lumens: 3350,
-        power: 36,
-        cct: '6500K',
-        template: {
-            fixtureType: 'tube',
-            fixtureShape: 'cylindrical',
-            lumens: 3350,
-            efficiency: 0.85,
-            lightColor: '#f0f0ff',
-        },
-    },
-    {
-        label: 'Tubo LED T5 16W',
-        brand: 'Osram',
-        icon: <Minimize2 size={13} />,
-        lumens: 2400,
-        power: 16,
-        cct: '4000K',
-        template: {
-            fixtureType: 'tube',
-            fixtureShape: 'cylindrical',
-            lumens: 2400,
+            lumens: 2014,
+            power: 21,
             efficiency: 0.88,
             lightColor: '#f0f8ff',
+            dimensions: { length: 0.19, width: 0.19, height: 0.1 },
+            mountingHeight: 3.5,
+            ip: 'IP20',
+            ik: 'IK02',
+            catalogSymbol: 'circle_magenta',
         },
     },
+    // ── Reflectores ──────────────────────────────────────────────────────────
     {
-        label: 'Foco MR16 7W',
-        brand: 'GE',
-        icon: <Zap size={13} />,
-        lumens: 500,
-        power: 7,
-        cct: '3000K',
-        template: {
-            fixtureType: 'spot',
-            fixtureShape: 'round',
-            lumens: 500,
-            efficiency: 0.85,
-            lightColor: '#fff5e1',
-        },
-    },
-    {
-        label: 'Foco GU10 5W',
-        brand: 'Philips',
-        icon: <Zap size={13} />,
-        lumens: 450,
-        power: 5,
-        cct: '3000K',
-        template: {
-            fixtureType: 'spot',
-            fixtureShape: 'round',
-            lumens: 450,
-            efficiency: 0.82,
-            lightColor: '#fff5e1',
-        },
-    },
-    {
-        label: 'Foco PAR30 12W',
-        brand: 'Cree',
-        icon: <Zap size={13} />,
-        lumens: 900,
-        power: 12,
-        cct: '3000K',
-        template: {
-            fixtureType: 'spot',
-            fixtureShape: 'round',
-            lumens: 900,
-            efficiency: 0.87,
-            lightColor: '#fff5e1',
-        },
-    },
-    {
-        label: 'Plafón Circular 24W',
-        brand: 'Ledvance',
-        icon: <Sun size={13} />,
-        lumens: 2400,
-        power: 24,
-        cct: '4000K',
-        template: {
-            fixtureType: 'surface',
-            fixtureShape: 'round',
-            lumens: 2400,
-            efficiency: 0.85,
-            lightColor: '#fff5e1',
-        },
-    },
-    {
-        label: 'Aplique de Pared 15W',
-        brand: 'Zumtobel',
-        icon: <Lamp size={13} />,
-        lumens: 1200,
-        power: 15,
-        cct: '3000K',
-        template: {
-            fixtureType: 'surface',
-            fixtureShape: 'rectangular',
-            lumens: 1200,
-            efficiency: 0.8,
-            lightColor: '#fff5e1',
-        },
-    },
-    {
-        label: 'Lum. Hermética IP65 36W',
-        brand: 'Osram',
-        icon: <Shield size={13} />,
-        lumens: 3600,
-        power: 36,
+        label: 'Reflector 330W — 38500lm adosado',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="spot_yellow" />,
+        lumens: 38500,
+        power: 330,
         cct: '6500K',
         template: {
+            name: 'Reflector 330W',
+            fixtureType: 'spot',
+            fixtureShape: 'round',
+            lumens: 38500,
+            power: 330,
+            efficiency: 0.9,
+            lightColor: '#fefce8',
+            dimensions: { length: 0.4, width: 0.4, height: 0.2 },
+            mountingHeight: 4.5,
+            ip: 'IP65',
+            ik: 'IK07',
+            catalogSymbol: 'spot_yellow',
+        },
+    },
+    {
+        label: 'Reflector 51W — 6505lm empotrado',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="spot_orange" />,
+        lumens: 6505,
+        power: 51,
+        cct: '6500K',
+        template: {
+            name: 'Reflector 51W',
+            fixtureType: 'recessed',
+            fixtureShape: 'round',
+            lumens: 6505,
+            power: 51,
+            efficiency: 0.88,
+            lightColor: '#fefce8',
+            dimensions: { length: 0.2, width: 0.2, height: 0.15 },
+            mountingHeight: 3.2,
+            ip: 'IP42',
+            ik: 'IK02',
+            catalogSymbol: 'spot_orange',
+        },
+    },
+    // ── Emergencia ───────────────────────────────────────────────────────────
+    {
+        label: 'Emergencia 20W — IP42 IK07',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="emergency" />,
+        lumens: 700,
+        power: 20,
+        cct: '6500K',
+        template: {
+            name: 'Emergencia 20W',
             fixtureType: 'surface',
             fixtureShape: 'rectangular',
-            lumens: 3600,
+            lumens: 700,
+            power: 20,
             efficiency: 0.85,
-            lightColor: '#f0f8ff',
+            lightColor: '#d1fae5',
+            dimensions: { length: 0.3, width: 0.12, height: 0.06 },
+            mountingHeight: 3.0,
+            ip: 'IP42',
+            ik: 'IK07',
+            catalogSymbol: 'emergency',
+            emergencyType: 'emergency',
         },
     },
     {
-        label: 'Colgante Catenario 40W',
-        brand: 'Zumtobel',
-        icon: <Lightbulb size={13} />,
-        lumens: 5500,
-        power: 40,
-        cct: '3000K',
+        label: 'Emergencia permanente — 0.37×0.20m',
+        brand: 'Catálogo',
+        icon: <CatalogSymbolIcon symbol="emergency_perm" />,
+        lumens: 400,
+        power: 8,
+        cct: '6500K',
         template: {
-            fixtureType: 'pendant',
-            fixtureShape: 'round',
-            lumens: 5500,
+            name: 'Emergencia permanente',
+            fixtureType: 'surface',
+            fixtureShape: 'rectangular',
+            lumens: 400,
+            power: 8,
             efficiency: 0.85,
-            lightColor: '#fff5e1',
+            lightColor: '#d1fae5',
+            dimensions: { length: 0.37, width: 0.20, height: 0.06 },
+            mountingHeight: 3.5,
+            ip: 'IP42',
+            ik: 'IK07',
+            catalogSymbol: 'emergency_perm',
+            emergencyType: 'permanent',
         },
     },
+];
+
+// ── Catálogo de interruptores ─────────────────────────────────────────────────
+
+interface SwitchCatalogItem {
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+    switchLabel: string;
+    type: LightSwitch['type'];
+}
+
+const switchCatalog: SwitchCatalogItem[] = [
     {
-        label: 'Campana LED 100W',
-        brand: 'Cree',
-        icon: <Flame size={13} />,
-        lumens: 13000,
-        power: 100,
-        cct: '5000K',
-        template: {
-            fixtureType: 'pendant',
-            fixtureShape: 'round',
-            lumens: 13000,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-        },
+        label: 'Interruptor simple',
+        description: 'S(a) — Altura 1.40m',
+        icon: <ToggleLeft size={13} />,
+        switchLabel: 'S(a)',
+        type: 'single',
     },
     {
-        label: 'Campana LED 200W',
-        brand: 'GE',
-        icon: <Flame size={13} />,
-        lumens: 26000,
-        power: 200,
-        cct: '5000K',
-        template: {
-            fixtureType: 'pendant',
-            fixtureShape: 'round',
-            lumens: 26000,
-            efficiency: 0.92,
-            lightColor: '#f0f8ff',
-        },
+        label: 'Interruptor conmutador',
+        description: 'Sc(a) — Altura 1.40m',
+        icon: <ToggleLeft size={13} className="text-violet-400" />,
+        switchLabel: 'Sc(a)',
+        type: 'two-way',
     },
     {
-        label: 'Tira LED 14.4W/m',
-        brand: 'Philips',
-        icon: <Disc size={13} />,
-        lumens: 1100,
-        power: 14.4,
-        cct: '4000K',
-        template: {
-            fixtureType: 'strip',
-            fixtureShape: 'rectangular',
-            lumens: 1100,
-            efficiency: 0.9,
-            lightColor: '#fff5e1',
-        },
+        label: 'Interruptor doble bipolar',
+        description: '2S(a) — Altura 1.40m',
+        icon: <ToggleLeft size={13} className="text-sky-400" />,
+        switchLabel: '2S(a)',
+        type: 'double',
+    },
+];
+
+// ── Catálogo de cajas de pase ─────────────────────────────────────────────────
+
+interface JunctionBoxCatalogItem {
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+    size: JunctionBox['size'];
+}
+
+const junctionBoxCatalog: JunctionBoxCatalogItem[] = [
+    {
+        label: 'Caja de pase 100×100×50',
+        description: 'Para empalmes de alumbrado',
+        icon: <Box size={13} />,
+        size: '100x100x50',
     },
     {
-        label: 'Lineal Pasillo IP65 24W',
-        brand: 'Ledvance',
-        icon: <Minimize2 size={13} />,
-        lumens: 2400,
-        power: 24,
-        cct: '4000K',
-        template: {
-            name: 'Lineal Pasillo IP65 24W',
-            fixtureType: 'strip',
-            fixtureShape: 'rectangular',
-            lumens: 2400,
-            power: 24,
-            efficiency: 0.88,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 1.2, width: 0.08, height: 0.04 },
-        },
+        label: 'Caja de pase 100×55×50',
+        description: 'Para tomacorrientes / interruptores',
+        icon: <Box size={13} className="text-sky-400" />,
+        size: '100x55x50',
     },
 ];
 
@@ -769,10 +736,10 @@ const corridorCatalog: CorridorCatalogItem[] = [
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
-const isFixtureMatch = (a?: Partial<Fixture>, b?: Partial<Fixture>) =>
-    a?.fixtureType === b?.fixtureType &&
-    a?.fixtureShape === b?.fixtureShape &&
-    a?.lumens === b?.lumens;
+const isFixtureMatch = (a?: Partial<Fixture>, b?: Partial<Fixture>) => {
+    if (a?.catalogSymbol && b?.catalogSymbol) return a.catalogSymbol === b.catalogSymbol;
+    return a?.fixtureType === b?.fixtureType && a?.fixtureShape === b?.fixtureShape && a?.lumens === b?.lumens;
+};
 
 const isWindowMatch = (a?: Partial<Window>, b?: Partial<Window>) =>
     a?.windowType === b?.windowType &&
@@ -816,6 +783,8 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     const [fixturePage, setFixturePage] = useState(1);
 
     const showFixtures = filterCategory === 'luminaires' || !filterCategory;
+    const showSwitches = filterCategory === 'switches' || !filterCategory;
+    const showJunctionBoxes = filterCategory === 'junctionboxes' || !filterCategory;
     const showCorridors =
         filterCategory === 'corridors' ||
         filterCategory === 'architecture' ||
@@ -874,6 +843,14 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
 
         return true;
     });
+
+    const filteredSwitches = switchCatalog.filter((item) =>
+        !search || item.label.toLowerCase().includes(search.toLowerCase()),
+    );
+
+    const filteredJunctionBoxes = junctionBoxCatalog.filter((item) =>
+        !search || item.label.toLowerCase().includes(search.toLowerCase()),
+    );
 
     const loadProducts = useCallback(async () => {
         setIsLoadingProducts(true);
@@ -961,6 +938,18 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
             power: item.template.power ?? item.power,
         });
         store.setTool('fixture');
+        onSelect?.();
+    };
+
+    const setSwitch = (item: SwitchCatalogItem) => {
+        store.setSwitchTemplate({ type: item.type, mountingHeight: 1.4, label: item.switchLabel });
+        store.setTool('switch');
+        onSelect?.();
+    };
+
+    const setJunctionBox = (item: JunctionBoxCatalogItem) => {
+        store.setJunctionBoxTemplate({ size: item.size });
+        store.setTool('wire');
         onSelect?.();
     };
 
@@ -1506,8 +1495,84 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                 </div>
             )}
 
+            {/* ── Interruptores ── */}
+            {showFixtures && showSwitches && (
+                <div className="my-1 border-t border-gray-700/40" />
+            )}
+            {showSwitches && (
+                <div className="space-y-0.5">
+                    <p className="mb-1 px-1 text-[8px] font-semibold tracking-widest text-violet-500/80 uppercase">
+                        Interruptores ({filteredSwitches.length})
+                    </p>
+                    {filteredSwitches.map((item, i) => {
+                        const isActive = store.ui.switchTemplate?.type === item.type;
+                        return (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => setSwitch(item)}
+                                className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
+                                    isActive
+                                        ? 'bg-violet-900/30 text-violet-300 ring-1 ring-violet-600/30'
+                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                }`}
+                            >
+                                <span className={`shrink-0 font-bold text-[11px] w-8 text-center ${isActive ? 'text-violet-300' : 'text-gray-500'}`}>
+                                    {item.switchLabel}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[11px] leading-tight">{item.label}</p>
+                                    <p className="text-[9px] leading-none text-gray-600">{item.description}</p>
+                                </div>
+                                {isActive && (
+                                    <span className="shrink-0 rounded bg-violet-900/50 px-1 py-0.5 text-[8px] text-violet-400">●</span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* ── Cajas de pase ── */}
+            {showSwitches && showJunctionBoxes && (
+                <div className="my-1 border-t border-gray-700/40" />
+            )}
+            {showJunctionBoxes && (
+                <div className="space-y-0.5">
+                    <p className="mb-1 px-1 text-[8px] font-semibold tracking-widest text-orange-500/80 uppercase">
+                        Cajas de pase ({filteredJunctionBoxes.length})
+                    </p>
+                    {filteredJunctionBoxes.map((item, i) => {
+                        const isActive = store.ui.junctionBoxTemplate?.size === item.size;
+                        return (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => setJunctionBox(item)}
+                                className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
+                                    isActive
+                                        ? 'bg-orange-900/30 text-orange-300 ring-1 ring-orange-600/30'
+                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                }`}
+                            >
+                                <span className={`shrink-0 ${isActive ? 'text-orange-400' : 'text-gray-500'}`}>
+                                    {item.icon}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[11px] leading-tight">{item.label}</p>
+                                    <p className="text-[9px] leading-none text-gray-600">{item.description}</p>
+                                </div>
+                                {isActive && (
+                                    <span className="shrink-0 rounded bg-orange-900/50 px-1 py-0.5 text-[8px] text-orange-400">●</span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             {/* ── Ventanas ── */}
-            {showFixtures && shouldShowWindows && (
+            {(showFixtures || showSwitches || showJunctionBoxes) && shouldShowWindows && (
                 <div className="my-1 border-t border-gray-700/40" />
             )}
 

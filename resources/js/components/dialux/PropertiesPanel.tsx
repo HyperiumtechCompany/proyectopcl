@@ -18,13 +18,34 @@ import React from 'react';
 import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
+    pointInPolygon,
 } from '@/hooks/dialux/ambientSpaces';
-import { calculatePolygonArea, calculatePolygonPerimeter } from '@/hooks/dialux/lightingCalculations';
+import {
+    calculatePolygonArea,
+    calculatePolygonPerimeter,
+    calculateLumensRequired,
+    calculateExactQuantity,
+    calculateRoundedQuantity,
+} from '@/hooks/dialux/lightingCalculations';
 import {
     NORMATIVE_LABELS,
     buildRoomLightingInputs,
     getFixturesForRoom,
+    getCategoryOptions,
+    getSectionOptions,
+    getActivityOptions,
 } from '@/hooks/dialux/roomLighting';
+import type { NormativeStandard } from '@/hooks/dialux/roomLighting';
+import type {
+    CorridorType,
+    Partition,
+    StairConfig,
+    StairFlight,
+    LightSwitch,
+    Conductor,
+    ElectricalDevice,
+} from '@/hooks/dialux/types';
+import { CONDUCTOR_WIRE_OPTIONS } from '@/hooks/dialux/types';
 import { useEditorStore } from '@/hooks/dialux/useEditorStore';
 import type {
     Canopy,
@@ -39,13 +60,6 @@ import {
     getWallPresetFromWall,
     getPeruWallPreset,
 } from '@/hooks/dialux/wallNorms';
-import type {
-    CorridorType,
-    Partition,
-    StairConfig,
-    StairFlight,
-    LightSwitch,
-} from '@/hooks/dialux/types';
 
 const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
     { value: 'roof_only', label: 'Solo techo' },
@@ -66,7 +80,7 @@ function LightSwitchProps({
 }) {
     return (
         <div className="flex flex-col gap-3">
-            <SectionWrapper title="Interruptor" icon={<Zap size={15} />}>
+            <SectionWrapper label="Interruptor" icon={<Zap size={15} />}>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                     <SelectField
                         label="Tipo"
@@ -86,6 +100,310 @@ function LightSwitchProps({
                     />
                 </div>
             </SectionWrapper>
+            {(lightSwitch.connectedFixtureIds?.length ?? 0) > 0 && (
+                <SectionWrapper label="Conexiones" icon={<Zap size={15} />}>
+                    <div className="flex flex-col gap-1">
+                        {lightSwitch.connectedFixtureIds.map(fid => (
+                            <div key={fid} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                <span>Luminaria {fid.slice(0,4)}...</span>
+                                <button
+                                    onClick={() => onUpdate({
+                                        connectedFixtureIds: lightSwitch.connectedFixtureIds.filter(id => id !== fid)
+                                    })}
+                                    className="text-red-500 hover:text-red-700 px-1"
+                                    title="Desconectar"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </SectionWrapper>
+            )}
+        </div>
+    );
+}
+
+function ConductorProps({
+    conductor,
+    onUpdate,
+    onDelete,
+}: {
+    conductor: Conductor;
+    onUpdate: (patch: Partial<Omit<Conductor, 'id'>>) => void;
+    onDelete: () => void;
+}) {
+    const store = useEditorStore();
+    const wireOptions = CONDUCTOR_WIRE_OPTIONS.map(({ value, label }) => ({
+        value,
+        label,
+    }));
+    
+    // Find connected nodes
+    const scene = store.activeScene();
+    const sourceNode = scene?.lightSwitches.find(s => s.id === conductor.sourceId) || scene?.fixtures.find(f => f.id === conductor.sourceId) || scene?.electricalDevices?.find(d => d.id === conductor.sourceId);
+    const targetNode = scene?.lightSwitches.find(s => s.id === conductor.targetId) || scene?.fixtures.find(f => f.id === conductor.targetId) || scene?.electricalDevices?.find(d => d.id === conductor.targetId);
+
+    const getNodeLabel = (node: any) => {
+        if (!node) return 'Desconocido';
+        if ('name' in node) return node.name; // Fixture
+        if ('label' in node) return node.label; // Device
+        return `Interruptor ${node.type}`; // Switch
+    };
+
+    return (
+        <div className="flex flex-col gap-3">
+            <SectionWrapper label="Conductor" icon={<Zap size={15} />}>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <SelectField
+                        label="N° Conductores"
+                        value={conductor.wireLabel ?? ''}
+                        onChange={(val) => {
+                            const option = CONDUCTOR_WIRE_OPTIONS.find(
+                                (item) => item.value === val,
+                            );
+                            if (!option) return;
+                            onUpdate({
+                                wireCount: option.count,
+                                wireLabel: option.value,
+                            });
+                        }}
+                        options={wireOptions}
+                    />
+                    <SelectField
+                        label="Ruta"
+                        value={conductor.routeType}
+                        onChange={(val) => onUpdate({ routeType: val as Conductor['routeType'] })}
+                        options={[
+                            { value: 'wall_ceiling', label: 'Pared/Techo' },
+                            { value: 'floor', label: 'Piso' },
+                        ]}
+                    />
+                    <SelectField
+                        label="Tipo"
+                        value={conductor.conductorType}
+                        onChange={(val) => onUpdate({ conductorType: val })}
+                        options={[
+                            { value: 'THW-90', label: 'THW-90' },
+                            { value: 'N2XOH', label: 'N2XOH (LSOH)' },
+                            { value: 'Cu LSOH', label: 'Cu LSOH' },
+                            { value: 'NYY', label: 'NYY' },
+                        ]}
+                    />
+                    <SelectField
+                        label="Ø Tubo (mm)"
+                        value={String(conductor.tubeSize)}
+                        onChange={(val) => onUpdate({ tubeSize: parseInt(val) })}
+                        options={[
+                            { value: '16', label: 'Ø16 mm' },
+                            { value: '20', label: 'Ø20 mm' },
+                            { value: '25', label: 'Ø25 mm' },
+                            { value: '32', label: 'Ø32 mm' },
+                        ]}
+                    />
+                </div>
+                <div className="mt-2 text-[10px] text-gray-500 bg-slate-900/50 p-1.5 rounded">
+                    <p className="flex justify-between items-center mb-1">
+                        <span className="font-semibold text-gray-400">Origen:</span>
+                        <span className="truncate max-w-[120px]">{getNodeLabel(sourceNode)}</span>
+                    </p>
+                    <p className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-400">Destino:</span>
+                        <span className="truncate max-w-[120px]">{getNodeLabel(targetNode)}</span>
+                    </p>
+                </div>
+            </SectionWrapper>
+            <button
+                type="button"
+                onClick={onDelete}
+                className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-red-400 hover:bg-red-900/20 hover:text-red-300"
+            >
+                <Trash2 size={11} /> Eliminar conductor
+            </button>
+        </div>
+    );
+}
+
+function ElectricalDeviceProps({
+    device,
+    onUpdate,
+}: {
+    device: ElectricalDevice;
+    onUpdate: (patch: Partial<ElectricalDevice>) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-3">
+            <SectionWrapper label={`Equipo: ${device.type}`} icon={<Zap size={15} />}>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <SelectField
+                        label="Tipo"
+                        value={device.type}
+                        onChange={(val) => onUpdate({ type: val as any })}
+                        options={[
+                            { value: 'meter', label: 'Medidor' },
+                            { value: 'main_panel', label: 'Tablero General (TG)' },
+                            { value: 'sub_panel', label: 'Tablero Distribución (TD)' },
+                            { value: 'transfer_switch', label: 'Transferencia (ATS)' },
+                            { value: 'arrival_panel', label: 'T. Llegada (TL)' },
+                            { value: 'junction_box', label: 'Caja de Pase' },
+                            { value: 'earth_pit', label: 'Pozo a Tierra (PAT)' },
+                            { value: 'facp', label: 'Contraincendios (FACP)' },
+                            { value: 'outlet_floor', label: 'Tomacorriente Bajo' },
+                            { value: 'outlet_waterproof', label: 'Tomacorriente Agua' },
+                            { value: 'outlet_ceiling', label: 'Tomacorriente Techo' },
+                            { value: 'outlet_rack', label: 'Tomacorriente Rack' },
+                        ]}
+                    />
+                    <div className="col-span-2">
+                        <label className="mb-1 block text-[10px] font-medium text-gray-700">
+                            Etiqueta (Opcional)
+                        </label>
+                        <input
+                            type="text"
+                            value={device.label ?? ''}
+                            onChange={(e) => onUpdate({ label: e.target.value })}
+                            placeholder="Ej. TD-1"
+                            className="w-full rounded border px-2 py-1 text-xs"
+                        />
+                    </div>
+                </div>
+            </SectionWrapper>
+
+            {/* Conexiones */}
+            <SectionWrapper label="Conexiones Eléctricas" icon={<Move size={15} />}>
+                <div className="flex flex-col gap-2">
+                    {/* Luminarias */}
+                    {(device.connectedFixtureIds?.length ?? 0) > 0 && (
+                        <div>
+                            <p className="text-[10px] font-medium text-gray-500">Luminarias (Salidas)</p>
+                            <div className="flex flex-col gap-1 mt-1">
+                                {device.connectedFixtureIds!.map(id => (
+                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                        <span>Luminaria {id.slice(0,4)}...</span>
+                                        <button onClick={() => onUpdate({ connectedFixtureIds: device.connectedFixtureIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {/* Interruptores */}
+                    {(device.connectedSwitchIds?.length ?? 0) > 0 && (
+                        <div>
+                            <p className="text-[10px] font-medium text-gray-500">Interruptores</p>
+                            <div className="flex flex-col gap-1 mt-1">
+                                {device.connectedSwitchIds!.map(id => (
+                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                        <span>Interruptor {id.slice(0,4)}...</span>
+                                        <button onClick={() => onUpdate({ connectedSwitchIds: device.connectedSwitchIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {/* Dispositivos */}
+                    {(device.connectedDeviceIds?.length ?? 0) > 0 && (
+                        <div>
+                            <p className="text-[10px] font-medium text-gray-500">Otros Equipos / Tableros</p>
+                            <div className="flex flex-col gap-1 mt-1">
+                                {device.connectedDeviceIds!.map(id => (
+                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                        <span>Equipo {id.slice(0,4)}...</span>
+                                        <button onClick={() => onUpdate({ connectedDeviceIds: device.connectedDeviceIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {(device.connectedFixtureIds?.length ?? 0) === 0 && (device.connectedSwitchIds?.length ?? 0) === 0 && (device.connectedDeviceIds?.length ?? 0) === 0 && (
+                        <p className="text-[10px] text-gray-400 italic">No hay conexiones a este equipo. Usa la herramienta U (Wire) para conectar.</p>
+                    )}
+                </div>
+            </SectionWrapper>
+        </div>
+    );
+}
+
+function VirtualWireProps({
+    wireId,
+    device,
+    onUpdate,
+    onDelete,
+}: {
+    wireId: string;
+    device: ElectricalDevice;
+    onUpdate: (patch: any) => void;
+    onDelete: () => void;
+}) {
+    const props = device.wireProps?.[wireId] ?? {
+        wireCount: wireId.includes('dev-dev') ? 3 : 2,
+        routeType: wireId.includes('dev-sw') ? 'wall_ceiling' : 'floor',
+        tubeSize: 20,
+        conductorType: 'THW-90',
+    };
+
+    const wireOptions = CONDUCTOR_WIRE_OPTIONS.map(({ value, label }) => ({
+        value,
+        label,
+    }));
+
+    return (
+        <div className="flex flex-col gap-3">
+            <SectionWrapper label="Conductor de Tablero/Equipo" icon={<Zap size={15} />}>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <SelectField
+                        label="N° Conductores"
+                        value={props.wireLabel ?? ''}
+                        onChange={(val) => {
+                            const option = CONDUCTOR_WIRE_OPTIONS.find(item => item.value === val);
+                            if (!option) return;
+                            onUpdate({
+                                ...props,
+                                wireCount: option.count,
+                                wireLabel: option.value,
+                            });
+                        }}
+                        options={wireOptions}
+                    />
+                    <SelectField
+                        label="Ruta"
+                        value={props.routeType}
+                        onChange={(val) => onUpdate({ ...props, routeType: val as any })}
+                        options={[
+                            { value: 'wall_ceiling', label: 'Pared/Techo' },
+                            { value: 'floor', label: 'Piso' },
+                        ]}
+                    />
+                    <SelectField
+                        label="Tipo"
+                        value={props.conductorType}
+                        onChange={(val) => onUpdate({ ...props, conductorType: val })}
+                        options={[
+                            { value: 'THW-90', label: 'THW-90' },
+                            { value: 'N2XOH', label: 'N2XOH (LSOH)' },
+                            { value: 'Cu LSOH', label: 'Cu LSOH' },
+                            { value: 'NYY', label: 'NYY' },
+                        ]}
+                    />
+                    <SelectField
+                        label="Ø Tubo (mm)"
+                        value={String(props.tubeSize)}
+                        onChange={(val) => onUpdate({ ...props, tubeSize: parseInt(val) })}
+                        options={[
+                            { value: '16', label: 'Ø16 mm' },
+                            { value: '20', label: 'Ø20 mm' },
+                            { value: '25', label: 'Ø25 mm' },
+                            { value: '32', label: 'Ø32 mm' },
+                        ]}
+                    />
+                </div>
+            </SectionWrapper>
+            <button
+                type="button"
+                onClick={onDelete}
+                className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs text-red-400 hover:bg-red-900/20 hover:text-red-300"
+            >
+                <Trash2 size={11} /> Eliminar conexión
+            </button>
         </div>
     );
 }
@@ -106,6 +424,36 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         );
     }
 
+    if (selectedId?.startsWith('wire:dev-') && scene) {
+        const [, , sourceId, targetId] = selectedId.split(':');
+        const device = scene.electricalDevices?.find(d => d.id === sourceId);
+        if (device) {
+            return (
+                <VirtualWireProps
+                    wireId={selectedId}
+                    device={device}
+                    onUpdate={(patch) => {
+                        store.updateElectricalDevice(device.id, {
+                            wireProps: {
+                                ...(device.wireProps ?? {}),
+                                [selectedId]: {
+                                    ...(device.wireProps?.[selectedId] ?? {
+                                        wireCount: selectedId.includes('dev-dev') ? 3 : 2,
+                                        routeType: selectedId.includes('dev-sw') ? 'wall_ceiling' : 'floor',
+                                        tubeSize: 20,
+                                        conductorType: 'THW-90',
+                                    }),
+                                    ...patch
+                                }
+                            }
+                        });
+                    }}
+                    onDelete={() => store.removeObject(selectedId)}
+                />
+            );
+        }
+    }
+
     if (selectedFixtureIds.length > 1 && scene) {
         return (
             <FixtureProps
@@ -117,14 +465,35 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         );
     }
 
-    const room = scene.rooms.find((r) => r.id === selectedId);
-    const wall = scene.walls.find((w) => w.id === selectedId);
-    const win = scene.windows.find((w) => w.id === selectedId);
-    const door = scene.doors.find((d) => d.id === selectedId);
-    const canopy = scene.canopies.find((c) => c.id === selectedId);
-    const fixture = scene.fixtures.find((f) => f.id === selectedId);
-    const partition = scene.partitions?.find((p) => p.id === selectedId);
-    const lightSwitch = scene.lightSwitches?.find((s) => s.id === selectedId);
+    const room = scene?.rooms.find((r) => r.id === selectedId);
+    const wall = scene?.walls.find((w) => w.id === selectedId);
+    const win = scene?.windows.find((w) => w.id === selectedId);
+    const door = scene?.doors.find((d) => d.id === selectedId);
+    const canopy = scene?.canopies.find((c) => c.id === selectedId);
+    const fixture = scene?.fixtures.find((f) => f.id === selectedId);
+    const partition = scene?.partitions?.find((p) => p.id === selectedId);
+    const lightSwitch = scene?.lightSwitches?.find((s) => s.id === selectedId);
+    const conductor = scene?.conductors?.find((c) => c.id === selectedId);
+    const electricalDevice = scene?.electricalDevices?.find((d) => d.id === selectedId);
+
+    if (electricalDevice) {
+        return (
+            <ElectricalDeviceProps
+                device={electricalDevice}
+                onUpdate={(patch) => store.updateElectricalDevice(electricalDevice.id, patch)}
+            />
+        );
+    }
+
+    if (conductor) {
+        return (
+            <ConductorProps
+                conductor={conductor}
+                onUpdate={(patch) => store.updateConductor(conductor.id, patch)}
+                onDelete={() => store.removeObject(conductor.id)}
+            />
+        );
+    }
 
     if (partition) {
         return (
@@ -147,12 +516,12 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     if (room) {
         const corridorAmbient =
             room.roomType === 'corridor'
-                ? (deriveSceneAmbientSpaces(scene).find(
+                ? (deriveSceneAmbientSpaces(scene!).find(
                       (ambient) => ambient.sourceRoom.id === room.id,
                   ) ?? null)
                 : null;
         const parentRoom = corridorAmbient
-            ? (scene.rooms.find(
+            ? (scene!.rooms.find(
                   (candidate) => candidate.id === corridorAmbient.roomId,
               ) ?? null)
             : null;
@@ -160,7 +529,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         return (
             <RoomProps
                 room={room}
-                scene={scene}
+                scene={scene!}
                 parentRoom={parentRoom}
                 selectedAmbient={corridorAmbient}
                 onUpdate={(patch) => store.updateRoom(room.id, patch)}
@@ -235,6 +604,8 @@ const RoomProps: React.FC<{
 }> = ({ room, scene, parentRoom = null, selectedAmbient = null, onUpdate }) => {
     const store = useEditorStore();
     const isCorridorAmbient = room.roomType === 'corridor';
+    const isRecinto = !room.roomType || room.roomType === 'room';
+    const isAmbiente = room.roomType === 'ambient' || room.roomType === 'corridor';
     const calculationRoom = selectedAmbient?.room ?? room;
     const area = calculatePolygonArea(calculationRoom.vertices);
     const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
@@ -281,7 +652,7 @@ const RoomProps: React.FC<{
             {/* ── Sección Geometría ── */}
             <SectionWrapper
                 icon={<Square size={12} className="text-blue-400" />}
-                label={isCorridorAmbient ? 'Pasadizo' : 'Recinto'}
+                label={isCorridorAmbient ? 'Pasadizo' : room.roomType === 'ambient' ? 'Ambiente' : 'Recinto'}
             >
                 <TextField
                     label="Nombre"
@@ -392,7 +763,7 @@ const RoomProps: React.FC<{
                 <PropField label="Vértices" value={`${room.vertices.length}`} />
                 <PropField label="Área" value={`${area.toFixed(4)} m²`} />
                 <PropField label="Perímetro" value={`${perimeter.toFixed(4)} m`} />
-                {!isCorridorAmbient && room.roomType !== 'stair' && (
+                {isRecinto && (
                     <PropField
                         label="Ambientes"
                         value={`${ambientSpaces.length}`}
@@ -407,8 +778,8 @@ const RoomProps: React.FC<{
                 )}
             </SectionWrapper>
 
-            {/* ── Sección Construcción (solo en Recinto, no pasadizo ni escalera) ── */}
-            {!isCorridorAmbient && room.roomType !== 'stair' && (
+            {/* ── Sección Construcción — solo recinto exterior ── */}
+            {isRecinto && (
                 <SectionWrapper
                     icon={<Square size={12} className="text-orange-400" />}
                     label="Construcción"
@@ -443,8 +814,8 @@ const RoomProps: React.FC<{
                 </SectionWrapper>
             )}
 
-            {/* ── Sección Iluminación (solo recinto normal) ── */}
-            {!isCorridorAmbient && room.roomType !== 'stair' && (
+            {/* ── Sección Iluminación — solo ambientes y pasadizos ── */}
+            {isAmbiente && (
                 <SectionWrapper
                     icon={<Zap size={12} className="text-yellow-400" />}
                     label="Iluminación"
@@ -505,8 +876,8 @@ const RoomProps: React.FC<{
                 </SectionWrapper>
             )}
 
-            {/* ── Sección Grilla de Luminarias ── */}
-            {room.roomType !== 'stair' && (
+            {/* ── Sección Grilla de Luminarias — solo ambientes y pasadizos ── */}
+            {isAmbiente && (
                 <div className="mt-4 border-t border-gray-800/80 pt-3">
                     <div className="flex items-center gap-2 text-emerald-500">
                         <Zap size={12} />
@@ -545,11 +916,13 @@ const RoomProps: React.FC<{
                             if (newIds.length > 0) {
                                 store.setSelectedId(null);
                                 store.setSelectedFixtureIds(newIds);
+                            } else {
+                                alert("No se pudo generar la grilla. El área puede ser muy pequeña.");
                             }
                         }}
                         className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
                     >
-                        Generar Grilla {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
+                        Generar en Techo {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
                     </button>
                 </div>
             )}
@@ -824,6 +1197,187 @@ const StairConfigPanel: React.FC<{
     );
 };
 
+const WallInteriorLightingSection: React.FC<{
+    wall: Wall;
+    scene: Scene | null;
+    onUpdate: (patch: Partial<Omit<Wall, 'id'>>) => void;
+}> = ({ wall, scene, onUpdate }) => {
+    const store = useEditorStore();
+    const standard = store.defaultRoomNormativeStandard as NormativeStandard;
+
+    const verts = wall.vertices;
+    let wallLen = 0;
+    for (let i = 1; i < verts.length; i++) {
+        wallLen += Math.hypot(verts[i].x - verts[i - 1].x, verts[i].y - verts[i - 1].y);
+    }
+    const wallArea = wallLen * wall.height;
+
+    const cats = getCategoryOptions(standard);
+    const sects = getSectionOptions(standard, wall.normativeCategory);
+    const activities = getActivityOptions(standard, wall.normativeCategory, wall.normativeSection);
+
+    const lux = wall.illuminanceLux ?? 300;
+    const fixLumens = wall.fixtureLumens ?? 4000;
+    const lumensReq = calculateLumensRequired(wallArea, lux);
+    const exactQty = calculateExactQuantity(lumensReq, fixLumens);
+    const roundedQty = calculateRoundedQuantity(exactQty);
+
+    const mid = React.useMemo(() =>
+        verts.length >= 2
+            ? { x: (verts[0].x + verts[verts.length - 1].x) / 2, y: (verts[0].y + verts[verts.length - 1].y) / 2 }
+            : verts[0],
+        [verts]);
+
+    const parentAmbient = React.useMemo(() =>
+        scene?.rooms.find(r =>
+            (r.roomType === 'ambient' || r.roomType === 'corridor') &&
+            pointInPolygon(mid, r.vertices),
+        ) ?? null,
+        [scene, mid]);
+
+    const fixturesInArea = React.useMemo(() => {
+        if (!scene || !parentAmbient) return [];
+        return scene.fixtures.filter(f => pointInPolygon({ x: f.x, y: f.y }, parentAmbient.vertices));
+    }, [scene, parentAmbient]);
+
+    const wallPolygon = React.useMemo(() => {
+        if (verts.length < 2) return null;
+        const ax = verts[0].x, ay = verts[0].y;
+        const bx = verts[verts.length - 1].x, by = verts[verts.length - 1].y;
+        const len = Math.hypot(bx - ax, by - ay);
+        if (len < 0.01) return null;
+        const dx = (bx - ax) / len, dy = (by - ay) / len;
+        const px = dy, py = -dx;
+        const depth = Math.max(wall.thickness * 2, 1.5);
+        return [
+            { x: ax, y: ay },
+            { x: bx, y: by },
+            { x: bx + px * depth, y: by + py * depth },
+            { x: ax + px * depth, y: ay + py * depth },
+        ];
+    }, [verts, wall.thickness]);
+
+    const handleGenerate = () => {
+        const fixtureTemplate = {
+            ...store.ui.fixtureTemplate,
+            ...(wall.fixtureType ? { fixtureType: wall.fixtureType } : {}),
+            ...(wall.fixtureShape ? { fixtureShape: wall.fixtureShape } : {}),
+            ...(wall.fixtureLumens ? { lumens: wall.fixtureLumens } : {}),
+        };
+        // Generate the grid over the wall's area, and assign it to the parent room if possible.
+        // If the wall is within an ambient, we assign it to that ambient's source room.
+        const parentRoomId = parentAmbient?.id ?? scene?.rooms.find(r => pointInPolygon(mid, r.vertices))?.id ?? null;
+        
+        const newIds = wallPolygon
+            ? store.addFixtureGrid({ roomId: parentRoomId, rows: store.ui.fixtureGridRows, columns: store.ui.fixtureGridCols, fixtureTemplate, ambientVertices: wallPolygon })
+            : [];
+        if (newIds.length > 0) {
+            store.setSelectedId(null);
+            store.setSelectedFixtureIds(newIds);
+        }
+    };
+
+    return (
+        <div className="mt-3 space-y-2.5 border-t border-gray-700/50 pt-3">
+            <div className="flex items-center gap-2">
+                <Zap size={12} className="text-yellow-400" />
+                <p className="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">Iluminación</p>
+            </div>
+
+            <PropField label="Estándar" value={NORMATIVE_LABELS[standard]} mono={false} />
+            <PropField label="Área pared" value={`${wallArea.toFixed(2)} m²`} />
+
+            <SelectField
+                label="Sección / Área"
+                value={wall.normativeCategory ?? ''}
+                options={cats.map(c => ({ value: c, label: c }))}
+                onChange={(val) => onUpdate({ normativeCategory: val, normativeSection: undefined, normativeActivity: undefined })}
+            />
+            {wall.normativeCategory && (
+                <SelectField
+                    label="Subsección"
+                    value={wall.normativeSection ?? ''}
+                    options={sects.map(s => ({ value: s, label: s }))}
+                    onChange={(val) => onUpdate({ normativeSection: val, normativeActivity: undefined })}
+                />
+            )}
+            {wall.normativeSection && (
+                <SelectField
+                    label="Aplicación"
+                    value={wall.normativeActivity ?? ''}
+                    options={activities.map(a => ({ value: a.activity, label: a.activity }))}
+                    onChange={(val) => {
+                        const act = activities.find(a => a.activity === val);
+                        onUpdate({ normativeActivity: val, illuminanceLux: act?.illuminanceLux ?? lux });
+                    }}
+                />
+            )}
+
+            <EditField label="Iluminancia (lux)" value={lux} min={10} max={2000} step={10}
+                onChange={(val) => onUpdate({ illuminanceLux: val })} />
+
+            <div className="flex items-center justify-between">
+                <PropField label="Luminarias" value={`${fixturesInArea.length}`} />
+                {fixturesInArea.length > 0 && (
+                    <button type="button"
+                        onClick={() => { store.setSelectedId(null); store.setSelectedFixtureIds(fixturesInArea.map(f => f.id)); }}
+                        className="ml-2 rounded bg-blue-600/20 px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-600/40">
+                        Seleccionar
+                    </button>
+                )}
+            </div>
+            <PropField label="Lm requeridos" value={`${lumensReq.toFixed(0)} lm`} />
+            <PropField label="Cant. óptima" value={exactQty.toFixed(2)} />
+            <PropField label="Cant. simetría" value={`${roundedQty}`} />
+
+            <EditField label="Lm/foco" value={fixLumens} min={100} max={50000} step={100}
+                onChange={(val) => onUpdate({ fixtureLumens: val })} />
+            <SelectField label="Tipo foco"
+                value={wall.fixtureType ?? 'recessed'}
+                options={[
+                    { value: 'recessed', label: 'Empotrada' },
+                    { value: 'surface', label: 'Superficie' },
+                    { value: 'pendant', label: 'Colgante' },
+                    { value: 'spot', label: 'Spot' },
+                    { value: 'strip', label: 'Tira LED' },
+                    { value: 'panel', label: 'Panel LED' },
+                    { value: 'tube', label: 'Tubo' },
+                ]}
+                onChange={(val) => onUpdate({ fixtureType: val as Wall['fixtureType'] })} />
+            <SelectField label="Forma foco"
+                value={wall.fixtureShape ?? 'round'}
+                options={[
+                    { value: 'round', label: 'Redonda' },
+                    { value: 'square', label: 'Cuadrada' },
+                    { value: 'rectangular', label: 'Rectangular' },
+                    { value: 'cylindrical', label: 'Cilíndrica' },
+                ]}
+                onChange={(val) => onUpdate({ fixtureShape: val as Wall['fixtureShape'] })} />
+
+            <div className="mt-3 border-t border-gray-700/50 pt-2">
+                <div className="flex items-center gap-2 text-emerald-500 mb-2">
+                    <Grid size={12} />
+                    <p className="text-[10px] font-semibold uppercase">Grilla sobre Pared</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <EditField label="Filas" value={store.ui.fixtureGridRows} min={1} max={20} step={1}
+                        onChange={(val) => store.setFixtureGridRows(val)} />
+                    <EditField label="Columnas" value={store.ui.fixtureGridCols} min={1} max={20} step={1}
+                        onChange={(val) => store.setFixtureGridCols(val)} />
+                </div>
+                <button type="button" onClick={handleGenerate}
+                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors">
+                    <Grid size={11} />
+                    Generar en Pared {store.ui.fixtureGridRows}×{store.ui.fixtureGridCols}
+                </button>
+                <p className="text-[9px] text-gray-500 mt-1 leading-snug">
+                    Genera una grilla de focos pegada a la superficie de esta pared (ej. apliques).
+                </p>
+            </div>
+        </div>
+    );
+};
+
 const WallProps: React.FC<{
     wall: Wall;
     scene: Scene | null;
@@ -1015,26 +1569,37 @@ const WallProps: React.FC<{
                         </div>
                         <button
                             type="button"
-                        onClick={() => {
-                            const newIds = store.addFixtureGrid({
-                                roomId: ambientMatch.sourceRoom.id,
-                                rows: store.ui.fixtureGridRows,
-                                columns: store.ui.fixtureGridCols,
-                                fixtureTemplate: store.ui.fixtureTemplate,
-                                ambientVertices: ambientMatch.room.vertices,
-                            });
-                            if (newIds.length > 0) {
-                                store.setSelectedId(null);
-                                store.setSelectedFixtureIds(newIds);
-                            }
-                        }}
-                            className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-emerald-600/80 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-emerald-500"
+                            onClick={() => {
+                                const newIds = store.addFixtureGrid({
+                                    roomId: ambientMatch.sourceRoom.id,
+                                    rows: store.ui.fixtureGridRows,
+                                    columns: store.ui.fixtureGridCols,
+                                    fixtureTemplate: store.ui.fixtureTemplate,
+                                    ambientVertices: ambientMatch.room.vertices,
+                                });
+                                if (newIds.length > 0) {
+                                    store.setSelectedId(null);
+                                    store.setSelectedFixtureIds(newIds);
+                                } else {
+                                    alert("No se pudo generar la grilla. Asegúrese de que el ambiente esté cerrado y tenga un área válida.");
+                                }
+                            }}
+                            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
                         >
-                            <PlusSquare size={13} />
-                            Generar {store.ui.fixtureGridRows}×{store.ui.fixtureGridCols}
+                            Generar en Techo de Ambiente {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
                         </button>
+                        <p className="text-[9px] text-gray-500 mt-1 leading-snug">
+                            Genera luminarias en el área de techo delimitada por esta pared.
+                        </p>
                     </div>
                 </>
+            )}
+            {wall.wallType === 'interior' && (
+                <WallInteriorLightingSection
+                    wall={wall}
+                    scene={scene}
+                    onUpdate={onUpdate}
+                />
             )}
         </SectionWrapper>
     );

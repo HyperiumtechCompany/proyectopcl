@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
 import { RefreshCw, X, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
-import { ItemValorizado, Periodo, ViewMode, TotalesColumna } from '../types';
+import React, { useState, useRef } from 'react';
+import type { ItemValorizado, Periodo, ViewMode, TotalesColumna } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMATOS
