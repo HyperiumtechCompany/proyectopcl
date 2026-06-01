@@ -6,9 +6,8 @@ import {
 } from 'lucide-react';
 import { Periodo } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
+
 interface Props {
     periodos: Periodo[];
     totalPresupuesto: number;
@@ -902,7 +901,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                         <div style={{ padding: 24, background: C.surface, position: 'relative' }} ref={chartRef}>
                             <div style={{ marginBottom: 14 }}>
                                 <h3 style={{ fontSize: 11.5, fontWeight: 800, color: C.navy, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
-                                    HISTOGRAMA DE DESEMBOLSOS MENSUALES — Vista 3D
+                                    GAUSS DE DESEMBOLSOS MENSUALES
                                 </h3>
                                 <p style={{ fontSize: 10, color: C.muted, margin: '3px 0 0 0' }}>
                                     Desembolso mensual (Adelantos + Valorización). Coloque el cursor sobre cada barra para ver el detalle completo.

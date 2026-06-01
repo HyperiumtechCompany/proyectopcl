@@ -113,16 +113,21 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         window.location.href = url.toString();
     }, [modoCalculo]);
 
-    // ── EXPORTACIONES (usando las nuevas funciones) ──────────────────────────
+    // EXPORTACIONES  
     const handleExportExcel = useCallback(() => {
-        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem);
-    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem]);
+        const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
+        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
+            totalPresupuesto: props.totalPresupuesto,
+            diasPorMes: props.diasPorMes || {},
+            totalDias,
+        });
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, totalesFinales, props.projectName, viewMode, totalesPorItem]);
 
     const handleExportPDF = useCallback(() => {
         exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem);
     }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem]);
 
-    // ── MES PICO ──────────────────────────────────────────────────────────────
+    // MES PICO 
     const mesPicoKey = React.useMemo(() => {
         let max = 0; let key = '';
         Object.entries(totalesFinales).forEach(([k, v]) => {
@@ -254,6 +259,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                 valorizacionesMensuales={totalesFinales}
                 totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
                 diasPorMes={props.diasPorMes || {}}
+                projectName={props.projectName}
                 onClose={() => setMostrarDesembolso(false)}
                 />
                 )}
