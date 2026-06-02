@@ -5,9 +5,7 @@ import {
 } from 'lucide-react';
 import { MaterialItem, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TIPOS / PROPS
-// ─────────────────────────────────────────────────────────────────────────────
 interface Props {
     materiales:       MaterialItem[];
     periodos:         Periodo[];
@@ -25,9 +23,7 @@ interface Props {
     getIntensidad:    (val: number) => number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // UTILIDADES
-// ─────────────────────────────────────────────────────────────────────────────
 const fmtNum = (v: number, dec = 2) =>
     v.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtSoles = (v: number) => `S/. ${fmtNum(v)}`;
@@ -35,9 +31,7 @@ const fmtSoles = (v: number) => `S/. ${fmtNum(v)}`;
 const getCantidad = (m: MaterialItem, key: string) => m.distribucion[key]?.cantidad || 0;
 const getMonto    = (m: MaterialItem, key: string) => m.distribucion[key]?.monto    || 0;
 
-// ─────────────────────────────────────────────────────────────────────────────
 // CATÁLOGO DE TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
 const TIPO_META: Record<string, { label: string; bg: string; text: string; border: string; headerBg: string }> = {
     mano_de_obra: { label: 'MANO DE OBRA', bg: '#fff7ed', text: '#c2410c', border: '#fed7aa', headerBg: '#ea580c' },
     materiales:   { label: 'MATERIALES',   bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', headerBg: '#2563eb' },
@@ -48,9 +42,7 @@ const TIPO_META: Record<string, { label: string; bg: string; text: string; borde
 };
 const getTipoMeta = (tipo: string) => TIPO_META[tipo] || TIPO_META['otros'];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INTENSIDAD — escala Excel sólida (SIN transparencias)
-// ─────────────────────────────────────────────────────────────────────────────
+// INTENSIDAD
 const intensityStyle = (i: number): React.CSSProperties => {
     if (i <= 0)    return { backgroundColor: '#ffffff', color: '#94a3b8' };
     if (i < 0.12)  return { backgroundColor: '#dbeafe', color: '#1e40af' };
@@ -61,9 +53,7 @@ const intensityStyle = (i: number): React.CSSProperties => {
     return { backgroundColor: '#0c4a6e', color: '#ffffff', fontWeight: 700 };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ESTILOS FIJOS DE TABLA (Excel)
-// ─────────────────────────────────────────────────────────────────────────────
+// ESTILOS FIJOS DE TABLA 
 const TH_MAIN: React.CSSProperties = {
     background: '#1e293b', color: '#f1f5f9',
     fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
@@ -83,9 +73,7 @@ const TD_BASE: React.CSSProperties = {
 };
 const STICKY_SHADOW: React.CSSProperties = { boxShadow: '3px 0 6px rgba(0,0,0,0.18)' };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTE: TARJETA INFO
-// ─────────────────────────────────────────────────────────────────────────────
 const InfoCard: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = '#1e293b' }) => (
     <div style={{
         background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
@@ -100,9 +88,7 @@ const InfoCard: React.FC<{ label: string; value: string; color?: string }> = ({ 
     </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTE: DETALLE EXPANDIDO (doble clic)
-// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTE: DETALLE EXPANDIDO 
 const DetalleInsumo: React.FC<{
     material:    MaterialItem;
     periodos:    Periodo[];
@@ -230,9 +216,7 @@ const DetalleInsumo: React.FC<{
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTE: ENCABEZADO ORDENABLE
-// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTE: 
 const SortTh: React.FC<{
     field:   SortField;
     current: SortField;
@@ -269,9 +253,7 @@ const SortTh: React.FC<{
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTE: BARRA DE FILTROS (ESTILO EXCEL AVANZADO)
-// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTE:
 const BarraFiltro: React.FC<{
     filtro:         FiltroState;
     onFiltroChange: (f: Partial<FiltroState>) => void;
@@ -372,9 +354,7 @@ const BarraFiltro: React.FC<{
     </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const TablaMateriales: React.FC<Props> = ({
     materiales, periodos, viewMode,
     totalesMensuales, totalGeneral,

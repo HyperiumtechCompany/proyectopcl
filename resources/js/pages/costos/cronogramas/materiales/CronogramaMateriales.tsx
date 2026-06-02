@@ -58,7 +58,7 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
         getIntensidad,
     } = useCronogramaLogic(todosMateriales, periodos);
 
-    // ── GUARDAR ───────────────────────────────────────────────────────────────
+    //  GUARDAR 
     const handleSave = useCallback(async () => {
         if (!todosMateriales.length) {
             showToast('⚠ No hay materiales para guardar.', 'warning');
@@ -82,7 +82,7 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
         }
     }, [project, todosMateriales]);
 
-    // ── ELIMINAR ──────────────────────────────────────────────────────────────
+    //  ELIMINAR 
     const handleDelete = useCallback(async () => {
         if (!confirm('¿Eliminar los datos guardados del cronograma de materiales?\nEsta acción no se puede deshacer.')) return;
 
@@ -98,12 +98,12 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
         }
     }, [project]);
 
-    // ── EXPORTAR ──────────────────────────────────────────────────────────────
+    //  EXPORTAR 
     const handleExportExcel = useCallback(() => {
         exportarMaterialesExcel(todosMateriales, periodos, projectName || project, viewMode, filtro.tipoFiltro, projectData);
     }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
-    // ── BREADCRUMBS ───────────────────────────────────────────────────────────
+    //  BREADCRUMBS 
 
     const displayName = useMemo(() => {
         if (projectData?.nombre_corto) return projectData.nombre_corto;
@@ -123,7 +123,7 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
         { title: 'Cronograma Materiales', href: '#' },
     ], [displayName, project]);
 
-    // ── RENDER ────────────────────────────────────────────────────────────────
+    //  RENDER 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Materiales — ${projectName || project}`} />
@@ -204,9 +204,7 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE TOAST (CORREGIDO)
-// ─────────────────────────────────────────────────────────────────────────────
 interface ToastMsg {
     id: number;
     text: string;

@@ -166,6 +166,8 @@ class CronoValorizadoController extends Controller
             'estaGuardado'     => $estaGuardado,
             'diasPorMes'       => $diasPorMesProyecto,
             'modoCalculo'      => $modoCalculo,
+            'projectData'       => $costoProject,
+
         ]);
     }
 

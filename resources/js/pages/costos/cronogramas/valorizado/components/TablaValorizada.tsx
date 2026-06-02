@@ -2,9 +2,7 @@ import React, { useState, useRef } from 'react';
 import { RefreshCw, X, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
 import { ItemValorizado, Periodo, ViewMode, TotalesColumna } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FORMATOS
-// ─────────────────────────────────────────────────────────────────────────────
 const fmtN = (v: number) =>
     (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtS = (v: number) => `S/. ${fmtN(v)}`;
@@ -20,21 +18,17 @@ const bgNivel = (n: number, isLeaf: boolean): string => {
     return 'bg-slate-50 text-slate-700';
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
-// ─────────────────────────────────────────────────────────────────────────────
 interface FinancieroState {
-    pctGastosGenerales: number;  // ej: 11.56
-    pctUtilidad:        number;  // ej: 5.00
-    pctIGV:             number;  // ej: 18.00
-    montoMobiliario:    number;  // monto fijo
-    pctIGVMobiliario:   number;  // ej: 18.00
-    pctSupervision:     number;  // ej: 5.13
+    pctGastosGenerales: number;  
+    pctUtilidad:        number;  
+    pctIGV:             number;  
+    montoMobiliario:    number;  
+    pctIGVMobiliario:   number;  
+    pctSupervision:     number;  
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // CELDA EDITABLE PARTIDAS
-// ─────────────────────────────────────────────────────────────────────────────
 interface EditableCellProps {
     value: number; viewMode: ViewMode; parcial: number;
     onChange: (v: number) => void; isPico: boolean; bloqueada: boolean;
@@ -82,9 +76,7 @@ const EditableCell: React.FC<EditableCellProps> = ({ value, viewMode, parcial, o
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CELDA % EDITABLE (sección financiera)
-// ─────────────────────────────────────────────────────────────────────────────
+// CELDA % EDITABLE 
 const PctCell: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => {
     const [editing, setEditing] = useState(false);
     const [raw, setRaw]         = useState('');
@@ -109,9 +101,7 @@ const PctCell: React.FC<{ value: number; onChange: (v: number) => void }> = ({ v
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CELDA MONTO EDITABLE (Mobiliario)
-// ─────────────────────────────────────────────────────────────────────────────
+// CELDA MONTO EDITABLE 
 const MontoCell: React.FC<{ value: number; onChange: (v: number) => void }> = ({ value, onChange }) => {
     const [editing, setEditing] = useState(false);
     const [raw, setRaw]         = useState('');
@@ -136,9 +126,7 @@ const MontoCell: React.FC<{ value: number; onChange: (v: number) => void }> = ({
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // BADGE DESVÍO
-// ─────────────────────────────────────────────────────────────────────────────
 const BadgeDesviacion: React.FC<{ desvio: number }> = ({ desvio }) => {
     if (desvio <= 0.01) return null;
     return (
@@ -149,9 +137,7 @@ const BadgeDesviacion: React.FC<{ desvio: number }> = ({ desvio }) => {
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // PROPS
-// ─────────────────────────────────────────────────────────────────────────────
 interface Props {
     items:               ItemValorizado[];
     periodos:            Periodo[];
@@ -169,7 +155,7 @@ interface Props {
     isPeriodoBloqueado:  (item: ItemValorizado, key: string) => boolean;
     totalesPorItem?:     Record<string | number, number>;
     totalGeneralPeriodos?: number;
-    // Valores iniciales de la sección financiera (opcionales, vienen del backend)
+    // Valores iniciales de la sección financiera 
     finDefaults?: {
         pctGastosGenerales?: number;
         pctUtilidad?:        number;
@@ -180,9 +166,7 @@ interface Props {
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const TablaValorizada: React.FC<Props> = ({
     items = [], periodos = [], viewMode, totales = {},
     totalPresupuesto = 0,
@@ -197,7 +181,6 @@ const TablaValorizada: React.FC<Props> = ({
     const tableRef = useRef<HTMLDivElement>(null);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-    // Estado financiero editable — valores reales del backend como inicial
     const [fin, setFin] = useState<FinancieroState>({
         pctGastosGenerales: finDefaults.pctGastosGenerales ?? 11.56,
         pctUtilidad:        finDefaults.pctUtilidad        ?? 5.00,
@@ -228,19 +211,15 @@ const TablaValorizada: React.FC<Props> = ({
         </div>
     );
 
-    // ── Totales reales del backend ────────────────────────────────────────
     const lastKey             = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
     const totalAcumuladoFinal = totales[lastKey]?.acumuladoMonto ?? 0;
 
-    // costoDirecto = totalPresupuesto (suma de parciales reales del backend)
     const costoDirecto = totalPresupuesto > 0 ? totalPresupuesto : totalGeneralPeriodos;
 
-    // Valorización mensual real por período (del backend)
     const cdPorPeriodo: Record<string, number> = {};
     periodos.forEach(p => { cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0; });
     const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
 
-    // ── Cálculos financieros (sobre el costoDirecto real) ────────────────
     const montoGG    = costoDirecto * (fin.pctGastosGenerales / 100);
     const montoUT    = costoDirecto * (fin.pctUtilidad / 100);
     const subTotal   = costoDirecto + montoGG + montoUT;
@@ -254,7 +233,6 @@ const TablaValorizada: React.FC<Props> = ({
     const montoSup    = presupI * (fin.pctSupervision / 100);
     const presupTotal = totalI_II + montoSup;
 
-    // Distribución mensual proporcional a la valorización real del CD
     const propDist = (total: number): Record<string, number> => {
         const r: Record<string, number> = {};
         periodos.forEach(p => {
@@ -270,7 +248,7 @@ const TablaValorizada: React.FC<Props> = ({
     const distPresI = propDist(presupI);
     const distSup   = propDist(montoSup);
 
-    // Avance acumulado real (del backend)
+    // Avance acumulado 
     let acumCD = 0;
     const avAcumReal: Record<string, number> = {};
     periodos.forEach(p => {
@@ -278,7 +256,6 @@ const TablaValorizada: React.FC<Props> = ({
         avAcumReal[p.key] = costoDirecto > 0 ? (acumCD / costoDirecto) * 100 : 0;
     });
 
-    // ── Helper celda financiera (solo muestra, no editable) ──────────────
     const finTd = (v: number, key: string, cls: string) => (
         <td key={key} className={`p-2 text-right text-[11px] border border-slate-300 tabular-nums font-medium ${cls}
             ${v > 0 ? 'text-slate-700' : 'text-slate-300'}
@@ -287,10 +264,8 @@ const TablaValorizada: React.FC<Props> = ({
         </td>
     );
 
-    // Número de columnas total (para separadores)
     const nCols = 8 + periodos.length + 1;
 
-    // ─────────────────────────────────────────────────────────────────────
     return (
         <div ref={tableRef} className="rounded-xl border border-slate-200 shadow-lg bg-white overflow-hidden">
 

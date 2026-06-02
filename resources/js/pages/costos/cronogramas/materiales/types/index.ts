@@ -61,7 +61,7 @@ export interface CronogramaProps {
     resumen:            ResumenProyecto;
     estaGuardado:       boolean;
     sinGantt?:          boolean;
-    projectData:        any; // Agregado para recibir projectData desde el backend
+    projectData:        any;
 }
 
 export type ViewMode  = 'cantidad' | 'monto';
@@ -74,7 +74,6 @@ export interface FiltroState {
     tipoFiltro?: string;
 }
 
-// ── Punto de la Curva S ───────────────────────────────────────────────────────
 export interface CurvaSPoint {
     mes:        string;
     key:        string;
@@ -83,7 +82,6 @@ export interface CurvaSPoint {
     porcentaje: number;
 }
 
-// ── Catálogo de metadatos por tipo de insumo ──────────────────────────────────
 export const TIPO_META: Record<string, {
     label:      string;
     emoji:      string;
@@ -127,14 +125,12 @@ export const TIPO_META: Record<string, {
 
 export const getTipoMeta = (tipo: string) => TIPO_META[tipo] ?? TIPO_META['otros'];
 
-// ── Helpers de distribución ───────────────────────────────────────────────────
 export const getMontoMensual = (m: MaterialItem, key: string): number =>
     m.distribucion[key]?.monto ?? 0;
 
 export const getCantidadMensual = (m: MaterialItem, key: string): number =>
     m.distribucion[key]?.cantidad ?? 0;
 
-// ── Formateadores ─────────────────────────────────────────────────────────────
 export const fmtSoles = (v: number) =>
     `S/. ${v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

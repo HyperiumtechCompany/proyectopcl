@@ -1,19 +1,15 @@
 import { useMemo, useState, useCallback } from 'react';
 import { MaterialItem, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HOOK PRINCIPAL — toda la lógica de cálculo y estado de la UI
-// ─────────────────────────────────────────────────────────────────────────────
+
 export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo[]) => {
 
-    // ── Estado de la UI ───────────────────────────────────────────────────────
     const [viewMode,  setViewMode]  = useState<ViewMode>('cantidad');
     const [sortField, setSortField] = useState<SortField>('descripcion');
     const [sortDir,   setSortDir]   = useState<SortDir>('asc');
     const [filtro,    setFiltro]    = useState<FiltroState>({ busqueda: '', soloConCant: false, tipoFiltro: '' });
     const [destacado, setDestacado] = useState<string | null>(null);
 
-    // ── Helper para convertir a string seguro ─────────────────────────────────
     const safeString = (value: any): string => {
         if (value === null || value === undefined) return '';
         if (typeof value === 'string') return value;
@@ -21,23 +17,20 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         return '';
     };
 
-    // ── Obtener valor según modo de vista (cantidad o monto) ───────────────────
     const getValorByMode = useCallback((material: MaterialItem, key: string): number => {
         const distribucion = material.distribucion[key];
         if (!distribucion) return 0;
         return viewMode === 'cantidad' ? distribucion.cantidad : distribucion.monto;
     }, [viewMode]);
 
-    // ── Obtener total de un material (cantidad o costo según modo) ─────────────
     const getTotalByMode = useCallback((material: MaterialItem): number => {
         return viewMode === 'cantidad' ? material.cantidad_total : material.costo_total;
     }, [viewMode]);
 
-    // ── Ordenar y filtrar materiales ──────────────────────────────────────────
     const materialesFiltrados = useMemo(() => {
         let lista = [...materiales];
 
-        // Filtro por búsqueda (con conversión segura)
+        // Filtro por búsqueda 
         if (filtro.busqueda.trim()) {
             const q = filtro.busqueda.toLowerCase().trim();
             lista = lista.filter(m => {
@@ -94,7 +87,6 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         return lista;
     }, [materiales, filtro, sortField, sortDir]);
 
-    // ── Totales mensuales (para el footer de la tabla) ────────────────────────
     const totalesMensuales = useMemo(() => {
         const totales: Record<string, number> = {};
         periodos.forEach(p => {
@@ -108,12 +100,10 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         return totales;
     }, [materialesFiltrados, periodos, viewMode]);
 
-    // ── Total general (suma de costos totales) ────────────────────────────────
     const totalGeneral = useMemo(() =>
         materialesFiltrados.reduce((s, m) => s + (m.costo_total || 0), 0),
     [materialesFiltrados]);
 
-    // ── Datos para la Curva S (acumulado mensual en montos) ───────────────────
     const curvaSData = useMemo(() => {
         let acumulado = 0;
         const totalPresupuesto = materiales.reduce((s, m) => s + (m.costo_total || 0), 0);
@@ -135,7 +125,6 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         });
     }, [materiales, periodos]);
 
-    // ── Mes pico (mayor inversión en un mes) ──────────────────────────────────
     const mesPicoKey = useMemo(() => {
         let maxVal = 0;
         let mesPico = '';
@@ -152,7 +141,6 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         return mesPico;
     }, [materiales, periodos]);
 
-    // ── Intensidad de celda (para colorear) ───────────────────────────────────
     const maxMensualTotal = useMemo(() => {
         let maxVal = 0;
         periodos.forEach(p => {
@@ -172,7 +160,6 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
         return Math.min(val / maxMensualTotal, 1);
     }, [maxMensualTotal]);
 
-    // ── Toggle de ordenamiento ─────────────────────────────────────────────────
     const toggleSort = useCallback((field: SortField) => {
         if (sortField === field) {
             setSortDir(d => d === 'asc' ? 'desc' : 'asc');

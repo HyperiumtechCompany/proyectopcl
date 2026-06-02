@@ -959,7 +959,6 @@ export const exportarMaterialesExcel = async (
     }
 
     // GENERAR Y DESCARGAR
-    // ─────────────────────────────────────────────────────────────────────────
     const buffer = await wb.xlsx.writeBuffer();
     const blob   = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

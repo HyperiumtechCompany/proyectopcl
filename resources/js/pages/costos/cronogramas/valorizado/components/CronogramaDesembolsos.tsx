@@ -20,22 +20,16 @@ interface Props {
     onClose: () => void;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES REGLAMENTARIAS
-// ─────────────────────────────────────────────────────────────────────────────
 const ADELANTO_EFECTIVO_PCT   = 0.10;
 const ADELANTO_MATERIALES_PCT = 0.20;
 
-// ─────────────────────────────────────────────────────────────────────────────
 // FORMATTERS
-// ─────────────────────────────────────────────────────────────────────────────
 const fmtSoles = (v: number) =>
     `S/ ${v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SISTEMA DE COLORES FORMAL (paleta Excel institucional)
-// ─────────────────────────────────────────────────────────────────────────────
+// SISTEMA DE COLORES 
 const C = {
     navy:         '#1E3A5F',
     navyMid:      '#2A4F7C',
@@ -60,9 +54,8 @@ const C = {
     surfaceAlt:   '#F0F4F8',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // TIPOS INTERNOS
-// ─────────────────────────────────────────────────────────────────────────────
 type Vista = 'tabla' | 'grafico' | 'curvaS';
 
 interface FilaMensual {
@@ -92,9 +85,7 @@ interface CurveTooltipState {
     data: { label: string; acumulado: number; pct: number };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ESTILOS TABLA EXCEL
-// ─────────────────────────────────────────────────────────────────────────────
+// ESTILOS TABLA 
 function thExcel(extra: React.CSSProperties = {}): React.CSSProperties {
     return {
         padding: '7px 10px',
@@ -132,9 +123,7 @@ const btnBase: React.CSSProperties = {
     transition: 'all 0.15s',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // SUBCOMPONENTES SIMPLES
-// ─────────────────────────────────────────────────────────────────────────────
 const InfoRow: React.FC<{ label: string; value: string; bold?: boolean }> = ({ label, value, bold }) => (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
         <span style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>
@@ -199,9 +188,7 @@ const TipRow: React.FC<{ label: string; value: string; color?: string; bold?: bo
     </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
 // HISTOGRAMA 3D SVG
-// ─────────────────────────────────────────────────────────────────────────────
 interface H3DProps {
     data: FilaMensual[];
     maxValue: number;
@@ -217,8 +204,8 @@ const Histogram3D: React.FC<H3DProps> = ({ data, maxValue, onEnter, onMove, onLe
     const CW  = SVG_W - ML - MR;
     const CH  = SVG_H - MT - MB;
 
-    const DX = 11;  // depth offset X
-    const DY = -5;  // depth offset Y (negative = upward)
+    const DX = 11; 
+    const DY = -5;  
 
     const n   = data.length;
     const slotW = CW / Math.max(n, 1);
@@ -345,9 +332,7 @@ const Histogram3D: React.FC<H3DProps> = ({ data, maxValue, onEnter, onMove, onLe
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // CURVA S SVG INTERACTIVA
-// ─────────────────────────────────────────────────────────────────────────────
 interface SCurveProps {
     data: { label: string; acumulado: number; pct: number }[];
     onPointEnter: (e: React.MouseEvent<SVGElement>, d: { label: string; acumulado: number; pct: number }) => void;
@@ -516,9 +501,7 @@ const SCurveChart: React.FC<SCurveProps> = ({ data, onPointEnter, onPointLeave }
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const CronogramaDesembolsos: React.FC<Props> = ({
     periodos,
     totalPresupuesto,
@@ -536,13 +519,13 @@ const CronogramaDesembolsos: React.FC<Props> = ({
     const [cTooltip, setCTooltip]   = useState<CurveTooltipState | null>(null);
     const chartRef = useRef<HTMLDivElement>(null);
 
-    // ── Montos totales ────────────────────────────────────────────────────────
+    // Montos totales 
     const adelantoEfectivoTotal   = totalPresupuesto * ADELANTO_EFECTIVO_PCT;
     const adelantoMaterialesTotal = totalPresupuesto * ADELANTO_MATERIALES_PCT;
     const totalAdelantoInicial    = adelantoEfectivoTotal + adelantoMaterialesTotal;
     const flujoTotal              = totalPresupuesto + totalAdelantoInicial;
 
-    // ── Cálculo mensual (LÓGICA ORIGINAL SIN CAMBIOS) ────────────────────────
+    // Cálculo mensual 
     const datosMensuales = useMemo<FilaMensual[]>(() => {
         let desembolsoAcumulado = totalAdelantoInicial;
         const totalDiasProyecto = Object.values(diasPorMes).reduce((a, b) => a + b, 0) || totalDias || 1;
@@ -605,7 +588,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
         }));
     }, [datosMensuales, flujoTotal]);
 
-    // ── Handlers de tooltip ───────────────────────────────────────────────────
+    
     const getOffset = (e: React.MouseEvent<SVGElement>) => {
         const rect = chartRef.current?.getBoundingClientRect();
         return rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null;
@@ -624,9 +607,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
     };
     const handleCurveLeave = () => setCTooltip(null);
 
-    // ─────────────────────────────────────────────────────────────────────────
     // RENDER
-    // ─────────────────────────────────────────────────────────────────────────
     return (
         <div style={{
             position: 'fixed', inset: 0, zIndex: 50,
@@ -646,7 +627,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                 overflow: 'hidden',
             }}>
 
-                {/* ══ CABECERA INSTITUCIONAL ══════════════════════════════════ */}
+                {/*  CABECERA INSTITUCIONAL  */}
                 <div style={{ background: C.navy, flexShrink: 0 }}>
                     {/* Franja multicolor */}
                     <div style={{ height: 3, background: 'linear-gradient(90deg,#F59E0B,#EF4444,#10B981,#3B82F6)' }} />
@@ -691,7 +672,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                     </div>
                 </div>
 
-                {/* ══ FICHA DEL PROYECTO ══════════════════════════════════════ */}
+                {/*  FICHA DEL PROYECTO  */}
                 <div style={{
                     background: C.surface,
                     borderBottom: `2px solid ${C.headerBg2}`,
@@ -708,7 +689,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                     <InfoRow label="Adelanto Total (30%)" value={fmtSoles(totalAdelantoInicial)} />
                 </div>
 
-                {/* ══ TARJETAS KPI ════════════════════════════════════════════ */}
+                {/*  TARJETAS KPI  */}
                 <div style={{
                     display: 'grid', gridTemplateColumns: 'repeat(5,1fr)',
                     borderBottom: `2px solid ${C.headerBg2}`,
@@ -729,7 +710,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                         last />
                 </div>
 
-                {/* ══ NAVEGACIÓN DE VISTAS ════════════════════════════════════ */}
+                {/*  NAVEGACIÓN DE VISTAS  */}
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 3,
                     padding: '6px 20px',
@@ -742,10 +723,10 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                     <TabBtn active={vista === 'curvaS'}  onClick={() => setVista('curvaS')}  icon={<TrendingUp style={{ width: 12, height: 12 }} />} label="Curva S Acumulada" />
                 </div>
 
-                {/* ══ CONTENIDO PRINCIPAL ═════════════════════════════════════ */}
+                {/*  CONTENIDO PRINCIPAL  */}
                 <div style={{ flex: 1, overflow: 'auto' }}>
 
-                    {/* ─── VISTA TABLA ─────────────────────────────────────── */}
+                    {/*  VISTA TABLA  */}
                     {vista === 'tabla' && (
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, fontFamily: "'Calibri','Segoe UI',sans-serif" }}>
@@ -896,7 +877,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                         </div>
                     )}
 
-                    {/* ─── VISTA HISTOGRAMA 3D ─────────────────────────────── */}
+                    {/*  VISTA HISTOGRAMA 3D  */}
                     {vista === 'grafico' && (
                         <div style={{ padding: 24, background: C.surface, position: 'relative' }} ref={chartRef}>
                             <div style={{ marginBottom: 14 }}>
@@ -963,7 +944,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                         </div>
                     )}
 
-                    {/* ─── VISTA CURVA S ───────────────────────────────────── */}
+                    {/*  VISTA CURVA S  */}
                     {vista === 'curvaS' && (
                         <div style={{ padding: 24, background: C.surface, position: 'relative' }} ref={chartRef}>
                             <div style={{ marginBottom: 14 }}>
@@ -1009,7 +990,7 @@ const CronogramaDesembolsos: React.FC<Props> = ({
                     )}
                 </div>
 
-                {/* ══ FOOTER LEGAL ════════════════════════════════════════════ */}
+                {/*  FOOTER LEGAL  */}
                 <div style={{
                     borderTop: `2px solid ${C.headerBg2}`,
                     background: C.surfaceAlt,

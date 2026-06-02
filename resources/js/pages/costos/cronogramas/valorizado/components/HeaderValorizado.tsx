@@ -115,7 +115,7 @@ const HeaderValorizado: React.FC<Props> = ({
                 <FileText className="w-3.5 h-3.5" /> PDF
             </button>
 
-            {/* 🔥 NUEVO BOTÓN: CRONOGRAMA DE DESEMBOLSOS */}
+            {/* BOTÓN: CRONOGRAMA DE DESEMBOLSOS */}
             <button
                 onClick={onOpenDesembolso}
                 className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black rounded-xl border border-amber-200 transition-all"

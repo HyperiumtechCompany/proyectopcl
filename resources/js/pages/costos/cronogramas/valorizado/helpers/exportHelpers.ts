@@ -10,6 +10,8 @@ interface ExportarExcelOptions {
     codigoProyecto?: string;
     ubicacion?: string;
     projectData?: any;
+    projectId?: number | string;
+    costoProjectId?: number | string;
     finDefaults?: {
         pctGastosGenerales?: number;
         pctUtilidad?: number;
@@ -27,28 +29,28 @@ const nivel  = (item: string) => (item?.split('.').length ?? 1) - 1;
 // PALETA DE COLORES 
 const C = {
     // Cabecera principal
-    headerBg:        'FF1F4E79', 
+    headerBg:        'FF1F4E79', // slate-950
     headerFg:        'FFFFFFFF',
     // Cabecera parcial
-    parcialBg:       'FF5B9BD5', 
+    parcialBg:       'FF5B9BD5', // azul oscuro
     parcialFg:       'FFFFFFFF',
     // Total (col derecha)
-    totalBg:         'FF70AD47', 
+    totalBg:         'FF70AD47', // emerald-950
     totalFg:         'FFFFFFFF',
     // Mes pico
-    picoBg:          'FFFFC000', 
+    picoBg:          'FFFFC000', // amber-700
     picoFg:          'FF3A3A3A',
     // Niveles de ítem
-    nivel0Bg:        'FFD9EAF7', nivel0Fg: 'FF1F4E79',   
-    nivel1Bg:        'FFEAF4DD', nivel1Fg: 'FF375623',   
-    nivel2Bg:        'FFF2F2F2', nivel2Fg: 'FF404040',  
+    nivel0Bg:        'FFD9EAF7', nivel0Fg: 'FF1F4E79',   // slate-800
+    nivel1Bg:        'FFEAF4DD', nivel1Fg: 'FF375623',   // slate-200
+    nivel2Bg:        'FFF2F2F2', nivel2Fg: 'FF404040',   // slate-100
     nivel3Bg:        'FFFFFFFF', nivel3Fg: 'FF404040',
     leafBg:          'FFFFFFFF', leafFg:  'FF1E293B',
     // Footer filas
-    footer1Bg:       'FF5B9BD5', footer1Fg: 'FFFFFFFF',  
-    footer2Bg:       'FF808080', footer2Fg: 'FFFFFFFF',  
-    footer3Bg:       'FF70AD47', footer3Fg: 'FFFFFFFF',  
-    footer4Bg:       'FF44546A', footer4Fg: 'FFFFFFFF', 
+    footer1Bg:       'FF5B9BD5', footer1Fg: 'FFFFFFFF',  // Valorización mensual
+    footer2Bg:       'FF808080', footer2Fg: 'FFFFFFFF',  // % mensual
+    footer3Bg:       'FF70AD47', footer3Fg: 'FFFFFFFF',  // Val. acumulada
+    footer4Bg:       'FF44546A', footer4Fg: 'FFFFFFFF',  // % acumulado
     // Celda datos
     dataBg:          'FFFFFFFF', dataFg: 'FF808080',
     altRowBg:        'FFF7FBFF',
@@ -164,20 +166,194 @@ const calcularDuracionProyecto = (projectData: any, totalDias?: number): string 
 async function fetchProjectImage(relativePath?: string): Promise<{ buffer: ArrayBuffer; extension: 'png' | 'jpeg' | 'gif' | 'bmp' } | null> {
     try {
         if (!relativePath) return null;
-        const base = (window as any).__STORAGE_URL__
-            || (import.meta as any).env?.VITE_STORAGE_URL
-            || '/storage';
-        const url = base.replace(/\/$/, '') + '/' + String(relativePath).replace(/^\//, '');
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const buffer = await res.arrayBuffer();
-        const lower = String(relativePath).toLowerCase();
+        const rawPath = String(relativePath).trim();
+        if (!rawPath) return null;
+
+        const lower = rawPath.toLowerCase();
         const extension: 'png' | 'jpeg' | 'gif' | 'bmp' =
             lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'jpeg' :
             lower.endsWith('.gif') ? 'gif' :
             lower.endsWith('.bmp') ? 'bmp' : 'png';
-        return { buffer, extension };
+
+        const apiUrl = (import.meta as any).env?.VITE_API_URL || (window as any).__API_URL__ || '';
+        const appUrl = (import.meta as any).env?.VITE_APP_URL || (window as any).__APP_URL__ || '';
+        const apiStorage = apiUrl ? `${String(apiUrl).replace(/\/api\/?$/, '').replace(/\/$/, '')}/storage` : '';
+        const appStorage = appUrl ? `${String(appUrl).replace(/\/$/, '')}/storage` : '';
+
+        const bases = [
+            
+            (window as any).__PROYECTAPCL_STORAGE_URL__,
+            (window as any).__STORAGE_URL__,
+            (import.meta as any).env?.VITE_PROYECTAPCL_STORAGE_URL,
+            (import.meta as any).env?.VITE_STORAGE_URL,
+            apiStorage,
+            appStorage,
+            // Fallbacks comunes en Laravel local.
+            'http://127.0.0.1:8000/storage',
+            'http://localhost:8000/storage',
+            '/storage',
+        ].filter(Boolean) as string[];
+
+        const urls = rawPath.startsWith('http')
+            ? [rawPath]
+            : bases.map(base => `${String(base).replace(/\/$/, '')}/${rawPath.replace(/^\//, '')}`);
+
+        for (const url of urls) {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) continue;
+                const buffer = await res.arrayBuffer();
+                return { buffer, extension };
+            } catch { /* probar siguiente URL */ }
+        }
+        return null;
     } catch { return null; }
+}
+
+function safeJsonParseProject(value: any): any {
+    try {
+        if (!value) return {};
+        if (typeof value === 'string') return JSON.parse(value);
+        return value;
+    } catch { return {}; }
+}
+
+function looksLikeCostoProject(obj: any, projectName = ''): boolean {
+    if (!obj || typeof obj !== 'object') return false;
+    const hasProjectFields = !!(
+        obj.plantilla_logo_izq || obj.plantilla_logo_der ||
+        obj.codigo_cui || obj.codigo_local || obj.codigos_modulares ||
+        obj.unidad_ejecutora || obj.fecha_inicio || obj.fecha_fin
+    );
+    if (!hasProjectFields) return false;
+    if (!projectName || !obj.nombre) return true;
+    const a = String(obj.nombre).toUpperCase().replace(/\s+/g, ' ').trim();
+    const b = String(projectName).toUpperCase().replace(/\s+/g, ' ').trim();
+    return a === b || a.includes(b.slice(0, 40)) || b.includes(a.slice(0, 40));
+}
+
+function findCostoProjectDeep(value: any, projectName = '', depth = 0): any {
+    if (!value || depth > 4) return {};
+    if (typeof value === 'string') {
+        try { return findCostoProjectDeep(JSON.parse(value), projectName, depth + 1); } catch { return {}; }
+    }
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findCostoProjectDeep(item, projectName, depth + 1);
+            if (looksLikeCostoProject(found, projectName)) return found;
+        }
+        return {};
+    }
+    if (typeof value === 'object') {
+        if (looksLikeCostoProject(value, projectName)) return value;
+        const priorityKeys = ['projectData', 'project', 'costoProject', 'costo_project', 'proyecto', 'currentProject', 'data'];
+        for (const k of priorityKeys) {
+            if (k in value) {
+                const found = findCostoProjectDeep(value[k], projectName, depth + 1);
+                if (looksLikeCostoProject(found, projectName)) return found;
+            }
+        }
+        for (const k of Object.keys(value)) {
+            const found = findCostoProjectDeep(value[k], projectName, depth + 1);
+            if (looksLikeCostoProject(found, projectName)) return found;
+        }
+    }
+    return {};
+}
+
+function findProjectInBrowserStorage(projectName: string): any {
+    const keys = [
+        'costo_project', 'costoProject', 'costoProjectData', 'projectData', 'currentProject',
+        'proyecto', 'proyectoActual', 'selectedProject', 'project', 'pcl_project', 'proyecta_project',
+    ];
+
+    for (const storage of [localStorage, sessionStorage]) {
+        for (const key of keys) {
+            try {
+                const found = findCostoProjectDeep(storage.getItem(key), projectName);
+                if (looksLikeCostoProject(found, projectName)) return found;
+            } catch { /* continuar */ }
+        }
+
+        
+        try {
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                if (!key) continue;
+                const found = findCostoProjectDeep(storage.getItem(key), projectName);
+                if (looksLikeCostoProject(found, projectName)) return found;
+            }
+        } catch { /* continuar */ }
+    }
+    return {};
+}
+
+async function resolveProjectDataForExport(options: ExportarExcelOptions, projectName: string): Promise<any> {
+
+    const optAny: any = options || {};
+
+    const fromOptions = findCostoProjectDeep({
+        projectData: optAny.projectData,
+        project: optAny.project,
+        costoProject: optAny.costoProject,
+        costo_project: optAny.costo_project,
+        proyecto: optAny.proyecto,
+        data: optAny.data,
+        direct: optAny,
+    }, projectName);
+
+    const w: any = window as any;
+    const fromWindow = findCostoProjectDeep({
+        __COSTO_PROJECT__: w.__COSTO_PROJECT__,
+        __PROJECT_DATA__: w.__PROJECT_DATA__,
+        __PROYECTO_ACTUAL__: w.__PROYECTO_ACTUAL__,
+        __CURRENT_PROJECT__: w.__CURRENT_PROJECT__,
+        projectData: w.projectData,
+        currentProject: w.currentProject,
+        costoProject: w.costoProject,
+        proyectoActual: w.proyectoActual,
+    }, projectName);
+
+    const fromStorage = findProjectInBrowserStorage(projectName);
+
+    const pd: any = {
+        nombre: projectName,
+        ...fromStorage,
+        ...fromWindow,
+        ...fromOptions,
+    };
+
+    // Compatibilidad con nombres alternativos.
+    pd.plantilla_logo_izq = pd.plantilla_logo_izq || pd.logo_izq || pd.logoIzquierdo || pd.logo_izquierdo || pd.logo_institucion || pd.logo_entidad;
+    pd.plantilla_logo_der = pd.plantilla_logo_der || pd.logo_der || pd.logoDerecho || pd.logo_derecho || pd.logo_municipalidad || pd.logo_gobierno;
+
+    // Debug útil en consola: 
+    console.log('[Valorizado export] projectData resuelto:', {
+        nombre: pd.nombre,
+        codigo_cui: pd.codigo_cui,
+        codigo_local: pd.codigo_local,
+        plantilla_logo_izq: pd.plantilla_logo_izq,
+        plantilla_logo_der: pd.plantilla_logo_der,
+    });
+
+    return pd;
+}
+
+function projectImageUrl(relativePath?: string): string {
+    if (!relativePath) return '';
+    const rawPath = String(relativePath).trim();
+    if (!rawPath) return '';
+    if (rawPath.startsWith('http')) return rawPath;
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || (window as any).__API_URL__ || '';
+    const appUrl = (import.meta as any).env?.VITE_APP_URL || (window as any).__APP_URL__ || '';
+    const base = (window as any).__PROYECTAPCL_STORAGE_URL__
+        || (window as any).__STORAGE_URL__
+        || (import.meta as any).env?.VITE_PROYECTAPCL_STORAGE_URL
+        || (import.meta as any).env?.VITE_STORAGE_URL
+        || (apiUrl ? `${String(apiUrl).replace(/\/api\/?$/, '').replace(/\/$/, '')}/storage` : '')
+        || (appUrl ? `${String(appUrl).replace(/\/$/, '')}/storage` : '')
+        || 'http://127.0.0.1:8000/storage';
+    return `${String(base).replace(/\/$/, '')}/${rawPath.replace(/^\//, '')}`;
 }
 
 function putProjectImage(
@@ -225,7 +401,7 @@ async function buildHeaderMaterialStyle(
     const cIni = logoCols + 1;
     const cFin = totalLogicalCols - logoCols;
 
-    ws.getRow(1).height = 78;
+    ws.getRow(1).height = 85;
 
     const borderExt: Partial<ExcelJS.Borders> = {
         top: { style: 'medium', color: { argb: 'FFB0B0B0' } },
@@ -390,10 +566,10 @@ async function addCronogramaDesembolsosSheet(
     });
 
     ws.getColumn(1).width = 3;
-    const widths = [13, 15, 15, 13, 16, 12, 16, 14];
+    const widths = [17, 19, 19, 17, 20, 16, 20, 18];
     widths.forEach((w, i) => ws.getColumn(xcol(i + 1)).width = w);
 
-    const pd = options.projectData ?? { nombre: projectName, projectName };
+    const pd = await resolveProjectDataForExport(options, projectName);
     let r = await buildHeaderMaterialStyle(ws, pd, 'CRONOGRAMA DE DESEMBOLSOS', 8, data.totalDias);
 
     // Resumen ejecutivo corto
@@ -440,7 +616,7 @@ async function addCronogramaDesembolsosSheet(
     headers.forEach((h, i) => {
         const cell = ws.getCell(r, xcol(i + 1));
         cell.value = h;
-        style(cell, { bg: 'FFDCEBFA', fg: 'FF000000', bold: true, size: 8, hAlign: 'center', vAlign: 'middle', wrapText: true });
+        style(cell, { bg: 'FFDCEBFA', fg: 'FF000000', bold: true, size: 10, hAlign: 'center', vAlign: 'middle', wrapText: true });
         borderAll(cell, 'FF000000');
     });
     ws.getRow(r).height = 31;
@@ -455,7 +631,7 @@ async function addCronogramaDesembolsosSheet(
                 bg,
                 fg: 'FF000000',
                 bold,
-                size: 8,
+                size: 11,
                 hAlign: i === 0 ? 'center' : 'right',
                 vAlign: 'middle',
                 numFmt: isPct ? '0.00%' : i > 0 ? '#,##0.00' : undefined,
@@ -695,9 +871,10 @@ async function addChartImageSheet(
     for (let c = 2; c <= 14; c++) ws.getColumn(c).width = 14;
     for (let r = 1; r <= 55; r++) ws.getRow(r).height = 18;
 
+    const pdChart = await resolveProjectDataForExport(options, projectName);
     await buildHeaderMaterialStyle(
         ws,
-        options.projectData ?? { nombre: projectName, projectName },
+        pdChart,
         `CRONOGRAMA VALORIZADO - ${name.toUpperCase()}`,
         13,
         options.totalDias,
@@ -706,12 +883,11 @@ async function addChartImageSheet(
     const png = await svgToPngDataUrl(chart.svg, chart.width, chart.height);
     const imageId = wb.addImage({ base64: png, extension: 'png' });
     ws.addImage(imageId, {
-        tl: { col: 1, row: 4 }, // B5 visualmente; columna A queda libre
+        tl: { col: 1, row: 4 },
         ext: { width: 1188, height: 576 },
         editAs: 'oneCell',
     });
 
-    // Tabla auxiliar con notas
     let r = 39;
     const headers = type === 'gauss'
         ? ['PERÍODO', 'DÍAS', 'ADELANTO', 'VALORIZACIÓN', 'DESEMBOLSO', '% DESEMBOLSO', 'DESCRIPCIÓN']
@@ -910,7 +1086,7 @@ export async function exportarExcel(
     wb.modified = new Date();
     wb.calcProperties.fullCalcOnLoad = true;
 
-    const pd = options.projectData ?? { nombre: projectName, projectName };
+    const pd = await resolveProjectDataForExport(options, projectName);
     const mesPicoKey = periodos.reduce((best: any, p: any) =>
         ((totales[p.key]?.monto ?? 0) > (totales[best?.key]?.monto ?? 0) ? p : best), periodos[0]
     )?.key;
@@ -928,7 +1104,7 @@ export async function exportarExcel(
             fitToHeight: 0,
             margins: { left: 0.35, right: 0.35, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 },
         },
-        views: [{ state: 'frozen', xSplit: 0, ySplit: 5, showGridLines: false, zoomScale: 100 }],
+        views: [{ state: 'normal', showGridLines: false, zoomScale: 90 }],
         properties: { tabColor: { argb: 'FF1E3A5F' } },
         headerFooter: {
             oddHeader: `&L&B${getProjectNombre(pd, projectName)}&C&BCRONOGRAMA VALORIZADO&R&P de &N`,
@@ -937,9 +1113,9 @@ export async function exportarExcel(
     });
 
     ws.getColumn(1).width = 3;
-    [6, 12, 48, 8, 12, 14, 16, 10].forEach((w, i) => ws.getColumn(xcol(i + 1)).width = w);
-    periodos.forEach((_, i) => ws.getColumn(xcol(FIXED + 1 + i)).width = 15);
-    ws.getColumn(totalCol).width = 18;
+    [7, 13, 55, 9, 13, 15, 18, 11].forEach((w, i) => ws.getColumn(xcol(i + 1)).width = w);
+    periodos.forEach((_, i) => ws.getColumn(xcol(FIXED + 1 + i)).width = 17);
+    ws.getColumn(totalCol).width = 20;
 
     const firstRow = await buildHeaderMaterialStyle(
         ws,
@@ -949,22 +1125,21 @@ export async function exportarExcel(
         options.totalDias,
     );
 
-    // Leyenda superior 
-    ws.getRow(firstRow).height = 22;
+    ws.getRow(firstRow).height = 24;
     ws.mergeCells(firstRow, xcol(1), firstRow, totalCol);
     const ley = ws.getCell(firstRow, xcol(1));
-    ley.value = '📌 CLIC EN CELDA PARA EDITAR     ⟳ = UNIFORME     ↗ = GAUSS (CURVA S)     × = LIMPIAR     🔒 = FUERA DE RANGO';
+    ley.value = 'CRONOGRAMA VALORIZADO — DISTRIBUCIÓN MENSUAL, RESUMEN FINANCIERO Y AVANCE DE OBRA';
     ley.style = {
-        font: fontX({ bold: true, size: 9, color: { argb: 'FF1F4E79' } }),
-        fill: fillX('FFEAF4FE'),
-        alignment: alignX('left', 'middle'),
-        border: borderX('FFCBD5E1'),
+        font: fontX({ bold: true, size: 11, color: { argb: 'FF1F4E79' } }),
+        fill: fillX('FFDCEBFA'),
+        alignment: alignX('center', 'middle'),
+        border: borderX('FF9DC3E6'),
     };
 
     const rowH1 = firstRow + 1;
     const rowH2 = firstRow + 2;
-    ws.getRow(rowH1).height = 32;
-    ws.getRow(rowH2).height = 28;
+    ws.getRow(rowH1).height = 38;
+    ws.getRow(rowH2).height = 34;
 
     const fixedHeaders = ['N°', 'ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'P.U. (S/.)', 'PARCIAL (S/.)', 'ACC.'];
     fixedHeaders.forEach((h, i) => {
@@ -973,8 +1148,8 @@ export async function exportarExcel(
         const cell = ws.getCell(rowH1, col);
         cell.value = h;
         cell.style = {
-            font: fontX({ bold: true, size: 9, color: { argb: 'FF000000' } }),
-            fill: fillX(i === 6 ? 'FF5B9BD5' : 'FFD9EAF7'),
+            font: fontX({ bold: true, size: 11, color: { argb: 'FF000000' } }),
+            fill: fillX(i === 6 ? 'FF5B9BD5' : 'FFDCEBFA'),
             alignment: alignX(i === 2 ? 'left' : 'center', 'middle', true),
             border: borderX('FF9DC3E6'),
         };
@@ -987,8 +1162,8 @@ export async function exportarExcel(
         cell.value = `${p.label ?? `MES ${i + 1}`}\n${p.labelCal ?? ''}`;
         ws.mergeCells(rowH1, col, rowH2, col);
         cell.style = {
-            font: fontX({ bold: true, size: 9, color: { argb: 'FF000000' } }),
-            fill: fillX(isPico ? 'FFFFC000' : 'FFD9EAF7'),
+            font: fontX({ bold: true, size: 11, color: { argb: 'FF000000' } }),
+            fill: fillX(isPico ? 'FFFFC000' : 'FFDCEBFA'),
             alignment: alignX('center', 'middle', true),
             border: borderX(isPico ? 'FFD966' : 'FF9DC3E6'),
         };
@@ -1017,10 +1192,10 @@ export async function exportarExcel(
         const isLeaf = item.is_leaf ?? true;
         const totalFila = getItemTotal(item);
         const row = ws.getRow(rowIdx);
-        row.height = n === 0 ? 26 : 23;
+        row.height = n === 0 ? 30 : 27;
 
         const isRoot = n === 0;
-        const bg = isRoot ? 'FFD9EAF7' : (idx % 2 === 0 ? 'FFFFFFFF' : 'FFF7FBFF');
+        const bg = isRoot ? 'FFDCEBFA' : (idx % 2 === 0 ? 'FFFFFFFF' : 'FFF5FAFF');
         const fg = 'FF000000';
 
         const set = (logicalCol: number, value: ExcelJS.CellValue, st: Partial<ExcelJS.Style>) => {
@@ -1030,27 +1205,27 @@ export async function exportarExcel(
         };
 
         const bodyBase = (align: ExcelJS.Alignment['horizontal'] = 'center'): Partial<ExcelJS.Style> => ({
-            font: fontX({ bold: isRoot, italic: !isRoot && isLeaf, size: 9, color: { argb: fg } }),
+            font: fontX({ bold: isRoot, italic: !isRoot && isLeaf, size: 11, color: { argb: fg } }),
             fill: fillX(bg),
             alignment: alignX(align, 'middle', align === 'left'),
             border: borderX('FFCBD5E1'),
         });
 
         set(1, idx + 1, bodyBase('center'));
-        set(2, item.item ?? '', { ...bodyBase('center'), font: fontX({ bold: true, size: 9, color: { argb: fg } }) });
+        set(2, item.item ?? '', { ...bodyBase('center'), font: fontX({ bold: true, size: 11, color: { argb: fg } }) });
         set(3, item.descripcion ?? item.description ?? '', { ...bodyBase('left'), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: Math.min(n, 4) } });
         set(4, item.und ?? item.unidad ?? '', bodyBase('center'));
         set(5, item.metrado || null, { ...bodyBase('right'), numFmt: '#,##0.00' });
         set(6, item.precio || null, { ...bodyBase('right'), numFmt: '#,##0.00' });
         set(7, item.parcial || null, {
-            font: fontX({ bold: true, size: 8, color: { argb: 'FF1D4ED8' } }),
+            font: fontX({ bold: true, size: 11, color: { argb: 'FF1D4ED8' } }),
             fill: fillX(isRoot ? 'FFD9EAF7' : 'FFEAF4FE'),
             alignment: alignX('right'),
             border: borderX('FFCBD5E1'),
             numFmt: '"S/. "#,##0.00',
         });
         set(8, isRoot ? '' : '⟳  ↗  ×', {
-            font: fontX({ size: 8, color: { argb: 'FF94A3B8' } }),
+            font: fontX({ size: 9, color: { argb: 'FF64748B' } }),
             fill: fillX(isRoot ? 'FFD9EAF7' : 'FFF7FBFF'),
             alignment: alignX('center'),
             border: borderX('FFCBD5E1'),
@@ -1065,7 +1240,7 @@ export async function exportarExcel(
             const c = ws.getCell(rowIdx, col);
             c.value = value as any;
             c.style = {
-                font: fontX({ bold: true, size: 9, color: { argb: monto > 0 ? 'FF000000' : 'FF94A3B8' } }),
+                font: fontX({ bold: true, size: 11, color: { argb: monto > 0 ? 'FF000000' : 'FF94A3B8' } }),
                 fill: fillX(p.key === mesPicoKey ? 'FFFFF2CC' : bg),
                 alignment: alignX('right'),
                 border: borderX(p.key === mesPicoKey ? 'FFFFC000' : 'FFCBD5E1'),
@@ -1076,7 +1251,7 @@ export async function exportarExcel(
         const tCell = ws.getCell(rowIdx, totalCol);
         tCell.value = totalFila || null;
         tCell.style = {
-            font: fontX({ bold: true, size: 9, color: { argb: 'FF008000' } }),
+            font: fontX({ bold: true, size: 11, color: { argb: 'FF008000' } }),
             fill: fillX('FFECFDF5'),
             alignment: alignX('right'),
             border: borderX('FFA7F3D0'),
@@ -1086,11 +1261,11 @@ export async function exportarExcel(
         rowIdx++;
     });
 
-    // Resumen financiero del presupuesto
+    // Resumen financiero del presupuesto, calculado a partir de los totales por periodo y distribuyendo proporcionalmente según el costo directo real por periodo
     ws.getRow(rowIdx).height = 17;
     ws.mergeCells(rowIdx, xcol(1), rowIdx, totalCol);
     const secFin = ws.getCell(rowIdx, xcol(1));
-    secFin.value = '▼ RESUMEN FINANCIERO DEL PRESUPUESTO';
+    secFin.value = 'RESUMEN FINANCIERO DEL PRESUPUESTO';
     secFin.style = {
         font: fontX({ bold: true, size: 9, color: { argb: 'FF1F4E79' } }),
         fill: fillX('FFD9EAF7'),
@@ -1147,7 +1322,7 @@ export async function exportarExcel(
     finRows.forEach(fr => {
         const dist = propDist(fr.label.includes('COSTO DIRECTO') ? totalPresupuesto : fr.total);
         ws.getRow(rowIdx).height = fr.dark ? 24 : 22;
-        const bg = fr.dark ? 'FF5B9BD5' : fr.gray ? 'FFD9EAF7' : 'FFFFFFFF';
+        const bg = fr.dark ? 'FF5B9BD5' : fr.gray ? 'FFDCEBFA' : 'FFFFFFFF';
         const fg = 'FF000000';
 
         ws.getCell(rowIdx, xcol(1)).value = fr.pct ?? '';
@@ -1156,7 +1331,7 @@ export async function exportarExcel(
         ws.mergeCells(rowIdx, xcol(2), rowIdx, xcol(6));
         const l = ws.getCell(rowIdx, xcol(2));
         l.value = fr.label;
-        l.style = { font: fontX({ bold: true, size: 9, color: { argb: fg } }), fill: fillX(bg), alignment: alignX('right'), border: borderX('FFCBD5E1') };
+        l.style = { font: fontX({ bold: true, size: 11, color: { argb: fg } }), fill: fillX(bg), alignment: alignX('right'), border: borderX('FFCBD5E1') };
 
         const parcialCell = ws.getCell(rowIdx, xcol(7));
         parcialCell.value = fr.total || null;
@@ -1166,7 +1341,7 @@ export async function exportarExcel(
         periodos.forEach((p, pi) => {
             const c = ws.getCell(rowIdx, xcol(FIXED + 1 + pi));
             c.value = dist[p.key] || null;
-            c.style = { font: fontX({ bold: true, size: 9, color: { argb: fg } }), fill: fillX(p.key === mesPicoKey ? 'FFFFF2CC' : bg), alignment: alignX('right'), border: borderX(p.key === mesPicoKey ? 'FFFFC000' : 'FFCBD5E1'), numFmt: '#,##0.00' };
+            c.style = { font: fontX({ bold: true, size: 11, color: { argb: fg } }), fill: fillX(p.key === mesPicoKey ? 'FFFFF2CC' : bg), alignment: alignX('right'), border: borderX(p.key === mesPicoKey ? 'FFFFC000' : 'FFCBD5E1'), numFmt: '#,##0.00' };
         });
         const t = ws.getCell(rowIdx, totalCol);
         t.value = fr.total || null;
@@ -1178,7 +1353,7 @@ export async function exportarExcel(
     ws.getRow(rowIdx).height = 17;
     ws.mergeCells(rowIdx, xcol(1), rowIdx, totalCol);
     const secVal = ws.getCell(rowIdx, xcol(1));
-    secVal.value = '▼ VALORIZACIÓN Y AVANCE DE OBRA';
+    secVal.value = 'VALORIZACIÓN Y AVANCE DE OBRA';
     secVal.style = { font: fontX({ bold: true, size: 9, color: { argb: 'FF1F4E79' } }), fill: fillX('FFD9EAF7'), alignment: alignX('left'), border: borderX('FF334155') };
     rowIdx++;
 
@@ -1227,214 +1402,155 @@ export async function exportarExcel(
     URL.revokeObjectURL(url);
 }
 
-// EXPORTAR PDF
-export function exportarPDF(
+
+// EXPORTAR PDF — 4 HOJAS (Cronograma valorizado, Cronograma de desembolsos, Gráfico Gauss, Curva S)
+
+export async function exportarPDF(
     items:          any[],
     periodos:       any[],
     totales:        any,
     projectName:    string,
     totalesPorItem: Record<string | number, number>,
-): void {
-    const fmt  = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    options:        ExportarExcelOptions = {},
+): Promise<void> {
+    const pd = await resolveProjectDataForExport(options, projectName);
+    const logoIzq = projectImageUrl(pd.plantilla_logo_izq || pd.logo_izq || pd.logoIzquierdo || '');
+    const logoDer = projectImageUrl(pd.plantilla_logo_der || pd.logo_der || pd.logoDerecho || '');
+    const dataDes = buildDesembolsoData(periodos, totales, options);
+    const gauss = buildGaussSvg(dataDes);
+    const curva = buildCurvaSvg(dataDes);
+
+    const fmt = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtS = (v: number) => `S/. ${fmt(v)}`;
+    const esc = (v: any) => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] as string));
+    const lastKey = periodos.length ? periodos[periodos.length - 1].key : '';
+    const totalMensualGeneral = periodos.reduce((s, p) => s + (totales[p.key]?.monto ?? 0), 0);
+    const mesPicoKey = periodos.reduce((best: any, p: any) =>
+        ((totales[p.key]?.monto ?? 0) > (totales[best?.key]?.monto ?? 0) ? p : best), periodos[0]
+    )?.key;
 
-    const colW        = Math.max(52, Math.floor(520 / Math.max(periodos.length + 1, 1)));
-    const lastKey     = periodos.length > 0 ? periodos[periodos.length - 1].key : '';
-    const acumFinal   = totales[lastKey]?.acumuladoMonto  ?? 0;
-    const pctFinal    = totales[lastKey]?.acumuladoPorcentaje ?? 0;
-    const totalMens   = Object.values(totales as any)
-        .reduce((s: number, t: any) => s + (t.monto ?? 0), 0) as number;
+    const totalPresupuesto = options.totalPresupuesto
+        ?? items.reduce((s, it) => s + (Number(it.parcial) || 0), 0)
+        ?? totalMensualGeneral;
+    const fin = {
+        pctGastosGenerales: options.finDefaults?.pctGastosGenerales ?? 11.56,
+        pctUtilidad: options.finDefaults?.pctUtilidad ?? 5.00,
+        pctIGV: options.finDefaults?.pctIGV ?? 18.00,
+        montoMobiliario: options.finDefaults?.montoMobiliario ?? 0,
+        pctIGVMobiliario: options.finDefaults?.pctIGVMobiliario ?? 18.00,
+        pctSupervision: options.finDefaults?.pctSupervision ?? 5.13,
+    };
+    const cdPorPeriodo: Record<string, number> = {};
+    periodos.forEach(p => cdPorPeriodo[p.key] = totales[p.key]?.monto ?? 0);
+    const cdTotalReal = Object.values(cdPorPeriodo).reduce((a, b) => a + b, 0);
+    const propDist = (total: number) => {
+        const r: Record<string, number> = {};
+        periodos.forEach(p => r[p.key] = cdTotalReal > 0 ? total * ((cdPorPeriodo[p.key] ?? 0) / cdTotalReal) : 0);
+        return r;
+    };
+    const montoGG = totalPresupuesto * (fin.pctGastosGenerales / 100);
+    const montoUT = totalPresupuesto * (fin.pctUtilidad / 100);
+    const subTotal = totalPresupuesto + montoGG + montoUT;
+    const montoIGV = subTotal * (fin.pctIGV / 100);
+    const presupI = subTotal + montoIGV;
+    const montoIGVMob = fin.montoMobiliario * (fin.pctIGVMobiliario / 100);
+    const subTotalII = fin.montoMobiliario + montoIGVMob;
+    const totalI_II = presupI + subTotalII;
+    const montoSup = presupI * (fin.pctSupervision / 100);
+    const presupTotal = totalI_II + montoSup;
 
-    // Curva S mini-chart (barra horizontal SVG)
-    const curvaBars = periodos.map((p: any) => {
-        const pct = totales[p.key]?.acumuladoPorcentaje ?? 0;
-        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-            <span style="width:60px;font-size:7px;color:#94a3b8;text-align:right">${p.label}</span>
-            <div style="flex:1;background:#1e293b;border-radius:2px;overflow:hidden;height:8px;">
-                <div style="width:${Math.min(pct, 100)}%;background:linear-gradient(90deg,#10b981,#34d399);height:100%;border-radius:2px;"></div>
+    const header = (titulo: string) => `
+        <div class="report-header">
+            <div class="logo-box">${logoIzq ? `<img src="${esc(logoIzq)}"/>` : ''}</div>
+            <div class="head-center">
+                <div class="head-title">${esc(titulo)}</div>
+                <div class="head-name">"${esc(getProjectNombre(pd, projectName))}"</div>
+                <div>CUI: ${esc(pd.codigo_cui || '-')}; &nbsp; CÓDIGO MODULAR: ${esc(getCodigoModular(pd))}; &nbsp; CÓDIGO LOCAL: ${esc(pd.codigo_local || '-')}</div>
+                <div>I.E: ${esc((pd.nombre || projectName || '-').toString().split('-')[0])} &nbsp;&nbsp; UNIDAD EJECUTORA: ${esc((pd.unidad_ejecutora || '-').toString().toUpperCase())}</div>
+                <div>UBICACIÓN: ${esc(getUbicacionProyecto(pd, '-'))}; &nbsp; PLAZO: ${esc(calcularDuracionProyecto(pd, options.totalDias))}</div>
             </div>
-            <span style="width:42px;font-size:7px;font-family:monospace;color:#34d399;text-align:right">${pct > 0 ? pct.toFixed(1) + '%' : ''}</span>
-        </div>`;
-    }).join('');
+            <div class="logo-box">${logoDer ? `<img src="${esc(logoDer)}"/>` : ''}</div>
+        </div>
+        <div class="sep"></div>`;
 
-    const thStyle = `style="padding:4px 5px;background:#0f172a;color:#fff;font-size:8px;text-align:center;border:1px solid #334155;font-weight:700;"`;
-    const thPar   = `style="padding:4px 5px;background:#1e3a5f;color:#bfdbfe;font-size:8px;text-align:right;border:1px solid #334155;font-weight:700;"`;
-    const thTot   = `style="padding:4px 5px;background:#064e3b;color:#6ee7b7;font-size:8px;text-align:center;border:1px solid #334155;font-weight:700;"`;
-    const thPer   = (key: string) =>
-        `style="min-width:${colW}px;padding:4px 3px;background:${key === '' ? '#0f172a' : '#1e293b'};color:#94a3b8;font-size:7px;text-align:center;border:1px solid #334155;"`;
-
-    const headerCols =
-        periodos.map((p: any) =>
-            `<th ${thPer(p.key)}>${p.label}<br><span style="font-size:6px;opacity:.7">${p.labelCal ?? ''}</span></th>`
-        ).join('') +
-        `<th ${thTot}>TOTAL<br><span style="font-size:6px;color:#a7f3d0;">S/. acum.</span></th>`;
-
-    const bodyRows = items.map((item: any, i: number) => {
-        const n       = nivel(item.item);
-        const isLeaf  = item.is_leaf;
-        const totalF  = totalesPorItem[item.id] ?? 0;
-
-        let bg: string, fg: string, fw: string;
-        if      (n === 0) { bg = '#1e293b'; fg = '#fff';    fw = '900'; }
-        else if (n === 1) { bg = '#e2e8f0'; fg = '#1e293b'; fw = '700'; }
-        else if (n === 2) { bg = '#f1f5f9'; fg = '#334155'; fw = '600'; }
-        else if (isLeaf)  { bg = i % 2 === 0 ? '#fff' : '#f8fafc'; fg = '#374151'; fw = '400'; }
-        else              { bg = '#fafafa'; fg = '#475569'; fw = '500'; }
-
-        const pl = `${4 + n * 8}px`;
-
-        const cols = periodos.map((p: any) => {
-            const m = item.distribucion?.[p.key]?.monto ?? 0;
-            return `<td style="text-align:right;font-size:7px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;background:${m > 0 ? bg : (i % 2 === 0 ? '#f9fafb' : '#f3f4f6')};color:${m > 0 ? fg : '#d1d5db'};">${m > 0 ? fmt(m) : ''}</td>`;
+    const periodHeaders = periodos.map(p => `<th class="th-month ${p.key === mesPicoKey ? 'pico' : ''}">${esc(p.label)}<br><small>${esc(p.labelCal || '')}</small></th>`).join('');
+    const itemRows = items.map((it, i) => {
+        const isRoot = nivel(it.item || '') === 0;
+        const totalF = totalesPorItem[it.id] ?? totalesPorItem[String(it.id)] ?? periodos.reduce((s, p) => s + (it.distribucion?.[p.key]?.monto ?? 0), 0);
+        const cls = isRoot ? 'root' : (i % 2 ? 'alt' : '');
+        const monthCells = periodos.map(p => {
+            const m = it.distribucion?.[p.key]?.monto ?? 0;
+            return `<td class="num ${p.key === mesPicoKey ? 'pico-cell' : ''}">${m > 0 ? fmt(m) : ''}</td>`;
         }).join('');
-
-        return `<tr>
-            <td style="text-align:center;font-size:7.5px;padding:2px;border:1px solid #e2e8f0;background:${bg};color:${fg};">${i + 1}</td>
-            <td style="text-align:center;font-size:7px;padding:2px 3px;border:1px solid #e2e8f0;font-family:monospace;background:${bg};color:${fg};">${item.item}</td>
-            <td style="font-size:7.5px;padding:2px ${pl} 2px 4px;border:1px solid #e2e8f0;background:${bg};color:${fg};font-weight:${fw};${isLeaf ? 'font-style:italic' : ''};max-width:220px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${item.descripcion}</td>
-            <td style="text-align:center;font-size:7px;padding:2px;border:1px solid #e2e8f0;background:${bg};color:${fg};">${item.und || ''}</td>
-            <td style="text-align:right;font-size:7px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;background:${bg};color:${fg};">${item.metrado > 0 ? fmt(item.metrado) : ''}</td>
-            <td style="text-align:right;font-size:7px;padding:2px 4px;border:1px solid #e2e8f0;font-family:monospace;background:${bg};color:${fg};">${item.precio > 0 ? fmt(item.precio) : ''}</td>
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #bfdbfe;background:#eff6ff;font-weight:700;font-family:monospace;color:#1d4ed8;">${item.parcial > 0 ? fmt(item.parcial) : ''}</td>
-            ${cols}
-            <td style="text-align:right;font-size:8px;padding:2px 4px;border:1px solid #a7f3d0;background:#ecfdf5;font-weight:900;font-family:monospace;color:#065f46;">${totalF > 0 ? fmtS(totalF) : ''}</td>
+        return `<tr class="${cls}">
+            <td class="center">${i + 1}</td><td class="center bold">${esc(it.item)}</td><td class="desc">${esc(it.descripcion || it.description || '')}</td>
+            <td class="center">${esc(it.und || it.unidad || '')}</td><td class="num">${it.metrado ? fmt(it.metrado) : ''}</td><td class="num">${it.precio ? fmt(it.precio) : ''}</td>
+            <td class="num parcial">${it.parcial ? fmtS(it.parcial) : ''}</td><td class="center muted">${isRoot ? '' : '↗'}</td>${monthCells}<td class="num total">${totalF ? fmtS(totalF) : ''}</td>
         </tr>`;
     }).join('');
 
-    const footerRow = (
-        label: string, bg: string, fg: string, bdColor: string,
-        vals:  string[], totalVal: string,
-    ) =>
-        `<tr><td colspan="7" style="text-align:right;padding:4px 6px;font-size:8px;font-weight:900;background:${bg};color:${fg};border:1px solid ${bdColor};text-transform:uppercase;letter-spacing:.5px;">${label}</td>
-        ${vals.map(v => `<td style="text-align:center;font-size:8px;padding:3px;border:1px solid ${bdColor};background:${bg};color:${fg};font-family:monospace;">${v}</td>`).join('')}
-        <td style="text-align:center;font-size:8.5px;padding:3px;border:1px solid ${bdColor};background:${bg};color:${fg};font-family:monospace;font-weight:900;">${totalVal}</td></tr>`;
+    const financialRows = [
+        ['COSTO DIRECTO', '', totalPresupuesto, propDist(totalPresupuesto), 'normal'],
+        ['GASTOS GENERALES', `${fin.pctGastosGenerales.toFixed(2)}%`, montoGG, propDist(montoGG), 'normal'],
+        ['UTILIDAD', `${fin.pctUtilidad.toFixed(2)}%`, montoUT, propDist(montoUT), 'normal'],
+        ['SUB TOTAL', '', subTotal, propDist(subTotal), 'sub'],
+        ['I.G.V.', `${fin.pctIGV.toFixed(2)}%`, montoIGV, propDist(montoIGV), 'normal'],
+        ['PRESUPUESTO DE OBRA INFRAESTRUCTURA COMPONENTE I', '', presupI, propDist(presupI), 'blue'],
+        ['MOBILIARIO Y EQUIPAMIENTO COMPONENTE II', 'monto', fin.montoMobiliario, propDist(fin.montoMobiliario), 'normal'],
+        ['IGV (MOBILIARIO Y EQUIPAMIENTO)', `${fin.pctIGVMobiliario.toFixed(2)}%`, montoIGVMob, propDist(montoIGVMob), 'normal'],
+        ['SUB TOTAL COMPONENTE II', '', subTotalII, propDist(subTotalII), 'sub'],
+        ['TOTAL PRESUPUESTO DE OBRA COMPONENTE I+II', '', totalI_II, propDist(totalI_II), 'blue'],
+        ['GASTOS DE SUPERVISIÓN Y LIQUIDACIÓN', `${fin.pctSupervision.toFixed(2)}%`, montoSup, propDist(montoSup), 'normal'],
+        ['PRESUPUESTO TOTAL', '', presupTotal, propDist(presupI + montoSup), 'final'],
+    ].map(([label, pct, total, dist, kind]: any) => {
+        const cells = periodos.map(p => `<td class="num ${p.key === mesPicoKey ? 'pico-cell' : ''}">${dist[p.key] ? fmt(dist[p.key]) : ''}</td>`).join('');
+        return `<tr class="fin-${kind}"><td></td><td>${esc(pct)}</td><td colspan="4" class="desc bold">${esc(label)}</td><td class="num bold">${total ? fmtS(total) : ''}</td><td></td>${cells}<td class="num total">${total ? fmtS(total) : ''}</td></tr>`;
+    }).join('');
 
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Cronograma Valorizado — ${projectName}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #fff; color: #1e293b; }
-  .page-wrap { padding: 6mm 8mm; }
-  .header-card {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    background: linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);
-    border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; gap: 12px;
-  }
-  .header-left { flex: 1; }
-  .header-title { font-size: 13px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .5px; }
-  .header-sub   { font-size: 9px;  color: #94a3b8; margin-top: 3px; }
-  .header-date  { font-size: 8px;  color: #64748b; margin-top: 2px; }
-  .kpi-cards { display: flex; gap: 6px; flex-shrink: 0; }
-  .kpi { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
-         border-radius: 6px; padding: 5px 10px; text-align: center; min-width: 80px; }
-  .kpi-label { font-size: 7px; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; }
-  .kpi-val   { font-size: 12px; font-weight: 900; color: #34d399; font-family: monospace; }
-  .kpi-sub   { font-size: 7px; color: #64748b; }
-  .curva-section { background: #0f172a; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; }
-  .curva-title   { font-size: 8px; font-weight: 700; color: #34d399; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
-  table { width: 100%; border-collapse: collapse; font-size: 8px; }
-  thead th { position: relative; }
-  @media print {
-    @page { size: A3 landscape; margin: 5mm; }
-    .page-wrap { padding: 0; }
-    .no-print { display: none !important; }
-  }
-</style>
-</head>
-<body>
-<div class="page-wrap">
+    const footer = [
+        ['VALORIZACIÓN MENSUAL (S/.)', 'footer-blue', periodos.map(p => totales[p.key]?.monto ?? 0), totalMensualGeneral, '#,##0.00'],
+        ['% AVANCE MENSUAL', 'footer-light', periodos.map(p => totales[p.key]?.porcentaje ?? 0), null, 'pct'],
+        ['DÍAS TRABAJADOS', 'footer-light', periodos.map(p => options.diasPorMes?.[p.key] ?? ''), null, 'int'],
+        ['VALORIZACIÓN ACUMULADA (S/.)', 'footer-green', periodos.map(p => totales[p.key]?.acumuladoMonto ?? 0), totales[lastKey]?.acumuladoMonto ?? totalMensualGeneral, '#,##0.00'],
+        ['% AVANCE ACUMULADO (CURVA S)', 'footer-green2', periodos.map(p => totales[p.key]?.acumuladoPorcentaje ?? 0), 100, 'pct'],
+    ].map(([label, cls, vals, total, type]: any) => `<tr class="${cls}"><td colspan="8" class="right bold">${label}</td>${vals.map((v: any, i: number) => `<td class="num ${periodos[i]?.key === mesPicoKey ? 'pico-foot' : ''}">${type === 'pct' ? (v ? Number(v).toFixed(2) + '%' : '') : type === 'int' ? (v || '') : (v ? fmt(v) : '')}</td>`).join('')}<td class="num bold">${total ? (type === 'pct' ? Number(total).toFixed(2) + '%' : fmtS(total)) : ''}</td></tr>`).join('');
 
-  <!-- HEADER -->
-  <div class="header-card">
-    <div class="header-left">
-      <div class="header-title">Cronograma de Ejecución Físico Valorizado</div>
-      <div class="header-sub">${projectName}</div>
-      <div class="header-date">Exportado: ${new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
-    </div>
-    <div class="kpi-cards">
-      <div class="kpi">
-        <div class="kpi-label">Meses</div>
-        <div class="kpi-val">${periodos.length}</div>
-        <div class="kpi-sub">periodos</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Total ejecutado</div>
-        <div class="kpi-val">${fmtS(totalMens)}</div>
-        <div class="kpi-sub">S/. mensual</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Avance final</div>
-        <div class="kpi-val">${pctFinal.toFixed(1)}%</div>
-        <div class="kpi-sub">acumulado</div>
-      </div>
-    </div>
-  </div>
+    const cronogramaTable = `<table class="main-table"><thead><tr><th>N°</th><th>ÍTEM</th><th class="desc">DESCRIPCIÓN</th><th>UND</th><th>METRADO</th><th>P.U. (S/.)</th><th class="parcial-h">PARCIAL (S/.)</th><th>ACC.</th>${periodHeaders}<th class="total-h">TOTAL<br><small>S/. acumulado</small></th></tr></thead><tbody>${itemRows}<tr class="section"><td colspan="${9 + periodos.length}">RESUMEN FINANCIERO DEL PRESUPUESTO</td></tr>${financialRows}<tr class="section"><td colspan="${9 + periodos.length}">VALORIZACIÓN Y AVANCE DE OBRA</td></tr>${footer}</tbody></table>`;
 
-  <!-- CURVA S mini -->
-  <div class="curva-section">
-    <div class="curva-title">📈 Curva S — Avance Acumulado</div>
-    ${curvaBars}
-  </div>
+    const desembolsoRows = [`<tr><td>0</td><td class="num">${fmt(dataDes.adelantoDirecto)}</td><td class="num">${fmt(dataDes.adelantoMateriales)}</td><td class="num">${fmt(dataDes.adelantoTotal)}</td><td></td><td></td><td class="num">${fmt(dataDes.adelantoTotal)}</td><td class="num">${((dataDes.adelantoTotal / dataDes.flujoTotal) * 100).toFixed(2)}%</td></tr>`]
+        .concat(dataDes.filas.map(f => `<tr><td>${f.diasAcumulados}</td><td class="num">${fmt(f.adelantoEfectivo)}</td><td class="num">${fmt(f.adelantoMateriales)}</td><td class="num">${fmt(f.totalAdelanto)}</td><td class="num">${fmt(f.valorizacion)}</td><td class="num">${f.pctAvance.toFixed(2)}%</td><td class="num">${fmt(f.desembolsoMensual)}</td><td class="num">${(f.pctDesembolso * 100).toFixed(2)}%</td></tr>`)).join('');
+    const desembolsoTable = `<table class="des-table"><thead><tr><th>CALENDARIO</th><th>EFECTIVO 10%</th><th>MATERIALES 20%</th><th>TOTAL (1+2)</th><th>PARCIAL PRESUPUESTO</th><th>% AVANCE</th><th>MONTO DESEMBOLSO</th><th>% DE DESEMBOLSO</th></tr></thead><tbody>${desembolsoRows}<tr class="sub"><td>PARCIAL</td><td></td><td></td><td></td><td class="num">${fmt(dataDes.totalValorizacion)}</td><td class="num">100.00%</td><td class="num">${fmt(dataDes.totalValorizacion)}</td><td class="num">100.00%</td></tr></tbody></table>`;
 
-  <!-- TABLA -->
-  <table>
-    <thead>
-      <tr>
-        <th ${thStyle} style="min-width:24px;background:#0f172a;color:#fff;border:1px solid #334155;font-size:8px;padding:4px;">N°</th>
-        <th ${thStyle} style="min-width:56px;background:#0f172a;color:#fff;border:1px solid #334155;font-size:8px;padding:4px;">ÍTEM</th>
-        <th style="min-width:200px;text-align:left;padding:4px 5px;background:#0f172a;color:#fff;font-size:8px;font-weight:700;border:1px solid #334155;">DESCRIPCIÓN</th>
-        <th ${thStyle} style="min-width:32px;background:#0f172a;color:#fff;border:1px solid #334155;font-size:8px;padding:4px;">UND</th>
-        <th ${thStyle} style="min-width:58px;text-align:right;background:#0f172a;color:#fff;border:1px solid #334155;font-size:8px;padding:4px;">METRADO</th>
-        <th ${thStyle} style="min-width:60px;text-align:right;background:#0f172a;color:#fff;border:1px solid #334155;font-size:8px;padding:4px;">P.U.</th>
-        <th ${thPar} style="min-width:72px;">PARCIAL</th>
-        ${headerCols}
-      </tr>
-    </thead>
-    <tbody>${bodyRows}</tbody>
-    <tfoot>
-      ${footerRow(
-          'Valorización Mensual (S/.)', '#1e3a5f', '#fff', '#1e3a5f',
-          periodos.map((p: any) => { const v = totales[p.key]?.monto ?? 0; return v > 0 ? fmtS(v) : '—'; }),
-          fmtS(totalMens),
-      )}
-      ${footerRow(
-          '% Avance Mensual', '#374151', '#e5e7eb', '#374151',
-          periodos.map((p: any) => { const v = totales[p.key]?.porcentaje ?? 0; return v > 0 ? v.toFixed(3) + '%' : '—'; }),
-          '—',
-      )}
-      ${footerRow(
-          'Valorización Acumulada (S/.)', '#064e3b', '#6ee7b7', '#064e3b',
-          periodos.map((p: any) => { const v = totales[p.key]?.acumuladoMonto ?? 0; return v > 0 ? fmtS(v) : '—'; }),
-          fmtS(acumFinal),
-      )}
-      ${footerRow(
-          '% Avance Acumulado — Curva S', '#111827', '#34d399', '#111827',
-          periodos.map((p: any) => { const v = totales[p.key]?.acumuladoPorcentaje ?? 0; return v > 0 ? v.toFixed(2) + '%' : '—'; }),
-          '100 %',
-      )}
-    </tfoot>
-  </table>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Cronograma Valorizado PDF</title><style>
+    @page{size:A3 landscape;margin:7mm} *{box-sizing:border-box} body{font-family:Arial,Calibri,sans-serif;color:#000;margin:0;background:#fff}.page{page-break-after:always;padding:0}.report-header{display:grid;grid-template-columns:130px 1fr 130px;align-items:center;min-height:90px;border:2px solid #b0b0b0;background:#fff}.logo-box{height:86px;display:flex;align-items:center;justify-content:center}.logo-box img{max-width:120px;max-height:82px;object-fit:contain}.head-center{text-align:center;font-size:10px;font-weight:700;font-style:italic;line-height:1.35}.head-title{font-size:13px;font-weight:900}.head-name{font-size:11px;font-weight:900}.sep{height:5px;background:#64748b;margin-bottom:8px}.title-band{background:#dcebfa;border:1px solid #9dc3e6;color:#1f4e79;font-weight:900;text-align:center;padding:7px;font-size:12px;margin-bottom:8px}.main-table,.des-table{width:100%;border-collapse:collapse;font-size:10px}.main-table th,.main-table td,.des-table th,.des-table td{border:1px solid #9db7d1;padding:5px 6px;vertical-align:middle}.main-table th,.des-table th{background:#dcebfa;text-align:center;font-weight:900}.main-table td{height:24px}.desc{text-align:left!important;min-width:250px}.center{text-align:center}.right{text-align:right}.num{text-align:right;font-family:Calibri,monospace;font-weight:700}.bold{font-weight:900}.muted{color:#64748b}.alt td{background:#f5faff}.root td{background:#d9eaf7;font-weight:900}.parcial,.parcial-h{background:#5b9bd5!important;color:#000;font-weight:900}.total,.total-h{background:#e2f0d9!important;color:#008000;font-weight:900}.pico,.pico-cell,.pico-foot{background:#fff2cc!important;border-color:#ffc000!important}.section td,.section{background:#d9eaf7!important;color:#1f4e79;font-weight:900;text-align:left}.fin-sub td{background:#ddebf7;font-weight:900}.fin-blue td{background:#5b9bd5!important;color:#000;font-weight:900}.fin-final td{background:#1f4e79!important;color:#fff;font-weight:900}.fin-final .total{color:#00b050!important}.footer-blue td{background:#5b9bd5;color:#fff;font-weight:900}.footer-light td{background:#d9eaf7}.footer-green td{background:#70ad47;color:#fff;font-weight:900}.footer-green2 td{background:#e2efda;color:#000}.chart-wrap{border:1px solid #9dc3e6;background:#f7f9fc;padding:10px}.chart-wrap svg{width:100%;height:auto}.note{font-size:10px;margin-top:8px;color:#334155;font-weight:700}@media print{.page{page-break-after:always}}
+    </style></head><body>
+    <section class="page">${header('CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO')}<div class="title-band">CRONOGRAMA VALORIZADO — DISTRIBUCIÓN MENSUAL, RESUMEN FINANCIERO Y AVANCE DE OBRA</div>${cronogramaTable}</section>
+    <section class="page">${header('CRONOGRAMA DE DESEMBOLSOS')}<div class="title-band">CRONOGRAMA DE DESEMBOLSOS</div>${desembolsoTable}<p class="note">* Porcentajes máximos de Adelantos según Artículo 155 del Reglamento de la Ley de Contrataciones del Estado.</p></section>
+    <section class="page">${header('GAUSS DE DESEMBOLSOS MENSUALES')}<div class="chart-wrap">${gauss.svg}</div></section>
+    <section class="page">${header('CURVA S — DESEMBOLSO ACUMULADO')}<div class="chart-wrap">${curva.svg}</div></section>
+    <script>window.onload=()=>setTimeout(()=>window.print(),600)</script></body></html>`;
 
-  <!-- PIE DE PÁGINA -->
-  <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #e2e8f0;">
-    <span style="font-size:7px;color:#94a3b8;">Sistema de Cronograma Valorizado</span>
-    <span style="font-size:7px;color:#94a3b8;">${new Date().toLocaleDateString('es-PE')}</span>
-  </div>
-</div>
-
-<script>
-  window.onload = () => setTimeout(() => window.print(), 500);
-</script>
-</body>
-</html>`;
-
-    const win = window.open('', '_blank', 'width=1400,height=900,menubar=yes');
-    if (win) {
-        win.document.write(html);
-        win.document.close();
+    const nombrePDF = `Cronograma_Valorizado_${getProjectNombre(pd, projectName).replace(/\s+/g, '_')}.pdf`;
+    const html2pdf = (window as any).html2pdf;
+    if (html2pdf) {
+        const cont = document.createElement('div');
+        cont.innerHTML = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+        document.body.appendChild(cont);
+        await html2pdf()
+            .set({
+                margin: 0,
+                filename: nombrePDF,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'] },
+            })
+            .from(cont)
+            .save();
+        document.body.removeChild(cont);
+        return;
     }
-}
 
+    const win = window.open('', '_blank', 'width=1600,height=1000,menubar=yes');
+    if (win) { win.document.write(html); win.document.close(); }
+}

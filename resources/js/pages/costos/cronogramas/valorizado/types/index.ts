@@ -23,7 +23,7 @@ export interface ItemValorizado {
     // Fechas reales del Gantt — para bloquear celdas fuera de rango
     start_date?:  string | null;
     end_date?:    string | null;
-    // Total calculado (suma de todos los meses distribuidos)
+    // Total calculado 
     total_monto?: number;
 }
 
@@ -44,7 +44,6 @@ export interface ResumenProyecto {
     pct_mes_pico:      number;
 }
 
-/** Modo de visualización de valores en la tabla */
 export type ViewMode = 'monto' | 'porcentaje';
 
 /**
@@ -65,4 +64,5 @@ export interface ValorizadoProps {
     estaGuardado?:    boolean;
     diasPorMes?:      Record<string, number>;
     modoCalculo?:     ModoCalculo;
+    projectData?: any;
 }

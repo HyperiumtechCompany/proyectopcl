@@ -22,7 +22,7 @@ const fmt = (v: number) =>
     new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(v);
 
 const ResumenCards: React.FC<Props> = ({ estaGuardado, sinGantt, curvaSData, mesPicoKey, resumen }) => {
-    // Cálculos de control de ingeniería
+    // Cálculos de control 
     const totalInsumos   = curvaSData[curvaSData.length - 1]?.acumulado ?? 0;
     const maxMensual     = Math.max(...curvaSData.map(d => d.mensual), 1);
     

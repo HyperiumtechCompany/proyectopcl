@@ -157,7 +157,6 @@ const HeaderMateriales: React.FC<Props> = ({
     );
 };
 
-// ── Sub-componente KPI Card ────────────────────────────────────────────────────
 const colorMap: Record<string, string> = {
     blue:    'bg-blue-50 border-blue-100 text-blue-700',
     emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
