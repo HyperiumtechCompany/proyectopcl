@@ -163,6 +163,41 @@ const calcularDuracionProyecto = (projectData: any, totalDias?: number): string 
     } catch { return '-'; }
 };
 
+// NOMBRE CORTO Y PROFESIONAL PARA EXCEL/PDF
+// Ejemplo: CV_CUI_2468101_2026-06-03.xlsx
+function buildExportFileName(
+    prefix: string,
+    projectName: string,
+    projectData: any,
+    options: ExportarExcelOptions,
+    extension: 'xlsx' | 'pdf',
+): string {
+    const limpiar = (value: any) => String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 42);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    const codigo = limpiar(
+        projectData?.codigo_cui
+        || projectData?.cui
+        || projectData?.codigo_local
+        || options?.codigoProyecto
+        || options?.projectId
+        || options?.costoProjectId
+        || '',
+    );
+
+    const base = codigo
+        ? `CUI_${codigo}`
+        : limpiar(projectName || projectData?.nombre || 'PROYECTO');
+
+    return `${prefix}_${base}_${fecha}.${extension}`;
+}
+
 async function fetchProjectImage(relativePath?: string): Promise<{ buffer: ArrayBuffer; extension: 'png' | 'jpeg' | 'gif' | 'bmp' } | null> {
     try {
         if (!relativePath) return null;
@@ -1392,13 +1427,16 @@ export async function exportarExcel(
     await addChartImageSheet(wb, 'Gauss', buildGaussSvg(desembolsoData), desembolsoData, projectName, options, 'FF5B9BD5', 'gauss');
     await addChartImageSheet(wb, 'Curva S', buildCurvaSvg(desembolsoData), desembolsoData, projectName, options, 'FF10B981', 'curva');
 
+    const nombreExcel = buildExportFileName('CV', projectName, pd, options, 'xlsx');
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Cronograma_Valorizado_${projectName.replace(/\s+/g, '_')}.xlsx`;
+    a.download = nombreExcel;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
 
@@ -1530,7 +1568,7 @@ export async function exportarPDF(
     <section class="page">${header('CURVA S — DESEMBOLSO ACUMULADO')}<div class="chart-wrap">${curva.svg}</div></section>
     <script>window.onload=()=>setTimeout(()=>window.print(),600)</script></body></html>`;
 
-    const nombrePDF = `Cronograma_Valorizado_${getProjectNombre(pd, projectName).replace(/\s+/g, '_')}.pdf`;
+    const nombrePDF = buildExportFileName('CV', projectName, pd, options, 'pdf');
     const html2pdf = (window as any).html2pdf;
     if (html2pdf) {
         const cont = document.createElement('div');

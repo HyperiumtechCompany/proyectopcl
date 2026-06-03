@@ -957,16 +957,47 @@ export const exportarMaterialesExcel = async (
             buildGrandTotalRow(wsT, items, periodos, mesPicoKey, r, COL_FIXED);
         }
     }
-
     // GENERAR Y DESCARGAR
     const buffer = await wb.xlsx.writeBuffer();
     const blob   = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
 
-    const sufijo = filtroEsTodo ? 'GENERAL' : tipoLabel.replace(/\s+/g, '_');
-    const fecha  = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    const nombre = `Cronograma_${sufijo}_${(pd.nombre || projectName).replace(/\s+/g, '_')}_${fecha}.xlsx`;
+    // ─────────────────────────────────────────────────────────────────────
+    // NOMBRE CORTO Y PROFESIONAL DEL ARCHIVO
+    // Evita nombres enormes como: Cronograma_MATERIALES_MEJORAMIENTO_DE...
+    // Ejemplo final: CM_CUI_2468101_2026-06-03.xlsx
+    // ─────────────────────────────────────────────────────────────────────
+    const limpiarNombreArchivo = (txt: string, max = 32): string => {
+        const limpio = String(txt || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9\s_-]/g, '')
+            .replace(/\s+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toUpperCase();
+
+        return limpio.substring(0, max) || 'PROYECTO';
+    };
+
+    const fecha = new Date().toISOString().slice(0, 10);
+
+    const codigoProyecto =
+        pd?.codigo_cui ||
+        pd?.codigo_local ||
+        pd?.codigo_snip ||
+        '';
+
+    const codigoCorto = codigoProyecto
+        ? `CUI_${limpiarNombreArchivo(String(codigoProyecto), 18)}`
+        : limpiarNombreArchivo(pd?.nombre || projectName, 32);
+
+    const sufijoCorto = filtroEsTodo
+        ? 'GENERAL'
+        : limpiarNombreArchivo(tipoLabel, 18);
+
+    const nombre = `CM_${sufijoCorto}_${codigoCorto}_${fecha}.xlsx`;
 
     saveAs(blob, nombre);
 };
