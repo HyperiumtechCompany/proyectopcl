@@ -247,15 +247,15 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 onOpenDesembolso={() => setMostrarDesembolso(true)}
                             />
 
-                            <ResumenFinanciero
+                            {/* <ResumenFinanciero
                                 total={props.totalPresupuesto}
                                 acumulado={montoAcumuladoTotal}
                                 meses={props.periodos.length}
                                 mesPico={props.resumen?.mes_pico}
-                                montoMesPico={props.resumen?.monto_mes_pico}
+                                montoMesPico={props.resumen?.monto_mes_pico} 
                                 pctMesPico={props.resumen?.pct_mes_pico}
                                 curvaSData={curvaSData}
-                            />
+                            />*/}
 
                             <TablaValorizada
                                 items={itemsFiltrados}

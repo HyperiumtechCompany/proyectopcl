@@ -963,11 +963,6 @@ export const exportarMaterialesExcel = async (
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
 
-    // ─────────────────────────────────────────────────────────────────────
-    // NOMBRE CORTO Y PROFESIONAL DEL ARCHIVO
-    // Evita nombres enormes como: Cronograma_MATERIALES_MEJORAMIENTO_DE...
-    // Ejemplo final: CM_CUI_2468101_2026-06-03.xlsx
-    // ─────────────────────────────────────────────────────────────────────
     const limpiarNombreArchivo = (txt: string, max = 32): string => {
         const limpio = String(txt || '')
             .normalize('NFD')
