@@ -147,3 +147,137 @@ select,select option{color:#1e293b !important;background:white !important}
 .gantt_grid_head_cell:hover .pcl-hide-col {
     display: flex !important;
 }
+/* ============================================
+   RESIZER VISIBLE Y FUNCIONAL
+   ============================================ */
+
+/* Hacer visible el resizer */
+.gantt_layout_cell_resizer {
+    background-color: #cbd5e1 !important;
+    width: 10px !important;
+    cursor: col-resize !important;
+    transition: background-color 0.2s ease;
+    position: relative;
+    z-index: 10;
+}
+
+/* Efecto hover */
+.gantt_layout_cell_resizer:hover {
+    background-color: #3b82f6 !important;
+}
+
+/* Línea decorativa en el medio */
+.gantt_layout_cell_resizer::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 30px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+/* Opcional: líneas de "puntos" para indicar arrastre */
+.gantt_layout_cell_resizer::after {
+    content: '⋮';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    display: none;
+}
+
+.gantt_layout_cell_resizer:hover::after {
+    display: block;
+}
+
+/* Asegurar que el grid tenga un ancho mínimo */
+.gantt_layout_cell:first-child {
+    min-width: 300px !important;
+}
+
+/* Deshabilitar selección mientras se arrastra */
+body.resizing {
+    user-select: none !important;
+    cursor: col-resize !important;
+}
+/* ============================================
+   RESIZER - Versión para DHTMLX 9.1.3
+   ============================================ */
+
+/* El resizer existe como "resizer_cell" */
+.gantt_layout_cell.resizer_cell {
+    background-color: #cbd5e1 !important;
+    width: 10px !important;
+    min-width: 10px !important;
+    cursor: col-resize !important;
+    transition: background-color 0.2s ease;
+    position: relative;
+    z-index: 100;
+}
+
+/* Efecto hover */
+.gantt_layout_cell.resizer_cell:hover {
+    background-color: #3b82f6 !important;
+}
+
+/* Indicador visual de arrastre */
+.gantt_layout_cell.resizer_cell::before {
+    content: '⋮' !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    color: #475569 !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    opacity: 0.6;
+}
+
+.gantt_layout_cell.resizer_cell:hover::before {
+    color: white !important;
+    opacity: 1;
+}
+
+/* Durante el arrastre */
+.gantt_layout_cell.resizer_cell:active {
+    background-color: #2563eb !important;
+}
+
+/* Para que se vea mejor con tu tema oscuro */
+.gantt_layout_cell.resizer_cell {
+    background: linear-gradient(90deg, #475569 0%, #64748b 50%, #475569 100%) !important;
+}
+
+.gantt_layout_cell.resizer_cell:hover {
+    background: #3b82f6 !important;
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+}
+/* Estilo para el borde redimensionable del grid */
+.gantt_grid_head_cell:last-child {
+    position: relative;
+}
+
+/* Indicador visual de que se puede redimensionar */
+.gantt_grid_resize_marker {
+    background-color: #3b82f6 !important;
+    width: 3px !important;
+}
+
+/* Cursor al pasar sobre el borde de las cabeceras */
+.gantt_grid_head_cell {
+    cursor: default;
+}
+
+/* El borde derecho de cada cabecera es arrastrable */
+.gantt_grid .gantt_grid_head_cell {
+    border-right: 1px solid #e2e8f0;
+}
+

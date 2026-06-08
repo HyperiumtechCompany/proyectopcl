@@ -119,8 +119,6 @@ let _savedDuration: number | null = null;
 export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
 
     const startDateRef = useRef<HTMLInputElement>(null);
-    const endDateRef = useRef<HTMLInputElement>(null);
-
     const [topUnit, setTopUnit] = useState(_savedTopUnit);
     const [bottomUnit, setBottomUnit] = useState(_savedBottomUnit);
     const [workStartTime, setWorkStartTime] = useState(_savedWorkStart);
@@ -196,7 +194,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         const fechaActual = new Date(inicio);
         let diasAgregados = 0;
 
-        // ✅ Contar el día de inicio SIN saltarlo
+        //  Contar el día de inicio SIN saltarlo
         while (diasAgregados < diasTotales) {
             const diaSemana = fechaActual.getDay();
             const fechaStr = fechaActual.toISOString().split('T')[0];
@@ -240,7 +238,7 @@ export const ProjectSettingsModal = ({ isOpen, onClose, onApply }: Props) => {
         const fecha = new Date(start);
         let dias = 0;
 
-        // ✅ CORRECCIÓN: Contar el día de inicio también
+        //  CORRECCIÓN: Contar el día de inicio también
         while (fecha <= end) {
             const str = fecha.toISOString().split('T')[0];
             if (esLaborable[fecha.getDay()] && !feriadosSet.has(str)) {

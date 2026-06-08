@@ -1,5 +1,6 @@
 import { gantt } from 'dhtmlx-gantt';
 import React, { useState, useEffect, useCallback } from 'react';
+import { gantt} from 'dhtmlx-gantt';
 
 // Importamos las funciones centralizadas del helper
 // ya no duplicamos la lógica de fechas aquí
@@ -21,7 +22,7 @@ interface Props {
 interface GanttTask {
     id: any;
     text: string;
-    rownum: number;  // número de fila global (1, 2, 3…)
+    rownum: number;  
     item?: string;
 }
 
@@ -42,8 +43,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
     const [tempSelections, setTempSelections] = useState<Record<string, string>>({});
 
     // ── Leer estado actual del gantt ──────────────────────────────────────────
-    // Se llama al abrir el modal y después de cada acción para mantener
-    // la lista sincronizada con los links reales del gantt.
+    
     const refreshState = useCallback(() => {
         if (!taskId) return;
 
@@ -56,11 +56,11 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         // Lista de todas las tareas disponibles para seleccionar como predecesora
         const available: GanttTask[] = [];
         gantt.eachTask((t: any) => {
-            if (String(t.id) === String(taskId)) return; // excluir la tarea actual
+            if (String(t.id) === String(taskId)) return; 
             available.push({
                 id: t.id,
                 text: t.text,
-                rownum: gantt.getGlobalTaskIndex(t.id) + 1, // número de fila (1-based)
+                rownum: gantt.getGlobalTaskIndex(t.id) + 1, 
                 item: t.item,
             });
         });
@@ -73,12 +73,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         if (isOpen && taskId) refreshState();
     }, [isOpen, taskId, refreshState]);
 
-    // ── Agregar predecesora ───────────────────────────────────────────────────
-    // 1. Ajusta las fechas de la tarea destino según el tipo de relación
-    //    usando calculateEndDate (respeta días no laborables)
-    // 2. Crea el link en el gantt
-    // 3. Llama autoSchedule para propagar cambios a tareas dependientes
-    // 4. Actualiza el texto de la columna predecesoras
+ // ── Agregar predecesora ─────────────────────────────────────────────────
     const predAdd = useCallback((sourceId: any, type: string) => {
         try {
             const sourceTask = gantt.getTask(sourceId);
@@ -116,9 +111,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
         refreshState();
     }, [taskId, refreshState]);
 
-    // ── Eliminar predecesora ──────────────────────────────────────────────────
-    // Elimina el link, dispara auto-scheduling y actualiza la columna del grid.
-    // Antes solo eliminaba el link y no actualizaba el texto de la columna.
+ //ELIMINAR PREDECESORA ─────────────────────────────────────────────────
     const predRemove = useCallback((linkId: any, targetId: any) => {
         try {
             gantt.deleteLink(linkId);
@@ -127,8 +120,6 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
                 (gantt as any).autoSchedule();
             }
 
-            // FIX: actualizar el texto de la columna después de eliminar
-            // Antes esto no se hacía, entonces la columna mostraba datos viejos
             updatePredecessorsText(targetId);
 
             gantt.render();
@@ -139,8 +130,7 @@ export const PredecessorsModal = ({ isOpen, taskId, onClose }: Props) => {
     }, [refreshState]);
 
     // ── Cambiar tipo de relación existente ────────────────────────────────────
-    // Permite editar el tipo de un link ya creado sin tener que quitarlo y
-    // volver a agregarlo. Antes esto no era posible.
+  
     const predChangeType = useCallback((linkId: any, newType: string) => {
         try {
             const link: any = gantt.getLink(linkId);

@@ -338,8 +338,8 @@ export const useValorizadoLogic = (
         // Calculados
         itemsFiltrados,
         totalesFinales,
-        totalesPorItem,          // 🆕 Total por fila (suma de meses)
-        totalGeneralPeriodos,    // 🆕 Total general de todos los periodos
+        totalesPorItem,         
+        totalGeneralPeriodos,    
         curvaSData,
         montoAcumuladoTotal,
         // Validación
