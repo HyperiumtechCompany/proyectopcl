@@ -37,7 +37,7 @@ const HeaderMateriales: React.FC<Props> = ({
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none">
-                                Cronograma de Materiales
+                                Cronogramas de Materiales, Equipos, Manos de obras, Subcontratos y Subpartidas
                             </h1>
                             {estaGuardado && (
                                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-full uppercase tracking-wide border border-emerald-200">
@@ -157,7 +157,6 @@ const HeaderMateriales: React.FC<Props> = ({
     );
 };
 
-// ── Sub-componente KPI Card ────────────────────────────────────────────────────
 const colorMap: Record<string, string> = {
     blue:    'bg-blue-50 border-blue-100 text-blue-700',
     emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',

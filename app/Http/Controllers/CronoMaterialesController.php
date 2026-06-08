@@ -140,7 +140,7 @@ class CronoMaterialesController extends Controller
             'materiales' => 'required|array',
         ]);
 
-        $projectId = (int) $request->input('project_id');
+        $projectId  = (int) $request->input('project_id');
         $materiales = $request->input('materiales');
         $costoProject = CostoProject::findOrFail($projectId);
 

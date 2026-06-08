@@ -3,6 +3,7 @@ import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle } fr
 import React from 'react';
 import type { ViewMode } from '../types';
 
+
 interface Props {
     project:         string;
     projectName:     string;
@@ -18,6 +19,7 @@ interface Props {
     onExportExcel:   () => void;
     onExportPDF:     () => void;
     totalDesviadas?: number;
+    onOpenDesembolso?: () => void; 
 }
 
 const HeaderValorizado: React.FC<Props> = ({
@@ -27,6 +29,7 @@ const HeaderValorizado: React.FC<Props> = ({
     estaGuardado, saving, deleting,
     onSave, onDelete, onExportExcel, onExportPDF,
     totalDesviadas = 0,
+    onOpenDesembolso, 
 }) => (
     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
 
@@ -111,6 +114,15 @@ const HeaderValorizado: React.FC<Props> = ({
             >
                 <FileText className="w-3.5 h-3.5" /> PDF
             </button>
+
+            {/* BOTÓN: CRONOGRAMA DE DESEMBOLSOS */}
+            <button
+                onClick={onOpenDesembolso}
+                className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black rounded-xl border border-amber-200 transition-all"
+                title="Ver cronograma de desembolsos"
+                >
+                    <DollarSign className='w-3.5 h-3.5' /> Desembolso
+                </button>
 
             {/* Guardar */}
             <button

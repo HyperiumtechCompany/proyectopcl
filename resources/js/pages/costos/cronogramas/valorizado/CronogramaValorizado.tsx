@@ -10,9 +10,7 @@ import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import type { ValorizadoProps, ModoCalculo } from './types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TOAST
-// ─────────────────────────────────────────────────────────────────────────────
 interface ToastItem { id: number; text: string; type: 'success' | 'error' | 'info' }
 
 const useToast = () => {
@@ -34,14 +32,13 @@ const colorToast: Record<string, string> = {
     info:    'bg-blue-900    border-blue-700    text-blue-100',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 export default function CronogramaValorizado(props: ValorizadoProps) {
     const [saving,         setSaving]         = useState(false);
     const [deleting,       setDeleting]       = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
     const [modoCalculo,    setModoCalculo]    = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
+    const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
 
     const { toasts, show: showToast } = useToast();
 
@@ -61,7 +58,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         isPeriodoBloqueado,
     } = useValorizadoLogic(props.items, props.periodos, props.totalPresupuesto, modoCalculo);
 
-    // ── GUARDAR ───────────────────────────────────────────────────────────────
+    // GUARDAR 
     const handleSave = useCallback(async () => {
         if (!items.length) { showToast('⚠ No hay partidas para guardar.', 'info'); return; }
         if (!confirm(`¿Guardar el valorizado de ${items.length} partidas?`)) return;
@@ -93,7 +90,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         }
     }, [props.project, props.periodos, modoCalculo, items, showToast]);
 
-    // ── ELIMINAR ──────────────────────────────────────────────────────────────
+    // ELIMINAR 
     const handleDelete = useCallback(async () => {
         if (!confirm('¿Eliminar el valorizado guardado?\nSe recalculará desde el Gantt.')) return;
         setDeleting(true);
@@ -109,7 +106,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         }
     }, [props.project, showToast]);
 
-    // ── TOGGLE MODO CÁLCULO ───────────────────────────────────────────────────
+    // TOGGLE MODO CÁLCULO 
     const handleToggleModo = useCallback(() => {
         const nuevoModo: ModoCalculo = modoCalculo === 'calendario' ? '30dias' : 'calendario';
         setModoCalculo(nuevoModo);
@@ -118,16 +115,52 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         window.location.href = url.toString();
     }, [modoCalculo]);
 
-    // ── EXPORTACIONES (usando las nuevas funciones) ──────────────────────────
+    
+    const projectDataExport = React.useMemo(() => {
+        const p: any = props as any;
+        return p.projectData
+            ?? p.costoProject
+            ?? p.costo_project
+            ?? p.proyecto
+            ?? p.projectInfo
+            ?? p.project_data
+            ?? null;
+    }, [props]);
+
+    // EXPORTACIONES  
     const handleExportExcel = useCallback(() => {
-        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem);
-    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem]);
+        const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
+
+        console.log('[Valorizado] projectData enviado al exportador:', {
+            nombre: projectDataExport?.nombre,
+            codigo_cui: projectDataExport?.codigo_cui,
+            codigo_local: projectDataExport?.codigo_local,
+            plantilla_logo_izq: projectDataExport?.plantilla_logo_izq,
+            plantilla_logo_der: projectDataExport?.plantilla_logo_der,
+        });
+
+        exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
+            projectData: projectDataExport,
+            projectId: props.project,
+            totalPresupuesto: props.totalPresupuesto,
+            diasPorMes: props.diasPorMes || {},
+            totalDias,
+        });
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, viewMode, totalesPorItem, projectDataExport]);
 
     const handleExportPDF = useCallback(() => {
-        exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem);
-    }, [itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem]);
+        const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
-    // ── MES PICO ──────────────────────────────────────────────────────────────
+        exportarPDF(itemsFiltrados, props.periodos, totalesFinales, props.projectName, totalesPorItem, {
+            projectData: projectDataExport,
+            projectId: props.project,
+            totalPresupuesto: props.totalPresupuesto,
+            diasPorMes: props.diasPorMes || {},
+            totalDias,
+        });
+    }, [itemsFiltrados, props.periodos, props.diasPorMes, props.totalPresupuesto, props.project, totalesFinales, props.projectName, totalesPorItem, projectDataExport]);
+
+    // MES PICO 
     const mesPicoKey = React.useMemo(() => {
         let max = 0; let key = '';
         Object.entries(totalesFinales).forEach(([k, v]) => {
@@ -136,9 +169,18 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         return key;
     }, [totalesFinales]);
 
+    const displayName = React.useMemo(() => {
+        const nombreCompleto = props.projectName || `Proyecto ${props.project}`;
+        const match = nombreCompleto.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N°?\s*\d+)/i);
+        if (match) return match[0];
+
+        if (nombreCompleto.length > 30) return `Proyecto ${props.project}`;
+        return nombreCompleto;
+    }, [props.projectName, props.project]);
+
     const breadcrumbs = [
-        { title: 'Costos',      href: '/costos' },
-        { title: props.projectName || `Proyecto ${props.project}`, href: `/costos/${props.project}` },
+        { title: 'Costos', href: '/costos' },
+        { title: displayName, href: `/costos/${props.project}` },
         { title: 'Cronograma Valorizado', href: '#' },
     ];
 
@@ -207,17 +249,18 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                 onExportExcel={handleExportExcel}
                                 onExportPDF={handleExportPDF}
                                 totalDesviadas={totalDesviadas}
+                                onOpenDesembolso={() => setMostrarDesembolso(true)}
                             />
 
-                            <ResumenFinanciero
+                            {/* <ResumenFinanciero
                                 total={props.totalPresupuesto}
                                 acumulado={montoAcumuladoTotal}
                                 meses={props.periodos.length}
                                 mesPico={props.resumen?.mes_pico}
-                                montoMesPico={props.resumen?.monto_mes_pico}
+                                montoMesPico={props.resumen?.monto_mes_pico} 
                                 pctMesPico={props.resumen?.pct_mes_pico}
                                 curvaSData={curvaSData}
-                            />
+                            />*/}
 
                             <TablaValorizada
                                 items={itemsFiltrados}
@@ -240,6 +283,27 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                         </>
                     )}
                 </div>
+
+                {/* Panel de Cronograma de Desembolsos */}
+                {mostrarDesembolso && (
+                <CronogramaDesembolsos
+                periodos={props.periodos}
+                totalPresupuesto={props.totalPresupuesto}
+                valorizacionesMensuales={totalesFinales}
+                totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
+                diasPorMes={props.diasPorMes || {}}
+                projectName={projectDataExport?.nombre ?? props.projectName}
+                codigoProyecto={projectDataExport?.codigo_cui ?? projectDataExport?.codigo_local ?? ''}
+                ubicacion={[projectDataExport?.departamento, projectDataExport?.provincia, projectDataExport?.distrito].filter(Boolean).join(' - ')}
+                onClose={() => setMostrarDesembolso(false)}
+                />
+                )}
+                
+
+                
+                
+
+
             </div>
 
             {/* Toast container */}
