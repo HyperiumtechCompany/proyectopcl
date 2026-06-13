@@ -6,6 +6,8 @@ use App\Http\Controllers\CaidaTensionController;
 use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\CronogramaController;
+use App\Http\Controllers\CronogramaV2Controller;
+use App\Http\Controllers\DelphinController;
 use App\Http\Controllers\CronoMaterialesController;
 use App\Http\Controllers\CronoValorizadoController;
 use App\Http\Controllers\DashboardController;
@@ -342,8 +344,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/cronograma/valorizado/destroy', [CronoValorizadoController::class, 'destroy'])->name('proyectos.cronograma.valorizado.destroy');
     Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']);
 
-    // 3. Ruta para GUARDAR el Gantt
+    // 3. Ruta para GUARDAR el Gantt (V1)
     Route::post('/cronograma/save/{project}', [CronogramaController::class, 'store'])->name('proyectos.cronograma.save');
+
+    // ─── Cronograma V2 (Gantt inline tipo Delphin) ────────────────────────
+    Route::get('/module/crono_general_v2', [CronogramaV2Controller::class, 'index'])->name('proyectos.cronograma.v2.index');
+    Route::get('/cronograma/v2/{project}/tasks', [CronogramaV2Controller::class, 'getTasks'])->name('proyectos.cronograma.v2.tasks');
+    Route::post('/cronograma/v2/{project}/save', [CronogramaV2Controller::class, 'store'])->name('proyectos.cronograma.v2.save');
+
+    // ─── Delphin (Presupuesto + Cronograma CPM fusionados) ────────────────
+    Route::get('/module/delphin', [DelphinController::class, 'index'])->name('proyectos.delphin.index');
 
     // ETTS — Redirecciones heredadas (opcional)
     Route::get('/costos/{costoProject}/ettp/test', [EttpController::class, 'testMetrados']);

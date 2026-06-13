@@ -16,6 +16,11 @@ function buildProjectFixture(): Project {
             {
                 id: 'scene-1',
                 name: 'Planta Baja',
+                floorIndex: 0,
+                floorElevation: 0,
+                floorHeight: 2.8,
+                lightSwitches: [],
+                partitions: [],
                 scaleConfig: {
                     unit: 'm',
                     factor: 1,
@@ -301,13 +306,14 @@ describe('dialux export pipeline', () => {
             (ambient) => ambient.sourceRoom.id === 'corridor-1',
         );
 
-        expect(snapshot.rooms).toHaveLength(1);
-        expect(snapshot.rooms[0]?.id).toBe('module-1');
+        // El módulo + el pasillo (los corredores siempre se reportan como contexto).
+        expect(snapshot.rooms).toHaveLength(2);
+        expect(snapshot.rooms.some((room) => room.id === 'module-1')).toBe(true);
         expect(corridorAmbient?.id).toBe('module-1::corridor-1::ambient-1');
         expect(corridorAmbient?.roomId).toBe('module-1');
         expect(corridorAmbient?.roomName).toBe('Modulo A');
         expect(corridorAmbient?.metrics.usefulPlaneHeight).toBe(0);
-        expect(snapshot.summary.roomCount).toBe(1);
+        expect(snapshot.summary.roomCount).toBe(2);
         expect(snapshot.summary.calculatedAmbientCount).toBe(2);
         expect(documentModel.ambientDetails).toHaveLength(2);
         expect(
@@ -320,7 +326,7 @@ describe('dialux export pipeline', () => {
         expect(documentModel.ambientDetails.find((detail) => detail.ambientName === 'Pasadizo principal')?.ambientName).toBe(
             'Pasadizo principal',
         );
-        expect(documentModel.pages.some((page) => page.kind === 'ambient-results')).toBe(true);
+        expect(documentModel.pages.some((page) => page.kind === 'ambient-summary')).toBe(true);
         expect(
             documentModel.assets.some(
                 (asset) => asset.id === 'ambient-plan-svg-module-1::corridor-1::ambient-1',
@@ -380,9 +386,16 @@ describe('dialux export pipeline', () => {
             includeViewerCapture: false,
         });
 
+        // Sin DXF importado no se emite el plano base CAD ("plano solo").
         expect(assets.some((asset) => asset.id === 'cad-overview-svg')).toBe(
+            false,
+        );
+        expect(assets.some((asset) => asset.id === 'drawn-terrain-svg')).toBe(
             true,
         );
+        expect(
+            assets.some((asset) => asset.id === 'terrain-with-isolux-svg'),
+        ).toBe(true);
         expect(assets.some((asset) => asset.id === 'chart-lux-summary')).toBe(
             true,
         );
@@ -536,10 +549,21 @@ describe('dialux export pipeline', () => {
         expect(documentModel.pages.some((page) => page.kind === 'luminaire-list')).toBe(true);
         expect(documentModel.pages.some((page) => page.kind === 'ambient-list')).toBe(true);
         expect(documentModel.pages.some((page) => page.kind === 'calculation-object-list')).toBe(true);
-        expect(documentModel.pages.filter((page) => page.kind === 'ambient-results')).toHaveLength(2);
-        expect(documentModel.pages.filter((page) => page.kind === 'ambient-products')).toHaveLength(2);
+        expect(documentModel.pages.filter((page) => page.kind === 'ambient-plan')).toHaveLength(2);
+        expect(documentModel.pages.filter((page) => page.kind === 'ambient-useful-plane')).toHaveLength(2);
+        // Los planos del terreno van primero: plano con dibujo → plano con
+        // isolux → lista de luminarias (el plano solo requiere DXF importado).
         expect(
             documentModel.pages.findIndex((page) => page.kind === 'ambient-list'),
+        ).toBeLessThan(
+            documentModel.pages.findIndex(
+                (page) => page.kind === 'terrain-architectural',
+            ),
+        );
+        expect(
+            documentModel.pages.findIndex(
+                (page) => page.kind === 'terrain-architectural',
+            ),
         ).toBeLessThan(
             documentModel.pages.findIndex(
                 (page) => page.sectionId === 'cad-overview-luminaires',
@@ -557,7 +581,7 @@ describe('dialux export pipeline', () => {
         expect(documentModel.pages.filter((page) => page.kind === 'ambient-summary')).toHaveLength(2);
         expect(documentModel.toc.find((entry) => entry.sectionId === 'preliminary-observations')?.pageNumber).toBe(2);
         expect(documentModel.toc.find((entry) => entry.sectionId === 'content')?.pageNumber).toBe(3);
-        expect(documentModel.toc.find((entry) => entry.sectionId === 'luminaire-list')?.pageNumber).toBeGreaterThan(1);
+        expect(documentModel.toc.find((entry) => entry.sectionId === 'cad-overview-luminaires')?.pageNumber).toBeGreaterThan(1);
         expect(documentModel.assets.some((asset) => asset.id === 'ambient-plan-svg-room-1::ambient-1')).toBe(true);
         expect(documentModel.assets.some((asset) => asset.id === 'isolux-svg-room-2::ambient-1')).toBe(true);
         expect(documentModel.luminaires).toHaveLength(2);
@@ -573,15 +597,200 @@ describe('dialux export pipeline', () => {
             .map((page) => page.kind);
         expect(firstAmbientPageKinds).toEqual([
             'ambient-summary',
-            'ambient-useful-plane',
-            'ambient-results',
-            'ambient-luminaires',
             'ambient-plan',
-            'ambient-products',
+            'ambient-luminaires',
             'ambient-calculation-object',
+            'ambient-useful-plane',
         ]);
         expect(documentModel.ambientDetails[0]?.luminaires[0]?.shape).toBeTruthy();
         expect(documentModel.pages[1]?.notes.length).toBeGreaterThan(0);
+    });
+
+    it('prefers pre-captured editor bitmaps for cover and terrain plan pages', async () => {
+        const snapshot = buildDialuxExportSnapshot({
+            project: buildProjectFixture(),
+            activeSceneId: 'scene-1',
+            resultsByRoom: {
+                'room-1::ambient-1': buildLightingResultFixture(),
+            },
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig: {
+                showGrid: true,
+                showIsolux: true,
+                show3DView: false,
+                isoluxMode: 'waves',
+                zoom: 1,
+                panX: 0,
+                panY: 0,
+                selectedId: null,
+            },
+        });
+
+        const makeBitmap = (id: string, purpose: string) => ({
+            id,
+            title: id,
+            purpose,
+            kind: 'bitmap' as const,
+            mimeType: 'image/jpeg' as const,
+            dataUrl: 'data:image/jpeg;base64,xxxx',
+            width: 900,
+            height: 585,
+        });
+
+        const assets = await buildDialuxExportAssets(snapshot, {
+            includeViewerCapture: false,
+            preCapturedViewerBitmap: makeBitmap('viewer-capture-3d', 'formal-cover') as never,
+            preCapturedCadBitmap: makeBitmap('cad-base-bitmap', 'cad-base') as never,
+            preCapturedDrawnBitmap: makeBitmap('composite-plan-bitmap', 'drawn-terrain') as never,
+            preCapturedIsoluxBitmap: makeBitmap('composite-isolux-bitmap', 'isolux') as never,
+        });
+        const documentModel = buildDialuxFormalDocument(snapshot, assets);
+
+        // La portada usa la captura 3D real del editor.
+        const coverPage = documentModel.pages.find((page) => page.kind === 'cover');
+        expect(coverPage?.assetIds).toContain('viewer-capture-3d');
+
+        // El plano base (sin DXF en el store) usa la captura del canvas CAD.
+        const cadPage = documentModel.pages.find((page) => page.kind === 'terrain-cad');
+        expect(cadPage?.assetIds).toEqual(['cad-base-bitmap']);
+
+        // Plano con dibujo e isolux: las capturas compuestas tienen prioridad
+        // sobre los SVG sintéticos.
+        const drawnPage = documentModel.pages.find((page) => page.kind === 'ambient-list');
+        expect(drawnPage?.assetIds).toEqual(['composite-plan-bitmap']);
+        const isoluxPage = documentModel.pages.find(
+            (page) => page.kind === 'terrain-architectural',
+        );
+        expect(isoluxPage?.assetIds).toEqual(['composite-isolux-bitmap']);
+    });
+
+    it('groups identical luminaire products into one list item with quantity and a single product sheet', () => {
+        const project = buildProjectFixture();
+        const scene = project.scenes[0]!;
+
+        // Tres instancias del mismo producto (con sufijos de copia y en distintos
+        // recintos) + un producto distinto.
+        scene.fixtures = [
+            {
+                id: 'fixture-a1',
+                name: 'Panel 60x60 [1]',
+                x: 2,
+                y: 1,
+                z: 2.7,
+                lumens: 4000,
+                efficiency: 0.8,
+                fixtureType: 'panel',
+                fixtureShape: 'rectangular',
+                lightColor: '#fff5e1',
+                roomId: 'room-1::ambient-1',
+                brand: 'Test Lighting',
+                articleNumber: 'PANEL-40W',
+                productId: 10,
+                power: 40,
+            },
+            {
+                id: 'fixture-a2',
+                name: 'Panel 60x60 [2]',
+                x: 4,
+                y: 3,
+                z: 2.7,
+                lumens: 4000,
+                efficiency: 0.8,
+                fixtureType: 'panel',
+                fixtureShape: 'rectangular',
+                lightColor: '#fff5e1',
+                roomId: 'room-1::ambient-1',
+                brand: 'Test Lighting',
+                articleNumber: 'PANEL-40W',
+                productId: 10,
+                power: 40,
+            },
+            {
+                id: 'fixture-a3',
+                name: 'Panel 60x60 (3)',
+                x: 8.5,
+                y: 2,
+                z: 2.7,
+                lumens: 4000,
+                efficiency: 0.8,
+                fixtureType: 'panel',
+                fixtureShape: 'rectangular',
+                lightColor: '#fff5e1',
+                roomId: 'room-2::ambient-1',
+                brand: 'Test Lighting',
+                articleNumber: 'PANEL-40W',
+                productId: 10,
+                power: 40,
+            },
+            {
+                id: 'fixture-b1',
+                name: 'Spot dirigible',
+                x: 9.5,
+                y: 3,
+                z: 2.7,
+                lumens: 1600,
+                efficiency: 0.8,
+                fixtureType: 'spot',
+                fixtureShape: 'round',
+                lightColor: '#fff5e1',
+                roomId: 'room-2::ambient-1',
+                power: 18,
+            },
+        ];
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom: {},
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig: {
+                showGrid: true,
+                showIsolux: true,
+                show3DView: false,
+                isoluxMode: 'functional',
+                zoom: 1,
+                panX: 0,
+                panY: 0,
+                selectedId: null,
+            },
+        });
+        const documentModel = buildDialuxFormalDocument(snapshot, []);
+
+        // Lista global: 2 tipologías, el panel consolidado con cantidad 3.
+        expect(documentModel.luminaires).toHaveLength(2);
+        const panel = documentModel.luminaires.find(
+            (luminaire) => luminaire.articleNumber === 'PANEL-40W',
+        );
+        expect(panel?.quantity).toBe(3);
+        expect(panel?.name).toBe('Panel 60x60');
+
+        // Totales tipo evo: Φtotal y Ptotal multiplican por cantidad.
+        expect(documentModel.luminaireTotals.totalLumens).toBe(
+            4000 * 3 + 1600,
+        );
+        expect(documentModel.luminaireTotals.totalPowerWatts).toBe(
+            40 * 3 + 18,
+        );
+
+        // Una sola ficha de producto por producto único.
+        expect(
+            documentModel.pages.filter((page) => page.kind === 'product-sheet'),
+        ).toHaveLength(2);
+
+        // Lista por ambiente: las 2 instancias del room-1 se agrupan en una fila.
+        const firstAmbient = documentModel.ambientDetails.find(
+            (detail) => detail.ambientId === 'room-1::ambient-1',
+        );
+        expect(firstAmbient?.luminaires).toHaveLength(1);
+        expect(firstAmbient?.luminaires[0]?.quantity).toBe(2);
+
+        // El plano útil descuenta la zona marginal del área total.
+        expect(firstAmbient?.usefulArea).toBeGreaterThan(0);
+        expect(firstAmbient?.usefulArea).toBeLessThanOrEqual(
+            firstAmbient?.area ?? 0,
+        );
     });
 
     it('enriches imported products with polar assets and report tables', async () => {

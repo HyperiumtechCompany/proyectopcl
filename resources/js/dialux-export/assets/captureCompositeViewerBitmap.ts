@@ -1,9 +1,9 @@
 import type { DialuxBitmapAsset } from '../domain/types';
 
-const MAX_CAPTURE_WIDTH = 1200;
-const MAX_CAPTURE_HEIGHT = 780;
+const MAX_CAPTURE_WIDTH = 900;
+const MAX_CAPTURE_HEIGHT = 585;
 const VIEWER_CAPTURE_MIME_TYPE = 'image/jpeg' as const;
-const VIEWER_CAPTURE_QUALITY = 0.78;
+const VIEWER_CAPTURE_QUALITY = 0.65;
 
 /**
  * Returns true when the canvas can be read without a SecurityError
@@ -19,6 +19,7 @@ function isSafeCanvas(canvas: HTMLCanvasElement): boolean {
 }
 
 interface CaptureCompositeViewerBitmapOptions {
+    id?: string;
     title?: string;
     purpose?: DialuxBitmapAsset['purpose'];
     cadSelector?: string;
@@ -191,7 +192,7 @@ export async function captureCompositeViewerBitmap(
     }
 
     return {
-        id: 'viewer-capture',
+        id: options.id ?? 'viewer-capture',
         title: options.title ?? 'Captura del CAD Viewer',
         purpose: options.purpose ?? 'viewer-capture',
         kind: 'bitmap',

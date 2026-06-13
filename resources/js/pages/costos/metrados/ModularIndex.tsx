@@ -18,6 +18,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
 import { detectDiscipline, injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 
 // TIPOS
 interface ColumnDef { key: string; label: string; width: number }
@@ -667,10 +668,12 @@ export default function ModularIndex() {
         if (updates.length === 0) return;
         if (updates.length > 10000) return;
 
+        if (!isLuckysheetReady()) return;
+
         progUpdateCount.current++;
 
         updates.forEach((u, idx) => {
-            ls.setCellValue(u.r, u.c, u.v, {
+            safeSetCellValue(u.r, u.c, u.v, {
                 order: sheetOrder,
                 isRefresh: idx === updates.length - 1,
             });
@@ -769,7 +772,7 @@ export default function ModularIndex() {
                 BASE_COLS.forEach((_, ci) => {
                     const val = rowData[ci] ?? null;
                     const isLastCell = isLast && i === rows.length - 1 && ci === BASE_COLS.length - 1;
-                    ls.setCellValue(r, ci, blank(val) ? '' : val, {
+                    safeSetCellValue(r, ci, blank(val) ? '' : val, {
                         order: sheetOrder,
                         isRefresh: isLastCell,
                     });
@@ -890,19 +893,19 @@ export default function ModularIndex() {
 
         // Escribir columnas internas
         const r = insertAfter + 1;
-        ls.setCellValue(r, COL['_level'], newLevel, { order: sheetOrder });
-        ls.setCellValue(r, COL['_kind'],  kind,     { order: sheetOrder });
+        safeSetCellValue(r, COL['_level'], newLevel, { order: sheetOrder });
+        safeSetCellValue(r, COL['_kind'],  kind,     { order: sheetOrder });
 
         // Limpiar columnas numéricas para grupos
         if (kind === 'group') {
             ['elsim','largo','ancho','alto','nveces','lon','area','vol','kg','und','total']
-                .forEach((key) => ls.setCellValue(r, COL[key], '', { order: sheetOrder }));
+                .forEach((key) => safeSetCellValue(r, COL[key], '', { order: sheetOrder }));
         }
         // Asegurar descripción mínima al agregar
         if (kind === 'group') {
-            ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_GROUP, { order: sheetOrder });
+            safeSetCellValue(r, COL['descripcion'], DEFAULT_DESC_GROUP, { order: sheetOrder });
         } else {
-            ls.setCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
+            safeSetCellValue(r, COL['descripcion'], DEFAULT_DESC_LEAF, { order: sheetOrder });
         }
 
         setTimeout(() => recalcActiveSheet(), 120);
@@ -917,7 +920,7 @@ export default function ModularIndex() {
             const ls = (window as any).luckysheet;
             const sheets = ls?.getAllSheets?.() ?? [];
             // Luckysheet no está listo si no hay hojas con datos
-            if (!ls || typeof ls.setDataVerification !== 'function' || sheets.length === 0) {
+            if (!ls || typeof ls.setDataVerification !== 'function' || sheets.length === 0 || !isLuckysheetReady()) {
                 if (++attempts < MAX_ATTEMPTS) timer = setTimeout(applyVerification, 250);
                 return;
             }
@@ -933,7 +936,7 @@ export default function ModularIndex() {
             sheets.forEach((s: any) => {
                 if (s.name === 'Resumen') return;
 
-                ls.setDataVerification(opt, {
+                safeSetDataVerification(opt, {
                     range,
                     order: s.order
                 });
@@ -1011,7 +1014,7 @@ export default function ModularIndex() {
             newRows.forEach((row, r) => {
                 resumenCols.forEach((col, c) => {
                     const val = row[col.key as keyof typeof row] ?? '';
-                    ls.setCellValue(r + 1, c, val, {
+                    safeSetCellValue(r + 1, c, val, {
                         isRefresh: false
                     });
                 });
@@ -1019,7 +1022,7 @@ export default function ModularIndex() {
 
             // ✅ HEADERS
             resumenCols.forEach((col, c) => {
-                ls.setCellValue(0, c, col.label, {
+                safeSetCellValue(0, c, col.label, {
                     isRefresh: false
                 });
             });
@@ -1155,7 +1158,7 @@ export default function ModularIndex() {
 
                     if (val === undefined) val = "";
 
-                    ls.setCellValue(r + 1, c, val, {
+                    safeSetCellValue(r + 1, c, val, {
                         order: sheetOrder,
                         isRefresh: false,
                     });
@@ -1486,4 +1489,3 @@ function ctxItem(
         },
     };
 }
-

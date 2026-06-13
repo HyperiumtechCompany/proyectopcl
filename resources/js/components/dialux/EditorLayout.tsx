@@ -11,7 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { useDialuxPdfExport } from '@/dialux-export';
+import { useDialuxDxfExport, useDialuxPdfExport } from '@/dialux-export';
 import { deriveAmbientSpaces } from '@/hooks/dialux/ambientSpaces';
 import {
     createScaleConfig,
@@ -95,6 +95,7 @@ export const EditorLayout = memo(function EditorLayout() {
     const [showFloorPanel, setShowFloorPanel] = useState(false);
     const engine = useLightingEngine();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
+    const { exportDxf, isExporting: isExportingDxf } = useDialuxDxfExport();
 
     const floorsSorted = getFloorsSorted();
 
@@ -495,6 +496,17 @@ export const EditorLayout = memo(function EditorLayout() {
                     >
                         <Download size={13} />
                         {isExporting ? (exportStep || 'Exportando PDF...') : 'Exportar PDF'}
+                    </button>
+
+                    <button
+                        id="dialux-btn-export-dxf"
+                        onClick={exportDxf}
+                        disabled={!project || isExportingDxf}
+                        className="flex items-center gap-1.5 rounded border border-emerald-700/40 bg-emerald-950/60 px-3 py-1.5 text-xs text-emerald-100 transition-all hover:bg-emerald-900/70 disabled:cursor-not-allowed disabled:opacity-40"
+                        title="Exportar plano 2D en formato DXF (CAD)"
+                    >
+                        <Download size={13} />
+                        {isExportingDxf ? 'Exportando DXF...' : 'Exportar DXF'}
                     </button>
                 </div>
             </header>

@@ -106,6 +106,24 @@ interface ModelSpaceApi {
         | undefined;
 }
 
+/**
+ * Ajusta la vista del motor CAD a la extensión del dibujo desde fuera de React.
+ * Lo usa el exportador PDF para encuadrar el plano completo antes de capturar
+ * el canvas. Retorna false si el motor o el documento no están disponibles.
+ */
+export function fitCadViewToDrawing(): boolean {
+    const view = _docManager?.curView as unknown as ViewApi | null;
+    if (view && typeof view.zoomToFitDrawing === 'function') {
+        try {
+            view.zoomToFitDrawing();
+            return true;
+        } catch {
+            return false;
+        }
+    }
+    return false;
+}
+
 /** Obtiene o crea la instancia Ãºnica del AcApDocManager */
 function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
     if (!_docManager) {
