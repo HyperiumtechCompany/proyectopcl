@@ -6,9 +6,11 @@ import AppLayout from '@/layouts/app-layout';
 import HeaderValorizado from './components/HeaderValorizado';
 import ResumenFinanciero from './components/ResumenFinanciero';
 import TablaValorizada from './components/TablaValorizada';
-import { exportarExcel, exportarPDF } from './helpers/exportHelpers'; 
+import CronogramaDesembolsos from './components/CronogramaDesembolsos';
+import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import type { ValorizadoProps, ModoCalculo } from './types';
+import CronogramaMateriales from '../materiales/CronogramaMateriales';
 
 // TOAST
 interface ToastItem { id: number; text: string; type: 'success' | 'error' | 'info' }
@@ -28,17 +30,21 @@ const useToast = () => {
 
 const colorToast: Record<string, string> = {
     success: 'bg-emerald-900 border-emerald-600 text-emerald-100',
-    error:   'bg-rose-900    border-rose-700    text-rose-100',
-    info:    'bg-blue-900    border-blue-700    text-blue-100',
+    error: 'bg-rose-900    border-rose-700    text-rose-100',
+    info: 'bg-blue-900    border-blue-700    text-blue-100',
 };
 
 // COMPONENTE PRINCIPAL
 export default function CronogramaValorizado(props: ValorizadoProps) {
-    const [saving,         setSaving]         = useState(false);
-    const [deleting,       setDeleting]       = useState(false);
+    console.log('🔴 TODAS LAS PROPS:', props);
+    console.log('🔴 MATERIALES PROPS:', props.materiales);
+    console.log('🔴 MATERIALESRESUMEN:', props.materialesResumen);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);
-    const [modoCalculo,    setModoCalculo]    = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
+    const [modoCalculo, setModoCalculo] = useState<ModoCalculo>(props.modoCalculo ?? 'calendario');
     const [mostrarDesembolso, setMostrarDesembolso] = useState(false);
+    const [vistaActual, setVistaActual] = useState<'valorizado' | 'materiales'>('valorizado');
 
     const { toasts, show: showToast } = useToast();
 
@@ -69,16 +75,16 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                 project_id: props.project,
                 modo_calculo: modoCalculo,
                 items: items.map(i => ({
-                    item:        i.item,
+                    item: i.item,
                     descripcion: i.descripcion,
-                    parcial:     i.parcial,
+                    parcial: i.parcial,
                     distribucion: Object.fromEntries(
                         props.periodos.map(periodo => [
                             periodo.key,
                             i.distribucion?.[periodo.key] ?? { monto: 0, porcentaje: 0 },
                         ])
                     ),
-                    parent_id:   i.parent_id ?? null,
+                    parent_id: i.parent_id ?? null,
                 })),
             });
             setEstaGuardadoUI(true);
@@ -115,7 +121,6 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
         window.location.href = url.toString();
     }, [modoCalculo]);
 
-    
     const projectDataExport = React.useMemo(() => {
         const p: any = props as any;
         return p.projectData
@@ -130,14 +135,6 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     // EXPORTACIONES  
     const handleExportExcel = useCallback(() => {
         const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
-
-        console.log('[Valorizado] projectData enviado al exportador:', {
-            nombre: projectDataExport?.nombre,
-            codigo_cui: projectDataExport?.codigo_cui,
-            codigo_local: projectDataExport?.codigo_local,
-            plantilla_logo_izq: projectDataExport?.plantilla_logo_izq,
-            plantilla_logo_der: projectDataExport?.plantilla_logo_der,
-        });
 
         exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
             projectData: projectDataExport,
@@ -207,102 +204,122 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                             </a>
                         </div>
                     )}
-
                     {!props.sinGantt && (
                         <>
-                            {/* Banner modo de cálculo */}
-                            <div className="mb-4 flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-sm">
-                                <div className="flex items-center gap-3 text-xs text-slate-600 font-semibold">
-                                    <span className={`px-2.5 py-1 rounded-lg font-black text-[10px] uppercase tracking-wide ${
-                                        modoCalculo === 'calendario'
-                                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                            : 'bg-violet-100 text-violet-700 border border-violet-200'
-                                    }`}>
-                                        {modoCalculo === 'calendario' ? '📅 Modo Calendario' : '📐 Modo 30 Días'}
-                                    </span>
-                                    <span className="text-slate-500">
-                                        {modoCalculo === 'calendario'
-                                            ? 'Corte al último día de cada mes (Regla de Ejecución)'
-                                            : 'Bloques exactos de 30 días (Planificación Financiera)'}
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={handleToggleModo}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all"
-                                >
-                                    Cambiar modo →
-                                </button>
-                            </div>
+                            {vistaActual === 'valorizado' ? (
+                                // VALORIZADO
+                                <>
+                                    {/* Banner modo de cálculo */}
+                                    <div className="mb-4 flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-sm">
+                                        <div className="flex items-center gap-3 text-xs text-slate-600 font-semibold">
+                                            <span className={`px-2.5 py-1 rounded-lg font-black text-[10px] uppercase tracking-wide ${modoCalculo === 'calendario'
+                                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                                : 'bg-violet-100 text-violet-700 border border-violet-200'
+                                                }`}>
+                                                {modoCalculo === 'calendario' ? '📅 Modo Calendario' : '📐 Modo 30 Días'}
+                                            </span>
+                                            <span className="text-slate-500">
+                                                {modoCalculo === 'calendario'
+                                                    ? 'Corte al último día de cada mes (Regla de Ejecución)'
+                                                    : 'Bloques exactos de 30 días (Planificación Financiera)'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleToggleModo}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all"
+                                            >
+                                                Cambiar modo →
+                                            </button>
+                                            <button
+                                                onClick={() => setVistaActual('materiales')}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all"
+                                            >
+                                                📦 Materiales →
+                                            </button>
+                                        </div>
+                                    </div>
 
-                            <HeaderValorizado
-                                project={props.project}
-                                projectName={props.projectName}
-                                viewMode={viewMode}
-                                setViewMode={setViewMode}
-                                searchTerm={searchTerm}
-                                setSearchTerm={setSearchTerm}
-                                estaGuardado={estaGuardadoUI}
-                                saving={saving}
-                                deleting={deleting}
-                                onSave={handleSave}
-                                onDelete={handleDelete}
-                                onExportExcel={handleExportExcel}
-                                onExportPDF={handleExportPDF}
-                                totalDesviadas={totalDesviadas}
-                                onOpenDesembolso={() => setMostrarDesembolso(true)}
-                            />
+                                    <HeaderValorizado
+                                        project={props.project}
+                                        projectName={props.projectName}
+                                        viewMode={viewMode}
+                                        setViewMode={setViewMode}
+                                        searchTerm={searchTerm}
+                                        setSearchTerm={setSearchTerm}
+                                        estaGuardado={estaGuardadoUI}
+                                        saving={saving}
+                                        deleting={deleting}
+                                        onSave={handleSave}
+                                        onDelete={handleDelete}
+                                        onExportExcel={handleExportExcel}
+                                        onExportPDF={handleExportPDF}
+                                        totalDesviadas={totalDesviadas}
+                                        onOpenDesembolso={() => setMostrarDesembolso(true)}
+                                    />
 
-                            {/* <ResumenFinanciero
-                                total={props.totalPresupuesto}
-                                acumulado={montoAcumuladoTotal}
-                                meses={props.periodos.length}
-                                mesPico={props.resumen?.mes_pico}
-                                montoMesPico={props.resumen?.monto_mes_pico} 
-                                pctMesPico={props.resumen?.pct_mes_pico}
-                                curvaSData={curvaSData}
-                            />*/}
+                                    <TablaValorizada
+                                        items={itemsFiltrados}
+                                        periodos={props.periodos}
+                                        viewMode={viewMode}
+                                        totales={totalesFinales}
+                                        totalPresupuesto={props.totalPresupuesto}
+                                        onEditarCelda={editarCelda}
+                                        onRedistribuir={redistribuirItem}
+                                        onRedistribuirGauss={redistribuirGaussItem}
+                                        onLimpiar={limpiarDistribucion}
+                                        mesPicoKey={mesPicoKey}
+                                        diasPorMes={props.diasPorMes}
+                                        desviaciones={desviaciones}
+                                        totalDesviadas={totalDesviadas}
+                                        isPeriodoBloqueado={isPeriodoBloqueado}
+                                        totalesPorItem={totalesPorItem}
+                                        totalGeneralPeriodos={totalGeneralPeriodos}
+                                    />
+                                </>
+                            ) : (
+                                // MATERIALES - SIN LLAMADA AJAX
+                                <>
+                                    <div className="mb-4 flex justify-end">
+                                        <button
+                                            onClick={() => setVistaActual('valorizado')}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all"
+                                        >
+                                            ← Volver a Valorizado
+                                        </button>
+                                    </div>
 
-                            <TablaValorizada
-                                items={itemsFiltrados}
-                                periodos={props.periodos}
-                                viewMode={viewMode}
-                                totales={totalesFinales}
-                                totalPresupuesto={props.totalPresupuesto}
-                                onEditarCelda={editarCelda}
-                                onRedistribuir={redistribuirItem}
-                                onRedistribuirGauss={redistribuirGaussItem}
-                                onLimpiar={limpiarDistribucion}
-                                mesPicoKey={mesPicoKey}
-                                diasPorMes={props.diasPorMes}
-                                desviaciones={desviaciones}
-                                totalDesviadas={totalDesviadas}
-                                isPeriodoBloqueado={isPeriodoBloqueado}
-                                totalesPorItem={totalesPorItem}
-                                totalGeneralPeriodos={totalGeneralPeriodos}
-                            />
+                                    <CronogramaMateriales
+                                        project={props.project}
+                                        projectName={props.projectName}
+                                        materiales={props.materiales || []}      // ← Debe ser props.materiales
+                                        periodos={props.periodos || []}
+                                        resumen={props.materialesResumen || null}
+                                        estaGuardado={false}
+                                        sinGantt={props.sinGantt}
+                                        projectData={projectDataExport || {}}
+                                        sinLayout={true}
+                                    />
+                                </>
+                            )}
                         </>
                     )}
                 </div>
 
-                {/* Panel de Cronograma de Desembolsos */}
+                {/* Panel de Cronograma de Desembolso */}
                 {mostrarDesembolso && (
-                <CronogramaDesembolsos
-                periodos={props.periodos}
-                totalPresupuesto={props.totalPresupuesto}
-                valorizacionesMensuales={totalesFinales}
-                totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
-                diasPorMes={props.diasPorMes || {}}
-                projectName={projectDataExport?.nombre ?? props.projectName}
-                codigoProyecto={projectDataExport?.codigo_cui ?? projectDataExport?.codigo_local ?? ''}
-                ubicacion={[projectDataExport?.departamento, projectDataExport?.provincia, projectDataExport?.distrito].filter(Boolean).join(' - ')}
-                onClose={() => setMostrarDesembolso(false)}
-                />
+                    <CronogramaDesembolsos
+                        periodos={props.periodos}
+                        totalPresupuesto={props.totalPresupuesto}
+                        valorizacionesMensuales={totalesFinales}
+                        totalDias={props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0)}
+                        diasPorMes={props.diasPorMes || {}}
+                        projectName={projectDataExport?.nombre ?? props.projectName}
+                        codigoProyecto={projectDataExport?.codigo_cui ?? projectDataExport?.codigo_local ?? ''}
+                        ubicacion={[projectDataExport?.departamento, projectDataExport?.provincia, projectDataExport?.distrito].filter(Boolean).join(' - ')}
+                        onClose={() => setMostrarDesembolso(false)}
+                    />
                 )}
-                
-
-                
-                
-
 
             </div>
 

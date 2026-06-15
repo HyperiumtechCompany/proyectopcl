@@ -1,13 +1,15 @@
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AppLayout from '@/layouts/app-layout';
+import { useToast, ToastContainer } from '@/shared/toast';
 
-import HeaderMateriales         from './components/HeaderMateriales';
-import ResumenCards             from './components/ResumenCards';
-import TablaMateriales          from './components/TablaMateriales';
-import { useCronogramaLogic }   from './helpers/useCronogramaLogic';
-import type { CronogramaProps }      from './types';
+import HeaderMateriales from './components/HeaderMateriales';
+import ResumenCards from './components/ResumenCards';
+import TablaMateriales from './components/TablaMateriales';
+import { useCronogramaLogic } from './helpers/useCronogramaLogic';
+import { exportarMaterialesExcel } from "./helpers/exportHelpers";
+import type { CronogramaProps, MaterialItem } from './types';
 
 // COMPONENTE PRINCIPAL
 const CronogramaMateriales: React.FC<CronogramaProps> = ({
@@ -20,7 +22,11 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
     estaGuardado,
     sinGantt = false,
     projectData,
+    sinLayout = false,
 }) => {
+    console.log('🔴 MATERIALES RECIBIDOS EN CronogramaMateriales:', materiales);
+    console.log('🔴 CANTIDAD:', materiales.length);
+    const { toasts, show: showToast } = useToast();
     console.log('📋 projectData en componente:', projectData);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -42,7 +48,7 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
     }, [materiales, materialesPorTipo]);
 
     console.log('🔍 Tipos en todosMateriales:', [...new Set(todosMateriales.map(m => m.tipo))]);
-console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materialesPorTipo) : 'vacio');
+    console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materialesPorTipo) : 'vacio');
 
     const {
         viewMode, setViewMode,
@@ -56,6 +62,7 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
         mesPicoKey,
         getIntensidad,
     } = useCronogramaLogic(todosMateriales, periodos);
+
 
     //  GUARDAR 
     const handleSave = useCallback(async () => {
@@ -103,7 +110,6 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
     }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
     //  BREADCRUMBS 
-
     const displayName = useMemo(() => {
         if (projectData?.nombre_corto) return projectData.nombre_corto;
         if (projectName) {
@@ -123,8 +129,8 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
     ], [displayName, project]);
 
     //  RENDER 
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+    const contenido = (
+        <>
             <Head title={`Materiales — ${projectName || project}`} />
 
             <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
@@ -198,62 +204,22 @@ console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materiale
             </div>
 
             {/* TOAST CONTAINER */}
-            <ToastContainer />
+            <ToastContainer toasts={toasts} />
+        </>
+    );
+
+    if (sinLayout) {
+        return contenido;
+    }
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            {contenido}
         </AppLayout>
     );
 };
 
 // COMPONENTE TOAST (CORREGIDO)
-interface ToastMsg {
-    id: number;
-    text: string;
-    type: 'success' | 'error' | 'info' | 'warning';
-}
 
-let toastSetterGlobal: React.Dispatch<React.SetStateAction<ToastMsg[]>> | null = null;
-let toastCounter = 0;
-
-const showToast = (text: string, type: 'success' | 'error' | 'info' | 'warning'): void => {
-    if (!toastSetterGlobal) return;
-    const id = ++toastCounter;
-    toastSetterGlobal(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-        toastSetterGlobal?.(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-};
-
-const ToastContainer: React.FC = () => {
-    const [toasts, setToasts] = useState<ToastMsg[]>([]);
-
-    useEffect(() => {
-        toastSetterGlobal = setToasts;
-
-        return () => {
-            toastSetterGlobal = null;
-        };
-    }, []);
-
-    if (!toasts.length) return null;
-
-    const colorMap: Record<string, string> = {
-        success: 'bg-emerald-800 border-emerald-600 text-emerald-100',
-        error: 'bg-rose-900 border-rose-700 text-rose-100',
-        info: 'bg-blue-900 border-blue-700 text-blue-100',
-        warning: 'bg-amber-800 border-amber-600 text-amber-100',
-    };
-
-    return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full">
-            {toasts.map(t => (
-                <div
-                    key={t.id}
-                    className={`px-4 py-3 rounded-xl border shadow-xl text-sm font-semibold backdrop-blur-sm animate-fade-in ${colorMap[t.type] || colorMap.info}`}
-                >
-                    {t.text}
-                </div>
-            ))}
-        </div>
-    );
-};
 
 export default CronogramaMateriales;

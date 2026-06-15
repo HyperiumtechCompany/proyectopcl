@@ -181,7 +181,7 @@ const CronogramaIndex = ({
     const isParsingPredRef = useRef(false);
     const ganttInitialized = useRef(false);
     const eventIdsRef = useRef<any[]>([]);
-   
+
 
     // ── UI STATE ──────────────────────────────────────────────────────────────
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -516,7 +516,7 @@ const CronogramaIndex = ({
                 if (settings.projectStart && settings.projectDuration && settings.projectDuration > 0) {
                     const duracion = Number(settings.projectDuration);
                     if (!isNaN(duracion) && duracion > 0) {
-                       
+
                         limitDate = calcularFinLaborable(
                             settings.projectStart,
                             duracion,
@@ -747,29 +747,29 @@ const CronogramaIndex = ({
             gantt.setWorkTime({ day: 6, hours: false });
             gantt.setWorkTime({ day: 0, hours: false });
         }
-gantt.config.layout = {
-    css: 'gantt_container',
-    cols: [
-        {
-            width: 700,
-            min_width: 300,  // ← aumentado para mejor UX
-            gravity: 1,
-            rows: [
-                { view: 'grid', scrollX: 'gridScroll', scrollable: true, scrollY: 'vScroll' },
-                { view: 'scrollbar', id: 'gridScroll' },
+        gantt.config.layout = {
+            css: 'gantt_container',
+            cols: [
+                {
+                    width: 700,
+                    min_width: 300,  // ← aumentado para mejor UX
+                    gravity: 1,
+                    rows: [
+                        { view: 'grid', scrollX: 'gridScroll', scrollable: true, scrollY: 'vScroll' },
+                        { view: 'scrollbar', id: 'gridScroll' },
+                    ],
+                },
+                // RESIZER ELIMINADO - grid_resize se encarga
+                {
+                    gravity: 2,
+                    rows: [
+                        { view: 'timeline', scrollX: 'scrollHor', scrollY: 'vScroll' },
+                        { view: 'scrollbar', id: 'scrollHor' },
+                    ],
+                },
+                { view: 'scrollbar', id: 'vScroll' },
             ],
-        },
-        // RESIZER ELIMINADO - grid_resize se encarga
-        {
-            gravity: 2,
-            rows: [
-                { view: 'timeline', scrollX: 'scrollHor', scrollY: 'vScroll' },
-                { view: 'scrollbar', id: 'scrollHor' },
-            ],
-        },
-        { view: 'scrollbar', id: 'vScroll' },
-    ],
-};
+        };
 
         gantt.config.scales = [
             {
@@ -1074,6 +1074,11 @@ gantt.config.layout = {
 
         gantt.i18n.setLocale("es");
         gantt.init(ganttContainer.current);
+        if (!ganttContainer.current) {
+            console.warn('Contenedor no disponible para pan');
+            return;
+        }
+
 
 
         ganttInitialized.current = true;
@@ -1137,45 +1142,84 @@ gantt.config.layout = {
                 ];
             }
         };
+        // ─────────────────────────────────────────────────────────────────────────────
+        // PAN - ARRASTRAR EN EL DIAGRAMA (4 DIRECCIONES)
+        // ─────────────────────────────────────────────────────────────────────────────
+        let isDraggingGantt = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeftStart = 0;
+        let scrollTopStart = 0;
 
-        const handleWheelZoom = (e: WheelEvent) => {
+        const onMouseDown = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+
+            // Verificar si el clic está en la tabla izquierda (NO activar)
+            if (target.closest('.gantt_grid, .gantt_grid_head, .gantt_grid_data, .gantt_row')) {
+                return;
+            }
+
+            // Activar en cualquier parte del diagrama derecho
+            if (!target.closest('.gantt_task, .gantt_task_bg, .gantt_data_area, .gantt_chart, .gantt_task_row')) {
+                return;
+            }
+
+            isDraggingGantt = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            // Contenedor horizontal (mueve barras izquierda/derecha)
+            const horizontalScroller = document.querySelector('.gantt_data_area') as HTMLElement;
+            if (horizontalScroller) {
+                scrollLeftStart = horizontalScroller.scrollLeft;
+            }
+
+            // Contenedor vertical (mueve arriba/abajo)
+            const verticalScroller = document.querySelector('.gantt_grid_data') as HTMLElement;
+            if (verticalScroller) {
+                scrollTopStart = verticalScroller.scrollTop;
+            }
+
             e.preventDefault();
-
-            const startDate = gantt.config.start_date;
-            const endDate = gantt.config.end_date;
-
-            if (!startDate || !endDate) return;
-
-            const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-            const centerDays = totalDays / 2;
-
-            const delta = e.deltaY > 0 ? 1.15 : 0.85;
-            let newTotalDays = totalDays * delta;
-            newTotalDays = Math.min(Math.max(newTotalDays, 14), 365);
-
-            const centerDate = new Date(startDate);
-            centerDate.setDate(startDate.getDate() + centerDays);
-
-            const newStartDate = new Date(centerDate);
-            newStartDate.setDate(centerDate.getDate() - Math.floor(newTotalDays / 2));
-
-            const newEndDate = new Date(centerDate);
-            newEndDate.setDate(centerDate.getDate() + Math.ceil(newTotalDays / 2));
-
-            gantt.config.start_date = newStartDate;
-            gantt.config.end_date = newEndDate;
-
-
-            (gantt.config as any).scales = getScaleByDays(newTotalDays);
-
-            gantt.render();
+            document.body.style.cursor = 'grabbing';
+            document.body.style.userSelect = 'none';
         };
 
-        if (ganttContainerElement) {
-            ganttContainerElement.addEventListener('wheel', handleWheelZoom, { passive: false });
-            (gantt as any).__zoomHandler = handleWheelZoom;
-        }
+        const onMouseMove = (e: MouseEvent) => {
+            if (!isDraggingGantt) return;
 
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            const horizontalScroller = document.querySelector('.gantt_data_area') as HTMLElement;
+            const verticalScroller = document.querySelector('.gantt_grid_data') as HTMLElement;
+
+            if (horizontalScroller) {
+                horizontalScroller.scrollLeft = scrollLeftStart - dx;
+            }
+
+            if (verticalScroller) {
+                verticalScroller.scrollTop = scrollTopStart - dy;
+            }
+
+            e.preventDefault();
+        };
+
+        const onMouseUp = () => {
+            isDraggingGantt = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        (gantt as any).__panHandlers = {
+            mousedown: onMouseDown,
+            mousemove: onMouseMove,
+            mouseup: onMouseUp
+        };
         // ── Cargar datos ──────────────────────────────────────────────────────
         let rawData: { tasks: any[]; links: any[] };
         if (initialData?.tasks?.length || initialData?.links?.length) {
@@ -1189,7 +1233,6 @@ gantt.config.layout = {
 
         const fmt = gantt.date.date_to_str('%Y-%m-%d %H:%i');
 
-        // ✅ LIMPIAR TAREAS ANTES DE CARGAR
         //  LIMPIAR TAREAS ANTES DE CARGAR
 
         const cleanTasks = rawData.tasks.map((task: any) => {
@@ -1262,22 +1305,22 @@ gantt.config.layout = {
 
         //  LIMPIEZA AL DESMONTAR EL COMPONENTE
         return () => {
-            // 1. Limpiar evento de zoom
-            if (ganttContainer.current && (gantt as any).__zoomHandler) {
-                ganttContainer.current.removeEventListener('wheel', (gantt as any).__zoomHandler);
-                delete (gantt as any).__zoomHandler;
+            // Limpiar eventos de pan
+            if ((gantt as any).__panHandlers) {
+                document.removeEventListener('mousedown', (gantt as any).__panHandlers.mousedown);
+                document.removeEventListener('mousemove', (gantt as any).__panHandlers.mousemove);
+                document.removeEventListener('mouseup', (gantt as any).__panHandlers.mouseup);
+                delete (gantt as any).__panHandlers;
             }
-            // 2. Limpiar todos los eventos registrados
+
+            // Resto de limpieza
             eventIdsRef.current.forEach((evtId) => {
                 try { gantt.detachEvent(evtId); } catch { /* ok */ }
             });
             eventIdsRef.current = [];
-            // 3. Marcar como no inicializado
             ganttInitialized.current = false;
-            // 4. Limpiar el Gantt
             gantt.clearAll();
         };
-
     }, [initialData, partidasBase]);
 
 
@@ -1462,7 +1505,7 @@ gantt.config.layout = {
                                 <span>Ajustes</span>
                             </button>
 
-                            
+
                         </div>
 
                         <button onClick={handleSave} disabled={saving} className="pcl-btn pcl-btn--primary pcl-btn--save">

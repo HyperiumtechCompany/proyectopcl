@@ -65,4 +65,6 @@ export interface ValorizadoProps {
     diasPorMes?:      Record<string, number>;
     modoCalculo?:     ModoCalculo;
     projectData?: any;
+     materiales?: any[];           // Datos de materiales
+    materialesResumen?: any;  
 }

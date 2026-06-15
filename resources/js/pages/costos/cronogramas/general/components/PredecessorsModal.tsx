@@ -1,4 +1,4 @@
-import { gantt } from 'dhtmlx-gantt';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { gantt} from 'dhtmlx-gantt';
 

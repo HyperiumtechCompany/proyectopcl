@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Search, FileDown, FileText, Trash2, Save, ArrowLeft, AlertTriangle, DollarSign } from 'lucide-react';
 import React from 'react';
 import type { ViewMode } from '../types';
 
@@ -31,7 +31,7 @@ const HeaderValorizado: React.FC<Props> = ({
     totalDesviadas = 0,
     onOpenDesembolso, 
 }) => (
-    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+    <div className="flex flex-col gap-4 mb-6">
 
         {/* ── Título ── */}
         <div>
@@ -59,18 +59,17 @@ const HeaderValorizado: React.FC<Props> = ({
             </p>
         </div>
 
-        {/* ── Controles ── */}
+        {/* ── Fila 1: Buscador + Volver (misma fila) ── */}
         <div className="flex flex-wrap items-center gap-2">
-
             {/* Buscador */}
-            <div className="relative">
+            <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                 <input
                     type="text"
                     placeholder="Buscar partida..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    className="pl-8 pr-8 py-2 w-52 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                    className="pl-8 pr-8 py-2 w-full text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                 />
                 {searchTerm && (
                     <button
@@ -80,6 +79,17 @@ const HeaderValorizado: React.FC<Props> = ({
                 )}
             </div>
 
+            {/* VOLVER - En la misma fila que el buscador */}
+            <Link
+                href={`/costos/${project}`}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl shadow-md transition-all whitespace-nowrap"
+            >
+                <ArrowLeft className="w-3.5 h-3.5" /> Volver
+            </Link>
+        </div>
+
+        {/* ── Fila 2: Todos los demás botones (S/. %, Excel, PDF, Desembolso, Guardar, Limpiar) ── */}
+        <div className="flex flex-wrap items-center gap-2">
             {/* Toggle S/. / % */}
             <div className="flex bg-slate-200 p-1 rounded-xl border border-slate-300">
                 {(['monto', 'porcentaje'] as ViewMode[]).map(mode => (
@@ -120,9 +130,9 @@ const HeaderValorizado: React.FC<Props> = ({
                 onClick={onOpenDesembolso}
                 className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black rounded-xl border border-amber-200 transition-all"
                 title="Ver cronograma de desembolsos"
-                >
-                    <DollarSign className='w-3.5 h-3.5' /> Desembolso
-                </button>
+            >
+                <DollarSign className='w-3.5 h-3.5' /> Desembolso
+            </button>
 
             {/* Guardar */}
             <button
@@ -141,7 +151,7 @@ const HeaderValorizado: React.FC<Props> = ({
                 {saving ? 'Guardando…' : totalDesviadas > 0 ? `Guardar (${totalDesviadas} ⚠)` : 'Guardar'}
             </button>
 
-            {/* Eliminar */}
+            {/* Eliminar / Limpiar */}
             {estaGuardado && (
                 <button
                     onClick={onDelete}
@@ -153,14 +163,6 @@ const HeaderValorizado: React.FC<Props> = ({
                     {deleting ? 'Eliminando…' : 'Limpiar'}
                 </button>
             )}
-
-            {/* Volver */}
-            <Link
-                href={`/costos/${project}`}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl shadow-md transition-all"
-            >
-                <ArrowLeft className="w-3.5 h-3.5" /> Volver
-            </Link>
         </div>
     </div>
 );

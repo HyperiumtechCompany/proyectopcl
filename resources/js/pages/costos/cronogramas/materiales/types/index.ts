@@ -62,6 +62,7 @@ export interface CronogramaProps {
     estaGuardado:       boolean;
     sinGantt?:          boolean;
     projectData:        any;
+    sinLayout?:         boolean;
 }
 
 export type ViewMode  = 'cantidad' | 'monto';
