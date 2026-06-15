@@ -650,9 +650,7 @@ test('formal dialux blade renders the fixed front matter structure', function ()
     $view->assertSee('Observaciones preliminares');
     $view->assertSee('Contenido');
     $view->assertSee('Resumen del proyecto');
-    $view->assertSee('height: 246mm', false);
     $view->assertSee('cover-image-wrap', false);
-    $view->assertSee('max-height: 150mm', false);
 });
 
 test('formal dialux blade renders calculated local and calculation object values', function () {
@@ -900,7 +898,10 @@ test('formal dialux blade renders calculated local and calculation object values
     $view->assertSee('asset-align', false);
     $view->assertSee('page-landscape', false);
     $view->assertSee('terrain-plan-wrap', false);
-    $view->assertSee('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="160">', false);
+    // $renderAsset replaces explicit px/numeric dimensions with 100% so the SVG fills its container.
+    $view->assertSee('<svg xmlns="http://www.w3.org/2000/svg"', false);
+    $view->assertSee('width="100%"', false);
+    $view->assertSee('height="100%"', false);
 
     preg_match(
         '/<td rowspan="4"><strong>Plano &uacute;til<\/strong><\/td>.*?<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>/s',

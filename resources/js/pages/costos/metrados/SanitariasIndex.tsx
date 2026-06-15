@@ -28,6 +28,7 @@ import type { BreadcrumbItem } from '@/types';
 
 // Módulo local Sanitarias
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import {
     ALL_COLS,
@@ -151,9 +152,9 @@ function useLuckysheet() {
         order: number,
     ) => {
         const inst = ls();
-        if (!inst || !updates.length) return;
+        if (!inst || !updates.length || !isLuckysheetReady()) return;
         updates.forEach((u, i) => {
-            inst.setCellValue(u.r, u.c, u.v, {
+            safeSetCellValue(u.r, u.c, u.v, {
                 order,
                 isRefresh: i === updates.length - 1,
             });
@@ -627,7 +628,7 @@ export default function SanitariasIndex() {
 
             progCount.current++;
             ups.forEach(({ c, v }, i) => {
-                ls()?.setCellValue(ri, c, v, {
+                safeSetCellValue(ri, c, v, {
                     order: sheetOrder,
                     isRefresh: i === ups.length - 1,
                 });
@@ -688,6 +689,10 @@ export default function SanitariasIndex() {
         setSyncing(true);
         setTimeout(() => {
             const inst = ls();
+            if (!isLuckysheetReady()) {
+                setSyncing(false);
+                return;
+            }
             if (!inst) {
                 setSyncing(false);
                 return;
@@ -746,7 +751,7 @@ export default function SanitariasIndex() {
 
             // Cabecera
             resumenCols.forEach((col, c) => {
-                inst.setCellValue(
+                safeSetCellValue(
                     0,
                     c,
                     {
@@ -797,7 +802,7 @@ export default function SanitariasIndex() {
                         };
                     }
 
-                    inst.setCellValue(ri + 1, c, cell, { isRefresh: false });
+                    safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
                 });
             });
 
@@ -823,7 +828,8 @@ export default function SanitariasIndex() {
             if (
                 !inst ||
                 typeof inst.setDataVerification !== 'function' ||
-                !sheets.length
+                !sheets.length ||
+                !isLuckysheetReady()
             ) {
                 if (++attempts < 40) t = setTimeout(apply, 250);
                 return;
@@ -839,7 +845,7 @@ export default function SanitariasIndex() {
             sheets
                 .filter((s: any) => s.name !== 'Resumen')
                 .forEach((s: any) =>
-                    inst.setDataVerification(opt, {
+                    safeSetDataVerification(opt, {
                         range: rng,
                         order: s.order ?? 0,
                     }),
@@ -1038,4 +1044,3 @@ export default function SanitariasIndex() {
         </AppLayout>
     );
 }
-

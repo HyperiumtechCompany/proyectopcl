@@ -50,6 +50,54 @@ function readFixturePowerWatts(
         : null;
 }
 
+function stripCopyCounter(name: string): string {
+    return name.replace(/\s*[\[\(]\d+[\]\)]\s*$/, '').trim();
+}
+
+/**
+ * Clave de agrupación de luminarias al estilo DIALux evo: el mismo producto
+ * (misma referencia de catálogo) se consolida en una sola fila con cantidad,
+ * sin importar en cuántos ambientes esté colocado ni el sufijo de copia
+ * "[n]"/"(n)" del nombre de la instancia.
+ */
+function buildProductGroupKey(
+    fixture: DialuxExportSnapshot['fixtures'][number],
+): string {
+    if (fixture.productId !== undefined && fixture.productId !== null) {
+        return `prod::${fixture.productId}`;
+    }
+
+    return [
+        (fixture.brand ?? 'sin-fabricante').trim().toLowerCase(),
+        (fixture.articleNumber ?? 'sin-articulo').trim().toLowerCase(),
+        stripCopyCounter(fixture.name).toLowerCase(),
+    ].join('::');
+}
+
+function polygonPerimeter(vertices: Array<{ x: number; y: number }>): number {
+    if (vertices.length < 3) {
+        return 0;
+    }
+
+    return vertices.reduce((sum, vertex, index) => {
+        const next = vertices[(index + 1) % vertices.length]!;
+        return sum + Math.hypot(next.x - vertex.x, next.y - vertex.y);
+    }, 0);
+}
+
+function polygonArea(vertices: Array<{ x: number; y: number }>): number {
+    if (vertices.length < 3) {
+        return 0;
+    }
+
+    const twiceArea = vertices.reduce((sum, vertex, index) => {
+        const next = vertices[(index + 1) % vertices.length]!;
+        return sum + (vertex.x * next.y - next.x * vertex.y);
+    }, 0);
+
+    return Math.abs(twiceArea) / 2;
+}
+
 function buildLuminaireList(
     snapshot: DialuxExportSnapshot,
 ): DialuxLuminaireListItem[] {
@@ -64,16 +112,8 @@ function buildLuminaireList(
             snapshot.rooms.find((room) => room.id === fixture.roomId)?.name ??
             null;
         const powerWatts = readFixturePowerWatts(fixture);
-        const key = [
-            fixture.productId ?? 'sin-producto',
-            fixture.name,
-            fixture.brand ?? 'sin-fabricante',
-            fixture.articleNumber ?? 'sin-articulo',
-            fixture.fixtureType ?? 'sin-tipo',
-            fixture.lumens ?? 'sin-lumen',
-            roomName ?? 'sin-recinto',
-            ambient?.name ?? 'sin-ambiente',
-        ].join('::');
+        const baseName = stripCopyCounter(fixture.name);
+        const key = buildProductGroupKey(fixture);
 
         const currentItem = groupedFixtures.get(key);
         if (currentItem) {
@@ -89,7 +129,7 @@ function buildLuminaireList(
 
         groupedFixtures.set(key, {
             id: fixture.id,
-            name: fixture.name,
+            name: baseName,
             model: fixture.fixtureType ?? fixture.fixtureShape ?? 'No definido',
             brand: fixture.brand ?? null,
             articleNumber:
@@ -154,16 +194,8 @@ function buildAmbientLuminaireList(
 
     for (const fixture of ambient.fixtures) {
         const powerWatts = readFixturePowerWatts(fixture);
-        const key = [
-            fixture.productId ?? 'sin-producto',
-            fixture.name,
-            fixture.brand ?? 'sin-fabricante',
-            fixture.articleNumber ?? 'sin-articulo',
-            fixture.fixtureType,
-            fixture.fixtureShape ?? 'sin-forma',
-            fixture.lumens ?? 'sin-lumen',
-            powerWatts ?? 'sin-potencia',
-        ].join('::');
+        const baseName = stripCopyCounter(fixture.name);
+        const key = buildProductGroupKey(fixture);
         const existing = groupedFixtures.get(key);
 
         if (existing) {
@@ -179,7 +211,7 @@ function buildAmbientLuminaireList(
 
         groupedFixtures.set(key, {
             id: fixture.id,
-            name: fixture.name,
+            name: baseName,
             model: fixture.fixtureType ?? fixture.fixtureShape ?? 'No definido',
             brand: fixture.brand ?? null,
             articleNumber:
@@ -234,6 +266,25 @@ function buildAmbientDetails(
             const planAssetId = `ambient-plan-svg-${ambient.id}`;
             const isoluxAssetId = `isolux-svg-${ambient.id}`;
 
+            // Perímetro en las mismas unidades que metrics.area: si los vértices
+            // están en otra escala, se corrige con la razón de áreas. El plano
+            // útil descuenta la zona marginal en todo el contorno (aprox. de
+            // polígono interior: A' = A - P·m + 4·m²), igual que DIALux evo
+            // distingue "(Área)" de "(Plano útil)" en la potencia específica.
+            const rawVertices = ambient.room.vertices ?? [];
+            const rawArea = polygonArea(rawVertices);
+            const scaleRatio =
+                rawArea > 0 ? Math.sqrt(ambient.metrics.area / rawArea) : 1;
+            const perimeter = polygonPerimeter(rawVertices) * scaleRatio;
+            const marginal = ambient.metrics.marginalZone;
+            const usefulArea = Math.min(
+                ambient.metrics.area,
+                Math.max(
+                    ambient.metrics.area - perimeter * marginal + 4 * marginal * marginal,
+                    0.01,
+                ),
+            );
+
             return {
                 ambientId: ambient.id,
                 roomId: ambient.roomId,
@@ -241,6 +292,8 @@ function buildAmbientDetails(
                 ambientName: ambient.name,
                 activity: ambient.activity,
                 area: Number(ambient.metrics.area.toFixed(2)),
+                perimeter: Number(perimeter.toFixed(3)),
+                usefulArea: Number(usefulArea.toFixed(2)),
                 targetLux: ambient.metrics.illuminanceLux,
                 avgLux:
                     ambient.metrics.avgLux === null
@@ -268,6 +321,11 @@ function buildAmbientDetails(
                         ? null
                         : Number(ambient.metrics.ugr.toFixed(2)),
                 ugrLimit: ambient.metrics.ugrLimit,
+                interiorHeight: Number(ambient.room.height.toFixed(3)),
+                reflectionCeiling: 70, // DIAlux default usually 70/50/20%
+                reflectionWall: 50,
+                reflectionFloor: 20,
+                maintenanceFactor: ((snapshot.project as unknown as Record<string, unknown>)['maintenanceFactor'] as number | undefined) ?? 0.8,
                 usefulPlaneHeight: Number(
                     ambient.metrics.usefulPlaneHeight.toFixed(3),
                 ),
@@ -365,6 +423,9 @@ function buildFixedPageSeeds(
     const preliminaryAssetIds = [
         'project-summary-data',
         'viewer-capture',
+        'formal-cover-svg',
+        'terrain-with-isolux-svg',
+        'cad-overview-svg',
         'lighting-results-data',
     ].filter((id) => assets.some((asset) => asset.id === id));
 
@@ -402,7 +463,67 @@ function buildTechnicalPageSeeds(
 ): PageSeed[] {
     const seeds: PageSeed[] = [];
 
-    // 1. Lista de luminarias
+    // ── Bloque 1: Planos del terreno (lo primero y más importante del informe) ──
+    // Orden DIALux evo solicitado: plano solo → plano con dibujo → plano con isolux.
+
+    // 1a. Plano base importado (solo CAD DXF, sin recintos)
+    const cadSvgAssetId = assets.some((a) => a.id === 'cad-overview-svg')
+        ? 'cad-overview-svg'
+        : (assets.some((a) => a.id === 'cad-base-bitmap') ? 'cad-base-bitmap' : null);
+
+    if (cadSvgAssetId) {
+        seeds.push({
+            id: 'page-terrain-cad',
+            kind: 'terrain-cad',
+            sectionId: 'cad-overview',
+            title: 'Terreno 1 - Edificación 1',
+            subtitle: 'Plano base importado',
+            assetIds: [cadSvgAssetId],
+            notes: []
+        });
+    }
+
+    // 1b. Lista de locales (CAD + recintos dibujados, sin isolux).
+    // La captura compuesta del editor (CAD + overlay alineados) es la fuente
+    // preferida; el SVG sintético queda como fallback sin DOM/captura.
+    const drawnTerrainAssetId = assets.some((a) => a.id === 'composite-plan-bitmap')
+        ? 'composite-plan-bitmap'
+        : assets.some((a) => a.id === 'drawn-terrain-svg')
+            ? 'drawn-terrain-svg'
+            : cadSvgAssetId;
+
+    seeds.push({
+        id: 'page-terrain-ambient-list',
+        kind: 'ambient-list',
+        sectionId: 'ambient-list',
+        title: 'Lista de locales / Escena de luz 1',
+        subtitle: 'Terreno 1 - Edificacion 1',
+        assetIds: drawnTerrainAssetId ? [drawnTerrainAssetId] : [],
+        notes: []
+    });
+
+    // 1c. Plano Arquitectónico con Isolux superpuesto (CAD + recintos + isolux)
+    const terrainIsoluxAssetId = assets.some((a) => a.id === 'composite-isolux-bitmap')
+        ? 'composite-isolux-bitmap'
+        : assets.some((a) => a.id === 'terrain-with-isolux-svg')
+            ? 'terrain-with-isolux-svg'
+            : drawnTerrainAssetId;
+
+    if (terrainIsoluxAssetId) {
+        seeds.push({
+            id: 'page-terrain-architectural',
+            kind: 'terrain-architectural',
+            sectionId: 'architectural-overview',
+            title: 'Terreno 1 - Edificación 1',
+            subtitle: 'Plano Arquitectónico con Isolux',
+            assetIds: [terrainIsoluxAssetId],
+            notes: []
+        });
+    }
+
+    // ── Bloque 2: Luminarias agrupadas por producto + fichas técnicas ──
+
+    // 2a. Lista de luminarias (una fila por producto, con cantidad)
     seeds.push({
         id: 'page-terrain-luminaires',
         kind: 'luminaire-list',
@@ -413,7 +534,7 @@ function buildTechnicalPageSeeds(
         notes: []
     });
 
-    // 2. Fichas de producto de luminarias (Detalles técnicos)
+    // 2b. Fichas de producto (una por producto único, no por instancia)
     luminaires.forEach((lum) => {
         const assetIds: string[] = [];
         if (lum.brandLogoAssetId) assetIds.push(lum.brandLogoAssetId);
@@ -432,153 +553,86 @@ function buildTechnicalPageSeeds(
         });
     });
 
-    // 3. Plano base importado (Solo CAD DXF o Bitmap)
-    const cadAssetId = assets.some((a) => a.id === 'viewer-capture')
-        ? 'viewer-capture'
-        : (assets.some((a) => a.id === 'cad-base-bitmap')
-            ? 'cad-base-bitmap'
-            : (assets.some((a) => a.id === 'cad-overview-svg') ? 'cad-overview-svg' : null));
-
-    if (cadAssetId) {
-        seeds.push({
-            id: 'page-terrain-cad',
-            kind: 'terrain-cad',
-            sectionId: 'cad-overview',
-            title: 'Terreno 1 - Edificación 1',
-            subtitle: 'Plano base importado',
-            assetIds: [cadAssetId],
-            notes: []
-        });
-    }
-
-    // 4. Lista de locales (Ambients)
-    const architecturalAssetId = assets.some((a) => a.id === 'viewer-capture')
-        ? 'viewer-capture'
-        : (assets.some((a) => a.id === 'drawn-terrain-svg')
-            ? 'drawn-terrain-svg'
-            : cadAssetId);
-
-    seeds.push({
-        id: 'page-terrain-ambient-list',
-        kind: 'ambient-list',
-        sectionId: 'ambient-list',
-        title: 'Lista de locales / Escena de luz 1',
-        subtitle: 'Terreno 1 - Edificacion 1',
-        assetIds: architecturalAssetId ? [architecturalAssetId] : [],
-        notes: []
-    });
-
-    // 5. Plano Arquitectónico (Recintos y luminarias sobre el CAD)
-
-    if (architecturalAssetId) {
-        seeds.push({
-            id: 'page-terrain-architectural',
-            kind: 'terrain-architectural',
-            sectionId: 'architectural-overview',
-            title: 'Terreno 1 - Edificación 1',
-            subtitle: 'Plano Arquitectónico',
-            assetIds: [architecturalAssetId],
-            notes: []
-        });
-    }
-
-    // 6. Objetos de calculo de los planos utiles
-    seeds.push({
-        id: 'page-terrain-calculation-objects',
-        kind: 'calculation-object-list',
-        sectionId: 'calculation-object-list',
-        title: 'Objetos de calculo / Escena de luz 1',
-        subtitle: 'Terreno 1 - Edificacion 1',
-        assetIds: [],
-        notes: []
-    });
-
-    // Secuencia por Recinto (Room)
+    // Secuencia por Recinto (Room) → 5 sub-secciones por local (estructura DIALux)
     snapshot.rooms.forEach((room) => {
         const roomAmbients = ambientDetails.filter(a => a.roomId === room.id);
         if (roomAmbients.length === 0) return;
 
-        // Room Level Pages
+        // Nivel: Lista de locales (bloques por local con Ptotal, área,
+        // potencia específica y Ē, como la página "Lista de locales" de evo)
         seeds.push({
             id: `page-room-ambient-list-${room.id}`,
             kind: 'room-ambient-list',
             sectionId: `room-ambient-list:${room.id}`,
-            title: `Lista de locales / Escena de luz 1`,
-            subtitle: null,
-            assetIds: ['drawn-terrain-svg'],
+            title: 'Lista de locales / Escena de luz 1',
+            subtitle: room.name,
+            assetIds: [],
             notes: [],
             roomId: room.id,
         });
 
+        // Nivel: Lista de luminarias
         seeds.push({
             id: `page-room-luminaires-${room.id}`,
             kind: 'room-luminaires',
             sectionId: `room-luminaires:${room.id}`,
-            title: `Lista de luminarias`,
-            subtitle: null,
+            title: 'Lista de luminarias',
+            subtitle: room.name,
             assetIds: [],
             notes: [],
             roomId: room.id,
         });
 
+        // Nivel: Objetos de cálculo / Escena de luz 1 (todos los locales del nivel)
         seeds.push({
-            id: `page-room-calculation-object-${room.id}`,
-            kind: 'room-calculation-object',
+            id: `page-room-calculation-objects-${room.id}`,
+            kind: 'calculation-object-list',
             sectionId: `room-calculation-object:${room.id}`,
-            title: `Objetos de cálculo / Escena de luz 1`,
-            subtitle: null,
+            title: 'Objetos de cálculo / Escena de luz 1',
+            subtitle: room.name,
             assetIds: [],
             notes: [],
             roomId: room.id,
         });
 
-        // Ambient Level Pages
+        // Sub-secciones por local (5 páginas fijas por ambiente)
         roomAmbients.forEach((detail) => {
+            // Sub-sección 1: Resumen / Escena de luz 1 (métricas + resultados, sin imagen)
             seeds.push({
                 id: `page-ambient-summary-${detail.ambientId}`,
                 kind: 'ambient-summary',
                 sectionId: `ambient-summary:${detail.ambientId}`,
-                title: `Resumen / Escena de luz 1`,
-                subtitle: `${detail.ambientName}`,
+                title: 'Resumen / Escena de luz 1',
+                subtitle: detail.ambientName,
                 assetIds: [],
                 notes: [],
                 ambientId: detail.ambientId,
                 roomId: room.id,
             });
 
-            if (detail.isoluxAssetId) {
+            // Sub-sección 2: Plano de situación de luminarias
+            if (detail.planAssetId) {
                 seeds.push({
-                    id: `page-ambient-useful-plane-${detail.ambientId}`,
-                    kind: 'ambient-useful-plane',
-                    sectionId: `ambient-useful-plane:${detail.ambientId}`,
-                    title: `Plano util (${detail.ambientName}) / Escena de luz 1 / Iluminancia perpendicular`,
-                    subtitle: `(Adaptativamente)`,
-                    assetIds: [detail.isoluxAssetId],
+                    id: `page-ambient-plan-${detail.ambientId}`,
+                    kind: 'ambient-plan',
+                    sectionId: `ambient-plan:${detail.ambientId}`,
+                    title: 'Plano de situación de luminarias',
+                    subtitle: detail.ambientName,
+                    assetIds: [detail.planAssetId],
                     notes: [],
                     ambientId: detail.ambientId,
                     roomId: room.id,
                 });
             }
 
-            seeds.push({
-                id: `page-ambient-results-${detail.ambientId}`,
-                kind: 'ambient-results',
-                sectionId: `ambient-results:${detail.ambientId}`,
-                title: `Resultados`,
-                subtitle: `${detail.ambientName}`,
-                assetIds: [],
-                notes: [],
-                ambientId: detail.ambientId,
-                roomId: room.id,
-            });
-
+            // Sub-sección 3: Lista de luminarias del ambiente
             if (detail.luminaires.length > 0) {
                 seeds.push({
                     id: `page-ambient-luminaires-${detail.ambientId}`,
                     kind: 'ambient-luminaires',
                     sectionId: `ambient-luminaires:${detail.ambientId}`,
-                    title: `Lista de luminarias`,
-                    subtitle: `${detail.ambientName}`,
+                    title: 'Lista de luminarias',
+                    subtitle: detail.ambientName,
                     assetIds: [],
                     notes: [],
                     ambientId: detail.ambientId,
@@ -586,71 +640,27 @@ function buildTechnicalPageSeeds(
                 });
             }
 
-            if (detail.planAssetId) {
-                const productAssetIds = detail.luminaires.flatMap((luminaire) =>
-                    [
-                        luminaire.productPhotoAssetId,
-                        luminaire.brandLogoAssetId,
-                        luminaire.lineDrawingAssetId,
-                        luminaire.polarDiagramAssetId,
-                    ].filter((assetId): assetId is string => Boolean(assetId)),
-                );
-
-                seeds.push({
-                    id: `page-ambient-plan-${detail.ambientId}`,
-                    kind: 'ambient-plan',
-                    sectionId: `ambient-plan:${detail.ambientId}`,
-                    title: `Plano de situación de luminarias`,
-                    subtitle: `${detail.ambientName}`,
-                    assetIds: [detail.planAssetId, ...productAssetIds],
-                    notes: [],
-                    ambientId: detail.ambientId,
-                    roomId: room.id,
-                });
-            }
-
-            if (detail.luminaires.length > 0) {
-                const productAssetIds = detail.luminaires.flatMap((luminaire) =>
-                    [
-                        luminaire.productPhotoAssetId,
-                        luminaire.brandLogoAssetId,
-                        luminaire.lineDrawingAssetId,
-                        luminaire.polarDiagramAssetId,
-                    ].filter((assetId): assetId is string => Boolean(assetId)),
-                );
-
-                seeds.push({
-                    id: `page-ambient-products-${detail.ambientId}`,
-                    kind: 'ambient-products',
-                    sectionId: `ambient-products:${detail.ambientId}`,
-                    title: `Productos usados`,
-                    subtitle: `${detail.ambientName}`,
-                    assetIds: productAssetIds,
-                    notes: [],
-                    ambientId: detail.ambientId,
-                    roomId: room.id,
-                });
-            }
-
+            // Sub-sección 4: Objetos de cálculo / Escena de luz 1
             seeds.push({
                 id: `page-ambient-calculation-object-${detail.ambientId}`,
                 kind: 'ambient-calculation-object',
                 sectionId: `ambient-calculation-object:${detail.ambientId}`,
-                title: `Objetos de cálculo / Escena de luz 1`,
-                subtitle: `${detail.ambientName}`,
+                title: 'Objetos de cálculo / Escena de luz 1',
+                subtitle: detail.ambientName,
                 assetIds: [],
                 notes: [],
                 ambientId: detail.ambientId,
                 roomId: room.id,
             });
 
-            if (false && detail.isoluxAssetId) {
+            // Sub-sección 5: Plano útil / Iluminancia perpendicular (mapa isolux)
+            if (detail.isoluxAssetId) {
                 seeds.push({
                     id: `page-ambient-useful-plane-${detail.ambientId}`,
                     kind: 'ambient-useful-plane',
                     sectionId: `ambient-useful-plane:${detail.ambientId}`,
-                    title: `Plano útil (${detail.ambientName}) / Escena de luz 1 / Iluminancia perpendicular`,
-                    subtitle: `(Adaptativamente)`,
+                    title: `Plano útil (${detail.ambientName}) / Iluminancia perpendicular`,
+                    subtitle: detail.ambientName,
                     assetIds: [detail.isoluxAssetId],
                     notes: [],
                     ambientId: detail.ambientId,
@@ -666,7 +676,7 @@ function buildTechnicalPageSeeds(
         kind: 'glossary',
         sectionId: 'glossary',
         title: 'Glosario',
-        subtitle: null,
+        subtitle: '',
         assetIds: [],
         notes: []
     });
@@ -701,24 +711,17 @@ function buildTocEntries(
     let currentRoomId: string | null = null;
     let currentAmbientId: string | null = null;
     let productSheetHeaderAdded = false;
+    let terrainHeaderAdded = false;
 
     technicalPageSeeds.forEach((seed, index) => {
-        // Special TOC Group: Fichas de producto
-        if (seed.kind === 'product-sheet' && !productSheetHeaderAdded) {
-            entries.push({
-                sectionId: 'product-sheets-header',
-                title: 'Fichas de producto',
-                subtitle: null,
-                level: 0,
-                pageNumber: 0,
-                kind: 'section-heading',
-                size: 'large'
-            });
-            productSheetHeaderAdded = true;
-        }
-
-        // Special TOC Group: Terreno
-        if (seed.kind === 'terrain-cad') {
+        // Special TOC Group: Terreno (antes de la primera página de planos del bloque general)
+        if (
+            !terrainHeaderAdded &&
+            (seed.kind === 'terrain-cad' ||
+                seed.kind === 'ambient-list' ||
+                seed.kind === 'terrain-architectural' ||
+                seed.kind === 'luminaire-list')
+        ) {
             entries.push({
                 sectionId: 'terrain-header',
                 title: 'Terreno 1',
@@ -737,55 +740,59 @@ function buildTocEntries(
                 kind: 'section-heading',
                 size: 'large'
             });
-            // We skip rendering 'terrain-cad' in TOC since the user's TOC just shows "Lista de luminarias" under "Edificación 1"
-            return;
+            terrainHeaderAdded = true;
         }
 
-        // Room Transition Group
+        // Special TOC Group: Fichas de producto
+        if (seed.kind === 'product-sheet' && !productSheetHeaderAdded) {
+            entries.push({
+                sectionId: 'product-sheets-header',
+                title: 'Fichas de producto',
+                subtitle: null,
+                level: 0,
+                pageNumber: 0,
+                kind: 'section-heading',
+                size: 'large'
+            });
+            productSheetHeaderAdded = true;
+        }
+
+        // Room Transition Group (Nivel)
         if (seed.roomId && seed.roomId !== currentRoomId) {
             const room = snapshot.rooms.find(r => r.id === seed.roomId);
             currentRoomId = seed.roomId;
             if (room) {
                 entries.push({
                     sectionId: `room-group-label-${room.id}`,
-                    title: 'Terreno 1 - Edificación 1',
+                    title: 'Edificación 1',
                     subtitle: null,
                     level: 0,
                     pageNumber: 0,
                     kind: 'section-label',
                     size: 'small'
-                });
-                entries.push({
-                    sectionId: `room-group-heading-${room.id}`,
-                    title: room.name,
-                    subtitle: null,
-                    level: 0,
-                    pageNumber: 0,
-                    kind: 'section-heading',
-                    size: 'large'
                 });
             }
         }
 
         // Ambient Transition Group
-        if (seed.ambientId && seed.ambientId !== currentAmbientId && currentRoomId) {
-            const room = snapshot.rooms.find(r => r.id === currentRoomId);
+        if (seed.ambientId && seed.ambientId !== currentAmbientId) {
+            const ambient = snapshot.ambients.find(a => a.id === seed.ambientId);
             currentAmbientId = seed.ambientId;
-            if (room) {
+            if (ambient) {
                 entries.push({
-                    sectionId: `ambient-group-label-${seed.ambientId}`,
-                    title: `Terreno 1 - Edificación 1 - ${room.name}`,
+                    sectionId: `ambient-group-label-${ambient.id}`,
+                    title: ambient.roomName,
                     subtitle: null,
-                    level: 0,
+                    level: 1,
                     pageNumber: 0,
                     kind: 'section-label',
                     size: 'small'
                 });
                 entries.push({
-                    sectionId: `ambient-group-heading-${seed.ambientId}`,
-                    title: seed.subtitle ?? 'Sin nombre',
+                    sectionId: `ambient-group-heading-${ambient.id}`,
+                    title: ambient.name,
                     subtitle: null,
-                    level: 0,
+                    level: 1,
                     pageNumber: 0,
                     kind: 'section-heading',
                     size: 'large'
@@ -797,6 +804,14 @@ function buildTocEntries(
         let title = seed.title;
 
         if (seed.kind === 'product-sheet') {
+            title = seed.subtitle ?? seed.title;
+            level = 0;
+        } else if (
+            seed.kind === 'terrain-cad' ||
+            seed.kind === 'terrain-architectural'
+        ) {
+            // En el índice se lee mejor el subtítulo descriptivo del plano
+            // ("Plano base importado", "Plano Arquitectónico con Isolux").
             title = seed.subtitle ?? seed.title;
             level = 0;
         } else if (
@@ -948,10 +963,15 @@ export function buildDialuxFormalDocument(
             { label: 'Luminarias', value: `${snapshot.summary.fixtureCount}` },
             {
                 label: 'Estado calculo',
-                value: snapshot.summary.ambientCount > 0
-                    && snapshot.summary.compliantAmbientCount >= snapshot.summary.ambientCount
+                value: snapshot.summary.ambientCount === 0
+                    ? 'Sin ambientes'
+                    : snapshot.summary.calculatedAmbientCount === 0
+                    ? 'Sin calcular'
+                    : snapshot.summary.calculatedAmbientCount < snapshot.summary.ambientCount
+                    ? `Parcial (${snapshot.summary.calculatedAmbientCount}/${snapshot.summary.ambientCount})`
+                    : snapshot.summary.compliantAmbientCount >= snapshot.summary.ambientCount
                     ? 'Conforme'
-                    : 'Revisar',
+                    : `Revisar (${snapshot.summary.compliantAmbientCount}/${snapshot.summary.ambientCount})`,
             },
             {
                 label: 'Lux promedio',

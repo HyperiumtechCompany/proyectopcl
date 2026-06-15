@@ -151,6 +151,10 @@ export interface DialuxBitmapAsset extends DialuxExportAssetBase {
     dataUrl: string;
     width: number;
     height: number;
+    cssWidth?: number;
+    cssHeight?: number;
+    physicalWidth?: number;
+    physicalHeight?: number;
 }
 
 export interface DialuxVectorAsset extends DialuxExportAssetBase {
@@ -259,6 +263,10 @@ export interface DialuxAmbientDetail {
     ambientName: string;
     activity: string | null;
     area: number;
+    /** Perímetro del recinto en metros (misma escala que area). */
+    perimeter: number;
+    /** Área del plano útil: recinto menos la zona marginal en todo el contorno. */
+    usefulArea: number;
     targetLux: number;
     avgLux: number | null;
     minLux: number | null;
@@ -268,6 +276,11 @@ export interface DialuxAmbientDetail {
     uniformityTarget: number | null;
     ugr: number | null;
     ugrLimit: number | null;
+    interiorHeight: number;
+    reflectionCeiling: number;
+    reflectionWall: number;
+    reflectionFloor: number;
+    maintenanceFactor: number;
     usefulPlaneHeight: number;
     marginalZone: number;
     calculationIndex: string;
