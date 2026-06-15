@@ -13,10 +13,12 @@ import {
     FilePlus,
     FileSpreadsheet,
     X,
+    ChevronDown,
 } from 'lucide-react';
 import { Download } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { PresupuestoSubsection } from '@/types/presupuestos';
@@ -28,6 +30,8 @@ import { FormulaPolinomica } from './components/formula_polinomica';
 import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { GGFijosPanel } from './components/GGFijosPanel';
 import { GGVariablesPanel } from './components/GGVariablesPanel';
+import { ImportAcusExcelModal } from './components/ImportAcusExcelModal';
+import { ImportExcelPresupuestoModal } from './components/ImportExcelPresupuestoModal';
 import { ImportMetradosModal } from './components/ImportMetradosModal';
 import { InsumosPanel } from './components/InsumosPanel';
 import { RemuneracionesPanel } from './components/RemuneracionesPanel';
@@ -119,6 +123,9 @@ export default function Index() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState('');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+    const [isAcusExcelModalOpen, setIsAcusExcelModalOpen] = useState(false);
+    const [acuRefreshKey, setAcuRefreshKey] = useState(0);
     const searchRef = useRef<HTMLInputElement>(null);
 
     // Sync search query to store
@@ -227,11 +234,12 @@ export default function Index() {
     } = usePresupuestoAcu({
         projectId: project.id,
         subsection,
-        selectedCell: null, // Cell tracking is not needed in the same way for TanStack
+        selectedCell: null,
         selectedPartidaCode: selectedPartidaData ? selectedId : null,
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
+        refreshKey: acuRefreshKey,
     });
 
     // Wrapped save so that AcuPanel updates budgetStore state appropriately
@@ -400,10 +408,25 @@ export default function Index() {
                                         {/* ── Toolbar S10-style ── */}
                                         <div className="flex flex-wrap items-center gap-1 border-b border-slate-700 bg-slate-800/90 px-2 py-1.5">
                                             <span className="text-[9px] font-bold tracking-wider text-slate-600 uppercase mr-0.5">Insertar</span>
-                                            <button title="Importar Metrados" onClick={() => setIsImportModalOpen(true)}
-                                                className="flex items-center gap-1 rounded bg-amber-900/60 px-2 py-1 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-800">
-                                                <Download size={11} /> Importar...
-                                            </button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button title="Importar"
+                                                        className="flex items-center gap-1 rounded bg-amber-900/60 px-2 py-1 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-800">
+                                                        <Download size={11} /> Importar <ChevronDown size={10} />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="start" className="bg-slate-800 border-slate-700">
+                                                    <DropdownMenuItem className="text-amber-300 focus:bg-amber-900/60 focus:text-amber-200 text-xs cursor-pointer" onClick={() => setIsImportModalOpen(true)}>
+                                                        <Download size={14} /> Importar Metrados
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-emerald-300 focus:bg-emerald-900/60 focus:text-emerald-200 text-xs cursor-pointer" onClick={() => setIsExcelModalOpen(true)}>
+                                                        <FileSpreadsheet size={14} /> Imp. Excel
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-amber-300 focus:bg-amber-900/60 focus:text-amber-200 text-xs cursor-pointer" onClick={() => setIsAcusExcelModalOpen(true)}>
+                                                        <FileSpreadsheet size={14} /> Imp. ACUs
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                             <button title="Nuevo Título raíz" onClick={() => addNode(null, 'titulo')}
                                                 className="flex items-center gap-1 rounded bg-sky-900/60 px-2 py-1 text-[10px] font-semibold text-sky-300 transition-colors hover:bg-sky-800">
                                                 <FilePlus size={11} /> Título
@@ -483,6 +506,43 @@ export default function Index() {
                                             isOpen={isImportModalOpen}
                                             onClose={() => setIsImportModalOpen(false)}
                                             onSuccess={() => {
+                                                setGeneralLoading(true);
+                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
+                                                    .then((response) => {
+                                                        if (response.data?.success) {
+                                                            setGeneralRows(response.data.rows || []);
+                                                            initialize(response.data.rows || []);
+                                                            setDirty(false);
+                                                        }
+                                                    })
+                                                    .finally(() => setGeneralLoading(false));
+                                            }}
+                                        />
+
+                                        <ImportExcelPresupuestoModal
+                                            projectId={project.id}
+                                            isOpen={isExcelModalOpen}
+                                            onClose={() => setIsExcelModalOpen(false)}
+                                            onSuccess={() => {
+                                                setGeneralLoading(true);
+                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
+                                                    .then((response) => {
+                                                        if (response.data?.success) {
+                                                            setGeneralRows(response.data.rows || []);
+                                                            initialize(response.data.rows || []);
+                                                            setDirty(false);
+                                                        }
+                                                    })
+                                                    .finally(() => setGeneralLoading(false));
+                                            }}
+                                        />
+
+                                        <ImportAcusExcelModal
+                                            projectId={project.id}
+                                            isOpen={isAcusExcelModalOpen}
+                                            onClose={() => setIsAcusExcelModalOpen(false)}
+                                            onSuccess={() => {
+                                                setAcuRefreshKey(k => k + 1);
                                                 setGeneralLoading(true);
                                                 axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
                                                     .then((response) => {

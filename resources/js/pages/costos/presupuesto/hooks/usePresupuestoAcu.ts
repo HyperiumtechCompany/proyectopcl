@@ -10,6 +10,7 @@ interface UsePresupuestoAcuProps {
     selectedPartidaData: { descripcion: string; unidad: string } | null;
     lastSaved: Date | null;
     setSheetVersion: React.Dispatch<React.SetStateAction<number>>;
+    refreshKey?: number;
 }
 
 export function usePresupuestoAcu({
@@ -20,6 +21,7 @@ export function usePresupuestoAcu({
     selectedPartidaData,
     lastSaved,
     setSheetVersion,
+    refreshKey,
 }: UsePresupuestoAcuProps) {
     const [acuRows, setAcuRows] = useState<ACURowSummary[]>([]);
     const [acuLoading, setAcuLoading] = useState(false);
@@ -187,7 +189,7 @@ export function usePresupuestoAcu({
             });
 
         return () => controller.abort();
-    }, [mapAcuRows, projectId, subsection]);
+    }, [mapAcuRows, projectId, subsection, refreshKey]);
 
     const normalizeNumber = (value: unknown, fallback = 0): number => {
         const num = Number(value);

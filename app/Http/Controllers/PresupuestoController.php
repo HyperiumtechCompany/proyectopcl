@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PresupuestoController extends Controller
@@ -182,8 +183,7 @@ class PresupuestoController extends Controller
                         // set to null to avoid FK violation (500 Error)
                         $cleanedRow['parent_id'] = null;
 
-                        // Log for debugging if needed
-                        // Log::debug("PresupuestoController: Parent ID {$originalParentId} not found in mapping - set to NULL");
+                        
                     }
                 }
 
@@ -850,6 +850,366 @@ class PresupuestoController extends Controller
     }
 
     /**
+     * Importa ACUs desde archivos Excel subidos
+     * Ruta: POST /costos/proyectos/{project}/presupuesto/acus/import-excel
+     */
+    public function importAcusFromExcel(
+        CostoProject $project,
+        Request $request
+    ): JsonResponse {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
+        $this->ensureAcuSchema();
+
+        $validated = $request->validate([
+            'files' => 'required|array|min:1',
+            'files.*' => 'required|file|mimes:xls,xlsx,xlm',
+        ]);
+
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        if (! $tenantPresupuestoId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró un presupuesto en la base de datos del proyecto.',
+            ], 422);
+        }
+
+        $totalCreated = 0;
+        $totalUpdated = 0;
+        $totalSkipped = 0;
+        $errors = [];
+
+        foreach ($validated['files'] as $uploadedFile) {
+            try {
+                $filePath = $uploadedFile->getRealPath();
+                $fileName = $uploadedFile->getClientOriginalName();
+
+                $reader = IOFactory::createReaderForFile($filePath);
+                $reader->setReadDataOnly(true);
+                $spreadsheet = $reader->load($filePath);
+                $sheet = $spreadsheet->getActiveSheet();
+                $maxRow = $sheet->getHighestRow();
+
+                $acus = $this->parseAcusFromExcel($sheet, $maxRow);
+                $acuIndex = 0;
+
+                foreach ($acus as $acu) {
+                    $partida = $acu['partida'];
+
+                    $existingPartida = DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->where('partida', $partida)
+                        ->first();
+
+                    if (! $existingPartida) {
+                        $totalSkipped++;
+                        continue;
+                    }
+
+                    $unidad = $this->extractUnidadFromRendimiento($acu['rendimiento_text'] ?? '');
+
+                    DB::connection('costos_tenant')->beginTransaction();
+
+                    try {
+                        $existingAcu = DB::connection('costos_tenant')
+                            ->table('presupuesto_acus')
+                            ->where('presupuesto_id', $tenantPresupuestoId)
+                            ->where('partida', $partida)
+                            ->first();
+
+                        $acuData = [
+                            'presupuesto_id' => $tenantPresupuestoId,
+                            'partida' => $partida,
+                            'descripcion' => $acu['descripcion'],
+                            'unidad' => $unidad ?: $existingPartida->unidad,
+                            'rendimiento' => $acu['rendimiento'] ?? 1,
+                            'mano_de_obra' => ! empty($acu['mano_de_obra']) ? json_encode($acu['mano_de_obra']) : null,
+                            'costo_mano_obra' => $acu['costo_mano_obra'] ?? 0,
+                            'materiales' => ! empty($acu['materiales']) ? json_encode($acu['materiales']) : null,
+                            'costo_materiales' => $acu['costo_materiales'] ?? 0,
+                            'equipos' => ! empty($acu['equipos']) ? json_encode($acu['equipos']) : null,
+                            'costo_equipos' => $acu['costo_equipos'] ?? 0,
+                            'subcontratos' => null,
+                            'costo_subcontratos' => 0,
+                            'subpartidas' => null,
+                            'costo_subpartidas' => 0,
+                            'item_order' => $acuIndex,
+                            'updated_at' => now(),
+                        ];
+
+                        if ($existingAcu) {
+                            DB::connection('costos_tenant')
+                                ->table('presupuesto_acus')
+                                ->where('id', $existingAcu->id)
+                                ->update($acuData);
+                            $acuId = $existingAcu->id;
+                            $totalUpdated++;
+                        } else {
+                            $acuData['created_at'] = now();
+                            $acuId = DB::connection('costos_tenant')
+                                ->table('presupuesto_acus')
+                                ->insertGetId($acuData);
+                            $totalCreated++;
+                        }
+
+                        $this->syncAcuComponentsFromImport($acuId, $acu);
+
+                        DB::connection('costos_tenant')->commit();
+                    } catch (\Exception $e) {
+                        DB::connection('costos_tenant')->rollBack();
+                        throw $e;
+                    }
+
+                    $acuIndex++;
+                }
+            } catch (\Exception $e) {
+                $errors[] = $uploadedFile->getClientOriginalName() . ': ' . $e->getMessage();
+                Log::error('Error importing ACU Excel', [
+                    'file' => $uploadedFile->getClientOriginalName(),
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->syncAllPrecioUnitarioFromAcus($tenantPresupuestoId);
+        $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Importación de ACUs completada',
+            'summary' => [
+                'created' => $totalCreated,
+                'updated' => $totalUpdated,
+                'skipped' => $totalSkipped,
+                'errors' => $errors,
+            ],
+        ]);
+    }
+
+    private function parseAcusFromExcel($sheet, int $maxRow): array
+    {
+        $acus = [];
+        $currentAcu = null;
+        $currentSection = null;
+        $sectionHeaders = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO'];
+
+        for ($row = 1; $row <= $maxRow; $row++) {
+            $colA = trim((string) $sheet->getCell('A' . $row)->getCalculatedValue());
+
+            if ($colA === 'Partida:') {
+                if ($currentAcu !== null) {
+                    $acus[] = $currentAcu;
+                }
+
+                $partidaCode = $this->normalizePartidaCode(trim((string) $sheet->getCell('D' . $row)->getCalculatedValue()));
+                $descripcion = trim((string) $sheet->getCell('F' . $row)->getCalculatedValue());
+                if (empty($descripcion)) {
+                    $descripcion = trim((string) $sheet->getCell('G' . $row)->getCalculatedValue());
+                }
+                $rendimientoText = trim((string) $sheet->getCell('P' . $row)->getCalculatedValue());
+                $rendimiento = 1.0;
+                if (preg_match('/(\d+[\.,]?\d*)/', $rendimientoText, $matches)) {
+                    $rendimiento = (float) str_replace(',', '.', $matches[1]);
+                }
+
+                $currentAcu = [
+                    'partida' => $partidaCode,
+                    'descripcion' => $descripcion,
+                    'rendimiento' => $rendimiento,
+                    'rendimiento_text' => $rendimientoText,
+                    'mano_de_obra' => [],
+                    'materiales' => [],
+                    'equipos' => [],
+                    'costo_mano_obra' => 0,
+                    'costo_materiales' => 0,
+                    'costo_equipos' => 0,
+                ];
+                $currentSection = null;
+                continue;
+            }
+
+            $colAUpper = strtoupper($colA);
+            if (in_array($colAUpper, $sectionHeaders)) {
+                $currentSection = $colAUpper;
+                $subtotal = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
+                $costKey = match ($colAUpper) {
+                    'MANO DE OBRA' => 'costo_mano_obra',
+                    'MATERIALES' => 'costo_materiales',
+                    'EQUIPO' => 'costo_equipos',
+                    default => 'costo_' . strtolower($colAUpper),
+                };
+                if ($currentAcu !== null) {
+                    $currentAcu[$costKey] = $subtotal;
+                }
+                continue;
+            }
+
+            if ($colA === 'Ind.' || $colA === '' || $currentAcu === null || $currentSection === null) {
+                continue;
+            }
+
+            $colP = trim((string) $sheet->getCell('P' . $row)->getCalculatedValue());
+            if (stripos($colP, 'Costo unitario') !== false) {
+                continue;
+            }
+
+            $colE = trim((string) $sheet->getCell('E' . $row)->getCalculatedValue());
+            if (empty($colE) || in_array(strtoupper($colE), $sectionHeaders)) {
+                continue;
+            }
+
+            $colM = trim((string) $sheet->getCell('M' . $row)->getCalculatedValue());
+            $colQ = (float) ($sheet->getCell('Q' . $row)->getCalculatedValue() ?? 0);
+            $colR = (float) ($sheet->getCell('R' . $row)->getCalculatedValue() ?? 0);
+            $colS = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
+            $colN = trim((string) $sheet->getCell('N' . $row)->getCalculatedValue());
+
+            $isHerramientas = stripos($colE, 'HERRAMIENTA') !== false;
+            $unidad = $colM ?: 'und';
+            $recursos = ($colN === '-' || $colN === '' || $colN === null) ? 0 : (float) $colN;
+
+            $component = [
+                'descripcion' => $colE,
+                'unidad' => $unidad,
+                'cantidad' => $colQ,
+                'parcial' => $colS,
+            ];
+
+            switch ($currentSection) {
+                case 'MANO DE OBRA':
+                    $component['precio_unitario'] = $colR;
+                    $component['recursos'] = $recursos;
+                    break;
+                case 'MATERIALES':
+                    $component['precio_unitario'] = $colR;
+                    $component['factor_desperdicio'] = 1.0;
+                    break;
+                case 'EQUIPO':
+                    $component['precio_hora'] = $colR;
+                    $component['recursos'] = $isHerramientas ? 0 : $recursos;
+                    break;
+            }
+
+            $sectionKey = match ($currentSection) {
+                'MANO DE OBRA' => 'mano_de_obra',
+                'MATERIALES' => 'materiales',
+                'EQUIPO' => 'equipos',
+                default => strtolower($currentSection),
+            };
+            $currentAcu[$sectionKey][] = $component;
+        }
+
+        if ($currentAcu !== null) {
+            $acus[] = $currentAcu;
+        }
+
+        return $acus;
+    }
+
+    private function normalizePartidaCode(string $code): string
+    {
+        $str = trim($code);
+        if ($str === '') {
+            return $str;
+        }
+        $parts = explode('.', $str);
+        return implode('.', array_map(fn ($p) => str_pad(preg_replace('/[a-zA-Z]+$/', '', trim($p)), 2, '0', STR_PAD_LEFT), $parts));
+    }
+
+    private function extractUnidadFromRendimiento(string $text): string
+    {
+        if (preg_match('/(\d+[\.,]?\d*)\s*([^\s\/]+)/u', $text, $matches)) {
+            return $matches[2];
+        }
+        return '';
+    }
+
+    private function syncAcuComponentsFromImport(int $acuId, array $acu): void
+    {
+        DB::connection('costos_tenant')->table('acu_mano_de_obra')->where('acu_id', $acuId)->delete();
+        DB::connection('costos_tenant')->table('acu_materiales')->where('acu_id', $acuId)->delete();
+        DB::connection('costos_tenant')->table('acu_equipos')->where('acu_id', $acuId)->delete();
+        DB::connection('costos_tenant')->table('acu_subcontratos')->where('acu_id', $acuId)->delete();
+        DB::connection('costos_tenant')->table('acu_subpartidas')->where('acu_id', $acuId)->delete();
+
+        $costoManoObra = $acu['costo_mano_obra'] ?? 0;
+
+        foreach ($acu['mano_de_obra'] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_mano_de_obra')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'hh',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'recursos' => $row['recursos'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['materiales'] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_materiales')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'und',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'factor_desperdicio' => $row['factor_desperdicio'] ?? 1.0,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['equipos'] as $index => $row) {
+            $isHerramientas = stripos($row['descripcion'] ?? '', 'HERRAMIENTA') !== false;
+            $precioHora = $isHerramientas ? $costoManoObra : ($row['precio_hora'] ?? $row['precio_unitario'] ?? 0);
+
+            DB::connection('costos_tenant')->table('acu_equipos')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'hm',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'recursos' => $row['recursos'] ?? 0,
+                'precio_hora' => $precioHora,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function syncAllPrecioUnitarioFromAcus(int $presupuestoId): void
+    {
+        $acus = DB::connection('costos_tenant')
+            ->table('presupuesto_acus')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get();
+
+        foreach ($acus as $acu) {
+            $costoUnitario = (float) ($acu->costo_unitario_total ?? 0);
+
+            DB::connection('costos_tenant')
+                ->table('presupuesto_general')
+                ->where('presupuesto_id', $presupuestoId)
+                ->where('partida', $acu->partida)
+                ->update([
+                    'precio_unitario' => $costoUnitario,
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    /**
      * Calcula o recalcula un ACU específico
      * Ruta: POST /costos/proyectos/{project}/presupuesto/acus/calculate
      */
@@ -980,7 +1340,7 @@ class PresupuestoController extends Controller
             }
             $costoSubpartidas = round($costoSubpartidas, 2);
 
-            // ─── Update Master Project Prices如果 flag is active ────────────
+            // ─── Update Master Project Prices if flag is active ────────────
             if (! empty($validated['update_project_prices'])) {
                 $dbService = app(CostoDatabaseService::class);
                 $dbService->setTenantConnection($project->database_name);
@@ -1573,7 +1933,7 @@ class PresupuestoController extends Controller
 
             DB::connection('costos_tenant')->commit();
 
-            // Sincronizar totales tras eliminaciÃ³n si es presupuesto general
+            // Sincronizar totales tras eliminación si es presupuesto general
             if ($subsection === 'general') {
                 $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
                 $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
@@ -1721,13 +2081,7 @@ class PresupuestoController extends Controller
             }
         }
 
-        if (isset($row['costo_subcontratos']) && ! is_numeric($row['costo_subcontratos'])) {
-            $errors[] = 'El campo costo_subcontratos debe ser numÃ©rico';
-        }
-
-        if (isset($row['costo_subpartidas']) && ! is_numeric($row['costo_subpartidas'])) {
-            $errors[] = 'El campo costo_subpartidas debe ser numÃ©rico';
-        }
+        
 
         return $errors;
     }
@@ -2068,10 +2422,12 @@ class PresupuestoController extends Controller
         unset($row['id'], $row['project_id']);
         $row['presupuesto_id'] = $tenantPresupuestoId ?? $projectId;
 
-        // Remove calculated columns (they are generated by the database)
+        // Handle calculated/derived columns per subsection
         switch ($subsection) {
             case 'general':
-                unset($row['parcial']);
+                // parcial is now a regular column (not STORED GENERATED),
+                // but we recalculate it via syncCostoDirecto after save
+                $row['parcial'] = (float) ($row['parcial'] ?? 0);
                 break;
             case 'acus':
                 unset($row['costo_unitario_total']);

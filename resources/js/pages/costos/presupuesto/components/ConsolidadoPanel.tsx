@@ -270,7 +270,6 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
     ]);
 
     // ── Calcular totales dinámicamente desde el estado ────────────────────────
-    // Calcular costo directo desde budgetRows
     const parentBudgetSections = useMemo(
         () =>
             budgetRows.filter((r) =>
@@ -278,12 +277,12 @@ export function ConsolidadoPanel({ projectId }: ConsolidadoPanelProps) {
             ),
         [budgetRows],
     );
+    // Costo directo = suma de parciales de partidas (filas con unidad)
     const costoDirecto = useMemo(
         () =>
-            parentBudgetSections.reduce(
-                (acc, r) => acc + toNumber(r.parcial),
-                0,
-            ),
+            budgetRows
+                .filter((r) => r.unidad && r.unidad.trim() !== '')
+                .reduce((acc, r) => acc + toNumber(r.parcial), 0),
         [parentBudgetSections],
     );
 
