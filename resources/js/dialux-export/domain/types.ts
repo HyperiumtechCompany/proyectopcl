@@ -40,6 +40,9 @@ export interface DialuxAmbientMetrics {
 
 export interface DialuxAmbientExport {
     id: string;
+    sceneId: string;
+    sceneName: string;
+    floorIndex: number;
     roomId: string;
     roomName: string;
     index: number;
@@ -258,6 +261,9 @@ export type DialuxAmbientLuminaireItem = DialuxLuminaireListItem;
 
 export interface DialuxAmbientDetail {
     ambientId: string;
+    sceneId: string;
+    sceneName: string;
+    floorIndex: number;
     roomId: string;
     roomName: string;
     ambientName: string;
@@ -351,6 +357,8 @@ export type DialuxFormalSectionId =
     | 'product-sheets-header'
     | 'terrain-header'
     | 'edification-header'
+    | `scene-group-label-${string}`
+    | `scene-group-heading-${string}`
     | `room-group-label-${string}`
     | `room-group-heading-${string}`
     | `ambient-group-label-${string}`

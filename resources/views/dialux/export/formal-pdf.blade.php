@@ -197,7 +197,7 @@
 
             return $totalsBox .
                 '
-        <table class="luminaire-table">
+        <table class="luminaire-table project-luminaire-table">
             <thead>
                 <tr>
                     <th class="number">Unidad</th>
@@ -384,6 +384,15 @@
 
             return '
         <table class="luminaire-table calculation-table">
+            <colgroup>
+                <col style="width:31%;">
+                <col style="width:12%;">
+                <col style="width:10.5%;">
+                <col style="width:10.5%;">
+                <col style="width:14%;">
+                <col style="width:11%;">
+                <col style="width:11%;">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Propiedades</th>
@@ -945,7 +954,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                 {!! $renderAsset($ambientListAsset, 184, 124, true) !!}
                             </div>
                         @endif
-                        <table class="luminaire-table" style="margin-top:3mm; table-layout:fixed;">
+                        <table class="luminaire-table ambient-list-table" style="margin-top:3mm; table-layout:fixed;">
                             <thead>
                                 <tr>
                                     <th style="text-align:left; width:36%;">Local</th>
@@ -1170,7 +1179,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                 @endphp
                                 <div class="fixture-position-title" style="margin-top:2mm;">
                                     {{ $group->count() }} x {{ $groupLabel !== '' ? $groupLabel : 'Luminaria' }}</div>
-                                <table class="luminaire-table">
+                                <table class="luminaire-table fixture-position-table">
                                     <thead>
                                         <tr>
                                             <th class="number">X</th>
@@ -1216,6 +1225,15 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         @php $detail = $page['ambientDetail']; @endphp
                         <div class="detail-block-title" style="margin-bottom:2mm;">Superficies de cálculo</div>
                         <table class="luminaire-table calculation-table">
+                            <colgroup>
+                                <col style="width:31%;">
+                                <col style="width:12%;">
+                                <col style="width:10.5%;">
+                                <col style="width:10.5%;">
+                                <col style="width:14%;">
+                                <col style="width:11%;">
+                                <col style="width:11%;">
+                            </colgroup>
                             <thead>
                                 <tr>
                                     <th>Propiedades</th>

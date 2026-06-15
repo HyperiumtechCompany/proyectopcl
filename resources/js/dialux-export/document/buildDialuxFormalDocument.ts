@@ -11,7 +11,7 @@ import type {
     DialuxTocEntry,
 } from '../domain/types';
 
-const TOC_ROWS_PER_PAGE = 18;
+const TOC_ROWS_PER_PAGE = 14;
 
 interface PageSeed {
     id: string;
@@ -22,6 +22,8 @@ interface PageSeed {
     assetIds: string[];
     notes: string[];
     ambientId?: string | null;
+    sceneId?: string | null;
+    sceneName?: string | null;
     roomId?: string | null;
 }
 
@@ -173,7 +175,8 @@ function buildLuminaireTotals(
         0,
     );
     const totalPowerWatts = luminaires.reduce(
-        (sum, luminaire) => sum + (luminaire.powerWatts ?? 0) * luminaire.quantity,
+        (sum, luminaire) =>
+            sum + (luminaire.powerWatts ?? 0) * luminaire.quantity,
         0,
     );
 
@@ -245,23 +248,33 @@ function buildAmbientDetails(
 
     return [...snapshot.ambients]
         .sort((left, right) => {
-            const roomCompare = left.roomName.localeCompare(right.roomName, 'es');
-
+            // Sort by floor first so "1° NIVEL" rooms come before "2° NIVEL".
+            if (left.floorIndex !== right.floorIndex) {
+                return left.floorIndex - right.floorIndex;
+            }
+            const roomCompare = left.roomName.localeCompare(
+                right.roomName,
+                'es',
+            );
             if (roomCompare !== 0) {
                 return roomCompare;
             }
-
             return left.index - right.index;
         })
         .map((ambient, index) => {
             const luminaires = buildAmbientLuminaireList(ambient);
-            const totalPower = luminaires.reduce<number | null>((sum, luminaire) => {
-                if (luminaire.powerWatts === null) {
-                    return sum;
-                }
+            const totalPower = luminaires.reduce<number | null>(
+                (sum, luminaire) => {
+                    if (luminaire.powerWatts === null) {
+                        return sum;
+                    }
 
-                return (sum ?? 0) + luminaire.powerWatts * luminaire.quantity;
-            }, null);
+                    return (
+                        (sum ?? 0) + luminaire.powerWatts * luminaire.quantity
+                    );
+                },
+                null,
+            );
 
             const planAssetId = `ambient-plan-svg-${ambient.id}`;
             const isoluxAssetId = `isolux-svg-${ambient.id}`;
@@ -280,13 +293,18 @@ function buildAmbientDetails(
             const usefulArea = Math.min(
                 ambient.metrics.area,
                 Math.max(
-                    ambient.metrics.area - perimeter * marginal + 4 * marginal * marginal,
+                    ambient.metrics.area -
+                        perimeter * marginal +
+                        4 * marginal * marginal,
                     0.01,
                 ),
             );
 
             return {
                 ambientId: ambient.id,
+                sceneId: ambient.sceneId,
+                sceneName: ambient.sceneName,
+                floorIndex: ambient.floorIndex,
                 roomId: ambient.roomId,
                 roomName: ambient.roomName,
                 ambientName: ambient.name,
@@ -325,7 +343,10 @@ function buildAmbientDetails(
                 reflectionCeiling: 70, // DIAlux default usually 70/50/20%
                 reflectionWall: 50,
                 reflectionFloor: 20,
-                maintenanceFactor: ((snapshot.project as unknown as Record<string, unknown>)['maintenanceFactor'] as number | undefined) ?? 0.8,
+                maintenanceFactor:
+                    ((snapshot.project as unknown as Record<string, unknown>)[
+                        'maintenanceFactor'
+                    ] as number | undefined) ?? 0.8,
                 usefulPlaneHeight: Number(
                     ambient.metrics.usefulPlaneHeight.toFixed(3),
                 ),
@@ -334,34 +355,42 @@ function buildAmbientDetails(
                 fixtureCount: ambient.metrics.fixtureCount,
                 totalPowerWatts:
                     totalPower === null ? null : Number(totalPower.toFixed(2)),
-                lumensRequired: Number(ambient.metrics.lumensRequired.toFixed(2)),
+                lumensRequired: Number(
+                    ambient.metrics.lumensRequired.toFixed(2),
+                ),
                 fixtureLumens: Number(ambient.metrics.fixtureLumens.toFixed(2)),
                 exactQuantity: Number(ambient.metrics.exactQuantity.toFixed(2)),
                 roundedQuantity: ambient.metrics.roundedQuantity,
                 coverage: toDisplayLabel(ambient.metrics.coverage),
-                complianceLabel: ambient.metrics.complies ? 'Cumple' : 'Revisar',
+                complianceLabel: ambient.metrics.complies
+                    ? 'Cumple'
+                    : 'Revisar',
                 planAssetId: assetIds.has(planAssetId) ? planAssetId : null,
-                isoluxAssetId: assetIds.has(isoluxAssetId) ? isoluxAssetId : null,
+                isoluxAssetId: assetIds.has(isoluxAssetId)
+                    ? isoluxAssetId
+                    : null,
                 luminaires,
-                fixturePositions: ambient.fixtures.map((fixture, fixtureIndex) => ({
-                    id: fixture.id,
-                    name: `Luminaria ${fixtureIndex + 1}`,
-                    productName: fixture.name,
-                    x: Number(fixture.x.toFixed(3)),
-                    y: Number(fixture.y.toFixed(3)),
-                    mountingHeight:
-                        typeof fixture.z === 'number'
-                            ? Number(fixture.z.toFixed(3))
-                            : null,
-                    brand: fixture.brand ?? null,
-                    articleNumber:
-                        fixture.articleNumber ??
-                        fixture.productSourceFormat?.toUpperCase() ??
-                        fixture.fixtureType ??
-                        null,
-                    lumens: fixture.lumens ?? null,
-                    powerWatts: readFixturePowerWatts(fixture),
-                })),
+                fixturePositions: ambient.fixtures.map(
+                    (fixture, fixtureIndex) => ({
+                        id: fixture.id,
+                        name: `Luminaria ${fixtureIndex + 1}`,
+                        productName: fixture.name,
+                        x: Number(fixture.x.toFixed(3)),
+                        y: Number(fixture.y.toFixed(3)),
+                        mountingHeight:
+                            typeof fixture.z === 'number'
+                                ? Number(fixture.z.toFixed(3))
+                                : null,
+                        brand: fixture.brand ?? null,
+                        articleNumber:
+                            fixture.articleNumber ??
+                            fixture.productSourceFormat?.toUpperCase() ??
+                            fixture.fixtureType ??
+                            null,
+                        lumens: fixture.lumens ?? null,
+                        powerWatts: readFixturePowerWatts(fixture),
+                    }),
+                ),
             };
         });
 }
@@ -372,7 +401,11 @@ function findStructuredSummaryData(
 ): DialuxStructuredSummaryData | null {
     const asset = assets.find((candidate) => candidate.id === id);
 
-    if (!asset || asset.kind !== 'structured' || asset.data.type !== 'summary') {
+    if (
+        !asset ||
+        asset.kind !== 'structured' ||
+        asset.data.type !== 'summary'
+    ) {
         return null;
     }
 
@@ -413,7 +446,10 @@ function buildFixedPageSeeds(
     luminaires: DialuxLuminaireListItem[],
     assets: DialuxExportAsset[],
 ): PageSeed[] {
-    const summaryData = findStructuredSummaryData(assets, 'project-summary-data');
+    const summaryData = findStructuredSummaryData(
+        assets,
+        'project-summary-data',
+    );
     const coverAssetId =
         assets.find((asset) => asset.id === 'viewer-capture-3d')?.id ??
         assets.find((asset) => asset.id === 'formal-cover-svg')?.id ??
@@ -446,11 +482,7 @@ function buildFixedPageSeeds(
             title: 'Observaciones preliminares',
             subtitle: 'Base tecnica y criterios iniciales del reporte',
             assetIds: preliminaryAssetIds,
-            notes: buildPreliminaryNotes(
-                snapshot,
-                luminaires,
-                summaryData,
-            ),
+            notes: buildPreliminaryNotes(snapshot, luminaires, summaryData),
         },
     ];
 }
@@ -459,7 +491,7 @@ function buildTechnicalPageSeeds(
     snapshot: DialuxExportSnapshot,
     luminaires: DialuxLuminaireListItem[],
     ambientDetails: DialuxAmbientDetail[],
-    assets: DialuxExportAsset[]
+    assets: DialuxExportAsset[],
 ): PageSeed[] {
     const seeds: PageSeed[] = [];
 
@@ -469,7 +501,9 @@ function buildTechnicalPageSeeds(
     // 1a. Plano base importado (solo CAD DXF, sin recintos)
     const cadSvgAssetId = assets.some((a) => a.id === 'cad-overview-svg')
         ? 'cad-overview-svg'
-        : (assets.some((a) => a.id === 'cad-base-bitmap') ? 'cad-base-bitmap' : null);
+        : assets.some((a) => a.id === 'cad-base-bitmap')
+          ? 'cad-base-bitmap'
+          : null;
 
     if (cadSvgAssetId) {
         seeds.push({
@@ -479,18 +513,20 @@ function buildTechnicalPageSeeds(
             title: 'Terreno 1 - Edificación 1',
             subtitle: 'Plano base importado',
             assetIds: [cadSvgAssetId],
-            notes: []
+            notes: [],
         });
     }
 
     // 1b. Lista de locales (CAD + recintos dibujados, sin isolux).
     // La captura compuesta del editor (CAD + overlay alineados) es la fuente
     // preferida; el SVG sintético queda como fallback sin DOM/captura.
-    const drawnTerrainAssetId = assets.some((a) => a.id === 'composite-plan-bitmap')
+    const drawnTerrainAssetId = assets.some(
+        (a) => a.id === 'composite-plan-bitmap',
+    )
         ? 'composite-plan-bitmap'
         : assets.some((a) => a.id === 'drawn-terrain-svg')
-            ? 'drawn-terrain-svg'
-            : cadSvgAssetId;
+          ? 'drawn-terrain-svg'
+          : cadSvgAssetId;
 
     seeds.push({
         id: 'page-terrain-ambient-list',
@@ -499,15 +535,17 @@ function buildTechnicalPageSeeds(
         title: 'Lista de locales / Escena de luz 1',
         subtitle: 'Terreno 1 - Edificacion 1',
         assetIds: drawnTerrainAssetId ? [drawnTerrainAssetId] : [],
-        notes: []
+        notes: [],
     });
 
     // 1c. Plano Arquitectónico con Isolux superpuesto (CAD + recintos + isolux)
-    const terrainIsoluxAssetId = assets.some((a) => a.id === 'composite-isolux-bitmap')
+    const terrainIsoluxAssetId = assets.some(
+        (a) => a.id === 'composite-isolux-bitmap',
+    )
         ? 'composite-isolux-bitmap'
         : assets.some((a) => a.id === 'terrain-with-isolux-svg')
-            ? 'terrain-with-isolux-svg'
-            : drawnTerrainAssetId;
+          ? 'terrain-with-isolux-svg'
+          : drawnTerrainAssetId;
 
     if (terrainIsoluxAssetId) {
         seeds.push({
@@ -517,7 +555,7 @@ function buildTechnicalPageSeeds(
             title: 'Terreno 1 - Edificación 1',
             subtitle: 'Plano Arquitectónico con Isolux',
             assetIds: [terrainIsoluxAssetId],
-            notes: []
+            notes: [],
         });
     }
 
@@ -531,7 +569,7 @@ function buildTechnicalPageSeeds(
         title: 'Lista de luminarias',
         subtitle: 'Terreno 1 - Edificación 1',
         assetIds: [],
-        notes: []
+        notes: [],
     });
 
     // 2b. Fichas de producto (una por producto único, no por instancia)
@@ -549,14 +587,22 @@ function buildTechnicalPageSeeds(
             title: 'Ficha de producto',
             subtitle: lum.name,
             assetIds: assetIds,
-            notes: []
+            notes: [],
         });
     });
 
     // Secuencia por Recinto (Room) → 5 sub-secciones por local (estructura DIALux)
-    snapshot.rooms.forEach((room) => {
-        const roomAmbients = ambientDetails.filter(a => a.roomId === room.id);
+    // Sorted by floorIndex so rooms belonging to "1° NIVEL" appear before "2° NIVEL".
+    const sortedRooms = [...snapshot.rooms].sort((a, b) => {
+        const aFloor = ambientDetails.find((d) => d.roomId === a.id)?.floorIndex ?? 0;
+        const bFloor = ambientDetails.find((d) => d.roomId === b.id)?.floorIndex ?? 0;
+        return aFloor - bFloor;
+    });
+    sortedRooms.forEach((room) => {
+        const roomAmbients = ambientDetails.filter((a) => a.roomId === room.id);
         if (roomAmbients.length === 0) return;
+        const levelSceneId = roomAmbients[0]?.sceneId ?? null;
+        const levelSceneName = roomAmbients[0]?.sceneName ?? null;
 
         // Nivel: Lista de locales (bloques por local con Ptotal, área,
         // potencia específica y Ē, como la página "Lista de locales" de evo)
@@ -568,6 +614,8 @@ function buildTechnicalPageSeeds(
             subtitle: room.name,
             assetIds: [],
             notes: [],
+            sceneId: levelSceneId,
+            sceneName: levelSceneName,
             roomId: room.id,
         });
 
@@ -580,6 +628,8 @@ function buildTechnicalPageSeeds(
             subtitle: room.name,
             assetIds: [],
             notes: [],
+            sceneId: levelSceneId,
+            sceneName: levelSceneName,
             roomId: room.id,
         });
 
@@ -592,6 +642,8 @@ function buildTechnicalPageSeeds(
             subtitle: room.name,
             assetIds: [],
             notes: [],
+            sceneId: levelSceneId,
+            sceneName: levelSceneName,
             roomId: room.id,
         });
 
@@ -606,6 +658,8 @@ function buildTechnicalPageSeeds(
                 subtitle: detail.ambientName,
                 assetIds: [],
                 notes: [],
+                sceneId: detail.sceneId,
+                sceneName: detail.sceneName,
                 ambientId: detail.ambientId,
                 roomId: room.id,
             });
@@ -620,6 +674,8 @@ function buildTechnicalPageSeeds(
                     subtitle: detail.ambientName,
                     assetIds: [detail.planAssetId],
                     notes: [],
+                    sceneId: detail.sceneId,
+                    sceneName: detail.sceneName,
                     ambientId: detail.ambientId,
                     roomId: room.id,
                 });
@@ -635,6 +691,8 @@ function buildTechnicalPageSeeds(
                     subtitle: detail.ambientName,
                     assetIds: [],
                     notes: [],
+                    sceneId: detail.sceneId,
+                    sceneName: detail.sceneName,
                     ambientId: detail.ambientId,
                     roomId: room.id,
                 });
@@ -649,6 +707,8 @@ function buildTechnicalPageSeeds(
                 subtitle: detail.ambientName,
                 assetIds: [],
                 notes: [],
+                sceneId: detail.sceneId,
+                sceneName: detail.sceneName,
                 ambientId: detail.ambientId,
                 roomId: room.id,
             });
@@ -663,6 +723,8 @@ function buildTechnicalPageSeeds(
                     subtitle: detail.ambientName,
                     assetIds: [detail.isoluxAssetId],
                     notes: [],
+                    sceneId: detail.sceneId,
+                    sceneName: detail.sceneName,
                     ambientId: detail.ambientId,
                     roomId: room.id,
                 });
@@ -678,7 +740,7 @@ function buildTechnicalPageSeeds(
         title: 'Glosario',
         subtitle: '',
         assetIds: [],
-        notes: []
+        notes: [],
     });
 
     return seeds;
@@ -708,6 +770,7 @@ function buildTocEntries(
     });
 
     const firstTechnicalPage = fixedPageCount + tocPageCount + 1;
+    let currentSceneId: string | null = null;
     let currentRoomId: string | null = null;
     let currentAmbientId: string | null = null;
     let productSheetHeaderAdded = false;
@@ -729,7 +792,7 @@ function buildTocEntries(
                 level: 0,
                 pageNumber: 0,
                 kind: 'section-label',
-                size: 'small'
+                size: 'small',
             });
             entries.push({
                 sectionId: 'edification-header',
@@ -738,7 +801,7 @@ function buildTocEntries(
                 level: 0,
                 pageNumber: 0,
                 kind: 'section-heading',
-                size: 'large'
+                size: 'large',
             });
             terrainHeaderAdded = true;
         }
@@ -752,31 +815,43 @@ function buildTocEntries(
                 level: 0,
                 pageNumber: 0,
                 kind: 'section-heading',
-                size: 'large'
+                size: 'large',
             });
             productSheetHeaderAdded = true;
         }
 
-        // Room Transition Group (Nivel)
+        if (seed.sceneId && seed.sceneId !== currentSceneId) {
+            currentSceneId = seed.sceneId;
+            entries.push({
+                sectionId: `scene-group-label-${seed.sceneId}`,
+                title: 'Edificacion 1',
+                subtitle: null,
+                level: 0,
+                pageNumber: 0,
+                kind: 'section-label',
+                size: 'small',
+            });
+            entries.push({
+                sectionId: `scene-group-heading-${seed.sceneId}`,
+                title: seed.sceneName ?? 'Nivel',
+                subtitle: null,
+                level: 0,
+                pageNumber: 0,
+                kind: 'section-heading',
+                size: 'large',
+            });
+        }
+
+        // Room transition tracking.
         if (seed.roomId && seed.roomId !== currentRoomId) {
-            const room = snapshot.rooms.find(r => r.id === seed.roomId);
             currentRoomId = seed.roomId;
-            if (room) {
-                entries.push({
-                    sectionId: `room-group-label-${room.id}`,
-                    title: 'Edificación 1',
-                    subtitle: null,
-                    level: 0,
-                    pageNumber: 0,
-                    kind: 'section-label',
-                    size: 'small'
-                });
-            }
         }
 
         // Ambient Transition Group
         if (seed.ambientId && seed.ambientId !== currentAmbientId) {
-            const ambient = snapshot.ambients.find(a => a.id === seed.ambientId);
+            const ambient = snapshot.ambients.find(
+                (a) => a.id === seed.ambientId,
+            );
             currentAmbientId = seed.ambientId;
             if (ambient) {
                 entries.push({
@@ -786,7 +861,7 @@ function buildTocEntries(
                     level: 1,
                     pageNumber: 0,
                     kind: 'section-label',
-                    size: 'small'
+                    size: 'small',
                 });
                 entries.push({
                     sectionId: `ambient-group-heading-${ambient.id}`,
@@ -795,7 +870,7 @@ function buildTocEntries(
                     level: 1,
                     pageNumber: 0,
                     kind: 'section-heading',
-                    size: 'large'
+                    size: 'large',
                 });
             }
         }
@@ -837,7 +912,7 @@ function buildTocEntries(
             subtitle: null,
             level,
             pageNumber: firstTechnicalPage + index,
-            kind: 'item'
+            kind: 'item',
         });
     });
 
@@ -858,7 +933,7 @@ function generateFormalTocFromSeeds(
             fixedPageSeeds,
             technicalPageSeeds,
             fixedPageCount,
-            snapshot
+            snapshot,
         );
         const nextTocPageCount = Math.max(
             1,
@@ -881,13 +956,18 @@ export function buildDialuxFormalDocument(
     const luminaireTotals = buildLuminaireTotals(luminaires);
     const ambientDetails = buildAmbientDetails(snapshot, assets);
     const fixedPageSeeds = buildFixedPageSeeds(snapshot, luminaires, assets);
-    const technicalPageSeeds = buildTechnicalPageSeeds(snapshot, luminaires, ambientDetails, assets);
+    const technicalPageSeeds = buildTechnicalPageSeeds(
+        snapshot,
+        luminaires,
+        ambientDetails,
+        assets,
+    );
     const fixedPageCount = fixedPageSeeds.length;
     const toc = generateFormalTocFromSeeds(
         fixedPageCount,
         fixedPageSeeds,
         technicalPageSeeds,
-        snapshot
+        snapshot,
     );
     const tocPageCount = Math.max(1, Math.ceil(toc.length / TOC_ROWS_PER_PAGE));
 
@@ -963,15 +1043,18 @@ export function buildDialuxFormalDocument(
             { label: 'Luminarias', value: `${snapshot.summary.fixtureCount}` },
             {
                 label: 'Estado calculo',
-                value: snapshot.summary.ambientCount === 0
-                    ? 'Sin ambientes'
-                    : snapshot.summary.calculatedAmbientCount === 0
-                    ? 'Sin calcular'
-                    : snapshot.summary.calculatedAmbientCount < snapshot.summary.ambientCount
-                    ? `Parcial (${snapshot.summary.calculatedAmbientCount}/${snapshot.summary.ambientCount})`
-                    : snapshot.summary.compliantAmbientCount >= snapshot.summary.ambientCount
-                    ? 'Conforme'
-                    : `Revisar (${snapshot.summary.compliantAmbientCount}/${snapshot.summary.ambientCount})`,
+                value:
+                    snapshot.summary.ambientCount === 0
+                        ? 'Sin ambientes'
+                        : snapshot.summary.calculatedAmbientCount === 0
+                          ? 'Sin calcular'
+                          : snapshot.summary.calculatedAmbientCount <
+                              snapshot.summary.ambientCount
+                            ? `Parcial (${snapshot.summary.calculatedAmbientCount}/${snapshot.summary.ambientCount})`
+                            : snapshot.summary.compliantAmbientCount >=
+                                snapshot.summary.ambientCount
+                              ? 'Conforme'
+                              : `Revisar (${snapshot.summary.compliantAmbientCount}/${snapshot.summary.ambientCount})`,
             },
             {
                 label: 'Lux promedio',

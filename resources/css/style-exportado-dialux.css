@@ -82,24 +82,33 @@ body {
     border-top: 1px solid #cbd5e1;
 }
 
-/* Page body: header ends at ~10mm, footer starts at ~(297-10)mm */
+/* Page body — portrait: 210-10-10=190mm wide, 297-12-12=273mm tall.
+   Explicit width + height (not right/bottom) because dompdf computes child
+   percentage widths against the *page* (210mm) when only left+right are set,
+   causing tables with width:96% to render as 201mm and bleed past the edge. */
 .page-body {
     position: absolute;
     top: 12mm;
-    bottom: 12mm;
     left: 10mm;
-    right: 10mm;
+    width: 190mm;
+    height: 273mm;
     z-index: 2;
     overflow: hidden;
 }
 
-/* Full-plan variant: explicit height = 297 - 12 - 12 = 273mm */
+/* Landscape page body: 297-10-10=277mm wide, 210-12-12=186mm tall */
+.page-landscape .page-body {
+    width: 277mm;
+    height: 186mm;
+}
+
+/* Full-plan variant: same width rule, explicit height */
 .page-body-fullplan {
     position: absolute;
     top: 12mm;
-    height: 273mm;
     left: 10mm;
-    right: 10mm;
+    width: 190mm;
+    height: 273mm;
     z-index: 2;
     overflow: hidden;
     padding: 0;
@@ -107,6 +116,7 @@ body {
 }
 
 .page-landscape .page-body-fullplan {
+    width: 277mm;
     height: 174mm;
 }
 
@@ -201,6 +211,16 @@ body {
     color: #0f172a;
     text-align: center;
     white-space: nowrap;
+}
+
+/* Inside any table, numbers must wrap — dompdf expands cells with nowrap
+   and the table bleeds past the page margin. */
+table .number,
+table td.number,
+table th.number {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* ══ PORTADA ════════════════════════════════════════════════════════════ */
@@ -651,8 +671,11 @@ body {
 }
 
 .luminaire-table {
+    width: 96%;
+    max-width: 100%;
     table-layout: fixed;
     margin-top: 4mm;
+    box-sizing: border-box;
 }
 
 .luminaire-table td {
@@ -660,62 +683,68 @@ body {
     font-size: 9px;
     line-height: 1.35;
     text-align: center;
-    word-break: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
-.luminaire-table .col-unit {
+.luminaire-table th {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.project-luminaire-table .col-unit {
     width: 10%;
 }
 
-.luminaire-table .col-brand {
+.project-luminaire-table .col-brand {
     width: 14%;
 }
 
-.luminaire-table .col-code {
+.project-luminaire-table .col-code {
     width: 14%;
 }
 
-.luminaire-table .col-name {
+.project-luminaire-table .col-name {
     width: 22%;
 }
 
-.luminaire-table .col-power {
+.project-luminaire-table .col-power {
     width: 12%;
 }
 
-.luminaire-table .col-flux {
+.project-luminaire-table .col-flux {
     width: 14%;
 }
 
-.luminaire-table .col-efficiency {
+.project-luminaire-table .col-efficiency {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(1) {
+.project-luminaire-table th:nth-child(1) {
     width: 10%;
 }
 
-.luminaire-table th:nth-child(2) {
+.project-luminaire-table th:nth-child(2) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(3) {
+.project-luminaire-table th:nth-child(3) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(4) {
+.project-luminaire-table th:nth-child(4) {
     width: 22%;
 }
 
-.luminaire-table th:nth-child(5) {
+.project-luminaire-table th:nth-child(5) {
     width: 12%;
 }
 
-.luminaire-table th:nth-child(6) {
+.project-luminaire-table th:nth-child(6) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(7) {
+.project-luminaire-table th:nth-child(7) {
     width: 14%;
 }
 
@@ -734,10 +763,12 @@ body {
 
 .ambient-metric-row {
     width: 96%;
+    max-width: 100%;
     margin: 0 auto 5mm;
     border-collapse: collapse;
     border-spacing: 0;
     table-layout: fixed;
+    box-sizing: border-box;
 }
 
 /* 4 tarjetas: 19+19+43+19 = 100% (la ancha lleva las dos líneas de potencia).
@@ -767,8 +798,11 @@ body {
 }
 
 .ambient-metric-value {
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 9px;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow: hidden;
 }
 
 .ambient-local-table th,
@@ -781,22 +815,98 @@ body {
     text-align: center;
 }
 
+.ambient-local-table th:nth-child(1),
+.ambient-local-table td:nth-child(1) {
+    width: 10%;
+}
+
+.ambient-local-table th:nth-child(2),
+.ambient-local-table td:nth-child(2) {
+    width: 17%;
+}
+
+.ambient-local-table th:nth-child(3),
+.ambient-local-table td:nth-child(3) {
+    width: 17%;
+}
+
+.ambient-local-table th:nth-child(4),
+.ambient-local-table td:nth-child(4) {
+    width: 30%;
+}
+
+.ambient-local-table th:nth-child(5),
+.ambient-local-table td:nth-child(5) {
+    width: 13%;
+}
+
+.ambient-local-table th:nth-child(6),
+.ambient-local-table td:nth-child(6) {
+    width: 13%;
+}
+
+.ambient-list-table th:nth-child(1),
+.ambient-list-table td:nth-child(1) {
+    width: 36%;
+}
+
+.ambient-list-table th:nth-child(2),
+.ambient-list-table td:nth-child(2),
+.ambient-list-table th:nth-child(5),
+.ambient-list-table td:nth-child(5),
+.ambient-list-table th:nth-child(6),
+.ambient-list-table td:nth-child(6) {
+    width: 12%;
+}
+
+.ambient-list-table th:nth-child(3),
+.ambient-list-table td:nth-child(3),
+.ambient-list-table th:nth-child(4),
+.ambient-list-table td:nth-child(4) {
+    width: 14%;
+}
+
+.fixture-position-table th:nth-child(1),
+.fixture-position-table td:nth-child(1),
+.fixture-position-table th:nth-child(2),
+.fixture-position-table td:nth-child(2),
+.fixture-position-table th:nth-child(3),
+.fixture-position-table td:nth-child(3),
+.fixture-position-table th:nth-child(4),
+.fixture-position-table td:nth-child(4) {
+    width: 25%;
+}
+
 .calculation-table {
-    width: 98%;
+    width: 96%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     table-layout: fixed;
+    border-spacing: 0;
+    box-sizing: border-box;
 }
 
 .calculation-table th,
 .calculation-table td {
-    padding: 2mm 1.1mm;
-    font-size: 8.4px;
-    line-height: 1.28;
+    box-sizing: border-box;
+    padding: 1.2mm 0.15mm;
+    font-size: 7.2px;
+    line-height: 1.18;
     vertical-align: middle;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.calculation-table th {
+    font-size: 6.4px;
+    letter-spacing: 0;
 }
 
 .calculation-table th:nth-child(1),
 .calculation-table td:nth-child(1) {
-    width: 38%;
+    width: 31%;
 }
 
 .calculation-table th:nth-child(2),
@@ -808,7 +918,7 @@ body {
 .calculation-table td:nth-child(3),
 .calculation-table th:nth-child(4),
 .calculation-table td:nth-child(4) {
-    width: 10%;
+    width: 10.5%;
 }
 
 .calculation-table th:nth-child(5),
@@ -820,7 +930,7 @@ body {
 .calculation-table td:nth-child(6),
 .calculation-table th:nth-child(7),
 .calculation-table td:nth-child(7) {
-    width: 8%;
+    width: 11%;
 }
 
 .calculation-table .number {
@@ -830,6 +940,7 @@ body {
 .calculation-table .calculation-properties {
     text-align: left;
     line-height: 1.32;
+    overflow-wrap: anywhere;
     word-break: normal;
 }
 
@@ -844,7 +955,7 @@ body {
 
 .calculation-index {
     display: inline-block;
-    padding: 1mm 1.5mm;
+    padding: 0.8mm 1mm;
     border: 1px solid #0f172a;
     line-height: 1;
 }
@@ -861,8 +972,11 @@ body {
 
 .ambient-results-table {
     width: 96%;
+    max-width: 100%;
     margin: 6mm auto 4mm;
     border-collapse: collapse;
+    table-layout: fixed;
+    box-sizing: border-box;
 }
 
 .ambient-results-table th,
@@ -871,7 +985,23 @@ body {
     border-bottom: 1px solid #0f172a;
     font-size: 9px;
     vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow: hidden;
 }
+
+.ambient-results-table th:nth-child(1),
+.ambient-results-table td:nth-child(1) { width: 18%; }
+.ambient-results-table th:nth-child(2),
+.ambient-results-table td:nth-child(2) { width: 30%; }
+.ambient-results-table th:nth-child(3),
+.ambient-results-table td:nth-child(3) { width: 17%; }
+.ambient-results-table th:nth-child(4),
+.ambient-results-table td:nth-child(4) { width: 17%; }
+.ambient-results-table th:nth-child(5),
+.ambient-results-table td:nth-child(5) { width: 10%; }
+.ambient-results-table th:nth-child(6),
+.ambient-results-table td:nth-child(6) { width: 8%; }
 
 .ambient-results-table th {
     font-weight: bold;
@@ -881,7 +1011,8 @@ body {
 .ambient-results-table .result-number,
 .ambient-results-table .result-check {
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .verification-check {

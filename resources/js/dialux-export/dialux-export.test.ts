@@ -180,6 +180,89 @@ describe('dialux export pipeline', () => {
         expect(snapshot.summary.compliantAmbientCount).toBe(2);
     });
 
+    it('can build the formal export snapshot from every project level', () => {
+        const project = buildProjectFixture();
+        const baseScene = project.scenes[0]!;
+        baseScene.name = 'NIVEL 1';
+        const secondLevelRoom = {
+            ...baseScene.rooms[0]!,
+            id: 'room-3',
+            name: '2 NIVEL',
+            vertices: [
+                { x: 0, y: 5 },
+                { x: 6, y: 5 },
+                { x: 6, y: 9 },
+                { x: 0, y: 9 },
+            ],
+        };
+
+        project.scenes.push({
+            ...baseScene,
+            id: 'scene-2',
+            name: 'NIVEL 2',
+            floorIndex: 1,
+            rooms: [secondLevelRoom],
+            fixtures: [
+                {
+                    ...baseScene.fixtures[0]!,
+                    id: 'fixture-3',
+                    roomId: 'room-3::ambient-1',
+                    x: 3,
+                    y: 7,
+                },
+            ],
+        });
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            includeAllScenes: true,
+            resultsByRoom: {
+                'room-1::ambient-1': buildLightingResultFixture(),
+                'room-2::ambient-1': buildLightingResultFixture(),
+                'room-3::ambient-1': buildLightingResultFixture(),
+            },
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig: {
+                showGrid: true,
+                showIsolux: true,
+                show3DView: false,
+                isoluxMode: 'functional',
+                zoom: 1,
+                panX: 0,
+                panY: 0,
+                selectedId: null,
+            },
+        });
+        const documentModel = buildDialuxFormalDocument(snapshot, []);
+
+        expect(snapshot.ambients).toHaveLength(3);
+        expect(snapshot.summary.fixtureCount).toBe(3);
+        expect(
+            documentModel.ambientDetails.map((detail) => detail.roomName),
+        ).toContain('2 NIVEL');
+        expect(
+            documentModel.pages.some(
+                (page) => page.sectionId === 'room-calculation-object:room-3',
+            ),
+        ).toBe(true);
+        expect(
+            documentModel.toc.some(
+                (entry) =>
+                    entry.kind === 'section-heading' &&
+                    entry.title === 'NIVEL 1',
+            ),
+        ).toBe(true);
+        expect(
+            documentModel.toc.some(
+                (entry) =>
+                    entry.kind === 'section-heading' &&
+                    entry.title === 'NIVEL 2',
+            ),
+        ).toBe(true);
+    });
+
     it('calculates missing ambient results while building the export snapshot', () => {
         const snapshot = buildDialuxExportSnapshot({
             project: buildProjectFixture(),
@@ -308,7 +391,9 @@ describe('dialux export pipeline', () => {
 
         // El módulo + el pasillo (los corredores siempre se reportan como contexto).
         expect(snapshot.rooms).toHaveLength(2);
-        expect(snapshot.rooms.some((room) => room.id === 'module-1')).toBe(true);
+        expect(snapshot.rooms.some((room) => room.id === 'module-1')).toBe(
+            true,
+        );
         expect(corridorAmbient?.id).toBe('module-1::corridor-1::ambient-1');
         expect(corridorAmbient?.roomId).toBe('module-1');
         expect(corridorAmbient?.roomName).toBe('Modulo A');
@@ -323,13 +408,19 @@ describe('dialux export pipeline', () => {
                     detail.ambientName === 'Pasadizo principal',
             ),
         ).toBe(true);
-        expect(documentModel.ambientDetails.find((detail) => detail.ambientName === 'Pasadizo principal')?.ambientName).toBe(
-            'Pasadizo principal',
-        );
-        expect(documentModel.pages.some((page) => page.kind === 'ambient-summary')).toBe(true);
+        expect(
+            documentModel.ambientDetails.find(
+                (detail) => detail.ambientName === 'Pasadizo principal',
+            )?.ambientName,
+        ).toBe('Pasadizo principal');
+        expect(
+            documentModel.pages.some((page) => page.kind === 'ambient-summary'),
+        ).toBe(true);
         expect(
             documentModel.assets.some(
-                (asset) => asset.id === 'ambient-plan-svg-module-1::corridor-1::ambient-1',
+                (asset) =>
+                    asset.id ===
+                    'ambient-plan-svg-module-1::corridor-1::ambient-1',
             ),
         ).toBe(true);
         expect(
@@ -345,9 +436,9 @@ describe('dialux export pipeline', () => {
                     entry.title.includes('Modulo A'),
             ),
         ).toBe(true);
-        expect(documentModel.pages.filter((page) => page.kind === 'toc')).toHaveLength(
-            Math.ceil(documentModel.toc.length / 18),
-        );
+        expect(
+            documentModel.pages.filter((page) => page.kind === 'toc'),
+        ).toHaveLength(Math.ceil(documentModel.toc.length / 14));
     });
 
     it('creates reusable visual and structured assets', async () => {
@@ -409,7 +500,9 @@ describe('dialux export pipeline', () => {
             assets.some((asset) => asset.id === 'luminaire-products-data'),
         ).toBe(true);
         expect(
-            assets.some((asset) => asset.id === 'ambient-plan-svg-room-1::ambient-1'),
+            assets.some(
+                (asset) => asset.id === 'ambient-plan-svg-room-1::ambient-1',
+            ),
         ).toBe(true);
     });
 
@@ -543,18 +636,36 @@ describe('dialux export pipeline', () => {
         expect(documentModel.pages[0]?.kind).toBe('cover');
         expect(documentModel.pages[1]?.kind).toBe('preliminary-observations');
         expect(documentModel.pages[2]?.kind).toBe('toc');
-        expect(documentModel.pages[1]?.sectionId).toBe('preliminary-observations');
+        expect(documentModel.pages[1]?.sectionId).toBe(
+            'preliminary-observations',
+        );
         expect(documentModel.pages[1]?.pageNumber).toBe(2);
         expect(documentModel.pages[2]?.pageNumber).toBe(3);
-        expect(documentModel.pages.some((page) => page.kind === 'luminaire-list')).toBe(true);
-        expect(documentModel.pages.some((page) => page.kind === 'ambient-list')).toBe(true);
-        expect(documentModel.pages.some((page) => page.kind === 'calculation-object-list')).toBe(true);
-        expect(documentModel.pages.filter((page) => page.kind === 'ambient-plan')).toHaveLength(2);
-        expect(documentModel.pages.filter((page) => page.kind === 'ambient-useful-plane')).toHaveLength(2);
+        expect(
+            documentModel.pages.some((page) => page.kind === 'luminaire-list'),
+        ).toBe(true);
+        expect(
+            documentModel.pages.some((page) => page.kind === 'ambient-list'),
+        ).toBe(true);
+        expect(
+            documentModel.pages.some(
+                (page) => page.kind === 'calculation-object-list',
+            ),
+        ).toBe(true);
+        expect(
+            documentModel.pages.filter((page) => page.kind === 'ambient-plan'),
+        ).toHaveLength(2);
+        expect(
+            documentModel.pages.filter(
+                (page) => page.kind === 'ambient-useful-plane',
+            ),
+        ).toHaveLength(2);
         // Los planos del terreno van primero: plano con dibujo → plano con
         // isolux → lista de luminarias (el plano solo requiere DXF importado).
         expect(
-            documentModel.pages.findIndex((page) => page.kind === 'ambient-list'),
+            documentModel.pages.findIndex(
+                (page) => page.kind === 'ambient-list',
+            ),
         ).toBeLessThan(
             documentModel.pages.findIndex(
                 (page) => page.kind === 'terrain-architectural',
@@ -578,12 +689,35 @@ describe('dialux export pipeline', () => {
                 (page) => page.kind === 'calculation-object-list',
             ),
         );
-        expect(documentModel.pages.filter((page) => page.kind === 'ambient-summary')).toHaveLength(2);
-        expect(documentModel.toc.find((entry) => entry.sectionId === 'preliminary-observations')?.pageNumber).toBe(2);
-        expect(documentModel.toc.find((entry) => entry.sectionId === 'content')?.pageNumber).toBe(3);
-        expect(documentModel.toc.find((entry) => entry.sectionId === 'cad-overview-luminaires')?.pageNumber).toBeGreaterThan(1);
-        expect(documentModel.assets.some((asset) => asset.id === 'ambient-plan-svg-room-1::ambient-1')).toBe(true);
-        expect(documentModel.assets.some((asset) => asset.id === 'isolux-svg-room-2::ambient-1')).toBe(true);
+        expect(
+            documentModel.pages.filter(
+                (page) => page.kind === 'ambient-summary',
+            ),
+        ).toHaveLength(2);
+        expect(
+            documentModel.toc.find(
+                (entry) => entry.sectionId === 'preliminary-observations',
+            )?.pageNumber,
+        ).toBe(2);
+        expect(
+            documentModel.toc.find((entry) => entry.sectionId === 'content')
+                ?.pageNumber,
+        ).toBe(3);
+        expect(
+            documentModel.toc.find(
+                (entry) => entry.sectionId === 'cad-overview-luminaires',
+            )?.pageNumber,
+        ).toBeGreaterThan(1);
+        expect(
+            documentModel.assets.some(
+                (asset) => asset.id === 'ambient-plan-svg-room-1::ambient-1',
+            ),
+        ).toBe(true);
+        expect(
+            documentModel.assets.some(
+                (asset) => asset.id === 'isolux-svg-room-2::ambient-1',
+            ),
+        ).toBe(true);
         expect(documentModel.luminaires).toHaveLength(2);
         expect(documentModel.luminaires[0]?.articleNumber).toBe('PANEL-40W');
         expect(documentModel.luminaires[0]?.brand).toBe('Test Lighting');
@@ -602,7 +736,9 @@ describe('dialux export pipeline', () => {
             'ambient-calculation-object',
             'ambient-useful-plane',
         ]);
-        expect(documentModel.ambientDetails[0]?.luminaires[0]?.shape).toBeTruthy();
+        expect(
+            documentModel.ambientDetails[0]?.luminaires[0]?.shape,
+        ).toBeTruthy();
         expect(documentModel.pages[1]?.notes.length).toBeGreaterThan(0);
     });
 
@@ -640,24 +776,42 @@ describe('dialux export pipeline', () => {
 
         const assets = await buildDialuxExportAssets(snapshot, {
             includeViewerCapture: false,
-            preCapturedViewerBitmap: makeBitmap('viewer-capture-3d', 'formal-cover') as never,
-            preCapturedCadBitmap: makeBitmap('cad-base-bitmap', 'cad-base') as never,
-            preCapturedDrawnBitmap: makeBitmap('composite-plan-bitmap', 'drawn-terrain') as never,
-            preCapturedIsoluxBitmap: makeBitmap('composite-isolux-bitmap', 'isolux') as never,
+            preCapturedViewerBitmap: makeBitmap(
+                'viewer-capture-3d',
+                'formal-cover',
+            ) as never,
+            preCapturedCadBitmap: makeBitmap(
+                'cad-base-bitmap',
+                'cad-base',
+            ) as never,
+            preCapturedDrawnBitmap: makeBitmap(
+                'composite-plan-bitmap',
+                'drawn-terrain',
+            ) as never,
+            preCapturedIsoluxBitmap: makeBitmap(
+                'composite-isolux-bitmap',
+                'isolux',
+            ) as never,
         });
         const documentModel = buildDialuxFormalDocument(snapshot, assets);
 
         // La portada usa la captura 3D real del editor.
-        const coverPage = documentModel.pages.find((page) => page.kind === 'cover');
+        const coverPage = documentModel.pages.find(
+            (page) => page.kind === 'cover',
+        );
         expect(coverPage?.assetIds).toContain('viewer-capture-3d');
 
         // El plano base (sin DXF en el store) usa la captura del canvas CAD.
-        const cadPage = documentModel.pages.find((page) => page.kind === 'terrain-cad');
+        const cadPage = documentModel.pages.find(
+            (page) => page.kind === 'terrain-cad',
+        );
         expect(cadPage?.assetIds).toEqual(['cad-base-bitmap']);
 
         // Plano con dibujo e isolux: las capturas compuestas tienen prioridad
         // sobre los SVG sintéticos.
-        const drawnPage = documentModel.pages.find((page) => page.kind === 'ambient-list');
+        const drawnPage = documentModel.pages.find(
+            (page) => page.kind === 'ambient-list',
+        );
         expect(drawnPage?.assetIds).toEqual(['composite-plan-bitmap']);
         const isoluxPage = documentModel.pages.find(
             (page) => page.kind === 'terrain-architectural',
@@ -767,12 +921,8 @@ describe('dialux export pipeline', () => {
         expect(panel?.name).toBe('Panel 60x60');
 
         // Totales tipo evo: Φtotal y Ptotal multiplican por cantidad.
-        expect(documentModel.luminaireTotals.totalLumens).toBe(
-            4000 * 3 + 1600,
-        );
-        expect(documentModel.luminaireTotals.totalPowerWatts).toBe(
-            40 * 3 + 18,
-        );
+        expect(documentModel.luminaireTotals.totalLumens).toBe(4000 * 3 + 1600);
+        expect(documentModel.luminaireTotals.totalPowerWatts).toBe(40 * 3 + 18);
 
         // Una sola ficha de producto por producto único.
         expect(
@@ -811,7 +961,8 @@ describe('dialux export pipeline', () => {
                         ],
                     },
                     report_assets: {
-                        polar_svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>CDL polar</text></svg>',
+                        polar_svg:
+                            '<svg xmlns="http://www.w3.org/2000/svg"><text>CDL polar</text></svg>',
                     },
                     photometric_web: {
                         c_angles: [0],
@@ -848,9 +999,16 @@ describe('dialux export pipeline', () => {
         const documentModel = buildDialuxFormalDocument(snapshot, assets);
 
         expect(assets.some((asset) => asset.id === 'prod-10-polar')).toBe(true);
-        expect(documentModel.pages.some((page) => page.kind === 'product-sheet')).toBe(true);
-        expect(documentModel.luminaires[0]?.polarDiagramAssetId).toBe('prod-10-polar');
-        expect(documentModel.luminaires[0]?.reportData?.technical_table?.[1]?.value).toBe('100.0 lm/W');
+        expect(
+            documentModel.pages.some((page) => page.kind === 'product-sheet'),
+        ).toBe(true);
+        expect(documentModel.luminaires[0]?.polarDiagramAssetId).toBe(
+            'prod-10-polar',
+        );
+        expect(
+            documentModel.luminaires[0]?.reportData?.technical_table?.[1]
+                ?.value,
+        ).toBe('100.0 lm/W');
 
         getSpy.mockRestore();
     });

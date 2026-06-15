@@ -18,10 +18,23 @@ import type {
 export interface DialuxExportSnapshotInput {
     project: Project;
     activeSceneId: string;
+    includeAllScenes?: boolean;
     resultsByRoom: Record<string, LightingResult>;
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
     visualConfig: DialuxExportVisualConfig;
+}
+
+function sortScenesByFloor(project: Project): Project['scenes'] {
+    return [...project.scenes].sort((left, right) => {
+        const floorCompare = (left.floorIndex ?? 0) - (right.floorIndex ?? 0);
+
+        if (floorCompare !== 0) {
+            return floorCompare;
+        }
+
+        return left.name.localeCompare(right.name, 'es');
+    });
 }
 
 function buildAmbientMetrics(
@@ -79,37 +92,47 @@ export function buildDialuxExportSnapshot(
     }
 
     const resultsByRoom = { ...input.resultsByRoom };
-    const ambients = deriveSceneAmbientSpaces(scene).map((ambient) => {
-        const result =
-            resultsByRoom[ambient.room.id] ??
-            calculateLightingResult(ambient.room, ambient.fixtures);
-        resultsByRoom[ambient.room.id] = result;
-        const exportAmbient: DialuxAmbientExport = {
-            id: ambient.id,
-            roomId: ambient.roomId,
-            roomName: ambient.roomName,
-            index: ambient.index,
-            configKey: ambient.configKey,
-            name: ambient.name,
-            activity: ambient.activity,
-            sourceRoom: ambient.sourceRoom,
-            room: ambient.room,
-            fixtures: ambient.fixtures,
-            result,
-            metrics: {} as DialuxAmbientMetrics,
-        };
+    const scenes = input.includeAllScenes
+        ? sortScenesByFloor(input.project)
+        : [scene];
+    const ambients = scenes.flatMap((currentScene) =>
+        deriveSceneAmbientSpaces(currentScene).map((ambient) => {
+            const result =
+                resultsByRoom[ambient.room.id] ??
+                calculateLightingResult(ambient.room, ambient.fixtures);
+            resultsByRoom[ambient.room.id] = result;
+            const exportAmbient: DialuxAmbientExport = {
+                id: ambient.id,
+                sceneId: currentScene.id,
+                sceneName: currentScene.name,
+                floorIndex: currentScene.floorIndex ?? 0,
+                roomId: ambient.roomId,
+                roomName: ambient.roomName,
+                index: ambient.index,
+                configKey: ambient.configKey,
+                name: ambient.name,
+                activity: ambient.activity,
+                sourceRoom: ambient.sourceRoom,
+                room: ambient.room,
+                fixtures: ambient.fixtures,
+                result,
+                metrics: {} as DialuxAmbientMetrics,
+            };
 
-        exportAmbient.metrics = buildAmbientMetrics(exportAmbient, result);
+            exportAmbient.metrics = buildAmbientMetrics(exportAmbient, result);
 
-        return exportAmbient;
-    });
-    const reportRooms = scene.rooms.filter(
-        (room) =>
-            // Always include corridors (pasadizos) — they provide architectural context
-            // even when no ambient is assigned to them.
-            room.roomType === 'corridor' ||
-            ambients.some((ambient) => ambient.roomId === room.id),
+            return exportAmbient;
+        }),
     );
+    const reportRooms = scenes
+        .flatMap((currentScene) => currentScene.rooms)
+        .filter(
+            (room) =>
+                // Always include corridors (pasadizos) — they provide architectural context
+                // even when no ambient is assigned to them.
+                room.roomType === 'corridor' ||
+                ambients.some((ambient) => ambient.roomId === room.id),
+        );
 
     const calculatedAmbients = ambients.filter(
         (ambient) => ambient.result !== null,
@@ -138,22 +161,37 @@ export function buildDialuxExportSnapshot(
         dxfEntities: input.dxfEntities ?? [],
         dxfExtents: input.dxfExtents,
         rooms: reportRooms,
-        walls: scene.walls,
-        windows: scene.windows,
-        doors: scene.doors,
-        canopies: scene.canopies,
-        fixtures: scene.fixtures,
+        walls: scenes.flatMap((currentScene) => currentScene.walls),
+        windows: scenes.flatMap((currentScene) => currentScene.windows),
+        doors: scenes.flatMap((currentScene) => currentScene.doors),
+        canopies: scenes.flatMap((currentScene) => currentScene.canopies),
+        fixtures: scenes.flatMap((currentScene) => currentScene.fixtures),
         ambients,
         resultsByRoom,
         visualConfig: input.visualConfig,
         summary: {
             roomCount: reportRooms.length,
             ambientCount: ambients.length,
-            fixtureCount: scene.fixtures.length,
-            wallCount: scene.walls.length,
-            windowCount: scene.windows.length,
-            doorCount: scene.doors.length,
-            canopyCount: scene.canopies.length,
+            fixtureCount: scenes.reduce(
+                (sum, currentScene) => sum + currentScene.fixtures.length,
+                0,
+            ),
+            wallCount: scenes.reduce(
+                (sum, currentScene) => sum + currentScene.walls.length,
+                0,
+            ),
+            windowCount: scenes.reduce(
+                (sum, currentScene) => sum + currentScene.windows.length,
+                0,
+            ),
+            doorCount: scenes.reduce(
+                (sum, currentScene) => sum + currentScene.doors.length,
+                0,
+            ),
+            canopyCount: scenes.reduce(
+                (sum, currentScene) => sum + currentScene.canopies.length,
+                0,
+            ),
             calculatedAmbientCount: calculatedAmbients.length,
             compliantAmbientCount: ambients.filter(
                 (ambient) => ambient.metrics.complies,
