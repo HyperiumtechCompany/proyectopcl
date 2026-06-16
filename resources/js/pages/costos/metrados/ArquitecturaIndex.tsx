@@ -19,6 +19,9 @@ import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUN
 import { NumberingModal, buildNumberingUpdates } from './metradoarquitectura/arquitectura_NumberingModal';
 import type { CalcPayload, ArquitecturaPageProps, RowKind } from './metradoarquitectura/arquitectura_types';
 import { buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, buildArquitecturaResumenRows, colLetter, mkBlank, mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoarquitectura/arquitectura_utils';
+import { FileDown } from 'lucide-react';
+import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
+
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -93,10 +96,10 @@ function useLuckysheet() {
 // HOOK: useAutoSave
 // ═══════════════════════════════════════════════════════════════
 function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label: string; width: number }>) {
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSheets = useRef<any[]>([]);
   const dirtySheetNames = useRef<Set<string>>(new Set());
 
@@ -224,9 +227,9 @@ export default function ArquitecturaIndex() {
   const moduleCount = Math.max(1, Number(config?.cantidad_modulos ?? 1));
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',               href: '/costos' },
-    { title: project?.nombre || 'Proyecto',         href: `/costos/${project?.id || 0}` },
-    { title: 'Metrado Arquitectura',   href: '#' },
+    { title: 'Costos', href: '/costos' },
+    { title: project?.nombre || 'Proyecto', href: `/costos/${project?.id || 0}` },
+    { title: 'Metrado Arquitectura', href: '#' },
   ];
 
   const resumenCols = useMemo(() => ([
@@ -249,10 +252,10 @@ export default function ArquitecturaIndex() {
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
   const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project?.id || 0, resumenCols);
 
-  const [syncing,  setSyncing]  = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
-  const [numOpen,  setNumOpen]  = useState(false);
-  const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
+  const [numOpen, setNumOpen] = useState(false);
+  const [calcRow, setCalcRow] = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
   const progCount = useRef(0);
   const isProgrammaticChange = useRef(false);
@@ -485,8 +488,8 @@ export default function ArquitecturaIndex() {
 
       newRows.forEach((row, ri) => {
         const level = toNum(row._level) || 1;
-        const kind  = String(row._kind ?? 'leaf') as RowKind;
-        const st    = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+        const kind = String(row._kind ?? 'leaf') as RowKind;
+        const st = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
 
         resumenCols.forEach((col, c) => {
           const raw = (row as any)[col.key] ?? '';
@@ -516,6 +519,96 @@ export default function ArquitecturaIndex() {
     }, 400);
   }, [ls, moduleCount, resumenCols, saveNow, scheduleSave]);
 
+
+  const handleExportarExcel = useCallback(async () => {
+    try {
+      const inst = ls();
+      if (!inst) {
+        alert('No se pudo acceder a la tabla');
+        return;
+      }
+
+      const allSheets = getAllSheets();
+      if (!allSheets.length) {
+        alert('No hay hojas para exportar');
+        return;
+      }
+
+      const sheetsData: any[] = [];
+
+      for (const sheet of allSheets) {
+        const data = sheet.data || [];
+        const items: any[] = [];
+
+        for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+          const row = data[rowIdx];
+          if (!row || row.length === 0) continue;
+
+          const descripcion = row[CI.descripcion]?.v || row[CI.descripcion] || '';
+          if (descripcion && descripcion.toString().trim() !== '') {
+            const item: any = {
+              item: row[CI.partida]?.v || row[CI.partida] || '',
+              descripcion: descripcion.toString(),
+              und: row[CI.unidad]?.v || row[CI.unidad] || '',
+              elsim: Number(row[CI.elsim]?.v || row[CI.elsim] || 0),
+              largo: Number(row[CI.largo]?.v || row[CI.largo] || 0),
+              ancho: Number(row[CI.ancho]?.v || row[CI.ancho] || 0),
+              alto: Number(row[CI.alto]?.v || row[CI.alto] || 0),
+              nveces: Number(row[CI.nveces]?.v || row[CI.nveces] || 1),
+              lon: Number(row[CI.lon]?.v || row[CI.lon] || 0),
+              area: Number(row[CI.area]?.v || row[CI.area] || 0),
+              vol: Number(row[CI.vol]?.v || row[CI.vol] || 0),
+              kg: Number(row[CI.kg]?.v || row[CI.kg] || 0),
+              parcial: Number(row[CI.parcial]?.v || row[CI.parcial] || 0),
+              total: Number(row[CI.total]?.v || row[CI.total] || 0),
+            };
+
+            if (sheet.name === 'Resumen') {
+              item.modulo1 = Number(row[4]?.v || row[4] || 0);
+              item.modulo2 = Number(row[5]?.v || row[5] || 0);
+              item.modulo3 = Number(row[6]?.v || row[6] || 0);
+              item.exterior = Number(row[7]?.v || row[7] || 0);
+              item.cisterna = Number(row[8]?.v || row[8] || 0);
+            }
+
+            items.push(item);
+          }
+        }
+
+        if (items.length > 0) {
+          sheetsData.push({
+            name: sheet.name,
+            items: items,
+            esResumen: sheet.name === 'Resumen',
+          });
+        }
+      }
+
+      if (sheetsData.length === 0) {
+        alert('No hay datos para exportar');
+        return;
+      }
+
+      const proyectoExport = {
+        nombre: project?.nombre || 'PROYECTO',
+        codigo_cui: (project as any)?.codigo_cui || '',
+        codigo_local: (project as any)?.codigo_local || '',
+        codigos_modulares: (project as any)?.codigos_modulares || '',
+        unidad_ejecutora: (project as any)?.unidad_ejecutora || '',
+        propietario: (project as any)?.propietario || '',
+        modulo: 'GENERAL',
+        plantilla_logo_izq: (project as any)?.plantilla_logo_izq_url || '',
+        plantilla_logo_der: (project as any)?.plantilla_logo_der_url || '',
+      };
+
+      await exportarMetradoExcelMultiSheet('arquitectura', sheetsData, proyectoExport);
+
+    } catch (error: any) {
+      console.error('Error en exportación:', error);
+      alert(error.message || 'Error al exportar');
+    }
+  }, [ls, getAllSheets, project]);
+
   useEffect(() => {
     let attempts = 0;
     let t: ReturnType<typeof setTimeout>;
@@ -527,7 +620,7 @@ export default function ArquitecturaIndex() {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
-      const ci  = CI['unidad'];
+      const ci = CI['unidad'];
       const rng = `${colLetter(ci)}2:${colLetter(ci)}6000`;
       const opt = { type: 'dropdown', value1: UNITS.join(','), prohibitInput: false };
 
@@ -606,6 +699,17 @@ export default function ArquitecturaIndex() {
               <Hash className="h-3 w-3" /> Numerar
             </button>
 
+            <button
+              type="button"
+              title="Exportar metrado a Excel"
+              onClick={handleExportarExcel}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md
+    bg-emerald-600 px-3 text-[10px] font-bold text-white
+    transition-all hover:bg-emerald-700 active:scale-95"
+            >
+              <FileDown className="h-3 w-3" /> Exportar Excel
+            </button>
+
             <Divider />
 
             <Button variant="outline" size="sm" onClick={() => saveNow()} disabled={saving} className="h-7 gap-1.5 text-[11px]">
@@ -658,9 +762,9 @@ export default function ArquitecturaIndex() {
         </main>
       </div>
 
-      <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc}/>
+      <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc} />
 
-      <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering}/>
+      <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering} />
     </AppLayout>
   );
 }

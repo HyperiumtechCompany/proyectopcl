@@ -33,39 +33,52 @@ class EttpController extends Controller
      * Muestra la vista principal de ETTP
      * Ruta: /module/etts?project={id}
      */
-    public function show(CostoProject $costoProject, Request $request)
-    {
-        // Obtener el ID del presupuesto interno del tenant
-        $dbService = app(CostoDatabaseService::class);
-        $proyectoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
+public function show(CostoProject $costoProject, Request $request)
+{
+    // Obtener el ID del presupuesto interno del tenant
+    $dbService = app(CostoDatabaseService::class);
+    $proyectoId = $dbService->getDefaultPresupuestoId($costoProject->database_name);
 
-        // Cargar partidas con sus secciones e imágenes (eager loading)
-        $partidas = EttpPartida::where('presupuesto_id', $proyectoId)
-            ->with(['secciones.imagenes'])
-            ->raices()
-            ->orderBy('item_order')
-            ->get();
+    // 🔧 Cargar las relaciones de ubicación
+    $costoProject->load(['departamento', 'provincia', 'distrito']);
 
-        $partidas = $this->sortPartidasByItem($partidas);
+    // Cargar partidas con sus secciones e imágenes (eager loading)
+    $partidas = EttpPartida::where('presupuesto_id', $proyectoId)
+        ->with(['secciones.imagenes'])
+        ->raices()
+        ->orderBy('item_order')
+        ->get();
 
-        // Construir árbol jerárquico
-        $arbol = $this->buildTree($partidas, $proyectoId);
+    $partidas = $this->sortPartidasByItem($partidas);
 
-        return Inertia::render('costos/ettp/etts', [
-            'proyecto' => array_merge($costoProject->toArray(), [
-                'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq
-                    ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
-                'plantilla_logo_der_url' => $costoProject->plantilla_logo_der
-                    ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
-                'portada_logo_center_url' => $costoProject->portada_logo_center
-                    ? asset('storage/'.$costoProject->portada_logo_center) : null,
-                'plantilla_firma_url' => $costoProject->plantilla_firma
-                    ? asset('storage/'.$costoProject->plantilla_firma) : null,
-            ]),
-            'partidas' => $arbol,
-            'especialidades' => $this->getEspecialidadesDisponibles($proyectoId),
-        ]);
-    }
+    // Construir árbol jerárquico
+    $arbol = $this->buildTree($partidas, $proyectoId);
+
+    return Inertia::render('costos/ettp/etts', [
+        'proyecto' => array_merge($costoProject->toArray(), [
+            'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq
+                ? asset('storage/'.$costoProject->plantilla_logo_izq) : null,
+            'plantilla_logo_der_url' => $costoProject->plantilla_logo_der
+                ? asset('storage/'.$costoProject->plantilla_logo_der) : null,
+            'portada_logo_center_url' => $costoProject->portada_logo_center
+                ? asset('storage/'.$costoProject->portada_logo_center) : null,
+            'plantilla_firma_url' => $costoProject->plantilla_firma
+                ? asset('storage/'.$costoProject->plantilla_firma) : null,
+            'codigo_cui' => $costoProject->codigo_cui,
+            'codigo_local' => $costoProject->codigo_local,
+            'codigos_modulares' => $costoProject->codigos_modulares,
+            'unidad_ejecutora' => $costoProject->unidad_ejecutora,
+            'ie' => $costoProject->ie ?? null,
+            // 👇 CORREGIDO: usar departamento, provincia, distrito (no nombre)
+            'departamento_nombre' => $costoProject->departamento?->departamento ?? null,
+            'provincia_nombre' => $costoProject->provincia?->provincia ?? null,
+            'distrito_nombre' => $costoProject->distrito?->distrito ?? null,
+            'centro_poblado' => $costoProject->centro_poblado ?? null,
+        ]),
+        'partidas' => $arbol,
+        'especialidades' => $this->getEspecialidadesDisponibles($proyectoId),
+    ]);
+}
 
     /**
      * Construye el árbol jerárquico de partidas con sus secciones.

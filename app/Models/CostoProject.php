@@ -79,29 +79,21 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────────
+    // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
-    /**
-     * Generate a unique database name for this project.
-     */
-    public static function generateDatabaseName(int $userId): string
-    {
-        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
-    }
+public function departamento(): BelongsTo
+{
+    return $this->belongsTo(Ubigeo::class, 'departamento_id');
+}
 
-    /**
-     * Check if a specific module is enabled.
-     */
-    public function hasModule(string $moduleType): bool
-    {
-        return $this->modules()->where('module_type', $moduleType)->where('enabled', true)->exists();
-    }
+public function provincia(): BelongsTo
+{
+    return $this->belongsTo(Ubigeo::class, 'provincia_id');
+}
 
-    /**
-     * Check if the project uses the unified presupuesto module.
-     */
-    public function hasUnifiedPresupuesto(): bool
-    {
-        return $this->hasModule('presupuesto');
-    }
+public function distrito(): BelongsTo
+{
+    return $this->belongsTo(Ubigeo::class, 'distrito_id');
+}
+
 }

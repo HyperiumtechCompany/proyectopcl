@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // SanitariasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
-
+import { FileDown } from 'lucide-react';
+import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
 import { router, usePage } from '@inertiajs/react';
 import {
     AlertCircle,
@@ -71,6 +72,7 @@ import {
     levelStyle,
     toRoman,
 } from './metradosanitarias/sanitarias_utils';
+
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -199,8 +201,8 @@ function useAutoSave(
                     targetSheetNames?.length
                         ? targetSheetNames
                         : dirtySheetNames.current.size
-                          ? Array.from(dirtySheetNames.current)
-                          : sheets.map((s) => String(s?.name ?? '')),
+                            ? Array.from(dirtySheetNames.current)
+                            : sheets.map((s) => String(s?.name ?? '')),
                 );
                 const sheetsToSave = sheets.filter((s) =>
                     targetNames.has(String(s?.name ?? '')),
@@ -299,7 +301,7 @@ function useAutoSave(
                                                 if (sheetData[r]) {
                                                     if (
                                                         !sheetData[r][
-                                                            dbIdColIdx
+                                                        dbIdColIdx
                                                         ]
                                                     ) {
                                                         sheetData[r][
@@ -410,8 +412,8 @@ export default function SanitariasIndex() {
         return generated.length
             ? generated
             : resumen?.length
-              ? resumen
-              : buildResumenRows(modulos[1] || []);
+                ? resumen
+                : buildResumenRows(modulos[1] || []);
     }, [modulos, exterior, cisterna, moduleCount, resumen]);
 
     const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
@@ -815,9 +817,100 @@ export default function SanitariasIndex() {
         }, 400);
     }, [ls, moduleCount, resumenCols, saveNow, scheduleSave]);
 
+    const handleExportarExcel = useCallback(async () => {
+        try {
+            const inst = ls();
+            if (!inst) {
+                alert('No se pudo acceder a la tabla');
+                return;
+            }
+
+            const allSheets = getAllSheets();
+            if (!allSheets.length) {
+                alert('No hay hojas para exportar');
+                return;
+            }
+
+            const sheetsData: any[] = [];
+
+            for (const sheet of allSheets) {
+                const data = sheet.data || [];
+                const items: any[] = [];
+
+                for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+                    const row = data[rowIdx];
+                    if (!row || row.length === 0) continue;
+
+                    const descripcion = row[CI.descripcion]?.v || row[CI.descripcion] || '';
+                    if (descripcion && descripcion.toString().trim() !== '') {
+                        const item: any = {
+                            item: row[CI.partida]?.v || row[CI.partida] || '',
+                            descripcion: descripcion.toString(),
+                            und: row[CI.unidad]?.v || row[CI.unidad] || '',
+                            elsim: Number(row[CI.elsim]?.v || row[CI.elsim] || 0),
+                            largo: Number(row[CI.largo]?.v || row[CI.largo] || 0),
+                            ancho: Number(row[CI.ancho]?.v || row[CI.ancho] || 0),
+                            alto: Number(row[CI.alto]?.v || row[CI.alto] || 0),
+                            nveces: Number(row[CI.nveces]?.v || row[CI.nveces] || 1),
+                            lon: Number(row[CI.lon]?.v || row[CI.lon] || 0),
+                            area: Number(row[CI.area]?.v || row[CI.area] || 0),
+                            vol: Number(row[CI.vol]?.v || row[CI.vol] || 0),
+                            kg: Number(row[CI.kg]?.v || row[CI.kg] || 0),
+                            parcial: Number(row[CI.parcial]?.v || row[CI.parcial] || 0),
+                            total: Number(row[CI.total]?.v || row[CI.total] || 0),
+                        };
+
+                        if (sheet.name === 'Resumen') {
+                            item.modulo1 = Number(row[4]?.v || row[4] || 0);
+                            item.modulo2 = Number(row[5]?.v || row[5] || 0);
+                            item.modulo3 = Number(row[6]?.v || row[6] || 0);
+                            item.exterior = Number(row[7]?.v || row[7] || 0);
+                            item.cisterna = Number(row[8]?.v || row[8] || 0);
+                        }
+
+                        items.push(item);
+                    }
+                }
+
+                if (items.length > 0) {
+                    sheetsData.push({
+                        name: sheet.name,
+                        items: items,
+                        esResumen: sheet.name === 'Resumen',
+                    });
+                }
+            }
+
+            if (sheetsData.length === 0) {
+                alert('No hay datos para exportar');
+                return;
+            }
+
+            const proyectoExport = {
+                nombre: project?.nombre || 'PROYECTO',
+                codigo_cui: (project as any)?.codigo_cui || '',
+                codigo_local: (project as any)?.codigo_local || '',
+                codigos_modulares: (project as any)?.codigos_modulares || '',
+                unidad_ejecutora: (project as any)?.unidad_ejecutora || '',
+                propietario: (project as any)?.propietario || '',
+                modulo: 'GENERAL',
+                plantilla_logo_izq: (project as any)?.plantilla_logo_izq_url || '',
+                plantilla_logo_der: (project as any)?.plantilla_logo_der_url || '',
+            };
+
+            await exportarMetradoExcelMultiSheet('sanitarias', sheetsData, proyectoExport);
+
+        } catch (error: any) {
+            console.error('Error en exportación:', error);
+            alert(error.message || 'Error al exportar');
+        }
+    }, [ls, getAllSheets, project]);
+
+
     // ═══════════════════════════════════════════════════════════
     // EFECTOS
-    // ═══════════════════════════════════════════════════════════
+    // ════════════════════════
+
     useEffect(() => {
         let attempts = 0;
         let t: ReturnType<typeof setTimeout>;
@@ -937,6 +1030,17 @@ export default function SanitariasIndex() {
                             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-violet-600 px-3 text-[10px] font-bold text-white transition-all hover:bg-violet-700 active:scale-95"
                         >
                             <Hash className="h-3 w-3" /> Numerar
+                        </button>
+
+                        <button
+                            type="button"
+                            title="Exportar metrado a Excel"
+                            onClick={handleExportarExcel}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-md
+    bg-emerald-600 px-3 text-[10px] font-bold text-white
+    transition-all hover:bg-emerald-700 active:scale-95"
+                        >
+                            <FileDown className="h-3 w-3" /> Exportar Excel
                         </button>
 
                         <Divider />

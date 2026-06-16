@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // EstructurasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
-
 import { router, usePage } from '@inertiajs/react';
 import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
