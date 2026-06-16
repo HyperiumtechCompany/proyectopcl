@@ -1,9 +1,9 @@
 import type { DialuxBitmapAsset } from '../domain/types';
 
-const MAX_CAPTURE_WIDTH = 1200;
-const MAX_CAPTURE_HEIGHT = 780;
+const MAX_CAPTURE_WIDTH = 900;
+const MAX_CAPTURE_HEIGHT = 585;
 const VIEWER_CAPTURE_MIME_TYPE = 'image/jpeg' as const;
-const VIEWER_CAPTURE_QUALITY = 0.78;
+const VIEWER_CAPTURE_QUALITY = 0.65;
 
 interface Capture3DViewerBitmapOptions {
     title?: string;
@@ -54,7 +54,38 @@ export async function capture3DViewerBitmap(
 
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, outputWidth, outputHeight);
-    context.drawImage(canvas, 0, 0, outputWidth, outputHeight);
+    try {
+        context.drawImage(canvas, 0, 0, outputWidth, outputHeight);
+    } catch {
+        return null;
+    }
+
+    // Detección de captura en blanco: si todos los píxeles muestreados son casi
+    // iguales, el buffer WebGL llegó vacío (escena aún no renderizada). Devolver
+    // null permite que el caller reintente o use el fallback.
+    try {
+        const sample = context.getImageData(0, 0, outputWidth, outputHeight).data;
+        const stride = Math.max(4, Math.floor(sample.length / 4 / 400)) * 4;
+        const r0 = sample[0];
+        const g0 = sample[1];
+        const b0 = sample[2];
+        let uniform = true;
+        for (let i = stride; i < sample.length; i += stride) {
+            if (
+                Math.abs(sample[i] - r0) > 8 ||
+                Math.abs(sample[i + 1] - g0) > 8 ||
+                Math.abs(sample[i + 2] - b0) > 8
+            ) {
+                uniform = false;
+                break;
+            }
+        }
+        if (uniform) {
+            return null;
+        }
+    } catch {
+        // getImageData puede fallar con canvas tainted; continuar sin validar.
+    }
 
     const dataUrl = outputCanvas.toDataURL(
         VIEWER_CAPTURE_MIME_TYPE,

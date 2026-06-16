@@ -179,13 +179,23 @@ export const ExportacionPanel: React.FC<{
         <PanelCard title="Exportar reporte">
             <Button
                 variant="outline"
-                className="w-full justify-start gap-2 border-gray-700 bg-gray-800/40 text-gray-200 hover:bg-gray-700/60"
+                className="mb-2 w-full justify-start gap-2 border-gray-700 bg-gray-800/40 text-gray-200 hover:bg-gray-700/60"
                 onClick={() =>
                     document.getElementById('dialux-btn-export-pdf')?.click()
                 }
             >
                 <FileInput size={13} />
                 <span className="text-[11px]">Exportar Reporte PDF</span>
+            </Button>
+            <Button
+                variant="outline"
+                className="w-full justify-start gap-2 border-emerald-800/40 bg-emerald-950/20 text-emerald-200 hover:bg-emerald-900/40"
+                onClick={() =>
+                    document.getElementById('dialux-btn-export-dxf')?.click()
+                }
+            >
+                <FileInput size={13} />
+                <span className="text-[11px]">Exportar Plano DXF (CAD)</span>
             </Button>
         </PanelCard>
     </div>

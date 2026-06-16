@@ -15,6 +15,7 @@ import { exportarMetradoExcel } from './exportador/metradosExcelExport';
 import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
 
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
 import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoestructuras/estructuras_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradoestructuras/estructuras_NumberingModal';
@@ -78,9 +79,9 @@ function useLuckysheet() {
 
   const setCells = (updates: Array<{ r: number; c: number; v: any }>, order: number) => {
     const inst = ls();
-    if (!inst || !updates.length) return;
+    if (!inst || !updates.length || !isLuckysheetReady()) return;
     updates.forEach((u, i) => {
-      inst.setCellValue(u.r, u.c, u.v, {
+      safeSetCellValue(u.r, u.c, u.v, {
         order,
         isRefresh: i === updates.length - 1,
       });
@@ -371,7 +372,7 @@ export default function EstructurasIndex() {
 
     progCount.current++;
     ups.forEach(({ r, c, v }, i) => {
-      ls()?.setCellValue(r, c, v, {
+      safeSetCellValue(r, c, v, {
         order: sheetOrder,
         isRefresh: i === ups.length - 1,
       });
@@ -420,6 +421,7 @@ export default function EstructurasIndex() {
     setSyncing(true);
     setTimeout(() => {
       const inst = ls();
+      if (!isLuckysheetReady()) { setSyncing(false); return; }
       if (!inst) { setSyncing(false); return; }
 
       const all = inst.getAllSheets() as any[];
@@ -459,7 +461,7 @@ export default function EstructurasIndex() {
       inst.clearRange({ row: [0, 6000], column: [0, resumenCols.length + 1] });
 
       resumenCols.forEach((col, c) => {
-        inst.setCellValue(0, c, {
+        safeSetCellValue(0, c, {
           v: col.label, m: col.label,
           ct: { fa: 'General', t: 'g' },
           bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
@@ -486,7 +488,7 @@ export default function EstructurasIndex() {
             cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
           }
 
-          inst.setCellValue(ri + 1, c, cell, { isRefresh: false });
+          safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
         });
       });
 
@@ -608,7 +610,7 @@ for (const sheet of allSheets) {
     const apply = () => {
       const inst = ls();
       const sheets = inst?.getAllSheets?.() ?? [];
-      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length) {
+      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length || !isLuckysheetReady()) {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
@@ -618,7 +620,7 @@ for (const sheet of allSheets) {
 
       sheets
         .filter((s: any) => s.name !== 'Resumen')
-        .forEach((s: any) => inst.setDataVerification(opt, { range: rng, order: s.order ?? 0 }));
+        .forEach((s: any) => safeSetDataVerification(opt, { range: rng, order: s.order ?? 0 }));
     };
 
     t = setTimeout(apply, 400);

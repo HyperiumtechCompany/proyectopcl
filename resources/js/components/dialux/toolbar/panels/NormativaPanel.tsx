@@ -203,8 +203,7 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             </PanelCard>
 
             {/* Section → Subsection → Profile selectors */}
-            <PanelCard title="Selección de perfil">
-                {/* Section */}
+            {/* <PanelCard title="Selección de perfil">
                 <label className="mb-1 block text-[9px] tracking-wider text-gray-600 uppercase">
                     Sección / área
                 </label>
@@ -220,7 +219,6 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                     ))}
                 </select>
 
-                {/* Subsection (if any) */}
                 {section?.subsections && section.subsections.length > 0 && (
                     <>
                         <label className="mb-1 block text-[9px] tracking-wider text-gray-600 uppercase">
@@ -249,7 +247,6 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                     </>
                 )}
 
-                {/* Application / Profile */}
                 <label className="mb-1 block text-[9px] tracking-wider text-gray-600 uppercase">
                     Aplicación
                 </label>
@@ -267,10 +264,10 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                         </option>
                     ))}
                 </select>
-            </PanelCard>
+            </PanelCard> */}
 
             {/* Active profile details — DIALux-style metrics card */}
-            {profile && (
+            {/* {profile && (
                 <div className="rounded-md border border-emerald-800/40 bg-emerald-950/15">
                     <SectionBand
                         label="Perfil activo"
@@ -331,7 +328,7 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                         )}
                     </div>
                 </div>
-            )}
+            )} */}
 
             <button
                 type="button"

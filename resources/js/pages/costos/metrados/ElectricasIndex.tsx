@@ -25,6 +25,7 @@ import type { BreadcrumbItem } from '@/types';
 
 // Módulo local
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradoelectricas/electricas_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
@@ -108,9 +109,9 @@ function useLuckysheet() {
     order:   number,
   ) => {
     const inst = ls();
-    if (!inst || !updates.length) return;
+    if (!inst || !updates.length || !isLuckysheetReady()) return;
     updates.forEach((u, i) => {
-      inst.setCellValue(u.r, u.c, u.v, {
+      safeSetCellValue(u.r, u.c, u.v, {
         order,
         isRefresh: i === updates.length - 1,
       });
@@ -474,7 +475,7 @@ export default function ElectricasIndex() {
 
       progCount.current++;
       ups.forEach(({ c, v }, i) => {
-        ls()?.setCellValue(ri, c, v, {
+        safeSetCellValue(ri, c, v, {
           order: sheetOrder,
           isRefresh: i === ups.length - 1,
         });
@@ -543,6 +544,7 @@ export default function ElectricasIndex() {
     setSyncing(true);
     setTimeout(() => {
       const inst = ls();
+      if (!isLuckysheetReady()) { setSyncing(false); return; }
       if (!inst) {
         setSyncing(false);
         return;
@@ -575,7 +577,7 @@ export default function ElectricasIndex() {
 
       // Encabezados
       resumenCols.forEach((col, c) => {
-        inst.setCellValue(0, c, {
+        safeSetCellValue(0, c, {
           v: col.label,
           m: col.label,
           ct: { fa: 'General', t: 'g' },
@@ -612,7 +614,7 @@ export default function ElectricasIndex() {
             cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
           }
 
-          inst.setCellValue(ri + 1, c, cell, { isRefresh: false });
+          safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
         });
       });
 
@@ -640,7 +642,7 @@ export default function ElectricasIndex() {
     const apply = () => {
       const inst   = ls();
       const sheets = inst?.getAllSheets?.() ?? [];
-      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length) {
+      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length || !isLuckysheetReady()) {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
@@ -650,7 +652,7 @@ export default function ElectricasIndex() {
 
       sheets
         .filter((s: any) => s.name !== 'Resumen')
-        .forEach((s: any) => inst.setDataVerification(opt, { range: rng, order: s.order ?? 0 }));
+        .forEach((s: any) => safeSetDataVerification(opt, { range: rng, order: s.order ?? 0 }));
     };
 
     t = setTimeout(apply, 400);
@@ -765,7 +767,7 @@ export default function ElectricasIndex() {
             <Button
               variant="outline"
               size="sm"
-              onClick={saveNow}
+              onClick={() => void saveNow()}
               disabled={saving}
               className="h-7 gap-1.5 text-[11px]"
             >

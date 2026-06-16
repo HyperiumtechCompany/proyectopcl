@@ -40,6 +40,9 @@ export interface DialuxAmbientMetrics {
 
 export interface DialuxAmbientExport {
     id: string;
+    sceneId: string;
+    sceneName: string;
+    floorIndex: number;
     roomId: string;
     roomName: string;
     index: number;
@@ -151,6 +154,10 @@ export interface DialuxBitmapAsset extends DialuxExportAssetBase {
     dataUrl: string;
     width: number;
     height: number;
+    cssWidth?: number;
+    cssHeight?: number;
+    physicalWidth?: number;
+    physicalHeight?: number;
 }
 
 export interface DialuxVectorAsset extends DialuxExportAssetBase {
@@ -254,11 +261,18 @@ export type DialuxAmbientLuminaireItem = DialuxLuminaireListItem;
 
 export interface DialuxAmbientDetail {
     ambientId: string;
+    sceneId: string;
+    sceneName: string;
+    floorIndex: number;
     roomId: string;
     roomName: string;
     ambientName: string;
     activity: string | null;
     area: number;
+    /** Perímetro del recinto en metros (misma escala que area). */
+    perimeter: number;
+    /** Área del plano útil: recinto menos la zona marginal en todo el contorno. */
+    usefulArea: number;
     targetLux: number;
     avgLux: number | null;
     minLux: number | null;
@@ -268,6 +282,11 @@ export interface DialuxAmbientDetail {
     uniformityTarget: number | null;
     ugr: number | null;
     ugrLimit: number | null;
+    interiorHeight: number;
+    reflectionCeiling: number;
+    reflectionWall: number;
+    reflectionFloor: number;
+    maintenanceFactor: number;
     usefulPlaneHeight: number;
     marginalZone: number;
     calculationIndex: string;
@@ -338,6 +357,8 @@ export type DialuxFormalSectionId =
     | 'product-sheets-header'
     | 'terrain-header'
     | 'edification-header'
+    | `scene-group-label-${string}`
+    | `scene-group-heading-${string}`
     | `room-group-label-${string}`
     | `room-group-heading-${string}`
     | `ambient-group-label-${string}`

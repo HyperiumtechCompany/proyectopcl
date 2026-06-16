@@ -1,3 +1,18 @@
+# ── Límites de subida para exportación formal DIAlux (PDF payload) ──────────
+# Si el servidor usa nginx en producción, añadir en el bloque server:
+#   client_max_body_size 32M;
+# Y en php.ini / php-fpm.conf:
+#   post_max_size = 32M
+#   upload_max_filesize = 32M
+<IfModule mod_php.c>
+    php_value post_max_size 32M
+    php_value upload_max_filesize 32M
+</IfModule>
+<IfModule mod_php8.c>
+    php_value post_max_size 32M
+    php_value upload_max_filesize 32M
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

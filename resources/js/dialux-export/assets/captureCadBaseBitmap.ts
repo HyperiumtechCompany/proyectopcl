@@ -1,7 +1,7 @@
 import type { DialuxBitmapAsset } from '../domain/types';
 
 const CAD_CAPTURE_MIME_TYPE = 'image/jpeg' as const;
-const CAD_CAPTURE_QUALITY = 0.76;
+const CAD_CAPTURE_QUALITY = 0.92;
 
 function encodePrintBitmap(canvas: HTMLCanvasElement): string {
     return canvas.toDataURL(CAD_CAPTURE_MIME_TYPE, CAD_CAPTURE_QUALITY);
@@ -21,7 +21,7 @@ function readWebGLPixels(
     canvas: HTMLCanvasElement,
     targetWidth: number,
     targetHeight: number,
-): string | null {
+): { dataUrl: string; width: number; height: number } | null {
     const gl =
         (canvas.getContext('webgl2') as WebGL2RenderingContext | null) ??
         (canvas.getContext('webgl') as WebGLRenderingContext | null);
@@ -72,24 +72,26 @@ function readWebGLPixels(
     if (!tmpCtx) return null;
     tmpCtx.putImageData(new ImageData(inverted, w, h), 0, 0);
 
-    // Scale to target while preserving aspect ratio
+    // Scale to target while preserving aspect ratio, without padding (no letterbox)
+    const scale = Math.min(targetWidth / w, targetHeight / h);
+    const dw = Math.round(w * scale);
+    const dh = Math.round(h * scale);
+    
     const out = document.createElement('canvas');
-    out.width = targetWidth;
-    out.height = targetHeight;
+    out.width = dw;
+    out.height = dh;
     const outCtx = out.getContext('2d');
     if (!outCtx) return null;
 
     outCtx.fillStyle = '#ffffff';
-    outCtx.fillRect(0, 0, targetWidth, targetHeight);
+    outCtx.fillRect(0, 0, dw, dh);
+    outCtx.drawImage(tmp, 0, 0, dw, dh);
 
-    const scale = Math.min(targetWidth / w, targetHeight / h);
-    const dw = w * scale;
-    const dh = h * scale;
-    const dx = (targetWidth - dw) / 2;
-    const dy = (targetHeight - dh) / 2;
-    outCtx.drawImage(tmp, dx, dy, dw, dh);
-
-    return encodePrintBitmap(out);
+    return {
+        dataUrl: encodePrintBitmap(out),
+        width: dw,
+        height: dh,
+    };
 }
 
 /**
@@ -100,7 +102,7 @@ async function readCanvasViaDataUrl(
     canvas: HTMLCanvasElement,
     targetWidth: number,
     targetHeight: number,
-): Promise<string | null> {
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
     let rawDataUrl: string;
     try {
         rawDataUrl = canvas.toDataURL();
@@ -112,15 +114,20 @@ async function readCanvasViaDataUrl(
     if (rawDataUrl.length < 2000) return null;
 
     // Check for all-white (blank after inversion would be all-black, also useless)
-    // We paint onto an off-screen canvas with inversion filter
+    const w = canvas.width;
+    const h = canvas.height;
+    const scale = Math.min(targetWidth / w, targetHeight / h);
+    const dw = Math.round(w * scale);
+    const dh = Math.round(h * scale);
+
     const out = document.createElement('canvas');
-    out.width = targetWidth;
-    out.height = targetHeight;
+    out.width = dw;
+    out.height = dh;
     const ctx = out.getContext('2d');
     if (!ctx) return null;
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.fillRect(0, 0, dw, dh);
 
     const srcImg = new Image();
     await new Promise<void>((resolve, reject) => {
@@ -134,23 +141,16 @@ async function readCanvasViaDataUrl(
 
     ctx.save();
     ctx.filter = 'invert(1) brightness(0.90) contrast(1.05)';
-    const w = canvas.width;
-    const h = canvas.height;
-    const scale = Math.min(targetWidth / w, targetHeight / h);
-    const dw = w * scale;
-    const dh = h * scale;
-    const dx = (targetWidth - dw) / 2;
-    const dy = (targetHeight - dh) / 2;
     try {
-        ctx.drawImage(srcImg, dx, dy, dw, dh);
+        ctx.drawImage(srcImg, 0, 0, dw, dh);
     } catch {
         ctx.restore();
         return null;
     }
     ctx.restore();
 
-    const result = encodePrintBitmap(out);
-    return result.length > 2000 ? result : null;
+    const dataUrl = encodePrintBitmap(out);
+    return dataUrl.length > 2000 ? { dataUrl, width: dw, height: dh } : null;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -172,8 +172,8 @@ async function readCanvasViaDataUrl(
  */
 export async function captureCadBaseBitmap(
     cadSelector = '#cad-engine-container',
-    targetWidth = 1200,
-    targetHeight = 780,
+    targetWidth = 1800,
+    targetHeight = 1200,
 ): Promise<DialuxBitmapAsset | null> {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
         return null;
@@ -211,9 +211,13 @@ export async function captureCadBaseBitmap(
             purpose: 'cad-base',
             kind: 'bitmap',
             mimeType: CAD_CAPTURE_MIME_TYPE,
-            dataUrl: webglResult,
-            width: targetWidth,
-            height: targetHeight,
+            dataUrl: webglResult.dataUrl,
+            width: webglResult.width,
+            height: webglResult.height,
+            cssWidth: primary.clientWidth,
+            cssHeight: primary.clientHeight,
+            physicalWidth: primary.width,
+            physicalHeight: primary.height,
         };
     }
 
@@ -232,9 +236,13 @@ export async function captureCadBaseBitmap(
                 purpose: 'cad-base',
                 kind: 'bitmap',
                 mimeType: CAD_CAPTURE_MIME_TYPE,
-                dataUrl: result,
-                width: targetWidth,
-                height: targetHeight,
+                dataUrl: result.dataUrl,
+                width: result.width,
+                height: result.height,
+                cssWidth: canvas.clientWidth,
+                cssHeight: canvas.clientHeight,
+                physicalWidth: canvas.width,
+                physicalHeight: canvas.height,
             };
         }
     }

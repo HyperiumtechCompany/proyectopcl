@@ -3,6 +3,7 @@ import {
     ArrowLeft,
     Building2,
     Calendar,
+    CalendarDays,
     Code2,
     Hash,
     Layers,
@@ -29,6 +30,7 @@ import {
     Droplets,
     Database,
     Play,
+    LayoutDashboard,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -135,6 +137,16 @@ const MODULE_MAP: Record<string, ModuleMeta> = {
         group: 'crono',
         icon: Calendar,
     },
+    crono_general_v2: {
+        label: 'Cronograma v2',
+        group: 'crono',
+        icon: CalendarDays,
+    },
+    delphin: {
+        label: 'Delphin',
+        group: 'crono',
+        icon: LayoutDashboard,
+    },
     crono_valorizado: {
         label: 'Cronograma Valorizado',
         group: 'crono',
@@ -177,6 +189,7 @@ function getIcon(module: string): string {
         crono_general: '📅',
         crono_valorizado: '📈',
         crono_materiales: '📦',
+        delphin: '🐬',
         etts: '📋',
     };
     return icons[module] || '📄';
@@ -198,6 +211,7 @@ const MODULE_LABELS: Record<string, string> = {
     crono_general: 'Cronograma General',
     crono_valorizado: 'Cronograma Valorizado',
     crono_materiales: 'Cronograma Materiales',
+    delphin: 'Delphin',
     etts: 'ETTs',
 };
 
@@ -216,6 +230,12 @@ function moduleHref(project_id: number, m: string): string {
     if (m === 'metrado_comunicaciones')
         return `/costos/${project_id}/metrado-comunicaciones`;
     if (m === 'metrado_gas') return `/costos/${project_id}/metrado-gas`;
+    if (m === 'crono_general_v2') {
+        return `/module/crono_general_v2?project=${project_id}`;
+    }
+    if (m === 'delphin') {
+        return `/module/delphin?project=${project_id}`;
+    }
     if (
         m === 'crono_general' ||
         m === 'crono_valorizado' ||
@@ -234,6 +254,11 @@ function groupModules(
     for (const m of modules) {
         const group = MODULE_MAP[m]?.group ?? 'etts';
         (grouped[group] ??= []).push(m);
+        // Inyectar Cronograma v2 y Delphin siempre que crono_general esté habilitado
+        if (m === 'crono_general') {
+            (grouped[group] ??= []).push('crono_general_v2');
+            (grouped[group] ??= []).push('delphin');
+        }
     }
 
     // Ordenar módulos dentro de cada grupo según su propiedad order
@@ -296,16 +321,32 @@ function ModuleCard({
     const meta = MODULE_MAP[module];
     const Icon = meta?.icon ?? FileText;
     const label = meta?.label ?? module;
+    const isV2 = module === 'crono_general_v2';
 
     return (
         <Link
             href={moduleHref(projectId, module)}
-            className="group flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm transition-all duration-150 hover:border-gray-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-600"
+            className={`group flex items-center gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm transition-all duration-150 hover:shadow-md ${
+                isV2
+                    ? 'border-blue-200 bg-blue-50/60 text-blue-700 hover:border-blue-300 dark:border-blue-800/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:border-blue-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-600'
+            }`}
         >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                isV2
+                    ? 'bg-blue-100 text-blue-500 dark:bg-blue-900/50 dark:text-blue-400'
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+            }`}>
                 <Icon size={15} />
             </span>
-            <span className="flex-1 leading-tight font-medium">{label}</span>
+            <span className="flex flex-1 items-center gap-1.5 leading-tight font-medium">
+                {label}
+                {isV2 && (
+                    <span className="rounded bg-blue-500 px-1 py-0.5 text-[9px] font-bold leading-none text-white">
+                        NUEVO
+                    </span>
+                )}
+            </span>
             <ChevronRight
                 size={13}
                 className="shrink-0 text-gray-300 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-gray-400 dark:text-gray-600 dark:group-hover:text-gray-500"

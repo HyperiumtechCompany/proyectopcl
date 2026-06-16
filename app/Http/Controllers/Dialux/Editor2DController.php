@@ -90,8 +90,17 @@ class Editor2DController extends Controller
             'coverAsset' => $coverAsset,
             'tocPages' => $tocPages,
             'contentPages' => $contentPages,
-            'tocChunks' => collect($document['toc'] ?? [])->chunk(18)->values()->all(),
-        ])->setPaper('a4', 'portrait');
+            'tocChunks' => collect($document['toc'] ?? [])->chunk(14)->values()->all(),
+        ])
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isCssFloatEnabled' => true,
+                'isRemoteEnabled' => false,
+                'defaultFont' => 'DejaVu Sans',
+                'dpi' => 96,
+                'debugKeepTemp' => false,
+            ]);
 
         return $pdf->download(($document['fileBaseName'] ?? 'dialux-reporte-formal').'.pdf');
     }

@@ -25,6 +25,7 @@ import type { BreadcrumbItem } from '@/types';
 
 // Módulo local
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal }     from './metradogas/gas_CalcModal';
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradogas/gas_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradogas/gas_NumberingModal';
@@ -108,9 +109,9 @@ function useLuckysheet() {
     order:   number,
   ) => {
     const inst = ls();
-    if (!inst || !updates.length) return;
+    if (!inst || !updates.length || !isLuckysheetReady()) return;
     updates.forEach((u, i) => {
-      inst.setCellValue(u.r, u.c, u.v, {
+      safeSetCellValue(u.r, u.c, u.v, {
         order,
         isRefresh: i === updates.length - 1,
       });
@@ -475,7 +476,7 @@ const applyCalc = useCallback(
 
       progCount.current++;
       ups.forEach(({ c, v }, i) => {
-        ls()?.setCellValue(ri, c, v, {
+        safeSetCellValue(ri, c, v, {
           order: sheetOrder,
           isRefresh: i === ups.length - 1,
         });
@@ -544,6 +545,7 @@ const applyCalc = useCallback(
     setSyncing(true);
     setTimeout(() => {
       const inst = ls();
+      if (!isLuckysheetReady()) { setSyncing(false); return; }
       if (!inst) {
         setSyncing(false);
         return;
@@ -576,7 +578,7 @@ const applyCalc = useCallback(
 
       // Encabezados
       resumenCols.forEach((col, c) => {
-        inst.setCellValue(0, c, {
+        safeSetCellValue(0, c, {
           v: col.label,
           m: col.label,
           ct: { fa: 'General', t: 'g' },
@@ -613,7 +615,7 @@ const applyCalc = useCallback(
             cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
           }
 
-          inst.setCellValue(ri + 1, c, cell, { isRefresh: false });
+          safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
         });
       });
 
@@ -641,7 +643,7 @@ const applyCalc = useCallback(
     const apply = () => {
       const inst   = ls();
       const sheets = inst?.getAllSheets?.() ?? [];
-      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length) {
+      if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length || !isLuckysheetReady()) {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
@@ -651,7 +653,7 @@ const applyCalc = useCallback(
 
       sheets
         .filter((s: any) => s.name !== 'Resumen')
-        .forEach((s: any) => inst.setDataVerification(opt, { range: rng, order: s.order ?? 0 }));
+        .forEach((s: any) => safeSetDataVerification(opt, { range: rng, order: s.order ?? 0 }));
     };
 
     t = setTimeout(apply, 400);
@@ -766,7 +768,7 @@ const applyCalc = useCallback(
             <Button
               variant="outline"
               size="sm"
-              onClick={saveNow}
+              onClick={() => void saveNow()}
               disabled={saving}
               className="h-7 gap-1.5 text-[11px]"
             >

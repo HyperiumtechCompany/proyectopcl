@@ -1,35 +1,45 @@
 @page {
-    margin: 8mm 16mm 8mm 16mm;
+    margin: 0;
 }
 
 @page landscape {
     size: A4 landscape;
-    margin: 8mm 16mm 8mm 16mm;
+    margin: 0;
 }
 
 * {
     box-sizing: border-box;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
 }
 
 body {
     margin: 0;
     padding: 0;
-    font-family: DejaVu Sans, sans-serif;
+    font-family: Arial, DejaVu Sans, sans-serif;
     color: #0f172a;
-    font-size: 10px;
+    font-size: 10pt;
+    line-height: 1.5;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
 }
 
+/* A4 portrait content area: 297mm high, 210mm wide */
 .page {
     position: relative;
-    height: 281mm;
+    width: 210mm;
+    height: 297mm;
     overflow: hidden;
     page-break-after: always;
     page-break-inside: avoid;
+    box-sizing: border-box;
 }
 
+/* A4 landscape content area: 297mm wide, 210mm high */
 .page-landscape {
     page: landscape;
-    height: 194mm;
+    width: 297mm;
+    height: 210mm;
 }
 
 .page:last-child {
@@ -53,33 +63,61 @@ body {
 .header,
 .footer {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 10mm;
+    right: 10mm;
     z-index: 2;
     color: #475569;
-    font-size: 8.5px;
+    font-size: 8px;
 }
 
 .header {
-    top: 0;
+    top: 4mm;
     padding-bottom: 2mm;
     border-bottom: 1px solid #cbd5e1;
 }
 
 .footer {
-    bottom: 0;
+    bottom: 4mm;
     padding-top: 2mm;
     border-top: 1px solid #cbd5e1;
 }
 
+/* Page body — portrait: 210-10-10=190mm wide, 297-12-12=273mm tall.
+   Explicit width + height (not right/bottom) because dompdf computes child
+   percentage widths against the *page* (210mm) when only left+right are set,
+   causing tables with width:96% to render as 201mm and bleed past the edge. */
 .page-body {
     position: absolute;
-    top: 11mm;
-    bottom: 9mm;
-    left: 0;
-    right: 0;
+    top: 12mm;
+    left: 10mm;
+    width: 190mm;
+    height: 273mm;
     z-index: 2;
     overflow: hidden;
+}
+
+/* Landscape page body: 297-10-10=277mm wide, 210-12-12=186mm tall */
+.page-landscape .page-body {
+    width: 277mm;
+    height: 186mm;
+}
+
+/* Full-plan variant: same width rule, explicit height */
+.page-body-fullplan {
+    position: absolute;
+    top: 12mm;
+    left: 10mm;
+    width: 190mm;
+    height: 273mm;
+    z-index: 2;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+}
+
+.page-landscape .page-body-fullplan {
+    width: 277mm;
+    height: 174mm;
 }
 
 .row {
@@ -175,18 +213,32 @@ body {
     white-space: nowrap;
 }
 
+/* Inside any table, numbers must wrap — dompdf expands cells with nowrap
+   and the table bleeds past the page margin. */
+table .number,
+table td.number,
+table th.number {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* ══ PORTADA ════════════════════════════════════════════════════════════ */
+
+/* Cover-shell: fills the entire A4 page (210x297mm) because @page margins are 0 */
 .cover-shell {
     position: relative;
-    height: 246mm;
+    width: 210mm;
+    height: 297mm;
     overflow: hidden;
     padding: 0;
-    border: 1.2px solid #cbd5e1;
     background: #ffffff;
 }
 
+/* Dark top band: company name + document tag */
 .cover-top-bar {
-    height: 13mm;
-    padding: 3mm 9mm 2mm;
+    height: 19mm;
+    padding: 6.5mm 10mm 2mm;
     background: #0f172a;
     overflow: hidden;
 }
@@ -206,6 +258,105 @@ body {
     text-transform: uppercase;
 }
 
+/* Teal classification strip */
+.cover-class-bar {
+    height: 9mm;
+    padding: 2mm 10mm;
+    background: #0d9488;
+    color: #ffffff;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1.4;
+    overflow: hidden;
+}
+
+/* Info block: title + metadata + KPIs – 50mm total */
+.cover-info {
+    height: 50mm;
+    padding: 6.5mm 14mm 2mm;
+    border-bottom: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.cover-info-left {
+    float: left;
+    width: 45%;
+    padding-right: 3mm;
+}
+
+.cover-info-right {
+    float: right;
+    width: 54%;
+}
+
+.cover-info .meta-grid {
+    width: 100%;
+    margin: 0;
+}
+
+.cover-info .meta-grid td {
+    padding: 1.15mm 1.3mm;
+    line-height: 1.22;
+}
+
+/* KPI cards replacing old executive summary box */
+.cover-kpi-grid {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.cover-kpi-item {
+    display: table-row;
+}
+
+.cover-kpi-half {
+    display: table;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 1.5mm 1.5mm;
+    margin-top: 0;
+}
+
+.cover-kpi-cell {
+    display: table-cell;
+    width: 25%;
+    padding: 1.5mm 1.5mm;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+}
+
+.cover-kpi-label {
+    color: #64748b;
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.8mm;
+    line-height: 1.2;
+}
+
+.cover-kpi-value {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1.15;
+}
+
+.cover-kpi-ok {
+    color: #16a34a;
+}
+
+.cover-kpi-warn {
+    color: #d97706;
+}
+
+.cover-kpi-neutral {
+    color: #475569;
+}
+
 .cover-title {
     margin: 0 0 1.5mm;
     font-size: 18px;
@@ -221,63 +372,15 @@ body {
     font-size: 8.5px;
 }
 
-.cover-info {
-    height: 60mm;
-    padding: 4mm 9mm 3mm;
-    border-bottom: 1px solid #e2e8f0;
-    overflow: hidden;
-}
-
-.cover-info-left {
-    float: left;
-    width: 62%;
-    padding-right: 7mm;
-}
-
-.cover-info-right {
-    float: right;
-    width: 34%;
-}
-
-.cover-info .meta-grid {
-    width: 100%;
-    margin: 0;
-}
-
-.cover-info .meta-grid td {
-    padding: 1.15mm 1.3mm;
-    line-height: 1.22;
-}
-
-.cover-exec-box {
-    min-height: 38mm;
-    padding: 3mm;
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #334155;
-    font-size: 8.3px;
-    line-height: 1.42;
-}
-
-.cover-exec-box p {
-    margin: 0 0 2mm;
-}
-
-.cover-exec-box p:last-child {
-    margin-bottom: 0;
-}
-
-.cover-exec-title {
-    color: #0d9488;
-    font-size: 8px;
-    font-weight: bold;
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-}
-
+/* Image area: absolutely positioned to prevent any page break issues */
 .cover-image-wrap {
-    height: 172mm;
-    padding: 7mm 9mm 0;
+    position: absolute;
+    top: 78mm;
+    left: 0;
+    width: 210mm;
+    height: 219mm;
+    padding: 0;
+    box-sizing: border-box;
     overflow: hidden;
     text-align: center;
 }
@@ -299,13 +402,20 @@ body {
 }
 
 .observations-graphic {
-    height: 76mm;
+    height: 66mm;
     text-align: center;
 }
 
 .asset-box {
     height: 56mm;
     text-align: center;
+}
+
+.cover-image-wrap .asset-box {
+    height: 100%;
+    border: none;
+    background: transparent;
+    border-radius: 0;
 }
 
 .asset-align {
@@ -321,7 +431,7 @@ body {
 }
 
 .observations-graphic .asset-align {
-    height: 76mm;
+    height: 66mm;
 }
 
 .asset-box .asset-align {
@@ -329,7 +439,7 @@ body {
 }
 
 .cover-image-wrap .asset-align {
-    height: 154mm;
+    height: 100%;
 }
 
 .terrain-full .asset-align {
@@ -341,11 +451,11 @@ body {
 }
 
 .terrain-container .asset-align {
-    height: 200mm;
+    height: 220mm;
 }
 
 .ambient-asset-container .asset-align {
-    height: 170mm;
+    height: 180mm;
 }
 
 .asset-align svg,
@@ -363,7 +473,7 @@ body {
 
 .observations-graphic .asset-align svg,
 .observations-graphic .asset-align img {
-    max-height: 72mm;
+    max-height: 62mm;
 }
 
 .asset-box .asset-align svg,
@@ -371,47 +481,49 @@ body {
     max-height: 52mm;
 }
 
+/* La portada usa dimensiones explícitas calculadas en el Blade (dompdf no
+   soporta object-fit); aquí solo se garantiza el límite del contenedor. */
 .cover-image-wrap .asset-align svg,
 .cover-image-wrap .asset-align img {
-    width: auto;
     max-width: 100%;
-    max-height: 150mm;
+    max-height: 100%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .cover-image-empty {
-    height: 154mm;
+    height: 157mm;
     border: 1px solid #e2e8f0;
     background: #f8fafc;
 }
 
+/* dompdf no soporta object-fit: el encuadre exacto lo calcula el Blade en mm.
+   Estas reglas solo limitan el desborde cuando no hay dimensiones explícitas. */
 .terrain-full .asset-align svg,
 .terrain-full .asset-align img {
-    width: auto;
-    height: auto;
     max-width: 100%;
     max-height: 100%;
-    object-fit: contain;
-    object-position: center center;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .terrain-plan-wrap .asset-align svg,
 .terrain-plan-wrap .asset-align img {
-    width: auto;
-    height: auto;
     max-width: 100%;
     max-height: 100%;
-    object-fit: contain;
-    object-position: center center;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .terrain-container .asset-align svg,
 .terrain-container .asset-align img {
-    max-height: 196mm;
+    max-height: 168mm;
 }
 
 .ambient-asset-container .asset-align svg,
 .ambient-asset-container .asset-align img {
-    max-height: 166mm;
+    max-height: 141mm;
 }
 
 .asset-placeholder {
@@ -499,7 +611,6 @@ body {
 
 .toc-cell-dots {
     width: 50%;
-    /* se estira para ocupar espacio sobrante */
     overflow: hidden;
     white-space: nowrap;
     color: #94a3b8;
@@ -517,12 +628,10 @@ body {
     color: #0f172a;
     padding-left: 1.5mm;
     width: 8mm;
-    /* ancho fijo para el número */
 }
 
 .toc-row.toc-indent {
     margin-left: 6mm;
-    /* margin en tabla, no padding */
     width: calc(100% - 6mm);
 }
 
@@ -562,8 +671,11 @@ body {
 }
 
 .luminaire-table {
+    width: 96%;
+    max-width: 100%;
     table-layout: fixed;
     margin-top: 4mm;
+    box-sizing: border-box;
 }
 
 .luminaire-table td {
@@ -571,62 +683,68 @@ body {
     font-size: 9px;
     line-height: 1.35;
     text-align: center;
-    word-break: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
-.luminaire-table .col-unit {
+.luminaire-table th {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.project-luminaire-table .col-unit {
     width: 10%;
 }
 
-.luminaire-table .col-brand {
+.project-luminaire-table .col-brand {
     width: 14%;
 }
 
-.luminaire-table .col-code {
+.project-luminaire-table .col-code {
     width: 14%;
 }
 
-.luminaire-table .col-name {
+.project-luminaire-table .col-name {
     width: 22%;
 }
 
-.luminaire-table .col-power {
+.project-luminaire-table .col-power {
     width: 12%;
 }
 
-.luminaire-table .col-flux {
+.project-luminaire-table .col-flux {
     width: 14%;
 }
 
-.luminaire-table .col-efficiency {
+.project-luminaire-table .col-efficiency {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(1) {
+.project-luminaire-table th:nth-child(1) {
     width: 10%;
 }
 
-.luminaire-table th:nth-child(2) {
+.project-luminaire-table th:nth-child(2) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(3) {
+.project-luminaire-table th:nth-child(3) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(4) {
+.project-luminaire-table th:nth-child(4) {
     width: 22%;
 }
 
-.luminaire-table th:nth-child(5) {
+.project-luminaire-table th:nth-child(5) {
     width: 12%;
 }
 
-.luminaire-table th:nth-child(6) {
+.project-luminaire-table th:nth-child(6) {
     width: 14%;
 }
 
-.luminaire-table th:nth-child(7) {
+.project-luminaire-table th:nth-child(7) {
     width: 14%;
 }
 
@@ -644,22 +762,33 @@ body {
 }
 
 .ambient-metric-row {
-    width: 100%;
-    margin-bottom: 5mm;
-    border-collapse: separate;
-    border-spacing: 4mm 0;
+    width: 96%;
+    max-width: 100%;
+    margin: 0 auto 5mm;
+    border-collapse: collapse;
+    border-spacing: 0;
+    table-layout: fixed;
+    box-sizing: border-box;
 }
 
+/* 4 tarjetas: 19+19+43+19 = 100% (la ancha lleva las dos líneas de potencia).
+   Separación visual con borde blanco; border-spacing desborda en dompdf. */
 .ambient-metric-card {
-    width: 25%;
-    padding: 3mm 4mm;
+    width: 19%;
+    padding: 2.5mm 3mm;
     background: #eeeeee;
     color: #0f172a;
     vertical-align: top;
+    overflow: hidden;
+    border-right: 1.5mm solid #ffffff;
+}
+
+.ambient-metric-card:last-child {
+    border-right: none;
 }
 
 .ambient-metric-card.wide {
-    width: 38%;
+    width: 43%;
 }
 
 .ambient-metric-label {
@@ -669,8 +798,11 @@ body {
 }
 
 .ambient-metric-value {
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 9px;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow: hidden;
 }
 
 .ambient-local-table th,
@@ -683,22 +815,98 @@ body {
     text-align: center;
 }
 
+.ambient-local-table th:nth-child(1),
+.ambient-local-table td:nth-child(1) {
+    width: 10%;
+}
+
+.ambient-local-table th:nth-child(2),
+.ambient-local-table td:nth-child(2) {
+    width: 17%;
+}
+
+.ambient-local-table th:nth-child(3),
+.ambient-local-table td:nth-child(3) {
+    width: 17%;
+}
+
+.ambient-local-table th:nth-child(4),
+.ambient-local-table td:nth-child(4) {
+    width: 30%;
+}
+
+.ambient-local-table th:nth-child(5),
+.ambient-local-table td:nth-child(5) {
+    width: 13%;
+}
+
+.ambient-local-table th:nth-child(6),
+.ambient-local-table td:nth-child(6) {
+    width: 13%;
+}
+
+.ambient-list-table th:nth-child(1),
+.ambient-list-table td:nth-child(1) {
+    width: 36%;
+}
+
+.ambient-list-table th:nth-child(2),
+.ambient-list-table td:nth-child(2),
+.ambient-list-table th:nth-child(5),
+.ambient-list-table td:nth-child(5),
+.ambient-list-table th:nth-child(6),
+.ambient-list-table td:nth-child(6) {
+    width: 12%;
+}
+
+.ambient-list-table th:nth-child(3),
+.ambient-list-table td:nth-child(3),
+.ambient-list-table th:nth-child(4),
+.ambient-list-table td:nth-child(4) {
+    width: 14%;
+}
+
+.fixture-position-table th:nth-child(1),
+.fixture-position-table td:nth-child(1),
+.fixture-position-table th:nth-child(2),
+.fixture-position-table td:nth-child(2),
+.fixture-position-table th:nth-child(3),
+.fixture-position-table td:nth-child(3),
+.fixture-position-table th:nth-child(4),
+.fixture-position-table td:nth-child(4) {
+    width: 25%;
+}
+
 .calculation-table {
-    width: 98%;
+    width: 96%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
     table-layout: fixed;
+    border-spacing: 0;
+    box-sizing: border-box;
 }
 
 .calculation-table th,
 .calculation-table td {
-    padding: 2mm 1.1mm;
-    font-size: 8.4px;
-    line-height: 1.28;
+    box-sizing: border-box;
+    padding: 1.2mm 0.15mm;
+    font-size: 7.2px;
+    line-height: 1.18;
     vertical-align: middle;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.calculation-table th {
+    font-size: 6.4px;
+    letter-spacing: 0;
 }
 
 .calculation-table th:nth-child(1),
 .calculation-table td:nth-child(1) {
-    width: 38%;
+    width: 31%;
 }
 
 .calculation-table th:nth-child(2),
@@ -710,7 +918,7 @@ body {
 .calculation-table td:nth-child(3),
 .calculation-table th:nth-child(4),
 .calculation-table td:nth-child(4) {
-    width: 10%;
+    width: 10.5%;
 }
 
 .calculation-table th:nth-child(5),
@@ -722,7 +930,7 @@ body {
 .calculation-table td:nth-child(6),
 .calculation-table th:nth-child(7),
 .calculation-table td:nth-child(7) {
-    width: 8%;
+    width: 11%;
 }
 
 .calculation-table .number {
@@ -732,6 +940,7 @@ body {
 .calculation-table .calculation-properties {
     text-align: left;
     line-height: 1.32;
+    overflow-wrap: anywhere;
     word-break: normal;
 }
 
@@ -746,7 +955,7 @@ body {
 
 .calculation-index {
     display: inline-block;
-    padding: 1mm 1.5mm;
+    padding: 0.8mm 1mm;
     border: 1px solid #0f172a;
     line-height: 1;
 }
@@ -763,8 +972,11 @@ body {
 
 .ambient-results-table {
     width: 96%;
+    max-width: 100%;
     margin: 6mm auto 4mm;
     border-collapse: collapse;
+    table-layout: fixed;
+    box-sizing: border-box;
 }
 
 .ambient-results-table th,
@@ -773,7 +985,23 @@ body {
     border-bottom: 1px solid #0f172a;
     font-size: 9px;
     vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow: hidden;
 }
+
+.ambient-results-table th:nth-child(1),
+.ambient-results-table td:nth-child(1) { width: 18%; }
+.ambient-results-table th:nth-child(2),
+.ambient-results-table td:nth-child(2) { width: 30%; }
+.ambient-results-table th:nth-child(3),
+.ambient-results-table td:nth-child(3) { width: 17%; }
+.ambient-results-table th:nth-child(4),
+.ambient-results-table td:nth-child(4) { width: 17%; }
+.ambient-results-table th:nth-child(5),
+.ambient-results-table td:nth-child(5) { width: 10%; }
+.ambient-results-table th:nth-child(6),
+.ambient-results-table td:nth-child(6) { width: 8%; }
 
 .ambient-results-table th {
     font-weight: bold;
@@ -783,7 +1011,8 @@ body {
 .ambient-results-table .result-number,
 .ambient-results-table .result-check {
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .verification-check {
@@ -931,22 +1160,51 @@ body {
     text-align: center;
 }
 
+/* 229mm page-body - 2mm margin-top - 3mm for section context = ~196mm */
 .terrain-full {
-    height: 226mm;
+    height: 196mm;
     margin-top: 2mm;
 }
 
+/* terrain-full-page: fills the entire page-body (229mm portrait) */
+.terrain-full-page {
+    display: block;
+    width: 100%;
+    height: 229mm;
+    overflow: hidden;
+    text-align: center;
+    background: transparent;
+}
+
+.page-landscape .terrain-full-page {
+    height: 142mm;
+}
+
+.terrain-full-page .asset-align {
+    width: 100%;
+    height: 100%;
+}
+
+.terrain-full-page .asset-align svg,
+.terrain-full-page .asset-align img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    margin: 0 auto;
+}
+
+/* Reduced from 174mm: leaves room for ambient blocks below */
 .terrain-plan-wrap {
-    height: 174mm;
+    height: 148mm;
     margin-bottom: 4mm;
 }
 
 .page-landscape .terrain-full {
-    height: 154mm;
+    height: 116mm;
 }
 
 .page-landscape .terrain-plan-wrap {
-    height: 108mm;
+    height: 100mm;
 }
 
 .page-landscape .ambient-local-block {
@@ -965,7 +1223,7 @@ body {
 .terrain-container {
     display: block;
     width: 100%;
-    height: 200mm;
+    height: 172mm;
     border: 1px solid #cbd5e1;
     background: #f8fafc;
     overflow: hidden;
@@ -980,10 +1238,11 @@ body {
     margin-bottom: 4mm;
 }
 
+/* Reduced from 170mm for new page height */
 .ambient-asset-container {
     display: block;
     width: 100%;
-    height: 170mm;
+    height: 145mm;
     border: 1px solid #cbd5e1;
     background: #f8fafc;
     overflow: hidden;
@@ -1014,7 +1273,24 @@ body {
     font-size: 9.5px;
 }
 
-/* ── Ambient summary 2-col layout ───────────────────────────────────── */
+/* ── Ambient summary image + 2-col layout ───────────────────────────── */
+.ambient-summary-image-wrap {
+    width: 100%;
+    height: 100mm;
+    overflow: hidden;
+    margin-bottom: 3mm;
+    border: 0.5px solid #e2e8f0;
+    border-radius: 2px;
+}
+
+.ambient-summary-image-wrap img,
+.ambient-summary-image-wrap svg {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    margin: 0 auto;
+}
+
 .ambient-summary-left {
     float: left;
     width: 48%;
@@ -1166,4 +1442,71 @@ body {
 .polar-diagram-container .asset-align img,
 .polar-diagram-container .asset-align svg {
     max-height: 86mm;
+}
+
+/* ── Combined ambient plan + isolux 2-column layout ────────────────── */
+.ambient-plan-grid {
+    width: 100%;
+    margin-bottom: 2mm;
+}
+
+.ambient-plan-left-col {
+    float: left;
+    width: 54%;
+    height: 108mm;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    overflow: hidden;
+    text-align: center;
+    margin-right: 1.5%;
+}
+
+.ambient-plan-right-col {
+    float: left;
+    width: 44.5%;
+    height: 108mm;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    overflow: hidden;
+    text-align: center;
+}
+
+.ambient-plan-col-label {
+    font-size: 8px;
+    font-weight: bold;
+    color: #0d9488;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 1.5mm 2mm;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    text-align: left;
+}
+
+.ambient-plan-left-col .asset-align,
+.ambient-plan-right-col .asset-align {
+    height: 98mm;
+}
+
+.ambient-plan-left-col .asset-align svg,
+.ambient-plan-left-col .asset-align img,
+.ambient-plan-right-col .asset-align svg,
+.ambient-plan-right-col .asset-align img {
+    max-width: 100%;
+    max-height: 94mm;
+    display: block;
+    margin: 0 auto;
+}
+
+/* ── Ambient summary image (isolux above metrics table) ──────────── */
+.ambient-summary-image-wrap .asset-align {
+    height: 96mm;
+}
+
+.ambient-summary-image-wrap .asset-align svg,
+.ambient-summary-image-wrap .asset-align img {
+    max-width: 100%;
+    max-height: 96mm;
+    display: block;
+    margin: 0 auto;
 }

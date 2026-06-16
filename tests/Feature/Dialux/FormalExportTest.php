@@ -650,9 +650,7 @@ test('formal dialux blade renders the fixed front matter structure', function ()
     $view->assertSee('Observaciones preliminares');
     $view->assertSee('Contenido');
     $view->assertSee('Resumen del proyecto');
-    $view->assertSee('height: 246mm', false);
     $view->assertSee('cover-image-wrap', false);
-    $view->assertSee('max-height: 150mm', false);
 });
 
 test('formal dialux blade renders calculated local and calculation object values', function () {
@@ -900,7 +898,13 @@ test('formal dialux blade renders calculated local and calculation object values
     $view->assertSee('asset-align', false);
     $view->assertSee('page-landscape', false);
     $view->assertSee('terrain-plan-wrap', false);
-    $view->assertSee('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="160">', false);
+    $view->assertSee('project-luminaire-table', false);
+    $view->assertSee('ambient-list-table', false);
+    $view->assertSee('calculation-table', false);
+    // $renderAsset replaces explicit px/numeric dimensions with 100% so the SVG fills its container.
+    $view->assertSee('<svg xmlns="http://www.w3.org/2000/svg"', false);
+    $view->assertSee('width="100%"', false);
+    $view->assertSee('height="100%"', false);
 
     preg_match(
         '/<td rowspan="4"><strong>Plano &uacute;til<\/strong><\/td>.*?<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>\s*<tr>(.*?)<\/tr>/s',
@@ -912,6 +916,18 @@ test('formal dialux blade renders calculated local and calculation object values
         ->and(substr_count($planeRows[1], '<td'))->toBe(5)
         ->and(substr_count($planeRows[2], '<td'))->toBe(5)
         ->and(substr_count($planeRows[3], '<td'))->toBe(5);
+});
+
+test('formal dialux pdf tables use scoped column width rules', function () {
+    $css = file_get_contents(resource_path('css/style-exportado-dialux.css'));
+
+    expect($css)->not->toContain('.luminaire-table th:nth-child');
+    expect($css)
+        ->toContain('.project-luminaire-table th:nth-child(1)')
+        ->toContain('.ambient-local-table th:nth-child(1)')
+        ->toContain('.ambient-list-table th:nth-child(1)')
+        ->toContain('.fixture-position-table th:nth-child(1)')
+        ->toContain('overflow-wrap: anywhere');
 });
 
 test('formal dialux blade renders product sheet report data and polar asset', function () {

@@ -191,8 +191,16 @@ export const Toolbar: React.FC = () => {
                 label: 'Doc.',
                 hasActive: hasCadDoc || activeTool === 'calibrate',
             },
+            {
+                id: 'vista' as PanelId,
+                ref: refs.vista,
+                icon: <Eye size={15} />,
+                label: 'Vista',
+                hasActive: showGrid || showIsolux,
+                accentColor: showIsolux ? 'text-yellow-400' : undefined,
+            },
         ],
-        [activeTool, hasCadDoc, projectName.length, refs],
+        [activeTool, hasCadDoc, projectName.length, refs, showGrid, showIsolux],
     );
     /* ── CAD VIEWER group (hidden until needed) ── */
     const CAD_GROUPS = useMemo(
@@ -204,15 +212,8 @@ export const Toolbar: React.FC = () => {
                 label: 'CAD',
                 hasActive: false,
             },
-            {
-                id: 'vista' as PanelId,
-                ref: refs.vista,
-                icon: <Eye size={15} />,
-                label: 'Vista',
-                hasActive: showGrid || showIsolux,
-            },
         ],
-        [refs, showGrid, showIsolux],
+        [refs],
     );
 
     return (

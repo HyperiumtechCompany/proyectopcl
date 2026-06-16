@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>{{ $document['title'] }}</title>
@@ -12,102 +13,191 @@
 </head>
 
 <body>
-@php
-/* ── Helpers ───────────────────────────────────────────────── */
+    @php
+        /* ── Helpers ───────────────────────────────────────────────── */
 
-$renderAsset = static function (?array $asset): string {
-    if (!$asset) {
-        return '<div class="asset-align"><div class="asset-placeholder"><span>Grafico no disponible.</span></div></div>';
-    }
-    if (($asset['kind'] ?? null) === 'vector' && !empty($asset['svg'])) {
-        return '<div class="asset-align">' . $asset['svg'] . '</div>';
-    }
-    if (($asset['kind'] ?? null) === 'bitmap' && !empty($asset['dataUrl'])) {
-        return '<div class="asset-align"><img src="' . e($asset['dataUrl']) . '" alt="' . e($asset['title'] ?? 'Asset') . '"></div>';
-    }
-    return '<div class="asset-align"><div class="asset-placeholder"><span>Asset no compatible.</span></div></div>';
-};
+        /* ── Render de assets con encuadre explícito ─────────────────────
+           dompdf NO soporta object-fit, así que el ajuste "contain" se calcula
+           aquí: con las dimensiones reales del asset y la caja destino (mm) se
+           emiten width/height exactos, centrados con margin auto. Sin caja se
+           cae al ancho completo (comportamiento previo). */
+        $renderAsset = static function (?array $asset, ?float $boxWidthMm = null, ?float $boxHeightMm = null, bool $vCenter = false): string {
+            if (!$asset) {
+                return '<div class="asset-align"><div class="asset-placeholder"><span>Grafico no disponible.</span></div></div>';
+            }
 
-$formatNumber = static function ($value, int $decimals = 2, string $suffix = ''): string {
-    if ($value === null || $value === '') return '-';
-    return number_format((float) $value, $decimals, '.', ',') . $suffix;
-};
+            $assetWidth = (float) ($asset['width'] ?? 0);
+            $assetHeight = (float) ($asset['height'] ?? 0);
+            $dimsStyle = '';
+            $vOffsetStyle = '';
+            $hOffsetStyle = '';
+            $svgWidthAttr = '100%';
+            $svgHeightAttr = '100%';
+            if ($boxWidthMm !== null && $assetWidth > 0 && $assetHeight > 0) {
+                $boxH = $boxHeightMm ?? $boxWidthMm;
+                $fitScale = min($boxWidthMm / $assetWidth, $boxH / $assetHeight);
+                $displayW = round($assetWidth * $fitScale, 2);
+                $displayH = round($assetHeight * $fitScale, 2);
+                $dimsStyle = "width:{$displayW}mm;height:{$displayH}mm;";
+                $svgWidthAttr = "{$displayW}mm";
+                $svgHeightAttr = "{$displayH}mm";
+                if ($vCenter && $displayH < $boxH) {
+                    $vOffsetStyle = 'margin-top:' . round(($boxH - $displayH) / 2, 2) . 'mm;';
+                }
+                // Centrado horizontal aritmético: dompdf no centra de forma
+                // fiable ni con margin:auto ni con text-align en este caso.
+                if ($displayW < $boxWidthMm) {
+                    $hOffsetStyle = 'margin-left:' . round(($boxWidthMm - $displayW) / 2, 2) . 'mm;';
+                }
+            }
 
-$renderFooterDate = static function () use ($document): string {
-    $generatedAt = $document['generatedAt'] ?? null;
-    if (!is_string($generatedAt) || trim($generatedAt) === '') return $document['footer']['right'] ?? '';
-    try {
-        return 'Exportado ' . \Carbon\Carbon::parse($generatedAt)->timezone('America/Lima')->format('d/m/y H:i');
-    } catch (\Throwable $e) {
-        return $document['footer']['right'] ?? '';
-    }
-};
+            if (($asset['kind'] ?? null) === 'vector' && !empty($asset['svg'])) {
+                // Inline SVG: dompdf renders paths/curves/arcs correctly this way.
+                // Base64 img tags lose scaling and SVG curve fidelity in dompdf.
+                $svg = $asset['svg'];
+                $svg = preg_replace('/(<svg\b[^>]*)\bwidth="\d+(?:\.\d+)?(?:px)?"/i', '$1 width="' . $svgWidthAttr . '"', $svg);
+                $svg = preg_replace('/(<svg\b[^>]*)\bheight="\d+(?:\.\d+)?(?:px)?"/i', '$1 height="' . $svgHeightAttr . '"', $svg);
+                return '<div class="asset-align" style="display:block;text-align:left;' . $vOffsetStyle . $hOffsetStyle . ($dimsStyle !== '' ? $dimsStyle : 'width:100%;') . '">' . $svg . '</div>';
+            }
+            if (($asset['kind'] ?? null) === 'bitmap' && !empty($asset['dataUrl'])) {
+                $imgStyle = $dimsStyle !== ''
+                    ? 'display:block;' . $vOffsetStyle . $hOffsetStyle . $dimsStyle
+                    : 'width:100%;height:auto;max-width:100%;display:block;';
+                // text-align:left neutraliza el text-align:center heredado de los
+                // contenedores: dompdf lo aplica también a bloques y duplicaría
+                // el centrado ya calculado en margin-left.
+                return '<div class="asset-align" style="width:100%;text-align:left;"><img src="' .
+                    e($asset['dataUrl']) .
+                    '" alt="' .
+                    e($asset['title'] ?? 'Asset') .
+                    '" style="' . $imgStyle . '"></div>';
+            }
+            return '<div class="asset-align"><div class="asset-placeholder"><span>Asset no compatible.</span></div></div>';
+        };
 
-$renderHeader = static function () use ($document): string {
-    return '
+        $formatNumber = static function ($value, int $decimals = 2, string $suffix = ''): string {
+            if ($value === null || $value === '') {
+                return '-';
+            }
+            return number_format((float) $value, $decimals, '.', ',') . $suffix;
+        };
+
+        $renderFooterDate = static function () use ($document): string {
+            $generatedAt = $document['generatedAt'] ?? null;
+            if (!is_string($generatedAt) || trim($generatedAt) === '') {
+                return $document['footer']['right'] ?? '';
+            }
+            try {
+                return 'Exportado ' .
+                    \Carbon\Carbon::parse($generatedAt)->timezone('America/Lima')->format('d/m/y H:i');
+            } catch (\Throwable $e) {
+                return $document['footer']['right'] ?? '';
+            }
+        };
+
+        $renderHeader = static function () use ($document): string {
+            return '
         <div class="header">
             <div class="row">
-                <div class="f-left">' . e($document['header']['title'] ?? '') . '</div>
-                <div class="f-right">' . e($document['header']['subtitle'] ?? '') . '</div>
+                <div class="f-left">' .
+                e($document['header']['title'] ?? '') .
+                '</div>
+                <div class="f-right">' .
+                e($document['header']['subtitle'] ?? '') .
+                '</div>
             </div>
             <div class="clear"></div>
         </div>';
-};
+        };
 
-$renderFooter = static function (int $pageNumber) use ($document, $renderFooterDate): string {
-    return '
+        $renderFooter = static function (int $pageNumber) use ($document, $renderFooterDate): string {
+            return '
         <div class="footer">
-            <div class="footer-col-left"><span class="footer-brand">' . e($document['footer']['left'] ?? 'DIAlux Web') . '</span></div>
-            <div class="footer-col-center">' . e($renderFooterDate()) . '</div>
-            <div class="footer-col-right">' . e((string) $pageNumber) . '</div>
+            <div class="footer-col-left"><span class="footer-brand">' .
+                e($document['footer']['left'] ?? 'DIAlux Web') .
+                '</span></div>
+            <div class="footer-col-center">' .
+                e($renderFooterDate()) .
+                '</div>
+            <div class="footer-col-right">' .
+                e((string) $pageNumber) .
+                '</div>
             <div class="footer-clear"></div>
         </div>';
-};
+        };
 
-/* ── Tabla de luminarias ────────────────────────────────────── */
-$renderLuminaireTable = static function (array $items, bool $totals = false) use ($document, $formatNumber): string {
-    $totalsBox = '';
-    if ($totals && !empty($document['luminaireTotals'])) {
-        $t = $document['luminaireTotals'];
-        $totalsBox = '
+        /* ── Tabla de luminarias ────────────────────────────────────── */
+        $renderLuminaireTable = static function (array $items, bool $totals = false) use (
+            $document,
+            $formatNumber,
+        ): string {
+            $totalsBox = '';
+            if ($totals && !empty($document['luminaireTotals'])) {
+                $t = $document['luminaireTotals'];
+                $totalsBox =
+                    '
             <div class="luminaire-totals-box">
                 <div class="luminaire-totals-cell">
                     <div class="luminaire-totals-label">&Phi;total</div>
-                    <div class="luminaire-totals-value">' . $formatNumber($t['totalLumens'] ?? 0, 0, ' lm') . '</div>
+                    <div class="luminaire-totals-value">' .
+                    $formatNumber($t['totalLumens'] ?? 0, 0, ' lm') .
+                    '</div>
                 </div>
                 <div class="luminaire-totals-cell">
                     <div class="luminaire-totals-label">P<sub>total</sub></div>
-                    <div class="luminaire-totals-value">' . $formatNumber($t['totalPowerWatts'] ?? 0, 1, ' W') . '</div>
+                    <div class="luminaire-totals-value">' .
+                    $formatNumber($t['totalPowerWatts'] ?? 0, 1, ' W') .
+                    '</div>
                 </div>
                 <div class="luminaire-totals-cell">
                     <div class="luminaire-totals-label">Rendimiento lumínico</div>
-                    <div class="luminaire-totals-value">' . $formatNumber($t['overallEfficiency'] ?? 0, 1, ' lm/W') . '</div>
+                    <div class="luminaire-totals-value">' .
+                    $formatNumber($t['overallEfficiency'] ?? 0, 1, ' lm/W') .
+                    '</div>
                 </div>
             </div>';
-    }
+            }
 
-    $rows = '';
-    foreach ($items as $luminaire) {
-        $efficiency = $luminaire['efficiency'] ?? null;
-        if ($efficiency === null && ($luminaire['lumens'] ?? 0) > 0 && ($luminaire['powerWatts'] ?? 0) > 0) {
-            $efficiency = round($luminaire['lumens'] / $luminaire['powerWatts'], 1);
-        }
-        $rows .= '
+            $rows = '';
+            foreach ($items as $luminaire) {
+                $efficiency = $luminaire['efficiency'] ?? null;
+                if ($efficiency === null && ($luminaire['lumens'] ?? 0) > 0 && ($luminaire['powerWatts'] ?? 0) > 0) {
+                    $efficiency = round($luminaire['lumens'] / $luminaire['powerWatts'], 1);
+                }
+                $rows .=
+                    '
             <tr>
-                <td class="number col-unit">' . e((string) ($luminaire['quantity'] ?? 1)) . '</td>
-                <td class="col-brand">' . e($luminaire['brand'] ?? '-') . '</td>
-                <td class="col-code">' . e($luminaire['articleNumber'] ?? $luminaire['model'] ?? '-') . '</td>
-                <td class="col-name">' . e($luminaire['name'] ?? '-') . '</td>
-                <td class="number col-power">' . $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') . '</td>
-                <td class="number col-flux">' . $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') . '</td>
-                <td class="number col-efficiency">' . ($efficiency !== null ? $formatNumber($efficiency, 1, ' lm/W') : '-') . '</td>
+                <td class="number col-unit">' .
+                    e((string) ($luminaire['quantity'] ?? 1)) .
+                    '</td>
+                <td class="col-brand">' .
+                    e($luminaire['brand'] ?? '-') .
+                    '</td>
+                <td class="col-code">' .
+                    e($luminaire['articleNumber'] ?? ($luminaire['model'] ?? '-')) .
+                    '</td>
+                <td class="col-name">' .
+                    e($luminaire['name'] ?? '-') .
+                    '</td>
+                <td class="number col-power">' .
+                    $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') .
+                    '</td>
+                <td class="number col-flux">' .
+                    $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') .
+                    '</td>
+                <td class="number col-efficiency">' .
+                    ($efficiency !== null ? $formatNumber($efficiency, 1, ' lm/W') : '-') .
+                    '</td>
             </tr>';
-    }
+            }
 
-    if ($rows === '') $rows = '<tr><td colspan="7">No hay luminarias registradas.</td></tr>';
+            if ($rows === '') {
+                $rows = '<tr><td colspan="7">No hay luminarias registradas.</td></tr>';
+            }
 
-    return $totalsBox . '
-        <table class="luminaire-table">
+            return $totalsBox .
+                '
+        <table class="luminaire-table project-luminaire-table">
             <thead>
                 <tr>
                     <th class="number">Unidad</th>
@@ -119,63 +209,107 @@ $renderLuminaireTable = static function (array $items, bool $totals = false) use
                     <th class="number">Rendimiento</th>
                 </tr>
             </thead>
-            <tbody>' . $rows . '</tbody>
+            <tbody>' .
+                $rows .
+                '</tbody>
         </table>';
-};
+        };
 
-/* ── Potencia específica ────────────────────────────────────── */
-$formatPowerDensity = static function ($powerWatts, $area, $referenceLux) use ($formatNumber): string {
-    if ($powerWatts === null || $area === null || (float) $area <= 0) return '-';
-    $density = (float) $powerWatts / (float) $area;
-    $lines = [$formatNumber($density, 2, ' W/m&sup2;')];
-    if ($referenceLux !== null && (float) $referenceLux > 0) {
-        $lines[] = $formatNumber($density / ((float) $referenceLux / 100), 2, ' W/m&sup2;/100 lx (&Aacute;rea)');
-    }
-    return implode('<br>', $lines);
-};
+        /* ── Potencia específica (estilo DIALux evo) ────────────────────
+           Dos líneas: sobre el área total del local y sobre el plano útil
+           (área menos zona marginal). Ambas se normalizan con la iluminancia
+           media calculada Ē, no con el valor nominal. */
+        $formatPowerDensity = static function ($powerWatts, $area, $usefulArea, $avgLux) use ($formatNumber): string {
+            if ($powerWatts === null || $area === null || (float) $area <= 0) {
+                return '-';
+            }
+            $buildLine = static function (float $density, $avgLux, string $label) use ($formatNumber): string {
+                $line = $formatNumber($density, 2, ' W/m&sup2;');
+                if ($avgLux !== null && (float) $avgLux > 0) {
+                    $line .= ' = ' . $formatNumber($density / ((float) $avgLux / 100), 2, ' W/m&sup2;/100 lx');
+                }
+                return $line . ' (' . $label . ')';
+            };
+            $lines = [$buildLine((float) $powerWatts / (float) $area, $avgLux, '&Aacute;rea')];
+            if ($usefulArea !== null && (float) $usefulArea > 0) {
+                $lines[] = $buildLine((float) $powerWatts / (float) $usefulArea, $avgLux, 'Plano &uacute;til');
+            }
+            return implode('<br>', $lines);
+        };
 
-/* ── Bloques de ambientes locales ───────────────────────────── */
-$renderAmbientLocalBlocks = static function ($ambients) use ($formatNumber, $formatPowerDensity): string {
-    $html = '';
-    foreach ($ambients as $ambient) {
-        $ambientLuminaires = is_array($ambient['luminaires'] ?? null) ? $ambient['luminaires'] : [];
-        $rows = '';
-        foreach ($ambientLuminaires as $luminaire) {
-            $rows .= '
+        /* ── Bloques de ambientes locales ───────────────────────────── */
+        $renderAmbientLocalBlocks = static function ($ambients) use ($formatNumber, $formatPowerDensity): string {
+            $html = '';
+            foreach ($ambients as $ambient) {
+                $ambientLuminaires = is_array($ambient['luminaires'] ?? null) ? $ambient['luminaires'] : [];
+                $rows = '';
+                foreach ($ambientLuminaires as $luminaire) {
+                    $rows .=
+                        '
                 <tr>
-                    <td class="number">' . e((string) ($luminaire['quantity'] ?? 1)) . '</td>
-                    <td>' . e($luminaire['brand'] ?? '-') . '</td>
-                    <td>' . e($luminaire['articleNumber'] ?? $luminaire['model'] ?? '-') . '</td>
-                    <td>' . e($luminaire['name'] ?? '-') . '</td>
-                    <td class="number">' . $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') . '</td>
-                    <td class="number">' . $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') . '</td>
+                    <td class="number">' .
+                        e((string) ($luminaire['quantity'] ?? 1)) .
+                        '</td>
+                    <td>' .
+                        e($luminaire['brand'] ?? '-') .
+                        '</td>
+                    <td>' .
+                        e($luminaire['articleNumber'] ?? ($luminaire['model'] ?? '-')) .
+                        '</td>
+                    <td>' .
+                        e($luminaire['name'] ?? '-') .
+                        '</td>
+                    <td class="number">' .
+                        $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') .
+                        '</td>
+                    <td class="number">' .
+                        $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') .
+                        '</td>
                 </tr>';
-        }
-        if ($rows === '') $rows = '<tr><td colspan="6">No hay luminarias registradas para este ambiente.</td></tr>';
+                }
+                if ($rows === '') {
+                    $rows = '<tr><td colspan="6">No hay luminarias registradas para este ambiente.</td></tr>';
+                }
 
-        $targetLux      = $ambient['targetLux'] ?? null;
-        $perpendicularLux = $ambient['avgLux'] ?? $targetLux;
+                $targetLux = $ambient['targetLux'] ?? null;
+                $perpendicularLux = $ambient['avgLux'] ?? $targetLux;
 
-        $html .= '
+                $html .=
+                    '
             <div class="ambient-local-block">
-                <h3 class="ambient-local-title">' . e(strtoupper((string) ($ambient['ambientName'] ?? 'Ambiente'))) . '</h3>
+                <h3 class="ambient-local-title">' .
+                    e(strtoupper((string) ($ambient['ambientName'] ?? 'Ambiente'))) .
+                    '</h3>
                 <table class="ambient-metric-row">
                     <tr>
                         <td class="ambient-metric-card">
                             <div class="ambient-metric-label">P<sub>total</sub></div>
-                            <div class="ambient-metric-value">' . $formatNumber($ambient['totalPowerWatts'] ?? null, 1, ' W') . '</div>
+                            <div class="ambient-metric-value">' .
+                    $formatNumber($ambient['totalPowerWatts'] ?? null, 1, ' W') .
+                    '</div>
                         </td>
                         <td class="ambient-metric-card">
                             <div class="ambient-metric-label">A<sub>local</sub></div>
-                            <div class="ambient-metric-value">' . $formatNumber($ambient['area'] ?? null, 2, ' m&sup2;') . '</div>
+                            <div class="ambient-metric-value">' .
+                    $formatNumber($ambient['area'] ?? null, 2, ' m&sup2;') .
+                    '</div>
                         </td>
                         <td class="ambient-metric-card wide">
                             <div class="ambient-metric-label">Potencia espec&iacute;fica de conexi&oacute;n</div>
-                            <div class="ambient-metric-value">' . $formatPowerDensity($ambient['totalPowerWatts'] ?? null, $ambient['area'] ?? null, $targetLux) . '</div>
+                            <div class="ambient-metric-value">' .
+                    $formatPowerDensity(
+                        $ambient['totalPowerWatts'] ?? null,
+                        $ambient['area'] ?? null,
+                        $ambient['usefulArea'] ?? null,
+                        $perpendicularLux,
+                    ) .
+                    '</div>
                         </td>
                         <td class="ambient-metric-card">
                             <div class="ambient-metric-label">E<sub>perpendicular</sub> (Plano &uacute;til)</div>
-                            <div class="ambient-metric-value">' . $formatNumber($perpendicularLux, 0, ' lx') . '</div>
+                            <div class="ambient-metric-value">' .
+                    $formatNumber($perpendicularLux, 0, ' lx') .
+                    '</div>
                         </td>
                     </tr>
                 </table>
@@ -190,37 +324,75 @@ $renderAmbientLocalBlocks = static function ($ambients) use ($formatNumber, $for
                             <th class="number">&Phi;<sub>Luminaria</sub></th>
                         </tr>
                     </thead>
-                    <tbody>' . $rows . '</tbody>
+                    <tbody>' .
+                    $rows .
+                    '</tbody>
                 </table>
             </div>';
-    }
-    return $html !== '' ? $html : '<div class="placeholder-box">No hay ambientes registrados.</div>';
-};
+            }
+            return $html !== '' ? $html : '<div class="placeholder-box">No hay ambientes registrados.</div>';
+        };
 
-/* ── Tabla de objetos de cálculo ────────────────────────────── */
-$renderCalculationObjectsTable = static function ($ambients) use ($formatNumber): string {
-    $rows = '';
-    foreach ($ambients as $detail) {
-        $rows .= '
+        /* ── Tabla de objetos de cálculo ────────────────────────────── */
+        $renderCalculationObjectsTable = static function ($ambients) use ($formatNumber): string {
+            $rows = '';
+            foreach ($ambients as $detail) {
+                $rows .=
+                    '
             <tr>
                 <td class="calculation-properties">
-                    <strong>Plano &uacute;til (' . e($detail['ambientName'] ?? 'Ambiente') . ')</strong><br>
-                    <span class="calculation-context">Recinto: ' . e($detail['roomName'] ?? 'Sin recinto') . '</span><br>
+                    <strong>Plano &uacute;til (' .
+                    e($detail['ambientName'] ?? 'Ambiente') .
+                    ')</strong><br>
+                    <span class="calculation-context">Recinto: ' .
+                    e($detail['roomName'] ?? 'Sin recinto') .
+                    '</span><br>
                     Iluminancia perpendicular (Adaptativamente)<br>
-                    <span class="calculation-context">Altura: ' . $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') . ' &middot; Zona marginal: ' . $formatNumber($detail['marginalZone'] ?? null, 3, ' m') . '</span>
+                    <span class="calculation-context">Altura: ' .
+                    $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') .
+                    ' &middot; Zona marginal: ' .
+                    $formatNumber($detail['marginalZone'] ?? null, 3, ' m') .
+                    '</span>
                 </td>
-                <td class="number">' . $formatNumber($detail['avgLux'] ?? null, 0, ' lx') . '<br>(' . $formatNumber($detail['targetLux'] ?? null, 0, ' lx') . ')<span class="calculation-check"></span></td>
-                <td class="number">' . $formatNumber($detail['minLux'] ?? null, 1, ' lx') . '</td>
-                <td class="number">' . $formatNumber($detail['maxLux'] ?? null, 0, ' lx') . '</td>
-                <td class="number">' . $formatNumber($detail['uniformity'] ?? null, 2) . '<br>(' . $formatNumber($detail['uniformityTarget'] ?? null, 2) . ')<span class="calculation-check"></span></td>
-                <td class="number">' . $formatNumber($detail['g2'] ?? null, 2) . '</td>
-                <td class="number"><span class="calculation-index">' . e($detail['calculationIndex'] ?? '-') . '</span></td>
+                <td class="number">' .
+                    $formatNumber($detail['avgLux'] ?? null, 0, ' lx') .
+                    '<br>(' .
+                    $formatNumber($detail['targetLux'] ?? null, 0, ' lx') .
+                    ')<span class="calculation-check"></span></td>
+                <td class="number">' .
+                    $formatNumber($detail['minLux'] ?? null, 1, ' lx') .
+                    '</td>
+                <td class="number">' .
+                    $formatNumber($detail['maxLux'] ?? null, 0, ' lx') .
+                    '</td>
+                <td class="number">' .
+                    $formatNumber($detail['uniformity'] ?? null, 2) .
+                    '<br>(' .
+                    $formatNumber($detail['uniformityTarget'] ?? null, 2) .
+                    ')<span class="calculation-check"></span></td>
+                <td class="number">' .
+                    $formatNumber($detail['g2'] ?? null, 2) .
+                    '</td>
+                <td class="number"><span class="calculation-index">' .
+                    e($detail['calculationIndex'] ?? '-') .
+                    '</span></td>
             </tr>';
-    }
-    if ($rows === '') $rows = '<tr><td colspan="7">Sin superficies calculadas.</td></tr>';
+            }
+            if ($rows === '') {
+                $rows = '<tr><td colspan="7">Sin superficies calculadas.</td></tr>';
+            }
 
-    return '
+            return '
         <table class="luminaire-table calculation-table">
+            <colgroup>
+                <col style="width:31%;">
+                <col style="width:12%;">
+                <col style="width:10.5%;">
+                <col style="width:10.5%;">
+                <col style="width:14%;">
+                <col style="width:11%;">
+                <col style="width:11%;">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Propiedades</th>
@@ -232,20 +404,39 @@ $renderCalculationObjectsTable = static function ($ambients) use ($formatNumber)
                     <th class="number">&Iacute;ndice</th>
                 </tr>
             </thead>
-            <tbody>' . $rows . '</tbody>
+            <tbody>' .
+                $rows .
+                '</tbody>
         </table>';
-};
+        };
 
-/* ── Tabla de resultados por ambiente ───────────────────────── */
-$renderAmbientResultsTable = static function (array $detail) use ($formatNumber): string {
-    $powerDensity = (($detail['totalPowerWatts'] ?? null) !== null && ($detail['area'] ?? 0) > 0)
-        ? ((float) $detail['totalPowerWatts'] / (float) $detail['area']) : null;
-    $powerDensityPerLux = ($powerDensity !== null && ($detail['targetLux'] ?? 0) > 0)
-        ? $powerDensity / ((float) $detail['targetLux'] / 100) : null;
-    $consumption = (($detail['totalPowerWatts'] ?? null) !== null)
-        ? ((float) $detail['totalPowerWatts'] * 8 * 365 / 1000) : null;
+        /* ── Tabla de resultados por ambiente ───────────────────────── */
+        $renderAmbientResultsTable = static function (array $detail) use ($formatNumber): string {
+            // Iluminancia de referencia: la media calculada Ē; cae al nominal si no hay cálculo.
+            $referenceLux = ($detail['avgLux'] ?? null) ?: ($detail['targetLux'] ?? null);
+            $usefulArea = ($detail['usefulArea'] ?? null) ?: ($detail['area'] ?? null);
+            $powerDensity =
+                ($detail['totalPowerWatts'] ?? null) !== null && ($detail['area'] ?? 0) > 0
+                    ? (float) $detail['totalPowerWatts'] / (float) $detail['area']
+                    : null;
+            $usefulPowerDensity =
+                ($detail['totalPowerWatts'] ?? null) !== null && ($usefulArea ?? 0) > 0
+                    ? (float) $detail['totalPowerWatts'] / (float) $usefulArea
+                    : null;
+            $powerDensityPerLux =
+                $powerDensity !== null && ($referenceLux ?? 0) > 0
+                    ? $powerDensity / ((float) $referenceLux / 100)
+                    : null;
+            $usefulPowerDensityPerLux =
+                $usefulPowerDensity !== null && ($referenceLux ?? 0) > 0
+                    ? $usefulPowerDensity / ((float) $referenceLux / 100)
+                    : null;
+            $consumption =
+                ($detail['totalPowerWatts'] ?? null) !== null
+                    ? ((float) $detail['totalPowerWatts'] * 8 * 365) / 1000
+                    : null;
 
-    return '
+            return '
         <div class="detail-block-title" style="margin-bottom:2mm;">Resultados</div>
         <table class="ambient-results-table">
             <thead>
@@ -261,28 +452,44 @@ $renderAmbientResultsTable = static function (array $detail) use ($formatNumber)
                 <tr>
                     <td rowspan="4"><strong>Plano &uacute;til</strong></td>
                     <td>E<sub>perpendicular</sub></td>
-                    <td class="result-number">' . $formatNumber($detail['avgLux'] ?? null, 0, ' lx') . '</td>
-                    <td class="result-number">&ge; ' . $formatNumber($detail['targetLux'] ?? null, 0, ' lx') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($detail['avgLux'] ?? null, 0, ' lx') .
+                '</td>
+                    <td class="result-number">&ge; ' .
+                $formatNumber($detail['targetLux'] ?? null, 0, ' lx') .
+                '</td>
                     <td class="result-check"><span class="verification-check"></span></td>
-                    <td class="result-number"><span class="calculation-index">' . e($detail['calculationIndex'] ?? '-') . '</span></td>
+                    <td class="result-number"><span class="calculation-index">' .
+                e($detail['calculationIndex'] ?? '-') .
+                '</span></td>
                 </tr>
                 <tr>
                     <td>U<sub>o</sub> (g1)</td>
-                    <td class="result-number">' . $formatNumber($detail['uniformity'] ?? null, 2) . '</td>
-                    <td class="result-number">&ge; ' . $formatNumber($detail['uniformityTarget'] ?? null, 2) . '</td>
+                    <td class="result-number">' .
+                $formatNumber($detail['uniformity'] ?? null, 2) .
+                '</td>
+                    <td class="result-number">&ge; ' .
+                $formatNumber($detail['uniformityTarget'] ?? null, 2) .
+                '</td>
                     <td class="result-check"><span class="verification-check"></span></td>
-                    <td class="result-number"><span class="calculation-index">' . e($detail['calculationIndex'] ?? '-') . '</span></td>
+                    <td class="result-number"><span class="calculation-index">' .
+                e($detail['calculationIndex'] ?? '-') .
+                '</span></td>
                 </tr>
                 <tr>
                     <td>Potencia espec&iacute;fica de conexi&oacute;n</td>
-                    <td class="result-number">' . $formatNumber($powerDensity, 2, ' W/m&sup2;') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($usefulPowerDensity, 2, ' W/m&sup2;') .
+                '</td>
                     <td class="result-number">-</td>
                     <td></td>
                     <td></td>
                 </tr>
                 <tr>
                     <td></td>
-                    <td class="result-number">' . $formatNumber($powerDensityPerLux, 2, ' W/m&sup2;/100 lx') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($usefulPowerDensityPerLux, 2, ' W/m&sup2;/100 lx') .
+                '</td>
                     <td class="result-number">-</td>
                     <td></td>
                     <td></td>
@@ -290,15 +497,21 @@ $renderAmbientResultsTable = static function (array $detail) use ($formatNumber)
                 <tr>
                     <td><strong>Evaluaci&oacute;n del deslumbramiento</strong></td>
                     <td>R<sub>UG, max</sub></td>
-                    <td class="result-number">' . $formatNumber($detail['ugr'] ?? null, 0) . '</td>
-                    <td class="result-number">&le; ' . $formatNumber($detail['ugrLimit'] ?? null, 0) . '</td>
+                    <td class="result-number">' .
+                $formatNumber($detail['ugr'] ?? null, 0) .
+                '</td>
+                    <td class="result-number">&le; ' .
+                $formatNumber($detail['ugrLimit'] ?? null, 0) .
+                '</td>
                     <td class="result-check"><span class="verification-check"></span></td>
                     <td></td>
                 </tr>
                 <tr>
                     <td><strong>Valores de consumo</strong></td>
                     <td>Consumo</td>
-                    <td class="result-number">' . $formatNumber($consumption, 0, ' kWh/a') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($consumption, 0, ' kWh/a') .
+                '</td>
                     <td class="result-number">m&aacute;x. 150 kWh/a</td>
                     <td class="result-check"><span class="verification-check"></span></td>
                     <td></td>
@@ -306,14 +519,18 @@ $renderAmbientResultsTable = static function (array $detail) use ($formatNumber)
                 <tr>
                     <td rowspan="2"><strong>&Aacute;rea</strong></td>
                     <td>Potencia espec&iacute;fica de conexi&oacute;n</td>
-                    <td class="result-number">' . $formatNumber($powerDensity, 2, ' W/m&sup2;') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($powerDensity, 2, ' W/m&sup2;') .
+                '</td>
                     <td class="result-number">-</td>
                     <td></td>
                     <td></td>
                 </tr>
                 <tr>
                     <td></td>
-                    <td class="result-number">' . $formatNumber($powerDensityPerLux, 2, ' W/m&sup2;/100 lx') . '</td>
+                    <td class="result-number">' .
+                $formatNumber($powerDensityPerLux, 2, ' W/m&sup2;/100 lx') .
+                '</td>
                     <td class="result-number">-</td>
                     <td></td>
                     <td></td>
@@ -321,605 +538,801 @@ $renderAmbientResultsTable = static function (array $detail) use ($formatNumber)
             </tbody>
         </table>
         <div class="ambient-note">
-            (1) Valores calculados desde los resultados almacenados del ambiente.<br>
+            (1)
+Valores calculados desde los resultados almacenados del ambiente.<br>
             (2) Consumo estimado para una jornada referencial de 8 h/d&iacute;a.
         </div>';
-};
+        };
 
-/* ── Fichas de producto por ambiente ────────────────────────── */
-$renderAmbientProductCards = static function (array $detail, $pageAssets) use ($formatNumber, $renderAsset): string {
-    $html = '';
-    foreach (($detail['luminaires'] ?? []) as $luminaire) {
-        $photoAsset       = collect($pageAssets)->firstWhere('id', $luminaire['productPhotoAssetId'] ?? null);
-        $logoAsset        = collect($pageAssets)->firstWhere('id', $luminaire['brandLogoAssetId'] ?? null);
-        $lineDrawingAsset = collect($pageAssets)->firstWhere('id', $luminaire['lineDrawingAssetId'] ?? null);
-        $polarAsset       = collect($pageAssets)->firstWhere('id', $luminaire['polarDiagramAssetId'] ?? null);
-        $imageAsset       = is_array($photoAsset) ? $photoAsset : (is_array($lineDrawingAsset) ? $lineDrawingAsset : null);
-        $hasPolarAsset    = is_array($polarAsset);
-        $isCompact        = !$imageAsset && !$hasPolarAsset;
+        /* ── Fichas de producto por ambiente ────────────────────────── */
+        $renderAmbientProductCards = static function (array $detail, $pageAssets) use (
+            $formatNumber,
+            $renderAsset,
+        ): string {
+            $html = '';
+            foreach ($detail['luminaires'] ?? [] as $luminaire) {
+                $photoAsset = collect($pageAssets)->firstWhere('id', $luminaire['productPhotoAssetId'] ?? null);
+                $logoAsset = collect($pageAssets)->firstWhere('id', $luminaire['brandLogoAssetId'] ?? null);
+                $lineDrawingAsset = collect($pageAssets)->firstWhere('id', $luminaire['lineDrawingAssetId'] ?? null);
+                $polarAsset = collect($pageAssets)->firstWhere('id', $luminaire['polarDiagramAssetId'] ?? null);
+                $imageAsset = is_array($photoAsset)
+                    ? $photoAsset
+                    : (is_array($lineDrawingAsset)
+                        ? $lineDrawingAsset
+                        : null);
+                $hasPolarAsset = is_array($polarAsset);
+                $isCompact = !$imageAsset && !$hasPolarAsset;
 
-        $html .= '
-            <div class="product-sheet-card' . ($isCompact ? ' compact' : '') . '">
+                $html .=
+                    '
+            <div class="product-sheet-card' .
+                    ($isCompact ? ' compact' : '') .
+                    '">
                 <div class="product-sheet-header">
-                    <h3>' . e($luminaire['name'] ?? '-') . '</h3>
-                    <p>' . e($luminaire['brand'] ?? 'Fabricante no definido') . '</p>
+                    <h3>' .
+                    e($luminaire['name'] ?? '-') .
+                    '</h3>
+                    <p>' .
+                    e($luminaire['brand'] ?? 'Fabricante no definido') .
+                    '</p>
                 </div>
                 <div class="product-sheet-left-col">
-                    ' . (is_array($logoAsset) ? '<div class="product-image-container" style="height:18mm;">' . $renderAsset($logoAsset) . '</div>' : '') . '
-                    ' . ($imageAsset ? '<div class="product-image-container">' . $renderAsset($imageAsset) . '</div>' : '') . '
+                    ' .
+                    (is_array($logoAsset)
+                        ? '<div class="product-image-container" style="height:18mm;">' .
+                            $renderAsset($logoAsset, 70, 15, true) .
+                            '</div>'
+                        : '') .
+                    '
+                    ' .
+                    ($imageAsset
+                        ? '<div class="product-image-container">' . $renderAsset($imageAsset, 70, 46, true) . '</div>'
+                        : '') .
+                    '
                     <table class="product-table">
-                        <tr><th>N&deg; de art&iacute;culo</th><td>' . e($luminaire['articleNumber'] ?? '-') . '</td></tr>
-                        <tr><th>P</th><td>' . $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') . '</td></tr>
-                        <tr><th>&Phi;<sub>Luminaria</sub></th><td>' . $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') . '</td></tr>
-                        <tr><th>Rendimiento</th><td>' . $formatNumber($luminaire['efficiency'] ?? null, 1, ' lm/W') . '</td></tr>
+                        <tr><th>N&deg; de art&iacute;culo</th><td>' .
+                    e($luminaire['articleNumber'] ?? '-') .
+                    '</td></tr>
+                        <tr><th>P</th><td>' .
+                    $formatNumber($luminaire['powerWatts'] ?? null, 1, ' W') .
+                    '</td></tr>
+                        <tr><th>&Phi;<sub>Luminaria</sub></th><td>' .
+                    $formatNumber($luminaire['lumens'] ?? null, 0, ' lm') .
+                    '</td></tr>
+                        <tr><th>Rendimiento</th><td>' .
+                    $formatNumber($luminaire['efficiency'] ?? null, 1, ' lm/W') .
+                    '</td></tr>
                     </table>
                 </div>
-                ' . ($hasPolarAsset ? '<div class="product-sheet-right-col"><div class="polar-diagram-container">' . $renderAsset($polarAsset) . '</div></div>' : '') . '
+                ' .
+                    ($hasPolarAsset
+                        ? '<div class="product-sheet-right-col"><div class="polar-diagram-container">' .
+                            $renderAsset($polarAsset, 84, 86, true) .
+                            '</div></div>'
+                        : '') .
+                    '
                 <div class="clear"></div>
             </div>';
-    }
-    return $html !== '' ? $html : '<div class="placeholder-box">No hay productos registrados para este ambiente.</div>';
-};
-@endphp
+            }
+            return $html !== ''
+                ? $html
+                : '<div class="placeholder-box">No hay productos registrados para este ambiente.</div>';
+        };
+    @endphp
 
-{{-- ════════════════════════════════════════════════════════
+    {{-- ════════════════════════════════════════════════════════
      PÁGINAS
      ════════════════════════════════════════════════════════ --}}
-@foreach ($pages as $page)
-@php
-    $pageAssets  = is_array($page['assets'] ?? null) ? $page['assets'] : [];
-    $summaryAsset = collect($pageAssets)->first(fn(array $a): bool =>
-        ($a['kind'] ?? null) === 'structured' && ($a['data']['type'] ?? null) === 'summary'
-    );
-    $summaryItems = is_array($summaryAsset['data']['items'] ?? null) ? $summaryAsset['data']['items'] : [];
-    $overviewAsset = collect($pageAssets)->first(fn(array $a): bool =>
-        in_array($a['id'] ?? '', ['viewer-capture', 'cad-overview-svg', 'formal-cover-svg'], true) ||
-        in_array($a['purpose'] ?? null, ['cad-overview', 'viewer-capture'], true)
-    );
-    $coverVisual = collect($pageAssets)->firstWhere('id', 'viewer-capture-3d')
-        ?? collect($pageAssets)->firstWhere('id', 'formal-cover-svg')
-        ?? collect($pageAssets)->firstWhere('id', 'viewer-capture')
-        ?? collect($pageAssets)->first();
-    $landscapePageKinds = [
-        'terrain-cad',
-        'terrain-architectural',
-        'ambient-list',
-        'room-ambient-list',
-        'calculation-object-list',
-    ];
-    $isLandscapePage = in_array($page['kind'] ?? '', $landscapePageKinds, true);
-@endphp
+    @foreach ($pages as $page)
+        @php
+            $pageAssets = is_array($page['assets'] ?? null) ? $page['assets'] : [];
+            $summaryAsset = collect($pageAssets)->first(
+                fn(array $a): bool => ($a['kind'] ?? null) === 'structured' &&
+                    ($a['data']['type'] ?? null) === 'summary',
+            );
+            $summaryItems = is_array($summaryAsset['data']['items'] ?? null) ? $summaryAsset['data']['items'] : [];
+            $overviewAsset = collect($pageAssets)->first(
+                fn(array $a): bool => in_array(
+                    $a['id'] ?? '',
+                    ['viewer-capture', 'cad-overview-svg', 'formal-cover-svg'],
+                    true,
+                ) || in_array($a['purpose'] ?? null, ['cad-overview', 'viewer-capture'], true),
+            );
+            $coverVisual =
+                collect($pageAssets)->firstWhere('id', 'viewer-capture-3d') ??
+                (collect($pageAssets)->firstWhere('id', 'formal-cover-svg') ??
+                    (collect($pageAssets)->firstWhere('id', 'viewer-capture') ?? collect($pageAssets)->first()));
 
-<section class="page {{ $page['kind'] === 'cover' ? 'cover-page' : '' }} {{ $isLandscapePage ? 'page-landscape' : '' }}">
-    <div class="watermark">HYPERIUMTECH</div>
+            // Default landscape pages (tables)
+            $landscapePageKinds = ['ambient-list', 'room-ambient-list', 'calculation-object-list'];
 
-    {{-- ══ PORTADA ══════════════════════════════════════════ --}}
-    @if ($page['kind'] === 'cover')
-        <div class="cover-shell">
+            $isLandscapePage = in_array($page['kind'] ?? '', $landscapePageKinds, true);
 
-            {{-- Barra superior --}}
-            <div class="cover-top-bar">
-                <div class="cover-brand">HYPERIUMTECH</div>
-                <div class="cover-project-tag">DIAlux Web · Reporte formal de iluminación</div>
-            </div>
+            // Dynamically set orientation for plan pages based on asset dimensions
+            if (in_array($page['kind'] ?? '', ['terrain-cad', 'terrain-architectural'], true)) {
+                $mainAsset = collect($pageAssets)->first();
+                if ($mainAsset && isset($mainAsset['width'], $mainAsset['height'])) {
+                    $isLandscapePage = $mainAsset['width'] > $mainAsset['height'];
+                }
+            }
+        @endphp
 
-            {{-- Bloque de información: título + metadatos + resumen --}}
-            <div class="cover-info">
-                <div class="cover-info-left">
-                    <h1 class="cover-title">{{ $document['title'] }}</h1>
-                    @if (!empty($document['subtitle']))
-                        <p class="cover-subtitle">{{ $document['subtitle'] }}</p>
-                    @endif
-                    <table class="meta-grid">
-                        @foreach ($document['metadata'] as $meta)
-                            <tr>
-                                <td class="meta-label">{{ $meta['label'] }}</td>
-                                <td class="meta-value">{{ $meta['value'] }}</td>
-                            </tr>
-                        @endforeach
-                    </table>
-                </div>
-                <div class="cover-info-right">
-                    <div class="cover-exec-box">
-                        <p class="cover-exec-title">Resumen ejecutivo</p>
-                        <p>Informe técnico de iluminación preparado para revisión y aprobación.
-                           Incluye síntesis del proyecto, inventario de luminarias y criterios técnicos.</p>
-                        <p>La portada asegura que toda la información principal quede en una sola hoja.</p>
+        <section
+            class="page {{ $page['kind'] === 'cover' ? 'cover-page' : '' }} {{ $isLandscapePage ? 'page-landscape' : '' }}">
+            <div class="watermark">HYPERIUMTECH</div>
+
+            {{-- ══ PORTADA ══════════════════════════════════════════ --}}
+            @if ($page['kind'] === 'cover')
+                @php
+                    $metaByLabel = collect($document['metadata'])->keyBy('label');
+                    $estadoCalculo = $metaByLabel->get('Estado calculo')['value'] ?? '-';
+                    $luxPromedio   = $metaByLabel->get('Lux promedio')['value'] ?? '-';
+                    $ambientesVal  = $metaByLabel->get('Ambientes')['value'] ?? '-';
+                    $luminariasVal = $metaByLabel->get('Luminarias')['value'] ?? '-';
+                    $coverMetaCols = ['Proyecto', 'Escena', 'Exportado', 'Formato'];
+                    $coverMeta = collect($document['metadata'])
+                        ->filter(fn($m) => in_array($m['label'], $coverMetaCols, true))
+                        ->values();
+                    $isConforme = str_starts_with($estadoCalculo, 'Conforme');
+                @endphp
+                <div class="cover-shell">
+
+                    {{-- Barra superior oscura: marca + etiqueta de documento --}}
+                    <div class="cover-top-bar">
+                        <div class="cover-brand">HYPERIUMTECH</div>
+                        <div class="cover-project-tag">Informe Luminot&eacute;cnico &middot; DIAlux Web</div>
                     </div>
-                </div>
-                <div class="clear"></div>
-            </div>
 
-            {{-- Imagen 3D — ocupa TODO el espacio restante de la página --}}
-            <div class="cover-image-wrap">
-                @if (is_array($coverVisual))
-                    {!! $renderAsset($coverVisual) !!}
-                @else
-                    <div class="cover-image-empty"></div>
-                @endif
-            </div>
-
-        </div>
-
-    {{-- ══ PÁGINAS INTERNAS ═════════════════════════════════ --}}
-    @else
-        {!! $renderHeader() !!}
-
-        <div class="page-body">
-            <h2 class="section-title">{{ $page['title'] }}</h2>
-            @if (!empty($page['subtitle']))
-                <p class="section-subtitle">{{ $page['subtitle'] }}</p>
-            @endif
-
-            {{-- Observaciones preliminares --}}
-            @if ($page['kind'] === 'preliminary-observations')
-                <div class="observations-layout">
-                    <div class="observations-left">
-                        <div class="observations-copy">
-                            @foreach ($page['notes'] ?? [] as $note)
-                                <p>{{ $note }}</p>
-                            @endforeach
-                        </div>
+                    {{-- Franja de clasificación teal --}}
+                    <div class="cover-class-bar">
+                        REPORTE T&Eacute;CNICO DE ILUMINACI&Oacute;N &mdash; DISE&Ntilde;O LUMINOT&Eacute;CNICO FORMAL
                     </div>
-                    <div class="observations-right">
-                        <div class="asset-box-base asset-md">
-                            {!! $renderAsset(is_array($overviewAsset) ? $overviewAsset : null) !!}
+
+                    {{-- Bloque de información: título + metadatos + KPIs --}}
+                    <div class="cover-info">
+                        <div class="cover-info-left">
+                            <h1 class="cover-title">{{ $document['title'] }}</h1>
+                            @if (!empty($document['subtitle']))
+                                <p class="cover-subtitle">{{ $document['subtitle'] }}</p>
+                            @endif
+                            <table class="meta-grid">
+                                @foreach ($coverMeta as $meta)
+                                    <tr>
+                                        <td class="meta-label">{{ $meta['label'] }}</td>
+                                        <td class="meta-value">{{ $meta['value'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </table>
                         </div>
-                        @if (!empty($summaryItems))
-                            <div class="summary-card" style="margin-top:3mm; padding:4mm;">
-                                <p class="summary-title">Resumen del proyecto</p>
-                                <table class="metric-grid">
-                                    @foreach ($summaryItems as $item)
-                                        <tr>
-                                            <td class="metric-label">{{ $item['label'] ?? '' }}</td>
-                                            <td class="metric-value">{{ $item['value'] ?? '' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </table>
+                        <div class="cover-info-right">
+                            {{-- KPI cards 2×2 --}}
+                            <div class="cover-kpi-half">
+                                <div class="cover-kpi-cell">
+                                    <div class="cover-kpi-label">Estado c&aacute;lculo</div>
+                                    <div class="cover-kpi-value {{ $isConforme ? 'cover-kpi-ok' : 'cover-kpi-warn' }}">
+                                        {{ $estadoCalculo }}
+                                    </div>
+                                </div>
+                                <div class="cover-kpi-cell">
+                                    <div class="cover-kpi-label">Lux promedio</div>
+                                    <div class="cover-kpi-value cover-kpi-neutral">{{ $luxPromedio }} lx</div>
+                                </div>
+                                <div class="cover-kpi-cell">
+                                    <div class="cover-kpi-label">Ambientes</div>
+                                    <div class="cover-kpi-value cover-kpi-neutral">{{ $ambientesVal }}</div>
+                                </div>
+                                <div class="cover-kpi-cell">
+                                    <div class="cover-kpi-label">Luminarias</div>
+                                    <div class="cover-kpi-value cover-kpi-neutral">{{ $luminariasVal }}</div>
+                                </div>
                             </div>
+                        </div>
+                        <div class="clear"></div>
+                    </div>
+
+                    {{-- Imagen 3D — ocupa el espacio visual restante de la portada --}}
+                    <div class="cover-image-wrap">
+                        @if (is_array($coverVisual))
+                            {!! $renderAsset($coverVisual, 210, 215, true) !!}
+                        @else
+                            <div class="cover-image-empty"></div>
                         @endif
                     </div>
-                    <div class="clear"></div>
+
                 </div>
 
-            {{-- Índice de contenidos --}}
-            @elseif ($page['kind'] === 'toc')
+                {{-- ══ PÁGINAS INTERNAS ═════════════════════════════════ --}}
+            @else
+                {!! $renderHeader() !!}
+
                 @php
-                    $chunkIndex = (int) (collect($tocPages)->search(
-                        fn(array $tocPage): bool => $tocPage['id'] === $page['id'],
-                    ) ?: 0);
-                    $chunk = $tocChunks[$chunkIndex] ?? [];
-                    $dots  = str_repeat('.', 300);
+                    $fullplanKinds = ['terrain-cad', 'terrain-architectural', 'ambient-useful-plane'];
                 @endphp
-                @foreach ($chunk as $entry)
-                    @php $kind = $entry['kind'] ?? 'item'; @endphp
-                    @if ($kind === 'section-label')
-                        <div class="toc-section-label">{{ $entry['title'] }}</div>
-                    @elseif ($kind === 'section-heading')
-                        <div class="toc-section-heading {{ ($entry['size'] ?? 'large') === 'small' ? 'small' : '' }}">
-                            {{ $entry['title'] }}
+                <div
+                    class="page-body{{ in_array($page['kind'] ?? '', $fullplanKinds, true) ? ' page-body-fullplan' : '' }}">
+                    @if (!in_array($page['kind'] ?? '', $fullplanKinds, true))
+                        <h2 class="section-title">{{ $page['title'] }}</h2>
+                        @if (!empty($page['subtitle']))
+                            <p class="section-subtitle">{{ $page['subtitle'] }}</p>
+                        @endif
+                    @endif
+
+                    {{-- Observaciones preliminares --}}
+                    @if ($page['kind'] === 'preliminary-observations')
+                        <div class="observations-layout">
+                            <div class="observations-left">
+                                <div class="observations-copy">
+                                    @foreach ($page['notes'] ?? [] as $note)
+                                        <p>{{ $note }}</p>
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="observations-right">
+                                <div class="observations-graphic">
+                                    {!! $renderAsset(is_array($overviewAsset) ? $overviewAsset : null, 66, 62, true) !!}
+                                </div>
+                                @if (!empty($summaryItems))
+                                    <div class="summary-card" style="margin-top:3mm; padding:4mm;">
+                                        <p class="summary-title">Resumen del proyecto</p>
+                                        <table class="metric-grid">
+                                            @foreach ($summaryItems as $item)
+                                                <tr>
+                                                    <td class="metric-label">{{ $item['label'] ?? '' }}</td>
+                                                    <td class="metric-value">{{ $item['value'] ?? '' }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </table>
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="clear"></div>
                         </div>
-                    @else
-                        <table class="toc-row {{ ($entry['level'] ?? 0) > 0 ? 'toc-indent' : '' }}">
+
+                        {{-- Índice de contenidos --}}
+                    @elseif ($page['kind'] === 'toc')
+                        @php
+                            $chunkIndex =
+                                (int) (collect($tocPages)->search(
+                                    fn(array $tocPage): bool => $tocPage['id'] === $page['id'],
+                                ) ?:
+                                0);
+                            $chunk = $tocChunks[$chunkIndex] ?? [];
+                            $dots = str_repeat('.', 300);
+                        @endphp
+                        @foreach ($chunk as $entry)
+                            @php $kind = $entry['kind'] ?? 'item'; @endphp
+                            @if ($kind === 'section-label')
+                                <div class="toc-section-label">{{ $entry['title'] }}</div>
+                            @elseif ($kind === 'section-heading')
+                                <div
+                                    class="toc-section-heading {{ ($entry['size'] ?? 'large') === 'small' ? 'small' : '' }}">
+                                    {{ $entry['title'] }}
+                                </div>
+                            @else
+                                <table class="toc-row {{ ($entry['level'] ?? 0) > 0 ? 'toc-indent' : '' }}">
+                                    <tr>
+                                        <td class="toc-cell-title">{{ $entry['title'] }}</td>
+                                        <td class="toc-cell-dots">{{ $dots }}</td>
+                                        <td class="toc-cell-page">{{ $entry['pageNumber'] }}</td>
+                                    </tr>
+                                </table>
+                                @if (!empty($entry['subtitle']))
+                                    <div
+                                        style="margin:-1mm 0 2mm {{ ($entry['level'] ?? 0) > 0 ? '6mm' : '0' }};color:#64748b;font-size:9px;line-height:1.3;">
+                                        {{ $entry['subtitle'] }}
+                                    </div>
+                                @endif
+                            @endif
+                        @endforeach
+
+                        {{-- Lista global de luminarias --}}
+                    @elseif ($page['kind'] === 'luminaire-list')
+                        {!! $renderLuminaireTable($document['luminaires'] ?? [], true) !!}
+
+                        {{-- Ficha de producto individual --}}
+                    @elseif ($page['kind'] === 'product-sheet')
+                        @php
+                            $luminaireId = str_replace('product-sheet:', '', $page['sectionId']);
+                            $lum = collect($document['luminaires'])->firstWhere('id', $luminaireId);
+                            $photoAsset = collect($pageAssets)->firstWhere('id', $lum['productPhotoAssetId'] ?? null);
+                            $logoAsset = collect($pageAssets)->firstWhere('id', $lum['brandLogoAssetId'] ?? null);
+                            $lineDrawingAsset = collect($pageAssets)->firstWhere(
+                                'id',
+                                $lum['lineDrawingAssetId'] ?? null,
+                            );
+                            $polarDiagramAsset = collect($pageAssets)->firstWhere(
+                                'id',
+                                $lum['polarDiagramAssetId'] ?? null,
+                            );
+                            $technicalRows = $lum['reportData']['technical_table'] ?? null;
+                        @endphp
+                        <div class="product-sheet-card">
+                            @if ($lum)
+                                <div class="product-sheet-header">
+                                    <h3>{{ $lum['brand'] ?? 'Fabricante no especificado' }} &mdash;
+                                        {{ $lum['name'] }}</h3>
+                                    <p>Potencia: {{ $formatNumber($lum['powerWatts'] ?? null, 1, ' W') }} &bull; CCT:
+                                        {{ $lum['cct'] ?? null ? $lum['cct'] . ' K' : '-' }}</p>
+                                </div>
+                                <div class="row">
+                                    <div class="product-sheet-left-col">
+                                        @if ($logoAsset)
+                                            <div class="product-image-container" style="height:18mm;">
+                                                {!! $renderAsset(is_array($logoAsset) ? $logoAsset : null, 70, 15, true) !!}
+                                            </div>
+                                        @endif
+                                        @if ($photoAsset || $lineDrawingAsset)
+                                            <div class="product-image-container">
+                                                {!! $renderAsset(is_array($photoAsset) ? $photoAsset : (is_array($lineDrawingAsset) ? $lineDrawingAsset : null), 70, 46, true) !!}
+                                            </div>
+                                        @endif
+                                        <table class="product-table">
+                                            @if (is_array($technicalRows) && count($technicalRows) > 0)
+                                                @foreach ($technicalRows as $row)
+                                                    <tr>
+                                                        <th>{{ $row['label'] ?? '-' }}</th>
+                                                        <td>{{ $row['value'] ?? '-' }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            @else
+                                                <tr>
+                                                    <th>N&deg; art.</th>
+                                                    <td>{{ $lum['articleNumber'] ?? ($lum['model'] ?? '-') }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>P</th>
+                                                    <td>{{ $formatNumber($lum['powerWatts'] ?? null, 1, ' W') }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Flujo luminoso</th>
+                                                    <td>{{ $formatNumber($lum['lumens'] ?? null, 0, ' lm') }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Rendimiento</th>
+                                                    <td>{{ $lum['efficiency'] ? $formatNumber($lum['efficiency'], 1, ' lm/W') : '-' }}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>CCT</th>
+                                                    <td>{{ $lum['cct'] ?? null ? $lum['cct'] . ' K' : '-' }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>CRI</th>
+                                                    <td>{{ $lum['cri'] ?? '-' }}</td>
+                                                </tr>
+                                            @endif
+                                        </table>
+                                        @if (!empty($lum['description']))
+                                            <div style="margin-bottom:2mm;">
+                                                <strong style="font-size:9px;color:#0f172a;">Descripción:</strong><br>
+                                                <span
+                                                    style="color:#475569;font-size:9px;line-height:1.4;">{{ $lum['description'] }}</span>
+                                            </div>
+                                        @endif
+                                        @if (!empty($lum['applications']))
+                                            <div style="margin-bottom:2mm;">
+                                                <strong style="font-size:9px;color:#0f172a;">Aplicaciones:</strong><br>
+                                                <span
+                                                    style="color:#475569;font-size:9px;line-height:1.4;">{{ $lum['applications'] }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <div class="product-sheet-right-col">
+                                        <div class="polar-diagram-container">
+                                            {!! $renderAsset(is_array($polarDiagramAsset) ? $polarDiagramAsset : null, 84, 86, true) !!}
+                                        </div>
+                                        <div class="detail-block-title" style="margin-bottom:2mm;">Evaluación del
+                                            deslumbramiento según UGR</div>
+                                        @if (!empty($lum['ugrDiagramValue']) || !empty($lum['ugrTable']))
+                                            <div class="placeholder-box">
+                                                {{ $lum['ugrDiagramValue'] ?? 'Tabla UGR estructurada proporcionada' }}
+                                            </div>
+                                        @else
+                                            <div class="placeholder-box">Información UGR no disponible</div>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="clear"></div>
+                            @else
+                                <p>No se encontró la luminaria.</p>
+                            @endif
+                        </div>
+
+                        {{-- Lista de locales — tabla compacta para no desbordar la hoja --}}
+                    @elseif ($page['kind'] === 'ambient-list')
+                        @php
+                            $ambientListAsset =
+                                collect($pageAssets)->firstWhere('id', 'composite-plan-bitmap') ??
+                                (collect($pageAssets)->firstWhere('id', 'drawn-terrain-svg') ??
+                                    (collect($pageAssets)->firstWhere('id', 'cad-base-bitmap') ??
+                                        (collect($pageAssets)->firstWhere('id', 'viewer-capture') ??
+                                            collect($pageAssets)->first())));
+                            $listAmbients = $document['ambientDetails'] ?? [];
+                        @endphp
+                        @if (is_array($ambientListAsset))
+                            <div class="terrain-plan-wrap" style="height:128mm;">
+                                {!! $renderAsset($ambientListAsset, 184, 124, true) !!}
+                            </div>
+                        @endif
+                        <table class="luminaire-table ambient-list-table" style="margin-top:3mm; table-layout:fixed;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left; width:36%;">Local</th>
+                                    <th class="number" style="width:12%;">&Aacute;rea (m&sup2;)</th>
+                                    <th class="number" style="width:14%;">Em (lx)</th>
+                                    <th class="number" style="width:14%;">&ge; (lx)</th>
+                                    <th class="number" style="width:12%;">Uo</th>
+                                    <th class="number" style="width:12%;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($listAmbients as $amb)
+                                    <tr>
+                                        <td style="text-align:left;">{{ strtoupper($amb['ambientName'] ?? '-') }}</td>
+                                        <td class="number">{{ $formatNumber($amb['area'] ?? null, 1) }}</td>
+                                        <td class="number">{{ $formatNumber($amb['avgLux'] ?? null, 0) }}</td>
+                                        <td class="number">{{ $formatNumber($amb['targetLux'] ?? null, 0) }}</td>
+                                        <td class="number">{{ $formatNumber($amb['uniformity'] ?? null, 2) }}</td>
+                                        <td class="number">{{ $amb['complianceLabel'] ?? '-' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="6">Sin ambientes registrados.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+
+                        {{-- Plano CAD — imagen llena toda la página --}}
+                    @elseif ($page['kind'] === 'terrain-cad')
+                        @php
+                            $cadAsset =
+                                collect($pageAssets)->firstWhere('id', 'cad-overview-svg') ??
+                                (collect($pageAssets)->firstWhere('id', 'cad-base-bitmap') ??
+                                    (collect($pageAssets)->firstWhere('id', 'viewer-capture') ??
+                                        collect($pageAssets)->first()));
+                        @endphp
+                        @if (is_array($cadAsset))
+                            <div class="terrain-full-page">
+                                {!! $isLandscapePage ? $renderAsset($cadAsset, 255, 140, true) : $renderAsset($cadAsset, 188, 226, true) !!}
+                            </div>
+                        @else
+                            <div class="placeholder-box">Plano CAD no disponible en esta exportación.</div>
+                        @endif
+
+                        {{-- Plano arquitectónico — imagen llena toda la página --}}
+                    @elseif ($page['kind'] === 'terrain-architectural')
+                        @php
+                            $drawnTerrain =
+                                collect($pageAssets)->firstWhere('id', 'composite-isolux-bitmap') ??
+                                (collect($pageAssets)->firstWhere('id', 'terrain-with-isolux-svg') ??
+                                    (collect($pageAssets)->firstWhere('id', 'drawn-terrain-svg') ??
+                                        (collect($pageAssets)->firstWhere('id', 'cad-base-bitmap') ??
+                                            collect($pageAssets)->first())));
+                        @endphp
+                        @if (is_array($drawnTerrain))
+                            <div class="terrain-full-page">
+                                {!! $isLandscapePage ? $renderAsset($drawnTerrain, 255, 140, true) : $renderAsset($drawnTerrain, 188, 226, true) !!}
+                            </div>
+                        @else
+                            <div class="placeholder-box">Plano Arquitectónico no disponible en esta exportación.</div>
+                        @endif
+
+                        {{-- Recinto: plan + tabla de ambientes --}}
+                    @elseif ($page['kind'] === 'room-ambient-list')
+                        @php
+                            $roomAmbients = collect($document['ambientDetails'] ?? [])
+                                ->filter(fn($a) => $a['roomId'] === ($page['roomId'] ?? null))
+                                ->values()
+                                ->all();
+                        @endphp
+                        {!! $renderAmbientLocalBlocks($roomAmbients) !!}
+
+                        {{-- Recinto: luminarias --}}
+                    @elseif ($page['kind'] === 'room-luminaires')
+                        @php
+                            $roomAmbients = collect($document['ambientDetails'] ?? [])->filter(
+                                fn($a) => $a['roomId'] === ($page['roomId'] ?? null),
+                            );
+                            // El mismo producto repetido en varios locales del recinto se
+                            // consolida en una sola fila sumando cantidades (estilo DIALux evo).
+                            $roomLuminaires = $roomAmbients
+                                ->pluck('luminaires')
+                                ->flatten(1)
+                                ->groupBy(
+                                    fn(array $l): string => ($l['brand'] ?? '') .
+                                        '|' .
+                                        ($l['articleNumber'] ?? '') .
+                                        '|' .
+                                        ($l['name'] ?? ''),
+                                )
+                                ->map(function ($group) {
+                                    $first = $group->first();
+                                    $first['quantity'] = (int) $group->sum('quantity');
+                                    return $first;
+                                })
+                                ->values()
+                                ->all();
+                        @endphp
+                        {!! $renderLuminaireTable($roomLuminaires, false) !!}
+
+                        {{-- Recinto: objeto de cálculo --}}
+                    @elseif ($page['kind'] === 'room-calculation-object')
+                        @php
+                            $roomAmbients = collect($document['ambientDetails'] ?? [])->filter(
+                                fn($a) => $a['roomId'] === ($page['roomId'] ?? null),
+                            );
+                        @endphp
+                        <div class="detail-block-title" style="margin-bottom:2mm;">Objetos de c&aacute;lculo / Escena de
+                            luz 1</div>
+                        {!! $renderCalculationObjectsTable($roomAmbients) !!}
+
+                        {{-- Objetos de cálculo (filtrado por recinto para que quepa en la hoja) --}}
+                    @elseif ($page['kind'] === 'calculation-object-list')
+                        @php
+                            $pageRoomId = $page['roomId'] ?? null;
+                            $calcAmbients = $pageRoomId
+                                ? collect($document['ambientDetails'] ?? [])
+                                    ->filter(fn(array $a): bool => ($a['roomId'] ?? null) === $pageRoomId)
+                                    ->values()
+                                    ->all()
+                                : ($document['ambientDetails'] ?? []);
+                        @endphp
+                        <div class="detail-block-title" style="margin-bottom:2mm;">Planos &uacute;tiles</div>
+                        {!! $renderCalculationObjectsTable($calcAmbients) !!}
+
+                        {{-- Resumen de ambiente --}}
+                    @elseif ($page['kind'] === 'ambient-summary' && !empty($page['ambientDetail']))
+                        @php $detail = $page['ambientDetail']; @endphp
+
+                        {{-- Información principal del local (sin imagen — va en Plano de situación) --}}
+                        <div class="detail-block-title" style="margin-bottom:3mm;">Informaci&oacute;n principal del local</div>
+                        <table class="metric-grid" style="width:100%; margin-bottom:5mm;">
                             <tr>
-                                <td class="toc-cell-title">{{ $entry['title'] }}</td>
-                                <td class="toc-cell-dots">{{ $dots }}</td>
-                                <td class="toc-cell-page">{{ $entry['pageNumber'] }}</td>
+                                <td class="metric-label" style="width:60%">Recinto base asociado</td>
+                                <td class="metric-value">{{ $detail['roomName'] }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">&Aacute;rea del local</td>
+                                <td class="metric-value">{{ $formatNumber($detail['area'] ?? null, 2, ' m²') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Altura interior del local</td>
+                                <td class="metric-value">{{ $formatNumber($detail['interiorHeight'] ?? null, 3, ' m') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Grado de reflexi&oacute;n (Techo / Paredes / Suelo)</td>
+                                <td class="metric-value">
+                                    {{ $detail['reflectionCeiling'] ?? 70 }}% /
+                                    {{ $detail['reflectionWall'] ?? 50 }}% /
+                                    {{ $detail['reflectionFloor'] ?? 20 }}%
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Altura del plano &uacute;til</td>
+                                <td class="metric-value">{{ $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Factor de degradaci&oacute;n</td>
+                                <td class="metric-value">{{ $formatNumber($detail['maintenanceFactor'] ?? null, 2) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="metric-label">Zona marginal</td>
+                                <td class="metric-value">{{ $formatNumber($detail['marginalZone'] ?? null, 3, ' m') }}</td>
                             </tr>
                         </table>
-                        @if (!empty($entry['subtitle']))
-                            <div style="margin:-1mm 0 2mm {{ ($entry['level'] ?? 0) > 0 ? '6mm' : '0' }};color:#64748b;font-size:9px;line-height:1.3;">
-                                {{ $entry['subtitle'] }}
+
+                        {{-- Tabla de resultados luminotécnicos --}}
+                        {!! $renderAmbientResultsTable($detail) !!}
+
+                        {{-- Plano de situación de luminarias (sub-sección 2 por local) --}}
+                    @elseif ($page['kind'] === 'ambient-plan')
+                        @php
+                            $detail = $page['ambientDetail'] ?? null;
+                            $planAsset = collect($pageAssets)->firstWhere('id', $detail['planAssetId'] ?? null);
+                            $isoluxAsset = collect($pageAssets)->firstWhere('id', $detail['isoluxAssetId'] ?? null);
+                            $hasBoth = is_array($planAsset) && is_array($isoluxAsset);
+                        @endphp
+
+                        {{-- Gráficos: plan + isolux en 2 columnas, o solo uno si el otro no existe --}}
+                        @if ($hasBoth)
+                            <div class="ambient-plan-grid">
+                                <div class="ambient-plan-left-col">
+                                    <div class="ambient-plan-col-label">Plano de luminarias</div>
+                                    {!! $renderAsset(is_array($planAsset) ? $planAsset : null, 98, 94, true) !!}
+                                </div>
+                                <div class="ambient-plan-right-col">
+                                    <div class="ambient-plan-col-label">Plano &uacute;til &mdash; Isolux (lx)</div>
+                                    {!! $renderAsset(is_array($isoluxAsset) ? $isoluxAsset : null, 80, 94, true) !!}
+                                </div>
+                                <div class="clear"></div>
+                            </div>
+                        @elseif (is_array($planAsset) || is_array($isoluxAsset))
+                            @php $singleGraphic = is_array($planAsset) ? $planAsset : $isoluxAsset; @endphp
+                            <div class="ambient-asset-container" style="height:130mm;">
+                                {!! $renderAsset($singleGraphic, 184, 126, true) !!}
+                            </div>
+                        @else
+                            <div class="ambient-empty-note">
+                                Ambiente sin plano disponible. Se mantiene en el reporte para resultados y objeto de
+                                c&aacute;lculo.
                             </div>
                         @endif
-                    @endif
-                @endforeach
 
-            {{-- Lista global de luminarias --}}
-            @elseif ($page['kind'] === 'luminaire-list')
-                {!! $renderLuminaireTable($document['luminaires'] ?? [], true) !!}
-
-            {{-- Ficha de producto individual --}}
-            @elseif ($page['kind'] === 'product-sheet')
-                @php
-                    $luminaireId      = str_replace('product-sheet:', '', $page['sectionId']);
-                    $lum              = collect($document['luminaires'])->firstWhere('id', $luminaireId);
-                    $photoAsset       = collect($pageAssets)->firstWhere('id', $lum['productPhotoAssetId'] ?? null);
-                    $logoAsset        = collect($pageAssets)->firstWhere('id', $lum['brandLogoAssetId'] ?? null);
-                    $lineDrawingAsset = collect($pageAssets)->firstWhere('id', $lum['lineDrawingAssetId'] ?? null);
-                    $polarDiagramAsset = collect($pageAssets)->firstWhere('id', $lum['polarDiagramAssetId'] ?? null);
-                    $technicalRows    = $lum['reportData']['technical_table'] ?? null;
-                @endphp
-                <div class="product-sheet-card">
-                    @if ($lum)
-                        <div class="product-sheet-header">
-                            <h3>{{ $lum['brand'] ?? 'Fabricante no especificado' }} &mdash; {{ $lum['name'] }}</h3>
-                            <p>Potencia: {{ $formatNumber($lum['powerWatts'] ?? null, 1, ' W') }} &bull; CCT: {{ ($lum['cct'] ?? null) ? $lum['cct'].' K' : '-' }}</p>
-                        </div>
-                        <div class="row">
-                            <div class="product-sheet-left-col">
-                                @if ($logoAsset)
-                                    <div class="product-image-container" style="height:18mm;">
-                                        {!! $renderAsset(is_array($logoAsset) ? $logoAsset : null) !!}
-                                    </div>
-                                @endif
-                                @if ($photoAsset || $lineDrawingAsset)
-                                    <div class="product-image-container">
-                                        {!! $renderAsset(is_array($photoAsset) ? $photoAsset : (is_array($lineDrawingAsset) ? $lineDrawingAsset : null)) !!}
-                                    </div>
-                                @endif
-                                <table class="product-table">
-                                    @if (is_array($technicalRows) && count($technicalRows) > 0)
-                                        @foreach ($technicalRows as $row)
-                                            <tr><th>{{ $row['label'] ?? '-' }}</th><td>{{ $row['value'] ?? '-' }}</td></tr>
+                        {{-- Posiciones de luminarias agrupadas por producto (estilo DIALux evo) --}}
+                        @if ($detail && !empty($detail['fixturePositions']))
+                            @php
+                                $positionGroups = collect($detail['fixturePositions'])->groupBy(
+                                    fn(array $p): string => ($p['brand'] ?? '') .
+                                        '|' .
+                                        ($p['articleNumber'] ?? '') .
+                                        '|' .
+                                        preg_replace('/\s*[\[\(]\d+[\]\)]\s*$/', '', $p['productName'] ?? ''),
+                                );
+                            @endphp
+                            @foreach ($positionGroups as $group)
+                                @php
+                                    $firstPos = $group->first();
+                                    $groupLabel = trim(
+                                        ($firstPos['brand'] ?? '') .
+                                            ' ' .
+                                            preg_replace('/\s*[\[\(]\d+[\]\)]\s*$/', '', $firstPos['productName'] ?? ''),
+                                    );
+                                @endphp
+                                <div class="fixture-position-title" style="margin-top:2mm;">
+                                    {{ $group->count() }} x {{ $groupLabel !== '' ? $groupLabel : 'Luminaria' }}</div>
+                                <table class="luminaire-table fixture-position-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="number">X</th>
+                                            <th class="number">Y</th>
+                                            <th class="number">Altura de montaje</th>
+                                            <th class="number">Luminaria</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($group as $position)
+                                            <tr>
+                                                <td class="number">{{ $formatNumber($position['x'] ?? null, 3, ' m') }}
+                                                </td>
+                                                <td class="number">{{ $formatNumber($position['y'] ?? null, 3, ' m') }}
+                                                </td>
+                                                <td class="number">
+                                                    {{ $formatNumber($position['mountingHeight'] ?? null, 3, ' m') }}</td>
+                                                <td class="number"><span
+                                                        class="calculation-index">{{ $loop->iteration }}</span></td>
+                                            </tr>
                                         @endforeach
-                                    @else
-                                        <tr><th>N&deg; art.</th><td>{{ $lum['articleNumber'] ?? $lum['model'] ?? '-' }}</td></tr>
-                                        <tr><th>P</th><td>{{ $formatNumber($lum['powerWatts'] ?? null, 1, ' W') }}</td></tr>
-                                        <tr><th>Flujo luminoso</th><td>{{ $formatNumber($lum['lumens'] ?? null, 0, ' lm') }}</td></tr>
-                                        <tr><th>Rendimiento</th><td>{{ $lum['efficiency'] ? $formatNumber($lum['efficiency'], 1, ' lm/W') : '-' }}</td></tr>
-                                        <tr><th>CCT</th><td>{{ ($lum['cct'] ?? null) ? $lum['cct'].' K' : '-' }}</td></tr>
-                                        <tr><th>CRI</th><td>{{ $lum['cri'] ?? '-' }}</td></tr>
-                                    @endif
+                                    </tbody>
                                 </table>
-                                @if (!empty($lum['description']))
-                                    <div style="margin-bottom:2mm;">
-                                        <strong style="font-size:9px;color:#0f172a;">Descripción:</strong><br>
-                                        <span style="color:#475569;font-size:9px;line-height:1.4;">{{ $lum['description'] }}</span>
-                                    </div>
-                                @endif
-                                @if (!empty($lum['applications']))
-                                    <div style="margin-bottom:2mm;">
-                                        <strong style="font-size:9px;color:#0f172a;">Aplicaciones:</strong><br>
-                                        <span style="color:#475569;font-size:9px;line-height:1.4;">{{ $lum['applications'] }}</span>
-                                    </div>
-                                @endif
-                            </div>
-                            <div class="product-sheet-right-col">
-                                <div class="polar-diagram-container">
-                                    {!! $renderAsset(is_array($polarDiagramAsset) ? $polarDiagramAsset : null) !!}
-                                </div>
-                                <div class="detail-block-title" style="margin-bottom:2mm;">Evaluación del deslumbramiento según UGR</div>
-                                @if (!empty($lum['ugrDiagramValue']) || !empty($lum['ugrTable']))
-                                    <div class="placeholder-box">
-                                        {{ $lum['ugrDiagramValue'] ?? 'Tabla UGR estructurada proporcionada' }}
-                                    </div>
-                                @else
-                                    <div class="placeholder-box">Información UGR no disponible</div>
-                                @endif
-                            </div>
+                            @endforeach
+                        @endif
+
+                        {{-- Luminarias por ambiente --}}
+                    @elseif ($page['kind'] === 'ambient-luminaires' && !empty($page['ambientDetail']))
+                        {!! $renderLuminaireTable($page['ambientDetail']['luminaires'] ?? [], false) !!}
+
+                        {{-- Resultados por ambiente --}}
+                    @elseif ($page['kind'] === 'ambient-results' && !empty($page['ambientDetail']))
+                        {!! $renderAmbientResultsTable($page['ambientDetail']) !!}
+
+                        {{-- Fichas de productos por ambiente --}}
+                    @elseif ($page['kind'] === 'ambient-products' && !empty($page['ambientDetail']))
+                        <div class="detail-block-title" style="margin-bottom:2mm;">Productos usados en el ambiente
                         </div>
-                        <div class="clear"></div>
+                        {!! $renderAmbientProductCards($page['ambientDetail'], $pageAssets) !!}
+
+                        {{-- Objetos de cálculo por ambiente --}}
+                    @elseif ($page['kind'] === 'ambient-calculation-object' && !empty($page['ambientDetail']))
+                        @php $detail = $page['ambientDetail']; @endphp
+                        <div class="detail-block-title" style="margin-bottom:2mm;">Superficies de cálculo</div>
+                        <table class="luminaire-table calculation-table">
+                            <colgroup>
+                                <col style="width:31%;">
+                                <col style="width:12%;">
+                                <col style="width:10.5%;">
+                                <col style="width:10.5%;">
+                                <col style="width:14%;">
+                                <col style="width:11%;">
+                                <col style="width:11%;">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Propiedades</th>
+                                    <th class="number">E (nominal)</th>
+                                    <th class="number">Emin</th>
+                                    <th class="number">Emax</th>
+                                    <th class="number">Uo (g1) (nominal)</th>
+                                    <th class="number">g2</th>
+                                    <th class="number">Índice</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="calculation-properties">
+                                        <strong>Plano &uacute;til ({{ $detail['ambientName'] }})</strong><br>
+                                        <span class="calculation-context">Recinto:
+                                            {{ $detail['roomName'] ?? 'Sin recinto' }}</span><br>
+                                        <span class="calculation-context">
+                                            Iluminancia perpendicular (Adaptativamente)<br>
+                                            Altura: {{ $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') }},
+                                            Zona marginal:
+                                            {{ $formatNumber($detail['marginalZone'] ?? null, 3, ' m') }}
+                                        </span>
+                                    </td>
+                                    <td class="number">{{ $formatNumber($detail['avgLux'], 2) }} lx
+                                        ({{ $formatNumber($detail['targetLux'], 0) }} lx)</td>
+                                    <td class="number">{{ $formatNumber($detail['minLux'], 2) }} lx</td>
+                                    <td class="number">{{ $formatNumber($detail['maxLux'], 2) }} lx</td>
+                                    <td class="number">{{ $formatNumber($detail['uniformity'], 3) }}
+                                        ({{ $formatNumber($detail['uniformityTarget'], 3) }})</td>
+                                    <td class="number">{{ $formatNumber($detail['g2'] ?? null, 3) }}</td>
+                                    <td class="number">{{ $detail['calculationIndex'] ?? '-' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        {{-- Plano útil / Iluminancia perpendicular (sub-sección 5, fullplan) --}}
+                    @elseif ($page['kind'] === 'ambient-useful-plane')
+                        <div class="terrain-full-page">
+                            {!! $renderAsset(collect($pageAssets)->first(), 188, 226, true) !!}
+                        </div>
+
+                        {{-- Glosario --}}
+                    @elseif ($page['kind'] === 'glossary')
+                        <table class="glossary-grid">
+                            <tr>
+                                <td class="glossary-term">Em (lx)</td>
+                                <td class="glossary-definition">Iluminancia media mantenida en la superficie de
+                                    referencia (plano útil). Representa el valor promedio de lux calculado sobre toda el
+                                    área, considerando la depreciación de las luminarias.</td>
+                            </tr>
+                            <tr>
+                                <td class="glossary-term">Emin / Emax</td>
+                                <td class="glossary-definition">Iluminancia mínima y máxima calculada respectivamente
+                                    en la grilla del plano de evaluación. Identifica los puntos más oscuros y brillantes
+                                    del local.</td>
+                            </tr>
+                            <tr>
+                                <td class="glossary-term">Uo (Uniformidad)</td>
+                                <td class="glossary-definition">Uniformidad general de iluminancias (Uo = Emin / Em).
+                                    Evalúa si la luz se distribuye de forma pareja o si existen caídas bruscas. La
+                                    normativa exige valores referenciales según perfil del local.</td>
+                            </tr>
+                            <tr>
+                                <td class="glossary-term">UGR</td>
+                                <td class="glossary-definition">Unified Glare Rating. Índice para prever la
+                                    probabilidad de que una instalación de iluminación interior produzca un
+                                    deslumbramiento molesto en la visión de los usuarios (valores menores indican menor
+                                    deslumbramiento).</td>
+                            </tr>
+                            <tr>
+                                <td class="glossary-term">Flujo luminoso (lm)</td>
+                                <td class="glossary-definition">Cantidad total de luz emitida por la luminaria en todas
+                                    las direcciones. Dato base para estimar la cantidad de luminarias necesarias para
+                                    alcanzar el E objetivo.</td>
+                            </tr>
+                            <tr>
+                                <td class="glossary-term">Plano útil</td>
+                                <td class="glossary-definition">Superficie imaginaria sobre la cual se espera tener la
+                                    iluminación requerida para desempeñar una actividad. Generalmente se ajusta entre
+                                    0.75m a 0.85m del suelo.</td>
+                            </tr>
+                        </table>
+
+                        {{-- Fallback para tipos no reconocidos --}}
                     @else
-                        <p>No se encontró la luminaria.</p>
+                        <div class="placeholder-box">
+                            @forelse ($page['notes'] ?? [] as $note)
+                                <div>{{ $note }}</div>
+                            @empty
+                                <div>Página reservada para contenido técnico del reporte.</div>
+                            @endforelse
+                        </div>
                     @endif
                 </div>
 
-            {{-- Lista de ambientes --}}
-            @elseif ($page['kind'] === 'ambient-list')
-                @php
-                    $ambientListAsset = collect($pageAssets)->firstWhere('id', 'viewer-capture')
-                        ?? collect($pageAssets)->firstWhere('id', 'drawn-terrain-svg')
-                        ?? collect($pageAssets)->firstWhere('id', 'cad-base-bitmap')
-                        ?? collect($pageAssets)->first();
-                @endphp
-                @if (is_array($ambientListAsset))
-                    <div class="terrain-plan-wrap">
-                        {!! $renderAsset($ambientListAsset) !!}
-                    </div>
-                @endif
-                <div class="detail-block-title" style="margin-bottom:2mm;">Lista de locales / Escena de luz 1</div>
-                {!! $renderAmbientLocalBlocks($document['ambientDetails'] ?? []) !!}
-
-            {{-- Plano CAD — imagen llena toda la página --}}
-            @elseif ($page['kind'] === 'terrain-cad')
-                @php
-                    $cadAsset = collect($pageAssets)->firstWhere('id', 'viewer-capture')
-                             ?? collect($pageAssets)->firstWhere('id', 'cad-base-bitmap')
-                             ?? collect($pageAssets)->firstWhere('id', 'cad-overview-svg')
-                             ?? collect($pageAssets)->first();
-                @endphp
-                @if (is_array($cadAsset))
-                    <div class="terrain-full">
-                        {!! $renderAsset($cadAsset) !!}
-                    </div>
-                @else
-                    <div class="placeholder-box">Plano CAD no disponible en esta exportación.</div>
-                @endif
-
-            {{-- Plano arquitectónico — imagen llena toda la página --}}
-            @elseif ($page['kind'] === 'terrain-architectural')
-                @php
-                    $drawnTerrain = collect($pageAssets)->firstWhere('id', 'viewer-capture')
-                                 ?? collect($pageAssets)->firstWhere('id', 'drawn-terrain-svg')
-                                 ?? collect($pageAssets)->firstWhere('id', 'cad-base-bitmap')
-                                 ?? collect($pageAssets)->first();
-                @endphp
-                @if (is_array($drawnTerrain))
-                    <div class="terrain-full">
-                        {!! $renderAsset($drawnTerrain) !!}
-                    </div>
-                @else
-                    <div class="placeholder-box">Plano Arquitectónico no disponible en esta exportación.</div>
-                @endif
-
-            {{-- Recinto: plan + tabla de ambientes --}}
-            @elseif ($page['kind'] === 'room-ambient-list')
-                @php
-                    $roomAmbients = collect($document['ambientDetails'] ?? [])->filter(fn($a) => $a['roomId'] === ($page['roomId'] ?? null));
-                    $drawnAsset   = collect($pageAssets)->first();
-                @endphp
-                @if ($drawnAsset)
-                    <div class="terrain-plan-wrap">
-                        {!! $renderAsset(is_array($drawnAsset) ? $drawnAsset : null) !!}
-                    </div>
-                @endif
-                <div class="detail-block-title" style="margin-bottom:2mm;">Lista de locales / Escena de luz 1</div>
-                <table class="luminaire-table">
-                    <thead>
-                        <tr>
-                            <th>Local</th>
-                            <th class="number">P total</th>
-                            <th class="number">A local</th>
-                            <th class="number">Potencia</th>
-                            <th class="number">E perpendicular</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($roomAmbients as $ambient)
-                            <tr>
-                                <td>{{ $ambient['roomName'] }} &gt; {{ $ambient['ambientName'] }}</td>
-                                <td class="number">{{ $formatNumber($ambient['totalPowerWatts'], 1, ' W') }}</td>
-                                <td class="number">{{ $formatNumber($ambient['area'], 2, ' m²') }}</td>
-                                <td class="number">{{ $formatNumber($ambient['totalPowerWatts'], 1, ' W') }}</td>
-                                <td class="number">{{ $formatNumber($ambient['avgLux'] ?? null, 2, ' lx') }} ({{ $formatNumber($ambient['targetLux'], 0, ' lx') }})</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="5">No hay ambientes registrados para este recinto.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-
-            {{-- Recinto: luminarias --}}
-            @elseif ($page['kind'] === 'room-luminaires')
-                @php
-                    $roomAmbients  = collect($document['ambientDetails'] ?? [])->filter(fn($a) => $a['roomId'] === ($page['roomId'] ?? null));
-                    $roomLuminaires = $roomAmbients->pluck('luminaires')->flatten(1)->unique('id')->all();
-                @endphp
-                {!! $renderLuminaireTable($roomLuminaires, false) !!}
-
-            {{-- Recinto: objeto de cálculo --}}
-            @elseif ($page['kind'] === 'room-calculation-object')
-                @php
-                    $roomAmbients = collect($document['ambientDetails'] ?? [])->filter(fn($a) => $a['roomId'] === ($page['roomId'] ?? null));
-                @endphp
-                <div class="detail-block-title" style="margin-bottom:2mm;">Objetos de c&aacute;lculo / Escena de luz 1</div>
-                {!! $renderCalculationObjectsTable($roomAmbients) !!}
-
-            {{-- Lista global de objetos de cálculo --}}
-            @elseif ($page['kind'] === 'calculation-object-list')
-                @php $drawnAsset = collect($pageAssets)->first(); @endphp
-                @if ($drawnAsset)
-                    <div class="terrain-plan-wrap">
-                        {!! $renderAsset(is_array($drawnAsset) ? $drawnAsset : null) !!}
-                    </div>
-                @endif
-                <div class="detail-block-title" style="margin-bottom:2mm;">Planos &uacute;tiles</div>
-                {!! $renderCalculationObjectsTable($document['ambientDetails'] ?? []) !!}
-
-            {{-- Resumen de ambiente --}}
-            @elseif ($page['kind'] === 'ambient-summary' && !empty($page['ambientDetail']))
-                @php $detail = $page['ambientDetail']; @endphp
-                <div class="ambient-summary-left">
-                    <div class="detail-block-title">Resultados lum&iacute;nicos</div>
-                    <table class="metric-grid">
-                        <tr><td class="metric-label">Recinto asociado</td><td class="metric-value">{{ $detail['roomName'] }}</td></tr>
-                        <tr><td class="metric-label">Perfil de actividad</td><td class="metric-value">{{ $detail['activity'] ?? 'No especificada' }}</td></tr>
-                        <tr><td class="metric-label">&Aacute;rea del plano &uacute;til</td><td class="metric-value">{{ $formatNumber($detail['area'], 2, ' m²') }}</td></tr>
-                        <tr><td class="metric-label">Lux objetivo (Em) / calculados</td><td class="metric-value">{{ $formatNumber($detail['targetLux'], 0) }} / {{ $formatNumber($detail['avgLux'], 2) }}</td></tr>
-                        <tr><td class="metric-label">Emin / Emax</td><td class="metric-value">{{ $formatNumber($detail['minLux'], 0) }} / {{ $formatNumber($detail['maxLux'], 0) }} lx</td></tr>
-                        <tr><td class="metric-label">Uniformidad (Uo) / referencia</td><td class="metric-value">{{ $formatNumber($detail['uniformity'], 3) }} / {{ $formatNumber($detail['uniformityTarget'], 3) }}</td></tr>
-                        <tr><td class="metric-label">UGR m&aacute;x. admitido / calculado</td><td class="metric-value">{{ $formatNumber($detail['ugrLimit'], 0) }} / {{ $formatNumber($detail['ugr'], 2) }}</td></tr>
-                        <tr><td class="metric-label">L&uacute;menes req. / disponibles</td><td class="metric-value">{{ $formatNumber($detail['lumensRequired'], 0, ' lm') }} / {{ $formatNumber($detail['fixtureLumens'], 0, ' lm') }}</td></tr>
-                        <tr><td class="metric-label">Potencia total instalada</td><td class="metric-value">{{ $formatNumber($detail['totalPowerWatts'], 1, ' W') }}</td></tr>
-                        <tr>
-                            <td class="metric-label">Evaluaci&oacute;n general</td>
-                            <td class="metric-value" style="color:{{ $detail['complianceLabel'] === 'Cumple' ? '#16a34a' : '#dc2626' }};font-weight:bold;">
-                                {{ $detail['complianceLabel'] }}
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="ambient-summary-right">
-                    <div class="detail-block-title">Consumo y cobertura</div>
-                    <table class="metric-grid">
-                        <tr><td class="metric-label">Luminarias propuestas</td><td class="metric-value">{{ $formatNumber($detail['fixtureCount'], 0) }}</td></tr>
-                        <tr><td class="metric-label">Cant. exacta / redondeada</td><td class="metric-value">{{ $formatNumber($detail['exactQuantity'], 2) }} / {{ $formatNumber($detail['roundedQuantity'], 0) }}</td></tr>
-                        <tr><td class="metric-label">Cobertura</td><td class="metric-value">{{ $detail['coverage'] }}</td></tr>
-                    </table>
-                </div>
-                <div class="clear"></div>
-
-            {{-- Plano de situación de luminarias --}}
-            @elseif ($page['kind'] === 'ambient-plan')
-                @php
-                    $detail    = $page['ambientDetail'] ?? null;
-                    $planAsset = collect($pageAssets)->firstWhere('id', $detail['planAssetId'] ?? null) ?? collect($pageAssets)->first();
-                    $firstLuminaire       = is_array($detail['luminaires'][0] ?? null) ? $detail['luminaires'][0] : null;
-                    $photoAsset           = $firstLuminaire ? collect($pageAssets)->firstWhere('id', $firstLuminaire['productPhotoAssetId'] ?? null) : null;
-                    $logoAsset            = $firstLuminaire ? collect($pageAssets)->firstWhere('id', $firstLuminaire['brandLogoAssetId'] ?? null) : null;
-                    $lineDrawingAsset     = $firstLuminaire ? collect($pageAssets)->firstWhere('id', $firstLuminaire['lineDrawingAssetId'] ?? null) : null;
-                    $polarAsset           = $firstLuminaire ? collect($pageAssets)->firstWhere('id', $firstLuminaire['polarDiagramAssetId'] ?? null) : null;
-                    $situationVisualAssets = collect([$logoAsset, $photoAsset, $lineDrawingAsset, $polarAsset])->filter(fn($a) => is_array($a))->values();
-                @endphp
-                <div class="detail-block-title" style="margin-bottom:2mm;">Plano de situaci&oacute;n de luminarias</div>
-                @if ($detail && $firstLuminaire)
-                    <div class="situation-product-layout {{ $situationVisualAssets->isEmpty() ? 'no-media' : '' }}">
-                        <div class="situation-product-left">
-                            @if ($situationVisualAssets->isNotEmpty())
-                                <div class="situation-product-assets">
-                                    @foreach ($situationVisualAssets as $visualAsset)
-                                        <div class="situation-product-asset {{ $situationVisualAssets->count() <= 2 ? 'single' : '' }}">
-                                            {!! $renderAsset(is_array($visualAsset) ? $visualAsset : null) !!}
-                                        </div>
-                                    @endforeach
-                                    <div class="clear"></div>
-                                </div>
-                            @endif
-                            <table class="product-table">
-                                <tr><th>Fabricante</th><td>{{ $firstLuminaire['brand'] ?? '-' }}</td></tr>
-                                <tr><th>N&deg; de art&iacute;culo</th><td>{{ $firstLuminaire['articleNumber'] ?? '-' }}</td></tr>
-                                <tr><th>Nombre del art&iacute;culo</th><td>{{ $firstLuminaire['name'] ?? '-' }}</td></tr>
-                                <tr><th>L&aacute;mpara</th><td>{{ $firstLuminaire['name'] ?? '-' }}</td></tr>
-                            </table>
-                        </div>
-                        <div class="situation-product-right">
-                            <table class="product-table">
-                                <tr><th>P</th><td>{{ $formatNumber($firstLuminaire['powerWatts'] ?? null, 1, ' W') }}</td></tr>
-                                <tr><th>&Phi;<sub>Luminaria</sub></th><td>{{ $formatNumber($firstLuminaire['lumens'] ?? null, 0, ' lm') }}</td></tr>
-                            </table>
-                            <div class="ambient-asset-container" style="height:70mm;">
-                                {!! $renderAsset(is_array($planAsset) ? $planAsset : null) !!}
-                            </div>
-                        </div>
-                        <div class="clear"></div>
-                    </div>
-                    <div class="fixture-position-title">{{ count($detail['fixturePositions'] ?? []) }} x {{ $firstLuminaire['brand'] ?? '-' }} {{ $firstLuminaire['name'] ?? '-' }}</div>
-                    <table class="luminaire-table">
-                        <thead>
-                            <tr>
-                                <th>Tipo</th>
-                                <th class="number">X</th>
-                                <th class="number">Y</th>
-                                <th class="number">Altura de montaje</th>
-                                <th class="number">Luminaria</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($detail['fixturePositions'] ?? [] as $position)
-                                <tr>
-                                    <td>{{ $position['name'] ?? 'Luminaria' }}</td>
-                                    <td class="number">{{ $formatNumber($position['x'] ?? null, 3, ' m') }}</td>
-                                    <td class="number">{{ $formatNumber($position['y'] ?? null, 3, ' m') }}</td>
-                                    <td class="number">{{ $formatNumber($position['mountingHeight'] ?? null, 3, ' m') }}</td>
-                                    <td class="number"><span class="calculation-index">{{ $loop->iteration }}</span></td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="5">No hay posiciones de luminarias registradas.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                @else
-                    <div class="ambient-empty-note">
-                        Ambiente sin luminarias asignadas. Se mantiene en el reporte como ambiente independiente para resultados, verificaci&oacute;n y objeto de c&aacute;lculo.
-                    </div>
-                    <div class="ambient-asset-container">
-                        {!! $renderAsset(is_array($planAsset) ? $planAsset : null) !!}
-                    </div>
-                @endif
-
-            {{-- Luminarias por ambiente --}}
-            @elseif ($page['kind'] === 'ambient-luminaires' && !empty($page['ambientDetail']))
-                {!! $renderLuminaireTable($page['ambientDetail']['luminaires'] ?? [], false) !!}
-
-            {{-- Resultados por ambiente --}}
-            @elseif ($page['kind'] === 'ambient-results' && !empty($page['ambientDetail']))
-                {!! $renderAmbientResultsTable($page['ambientDetail']) !!}
-
-            {{-- Fichas de productos por ambiente --}}
-            @elseif ($page['kind'] === 'ambient-products' && !empty($page['ambientDetail']))
-                <div class="detail-block-title" style="margin-bottom:2mm;">Productos usados en el ambiente</div>
-                {!! $renderAmbientProductCards($page['ambientDetail'], $pageAssets) !!}
-
-            {{-- Objetos de cálculo por ambiente --}}
-            @elseif ($page['kind'] === 'ambient-calculation-object' && !empty($page['ambientDetail']))
-                @php $detail = $page['ambientDetail']; @endphp
-                <div class="detail-block-title" style="margin-bottom:2mm;">Superficies de cálculo</div>
-                <table class="luminaire-table calculation-table">
-                    <thead>
-                        <tr>
-                            <th>Propiedades</th>
-                            <th class="number">E (nominal)</th>
-                            <th class="number">Emin</th>
-                            <th class="number">Emax</th>
-                            <th class="number">Uo (g1) (nominal)</th>
-                            <th class="number">g2</th>
-                            <th class="number">Índice</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="calculation-properties">
-                                <strong>Plano &uacute;til ({{ $detail['ambientName'] }})</strong><br>
-                                <span class="calculation-context">Recinto: {{ $detail['roomName'] ?? 'Sin recinto' }}</span><br>
-                                <span class="calculation-context">
-                                    Iluminancia perpendicular (Adaptativamente)<br>
-                                    Altura: {{ $formatNumber($detail['usefulPlaneHeight'] ?? null, 3, ' m') }},
-                                    Zona marginal: {{ $formatNumber($detail['marginalZone'] ?? null, 3, ' m') }}
-                                </span>
-                            </td>
-                            <td class="number">{{ $formatNumber($detail['avgLux'], 2) }} lx ({{ $formatNumber($detail['targetLux'], 0) }} lx)</td>
-                            <td class="number">{{ $formatNumber($detail['minLux'], 2) }} lx</td>
-                            <td class="number">{{ $formatNumber($detail['maxLux'], 2) }} lx</td>
-                            <td class="number">{{ $formatNumber($detail['uniformity'], 3) }} ({{ $formatNumber($detail['uniformityTarget'], 3) }})</td>
-                            <td class="number">{{ $formatNumber($detail['g2'] ?? null, 3) }}</td>
-                            <td class="number">{{ $detail['calculationIndex'] ?? '-' }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-            {{-- Plano útil del ambiente --}}
-            @elseif ($page['kind'] === 'ambient-useful-plane')
-                <div class="ambient-asset-container">
-                    {!! $renderAsset(collect($pageAssets)->first()) !!}
-                </div>
-
-            {{-- Glosario --}}
-            @elseif ($page['kind'] === 'glossary')
-                <table class="glossary-grid">
-                    <tr>
-                        <td class="glossary-term">Em (lx)</td>
-                        <td class="glossary-definition">Iluminancia media mantenida en la superficie de referencia (plano útil). Representa el valor promedio de lux calculado sobre toda el área, considerando la depreciación de las luminarias.</td>
-                    </tr>
-                    <tr>
-                        <td class="glossary-term">Emin / Emax</td>
-                        <td class="glossary-definition">Iluminancia mínima y máxima calculada respectivamente en la grilla del plano de evaluación. Identifica los puntos más oscuros y brillantes del local.</td>
-                    </tr>
-                    <tr>
-                        <td class="glossary-term">Uo (Uniformidad)</td>
-                        <td class="glossary-definition">Uniformidad general de iluminancias (Uo = Emin / Em). Evalúa si la luz se distribuye de forma pareja o si existen caídas bruscas. La normativa exige valores referenciales según perfil del local.</td>
-                    </tr>
-                    <tr>
-                        <td class="glossary-term">UGR</td>
-                        <td class="glossary-definition">Unified Glare Rating. Índice para prever la probabilidad de que una instalación de iluminación interior produzca un deslumbramiento molesto en la visión de los usuarios (valores menores indican menor deslumbramiento).</td>
-                    </tr>
-                    <tr>
-                        <td class="glossary-term">Flujo luminoso (lm)</td>
-                        <td class="glossary-definition">Cantidad total de luz emitida por la luminaria en todas las direcciones. Dato base para estimar la cantidad de luminarias necesarias para alcanzar el E objetivo.</td>
-                    </tr>
-                    <tr>
-                        <td class="glossary-term">Plano útil</td>
-                        <td class="glossary-definition">Superficie imaginaria sobre la cual se espera tener la iluminación requerida para desempeñar una actividad. Generalmente se ajusta entre 0.75m a 0.85m del suelo.</td>
-                    </tr>
-                </table>
-
-            {{-- Fallback para tipos no reconocidos --}}
-            @else
-                <div class="placeholder-box">
-                    @forelse ($page['notes'] ?? [] as $note)
-                        <div>{{ $note }}</div>
-                    @empty
-                        <div>Página reservada para contenido técnico del reporte.</div>
-                    @endforelse
-                </div>
+                {!! $renderFooter($page['pageNumber']) !!}
             @endif
-
-        </div>
-
-        {!! $renderFooter($page['pageNumber']) !!}
-    @endif
-</section>
-@endforeach
-
+        </section>
+    @endforeach
 </body>
 </html>
