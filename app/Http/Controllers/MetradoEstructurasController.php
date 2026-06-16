@@ -26,33 +26,40 @@ class MetradoEstructurasController extends Controller
     private const TABLE_CISTERNA = 'metrado_estructura_cisterna';
 
     private const TABLE_RESUMEN = 'metrado_estructura_resumen';
+public function index(CostoProject $costoProject): Response
+{
+    $this->authorizeProject($costoProject);
+    $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
 
-    public function index(CostoProject $costoProject): Response
-    {
-        $this->authorizeProject($costoProject);
-        $this->validateModuleEnabled($costoProject, self::MODULE_TYPE);
+    $config = $this->getOrCreateModularConfig($costoProject);
+    $modulosData = [];
 
-        $config = $this->getOrCreateModularConfig($costoProject);
-        $modulosData = [];
-
-        for ($i = 1; $i <= $config->cantidad_modulos; $i++) {
-            $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
-        }
-
-        return Inertia::render('costos/metrados/EstructurasIndex', [
-            'project' => [
-                'id' => $costoProject->id,
-                'nombre' => $costoProject->nombre,
-            ],
-            'titulo' => 'Metrado Estructuras',
-            'baseURL' => "/costos/{$costoProject->id}/metrado-estructuras",
-            'config' => (array) $config,
-            'modulos' => $modulosData,
-            'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
-            'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
-            'resumen' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
-        ]);
+    for ($i = 1; $i <= $config->cantidad_modulos; $i++) {
+        $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
     }
+
+    return Inertia::render('costos/metrados/EstructurasIndex', [
+        'project' => [
+            'id' => $costoProject->id,
+            'nombre' => $costoProject->nombre,
+            // 👇 AGREGAR ESTOS CAMPOS
+            'codigo_cui' => $costoProject->codigo_cui,
+            'codigo_local' => $costoProject->codigo_local,
+            'unidad_ejecutora' => $costoProject->unidad_ejecutora,
+            'propietario' => $costoProject->unidad_ejecutora,
+            'codigos_modulares' => $costoProject->codigos_modulares,
+            'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+            'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+        ],
+        'titulo' => 'Metrado Estructuras',
+        'baseURL' => "/costos/{$costoProject->id}/metrado-estructuras",
+        'config' => (array) $config,
+        'modulos' => $modulosData,
+        'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
+        'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
+        'resumen' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
+    ]);
+}
 
     public function getConfig(CostoProject $costoProject): JsonResponse
     {

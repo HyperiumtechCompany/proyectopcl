@@ -22,14 +22,21 @@ class MetradoComunicacionesController extends Controller
         $this->authorizeProject($costoProject);
         $this->validateModuleEnabled($costoProject, 'metrado_comunicaciones');
 
-        return Inertia::render('costos/metrados/ComunicacionesIndex', [
-            'project' => [
-                'id' => $costoProject->id,
-                'nombre' => $costoProject->nombre,
-            ],
-            'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
-            'resumen' => $this->queryRows($costoProject, self::TABLE_RESUMEN),
-        ]);
+     return Inertia::render('costos/metrados/ComunicacionesIndex', [
+    'project' => [
+        'id' => $costoProject->id,
+        'nombre' => $costoProject->nombre,
+        'codigo_cui' => $costoProject->codigo_cui,
+        'codigo_local' => $costoProject->codigo_local,
+        'unidad_ejecutora' => $costoProject->unidad_ejecutora,
+        'propietario' => $costoProject->unidad_ejecutora,
+        'codigos_modulares' => $costoProject->codigos_modulares,
+        'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+        'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+    ],
+    'metrado' => $this->queryRows($costoProject, self::TABLE_METRADO),
+    'resumen' => $this->queryRows($costoProject, self::TABLE_RESUMEN),
+]);
     }
 
     public function updateMetrado(CostoProject $costoProject, Request $request): JsonResponse

@@ -596,46 +596,46 @@ const generarWordParaSeccion = async (
     // Crear ImageRuns solo si hay datos
     const logoImageRun = logoDataUrl
         ? new ImageRun({
-              data: base64ToUint8Array(
-                  logoDataUrl.split(',').length > 1
-                      ? logoDataUrl.split(',')[1]
-                      : logoDataUrl,
-              ),
-              transformation: { width: 70, height: 70 },
-          } as any)
+            data: base64ToUint8Array(
+                logoDataUrl.split(',').length > 1
+                    ? logoDataUrl.split(',')[1]
+                    : logoDataUrl,
+            ),
+            transformation: { width: 70, height: 70 },
+        } as any)
         : null;
 
     const escudoImageRun = escudoDataUrl
         ? new ImageRun({
-              data: base64ToUint8Array(
-                  escudoDataUrl.split(',').length > 1
-                      ? escudoDataUrl.split(',')[1]
-                      : escudoDataUrl,
-              ),
-              transformation: { width: 70, height: 70 },
-          } as any)
+            data: base64ToUint8Array(
+                escudoDataUrl.split(',').length > 1
+                    ? escudoDataUrl.split(',')[1]
+                    : escudoDataUrl,
+            ),
+            transformation: { width: 70, height: 70 },
+        } as any)
         : null;
 
     const principalImageRun = principalDataUrl
         ? new ImageRun({
-              data: base64ToUint8Array(
-                  principalDataUrl.split(',').length > 1
-                      ? principalDataUrl.split(',')[1]
-                      : principalDataUrl,
-              ),
-              transformation: { width: 300, height: 400 },
-          } as any)
+            data: base64ToUint8Array(
+                principalDataUrl.split(',').length > 1
+                    ? principalDataUrl.split(',')[1]
+                    : principalDataUrl,
+            ),
+            transformation: { width: 300, height: 400 },
+        } as any)
         : null;
 
     const firmaImageRun = firmaDataUrl
         ? new ImageRun({
-              data: base64ToUint8Array(
-                  firmaDataUrl.split(',').length > 1
-                      ? firmaDataUrl.split(',')[1]
-                      : firmaDataUrl,
-              ),
-              transformation: { width: 70, height: 70 },
-          } as any)
+            data: base64ToUint8Array(
+                firmaDataUrl.split(',').length > 1
+                    ? firmaDataUrl.split(',')[1]
+                    : firmaDataUrl,
+            ),
+            transformation: { width: 70, height: 70 },
+        } as any)
         : null;
 
     // Header
@@ -651,23 +651,19 @@ const generarWordParaSeccion = async (
                                 width: { size: 15, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
                                 children: logoImageRun
-                                    ? [
-                                          new Paragraph({
-                                              alignment: AlignmentType.LEFT,
-                                              children: [logoImageRun],
-                                          }),
-                                      ]
+                                    ? [new Paragraph({ alignment: AlignmentType.LEFT, children: [logoImageRun] })]
                                     : [new Paragraph({ text: '' })],
                             }),
                             new TableCell({
                                 width: { size: 70, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
                                 children: [
+                                    // ✅ HEADER: Título del proyecto
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
                                         children: [
                                             new TextRun({
-                                                text: 'MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N° 358 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA- PROVINCIA DE UCAYALI – DEPARTAMENTO DE LORETO',
+                                                text: proyecto?.nombre?.toUpperCase() || 'PROYECTO SIN NOMBRE',
                                                 bold: true,
                                                 size: 16,
                                                 color: '#000000',
@@ -675,11 +671,12 @@ const generarWordParaSeccion = async (
                                             }),
                                         ],
                                     }),
+                                    // ✅ HEADER: CUI, Modular, Local
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
                                         children: [
                                             new TextRun({
-                                                text: 'CUI: 2484411; CÓDIGO MODULAR: 0651216; CÓDIGO LOCAL: 390867',
+                                                text: `CUI: ${proyecto?.codigo_cui || 'SIN CUI'}; CÓDIGO MODULAR: ${proyecto?.codigos_modulares?.primaria || proyecto?.codigos_modulares || 'SIN MODULAR'}; CÓDIGO LOCAL: ${proyecto?.codigo_local || 'SIN LOCAL'}`,
                                                 bold: true,
                                                 size: 16,
                                                 color: '#000000',
@@ -687,11 +684,12 @@ const generarWordParaSeccion = async (
                                             }),
                                         ],
                                     }),
+                                    // ✅ HEADER: I.E. y Unidad Ejecutora
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
                                         children: [
                                             new TextRun({
-                                                text: 'I.E.I:358; UNIDAD EJECUTORA: MUNICIPALIDAD PROVINCIAL DE UCAYALI',
+                                                text: `I.E.I: ${proyecto?.ie || 'SIN IE'}; UNIDAD EJECUTORA: ${proyecto?.unidad_ejecutora || 'SIN UNIDAD EJECUTORA'}`,
                                                 bold: true,
                                                 size: 16,
                                                 color: '#000000',
@@ -705,12 +703,7 @@ const generarWordParaSeccion = async (
                                 width: { size: 15, type: WidthType.PERCENTAGE },
                                 borders: sinBordes(),
                                 children: escudoImageRun
-                                    ? [
-                                          new Paragraph({
-                                              alignment: AlignmentType.RIGHT,
-                                              children: [escudoImageRun],
-                                          }),
-                                      ]
+                                    ? [new Paragraph({ alignment: AlignmentType.RIGHT, children: [escudoImageRun] })]
                                     : [new Paragraph({ text: '' })],
                             }),
                         ],
@@ -736,9 +729,9 @@ const generarWordParaSeccion = async (
         children: [
             firmaImageRun
                 ? new Paragraph({
-                      alignment: AlignmentType.LEFT,
-                      children: [firmaImageRun],
-                  })
+                    alignment: AlignmentType.LEFT,
+                    children: [firmaImageRun],
+                })
                 : new Paragraph({ text: '' }),
             new Paragraph({
                 alignment: AlignmentType.RIGHT,
@@ -799,7 +792,7 @@ const generarWordParaSeccion = async (
         ],
     });
 
-    // Página de portada
+    // ✅ DATOS DINÁMICOS DEL PROYECTO
     const coverPage = [
         new Paragraph({
             children: [
@@ -827,6 +820,7 @@ const generarWordParaSeccion = async (
             },
             spacing: { after: 400 },
         }),
+        // ✅ PROYECTO - DINÁMICO
         new Paragraph({
             children: [
                 new TextRun({
@@ -838,7 +832,7 @@ const generarWordParaSeccion = async (
                 }),
                 new TextRun({ text: '\t', font: 'Arial', size: 28 }),
                 new TextRun({
-                    text: 'MEJORAMIENTO DE LOS SERVICIOS DE EDUCACION INICIAL DE LA IEI N°558 CIUDAD DE CONTAMANA DEL DISTRITO DE CONTAMANA-PROVINCIA DE UCAYALI - DEPARTAMENTO DE LORETO',
+                    text: proyecto?.nombre || 'PROYECTO SIN NOMBRE',
                     font: 'Arial',
                     size: 28,
                     color: '#000000',
@@ -847,6 +841,7 @@ const generarWordParaSeccion = async (
             spacing: { after: 400, line: 360 },
             alignment: AlignmentType.JUSTIFIED,
         }),
+        // ✅ TABLA CON DATOS DINÁMICOS
         new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             borders: sinBordes(),
@@ -857,20 +852,14 @@ const generarWordParaSeccion = async (
                             width: { size: 60, type: WidthType.PERCENTAGE },
                             verticalAlign: VerticalAlign.CENTER,
                             children: [
-                                crearParrafoDetalle(
-                                    'CÓDIGO UNIFICADO:',
-                                    '2484411',
-                                ),
-                                crearParrafoDetalle(
-                                    'CÓDIGO MODULAR:',
-                                    '0561216',
-                                ),
-                                crearParrafoDetalle('I.E.I. N°:', '558'),
-                                crearParrafoDetalle('CÓDIGO LOCAL:', '390867'),
-                                crearParrafoDetalle('DEPARTAMENTO:', 'LORETO'),
-                                crearParrafoDetalle('PROVINCIA:', 'UCAYALI'),
-                                crearParrafoDetalle('DISTRITO:', 'CONTAMANA'),
-                                crearParrafoDetalle('C.P.:', 'CONTAMANA'),
+                                crearParrafoDetalle('CÓDIGO UNIFICADO (CUI):', proyecto?.codigo_cui || 'SIN CUI'),
+                                crearParrafoDetalle('CÓDIGO MODULAR:', proyecto?.codigos_modulares?.primaria || proyecto?.codigos_modulares || 'SIN MODULAR'),
+                                crearParrafoDetalle('I.E.I. N°:', proyecto?.ie || 'SIN IE'),
+                                crearParrafoDetalle('CÓDIGO LOCAL:', proyecto?.codigo_local || 'SIN LOCAL'),
+                                crearParrafoDetalle('DEPARTAMENTO:', proyecto?.departamento_nombre || 'SIN DEPARTAMENTO'),
+                                crearParrafoDetalle('PROVINCIA:', proyecto?.provincia_nombre || 'SIN PROVINCIA'),
+                                crearParrafoDetalle('DISTRITO:', proyecto?.distrito_nombre || 'SIN DISTRITO'),
+                                crearParrafoDetalle('CENTRO POBLADO:', proyecto?.centro_poblado || 'SIN CENTRO POBLADO'),
                             ],
                             borders: sinBordes(),
                         }),
@@ -879,11 +868,11 @@ const generarWordParaSeccion = async (
                             verticalAlign: VerticalAlign.CENTER,
                             children: principalImageRun
                                 ? [
-                                      new Paragraph({
-                                          alignment: AlignmentType.CENTER,
-                                          children: [principalImageRun],
-                                      }),
-                                  ]
+                                    new Paragraph({
+                                        alignment: AlignmentType.CENTER,
+                                        children: [principalImageRun],
+                                    }),
+                                ]
                                 : [new Paragraph({ text: '' })],
                             borders: sinBordes(),
                         }),
@@ -1162,9 +1151,9 @@ const WordExportModal: React.FC<WordExportProps> = ({
                             Imágenes para el documento:
                         </p>
                         {proyecto?.plantilla_logo_izq_url ||
-                        proyecto?.plantilla_logo_der_url ||
-                        proyecto?.portada_logo_center_url ||
-                        proyecto?.plantilla_firma_url ? (
+                            proyecto?.plantilla_logo_der_url ||
+                            proyecto?.portada_logo_center_url ||
+                            proyecto?.plantilla_firma_url ? (
                             <p className="mb-2 rounded-md bg-green-50 p-2 text-xs text-green-600 dark:bg-green-900/20 dark:text-green-400">
                                 ✅ Se usarán las imágenes configuradas en el
                                 proyecto. Suba archivos solo si desea
@@ -1255,11 +1244,10 @@ const WordExportModal: React.FC<WordExportProps> = ({
                     <button
                         onClick={handleGenerateWord}
                         disabled={generatingWord}
-                        className={`rounded-md px-4 py-2 text-sm font-medium shadow-sm transition-all duration-150 ${
-                            generatingWord
-                                ? 'cursor-not-allowed bg-gray-400 text-white opacity-50 dark:bg-gray-600 dark:text-gray-200'
-                                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-600'
-                        }`}
+                        className={`rounded-md px-4 py-2 text-sm font-medium shadow-sm transition-all duration-150 ${generatingWord
+                            ? 'cursor-not-allowed bg-gray-400 text-white opacity-50 dark:bg-gray-600 dark:text-gray-200'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-600'
+                            }`}
                     >
                         {generatingWord ? (
                             <span className="flex items-center gap-2">

@@ -145,9 +145,6 @@ function calcularFinLaborable(
         }
     });
 
-    // El día inicial cuenta como día 1.
-    // Si el día inicial no es laborable, se avanza al siguiente laborable
-    // y ese pasa a ser el día 1.
     let fechaActual = new Date(inicio);
     let diasContados = 0;
 
@@ -184,7 +181,7 @@ const CronogramaIndex = ({
     const isParsingPredRef = useRef(false);
     const ganttInitialized = useRef(false);
     const eventIdsRef = useRef<any[]>([]);
-    const allColumnsRef = useRef<any[]>([]);
+
 
     // ── UI STATE ──────────────────────────────────────────────────────────────
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -202,16 +199,6 @@ const CronogramaIndex = ({
 
     const displayName = project_name || `Proyecto ${project}`;
 
-    const [showColumnModal, setShowColumnModal] = useState(false);
-    const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
-        const saved = localStorage.getItem('gantt_visible_columns');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch { return {}; }
-        }
-        return {};
-    });
 
     // ─────────────────────────────────────────────────────────────────────────
     // KPIs — solo tareas hoja
@@ -236,26 +223,6 @@ const CronogramaIndex = ({
         });
     }, []);
 
-    const updateColumnVisibility = useCallback((columnName: string, visible: boolean) => {
-        setColumnVisibility(prev => {
-            const newVisibility = { ...prev, [columnName]: visible };
-            localStorage.setItem('gantt_visible_columns', JSON.stringify(newVisibility));
-            return newVisibility;
-        });
-    }, []);
-
-
-    useEffect(() => {
-        if (!ganttInitialized.current || allColumnsRef.current.length === 0) return;
-
-        gantt.config.columns = allColumnsRef.current.filter((col: any) => {
-            if (!col) return false;
-            if (col.name === 'add' || col.name === 'rownum') return true;
-            return columnVisibility[col.name] !== false;
-        });
-
-        gantt.render();
-    }, [columnVisibility]);
     // ─────────────────────────────────────────────────────────────────────────
     // PROPAGAR COSTO AL PADRE (suma de hijos, recursivo hacia arriba)
     // ─────────────────────────────────────────────────────────────────────────
@@ -549,7 +516,7 @@ const CronogramaIndex = ({
                 if (settings.projectStart && settings.projectDuration && settings.projectDuration > 0) {
                     const duracion = Number(settings.projectDuration);
                     if (!isNaN(duracion) && duracion > 0) {
-                        // ✅ DESPUÉS — agregar 1 día de margen visual a end_date pero NO al marker
+
                         limitDate = calcularFinLaborable(
                             settings.projectStart,
                             duracion,
@@ -654,7 +621,6 @@ const CronogramaIndex = ({
 
                 gantt.render();
                 refreshKPIs();
-
                 setProjectMarkers(realStartDate, limitDate);
             }
 
@@ -711,7 +677,6 @@ const CronogramaIndex = ({
             tooltip: true,
             marker: true,
         });
-
         gantt.config.date_format = '%Y-%m-%d %H:%i';
         gantt.config.xml_date = '%Y-%m-%d %H:%i';
         gantt.config.row_height = 32;
@@ -782,18 +747,19 @@ const CronogramaIndex = ({
             gantt.setWorkTime({ day: 6, hours: false });
             gantt.setWorkTime({ day: 0, hours: false });
         }
-
         gantt.config.layout = {
             css: 'gantt_container',
             cols: [
                 {
-                    width: 700, min_width: 50, gravity: 1,
+                    width: 700,
+                    min_width: 300,  // ← aumentado para mejor UX
+                    gravity: 1,
                     rows: [
                         { view: 'grid', scrollX: 'gridScroll', scrollable: true, scrollY: 'vScroll' },
                         { view: 'scrollbar', id: 'gridScroll' },
                     ],
                 },
-                { view: 'resizer', mode: 'resize', width: 10 },
+                // RESIZER ELIMINADO - grid_resize se encarga
                 {
                     gravity: 2,
                     rows: [
@@ -805,18 +771,16 @@ const CronogramaIndex = ({
             ],
         };
 
-
         gantt.config.scales = [
             {
                 unit: "month",
                 step: 1,
-                format: "%F, %Y" // Esto mostrará "Abril, 2026"
+                format: "%F, %Y"
             },
             {
                 unit: "day",
                 step: 1,
-                format: "%j" // %j muestra el número del día sin ceros a la izquierda (1, 2, 3...)
-                // O puedes usar "%d" para (01, 02, 03...)
+                format: "%j"
             }
         ];
 
@@ -824,7 +788,7 @@ const CronogramaIndex = ({
             text: { type: 'text', map_to: 'text' },
             date: { type: 'date', map_to: 'start_date' },
             endDate: { type: 'date', map_to: 'end_date' },
-            duration: { type: 'text', map_to: 'duration' }, // ← cambiar number por text
+            duration: { type: 'text', map_to: 'duration' },
             cost: { type: 'text', map_to: 'cost' },
             progress: { type: 'number', map_to: 'progress', min: 0, max: 1 },
             owner: { type: 'text', map_to: 'owner' },
@@ -1008,7 +972,7 @@ const CronogramaIndex = ({
 
         on('onAfterTaskUpdate', (id: any, item: any) => {
 
-            // ✅ Duración editada por usuario → recalcular end_date en días CALENDARIO
+            //  Duración editada por usuario → recalcular end_date en días CALENDARIO
             if (!isUpdatingRef.current && !isParsingPredRef.current) {
                 let task: any;
                 try { task = gantt.getTask(id); } catch { /* ok */ }
@@ -1110,6 +1074,11 @@ const CronogramaIndex = ({
 
         gantt.i18n.setLocale("es");
         gantt.init(ganttContainer.current);
+        if (!ganttContainer.current) {
+            console.warn('Contenedor no disponible para pan');
+            return;
+        }
+
 
 
         ganttInitialized.current = true;
@@ -1173,46 +1142,84 @@ const CronogramaIndex = ({
                 ];
             }
         };
+        // ─────────────────────────────────────────────────────────────────────────────
+        // PAN - ARRASTRAR EN EL DIAGRAMA (4 DIRECCIONES)
+        // ─────────────────────────────────────────────────────────────────────────────
+        let isDraggingGantt = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeftStart = 0;
+        let scrollTopStart = 0;
 
-        const handleWheelZoom = (e: WheelEvent) => {
+        const onMouseDown = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+
+            // Verificar si el clic está en la tabla izquierda (NO activar)
+            if (target.closest('.gantt_grid, .gantt_grid_head, .gantt_grid_data, .gantt_row')) {
+                return;
+            }
+
+            // Activar en cualquier parte del diagrama derecho
+            if (!target.closest('.gantt_task, .gantt_task_bg, .gantt_data_area, .gantt_chart, .gantt_task_row')) {
+                return;
+            }
+
+            isDraggingGantt = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            // Contenedor horizontal (mueve barras izquierda/derecha)
+            const horizontalScroller = document.querySelector('.gantt_data_area') as HTMLElement;
+            if (horizontalScroller) {
+                scrollLeftStart = horizontalScroller.scrollLeft;
+            }
+
+            // Contenedor vertical (mueve arriba/abajo)
+            const verticalScroller = document.querySelector('.gantt_grid_data') as HTMLElement;
+            if (verticalScroller) {
+                scrollTopStart = verticalScroller.scrollTop;
+            }
+
             e.preventDefault();
-
-            const startDate = gantt.config.start_date;
-            const endDate = gantt.config.end_date;
-
-            if (!startDate || !endDate) return;
-
-            const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-            const centerDays = totalDays / 2;
-
-            const delta = e.deltaY > 0 ? 1.15 : 0.85;
-            let newTotalDays = totalDays * delta;
-            newTotalDays = Math.min(Math.max(newTotalDays, 14), 365);
-
-            const centerDate = new Date(startDate);
-            centerDate.setDate(startDate.getDate() + centerDays);
-
-            const newStartDate = new Date(centerDate);
-            newStartDate.setDate(centerDate.getDate() - Math.floor(newTotalDays / 2));
-
-            const newEndDate = new Date(centerDate);
-            newEndDate.setDate(centerDate.getDate() + Math.ceil(newTotalDays / 2));
-
-            gantt.config.start_date = newStartDate;
-            gantt.config.end_date = newEndDate;
-
-
-            (gantt.config as any).scales = getScaleByDays(newTotalDays);
-
-            gantt.render();
+            document.body.style.cursor = 'grabbing';
+            document.body.style.userSelect = 'none';
         };
 
-        if (ganttContainerElement) {
-            ganttContainerElement.addEventListener('wheel', handleWheelZoom, { passive: false });
-            (gantt as any).__zoomHandler = handleWheelZoom;
-        }
+        const onMouseMove = (e: MouseEvent) => {
+            if (!isDraggingGantt) return;
 
-        // ── Cargar datos ──────────────────────────────────────────────────────
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            const horizontalScroller = document.querySelector('.gantt_data_area') as HTMLElement;
+            const verticalScroller = document.querySelector('.gantt_grid_data') as HTMLElement;
+
+            if (horizontalScroller) {
+                horizontalScroller.scrollLeft = scrollLeftStart - dx;
+            }
+
+            if (verticalScroller) {
+                verticalScroller.scrollTop = scrollTopStart - dy;
+            }
+
+            e.preventDefault();
+        };
+
+        const onMouseUp = () => {
+            isDraggingGantt = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        (gantt as any).__panHandlers = {
+            mousedown: onMouseDown,
+            mousemove: onMouseMove,
+            mouseup: onMouseUp
+        };
         // ── Cargar datos ──────────────────────────────────────────────────────
         let rawData: { tasks: any[]; links: any[] };
         if (initialData?.tasks?.length || initialData?.links?.length) {
@@ -1223,9 +1230,11 @@ const CronogramaIndex = ({
             rawData = { tasks: [], links: [] };
         }
 
+
         const fmt = gantt.date.date_to_str('%Y-%m-%d %H:%i');
 
-        // ✅ LIMPIAR TAREAS ANTES DE CARGAR
+        //  LIMPIAR TAREAS ANTES DE CARGAR
+
         const cleanTasks = rawData.tasks.map((task: any) => {
             // Forzar duración positiva (mínimo 1, máximo 365)
             let cleanDuration = task.duration;
@@ -1253,7 +1262,7 @@ const CronogramaIndex = ({
                 $open: true,
                 start_date: fmt(cleanStartDate),
                 duration: cleanDuration
-                // ✅ NO incluir end_date
+                //  NO incluir end_date
             };
         });
 
@@ -1282,8 +1291,6 @@ const CronogramaIndex = ({
         }
 
         gantt.render();
-
-        gantt.render();
         updateCountersAndItems();
         markCriticalTasks();
         refreshKPIs();
@@ -1298,22 +1305,22 @@ const CronogramaIndex = ({
 
         //  LIMPIEZA AL DESMONTAR EL COMPONENTE
         return () => {
-            // 1. Limpiar evento de zoom
-            if (ganttContainer.current && (gantt as any).__zoomHandler) {
-                ganttContainer.current.removeEventListener('wheel', (gantt as any).__zoomHandler);
-                delete (gantt as any).__zoomHandler;
+            // Limpiar eventos de pan
+            if ((gantt as any).__panHandlers) {
+                document.removeEventListener('mousedown', (gantt as any).__panHandlers.mousedown);
+                document.removeEventListener('mousemove', (gantt as any).__panHandlers.mousemove);
+                document.removeEventListener('mouseup', (gantt as any).__panHandlers.mouseup);
+                delete (gantt as any).__panHandlers;
             }
-            // 2. Limpiar todos los eventos registrados
+
+            // Resto de limpieza
             eventIdsRef.current.forEach((evtId) => {
                 try { gantt.detachEvent(evtId); } catch { /* ok */ }
             });
             eventIdsRef.current = [];
-            // 3. Marcar como no inicializado
             ganttInitialized.current = false;
-            // 4. Limpiar el Gantt
             gantt.clearAll();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialData, partidasBase]);
 
 
@@ -1498,9 +1505,7 @@ const CronogramaIndex = ({
                                 <span>Ajustes</span>
                             </button>
 
-                            <button onClick={() => setShowColumnModal(true)} className="pcl-btn pcl-btn--ghost">
-                                📋 Columnas
-                            </button>
+
                         </div>
 
                         <button onClick={handleSave} disabled={saving} className="pcl-btn pcl-btn--primary pcl-btn--save">
@@ -1524,67 +1529,10 @@ const CronogramaIndex = ({
                 <ProjectSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onApply={handleApplySettings} />
             </div>
 
-            {/* MODAL DE COLUMNAS */}
-            {showColumnModal && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center" onClick={() => setShowColumnModal(false)}>
-                    <div className="bg-white rounded-xl p-5 min-w-[280px]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-base font-bold mb-4 text-gray-800">📋 Configurar Columnas</h3>
-                        <div className="space-y-2 mb-5 max-h-[400px] overflow-y-auto">
-                            <label className="flex justify-between items-center cursor-pointer py-1">
-                                <span className="text-sm text-gray-700">#</span>
-                                <span className="text-gray-400 text-xs">(siempre visible)</span>
-                            </label>
-                            {[
-                                { name: 'wbs_item', label: 'ÍTEM' },
-                                { name: 'text', label: 'NOMBRE DE TAREA' },
-                                { name: 'duration', label: 'DÍAS' },
-                                { name: 'start_date', label: 'INICIO' },
-                                { name: 'end_date', label: 'FIN' },
-                                { name: 'predecessors', label: 'PREDECESORAS' },
-                                { name: 'cost', label: 'COSTO PARCIAL' },
-                                { name: 'progress', label: '%' },
-                                { name: 'owner', label: 'RESP.' },
-                            ].map((col) => (
-                                <label key={col.name} className="flex justify-between items-center cursor-pointer py-1">
-                                    <span className="text-sm text-gray-700">{col.label}</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={columnVisibility[col.name] !== false}
-                                        onChange={(e) => {
-
-                                            const newVisibility = { ...columnVisibility, [col.name]: e.target.checked };
-                                            setColumnVisibility(newVisibility);
-                                            localStorage.setItem('gantt_visible_columns', JSON.stringify(newVisibility));
-
-
-                                            const allColumns = gantt.config.columns;
-                                            const visibleColumns = allColumns.filter((c: any) => {
-                                                if (!c) return false;
-                                                if (c.name === 'add' || c.name === 'rownum') return true;
-                                                return newVisibility[c.name] !== false;
-                                            });
-                                            gantt.config.columns = visibleColumns;
-                                            gantt.render();
-                                            showToast(`${col.label} ${e.target.checked ? 'mostrada' : 'ocultada'}`, 'info');
-                                        }}
-                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                </label>
-                            ))}
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                            <button
-                                onClick={() => setShowColumnModal(false)}
-                                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300 transition-colors"
-                            >
-                                Cerrar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </AppLayout>
     );
+
 };
+
 
 export default CronogramaIndex;     

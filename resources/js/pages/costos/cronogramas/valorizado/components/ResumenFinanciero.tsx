@@ -36,7 +36,6 @@ const ResumenFinanciero: React.FC<Props> = ({
     const maxMensual = Math.max(...curvaSData.map(d => d.mensual), 1);
     const maxAcumulado = 100; // Porcentaje máximo siempre 100%
 
-    // Calcular puntos para la curva suavizada (bezier)
     const getBezierPoints = () => {
         if (curvaSData.length === 0) return '';
         const step = 100 / Math.max(curvaSData.length - 1, 1);
@@ -81,7 +80,7 @@ const ResumenFinanciero: React.FC<Props> = ({
                 />
             </div>
 
-            {/* Curva S - Estilo MS Project */}
+            {/* Curva S */}
             {curvaSData.length > 0 && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                     {/* Header */}
@@ -269,7 +268,6 @@ const ResumenFinanciero: React.FC<Props> = ({
     );
 };
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
 const colorMap: Record<string, string> = {
     blue:    'bg-blue-50    border-blue-100    text-blue-700',
     emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',

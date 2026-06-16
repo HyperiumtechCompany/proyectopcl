@@ -1,83 +1,54 @@
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AppLayout from '@/layouts/app-layout';
+import { useToast, ToastContainer } from '@/shared/toast';
 
-import HeaderMateriales         from './components/HeaderMateriales';
-import ResumenCards             from './components/ResumenCards';
-import TablaMateriales          from './components/TablaMateriales';
-import { useCronogramaLogic }   from './helpers/useCronogramaLogic';
-import type { CronogramaProps }      from './types';
+import HeaderMateriales from './components/HeaderMateriales';
+import ResumenCards from './components/ResumenCards';
+import TablaMateriales from './components/TablaMateriales';
+import { useCronogramaLogic } from './helpers/useCronogramaLogic';
+import { exportarMaterialesExcel } from "./helpers/exportHelpers";
+import type { CronogramaProps, MaterialItem } from './types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILIDADES DE EXPORTACIÓN A EXCEL (simple CSV con BOM para UTF-8)
-// ─────────────────────────────────────────────────────────────────────────────
-const exportarExcel = (
-    materiales: any[],
-    periodos:   any[],
-    projectName: string,
-    viewMode:   'cantidad' | 'monto',
-) => {
-    const headers = [
-        'Descripción', 'Unidad', 'Precio Unitario',
-        'Cantidad Total', 'Presupuesto Total (S/.)',
-        ...periodos.map((p: any) => p.label),
-    ];
-
-    const rows = materiales.map(mat => [
-        mat.descripcion,
-        mat.unidad,
-        mat.precio.toFixed(4),
-        mat.cantidad_total.toFixed(3),
-        mat.presupuesto.toFixed(2),
-        ...periodos.map((p: any) => {
-            const cant = mat.mensual[p.key] || 0;
-            return viewMode === 'cantidad'
-                ? cant.toFixed(3)
-                : (cant * mat.precio).toFixed(2);
-        }),
-    ]);
-
-    // Totales
-    const totales = [
-        'TOTAL', '', '', '', '',
-        ...periodos.map((p: any) => {
-            const tot = materiales.reduce((s: number, m: any) => {
-                const v = m.mensual[p.key] || 0;
-                return s + (viewMode === 'cantidad' ? v : v * m.precio);
-            }, 0);
-            return tot.toFixed(2);
-        }),
-    ];
-
-    const csvContent = [
-        [`Cronograma de Materiales - ${projectName}`],
-        [],
-        headers,
-        ...rows,
-        [],
-        totales,
-    ].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `Cronograma_Materiales_${projectName.replace(/\s+/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 const CronogramaMateriales: React.FC<CronogramaProps> = ({
-    project, projectName, materiales = [], periodos = [],
-    resumen, estaGuardado, sinGantt = false,
+    project,
+    projectName,
+    materiales = [],
+    materialesPorTipo,
+    periodos = [],
+    resumen,
+    estaGuardado,
+    sinGantt = false,
+    projectData,
+    sinLayout = false,
 }) => {
-    const [saving,         setSaving]         = useState(false);
-    const [deleting,       setDeleting]       = useState(false);
+    console.log('🔴 MATERIALES RECIBIDOS EN CronogramaMateriales:', materiales);
+    console.log('🔴 CANTIDAD:', materiales.length);
+    const { toasts, show: showToast } = useToast();
+    console.log('📋 projectData en componente:', projectData);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(estaGuardado);
+
+    // Usar la versión plana de materiales
+    const todosMateriales = useMemo((): MaterialItem[] => {
+        if (materiales && materiales.length > 0) return materiales;
+        if (materialesPorTipo) {
+            return [
+                ...(materialesPorTipo.mano_de_obra || []),
+                ...(materialesPorTipo.materiales || []),
+                ...(materialesPorTipo.equipos || []),
+                ...(materialesPorTipo.subcontratos || []),
+                ...(materialesPorTipo.otros || []),
+            ];
+        }
+        return [];
+    }, [materiales, materialesPorTipo]);
+
+    console.log('🔍 Tipos en todosMateriales:', [...new Set(todosMateriales.map(m => m.tipo))]);
+    console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materialesPorTipo) : 'vacio');
 
     const {
         viewMode, setViewMode,
@@ -90,39 +61,40 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
         curvaSData,
         mesPicoKey,
         getIntensidad,
-    } = useCronogramaLogic(materiales, periodos);
+    } = useCronogramaLogic(todosMateriales, periodos);
 
-    // ── GUARDAR ───────────────────────────────────────────────────────────────
+
+    //  GUARDAR 
     const handleSave = useCallback(async () => {
-        if (!materiales.length) {
+        if (!todosMateriales.length) {
             showToast('⚠ No hay materiales para guardar.', 'warning');
             return;
         }
-        if (!confirm(`¿Guardar el cronograma de ${materiales.length} materiales en la base de datos?`)) return;
+        if (!confirm(`¿Guardar el cronograma de ${todosMateriales.length} materiales en la base de datos?`)) return;
 
         setSaving(true);
         try {
-            await axios.post('/cronograma/materiales/save', {
+            await axios.post('/module/crono_materiales/save', {
                 project_id: project,
-                materiales,
+                materiales: todosMateriales,
             });
             setEstaGuardadoUI(true);
-            showToast(`✅ ${materiales.length} materiales guardados correctamente.`, 'success');
+            showToast(`✅ ${todosMateriales.length} materiales guardados correctamente.`, 'success');
         } catch (err: any) {
             console.error('[handleSave]', err);
             showToast(`❌ Error al guardar: ${err?.response?.data?.message ?? err.message}`, 'error');
         } finally {
             setSaving(false);
         }
-    }, [project, materiales]);
+    }, [project, todosMateriales]);
 
-    // ── ELIMINAR ──────────────────────────────────────────────────────────────
+    //  ELIMINAR 
     const handleDelete = useCallback(async () => {
         if (!confirm('¿Eliminar los datos guardados del cronograma de materiales?\nEsta acción no se puede deshacer.')) return;
 
         setDeleting(true);
         try {
-            await axios.delete(`/cronograma/materiales/destroy?project=${project}`);
+            await axios.delete(`/module/crono_materiales/clear?project=${project}`);
             setEstaGuardadoUI(false);
             showToast('🗑 Cronograma de materiales eliminado.', 'info');
         } catch (err: any) {
@@ -132,21 +104,33 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
         }
     }, [project]);
 
-    // ── EXPORTAR ──────────────────────────────────────────────────────────────
+    //  EXPORTAR 
     const handleExportExcel = useCallback(() => {
-        exportarExcel(materiales, periodos, projectName || project, viewMode);
-    }, [materiales, periodos, projectName, project, viewMode]);
+        exportarMaterialesExcel(todosMateriales, periodos, projectName || project, viewMode, filtro.tipoFiltro, projectData);
+    }, [todosMateriales, periodos, project, projectName, viewMode, filtro.tipoFiltro, projectData]);
 
-    // ── BREADCRUMBS ───────────────────────────────────────────────────────────
-    const breadcrumbs = [
-        { title: 'Costos',              href: '/costos' },
-        { title: projectName || `Proyecto ${project}`, href: `/costos/${project}` },
+    //  BREADCRUMBS 
+    const displayName = useMemo(() => {
+        if (projectData?.nombre_corto) return projectData.nombre_corto;
+        if (projectName) {
+            const match = projectName.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N°?\s*\d+)/i);
+            if (match) return match[0];
+            if (projectName.length > 30) return `Proyecto ${project}`;
+            return projectName;
+        }
+
+        return `Proyecto ${project}`;
+    }, [projectData, projectName, project]);
+
+    const breadcrumbs = useMemo(() => [
+        { title: 'Costos', href: '/costos' },
+        { title: displayName, href: `/costos/${project}` },
         { title: 'Cronograma Materiales', href: '#' },
-    ];
+    ], [displayName, project]);
 
-    // ── RENDER ────────────────────────────────────────────────────────────────
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+    //  RENDER 
+    const contenido = (
+        <>
             <Head title={`Materiales — ${projectName || project}`} />
 
             <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
@@ -167,14 +151,6 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                         onExportExcel={handleExportExcel}
                     />
 
-                    {/* RESUMEN + CURVA S */}
-                    <ResumenCards
-                        estaGuardado={estaGuardadoUI}
-                        sinGantt={sinGantt}
-                        curvaSData={curvaSData}
-                        mesPicoKey={mesPicoKey}
-                    />
-
                     {/* TABLA PRINCIPAL */}
                     {!sinGantt && (
                         <TablaMateriales
@@ -190,10 +166,18 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                             destacado={destacado}
                             setDestacado={setDestacado}
                             onToggleSort={toggleSort}
-                            onFiltroChange={delta => setFiltro(prev => ({ ...prev, ...delta }))}
+                            onFiltroChange={(delta) => setFiltro((prev: any) => ({ ...prev, ...delta }))}
                             getIntensidad={getIntensidad}
                         />
                     )}
+
+                    {/* RESUMEN + CURVA S */}
+                    <ResumenCards
+                        estaGuardado={estaGuardadoUI}
+                        sinGantt={sinGantt}
+                        curvaSData={curvaSData}
+                        mesPicoKey={mesPicoKey}
+                    />
 
                     {/* Sin Gantt */}
                     {sinGantt && (
@@ -208,7 +192,7 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
                                 y fin de cada partida, y guardarlo.
                             </p>
                             <a
-                                href={`/cronograma/general?project=${project}`}
+                                href={`/module/crono_general?project=${project}`}
                                 className="mt-6 inline-flex items-center px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
                             >
                                 Ir al Cronograma General →
@@ -220,52 +204,22 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
             </div>
 
             {/* TOAST CONTAINER */}
-            <ToastContainer />
+            <ToastContainer toasts={toasts} />
+        </>
+    );
+
+    if (sinLayout) {
+        return contenido;
+    }
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            {contenido}
         </AppLayout>
     );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MINI SISTEMA DE TOASTS (sin dependencias externas)
-// ─────────────────────────────────────────────────────────────────────────────
-let toastSetterGlobal: ((t: ToastMsg[]) => void) | null = null;
-interface ToastMsg { id: number; text: string; type: string; }
-let toastCounter = 0;
+// COMPONENTE TOAST (CORREGIDO)
 
-const showToast = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
-    if (!toastSetterGlobal) return;
-    const id = ++toastCounter;
-    toastSetterGlobal(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-        toastSetterGlobal!(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-};
-
-const ToastContainer: React.FC = () => {
-    const [toasts, setToasts] = useState<ToastMsg[]>([]);
-    toastSetterGlobal = setToasts;
-
-    if (!toasts.length) return null;
-
-    const colorMap: Record<string, string> = {
-        success: 'bg-emerald-800 border-emerald-600 text-emerald-100',
-        error:   'bg-rose-900    border-rose-700    text-rose-100',
-        info:    'bg-blue-900    border-blue-700    text-blue-100',
-        warning: 'bg-amber-800   border-amber-600   text-amber-100',
-    };
-
-    return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full">
-            {toasts.map(t => (
-                <div
-                    key={t.id}
-                    className={`px-4 py-3 rounded-xl border shadow-xl text-sm font-semibold backdrop-blur-sm animate-fade-in ${colorMap[t.type] || colorMap.info}`}
-                >
-                    {t.text}
-                </div>
-            ))}
-        </div>
-    );
-};
 
 export default CronogramaMateriales;

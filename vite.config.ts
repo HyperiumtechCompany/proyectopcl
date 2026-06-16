@@ -6,20 +6,28 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-    server: {
+  server: {
+    host: 'localhost',
+    port: 5173,
+    strictPort: false,
+    hmr: {
         host: 'localhost',
-        port: 5173,
-        strictPort: false,
-        hmr: {
-            host: 'localhost',
-            protocol: 'http',
+        protocol: 'http',
+    },
+    headers: {
+        'Permissions-Policy': 'unload=(self)',
+    },
+    proxy: {
+        '/module': {
+            target: 'http://127.0.0.1:8000',
+            changeOrigin: true,
         },
-        headers: {
-            // El motor mlightcad registra listeners de 'unload' internamente.
-            // Chrome 117+ los bloquea por defecto (bfcache); permitirlos en self.
-            'Permissions-Policy': 'unload=(self)',
+        '/cronograma': {
+            target: 'http://127.0.0.1:8000',
+            changeOrigin: true,
         },
     },
+},
 
     plugins: [
         laravel({
@@ -50,7 +58,7 @@ export default defineConfig({
         jsx: 'automatic',
     },
 
-    // 🔥 AGREGA ESTO
+
     optimizeDeps: {
         include: ['docx'],
     },

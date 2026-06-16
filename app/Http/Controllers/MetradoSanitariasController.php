@@ -39,19 +39,26 @@ class MetradoSanitariasController extends Controller
             $modulosData[$i] = $this->queryModuloRows($costoProject, $i);
         }
 
-        return Inertia::render('costos/metrados/SanitariasIndex', [
-            'project' => [
-                'id' => $costoProject->id,
-                'nombre' => $costoProject->nombre,
-            ],
-            'titulo' => 'Metrado Sanitarias',
-            'baseURL' => "/costos/{$costoProject->id}/metrado-sanitarias",
-            'config' => (array) $config,
-            'modulos' => $modulosData,
-            'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
-            'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
-            'resumen' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
-        ]);
+       return Inertia::render('costos/metrados/SanitariasIndex', [
+    'project' => [
+        'id' => $costoProject->id,
+        'nombre' => $costoProject->nombre,
+        'codigo_cui' => $costoProject->codigo_cui,
+        'codigo_local' => $costoProject->codigo_local,
+        'unidad_ejecutora' => $costoProject->unidad_ejecutora,
+        'propietario' => $costoProject->unidad_ejecutora,
+        'codigos_modulares' => $costoProject->codigos_modulares,
+        'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq ? asset('storage/' . $costoProject->plantilla_logo_izq) : null,
+        'plantilla_logo_der_url' => $costoProject->plantilla_logo_der ? asset('storage/' . $costoProject->plantilla_logo_der) : null,
+    ],
+    'titulo' => 'Metrado Sanitarias',
+    'baseURL' => "/costos/{$costoProject->id}/metrado-sanitarias",
+    'config' => (array) $config,
+    'modulos' => $modulosData,
+    'exterior' => $this->queryTableRows($costoProject, self::TABLE_EXTERIOR),
+    'cisterna' => $this->queryTableRows($costoProject, self::TABLE_CISTERNA),
+    'resumen' => $this->queryTableRows($costoProject, self::TABLE_RESUMEN),
+]);
     }
 
     public function getConfig(CostoProject $costoProject): JsonResponse
