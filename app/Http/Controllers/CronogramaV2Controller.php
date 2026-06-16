@@ -75,15 +75,16 @@ class CronogramaV2Controller extends Controller
                     ? (int) $task['parent_id']
                     : null;
 
-                // Serializar predecesoras al formato DHTMLX (compatibilidad V1)
+                // El frontend envía el formato DHTMLX: {source, target, type, lag}
                 $links = [];
                 foreach ($task['predecesoras'] ?? [] as $pred) {
-                    $typeMap = ['FC' => '0', 'CC' => '1', 'FF' => '2', 'CF' => '3'];
+                    $source = (int) ($pred['source'] ?? 0);
+                    if ($source <= 0) continue;
                     $links[] = [
-                        'source' => (int) ($pred['taskId'] ?? 0),
-                        'target' => $taskId,
-                        'type' => $typeMap[$pred['tipo'] ?? 'FC'] ?? '0',
-                        'lag' => (int) ($pred['lag'] ?? 0),
+                        'source' => $source,
+                        'target' => (int) ($pred['target'] ?? $taskId),
+                        'type'   => (string) ($pred['type'] ?? '0'),
+                        'lag'    => (int) ($pred['lag'] ?? 0),
                     ];
                 }
 
