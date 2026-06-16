@@ -24,6 +24,7 @@ import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 
 import { DelphinGrid } from './components/DelphinGrid';
+import { DelphinExportModal } from './components/DelphinExportModal';
 import { DelphinToolbar } from './components/DelphinToolbar';
 import { useDelphinData } from './hooks/useDelphinData';
 import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinMode, type DelphinSubView } from './types';
@@ -100,6 +101,7 @@ export default function DelphinView({
     const [continuousDayWidth, setContinuousDayWidth] = useState<number | null>(null);
     const [showCriticalPath,  setShowCriticalPath]  = useState(false);
     const [settingsOpen,      setSettingsOpen]      = useState(false);
+    const [exportOpen,        setExportOpen]        = useState(false);
     const [ganttBarLabel,     setGanttBarLabel]     = useState<GanttBarLabel>('descripcion');
 
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
@@ -262,10 +264,17 @@ export default function DelphinView({
         toast(ok ? 'Presupuesto guardado.' : 'Error al guardar el presupuesto.', ok ? 'success' : 'error');
     }, [saveBudget, project_id_int]);
 
+    // Gantt save also saves budget: partida codes change when rows are reordered/indented,
+    // so presupuesto_general must stay in sync with cronograma_general.
     const handleSaveGantt = useCallback(async () => {
-        const ok = await saveTasks(project);
-        toast(ok ? 'Cronograma guardado.' : 'Error al guardar el cronograma.', ok ? 'success' : 'error');
-    }, [saveTasks, project]);
+        const [ganttOk, budgetOk] = await Promise.all([
+            saveTasks(project),
+            saveBudget(project_id_int),
+        ]);
+        const ok = ganttOk && budgetOk;
+        const msg = ok ? 'Delphin guardado.' : !ganttOk ? 'Error al guardar el cronograma.' : 'Error al guardar el presupuesto.';
+        toast(msg, ok ? 'success' : 'error');
+    }, [saveTasks, project, saveBudget, project_id_int]);
 
     // ── Import MSP ────────────────────────────────────────────────────────────
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -299,7 +308,9 @@ export default function DelphinView({
             if (mode === 'budget') {
                 if (budgetDirty && !isSavingBudget) void handleSaveBudget();
             } else {
-                if (ganttDirty && !ganttIsSaving) void handleSaveGantt();
+                // In CPM mode, save both: gantt dirty OR budget dirty (partida sync)
+                const cpmDirty = ganttDirty || budgetDirty;
+                if (cpmDirty && !ganttIsSaving && !isSavingBudget) void handleSaveGantt();
             }
         };
         document.addEventListener('keydown', handler);
@@ -347,10 +358,11 @@ export default function DelphinView({
 
                     budgetDirty={budgetDirty}
                     isSavingBudget={isSavingBudget}
-                    ganttDirty={ganttDirty}
-                    isGanttSaving={ganttIsSaving}
+                    ganttDirty={ganttDirty || budgetDirty}
+                    isGanttSaving={ganttIsSaving || isSavingBudget}
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
+                    onExport={() => setExportOpen(true)}
                 />
 
                 {/* ── 2. Main area ────────────────────────────────────────── */}
@@ -434,6 +446,12 @@ export default function DelphinView({
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
                     onSave={setCalendarSettings}
+                />
+                <DelphinExportModal
+                    open={exportOpen}
+                    rows={delphinRows}
+                    projectName={project_name}
+                    onClose={() => setExportOpen(false)}
                 />
                 <input
                     ref={importInputRef}

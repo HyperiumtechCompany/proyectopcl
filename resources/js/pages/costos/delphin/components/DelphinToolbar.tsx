@@ -14,6 +14,7 @@ import {
     IndentIncrease,
     LayoutDashboard,
     Network,
+    NotepadTextIcon,
     Plus,
     Save,
     Settings,
@@ -70,6 +71,9 @@ interface Props {
     isGanttSaving:  boolean;
     onSaveBudget:   () => void;
     onSaveGantt:    () => void;
+
+    // Export
+    onExport: () => void;
 }
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -220,6 +224,7 @@ export function DelphinToolbar({
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
     onOpenSettings, onImport,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,
+    onExport,
 }: Props) {
     const noSel   = selectedRowId === null;
     const isDirty  = mode === 'budget' ? budgetDirty : ganttDirty;
@@ -239,8 +244,7 @@ export function DelphinToolbar({
                         mode === 'budget'
                             ? 'bg-emerald-700 text-white'
                             : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                >
+                    }`}>
                     <BarChart2 size={11} />
                     <span className="hidden sm:inline">Presupuesto</span>
                     <span className="sm:hidden">$</span>
@@ -253,8 +257,7 @@ export function DelphinToolbar({
                         mode === 'cpm'
                             ? 'bg-sky-700 text-white'
                             : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                >
+                    }`}>
                     <CalendarDays size={11} />
                     <span className="hidden sm:inline">CPM</span>
                     <span className="sm:hidden">⏱</span>
@@ -282,8 +285,7 @@ export function DelphinToolbar({
                                         subView === 'gantt'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}
-                                >
+                                    }`}>
                                     <LayoutDashboard size={11} /> Gantt
                                 </button>
                                 <button
@@ -294,8 +296,7 @@ export function DelphinToolbar({
                                         subView === 'network'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}
-                                >
+                                    }`}>
                                     <Network size={11} /> Red
                                 </button>
                             </div>
@@ -327,8 +328,7 @@ export function DelphinToolbar({
                                         schedulingMode === 'automatic'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}
-                                >
+                                    }`}>
                                     <Bot size={11} /> Auto
                                 </button>
                                 <button
@@ -339,8 +339,7 @@ export function DelphinToolbar({
                                         schedulingMode === 'manual'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}
-                                >
+                                    }`}>
                                     <Hand size={11} /> Manual
                                 </button>
                             </div>
@@ -352,8 +351,7 @@ export function DelphinToolbar({
                                         : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
                                 }`}
                                 title="Resaltar ruta crítica"
-                                onClick={onToggleCritical}
-                            >
+                                onClick={onToggleCritical}>
                                 <GitBranch size={13} />
                                 <span className="hidden sm:inline">Ruta Crítica</span>
                             </button>
@@ -374,8 +372,7 @@ export function DelphinToolbar({
                                                             : 'text-slate-400 hover:text-slate-200'
                                                     }`}
                                                     title={ZOOM_LABELS[z]}
-                                                    onClick={() => onZoomChange(z)}
-                                                >
+                                                    onClick={() => onZoomChange(z)}>
                                                     {ZOOM_LABELS[z]}
                                                 </button>
                                             ))}
@@ -395,8 +392,7 @@ export function DelphinToolbar({
                     <ConfigDropdown
                         ganttBarLabel={ganttBarLabel}
                         onBarLabelChange={onBarLabelChange}
-                        onOpenSettings={onOpenSettings}
-                    />
+                        onOpenSettings={onOpenSettings}/>
                 </>
             )}
 
@@ -410,19 +406,23 @@ export function DelphinToolbar({
                 {mode === 'cpm' && (
                     <Btn
                         icon={<Upload size={13} />}
-                        label="Importar MSP"
+                        label="Imp."
                         title="Importar XML de MS Project"
                         variant="danger"
-                        onClick={onImport}
-                    />
+                        onClick={onImport}/>
                 )}
+                <Btn
+                    icon={<NotepadTextIcon size={13} />}
+                    label="Exportar"
+                    title="Exportar a Excel"
+                    variant="default"
+                    onClick={onExport}/>
                 <Btn
                     icon={<Save size={13} />}
                     label={isSaving ? 'Guardando…' : 'Guardar'}
                     variant="primary"
                     disabled={isSaving || !isDirty}
-                    onClick={onSave}
-                />
+                    onClick={onSave}/>
             </div>
         </div>
     );

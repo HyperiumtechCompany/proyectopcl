@@ -109,9 +109,9 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
                         unidad:          b.unidad,
                         metrado:         b.metrado,
                         precio_unitario: b.precio_unitario,
-                        parent_id:       task.parent_id,
-                        nivel:           task.nivel,
                         item_order:      task.item_order,
+                        // presupuesto_general uses partida notation for hierarchy,
+                        // not parent_id/nivel — omit to avoid column-not-found 500
                     };
                 });
                 await axios.patch(`/costos/proyectos/${projectId}/presupuesto/general`, { rows });

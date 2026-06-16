@@ -75,10 +75,22 @@ class DelphinController extends Controller
             ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'))
             ->get();
 
-        return $records->map(fn ($row) => $this->rowToV2($row))->all();
+        // Map partida → id so we can derive parent_id from dotted notation
+        // when the DB rows have parent_id = null (e.g. data imported externally).
+        $partidaToId = $records->pluck('id', 'partida')->all();
+
+        return $records->map(fn ($row) => $this->rowToV2($row, $partidaToId))->all();
     }
 
-    private function rowToV2(object $row): array
+    /**
+     * Convert a raw DB row to the V2 task shape.
+     *
+     * When parent_id or nivel are missing/zero we derive them from the partida
+     * dotted-notation ("2.1.3" → nivel=3, parent="2.1").  This lets Delphin
+     * build the correct tree even for rows that were imported without explicit
+     * parent_id / nivel values.
+     */
+    private function rowToV2(object $row, array $partidaToId = []): array
     {
         $typeMap = ['0' => 'FC', '1' => 'CC', '2' => 'FF', '3' => 'CF'];
         $predecesoras = [];
@@ -98,12 +110,35 @@ class DelphinController extends Controller
             }
         }
 
+        $partida = $row->partida ?? '';
+
+        // Derive nivel from partida depth: "2.1.3" → 3, "2" → 1
+        $nivelFromPartida = $partida !== '' ? substr_count($partida, '.') + 1 : 1;
+        $nivel = (int) ($row->nivel ?? 0);
+        if ($nivel <= 0) {
+            $nivel = $nivelFromPartida;
+        }
+
+        // Derive parent_id from partida when DB value is null
+        $parentId = isset($row->parent_id) && $row->parent_id > 0
+            ? (int) $row->parent_id
+            : null;
+
+        if ($parentId === null && str_contains($partida, '.')) {
+            $parts     = explode('.', $partida);
+            array_pop($parts);
+            $parentPartida = implode('.', $parts);
+            $parentId  = isset($partidaToId[$parentPartida])
+                ? (int) $partidaToId[$parentPartida]
+                : null;
+        }
+
         return [
             'id'            => $row->id,
-            'parent_id'     => $row->parent_id,
-            'nivel'         => (int) ($row->nivel ?? 1),
+            'parent_id'     => $parentId,
+            'nivel'         => $nivel,
             'item_order'    => (int) ($row->item_order ?? 0),
-            'partida'       => $row->partida ?? '',
+            'partida'       => $partida,
             'descripcion'   => $row->descripcion ?? '',
             'duracion_dias' => (int) ($row->duracion_dias ?? 0),
             'fecha_inicio'  => $row->fecha_inicio,
