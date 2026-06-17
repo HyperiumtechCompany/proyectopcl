@@ -30,8 +30,6 @@ import { FormulaPolinomica } from './components/formula_polinomica';
 import { GGFijosDesagregadoPanel } from './components/GGFijosDesagregadoPanel';
 import { GGFijosPanel } from './components/GGFijosPanel';
 import { GGVariablesPanel } from './components/GGVariablesPanel';
-import { ImportAcusExcelModal } from './components/ImportAcusExcelModal';
-import { ImportExcelPresupuestoModal } from './components/ImportExcelPresupuestoModal';
 import { ImportMetradosModal } from './components/ImportMetradosModal';
 import { InsumosPanel } from './components/InsumosPanel';
 import { RemuneracionesPanel } from './components/RemuneracionesPanel';
@@ -123,8 +121,6 @@ export default function Index() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState('');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
-    const [isAcusExcelModalOpen, setIsAcusExcelModalOpen] = useState(false);
     const [acuRefreshKey, setAcuRefreshKey] = useState(0);
     const searchRef = useRef<HTMLInputElement>(null);
 
@@ -419,12 +415,6 @@ export default function Index() {
                                                     <DropdownMenuItem className="text-amber-300 focus:bg-amber-900/60 focus:text-amber-200 text-xs cursor-pointer" onClick={() => setIsImportModalOpen(true)}>
                                                         <Download size={14} /> Importar Metrados
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-emerald-300 focus:bg-emerald-900/60 focus:text-emerald-200 text-xs cursor-pointer" onClick={() => setIsExcelModalOpen(true)}>
-                                                        <FileSpreadsheet size={14} /> Imp. Excel
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-amber-300 focus:bg-amber-900/60 focus:text-amber-200 text-xs cursor-pointer" onClick={() => setIsAcusExcelModalOpen(true)}>
-                                                        <FileSpreadsheet size={14} /> Imp. ACUs
-                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                             <button title="Nuevo Título raíz" onClick={() => addNode(null, 'titulo')}
@@ -506,43 +496,6 @@ export default function Index() {
                                             isOpen={isImportModalOpen}
                                             onClose={() => setIsImportModalOpen(false)}
                                             onSuccess={() => {
-                                                setGeneralLoading(true);
-                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
-                                                    .then((response) => {
-                                                        if (response.data?.success) {
-                                                            setGeneralRows(response.data.rows || []);
-                                                            initialize(response.data.rows || []);
-                                                            setDirty(false);
-                                                        }
-                                                    })
-                                                    .finally(() => setGeneralLoading(false));
-                                            }}
-                                        />
-
-                                        <ImportExcelPresupuestoModal
-                                            projectId={project.id}
-                                            isOpen={isExcelModalOpen}
-                                            onClose={() => setIsExcelModalOpen(false)}
-                                            onSuccess={() => {
-                                                setGeneralLoading(true);
-                                                axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
-                                                    .then((response) => {
-                                                        if (response.data?.success) {
-                                                            setGeneralRows(response.data.rows || []);
-                                                            initialize(response.data.rows || []);
-                                                            setDirty(false);
-                                                        }
-                                                    })
-                                                    .finally(() => setGeneralLoading(false));
-                                            }}
-                                        />
-
-                                        <ImportAcusExcelModal
-                                            projectId={project.id}
-                                            isOpen={isAcusExcelModalOpen}
-                                            onClose={() => setIsAcusExcelModalOpen(false)}
-                                            onSuccess={() => {
-                                                setAcuRefreshKey(k => k + 1);
                                                 setGeneralLoading(true);
                                                 axios.get(`/costos/proyectos/${project.id}/presupuesto/general/data`)
                                                     .then((response) => {

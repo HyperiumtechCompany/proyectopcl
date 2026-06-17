@@ -19,7 +19,10 @@ import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 
+import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
+import { ImportAcusExcelModal } from '../presupuesto/components/ImportAcusExcelModal';
+import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 
@@ -30,6 +33,13 @@ import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinMode, type DelphinSubView } fr
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EMPTY_SET = new Set<number>();
+
+function normalizeCode(code: string | number): string {
+    const str = String(code).trim();
+    if (!str) return '';
+    const parts = str.split('.').filter(p => p.trim() !== '');
+    return parts.map(p => p.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.');
+}
 
 function toast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
     const el = document.createElement('div');
@@ -102,6 +112,10 @@ export default function DelphinView({
     const [settingsOpen,      setSettingsOpen]      = useState(false);
     const [ganttBarLabel,     setGanttBarLabel]     = useState<GanttBarLabel>('descripcion');
 
+    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+    const [isAcusExcelModalOpen, setIsAcusExcelModalOpen] = useState(false);
+    const [acuRefreshKey, setAcuRefreshKey] = useState(0);
+
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
 
     // ── Project params (needed by AcuPanel cost tables) ───────────────────────
@@ -162,20 +176,20 @@ export default function DelphinView({
         if (!selectedTask) return null;
         const row = delphinRows.find((r) => r.id === selectedTask.id);
         if (!row) return null;
-        const isLeaf  = !groupIds.has(row.id);
         const hasUnit = row.unidad && row.unidad.trim() !== '';
-        if (!isLeaf || !hasUnit) return null;
+        if (!hasUnit) return null;
         return { descripcion: row.descripcion, unidad: row.unidad };
-    }, [selectedTask, delphinRows, groupIds]);
+    }, [selectedTask, delphinRows]);
 
     const { acuRows, acuLoading, selectedAcu, saveAcu: baseSaveAcu } = usePresupuestoAcu({
         projectId:            project_id_int,
         subsection:           'acus',
         selectedCell:         null,
-        selectedPartidaCode:  selectedPartidaData ? (selectedTask?.partida ?? null) : null,
+        selectedPartidaCode:  selectedPartidaData ? normalizeCode(selectedTask?.partida ?? '') : null,
         selectedPartidaData,
         lastSaved:            null,
         setSheetVersion:      () => {},
+        refreshKey:           acuRefreshKey,
     });
 
     const handleSaveAcu = useCallback(async (acuData: Record<string, any>) => {
@@ -351,6 +365,8 @@ export default function DelphinView({
                     isGanttSaving={ganttIsSaving}
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
+                    onImportExcel={() => setIsExcelModalOpen(true)}
+                    onImportAcus={() => setIsAcusExcelModalOpen(true)}
                 />
 
                 {/* ── 2. Main area ────────────────────────────────────────── */}
@@ -434,6 +450,25 @@ export default function DelphinView({
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
                     onSave={setCalendarSettings}
+                />
+                <ImportExcelPresupuestoModal
+                    projectId={project_id_int}
+                    isOpen={isExcelModalOpen}
+                    onClose={() => setIsExcelModalOpen(false)}
+                    onSuccess={() => {
+                        setIsExcelModalOpen(false);
+                        router.reload();
+                    }}
+                />
+                <ImportAcusExcelModal
+                    projectId={project_id_int}
+                    isOpen={isAcusExcelModalOpen}
+                    onClose={() => setIsAcusExcelModalOpen(false)}
+                    onSuccess={() => {
+                        setIsAcusExcelModalOpen(false);
+                        setAcuRefreshKey(k => k + 1);
+                        router.reload();
+                    }}
                 />
                 <input
                     ref={importInputRef}

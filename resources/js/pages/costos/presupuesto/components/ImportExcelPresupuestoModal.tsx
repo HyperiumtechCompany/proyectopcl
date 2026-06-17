@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { X, FileSpreadsheet, AlertCircle, Upload, Eye, CheckCircle } from 'lucide-react';
 import React, { useState, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import { useBudgetStore, type BudgetItemRow } from '../stores/budgetStore';
 
 interface ImportExcelPresupuestoModalProps {
@@ -14,14 +15,18 @@ type ParsedRow = BudgetItemRow & { _rawCode: string };
 
 function normalizeCode(code: string | number): string {
     const str = String(code).trim();
-    const parts = str.split('.');
+    // Eliminar puntos finales y separar
+    const parts = str.split('.').filter(p => p.trim() !== '');
+    // Rellenar con ceros a la izquierda para tener siempre al menos 2 dígitos (ej. "1" -> "01")
     return parts.map(p => p.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.');
 }
 
-function detectTipoFila(level: number, hasUnidad: boolean): 'titulo' | 'subtitulo' | 'partida' {
-    if (hasUnidad) return 'partida';
-    if (level === 0) return 'titulo';
-    return 'subtitulo';
+function parseNum(val: any): number {
+    if (val == null || val === '') return 0;
+    if (typeof val === 'number') return val;
+    const s = String(val).replace(/,/g, '').trim();
+    const n = Number(s);
+    return isNaN(n) ? 0 : n;
 }
 
 function parseExcelFile(file: File): Promise<ParsedRow[]> {
@@ -36,40 +41,86 @@ function parseExcelFile(file: File): Promise<ParsedRow[]> {
 
                 const parsed: ParsedRow[] = [];
 
-                for (let i = 9; i < rows.length; i++) {
+                let colItem = -1, colDesc = -1, colUnidad = -1, colMetrado = -1, colPrecio = -1, colParcial = -1;
+                let startRow = -1;
+
+                // 1. Detectar cabeceras dinámicamente escaneando las primeras filas
+                for (let i = 0; i < Math.min(rows.length, 50); i++) {
                     const row = rows[i];
-                    if (!row || row[0] === null || row[0] === undefined) continue;
+                    if (!row || !Array.isArray(row)) continue;
 
-                    const rawCode = String(row[0]).trim();
-                    if (!/^\d/.test(rawCode)) continue;
+                    const strRow = row.map(v => String(v || '').trim().toLowerCase());
+                    const itemIdx = strRow.findIndex(v => v === 'item' || v === 'ítem');
+                    const descIdx = strRow.findIndex(v => v.includes('descripci'));
 
-                    const descripcion = row[2] ? String(row[2]).trim() : '';
+                    if (itemIdx !== -1 && descIdx !== -1) {
+                        colItem = itemIdx;
+                        colDesc = descIdx;
+                        
+                        colUnidad = strRow.findIndex(v => v === 'und.' || v === 'und' || v === 'unidad');
+                        colMetrado = strRow.findIndex(v => v.includes('metrado') || v.includes('cant'));
+                        colPrecio = strRow.findIndex(v => v.includes('precio') || v.includes('unit') || v.includes('p. unit'));
+                        colParcial = strRow.findIndex(v => v.includes('parcial') || v.includes('total'));
+                        
+                        startRow = i + 1;
+                        break;
+                    }
+                }
+
+                if (startRow === -1 || colItem === -1 || colDesc === -1) {
+                    throw new Error("No se pudo detectar la cabecera del presupuesto (Columnas 'Item' y 'Descripción').");
+                }
+
+                // 2. Extraer datos respetando jerarquías
+                for (let i = startRow; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || row[colItem] == null || String(row[colItem]).trim() === '') continue;
+
+                    const rawCode = String(row[colItem]).trim();
+                    if (!/^\d/.test(rawCode)) continue; // Solo procesar si el item empieza con un número
+
+                    const descripcion = row[colDesc] ? String(row[colDesc]).trim() : '';
                     if (!descripcion) continue;
 
-                    const rawUnidad = (row[9] != null && String(row[9]).trim() !== '')
-                        ? String(row[9]).trim()
-                        : '';
-                    const unidad = rawUnidad
-                        .replace(/m2/g, 'm²')
-                        .replace(/m3/g, 'm³');
-                    const hasUnidad = unidad !== '';
+                    let unidad = '';
+                    if (colUnidad !== -1 && row[colUnidad] != null) {
+                        unidad = String(row[colUnidad]).trim().replace(/m2/g, 'm²').replace(/m3/g, 'm³');
+                    }
 
-                    const metrado = (row[10] != null && row[10] !== '') ? Number(row[10]) : 0;
-                    const precioUnitario = (row[12] != null && row[12] !== '') ? Number(row[12]) : 0;
-                    const parcial = hasUnidad
-                        ? (metrado * precioUnitario)
-                        : ((row[13] != null && row[13] !== '') ? Number(row[13]) : (row[15] != null && row[15] !== '') ? Number(row[15]) : 0);
+                    const metrado = colMetrado !== -1 ? parseNum(row[colMetrado]) : 0;
+                    const precioUnitario = colPrecio !== -1 ? parseNum(row[colPrecio]) : 0;
+                    
+                    let parcial = colParcial !== -1 ? parseNum(row[colParcial]) : 0;
+
+                    // Fallback: Si el exportador desplazó el parcial por combinación de celdas
+                    if (parcial === 0 && colParcial !== -1) {
+                        for (let offset = 1; offset <= 3; offset++) {
+                            const p = parseNum(row[colParcial + offset]);
+                            if (p > 0) {
+                                parcial = p;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Autocalcular si no hay parcial pero hay precio y metrado
+                    if (parcial === 0 && metrado > 0 && precioUnitario > 0) {
+                        parcial = metrado * precioUnitario;
+                    }
 
                     const partida = normalizeCode(rawCode);
                     const level = (partida.match(/\./g) || []).length;
-                    const tipo_fila = detectTipoFila(level, hasUnidad);
+                    
+                    // Lógica estricta de detección de tipo de fila
+                    const isPartida = unidad !== '' || (metrado > 0 && precioUnitario > 0) || precioUnitario > 0;
+                    const tipo_fila = isPartida ? 'partida' : (level === 0 ? 'titulo' : 'subtitulo');
 
                     parsed.push({
                         partida,
                         descripcion,
-                        unidad: hasUnidad ? unidad : '',
-                        metrado,
-                        precio_unitario: precioUnitario,
+                        unidad: tipo_fila === 'partida' ? (unidad || 'glb') : '',
+                        metrado: tipo_fila === 'partida' ? metrado : 0,
+                        precio_unitario: tipo_fila === 'partida' ? precioUnitario : 0,
                         parcial,
                         metrado_source: null,
                         tipo_fila,
@@ -77,7 +128,7 @@ function parseExcelFile(file: File): Promise<ParsedRow[]> {
                     });
                 }
 
-                // Deduplicate: keep the row with the highest `parcial` for each code
+                // 3. Filtrar y ordenar asegurando la jerarquía pura
                 const bestByCode = new Map<string, ParsedRow>();
                 for (const r of parsed) {
                     const existing = bestByCode.get(r.partida);
@@ -85,14 +136,17 @@ function parseExcelFile(file: File): Promise<ParsedRow[]> {
                         bestByCode.set(r.partida, r);
                     }
                 }
-                const deduped = [...bestByCode.values()];
+                
+                const finalRows = Array.from(bestByCode.values()).sort((a, b) => {
+                    return a.partida.localeCompare(b.partida, undefined, { numeric: true });
+                });
 
-                resolve(deduped);
+                resolve(finalRows);
             } catch (err) {
                 reject(err);
             }
         };
-        reader.onerror = () => reject(new Error('Error al leer el archivo'));
+        reader.onerror = () => reject(new Error('Error al leer el archivo Excel'));
         reader.readAsArrayBuffer(file);
     });
 }
@@ -109,7 +163,7 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
     const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState<'select' | 'preview' | 'success'>('select');
-    const [stats, setStats] = useState<{ total: number; titulos: number; partidas: number; newRows: number; updatedRows: number } | null>(null);
+    const [stats, setStats] = useState<{ total: number; titulos: number; partidas: number } | null>(null);
 
     const reset = useCallback(() => {
         setFile(null);
@@ -137,35 +191,23 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
         try {
             const rows = await parseExcelFile(selected);
             if (rows.length === 0) {
-                setError('No se encontraron filas válidas en el archivo. Asegúrese de que el archivo tenga la estructura correcta.');
+                setError('No se encontraron filas válidas. Verifique que el archivo tenga la estructura correcta.');
                 setIsLoading(false);
                 return;
             }
             setParsedRows(rows);
+            setStats({
+                total: rows.length,
+                titulos: rows.filter(r => r.tipo_fila === 'titulo' || r.tipo_fila === 'subtitulo').length,
+                partidas: rows.filter(r => r.tipo_fila === 'partida').length
+            });
             setStep('preview');
         } catch (err: any) {
-            setError('Error al leer el archivo: ' + (err.message || 'Formato no soportado'));
+            setError('Error al parsear el archivo: ' + (err.message || 'Formato inválido'));
         } finally {
             setIsLoading(false);
         }
     };
-
-    const existingCodesForPreview = useMemo(() => {
-        const currentRows = useBudgetStore.getState().rows.map(r => ({
-            ...r,
-            partida: r.partida.split('.').map(s => s.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.'),
-        }));
-        return new Set(currentRows.map(r => r.partida));
-    }, [parsedRows]);
-
-    const statsMemo = useMemo(() => {
-        if (parsedRows.length === 0) return null;
-        const titulos = parsedRows.filter(r => r.tipo_fila === 'titulo' || r.tipo_fila === 'subtitulo').length;
-        const partidas = parsedRows.filter(r => r.tipo_fila === 'partida').length;
-        const newRows = parsedRows.filter(r => !existingCodesForPreview.has(r.partida)).length;
-        const updatedRows = parsedRows.filter(r => existingCodesForPreview.has(r.partida)).length;
-        return { total: parsedRows.length, titulos, partidas, newRows, updatedRows };
-    }, [parsedRows, existingCodesForPreview]);
 
     const handleImport = async () => {
         if (parsedRows.length === 0) return;
@@ -173,64 +215,33 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
         setError(null);
 
         try {
-            const rawRows = useBudgetStore.getState().rows;
-            const currentRows = rawRows.map(r => ({
-                ...r,
-                partida: r.partida.split('.').map(s => s.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.'),
+            // Reemplazo total: creamos el nuevo estado basado exclusivamente en el Excel
+            const newRows = parsedRows.map(({ _rawCode, ...cleanRow }) => ({
+                ...cleanRow,
+                id: undefined, // Se crearán nuevos registros
             }));
-            const existingMap = new Map(currentRows.map(r => [r.partida, r]));
 
-            const merged = [...currentRows];
+            // Sobrescribir en el store local para calcular jerarquías
+            useBudgetStore.getState().initialize(newRows);
 
-            for (const parsedRow of parsedRows) {
-                const { _rawCode, ...cleanRow } = parsedRow;
-                const existing = existingMap.get(parsedRow.partida);
-
-                if (existing) {
-                    const idx = merged.findIndex(r => r.partida === parsedRow.partida);
-                    if (idx >= 0) {
-                        merged[idx] = {
-                            ...existing,
-                            descripcion: cleanRow.descripcion,
-                            unidad: cleanRow.unidad,
-                            metrado: cleanRow.metrado,
-                            precio_unitario: cleanRow.precio_unitario,
-                            tipo_fila: cleanRow.tipo_fila,
-                        };
-                    }
-                } else {
-                    merged.push({
-                        ...cleanRow,
-                        id: undefined,
-                    });
-                }
-            }
-
-            useBudgetStore.getState().initialize(merged);
-
+            // Extraer las filas limpias para enviarlas al backend
             const saveRows = useBudgetStore.getState().rows.map((row) => {
                 const { _level, _parentId, _expanded, _hasChildren, _index, ...rest } = row as any;
                 return rest;
             });
 
-            const response = await fetch(`/costos/proyectos/${projectId}/presupuesto/general`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ rows: saveRows }),
+            const response = await axios.patch(`/costos/proyectos/${projectId}/presupuesto/general`, {
+                rows: saveRows
             });
 
-            if (!response.ok) {
-                throw new Error('Error al guardar en el servidor');
+            if (response.data && response.data.success === false) {
+                 throw new Error(response.data.message || 'Error al guardar en el servidor');
             }
 
-            setStats(statsMemo);
             setStep('success');
         } catch (err: any) {
-            setError('Error al importar: ' + (err.message || 'Error desconocido'));
+            const errorMsg = err.response?.data?.message || err.message || 'Error desconocido';
+            setError('Error al importar: ' + errorMsg);
         } finally {
             setIsImporting(false);
         }
@@ -240,12 +251,11 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="flex w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-2xl max-h-[90vh]">
-                {/* Header */}
+            <div className="flex w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-2xl max-h-[90vh]">
                 <div className="flex items-center justify-between border-b border-slate-700/50 bg-slate-900/50 px-5 py-4">
                     <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                         <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
-                        Importar Excel Presupuesto
+                        Importar Presupuesto desde Excel (Reemplazo Total)
                     </h3>
                     <button
                         onClick={handleClose}
@@ -255,17 +265,16 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                     </button>
                 </div>
 
-                {/* Body */}
                 <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
-                    {/* Step: Select File */}
                     {step === 'select' && (
                         <div className="flex flex-col items-center gap-4 py-8">
                             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-900/30 border border-emerald-700/40">
                                 <Upload className="h-10 w-10 text-emerald-400" />
                             </div>
                             <p className="text-sm text-slate-300 text-center max-w-md">
-                                Seleccione un archivo Excel (.xls o .xlsx) con la estructura de presupuesto jerárquico.
-                                Las columnas esperadas son: <span className="text-emerald-300 font-medium">Item, Descripción, Unid., Cant., Precio, Parcial</span>.
+                                Seleccione su presupuesto exportado en Excel (.xls, .xlsx). 
+                                <br/><br/>
+                                <strong className="text-red-400">Atención:</strong> Esta acción reemplazará completamente la estructura actual del presupuesto por la del archivo.
                             </p>
 
                             {error && (
@@ -275,8 +284,8 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                                 </div>
                             )}
 
-                            <label className="cursor-pointer rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50">
-                                {isLoading ? 'Procesando...' : 'Seleccionar Archivo'}
+                            <label className="cursor-pointer rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 mt-4">
+                                {isLoading ? 'Analizando...' : 'Seleccionar Archivo'}
                                 <input
                                     type="file"
                                     accept=".xls,.xlsx"
@@ -285,45 +294,25 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                                     disabled={isLoading}
                                 />
                             </label>
-
-                            {file && isLoading && (
-                                <div className="flex items-center gap-2 text-sm text-slate-400">
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-                                    Parseando archivo...
-                                </div>
-                            )}
                         </div>
                     )}
 
-                    {/* Step: Preview */}
                     {step === 'preview' && (
                         <div className="flex flex-col gap-4">
-                            {/* Stats */}
-                            {statsMemo && (
-                                <div className="grid grid-cols-4 gap-3">
-                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50">
+                            {stats && (
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50 text-center">
                                         <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">Total Filas</div>
-                                        <div className="text-xl font-bold text-slate-200">{statsMemo.total}</div>
+                                        <div className="text-xl font-bold text-slate-200">{stats.total}</div>
                                     </div>
-                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50">
-                                        <div className="text-[10px] font-bold tracking-wider text-amber-500 uppercase">Títulos</div>
-                                        <div className="text-xl font-bold text-amber-400">{statsMemo.titulos}</div>
+                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50 text-center">
+                                        <div className="text-[10px] font-bold tracking-wider text-amber-500 uppercase">Títulos / Subtítulos</div>
+                                        <div className="text-xl font-bold text-amber-400">{stats.titulos}</div>
                                     </div>
-                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50">
+                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50 text-center">
                                         <div className="text-[10px] font-bold tracking-wider text-sky-400 uppercase">Partidas</div>
-                                        <div className="text-xl font-bold text-sky-400">{statsMemo.partidas}</div>
+                                        <div className="text-xl font-bold text-sky-400">{stats.partidas}</div>
                                     </div>
-                                    <div className="rounded-lg bg-slate-900/60 p-3 border border-slate-700/50">
-                                        <div className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">Nuevas</div>
-                                        <div className="text-xl font-bold text-emerald-400">{statsMemo.newRows}</div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {statsMemo && statsMemo.updatedRows > 0 && (
-                                <div className="flex items-center gap-2 rounded bg-amber-900/30 p-2.5 text-xs text-amber-300 border border-amber-800/50">
-                                    <AlertCircle className="h-4 w-4 shrink-0" />
-                                    <span>{statsMemo.updatedRows} fila(s) con código existente serán actualizadas con los datos del Excel.</span>
                                 </div>
                             )}
 
@@ -336,27 +325,26 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
 
                             <div className="flex items-center gap-2 text-xs text-slate-400">
                                 <Eye className="h-3.5 w-3.5" />
-                                <span>Vista previa — {parsedRows.length} filas detectadas del archivo: <span className="text-slate-200 font-medium">{file?.name}</span></span>
+                                <span>Vista previa de la nueva jerarquía. <span className="text-red-400 font-bold">Esto sobrescribirá el presupuesto actual.</span></span>
                             </div>
 
-                            {/* Preview Table */}
                             <div className="overflow-auto rounded-lg border border-slate-700 bg-slate-900/40 max-h-[45vh]">
                                 <table className="w-full text-[10px]">
-                                    <thead className="sticky top-0 z-10 bg-slate-800 border-b border-slate-700">
+                                    <thead className="sticky top-0 z-10 bg-slate-800 border-b border-slate-700 shadow-sm">
                                         <tr>
-                                            <th className="px-2 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Código</th>
-                                            <th className="px-2 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Descripción</th>
-                                            <th className="px-2 py-2 text-center font-bold text-slate-400 uppercase tracking-wider w-14">Tipo</th>
-                                            <th className="px-2 py-2 text-center font-bold text-slate-400 uppercase tracking-wider w-14">Und.</th>
-                                            <th className="px-2 py-2 text-right font-bold text-slate-400 uppercase tracking-wider w-16">Cant.</th>
-                                            <th className="px-2 py-2 text-right font-bold text-slate-400 uppercase tracking-wider w-20">Precio</th>
+                                            <th className="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider w-24">Item</th>
+                                            <th className="px-3 py-2 text-left font-bold text-slate-400 uppercase tracking-wider">Descripción</th>
+                                            <th className="px-3 py-2 text-center font-bold text-slate-400 uppercase tracking-wider w-16">Tipo</th>
+                                            <th className="px-3 py-2 text-center font-bold text-slate-400 uppercase tracking-wider w-16">Und.</th>
+                                            <th className="px-3 py-2 text-right font-bold text-slate-400 uppercase tracking-wider w-20">Metrado</th>
+                                            <th className="px-3 py-2 text-right font-bold text-slate-400 uppercase tracking-wider w-20">Precio</th>
+                                            <th className="px-3 py-2 text-right font-bold text-slate-400 uppercase tracking-wider w-24">Parcial</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {parsedRows.map((row, idx) => {
                                             const isTitulo = row.tipo_fila === 'titulo' || row.tipo_fila === 'subtitulo';
                                             const level = (row.partida.match(/\./g) || []).length;
-                                            const isNew = statsMemo ? !existingCodesForPreview.has(row.partida) : true;
                                             return (
                                                 <tr
                                                     key={idx}
@@ -364,29 +352,32 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                                                         isTitulo ? 'bg-amber-950/20 font-semibold' : 'hover:bg-slate-800/50'
                                                     }`}
                                                 >
-                                                    <td className={`px-2 py-1 text-emerald-400 font-mono ${isNew ? '' : 'text-amber-400'}`} style={{ paddingLeft: `${8 + level * 12}px` }}>
+                                                    <td className="px-3 py-1.5 text-emerald-400 font-mono tracking-tight" style={{ paddingLeft: `${12 + level * 14}px` }}>
                                                         {row.partida}
                                                     </td>
-                                                    <td className={`px-2 py-1 ${isTitulo ? 'text-amber-200 uppercase text-[10px]' : 'text-slate-300'}`}>
-                                                        {row.descripcion.length > 60 ? row.descripcion.substring(0, 60) + '...' : row.descripcion}
+                                                    <td className={`px-3 py-1.5 ${isTitulo ? 'text-amber-200 uppercase text-[10px]' : 'text-slate-300'}`}>
+                                                        {row.descripcion}
                                                     </td>
-                                                    <td className="px-2 py-1 text-center">
+                                                    <td className="px-3 py-1.5 text-center">
                                                         {isTitulo ? (
                                                             <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-amber-300 font-bold">
-                                                                {row.tipo_fila === 'titulo' ? 'T' : 'ST'}
+                                                                {row.tipo_fila === 'titulo' ? 'TIT' : 'SUB'}
                                                             </span>
                                                         ) : (
-                                                            <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-sky-300 font-bold">P</span>
+                                                            <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-sky-300 font-bold">PAR</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-1 text-center text-slate-400">
+                                                    <td className="px-3 py-1.5 text-center text-slate-400">
                                                         {row.unidad || '—'}
                                                     </td>
-                                                    <td className="px-2 py-1 text-right text-slate-300 tabular-nums">
-                                                        {row.metrado || '—'}
+                                                    <td className="px-3 py-1.5 text-right text-slate-300 tabular-nums">
+                                                        {isTitulo ? '—' : (row.metrado || '0.00')}
                                                     </td>
-                                                    <td className="px-2 py-1 text-right text-slate-300 tabular-nums">
-                                                        {row.precio_unitario || '—'}
+                                                    <td className="px-3 py-1.5 text-right text-slate-300 tabular-nums">
+                                                        {isTitulo ? '—' : (row.precio_unitario || '0.00')}
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right text-emerald-300 font-bold tabular-nums">
+                                                        {row.parcial || '0.00'}
                                                     </td>
                                                 </tr>
                                             );
@@ -395,33 +386,32 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                                 </table>
                             </div>
 
-                            {/* Change file */}
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 mt-2">
                                 <button
                                     onClick={() => { setStep('select'); setParsedRows([]); setFile(null); setError(null); }}
                                     className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2"
                                 >
-                                    Cambiar archivo
+                                    Elegir otro archivo
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* Step: Success */}
                     {step === 'success' && stats && (
                         <div className="flex flex-col items-center gap-4 py-8">
                             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-900/30 border border-emerald-700/40">
                                 <CheckCircle className="h-10 w-10 text-emerald-400" />
                             </div>
                             <p className="text-sm text-slate-300 text-center">
-                                Se importaron <span className="font-bold text-emerald-400">{stats.total}</span> filas correctamente
+                                Se construyó el presupuesto exitosamente.
+                                <br />
+                                <span className="font-bold text-emerald-400">{stats.total}</span> filas procesadas 
                                 ({stats.titulos} títulos, {stats.partidas} partidas).
                             </p>
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-700/50 bg-slate-900/50 p-4">
                     {step === 'preview' && (
                         <>
@@ -440,12 +430,12 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                                 {isImporting ? (
                                     <>
                                         <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                                        Importando...
+                                        Procesando...
                                     </>
                                 ) : (
                                     <>
                                         <FileSpreadsheet size={14} />
-                                        Importar {parsedRows.length} Filas
+                                        Reemplazar Presupuesto ({parsedRows.length})
                                     </>
                                 )}
                             </button>
@@ -459,7 +449,7 @@ export const ImportExcelPresupuestoModal: React.FC<ImportExcelPresupuestoModalPr
                             }}
                             className="rounded bg-emerald-600 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-500"
                         >
-                            Continuar
+                            Ver Presupuesto
                         </button>
                     )}
                 </div>

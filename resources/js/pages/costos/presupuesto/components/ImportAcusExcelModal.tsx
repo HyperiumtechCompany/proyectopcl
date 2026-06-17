@@ -103,7 +103,6 @@ export const ImportAcusExcelModal: React.FC<ImportAcusExcelModalProps> = ({
                     headers: {
                         'Content-Type': 'multipart/form-data',
                         'Accept': 'application/json',
-                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
                     },
                 }
             );

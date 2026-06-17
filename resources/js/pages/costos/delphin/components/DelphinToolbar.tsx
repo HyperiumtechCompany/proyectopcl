@@ -70,6 +70,8 @@ interface Props {
     isGanttSaving:  boolean;
     onSaveBudget:   () => void;
     onSaveGantt:    () => void;
+    onImportExcel?: () => void;
+    onImportAcus?:  () => void;
 }
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -219,7 +221,7 @@ export function DelphinToolbar({
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
     onOpenSettings, onImport,
-    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,
+    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, onImportExcel, onImportAcus
 }: Props) {
     const noSel   = selectedRowId === null;
     const isDirty  = mode === 'budget' ? budgetDirty : ganttDirty;
@@ -406,6 +408,24 @@ export function DelphinToolbar({
                     <span className="shrink-0 text-[10px] text-amber-400">
                         ●<span className="ml-1 hidden sm:inline">Sin guardar</span>
                     </span>
+                )}
+                {mode === 'budget' && (
+                    <>
+                        <Btn
+                            icon={<Upload size={13} />}
+                            label="Imp. Presupuesto"
+                            title="Importar Presupuesto desde Excel"
+                            variant="primary"
+                            onClick={onImportExcel}
+                        />
+                        <Btn
+                            icon={<Upload size={13} />}
+                            label="Imp. ACUs"
+                            title="Importar ACUs desde Excel"
+                            variant="primary"
+                            onClick={onImportAcus}
+                        />
+                    </>
                 )}
                 {mode === 'cpm' && (
                     <Btn
