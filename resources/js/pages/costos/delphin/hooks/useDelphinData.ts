@@ -9,6 +9,7 @@ import {
     type BudgetFields,
     type DelphinRow,
 } from '../types';
+import type { ParsePresupuestoResult } from '../helpers/parsePresupuestoExcel';
 
 interface Options {
     initialTasks: GanttTask[];
@@ -17,11 +18,51 @@ interface Options {
     calendarSettings: CalendarSettings;
 }
 
+// When cronograma is empty but presupuesto has data, synthesize GanttTask skeletons
+// so the budget tree is still visible. CPM fields (dates, duration) default to empty.
+function synthesizeTasksFromRows(rows: any[]): GanttTask[] {
+    const partidaToId = new Map<string, number>(
+        rows.map((r: any) => [String(r.partida ?? ''), Number(r.id)]),
+    );
+    return rows.map((row: any) => {
+        const partida = String(row.partida ?? '');
+        const nivelFromPartida = partida !== '' ? partida.split('.').length : 1;
+        const nivel = Number(row.nivel ?? 0) || nivelFromPartida;
+        let parentId: number | null = row.parent_id ?? null;
+        if (!parentId && partida.includes('.')) {
+            const parts = partida.split('.');
+            parts.pop();
+            parentId = partidaToId.get(parts.join('.')) ?? null;
+        }
+        return {
+            id:            Number(row.id),
+            parent_id:     parentId,
+            nivel,
+            item_order:    Number(row.item_order ?? 0),
+            partida,
+            descripcion:   String(row.descripcion ?? ''),
+            duracion_dias: 0,
+            fecha_inicio:  null,
+            fecha_fin:     null,
+            avance:        0,
+            predecesoras:  [],
+            presupuesto:   Number(row.parcial ?? 0),
+        } as GanttTask;
+    });
+}
+
 export function useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings }: Options) {
+    // If cronograma is empty but presupuesto has rows, build synthetic tasks so
+    // the budget panel is visible. CPM data will be blank until the user fills it.
+    const effectiveTasks: GanttTask[] =
+        initialTasks.length > 0 || initialRows.length === 0
+            ? initialTasks
+            : synthesizeTasksFromRows(initialRows);
+
     // ── Budget state keyed by gantt task ID ────────────────────────────────────
     const [budgetMap, setBudgetMap] = useState<Map<number, BudgetFields>>(() => {
         const map = new Map<number, BudgetFields>();
-        for (const task of initialTasks) {
+        for (const task of effectiveTasks) {
             const br = initialRows.find((r) => r.partida === task.partida);
             map.set(task.id, {
                 unidad:          br?.unidad          ?? '',
@@ -36,13 +77,32 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
     const [isSavingBudget, setIsSavingBudget] = useState(false);
 
     // ── Gantt state ────────────────────────────────────────────────────────────
-    const ganttState = useGanttTasks(initialTasks, schedulingMode, calendarSettings);
+    const ganttState = useGanttTasks(effectiveTasks, schedulingMode, calendarSettings);
+
+    // ── Pending budget from Excel import (partida → BudgetFields) ────────────
+    const pendingBudgetRef = useRef<Map<string, BudgetFields> | null>(null);
 
     // ── Sync budget entries when tasks are added/removed ──────────────────────
     const prevTaskIdsRef = useRef(new Set(initialTasks.map((t) => t.id)));
 
     useEffect(() => {
         const currentIds = new Set(ganttState.tasks.map((t) => t.id));
+
+        // ── Excel import: apply pending budget keyed by partida ───────────────
+        if (pendingBudgetRef.current) {
+            const pending = pendingBudgetRef.current;
+            pendingBudgetRef.current = null;
+            const next = new Map<number, BudgetFields>();
+            ganttState.tasks.forEach((t) => {
+                next.set(t.id, pending.get(t.partida) ?? defaultBudget());
+            });
+            setBudgetMap(next);
+            setBudgetDirty(true);
+            prevTaskIdsRef.current = currentIds;
+            return;
+        }
+
+        // ── Normal sync: only fill in newly added rows with defaults ──────────
         const additions: number[] = [];
         currentIds.forEach((id) => {
             if (!prevTaskIdsRef.current.has(id)) additions.push(id);
@@ -57,16 +117,44 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         prevTaskIdsRef.current = currentIds;
     }, [ganttState.tasks]);
 
-    // ── Merged rows for display ────────────────────────────────────────────────
-    const delphinRows = useMemo<DelphinRow[]>(
-        () => ganttState.tasks.map((task) => ({ ...task, ...(budgetMap.get(task.id) ?? defaultBudget()) })),
-        [ganttState.tasks, budgetMap],
-    );
+    // ── Merged rows for display (with hierarchical parcial sums) ─────────────
+    const delphinRows = useMemo<DelphinRow[]>(() => {
+        const raw = ganttState.tasks.map((task) => ({
+            ...task,
+            ...(budgetMap.get(task.id) ?? defaultBudget()),
+        }));
 
-    const visibleDelphinRows = useMemo<DelphinRow[]>(
-        () => ganttState.visibleTasks.map((task) => ({ ...task, ...(budgetMap.get(task.id) ?? defaultBudget()) })),
-        [ganttState.visibleTasks, budgetMap],
-    );
+        // Bottom-up aggregation: group nodes = sum of children; leaves keep their own parcial
+        const gids = ganttState.groupIds;
+        const parcialMap = new Map<number, number>();
+        for (const row of raw) {
+            parcialMap.set(row.id, gids.has(row.id) ? 0 : (row.parcial ?? 0));
+        }
+        for (let i = raw.length - 1; i >= 0; i--) {
+            const row = raw[i];
+            if (row.parent_id != null) {
+                const pid = Number(row.parent_id);
+                if (parcialMap.has(pid)) {
+                    parcialMap.set(pid, (parcialMap.get(pid) ?? 0) + (parcialMap.get(row.id) ?? 0));
+                }
+            }
+        }
+
+        return raw.map((row) => {
+            const computed = Math.round((parcialMap.get(row.id) ?? row.parcial) * 100) / 100;
+            return computed === row.parcial ? row : { ...row, parcial: computed };
+        });
+    }, [ganttState.tasks, budgetMap, ganttState.groupIds]);
+
+    // Visible subset re-uses the already-computed hierarchical parcials from delphinRows
+    const visibleDelphinRows = useMemo<DelphinRow[]>(() => {
+        const parcialById = new Map(delphinRows.map((r) => [r.id, r.parcial]));
+        return ganttState.visibleTasks.map((task) => ({
+            ...task,
+            ...(budgetMap.get(task.id) ?? defaultBudget()),
+            parcial: parcialById.get(task.id) ?? 0,
+        }));
+    }, [ganttState.visibleTasks, budgetMap, delphinRows]);
 
     // ── Update budget field ────────────────────────────────────────────────────
     const updateBudgetField = useCallback((id: number, field: string, value: any) => {
@@ -126,6 +214,23 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         [ganttState.tasks, budgetMap],
     );
 
+    // ── Bulk import from Excel (Presupuesto General) ──────────────────────────
+    const importDelphinRows = useCallback(
+        ({ rows }: ParsePresupuestoResult) => {
+            // Separate budget fields from gantt task fields and build lookup
+            const budgetByPartida = new Map<string, BudgetFields>();
+            const tasks: GanttTask[] = rows.map(({ unidad, metrado, precio_unitario, parcial, ...task }) => {
+                budgetByPartida.set(task.partida, { unidad, metrado, precio_unitario, parcial });
+                return task as GanttTask;
+            });
+            // Store budget data so the effect can apply it after importTasks sets state
+            pendingBudgetRef.current = budgetByPartida;
+            ganttState.importTasks(tasks);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [ganttState.importTasks],
+    );
+
     return {
         delphinRows,
         visibleDelphinRows,
@@ -144,13 +249,17 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         toggleExpand: ganttState.toggleExpand,
         expandAll:    ganttState.expandAll,
         collapseAll:  ganttState.collapseAll,
-        addTaskAfter: ganttState.addTaskAfter,
-        addChildTask: ganttState.addChildTask,
-        deleteTask:   ganttState.deleteTask,
-        indentTask:   ganttState.indentTask,
-        outdentTask:  ganttState.outdentTask,
-        saveTasks:    ganttState.saveTasks,
-        applyBarMove: ganttState.applyBarMove,
-        importTasks:  ganttState.importTasks,
+        addTaskAfter:  ganttState.addTaskAfter,
+        addChildTask:  ganttState.addChildTask,
+        deleteTask:    ganttState.deleteTask,
+        indentTask:    ganttState.indentTask,
+        outdentTask:   ganttState.outdentTask,
+        moveTaskUp:    ganttState.moveTaskUp,
+        moveTaskDown:  ganttState.moveTaskDown,
+        duplicateTask: ganttState.duplicateTask,
+        saveTasks:         ganttState.saveTasks,
+        applyBarMove:      ganttState.applyBarMove,
+        importTasks:       ganttState.importTasks,
+        importDelphinRows,
     };
 }

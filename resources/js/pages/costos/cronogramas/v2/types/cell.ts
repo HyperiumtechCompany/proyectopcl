@@ -11,6 +11,8 @@ export interface ColumnDef {
     editable: boolean;
     /** Options for type 'select' cells */
     options?: string[];
+    /** Decimal places for numeric display (number/readonly cells) */
+    decimals?: number;
 }
 
 export interface EditState {
@@ -27,7 +29,10 @@ export type RowAction =
     | 'indent'
     | 'outdent'
     | 'expand'
-    | 'collapse';
+    | 'collapse'
+    | 'moveUp'
+    | 'moveDown'
+    | 'duplicate';
 
 export const COLUMNS: ColumnDef[] = [
     { key: 'item_order',    label: 'N°',           type: 'readonly',     width: 42,  align: 'center', editable: false },

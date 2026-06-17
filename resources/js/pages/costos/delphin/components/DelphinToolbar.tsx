@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+    ArrowDown,
+    ArrowUp,
     BarChart2,
     Bot,
     Calendar,
     CalendarDays,
     ChevronsDownUp,
     ChevronsUpDown,
+    Copy,
     CornerDownRight,
     GitBranch,
     Hand,
@@ -49,6 +52,9 @@ interface Props {
     onDeleteRow:   () => void;
     onIndent:      () => void;
     onOutdent:     () => void;
+    onMoveUp:      () => void;
+    onMoveDown:    () => void;
+    onDuplicate:   () => void;
     onExpandAll:   () => void;
     onCollapseAll: () => void;
 
@@ -63,6 +69,7 @@ interface Props {
     onBarLabelChange:    (l: GanttBarLabel) => void;
     onOpenSettings:      () => void;
     onImport?:           () => void;
+    onImportExcel?:      () => void;
 
     // Save (context-aware)
     budgetDirty:    boolean;
@@ -219,10 +226,11 @@ function ConfigDropdown({
 // ─────────────────────────────────────────────────────────────────────────────
 export function DelphinToolbar({
     mode, subView, onModeChange, onSubView,
-    selectedRowId, onAddRow, onAddChild, onDeleteRow, onIndent, onOutdent, onExpandAll, onCollapseAll,
+    selectedRowId, onAddRow, onAddChild, onDeleteRow, onIndent, onOutdent,
+    onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport,
+    onOpenSettings, onImport, onImportExcel,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,
     onExport,
 }: Props) {
@@ -311,6 +319,10 @@ export function DelphinToolbar({
                     <Divider />
                     <Btn icon={<IndentIncrease size={13} />}  label="Indentar"  title="Indentar (Tab)"        disabled={noSel} onClick={onIndent} />
                     <Btn icon={<IndentDecrease size={13} />}  label="Outdentar" title="Outdentar (Shift+Tab)" disabled={noSel} onClick={onOutdent} />
+                    <Divider />
+                    <Btn icon={<ArrowUp size={13} />}         label="Subir"     title="Mover fila arriba (Alt+↑)"   disabled={noSel} onClick={onMoveUp} />
+                    <Btn icon={<ArrowDown size={13} />}       label="Bajar"     title="Mover fila abajo (Alt+↓)"    disabled={noSel} onClick={onMoveDown} />
+                    <Btn icon={<Copy size={13} />}            label="Duplicar"  title="Duplicar fila (Ctrl+D)"      disabled={noSel} onClick={onDuplicate} />
                     <Divider />
                     <Btn icon={<ChevronsUpDown size={13} />}  label="Expandir"  onClick={onExpandAll} />
                     <Btn icon={<ChevronsDownUp size={13} />}  label="Colapsar"  onClick={onCollapseAll} />
@@ -402,6 +414,14 @@ export function DelphinToolbar({
                     <span className="shrink-0 text-[10px] text-amber-400">
                         ●<span className="ml-1 hidden sm:inline">Sin guardar</span>
                     </span>
+                )}
+                {mode === 'budget' && (
+                    <Btn
+                        icon={<Upload size={13} />}
+                        label="Imp. Excel"
+                        title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
+                        variant="default"
+                        onClick={onImportExcel}/>
                 )}
                 {mode === 'cpm' && (
                     <Btn

@@ -62,6 +62,15 @@ class CostoProject extends Model
         'etts',
     ];
 
+    private const LEGACY_PRESUPUESTO_MODULE_TYPES = [
+        'presupuesto_gg',
+        'presupuesto_insumos',
+        'presupuesto_remuneraciones',
+        'presupuesto_acus',
+        'presupuesto_indice',
+        'presupuesto_indices',
+    ];
+
     // ─── Relations ───────────────────────────────────────────────────────────────
 
     public function user(): BelongsTo
@@ -79,21 +88,47 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
+    public function hasModule(string $moduleType): bool
+    {
+        $moduleTypes = $moduleType === 'presupuesto'
+            ? array_merge(['presupuesto'], self::LEGACY_PRESUPUESTO_MODULE_TYPES)
+            : [$moduleType];
+
+        if ($this->relationLoaded('modules')) {
+            return $this->modules
+                ->whereIn('module_type', $moduleTypes)
+                ->contains('enabled', true);
+        }
+
+        return $this->enabledModules()
+            ->whereIn('module_type', $moduleTypes)
+            ->exists();
+    }
+
+    public function hasUnifiedPresupuesto(): bool
+    {
+        return $this->hasModule('presupuesto');
+    }
+
+    public static function generateDatabaseName(int $userId): string
+    {
+        return 'costos_user_'.$userId.'_'.now()->format('YmdHis').'_'.strtolower(str()->random(6));
+    }
+
     // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
-public function departamento(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'departamento_id');
-}
+    public function departamento(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'departamento_id');
+    }
 
-public function provincia(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'provincia_id');
-}
+    public function provincia(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'provincia_id');
+    }
 
-public function distrito(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'distrito_id');
-}
-
+    public function distrito(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'distrito_id');
+    }
 }

@@ -8,6 +8,7 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { abbreviateText } from '@/lib/text';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 export function Breadcrumbs({
@@ -19,20 +20,29 @@ export function Breadcrumbs({
         <>
             {breadcrumbs.length > 0 && (
                 <Breadcrumb>
-                    <BreadcrumbList>
+                    <BreadcrumbList className="flex-nowrap overflow-hidden">
                         {breadcrumbs.map((item, index) => {
                             const isLast = index === breadcrumbs.length - 1;
+                            const title = abbreviateText(item.title);
+
                             return (
                                 <Fragment key={index}>
-                                    <BreadcrumbItem>
+                                    <BreadcrumbItem className="min-w-0 shrink">
                                         {isLast ? (
-                                            <BreadcrumbPage>
-                                                {item.title}
+                                            <BreadcrumbPage
+                                                className="block max-w-[min(42rem,70vw)] truncate"
+                                                title={item.title}
+                                            >
+                                                {title}
                                             </BreadcrumbPage>
                                         ) : (
                                             <BreadcrumbLink asChild>
-                                                <Link href={item.href}>
-                                                    {item.title}
+                                                <Link
+                                                    href={item.href}
+                                                    className="block max-w-[min(42rem,70vw)] truncate"
+                                                    title={item.title}
+                                                >
+                                                    {title}
                                                 </Link>
                                             </BreadcrumbLink>
                                         )}

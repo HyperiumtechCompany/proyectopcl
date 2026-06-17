@@ -21,6 +21,8 @@ interface Props {
     isExpanded: boolean;
     editState: EditState | null;
     style: React.CSSProperties;
+    /** Text color class applied to the description cell (hierarchy coloring) */
+    descTextClass?: string;
     onSelect: (id: number) => void;
     onStartEdit: (rowId: number, colKey: string) => void;
     onCommitField: <K extends keyof GanttTask>(
@@ -42,6 +44,7 @@ const GanttGridRowComponent = function GanttGridRow({
     isExpanded,
     editState,
     style,
+    descTextClass,
     onSelect,
     onStartEdit,
     onCommitField,
@@ -137,7 +140,7 @@ const GanttGridRowComponent = function GanttGridRow({
                         )}
 
                         {col.type === 'readonly' && (
-                            <CellReadOnly value={raw} align={col.align} />
+                            <CellReadOnly value={raw} align={col.align} decimals={col.decimals} />
                         )}
                         {col.type === 'text' && (
                             <CellText
@@ -154,6 +157,7 @@ const GanttGridRowComponent = function GanttGridRow({
                                         ? task.partida
                                         : undefined
                                 }
+                                textColorClass={col.key === 'descripcion' ? descTextClass : undefined}
                                 onCommit={(v) =>
                                     onCommitField(task.id, col.key as any, v as any)
                                 }
@@ -166,7 +170,7 @@ const GanttGridRowComponent = function GanttGridRow({
                             <CellNumber
                                 value={(raw as number) ?? 0}
                                 isEditing={editing}
-                                decimals={col.key === 'presupuesto' ? 2 : 0}
+                                decimals={col.decimals ?? 0}
                                 min={col.key === 'duracion_dias' ? 1 : undefined}
                                 align={col.align}
                                 onCommit={(v) =>
@@ -233,6 +237,7 @@ const areEqual = (prev: Props, next: Props) =>
     prev.isSelected    === next.isSelected &&
     prev.isGroup       === next.isGroup &&
     prev.isExpanded    === next.isExpanded &&
+    prev.descTextClass === next.descTextClass &&
     prev.onContextMenu === next.onContextMenu &&
     (prev.editState?.rowId === prev.task.id) ===
         (next.editState?.rowId === next.task.id) &&
