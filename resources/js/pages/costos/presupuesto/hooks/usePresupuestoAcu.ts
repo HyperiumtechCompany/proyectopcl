@@ -1,6 +1,72 @@
 import axios from 'axios';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
+
+const ACU_BATCH_SIZE = 8; // concurrent requests per round — keeps server load manageable
+
+export interface AcuFlushProgress {
+    done:    number;
+    total:   number;
+    pct:     number;
+    etaSecs: number | null;
+}
+
+// Mirrors the PHP calculateACU logic — keeps visual preview consistent with DB result
+function r2(n: number): number { return Math.round(n * 100) / 100; }
+
+function calculateAcuLocally(acuData: Record<string, any>) {
+    const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => ({
+        ...item,
+        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+    }));
+    const costoManoObra = r2(manoDeObra.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
+
+    const materiales = (acuData.materiales as any[] || []).map((item: any) => ({
+        ...item,
+        parcial: r2(
+            Number(item.cantidad ?? 0) *
+            Number(item.precio_unitario ?? 0) *
+            Math.max(1, Number(item.factor_desperdicio ?? 1))
+        ),
+    }));
+    const costoMateriales = r2(materiales.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
+
+    const equipos = (acuData.equipos as any[] || []).map((item: any) => {
+        const isHerramientas = String(item.descripcion ?? '').toLowerCase().includes('herramienta');
+        if (isHerramientas) {
+            const parcial = r2(costoManoObra * (Number(item.cantidad ?? 0) / 100));
+            return { ...item, precio_hora: costoManoObra, parcial };
+        }
+        return { ...item, parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_hora ?? 0)) };
+    });
+    const costoEquipos = r2(equipos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
+
+    const subcontratos = (acuData.subcontratos as any[] || []).map((item: any) => ({
+        ...item,
+        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+    }));
+    const costoSubcontratos = r2(subcontratos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
+
+    const subpartidas = (acuData.subpartidas as any[] || []).map((item: any) => ({
+        ...item,
+        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+    }));
+    const costoSubpartidas = r2(subpartidas.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
+
+    return {
+        costo_mano_obra: costoManoObra,
+        costo_materiales: costoMateriales,
+        costo_equipos: costoEquipos,
+        costo_subcontratos: costoSubcontratos,
+        costo_subpartidas: costoSubpartidas,
+        costo_unitario_total: r2(costoManoObra + costoMateriales + costoEquipos + costoSubcontratos + costoSubpartidas),
+        mano_de_obra: manoDeObra,
+        materiales,
+        equipos,
+        subcontratos,
+        subpartidas,
+    };
+}
 
 interface UsePresupuestoAcuProps {
     projectId: number;
@@ -10,6 +76,7 @@ interface UsePresupuestoAcuProps {
     selectedPartidaData: { descripcion: string; unidad: string } | null;
     lastSaved: Date | null;
     setSheetVersion: React.Dispatch<React.SetStateAction<number>>;
+    refetchVersion?: number;  // increment to force a refetch of acuRows
 }
 
 export function usePresupuestoAcu({
@@ -20,10 +87,14 @@ export function usePresupuestoAcu({
     selectedPartidaData,
     lastSaved,
     setSheetVersion,
+    refetchVersion = 0,
 }: UsePresupuestoAcuProps) {
     const [acuRows, setAcuRows] = useState<ACURowSummary[]>([]);
     const [acuLoading, setAcuLoading] = useState(false);
     const [acuError, setAcuError] = useState<string | null>(null);
+    const [acuDirty, setAcuDirty] = useState(false);
+    // Pending ACU edits not yet persisted to DB (partida → payload)
+    const pendingAcuRef = useRef<Map<string, Record<string, any>>>(new Map());
 
     const parseJsonArrayField = useCallback(
         (value: unknown): ACUComponenteRow[] => {
@@ -187,7 +258,7 @@ export function usePresupuestoAcu({
             });
 
         return () => controller.abort();
-    }, [mapAcuRows, projectId, subsection]);
+    }, [mapAcuRows, projectId, subsection, refetchVersion]);
 
     const normalizeNumber = (value: unknown, fallback = 0): number => {
         const num = Number(value);
@@ -304,11 +375,85 @@ export function usePresupuestoAcu({
         }
     }, [projectId, mapAcuRows, setSheetVersion]);
 
+    // Visual-first save: calculates locally and marks as pending (no DB call)
+    const localSaveAcu = useCallback((acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
+        const normalized = normalizeAcuData(acuData);
+        const calculated = calculateAcuLocally(normalized);
+        const updatedAcu: ACURowSummary = {
+            id: Number(normalized.id ?? 0),
+            partida: String(normalized.partida ?? ''),
+            descripcion: String(normalized.descripcion ?? ''),
+            unidad: String(normalized.unidad ?? ''),
+            rendimiento: Number(normalized.rendimiento ?? 1),
+            ...calculated,
+        };
+        setAcuRows((prev) => {
+            const exists = prev.some((a) => a.partida === updatedAcu.partida);
+            if (exists) return prev.map((a) => a.partida === updatedAcu.partida ? updatedAcu : a);
+            return [...prev, updatedAcu];
+        });
+        const payload = { ...normalized };
+        if (options?.updateProjectPrices !== undefined) payload.update_project_prices = options.updateProjectPrices;
+        pendingAcuRef.current.set(updatedAcu.partida, payload);
+        setAcuDirty(true);
+        return { success: true as const, acu: updatedAcu };
+    }, [normalizeAcuData]);
+
+    // Batch-persists all pending ACU edits to DB (called on global save)
+    // Processes BATCH_SIZE requests concurrently to avoid hammering the server.
+    const flushPendingAcus = useCallback(
+        async (onProgress?: (p: AcuFlushProgress) => void): Promise<boolean> => {
+            const pending = Array.from(pendingAcuRef.current.values());
+            if (pending.length === 0) return true;
+
+            const total = pending.length;
+            const startMs = Date.now();
+            let done = 0;
+
+            // Signal initial state so callers can show the overlay immediately
+            onProgress?.({ done: 0, total, pct: 0, etaSecs: null });
+
+            try {
+                for (let i = 0; i < total; i += ACU_BATCH_SIZE) {
+                    const batch = pending.slice(i, i + ACU_BATCH_SIZE);
+                    await Promise.all(
+                        batch.map((payload) =>
+                            axios.post(
+                                `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
+                                payload,
+                            ),
+                        ),
+                    );
+                    done = Math.min(i + ACU_BATCH_SIZE, total);
+
+                    if (onProgress) {
+                        const elapsedSec = (Date.now() - startMs) / 1000;
+                        const rate = elapsedSec > 0 ? done / elapsedSec : 0;
+                        const etaSecs = rate > 0 ? Math.round((total - done) / rate) : null;
+                        onProgress({ done, total, pct: Math.round((done / total) * 100), etaSecs });
+                    }
+                }
+
+                pendingAcuRef.current.clear();
+                setAcuDirty(false);
+                return true;
+            } catch (e) {
+                console.error('Error al persistir ACUs pendientes:', e);
+                return false;
+            }
+        },
+        [projectId],
+    );
+
     return {
         acuRows,
         acuLoading,
         acuError,
         selectedAcu,
         saveAcu,
+        localSaveAcu,
+        flushPendingAcus,
+        acuDirty,
+        pendingAcuCount: pendingAcuRef.current.size,
     };
 }

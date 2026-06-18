@@ -24,10 +24,7 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
     projectData,
     sinLayout = false,
 }) => {
-    console.log('🔴 MATERIALES RECIBIDOS EN CronogramaMateriales:', materiales);
-    console.log('🔴 CANTIDAD:', materiales.length);
     const { toasts, show: showToast } = useToast();
-    console.log('📋 projectData en componente:', projectData);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(estaGuardado);
@@ -46,10 +43,6 @@ const CronogramaMateriales: React.FC<CronogramaProps> = ({
         }
         return [];
     }, [materiales, materialesPorTipo]);
-
-    console.log('🔍 Tipos en todosMateriales:', [...new Set(todosMateriales.map(m => m.tipo))]);
-    console.log('🔍 materialesPorTipo:', materialesPorTipo ? Object.keys(materialesPorTipo) : 'vacio');
-
     const {
         viewMode, setViewMode,
         sortField, sortDir, toggleSort,

@@ -58,6 +58,15 @@ class CostoProject extends Model
         'etts',
     ];
 
+    private const LEGACY_PRESUPUESTO_MODULE_TYPES = [
+        'presupuesto_gg',
+        'presupuesto_insumos',
+        'presupuesto_remuneraciones',
+        'presupuesto_acus',
+        'presupuesto_indice',
+        'presupuesto_indices',
+    ];
+
     // ─── Relations ───────────────────────────────────────────────────────────────
 
     public function user(): BelongsTo
@@ -75,7 +84,7 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
-    // ─── Relaciones de Ubicación ────────────────────────────────────────────────
+    // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
     public function departamento(): BelongsTo
     {
@@ -99,9 +108,18 @@ class CostoProject extends Model
      */
     public function hasModule(string $moduleType): bool
     {
-        return $this->modules()
-            ->where('module_type', $moduleType)
-            ->where('enabled', true)
+        $moduleTypes = $moduleType === 'presupuesto'
+            ? array_merge(['presupuesto'], self::LEGACY_PRESUPUESTO_MODULE_TYPES)
+            : [$moduleType];
+
+        if ($this->relationLoaded('modules')) {
+            return $this->modules
+                ->whereIn('module_type', $moduleTypes)
+                ->contains('enabled', true);
+        }
+
+        return $this->enabledModules()
+            ->whereIn('module_type', $moduleTypes)
             ->exists();
     }
 
@@ -118,6 +136,9 @@ class CostoProject extends Model
      */
     public static function generateDatabaseName(int $userId): string
     {
-        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
+        return 'costos_user_'.$userId.'_'.now()->format('YmdHis').'_'.strtolower(str()->random(6));
     }
+
 }
+
+

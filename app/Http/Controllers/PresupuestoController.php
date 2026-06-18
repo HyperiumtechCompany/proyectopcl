@@ -1686,8 +1686,7 @@ class PresupuestoController extends Controller
      */
     private function validateModuleEnabled(CostoProject $project): void
     {
-        $enabled = $project->enabledModules()->where('module_type', 'presupuesto')->exists();
-        if (! $enabled) {
+        if (! $project->hasUnifiedPresupuesto()) {
             abort(403, 'El módulo de presupuesto no está habilitado para este proyecto.');
         }
     }

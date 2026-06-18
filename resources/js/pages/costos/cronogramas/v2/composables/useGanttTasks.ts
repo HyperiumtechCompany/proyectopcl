@@ -667,6 +667,122 @@ export function useGanttTasks(
         [calendarSettings],
     );
 
+    // ── Referencia al estado actual de tareas (para pre-generar IDs en duplicar) ─
+    const tasksRef = useRef(tasks);
+    useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+    // ── Mover fila hacia arriba (intercambiar con hermano anterior) ───────────
+    const moveTaskUp = useCallback(
+        (id: number) => {
+            setTasks((prev) => {
+                const idx = prev.findIndex((t) => t.id === id);
+                if (idx <= 0) return prev;
+                const task = prev[idx];
+
+                // Fin del bloque actual (tarea + descendientes)
+                let blockEnd = idx + 1;
+                while (blockEnd < prev.length && prev[blockEnd].nivel > task.nivel) blockEnd++;
+
+                // Inicio del hermano anterior: retroceder sobre descendientes
+                let prevSibIdx = idx - 1;
+                while (prevSibIdx >= 0 && prev[prevSibIdx].nivel > task.nivel) prevSibIdx--;
+                if (prevSibIdx < 0 || prev[prevSibIdx].nivel !== task.nivel) return prev;
+
+                const currBlock    = prev.slice(idx, blockEnd);
+                const prevSibBlock = prev.slice(prevSibIdx, idx);
+
+                return recomputeHierarchy([
+                    ...prev.slice(0, prevSibIdx),
+                    ...currBlock,
+                    ...prevSibBlock,
+                    ...prev.slice(blockEnd),
+                ], calendarSettings);
+            });
+            setDirtyIds((prev) => new Set([...prev, id]));
+        },
+        [calendarSettings],
+    );
+
+    // ── Mover fila hacia abajo (intercambiar con hermano siguiente) ───────────
+    const moveTaskDown = useCallback(
+        (id: number) => {
+            setTasks((prev) => {
+                const idx = prev.findIndex((t) => t.id === id);
+                if (idx === -1) return prev;
+                const task = prev[idx];
+
+                // Fin del bloque actual
+                let blockEnd = idx + 1;
+                while (blockEnd < prev.length && prev[blockEnd].nivel > task.nivel) blockEnd++;
+
+                // El siguiente hermano empieza en blockEnd
+                if (blockEnd >= prev.length || prev[blockEnd].nivel !== task.nivel) return prev;
+
+                // Fin del bloque del hermano siguiente
+                let nextSibEnd = blockEnd + 1;
+                while (nextSibEnd < prev.length && prev[nextSibEnd].nivel > task.nivel) nextSibEnd++;
+
+                const currBlock    = prev.slice(idx, blockEnd);
+                const nextSibBlock = prev.slice(blockEnd, nextSibEnd);
+
+                return recomputeHierarchy([
+                    ...prev.slice(0, idx),
+                    ...nextSibBlock,
+                    ...currBlock,
+                    ...prev.slice(nextSibEnd),
+                ], calendarSettings);
+            });
+            setDirtyIds((prev) => new Set([...prev, id]));
+        },
+        [calendarSettings],
+    );
+
+    // ── Duplicar fila (+ descendientes) e insertar inmediatamente después ─────
+    const duplicateTask = useCallback(
+        (id: number): number => {
+            // Pre-generar IDs fuera de setTasks para evitar efectos secundarios
+            const currentTasks = tasksRef.current;
+            const srcIdx = currentTasks.findIndex((t) => t.id === id);
+            if (srcIdx === -1) return id;
+            const srcTask = currentTasks[srcIdx];
+            let srcEnd = srcIdx + 1;
+            while (srcEnd < currentTasks.length && currentTasks[srcEnd].nivel > srcTask.nivel) srcEnd++;
+            const blockSize = srcEnd - srcIdx;
+
+            const newIds = Array.from({ length: blockSize }, () => nextTmpId());
+            const newRootId = newIds[0];
+
+            setTasks((prev) => {
+                const idx = prev.findIndex((t) => t.id === id);
+                if (idx === -1) return prev;
+                const task = prev[idx];
+                let end = idx + 1;
+                while (end < prev.length && prev[end].nivel > task.nivel) end++;
+                const block = prev.slice(idx, end);
+
+                const idMap = new Map<number, number>();
+                block.forEach((t, i) => { idMap.set(t.id, newIds[i] ?? nextTmpId()); });
+
+                const duplicated = block.map((t) => ({
+                    ...t,
+                    id: idMap.get(t.id)!,
+                    parent_id: t.parent_id !== null ? (idMap.get(t.parent_id) ?? t.parent_id) : null,
+                    predecesoras: [],
+                }));
+
+                return recomputeHierarchy([
+                    ...prev.slice(0, end),
+                    ...duplicated,
+                    ...prev.slice(end),
+                ], calendarSettings);
+            });
+
+            setDirtyIds((prev) => new Set([...prev, newRootId]));
+            return newRootId;
+        },
+        [calendarSettings],
+    );
+
     // ── Mover / redimensionar barra con cascade ─────────────────────────────
     const applyBarMove = useCallback(
         (id: number, newStart: string, newDuration: number) => {
@@ -778,6 +894,9 @@ export function useGanttTasks(
         deleteTask,
         indentTask,
         outdentTask,
+        moveTaskUp,
+        moveTaskDown,
+        duplicateTask,
         saveTasks,
         applyBarMove,
         importTasks,

@@ -377,9 +377,11 @@ export default function Show() {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [migrating, setMigrating] = useState(false);
 
+    const projectBreadcrumbTitle = project.uei || project.nombre;
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Costos', href: '/costos' },
-        { title: project.nombre, href: `/costos/${project.id}` },
+        { title: projectBreadcrumbTitle, href: `/costos/${project.id}` },
     ];
 
     const identificationFields = [

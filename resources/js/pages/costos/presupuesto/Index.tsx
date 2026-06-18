@@ -1,5 +1,6 @@
 import { router, usePage, Head } from '@inertiajs/react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import {
     Building2,
     Calculator,
@@ -135,32 +136,66 @@ export default function Index() {
     }, [storeRows]);
 
     const handleSaveGeneral = async () => {
-        if (!isDirty && !isSaving) return; // Ignore if already saved
+        const anyDirty = isDirty || acuDirty;
+        if (!anyDirty || isSaving) return;
+
+        const confirm = await Swal.fire({
+            title: '¿Guardar cambios?',
+            text: 'Se guardarán todos los cambios pendientes en el presupuesto.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, guardar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d97706',
+            cancelButtonColor: '#475569',
+            background: '#1e293b',
+            color: '#f1f5f9',
+        });
+
+        if (!confirm.isConfirmed) return;
+
         setIsSaving(true);
         try {
-            const rawRows = useBudgetStore.getState().rows;
-            const currentRows = rawRows.map((row) => {
-                const {
-                    _level,
-                    _parentId,
-                    _expanded,
-                    _hasChildren,
-                    _index,
-                    ...cleanRow
-                } = row as any;
-                return cleanRow;
-            });
+            // 1. Persist pending ACU edits first
+            if (acuDirty) {
+                const acuOk = await flushPendingAcus();
+                if (!acuOk) {
+                    await Swal.fire({
+                        title: 'Error',
+                        text: 'No se pudieron guardar algunos ACUs. Intente nuevamente.',
+                        icon: 'error',
+                        background: '#1e293b',
+                        color: '#f1f5f9',
+                        confirmButtonColor: '#d97706',
+                    });
+                    return;
+                }
+            }
 
-            // The backend update controller expects a flat array of objects
-            await axios.patch(
-                `/costos/proyectos/${project.id}/presupuesto/general`,
-                { rows: currentRows },
-            );
-            setDirty(false);
-            setLastSavedTime(new Date());
+            // 2. Save presupuesto general rows
+            if (isDirty) {
+                const rawRows = useBudgetStore.getState().rows;
+                const currentRows = rawRows.map((row) => {
+                    const { _level, _parentId, _expanded, _hasChildren, _index, ...cleanRow } = row as any;
+                    return cleanRow;
+                });
+                await axios.patch(
+                    `/costos/proyectos/${project.id}/presupuesto/general`,
+                    { rows: currentRows },
+                );
+                setDirty(false);
+                setLastSavedTime(new Date());
+            }
         } catch (error) {
             console.error('Error saving budget', error);
-            alert('Error de sincronización con el servidor al guardar.');
+            await Swal.fire({
+                title: 'Error',
+                text: 'Error de sincronización con el servidor al guardar.',
+                icon: 'error',
+                background: '#1e293b',
+                color: '#f1f5f9',
+                confirmButtonColor: '#d97706',
+            });
         } finally {
             setIsSaving(false);
         }
@@ -243,26 +278,25 @@ export default function Index() {
         acuRows,
         acuLoading,
         selectedAcu,
-        saveAcu: baseSaveAcu,
+        localSaveAcu,
+        flushPendingAcus,
+        acuDirty,
     } = usePresupuestoAcu({
         projectId: project.id,
         subsection,
-        selectedCell: null, // Cell tracking is not needed in the same way for TanStack
+        selectedCell: null,
         selectedPartidaCode: selectedPartidaData ? selectedId : null,
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
     });
 
-    // Wrapped save so that AcuPanel updates budgetStore state appropriately
-    const handleSaveAcu = async (acuData: Record<string, any>) => {
-        const result = await baseSaveAcu(acuData);
+    // Visual-first: calculates locally and marks as pending — no DB call until global save
+    const handleSaveAcu = async (acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
+        const result = localSaveAcu(acuData, options);
         if (result.success && result.acu && selectedId === result.acu.partida) {
-            updateCell(
-                selectedId,
-                'precio_unitario',
-                result.acu.costo_unitario_total,
-            );
+            updateCell(selectedId, 'precio_unitario', result.acu.costo_unitario_total);
+            setDirty(true);
         }
         return result;
     };
@@ -477,9 +511,9 @@ export default function Index() {
 
 
                                             <button
-                                                className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
-                                                onClick={handleSaveGeneral} disabled={isSaving || !isDirty}>
-                                                {isSaving ? 'Guardando...' : isDirty ? 'Guardar' : '✓ Guardado'}
+                                                className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty || acuDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
+                                                onClick={handleSaveGeneral} disabled={isSaving || (!isDirty && !acuDirty)}>
+                                                {isSaving ? 'Guardando...' : (isDirty || acuDirty) ? 'Guardar' : '✓ Guardado'}
                                             </button>
 
                                             <span className="mx-1 h-4 w-px bg-slate-700" />
