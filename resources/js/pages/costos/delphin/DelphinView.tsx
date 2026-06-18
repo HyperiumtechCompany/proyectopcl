@@ -149,7 +149,7 @@ export default function DelphinView({
         toggleExpand, expandAll, collapseAll,
         addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask,
-        saveTasks, applyBarMove, importTasks, importDelphinRows,
+        saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
 
     // ── Timeline & critical path ──────────────────────────────────────────────
@@ -407,7 +407,7 @@ export default function DelphinView({
             reader.onload = (ev) => {
                 try {
                     const imported = parseMSProjectXML(ev.target?.result as string);
-                    importTasks(imported);
+                    importCronogramaTasks(imported);
                     toast(`Importadas ${imported.length} tareas (sin guardar).`, 'success');
                 } catch (err: any) {
                     toast('Error al importar: ' + (err?.message ?? 'XML inválido'), 'error');
@@ -543,8 +543,7 @@ export default function DelphinView({
                         <Panel
                             defaultSize={40}
                             minSize={18}
-                            className="flex min-h-0 flex-col overflow-hidden border-r border-slate-700"
-                        >
+                            className="flex min-h-0 flex-col overflow-hidden border-r border-slate-700">
                             {/* Search bar */}
                             <div className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-2.5">
                                 <Search size={12} className="shrink-0 text-slate-500" />
@@ -553,18 +552,15 @@ export default function DelphinView({
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Buscar descripción…"
-                                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none"
-                                />
-                                {searchQuery && (
-                                    <>
+                                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none"/>
+                                {searchQuery && (<>
                                         <span className="shrink-0 text-[10px] text-slate-500">
                                             {filteredRows.length} resultado{filteredRows.length !== 1 ? 's' : ''}
                                         </span>
                                         <button
                                             title="Limpiar búsqueda"
                                             className="shrink-0 text-slate-500 hover:text-slate-300"
-                                            onClick={() => setSearchQuery('')}
-                                        >
+                                            onClick={() => setSearchQuery('')}>
                                             <X size={12} />
                                         </button>
                                     </>
@@ -592,8 +588,7 @@ export default function DelphinView({
                                 onKeyDown={onKeyDown}
                                 onRowAction={handleRowAction}
                                 onToggleHidden={handleToggleHidden}
-                                onToggleDescExpand={() => setDescExpanded((p) => !p)}
-                            />
+                                onToggleDescExpand={() => setDescExpanded((p) => !p)}/>
                         </Panel>
 
                         <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
@@ -608,8 +603,7 @@ export default function DelphinView({
                                     selectedAcu={selectedAcu}
                                     projectId={project_id_int}
                                     selectedCell={null}
-                                    onSaveAcu={handleSaveAcu}
-                                />
+                                    onSaveAcu={handleSaveAcu}/>
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
                                 <GanttChart
@@ -623,8 +617,7 @@ export default function DelphinView({
                                     onScroll={onChartScroll}
                                     onSelect={selectRow}
                                     onBarCommit={handleBarCommit}
-                                    onContinuousZoom={handleContinuousZoom}
-                                />
+                                    onContinuousZoom={handleContinuousZoom}/>
                             )}
                         </Panel>
                     </Group>
@@ -635,8 +628,7 @@ export default function DelphinView({
                     open={settingsOpen}
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
-                    onSave={setCalendarSettings}
-                />
+                    onSave={setCalendarSettings}/>
                 <DelphinExportModal
                     open={exportOpen}
                     rows={delphinRows}
@@ -645,6 +637,7 @@ export default function DelphinView({
                     projectData={projectData}
                     onClose={() => setExportOpen(false)}
                 />
+
                 <ImportDelphinModal
                     open={importExcelOpen}
                     project={project}
@@ -652,15 +645,13 @@ export default function DelphinView({
                     delphinRows={delphinRows}
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
-                    onAcusImported={handleAcusImported}
-                />
+                    onAcusImported={handleAcusImported}/>
                 <input
                     ref={importInputRef}
                     type="file"
                     accept=".xml"
                     className="hidden"
-                    onChange={handleImportFile}
-                />
+                    onChange={handleImportFile}/>
             </div>
 
             {/* ── ACU flush progress overlay ─────────────────────────────── */}
@@ -675,10 +666,7 @@ export default function DelphinView({
 
                     {/* Progress bar */}
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-                        <div
-                            className="h-full rounded-full bg-amber-400 transition-all duration-300"
-                            style={{ width: `${flushProgress.pct}%` }}
-                        />
+                        <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: `${flushProgress.pct}%` }}/>
                     </div>
 
                     <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
