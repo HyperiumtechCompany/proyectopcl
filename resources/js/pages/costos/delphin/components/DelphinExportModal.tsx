@@ -19,28 +19,28 @@ const CONTENT_OPTIONS: {
     desc: string;
     sheets: string[];
 }[] = [
-    {
-        key: 'budget_only',
-        icon: <BarChart2 size={20} />,
-        title: 'Solo Presupuesto',
-        desc: 'Partidas, unidades, metrados y precios unitarios.',
-        sheets: ['Presupuesto General'],
-    },
-    {
-        key: 'budget_gantt',
-        icon: <Layers size={20} />,
-        title: 'Presupuesto + Cronograma',
-        desc: 'Ambas vistas en un único archivo.',
-        sheets: ['Presupuesto General', 'Cronograma General'],
-    },
-    {
-        key: 'gantt_only',
-        icon: <CalendarDays size={20} />,
-        title: 'Solo Cronograma',
-        desc: 'Duración, fechas, predecesoras y costo por partida.',
-        sheets: ['Cronograma General'],
-    },
-];
+        {
+            key: 'budget_only',
+            icon: <BarChart2 size={20} />,
+            title: 'Solo Presupuesto',
+            desc: 'Partidas, unidades, metrados y precios unitarios.',
+            sheets: ['Presupuesto General'],
+        },
+        {
+            key: 'budget_gantt',
+            icon: <Layers size={20} />,
+            title: 'Presupuesto + Cronograma',
+            desc: 'Ambas vistas en un único archivo.',
+            sheets: ['Presupuesto General', 'Cronograma General'],
+        },
+        {
+            key: 'gantt_only',
+            icon: <CalendarDays size={20} />,
+            title: 'Solo Cronograma',
+            desc: 'Duración, fechas, predecesoras y costo por partida.',
+            sheets: ['Cronograma General'],
+        },
+    ];
 
 // ── Opciones de formato ───────────────────────────────────────────────────────
 const FORMAT_OPTIONS: {
@@ -50,40 +50,52 @@ const FORMAT_OPTIONS: {
     icon: React.ReactNode;
     onlyGantt?: boolean; // si true → deshabilitado en budget_only
 }[] = [
-    {
-        key: 'excel',
-        label: 'Excel',
-        ext: '.xlsx',
-        icon: <FileSpreadsheet size={14} />,
-    },
-    {
-        key: 'pdf',
-        label: 'PDF',
-        ext: '.pdf',
-        icon: <FileText size={14} />,
-    },
-    {
-        key: 'msp',
-        label: 'MS Project',
-        ext: '.xml',
-        icon: <Milestone size={14} />,
-        onlyGantt: true,
-    },
-];
+        {
+            key: 'excel',
+            label: 'Excel',
+            ext: '.xlsx',
+            icon: <FileSpreadsheet size={14} />,
+        },
+        {
+            key: 'pdf',
+            label: 'PDF',
+            ext: '.pdf',
+            icon: <FileText size={14} />,
+        },
+        {
+            key: 'msp',
+            label: 'MS Project',
+            ext: '.xml',
+            icon: <Milestone size={14} />,
+            onlyGantt: true,
+        },
+    ];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
-    open:        boolean;
-    rows:        DelphinRow[];
+    open: boolean;
+    rows: DelphinRow[];
     projectName: string;
-    onClose:     () => void;
+    project?: any;
+    projectData?: {  // 👈 AGREGAR ESTO
+        id: number;
+        nombre: string;
+        codigo_cui: string;
+        codigo_local: string;
+        unidad_ejecutora: string;
+        propietario: string;
+        codigos_modulares: string;
+        plantilla_logo_izq_url: string | null;
+        plantilla_logo_der_url: string | null;
+    };
+    onClose: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export function DelphinExportModal({ open, rows, projectName, onClose }: Props) {
-    const [content,     setContent]     = useState<DelphinExportContent>('budget_gantt');
-    const [format,      setFormat]      = useState<DelphinExportFormat>('excel');
-    const [isExporting, setExporting]   = useState(false);
+export function DelphinExportModal({ open, rows, projectName, project, projectData, onClose }: Props) {
+    const [content, setContent] = useState<DelphinExportContent>('budget_gantt');
+    const [format, setFormat] = useState<DelphinExportFormat>('excel');
+    const [isExporting, setExporting] = useState(false);
 
     if (!open) return null;
 
@@ -94,7 +106,7 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
     const handleExport = async () => {
         setExporting(true);
         try {
-            await exportDelphin(content, resolvedFormat, rows, projectName);
+            await exportDelphin(content, resolvedFormat, rows, projectName, projectData);  // ✅ PASA projectData
         } finally {
             setExporting(false);
             onClose();
@@ -142,11 +154,10 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
                                         key={opt.key}
                                         type="button"
                                         onClick={() => setContent(opt.key)}
-                                        className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-all ${
-                                            active
-                                                ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/40'
-                                                : 'border-slate-700 bg-slate-800/60 hover:border-slate-500 hover:bg-slate-800'
-                                        }`}
+                                        className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-all ${active
+                                            ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/40'
+                                            : 'border-slate-700 bg-slate-800/60 hover:border-slate-500 hover:bg-slate-800'
+                                            }`}
                                     >
                                         <span className={`mt-0.5 shrink-0 ${active ? 'text-emerald-400' : 'text-slate-400'}`}>
                                             {opt.icon}
@@ -162,11 +173,10 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
                                                 {opt.sheets.map((s) => (
                                                     <span
                                                         key={s}
-                                                        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                                            active
-                                                                ? 'bg-emerald-900/60 text-emerald-300'
-                                                                : 'bg-slate-700 text-slate-300'
-                                                        }`}
+                                                        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${active
+                                                            ? 'bg-emerald-900/60 text-emerald-300'
+                                                            : 'bg-slate-700 text-slate-300'
+                                                            }`}
                                                     >
                                                         <FileSpreadsheet size={9} />
                                                         {s}
@@ -174,11 +184,10 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
                                                 ))}
                                             </div>
                                         </div>
-                                        <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-all ${
-                                            active
-                                                ? 'border-emerald-500 bg-emerald-500'
-                                                : 'border-slate-600 bg-transparent'
-                                        }`} />
+                                        <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-all ${active
+                                            ? 'border-emerald-500 bg-emerald-500'
+                                            : 'border-slate-600 bg-transparent'
+                                            }`} />
                                     </button>
                                 );
                             })}
@@ -193,7 +202,7 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
                         <div className="flex gap-2">
                             {FORMAT_OPTIONS.map((opt) => {
                                 const disabled = opt.onlyGantt && content === 'budget_only';
-                                const active   = format === opt.key && !disabled;
+                                const active = format === opt.key && !disabled;
                                 return (
                                     <button
                                         key={opt.key}
@@ -201,11 +210,10 @@ export function DelphinExportModal({ open, rows, projectName, onClose }: Props) 
                                         disabled={disabled}
                                         onClick={() => !disabled && setFormat(opt.key)}
                                         title={disabled ? 'No disponible para Solo Presupuesto' : opt.label}
-                                        className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-35 ${
-                                            active
-                                                ? 'border-sky-500 bg-sky-950/50 text-sky-300 ring-1 ring-sky-500/40'
-                                                : 'border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-500 hover:text-slate-200'
-                                        }`}
+                                        className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-35 ${active
+                                            ? 'border-sky-500 bg-sky-950/50 text-sky-300 ring-1 ring-sky-500/40'
+                                            : 'border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                                            }`}
                                     >
                                         <span className={active ? 'text-sky-400' : ''}>{opt.icon}</span>
                                         <span>{opt.label}</span>

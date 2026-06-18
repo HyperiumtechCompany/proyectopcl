@@ -127,7 +127,7 @@ export default function Index() {
 
     const [isSaving, setIsSaving] = useState(false);
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
-    const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | null>(null);
+    const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | 'excel-padres' | null>(null);
 
     const totalBudget = useMemo(() => {
         return storeRows
@@ -209,16 +209,36 @@ export default function Index() {
     // }, [isDirty, storeRows]);
 
     // Export handlers
-    const handleExport = async (format: 'excel' | 'pdf') => {
+    const handleExport = async (format: 'excel' | 'excel-padres' | 'pdf') => {
         setExportLoading(format);
         try {
-            const url = `/costos/proyectos/${project.id}/presupuesto/export/${format}`;
-            const response = await axios.get(url, { responseType: 'blob' });
-            const ext = format === 'excel' ? 'xlsx' : 'pdf';
+            let url = '';
+            let ext = '';
+
+            if (format === 'pdf') {
+                url = `/costos/proyectos/${project.id}/presupuesto/export/pdf`;
+                ext = 'pdf';
+            } else {
+                url = `/costos/proyectos/${project.id}/presupuesto/export/excel`;
+                ext = 'xlsx';
+            }
+
+            const response = await axios.get(url, {
+                params: format === 'excel-padres' ? { tipo: 'padres' } : {},
+                responseType: 'blob'
+            });
+
             const blob = new Blob([response.data]);
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `presupuesto_${project.nombre.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+
+            let nombreArchivo = 'presupuesto';
+            if (format === 'excel-padres') {
+                nombreArchivo += '_padres';
+            }
+            nombreArchivo += `_${project.nombre.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+
+            link.download = nombreArchivo;
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (e) {
@@ -468,11 +488,28 @@ export default function Index() {
                                                 className="flex items-center gap-1 rounded bg-emerald-900/50 px-2 py-1 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-800/60 disabled:opacity-50">
                                                 <FileSpreadsheet size={11} />{exportLoading === 'excel' ? '...' : 'Excel'}
                                             </button>
+
+                                        
                                             <button title="Exportar a PDF" onClick={() => handleExport('pdf')} disabled={exportLoading === 'pdf'}
                                                 className="flex items-center gap-1 rounded bg-red-900/50 px-2 py-1 text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-800/60 disabled:opacity-50">
                                                 <FileDown size={11} />{exportLoading === 'pdf' ? '...' : 'PDF'}
                                             </button>
+                                                {/* 🆕 BOTÓN EXCEL (PADRES) - AGREGAR JUSTO AQUÍ */}
+                                            <button
+                                                title="Exportar solo partidas padre"
+                                                onClick={() => handleExport('excel-padres')}
+                                                disabled={exportLoading === 'excel-padres'}
+                                                className="flex items-center gap-1 rounded bg-emerald-900/40 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-800/60 disabled:opacity-50"
+                                            >
+                                                <FileSpreadsheet size={11} />
+                                                {exportLoading === 'excel-padres' ? '...' : 'Excel (Padres)'}
+                                            </button>
+                                            
+
                                             <span className="mx-1 h-4 w-px bg-slate-700" />
+                                            
+
+
                                             <button
                                                 className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty || acuDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
                                                 onClick={handleSaveGeneral} disabled={isSaving || (!isDirty && !acuDirty)}>

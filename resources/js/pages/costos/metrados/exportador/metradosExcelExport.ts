@@ -121,13 +121,14 @@ async function crearEncabezado(
       if (response.ok) {
         const blob = await response.blob();
         const base64 = await blobToBase64(blob);
-        const ext = detectImageExt(logoIzq, blob);
+        let ext = detectImageExt(logoIzq, blob);
+        if (ext === 'bmp') ext = 'png'; // exceljs doesn't accept 'bmp', map to png
         const imgId = workbook.addImage({ base64, extension: ext });
-        worksheet.addImage(imgId, {
+        worksheet.addImage(imgId, ({
           tl: { col: 0.15, row: f1 - 1 + 0.15 },
           br: { col: 1.85, row: f1 - 1 + 3.85 },
           editAs: 'oneCell',
-        });
+        } as any));
       }
     } catch (e) { console.error('Logo izq:', e); }
   }
@@ -140,13 +141,14 @@ async function crearEncabezado(
       if (response.ok) {
         const blob = await response.blob();
         const base64 = await blobToBase64(blob);
-        const ext = detectImageExt(logoDer, blob);
+        let ext = detectImageExt(logoDer, blob);
+        if (ext === 'bmp') ext = 'png'; // exceljs doesn't accept 'bmp', map to png
         const imgId = workbook.addImage({ base64, extension: ext });
-        worksheet.addImage(imgId, {
+        worksheet.addImage(imgId, ({
           tl: { col: totalColumnas - 2 + 0.15, row: f1 - 1 + 0.15 },
           br: { col: totalColumnas - 0.15, row: f1 - 1 + 3.85 },
           editAs: 'oneCell',
-        });
+        } as any));
       }
     } catch (e) { console.error('Logo der:', e); }
   }
@@ -298,7 +300,7 @@ export async function exportarMetradoExcelMultiSheet(
       const colorFondo = (idx + 1) % 2 === 0 ? 'FFF5F5F5' : 'FFFFFFFF';
       for (let c = 1; c <= totalColumnas; c++) {
         const cell = worksheet.getCell(filaActual, c);
-        if (!cell.fill || cell.fill?.fgColor?.argb === 'FFFFFFFF' || cell.fill?.fgColor?.argb === 'FFFFFF') {
+        if (!cell.fill || (cell.fill as any)?.fgColor?.argb === 'FFFFFFFF' || (cell.fill as any)?.fgColor?.argb === 'FFFFFF') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorFondo } };
         }
       }

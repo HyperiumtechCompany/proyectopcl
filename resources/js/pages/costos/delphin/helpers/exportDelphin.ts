@@ -16,9 +16,10 @@ export async function exportDelphin(
     format: DelphinExportFormat,
     rows: DelphinRow[],
     projectName: string,
+    projectData?: any, 
 ): Promise<void> {
     switch (format) {
-        case 'excel': return exportDelphinExcel(content, rows, projectName);
+        case 'excel': return exportDelphinExcel(content, rows, projectName, projectData);  // 👈 PASAR projectData
         case 'pdf':   return exportDelphinPdf(content, rows, projectName);
         case 'msp':   return exportDelphinMSP(rows, projectName);
     }
