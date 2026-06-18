@@ -84,6 +84,8 @@ interface Props {
 }
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
+
+/** Full button with icon + label text (for right-side actions: save, export, import). */
 function Btn({
     icon,
     label,
@@ -112,12 +114,64 @@ function Btn({
     );
 }
 
+/** Icon-only button with a portal tooltip that bypasses overflow:hidden parents. */
+function IconBtn({
+    icon,
+    tooltip,
+    variant = 'default',
+    ...rest
+}: {
+    icon: React.ReactNode;
+    tooltip: string;
+    variant?: 'default' | 'primary' | 'danger' | 'active';
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+    const [rect, setRect] = useState<DOMRect | null>(null);
+    const ref = useRef<HTMLButtonElement>(null);
+
+    const styles: Record<string, string> = {
+        default: 'bg-slate-700 text-slate-200 hover:bg-slate-600',
+        primary: 'bg-blue-600 text-white hover:bg-blue-500',
+        danger:  'bg-red-700/70 text-red-200 hover:bg-red-600',
+        active:  'bg-blue-700 text-blue-100 hover:bg-blue-600',
+    };
+
+    return (
+        <>
+            <button
+                ref={ref}
+                title={tooltip}
+                className={`flex shrink-0 items-center justify-center rounded p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles[variant]}`}
+                onMouseEnter={() => setRect(ref.current?.getBoundingClientRect() ?? null)}
+                onMouseLeave={() => setRect(null)}
+                {...rest}
+            >
+                {icon}
+            </button>
+            {rect && createPortal(
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: rect.bottom + 5,
+                        left: rect.left + rect.width / 2,
+                        transform: 'translateX(-50%)',
+                        zIndex: 9999,
+                        pointerEvents: 'none',
+                    }}
+                    className="whitespace-nowrap rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] leading-none text-slate-200 shadow-xl"
+                >
+                    {tooltip}
+                </div>,
+                document.body,
+            )}
+        </>
+    );
+}
+
 function Divider() {
     return <div className="mx-0.5 h-5 w-px shrink-0 bg-slate-700" />;
 }
 
-// ── Dropdown "Config." ────────────────────────────────────────────────────────
-// Usa position:fixed + portal para escapar de cualquier overflow-hidden padre.
+// ── Config dropdown ───────────────────────────────────────────────────────────
 function ConfigDropdown({
     ganttBarLabel,
     onBarLabelChange,
@@ -176,7 +230,6 @@ function ConfigDropdown({
                     style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
                     className="w-56 rounded-lg border border-slate-700 bg-slate-900 shadow-2xl ring-1 ring-black/40"
                 >
-                    {/* Etiqueta en barra */}
                     <div className="p-3">
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                             Etiqueta en barra
@@ -203,7 +256,6 @@ function ConfigDropdown({
 
                     <div className="mx-3 h-px bg-slate-700" />
 
-                    {/* Ajustes de calendario */}
                     <div className="p-1.5">
                         <button
                             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[11px] text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
@@ -238,6 +290,10 @@ export function DelphinToolbar({
     const isDirty  = mode === 'budget' ? budgetDirty : ganttDirty;
     const isSaving = mode === 'budget' ? isSavingBudget : isGanttSaving;
     const onSave   = mode === 'budget' ? onSaveBudget : onSaveGantt;
+
+    // Portal tooltip state for the critical-path toggle (custom styling)
+    const [cpRect, setCpRect] = useState<DOMRect | null>(null);
+    const cpRef = useRef<HTMLButtonElement>(null);
 
     return (
         <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-slate-700 bg-slate-900 px-2">
@@ -312,20 +368,20 @@ export function DelphinToolbar({
                         </>
                     )}
 
-                    {/* Row ops — common to both modes */}
-                    <Btn icon={<Plus size={13} />}            label="Fila"      title="Agregar fila (Insert)"         onClick={onAddRow} />
-                    <Btn icon={<CornerDownRight size={13} />} label="Sub-fila"  title="Agregar sub-fila (Ctrl+Insert)" disabled={noSel} onClick={onAddChild} />
-                    <Btn icon={<Trash2 size={13} />}          label="Eliminar"  variant="danger" disabled={noSel}      onClick={onDeleteRow} />
+                    {/* ── Row ops: icon-only with portal tooltips ── */}
+                    <IconBtn icon={<Plus size={13} />}            tooltip="Agregar fila  ·  Insert"          onClick={onAddRow} />
+                    <IconBtn icon={<CornerDownRight size={13} />} tooltip="Agregar sub-fila  ·  Ctrl+Insert"  disabled={noSel} onClick={onAddChild} />
+                    <IconBtn icon={<Trash2 size={13} />}          tooltip="Eliminar fila  ·  Supr"            variant="danger" disabled={noSel} onClick={onDeleteRow} />
                     <Divider />
-                    <Btn icon={<IndentIncrease size={13} />}  label="Indentar"  title="Indentar (Tab)"        disabled={noSel} onClick={onIndent} />
-                    <Btn icon={<IndentDecrease size={13} />}  label="Outdentar" title="Outdentar (Shift+Tab)" disabled={noSel} onClick={onOutdent} />
+                    <IconBtn icon={<IndentIncrease size={13} />}  tooltip="Indentar  ·  Tab"                  disabled={noSel} onClick={onIndent} />
+                    <IconBtn icon={<IndentDecrease size={13} />}  tooltip="Outdentar  ·  Shift+Tab"           disabled={noSel} onClick={onOutdent} />
                     <Divider />
-                    <Btn icon={<ArrowUp size={13} />}         label="Subir"     title="Mover fila arriba (Alt+↑)"   disabled={noSel} onClick={onMoveUp} />
-                    <Btn icon={<ArrowDown size={13} />}       label="Bajar"     title="Mover fila abajo (Alt+↓)"    disabled={noSel} onClick={onMoveDown} />
-                    <Btn icon={<Copy size={13} />}            label="Duplicar"  title="Duplicar fila (Ctrl+D)"      disabled={noSel} onClick={onDuplicate} />
+                    <IconBtn icon={<ArrowUp size={13} />}         tooltip="Subir fila  ·  Alt+↑"             disabled={noSel} onClick={onMoveUp} />
+                    <IconBtn icon={<ArrowDown size={13} />}       tooltip="Bajar fila  ·  Alt+↓"             disabled={noSel} onClick={onMoveDown} />
+                    <IconBtn icon={<Copy size={13} />}            tooltip="Duplicar fila  ·  Ctrl+D"         disabled={noSel} onClick={onDuplicate} />
                     <Divider />
-                    <Btn icon={<ChevronsUpDown size={13} />}  label="Expandir"  onClick={onExpandAll} />
-                    <Btn icon={<ChevronsDownUp size={13} />}  label="Colapsar"  onClick={onCollapseAll} />
+                    <IconBtn icon={<ChevronsUpDown size={13} />}  tooltip="Expandir todo"                     onClick={onExpandAll} />
+                    <IconBtn icon={<ChevronsDownUp size={13} />}  tooltip="Colapsar todo"                     onClick={onCollapseAll} />
 
                     {/* CPM-only: Programador + Ruta crítica + Zoom */}
                     {mode === 'cpm' && (
@@ -356,17 +412,38 @@ export function DelphinToolbar({
                                 </button>
                             </div>
                             <Divider />
+
+                            {/* Ruta crítica — icon-only, portal tooltip, red when active */}
                             <button
-                                className={`flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                ref={cpRef}
+                                title="Resaltar ruta crítica"
+                                className={`flex shrink-0 items-center justify-center rounded p-1.5 transition-colors ${
                                     showCriticalPath
                                         ? 'bg-red-700 text-white hover:bg-red-600'
                                         : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
                                 }`}
-                                title="Resaltar ruta crítica"
-                                onClick={onToggleCritical}>
+                                onClick={onToggleCritical}
+                                onMouseEnter={() => setCpRect(cpRef.current?.getBoundingClientRect() ?? null)}
+                                onMouseLeave={() => setCpRect(null)}
+                            >
                                 <GitBranch size={13} />
-                                <span className="hidden sm:inline">Ruta Crítica</span>
                             </button>
+                            {cpRect && createPortal(
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        top: cpRect.bottom + 5,
+                                        left: cpRect.left + cpRect.width / 2,
+                                        transform: 'translateX(-50%)',
+                                        zIndex: 9999,
+                                        pointerEvents: 'none',
+                                    }}
+                                    className="whitespace-nowrap rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] leading-none text-slate-200 shadow-xl"
+                                >
+                                    Resaltar ruta crítica
+                                </div>,
+                                document.body,
+                            )}
 
                             {/* Zoom — solo vista Gantt */}
                             {subView === 'gantt' && (
@@ -397,7 +474,7 @@ export function DelphinToolbar({
                 </div>
             </div>
 
-            {/* Config. dropdown — FUERA del overflow-hidden para que el portal funcione */}
+            {/* Config. dropdown — fuera del overflow-hidden */}
             {mode === 'cpm' && (
                 <>
                     <Divider />
@@ -408,7 +485,7 @@ export function DelphinToolbar({
                 </>
             )}
 
-            {/* ── RIGHT: dirty + import + save ──────────────────────────── */}
+            {/* ── RIGHT: dirty indicator + import + save ─────────────────── */}
             <div className="flex shrink-0 items-center gap-1.5">
                 {isDirty && (
                     <span className="shrink-0 text-[10px] text-amber-400">
