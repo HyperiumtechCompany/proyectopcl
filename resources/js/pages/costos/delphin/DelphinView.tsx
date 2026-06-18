@@ -32,15 +32,23 @@ import { ImportDelphinModal } from './components/ImportDelphinModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinMode, type DelphinSubView } from './types';
 
+
 const DESC_EXPANDED_EXTRA = 180;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EMPTY_SET = new Set<number>();
 
 function toast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
-    // ... (código de toast igual)
-}
 
+}
+function getIconForPartida(partida: string): string {
+    const num = parseInt(partida?.split('.')?.[0] ?? '0', 10);
+    const icons: Record<number, string> = {
+        1: '🏗️', 2: '🏛️', 3: '⚡', 4: '🔧',
+        5: '📡', 6: '🔥', 7: '⚡', 8: '🏊',
+    };
+    return icons[num] ?? '📄';
+}
 function modeKey(pid: string) { return `pcl:delphin:${pid}:mode`; }
 function schedulingKey(pid: string) { return `pcl:gantt:v2:${pid}:scheduling-mode`; }
 
@@ -65,15 +73,15 @@ interface PageProps {
     };
 }
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DelphinView({
     project, project_id_int, project_name,
     initialRows, initialTasks, projectParams,
     projectData,
 }: PageProps) {
-     console.log('🔍 projectData recibido:', projectData);
-    console.log('🖼️ Logo Izq URL:', projectData?.plantilla_logo_izq_url);
-    console.log('🖼️ Logo Der URL:', projectData?.plantilla_logo_der_url);
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Proyectos', href: '/costos' },
         { title: project_name, href: `/costos/${project}` },
@@ -117,8 +125,8 @@ export default function DelphinView({
 
     // ── Column visibility + description expand ────────────────────────────────
     const [hiddenBudgetKeys, setHiddenBudgetKeys] = useState<Set<string>>(new Set());
-    const [hiddenCpmKeys,    setHiddenCpmKeys]    = useState<Set<string>>(new Set());
-    const [descExpanded,     setDescExpanded]     = useState(false);
+    const [hiddenCpmKeys, setHiddenCpmKeys] = useState<Set<string>>(new Set());
+    const [descExpanded, setDescExpanded] = useState(false);
 
     const activeHiddenKeys = mode === 'budget' ? hiddenBudgetKeys : hiddenCpmKeys;
 
@@ -152,6 +160,15 @@ export default function DelphinView({
         saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
 
+    const availableSpecialties = useMemo(() => {
+        return delphinRows
+            .filter(row => row.nivel === 1)
+            .map(row => ({
+                id: String(row.id),
+                label: row.descripcion || row.partida || `Especialidad ${row.partida}`,
+                icon: getIconForPartida(row.partida),
+            }));
+    }, [delphinRows]);
     // ── Timeline & critical path ──────────────────────────────────────────────
     const timeline = useGanttTimeline(tasks, zoomLevel, calendarSettings, continuousDayWidth);
     const { criticalIds, floatByTask } = useGanttCriticalPath(tasks);
@@ -189,10 +206,10 @@ export default function DelphinView({
         onPendingSelect: setPendingSelect,
     });
     const ganttKeyDown = useGanttKeyboard({
-        visibleTasks:    visibleDelphinRows as GanttTask[],
-        selectedRowId,   editState,
-        selectRow,       startEdit, stopEdit, cancelEdit,
-        addTaskAfter,    addChildTask, deleteTask, indentTask, outdentTask,
+        visibleTasks: visibleDelphinRows as GanttTask[],
+        selectedRowId, editState,
+        selectRow, startEdit, stopEdit, cancelEdit,
+        addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
 
         onPendingSelect: setPendingSelect,
     });
@@ -246,14 +263,14 @@ export default function DelphinView({
         saveAcu: baseSaveAcu,
         localSaveAcu, flushPendingAcus, acuDirty,
     } = usePresupuestoAcu({
-        projectId:            project_id_int,
-        subsection:           'acus',
-        selectedCell:         null,
-        selectedPartidaCode:  selectedPartidaData ? (selectedTask?.partida ?? null) : null,
+        projectId: project_id_int,
+        subsection: 'acus',
+        selectedCell: null,
+        selectedPartidaCode: selectedPartidaData ? (selectedTask?.partida ?? null) : null,
         selectedPartidaData,
-        lastSaved:            null,
-        setSheetVersion:      () => {},
-        refetchVersion:       acuRefetchVersion,
+        lastSaved: null,
+        setSheetVersion: () => { },
+        refetchVersion: acuRefetchVersion,
 
     });
 
@@ -345,21 +362,21 @@ export default function DelphinView({
                 case 'expand':
                 case 'collapse': toggleExpand(taskId); break;
 
-                case 'addAfter':   setPendingSelect(addTaskAfter(taskId));   break;
-                case 'addChild':   setPendingSelect(addChildTask(taskId));   break;
-                case 'delete':     deleteTask(taskId);                        break;
-                case 'indent':     indentTask(taskId);                        break;
-                case 'outdent':    outdentTask(taskId);                       break;
-                case 'moveUp':     moveTaskUp(taskId);                        break;
-                case 'moveDown':   moveTaskDown(taskId);                      break;
-                case 'duplicate':  setPendingSelect(duplicateTask(taskId));   break;
+                case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
+                case 'addChild': setPendingSelect(addChildTask(taskId)); break;
+                case 'delete': deleteTask(taskId); break;
+                case 'indent': indentTask(taskId); break;
+                case 'outdent': outdentTask(taskId); break;
+                case 'moveUp': moveTaskUp(taskId); break;
+                case 'moveDown': moveTaskDown(taskId); break;
+                case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
                 case 'expand':
-                case 'collapse':   toggleExpand(taskId);                      break;
+                case 'collapse': toggleExpand(taskId); break;
 
             }
         },
         [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
-         moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect],
+            moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect],
     );
 
     // ── Save functions ────────────────────────────────────────────────────────
@@ -389,9 +406,9 @@ export default function DelphinView({
         setFlushProgress((prev) => ({ ...prev, active: false }));
         const ok = ganttOk && budgetOk && acuOk;
         const msg = ok ? 'Delphin guardado.'
-            : !ganttOk  ? 'Error al guardar el cronograma.'
-            : !budgetOk ? 'Error al guardar el presupuesto.'
-            :             'Error al guardar los ACUs.';
+            : !ganttOk ? 'Error al guardar el cronograma.'
+                : !budgetOk ? 'Error al guardar el presupuesto.'
+                    : 'Error al guardar los ACUs.';
         toast(msg, ok ? 'success' : 'error');
         if (ok) setAcuRefetchVersion((v) => v + 1);
     }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
@@ -552,18 +569,18 @@ export default function DelphinView({
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Buscar descripción…"
-                                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none"/>
+                                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none" />
                                 {searchQuery && (<>
-                                        <span className="shrink-0 text-[10px] text-slate-500">
-                                            {filteredRows.length} resultado{filteredRows.length !== 1 ? 's' : ''}
-                                        </span>
-                                        <button
-                                            title="Limpiar búsqueda"
-                                            className="shrink-0 text-slate-500 hover:text-slate-300"
-                                            onClick={() => setSearchQuery('')}>
-                                            <X size={12} />
-                                        </button>
-                                    </>
+                                    <span className="shrink-0 text-[10px] text-slate-500">
+                                        {filteredRows.length} resultado{filteredRows.length !== 1 ? 's' : ''}
+                                    </span>
+                                    <button
+                                        title="Limpiar búsqueda"
+                                        className="shrink-0 text-slate-500 hover:text-slate-300"
+                                        onClick={() => setSearchQuery('')}>
+                                        <X size={12} />
+                                    </button>
+                                </>
                                 )}
                             </div>
 
@@ -588,7 +605,7 @@ export default function DelphinView({
                                 onKeyDown={onKeyDown}
                                 onRowAction={handleRowAction}
                                 onToggleHidden={handleToggleHidden}
-                                onToggleDescExpand={() => setDescExpanded((p) => !p)}/>
+                                onToggleDescExpand={() => setDescExpanded((p) => !p)} />
                         </Panel>
 
                         <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
@@ -603,7 +620,7 @@ export default function DelphinView({
                                     selectedAcu={selectedAcu}
                                     projectId={project_id_int}
                                     selectedCell={null}
-                                    onSaveAcu={handleSaveAcu}/>
+                                    onSaveAcu={handleSaveAcu} />
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
                                 <GanttChart
@@ -617,7 +634,7 @@ export default function DelphinView({
                                     onScroll={onChartScroll}
                                     onSelect={selectRow}
                                     onBarCommit={handleBarCommit}
-                                    onContinuousZoom={handleContinuousZoom}/>
+                                    onContinuousZoom={handleContinuousZoom} />
                             )}
                         </Panel>
                     </Group>
@@ -628,13 +645,14 @@ export default function DelphinView({
                     open={settingsOpen}
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
-                    onSave={setCalendarSettings}/>
+                    onSave={setCalendarSettings} />
                 <DelphinExportModal
                     open={exportOpen}
                     rows={delphinRows}
                     projectName={project_name}
                     project={project}
                     projectData={projectData}
+                    availableSpecialties={availableSpecialties}
                     onClose={() => setExportOpen(false)}
                 />
 
@@ -645,13 +663,13 @@ export default function DelphinView({
                     delphinRows={delphinRows}
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
-                    onAcusImported={handleAcusImported}/>
+                    onAcusImported={handleAcusImported} />
                 <input
                     ref={importInputRef}
                     type="file"
                     accept=".xml"
                     className="hidden"
-                    onChange={handleImportFile}/>
+                    onChange={handleImportFile} />
             </div>
 
             {/* ── ACU flush progress overlay ─────────────────────────────── */}
@@ -666,7 +684,7 @@ export default function DelphinView({
 
                     {/* Progress bar */}
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-                        <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: `${flushProgress.pct}%` }}/>
+                        <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: `${flushProgress.pct}%` }} />
                     </div>
 
                     <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
@@ -675,10 +693,10 @@ export default function DelphinView({
                             {flushProgress.etaSecs === null
                                 ? 'Calculando...'
                                 : flushProgress.etaSecs === 0
-                                ? 'Finalizando...'
-                                : flushProgress.etaSecs < 60
-                                ? `~${flushProgress.etaSecs}s restantes`
-                                : `~${Math.ceil(flushProgress.etaSecs / 60)}m restantes`}
+                                    ? 'Finalizando...'
+                                    : flushProgress.etaSecs < 60
+                                        ? `~${flushProgress.etaSecs}s restantes`
+                                        : `~${Math.ceil(flushProgress.etaSecs / 60)}m restantes`}
                         </span>
                     </div>
                 </div>

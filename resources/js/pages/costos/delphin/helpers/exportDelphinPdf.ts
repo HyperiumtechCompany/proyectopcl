@@ -25,7 +25,6 @@ const C: Record<string, RGB> = {
 const fmtNum = (v: number) =>
     (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Precompute per-row style info so didParseCell can look it up by index
 interface RowMeta { bg: RGB; fg: RGB; bold: boolean; indent: number }
 
 function rowMeta(rows: DelphinRow[]): RowMeta[] {
@@ -44,6 +43,35 @@ function rowMeta(rows: DelphinRow[]): RowMeta[] {
         if (isLeaf) altCount++;
         return { bg, fg, bold, indent: Math.max(0, nivel - 1) * 3 };
     });
+}
+
+// ── Filtrado por especialidades ───────────────────────────────────────────────
+function filterRowsBySpecialties(rows: DelphinRow[], selectedIds: string[]): DelphinRow[] {
+    if (!selectedIds || selectedIds.length === 0) return rows;
+
+    const parentIds = new Set(selectedIds.map(id => parseInt(id, 10)));
+
+    if (parentIds.size === 0) return rows;
+
+    const rowById = new Map(rows.map(r => [r.id, r]));
+    const result: DelphinRow[] = [];
+
+    rows.forEach(row => {
+        if (row.nivel === 1 && parentIds.has(row.id)) {
+            result.push(row);
+            return;
+        }
+        let parentId = row.parent_id ?? null;
+        while (parentId !== null) {
+            if (parentIds.has(parentId)) {
+                result.push(row);
+                return;
+            }
+            parentId = rowById.get(parentId)?.parent_id ?? null;
+        }
+    });
+
+    return result;
 }
 
 function addPageHeader(doc: jsPDF, projectName: string, subtitle: string) {
@@ -80,7 +108,6 @@ function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[]) {
             fmtNum(row.parcial || row.metrado * row.precio_unitario || 0),
         ];
     });
-    // Total row (index = rows.length)
     body.push(['', '', 'TOTAL PRESUPUESTO', '', '', '', fmtNum(totalPres)]);
 
     autoTable(doc, {
@@ -103,7 +130,6 @@ function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[]) {
             if (data.section !== 'body') return;
             const i = data.row.index;
             if (i >= rows.length) {
-                // Total row
                 data.cell.styles.fillColor = C.totalBg!;
                 data.cell.styles.textColor = C.totalFg!;
                 data.cell.styles.fontStyle = 'bold';
@@ -178,7 +204,14 @@ export async function exportDelphinPdf(
     content: DelphinExportContent,
     rows: DelphinRow[],
     projectName: string,
+    projectData?: any,
+    selectedSpecialties?: string[],
 ): Promise<void> {
+
+    const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
+        ? filterRowsBySpecialties(rows, selectedSpecialties)
+        : rows;
+
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     const suffix = {
@@ -193,7 +226,7 @@ export async function exportDelphinPdf(
 
     if (content === 'budget_only' || content === 'budget_gantt') {
         addPageHeader(doc, projectName, 'Presupuesto General');
-        buildPresupuestoPdf(doc, rows);
+        buildPresupuestoPdf(doc, filteredRows);
     }
 
     if (content === 'budget_gantt') {
@@ -201,12 +234,8 @@ export async function exportDelphinPdf(
     }
 
     if (content === 'gantt_only' || content === 'budget_gantt') {
-        if (content === 'budget_gantt') {
-            addPageHeader(doc, projectName, 'Cronograma General');
-        } else {
-            addPageHeader(doc, projectName, 'Cronograma General');
-        }
-        buildCronogramaPdf(doc, rows);
+        addPageHeader(doc, projectName, 'Cronograma General');
+        buildCronogramaPdf(doc, filteredRows);
     }
 
     // Page numbers
