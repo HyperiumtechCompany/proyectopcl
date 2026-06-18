@@ -13,7 +13,7 @@ interface Props {
 }
 
 const fmt = (n: number, decimals: number) =>
-    n.toLocaleString('es-PE', {
+    n.toLocaleString('en-US', {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
     });

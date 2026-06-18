@@ -36,9 +36,6 @@ const colorToast: Record<string, string> = {
 
 // COMPONENTE PRINCIPAL
 export default function CronogramaValorizado(props: ValorizadoProps) {
-    console.log('🔴 TODAS LAS PROPS:', props);
-    console.log('🔴 MATERIALES PROPS:', props.materiales);
-    console.log('🔴 MATERIALESRESUMEN:', props.materialesResumen);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [estaGuardadoUI, setEstaGuardadoUI] = useState(props.estaGuardado ?? false);

@@ -58,6 +58,15 @@ class CostoProject extends Model
         'etts',
     ];
 
+    private const LEGACY_PRESUPUESTO_MODULE_TYPES = [
+        'presupuesto_gg',
+        'presupuesto_insumos',
+        'presupuesto_remuneraciones',
+        'presupuesto_acus',
+        'presupuesto_indice',
+        'presupuesto_indices',
+    ];
+
     // ─── Relations ───────────────────────────────────────────────────────────────
 
     public function user(): BelongsTo

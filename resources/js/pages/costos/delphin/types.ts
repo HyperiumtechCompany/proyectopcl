@@ -28,9 +28,9 @@ export const BUDGET_COLUMNS: ColumnDef[] = [
     { key: 'descripcion',     label: 'Descripción', type: 'text',     width: 260, align: 'left',   editable: true  },
     { key: 'unidad',          label: 'Und.',        type: 'select',   width: 72,  align: 'center', editable: true,
       options: ['', 'und', 'm', 'm2', 'm3', 'kg', 'tn', 'glb', 'est', 'jg', 'ml', 'día', 'sem', 'mes', 'vje', 'pt', 'bls', 'gal', 'lt', 'rll'] },
-    { key: 'metrado',         label: 'Cantidad',    type: 'number',   width: 80,  align: 'right',  editable: true  },
-    { key: 'precio_unitario', label: 'P. Unit.',    type: 'number',   width: 90,  align: 'right',  editable: true  },
-    { key: 'parcial',         label: 'Total',       type: 'readonly', width: 100, align: 'right',  editable: false },
+    { key: 'metrado',         label: 'Cantidad',    type: 'number',   width: 80,  align: 'right',  editable: true,  decimals: 2 },
+    { key: 'precio_unitario', label: 'P. Unit.',    type: 'number',   width: 90,  align: 'right',  editable: true,  decimals: 2 },
+    { key: 'parcial',         label: 'Total',       type: 'readonly', width: 100, align: 'right',  editable: false, decimals: 2 },
 ];
 
 export const CPM_COLUMNS: ColumnDef[] = [
@@ -40,7 +40,7 @@ export const CPM_COLUMNS: ColumnDef[] = [
     { key: 'fecha_inicio',  label: 'Inicio',       type: 'date',         width: 100, align: 'center', editable: true  },
     { key: 'fecha_fin',     label: 'Fin',          type: 'date',         width: 100, align: 'center', editable: true  },
     { key: 'predecesoras',  label: 'Pred.',        type: 'predecesoras', width: 75,  align: 'center', editable: true  },
-    { key: 'presupuesto',   label: 'Costo (S/)',   type: 'number',       width: 110, align: 'right',  editable: true  },
+    { key: 'presupuesto',   label: 'Costo (S/)',   type: 'number',       width: 110, align: 'right',  editable: true,  decimals: 2 },
 ];
 
 export type DelphinMode = 'budget' | 'cpm';

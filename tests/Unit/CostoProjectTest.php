@@ -48,6 +48,17 @@ class CostoProjectTest extends TestCase
         $this->assertFalse($result, 'hasUnifiedPresupuesto should return false when no presupuesto module exists');
     }
 
+    public function test_has_unified_presupuesto_returns_true_when_legacy_presupuesto_module_enabled(): void
+    {
+        $project = CostoProject::factory()->create();
+        CostoProjectModule::factory()->legacyPresupuesto()->create([
+            'costo_project_id' => $project->id,
+        ]);
+
+        $this->assertTrue($project->hasUnifiedPresupuesto());
+        $this->assertTrue($project->hasModule('presupuesto'));
+    }
+
     public function test_has_module_for_metrado_modules(): void
     {
         $project = CostoProject::factory()->create();
