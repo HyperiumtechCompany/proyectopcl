@@ -12,40 +12,65 @@ class DelphinController extends Controller
 {
     public function __construct(private readonly CostoDatabaseService $dbService) {}
 
-    // GET /module/delphin?project={id}
-    public function index(Request $request)
-    {
-        $projectId = $request->query('project');
-        if (! $projectId) {
-            abort(404, 'No se recibió el ID del proyecto');
-        }
-
-        $costoProject = CostoProject::findOrFail($projectId);
-        $this->dbService->setTenantConnection($costoProject->database_name);
-
-        $presupuestoId = $this->resolvePresupuestoId();
-
-        $rows = DB::connection('costos_tenant')
-            ->table('presupuesto_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->orderByRaw('COALESCE(item_order, 999999), id')
-            ->get()
-            ->map(fn ($r) => (array) $r)
-            ->toArray();
-
-        $tasks = $this->fetchTasks($presupuestoId);
-
-        $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
-
-        return Inertia::render('costos/delphin/DelphinView', [
-            'project'        => (string) $projectId,
-            'project_id_int' => (int) $projectId,
-            'project_name'   => $costoProject->nombre ?? '',
-            'initialRows'    => $rows,
-            'initialTasks'   => $tasks,
-            'projectParams'  => $projectParams ? (array) $projectParams : null,
-        ]);
+   // GET /module/delphin?project={id}
+public function index(Request $request)
+{
+    $projectId = $request->query('project');
+    if (! $projectId) {
+        abort(404, 'No se recibió el ID del proyecto');
     }
+
+    $costoProject = CostoProject::findOrFail($projectId);
+    $this->dbService->setTenantConnection($costoProject->database_name);
+
+    $presupuestoId = $this->resolvePresupuestoId();
+
+    $rows = DB::connection('costos_tenant')
+        ->table('presupuesto_general')
+        ->where('presupuesto_id', $presupuestoId)
+        ->orderByRaw('COALESCE(item_order, 999999), id')
+        ->get()
+        ->map(fn ($r) => (array) $r)
+        ->toArray();
+
+    $tasks = $this->fetchTasks($presupuestoId);
+
+    $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
+
+$projectData = [
+    'nombre' => $costoProject->nombre ?? 'PROYECTO',
+    'codigo_cui' => $costoProject->codigo_cui ?? '-',
+    'codigo_local' => $costoProject->codigo_local ?? '-',
+    'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
+    'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
+    'propietario' => $costoProject->unidad_ejecutora ?? '-',
+    'modulo' => 'GENERAL',
+    'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq 
+        ? asset('storage/' . ltrim($costoProject->plantilla_logo_izq, '/')) 
+        : null,
+    'plantilla_logo_der_url' => $costoProject->plantilla_logo_der 
+        ? asset('storage/' . ltrim($costoProject->plantilla_logo_der, '/')) 
+        : null,
+   
+    'plantilla_logo_izq_base64' => $costoProject->plantilla_logo_izq 
+        ? $this->getImageBase64($costoProject->plantilla_logo_izq) 
+        : null,
+    'plantilla_logo_der_base64' => $costoProject->plantilla_logo_der 
+        ? $this->getImageBase64($costoProject->plantilla_logo_der) 
+        : null,
+];
+
+    return Inertia::render('costos/delphin/DelphinView', [
+        'project'        => (string) $projectId,
+        'project_id_int' => (int) $projectId,
+        'project_name'   => $costoProject->nombre ?? '',
+        'initialRows'    => $rows,
+        'initialTasks'   => $tasks,
+        'projectParams'  => $projectParams ? (array) $projectParams : null,
+        'projectData'    => $projectData, 
+    ]);
+}
+    
 
     private function resolvePresupuestoId(): int
     {
@@ -147,5 +172,15 @@ class DelphinController extends Controller
             'predecesoras'  => $predecesoras,
             'presupuesto'   => (float) ($row->presupuesto ?? 0),
         ];
+    }
+     private function getImageBase64($path): ?string
+    {
+        $fullPath = storage_path('app/public/' . ltrim($path, '/'));
+        if (!file_exists($fullPath)) {
+            return null;
+        }
+        $mime = mime_content_type($fullPath);
+        $data = file_get_contents($fullPath);
+        return 'data:' . $mime . ';base64,' . base64_encode($data);
     }
 }

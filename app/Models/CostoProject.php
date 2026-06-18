@@ -45,20 +45,16 @@ class CostoProject extends Model
 
     // ─── Tipos de módulos disponibles ────────────────────────────────────────────
     public const MODULE_TYPES = [
-        // Metrados
         'metrado_arquitectura',
         'metrado_estructura',
         'metrado_sanitarias',
         'metrado_electricas',
         'metrado_comunicaciones',
         'metrado_gas',
-        // Cronogramas
         'crono_general',
         'crono_valorizado',
         'crono_materiales',
-        // Presupuesto Unificado (incluye: general, ACUs, GG, remuneraciones, insumos, índices)
         'presupuesto',
-        // Especificaciones Técnicas
         'etts',
     ];
 
@@ -79,21 +75,49 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
-    // ─── Relaciones de Ubicación ─────────────────────────────────────────────
+    // ─── Relaciones de Ubicación ────────────────────────────────────────────────
 
-public function departamento(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'departamento_id');
-}
+    public function departamento(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'departamento_id');
+    }
 
-public function provincia(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'provincia_id');
-}
+    public function provincia(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'provincia_id');
+    }
 
-public function distrito(): BelongsTo
-{
-    return $this->belongsTo(Ubigeo::class, 'distrito_id');
-}
+    public function distrito(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'distrito_id');
+    }
 
+    // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Check if a specific module is enabled.
+     */
+    public function hasModule(string $moduleType): bool
+    {
+        return $this->modules()
+            ->where('module_type', $moduleType)
+            ->where('enabled', true)
+            ->exists();
+    }
+
+    /**
+     * Check if the project uses the unified presupuesto module.
+     */
+    public function hasUnifiedPresupuesto(): bool
+    {
+        return $this->hasModule('presupuesto');
+    }
+
+    /**
+     * Generate a unique database name for this project.
+     */
+    public static function generateDatabaseName(int $userId): string
+    {
+        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
+    }
 }
