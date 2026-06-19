@@ -349,24 +349,21 @@ export default function DelphinView({
     );
 
     // ── Row actions ───────────────────────────────────────────────────────────
-    const handleRowAction = useCallback(
-        (taskId: number, action: RowAction) => {
-            switch (action) {
-                case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
-                case 'addChild': setPendingSelect(addChildTask(taskId)); break;
-                case 'delete': deleteTask(taskId); break;
-                case 'indent': indentTask(taskId); break;
-                case 'outdent': outdentTask(taskId); break;
-                case 'moveUp': moveTaskUp(taskId); break;
-                case 'moveDown': moveTaskDown(taskId); break;
-                case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
-                case 'expand':
-                case 'collapse': toggleExpand(taskId); break;
-            }
-        },
-        [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
-            moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect],
-    );
+    const handleRowAction = useCallback((taskId: number, action: RowAction) => {
+        switch (action) {
+            case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
+            case 'addChild': setPendingSelect(addChildTask(taskId)); break;
+            case 'delete': deleteTask(taskId); break;
+            case 'indent': indentTask(taskId); break;
+            case 'outdent': outdentTask(taskId); break;
+            case 'moveUp': moveTaskUp(taskId); break;
+            case 'moveDown': moveTaskDown(taskId); break;
+            case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
+            case 'expand':
+            case 'collapse': toggleExpand(taskId); break;
+        }
+    }, [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
+        moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect]);
 
     // ── Save functions ────────────────────────────────────────────────────────
     const onAcuProgress = useCallback((p: AcuFlushProgress) => {
@@ -384,8 +381,7 @@ export default function DelphinView({
         if (ok) setAcuRefetchVersion((v) => v + 1);
     }, [saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
 
-    // Gantt save also saves budget: partida codes change when rows are reordered/indented,
-    // so presupuesto_general must stay in sync with cronograma_general.
+  
     const handleSaveGantt = useCallback(async () => {
         const [ganttOk, budgetOk, acuOk] = await Promise.all([
             saveTasks(project),
@@ -426,7 +422,7 @@ export default function DelphinView({
         [importTasks],
     );
 
-    // ── Ctrl+S ────────────────────────────────────────────────────────────────
+   
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
