@@ -20,10 +20,18 @@ const C: Record<string, RGB> = {
     totalFg:  [110, 231, 183],
     ganttHd:  [30,  58,  95],
     ganttFg:  [191, 219, 254],
+    borderDark: [30, 41, 59],
 };
 
 const fmtNum = (v: number) =>
     (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function getFechaFormatoModelo(): string {
+    const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                   'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const hoy = new Date();
+    return `${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+}
 
 interface RowMeta { bg: RGB; fg: RGB; bold: boolean; indent: number }
 
@@ -35,7 +43,7 @@ function rowMeta(rows: DelphinRow[]): RowMeta[] {
         let bg: RGB, fg: RGB, bold = false;
         if (nivel === 1)      { bg = C.nivel1!; fg = C.fgLight!; bold = true; }
         else if (nivel === 2) { bg = C.nivel2!; fg = C.fgMid!;   bold = true; }
-        else if (nivel === 3) { bg = C.nivel3!; fg = C.fgMid!;   }
+        else if (nivel === 3) { bg = C.nivel3!; fg = C.fgMid!; }
         else {
             bg = altCount % 2 === 1 ? C.altLeaf! : C.leaf!;
             fg = C.fgDark!;
@@ -48,48 +56,166 @@ function rowMeta(rows: DelphinRow[]): RowMeta[] {
 // ── Filtrado por especialidades ───────────────────────────────────────────────
 function filterRowsBySpecialties(rows: DelphinRow[], selectedIds: string[]): DelphinRow[] {
     if (!selectedIds || selectedIds.length === 0) return rows;
-
     const parentIds = new Set(selectedIds.map(id => parseInt(id, 10)));
-
     if (parentIds.size === 0) return rows;
-
     const rowById = new Map(rows.map(r => [r.id, r]));
     const result: DelphinRow[] = [];
-
     rows.forEach(row => {
-        if (row.nivel === 1 && parentIds.has(row.id)) {
-            result.push(row);
-            return;
-        }
+        if (row.nivel === 1 && parentIds.has(row.id)) { result.push(row); return; }
         let parentId = row.parent_id ?? null;
         while (parentId !== null) {
-            if (parentIds.has(parentId)) {
-                result.push(row);
-                return;
-            }
+            if (parentIds.has(parentId)) { result.push(row); return; }
             parentId = rowById.get(parentId)?.parent_id ?? null;
         }
     });
-
     return result;
 }
 
-function addPageHeader(doc: jsPDF, projectName: string, subtitle: string) {
+// ── Helper: cargar imagen desde URL o base64 → base64 ────────────────────────
+async function loadImageAsBase64(src: string): Promise<{ data: string; format: string } | null> {
+    try {
+        if (src.startsWith('data:image')) {
+            const format = src.includes('jpeg') || src.includes('jpg') ? 'JPEG' : 'PNG';
+            return { data: src, format };
+        }
+        const url = src.startsWith('http') ? src : `/storage/${src.replace(/^\//, '')}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        const blob = await resp.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = reader.result as string;
+                const format = blob.type.includes('jpeg') ? 'JPEG' : 'PNG';
+                resolve({ data: result, format });
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch {
+        return null;
+    }
+}
+
+// ── Encabezado PDF (replica el del Excel) ────────────────────────────────────
+async function addPageHeader(
+    doc: jsPDF,
+    projectName: string,
+    subtitle: string,
+    proyecto: any,
+): Promise<number> {
     const pageW = doc.internal.pageSize.getWidth();
+    const marginX = 10;
+    const contentW = pageW - marginX * 2;
+
+    const logoW = 28;
+    const logoH = 18;
+    const headerH = logoH;
+    const headerY = 8;
+
+    // ── Borde exterior del encabezado ──
+    doc.setDrawColor(...C.borderDark!);
+    doc.setLineWidth(0.4);
+    doc.rect(marginX, headerY, contentW, headerH);
+
+    // ── Separadores verticales (logo | texto | logo) ──
+    doc.line(marginX + logoW, headerY, marginX + logoW, headerY + headerH);
+    doc.line(marginX + contentW - logoW, headerY, marginX + contentW - logoW, headerY + headerH);
+
+    // ── Logo izquierdo ──
+    const logoIzq = proyecto?.plantilla_logo_izq_url || proyecto?.plantilla_logo_izq;
+    if (logoIzq) {
+        const img = await loadImageAsBase64(logoIzq);
+        if (img) {
+            try {
+                doc.addImage(img.data, img.format, marginX + 1, headerY + 1, logoW - 2, logoH - 2);
+            } catch {}
+        }
+    }
+
+    // ── Logo derecho ──
+    const logoDer = proyecto?.plantilla_logo_der_url || proyecto?.plantilla_logo_der;
+    if (logoDer) {
+        const img = await loadImageAsBase64(logoDer);
+        if (img) {
+            try {
+                doc.addImage(img.data, img.format,
+                    marginX + contentW - logoW + 1, headerY + 1, logoW - 2, logoH - 2);
+            } catch {}
+        }
+    }
+
+    // ── Texto central ──
+    const textX = marginX + logoW;
+    const textW = contentW - logoW * 2;
+    const textCenterX = textX + textW / 2;
+
+    const cui            = proyecto?.codigo_cui         || '-';
+    const modular        = proyecto?.codigos_modulares   || '-';
+    const codigoLocal    = proyecto?.codigo_local        || '-';
+    const unidadEjecutora = proyecto?.unidad_ejecutora   || '-';
+    const nombreProyecto = projectName || 'PROYECTO';
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.setFillColor(...C.headerBg!);
-    doc.rect(10, 8, pageW - 20, 14, 'F');
-    doc.text(subtitle.toUpperCase(), pageW / 2, 13, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setTextColor(...C.borderDark!);
+    doc.text(`"${nombreProyecto.toUpperCase()}"`, textCenterX, headerY + 5, { align: 'center' });
+
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(projectName, pageW / 2, 19, { align: 'center' });
-    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(7);
+    doc.text(
+        `CUI: ${cui}  |  CÓDIGO MODULAR: ${modular}  |  CÓDIGO LOCAL: ${codigoLocal}`,
+        textCenterX, headerY + 10, { align: 'center' }
+    );
+    doc.text(
+        `UNIDAD EJECUTORA: ${unidadEjecutora}`,
+        textCenterX, headerY + 14, { align: 'center' }
+    );
+
+    const afterHeader = headerY + headerH + 3;
+
+    // ── Título (subtítulo de la hoja) ──
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...C.borderDark!);
+    doc.text(subtitle.toUpperCase(), textCenterX, afterHeader + 4, { align: 'center' });
+
+    const afterTitle = afterHeader + 8;
+
+    // ── Bloque de datos del proyecto ──
+    const propietario    = proyecto?.propietario || unidadEjecutora || '-';
+    const fechaFormateada = getFechaFormatoModelo();
+    const modulo         = proyecto?.modulo || 'GENERAL';
+    const hechoPor       = proyecto?.hechoPor || '';
+    const revisadoPor    = proyecto?.revisadoPor || '';
+
+    const lines = [
+        `Proyecto : ${nombreProyecto}`,
+        `Propietario : ${propietario}`,
+        `Fecha : ${fechaFormateada}`,
+        `Módulo : ${modulo}`,
+        `Hecho por : ${hechoPor}          Revisado por : ${revisadoPor}`,
+    ];
+
+    const bloqueH = lines.length * 4 + 3;
+    doc.setDrawColor(...C.borderDark!);
+    doc.setLineWidth(0.3);
+    doc.rect(marginX, afterTitle, contentW, bloqueH);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...C.borderDark!);
+    lines.forEach((line, i) => {
+        doc.text(line, marginX + 3, afterTitle + 4 + i * 4);
+    });
+
+    const startY = afterTitle + bloqueH + 4;
+    return startY;
 }
 
 // ── Presupuesto ───────────────────────────────────────────────────────────────
-function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[]) {
+async function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[], projectName: string, proyecto: any) {
+    const startY = await addPageHeader(doc, projectName, 'Resumen de Presupuesto', proyecto);
     const meta = rowMeta(rows);
     const totalPres = rows
         .filter((r) => (r.nivel ?? 1) === 1)
@@ -111,7 +237,8 @@ function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[]) {
     body.push(['', '', 'TOTAL PRESUPUESTO', '', '', '', fmtNum(totalPres)]);
 
     autoTable(doc, {
-        startY: 26,
+        startY,
+        margin: { left: 10, right: 10 },
         head: [['N°', 'Partida', 'Descripción', 'Und.', 'Metrado', 'P. Unit.', 'Total (S/)']],
         body,
         theme: 'grid',
@@ -140,16 +267,15 @@ function buildPresupuestoPdf(doc: jsPDF, rows: DelphinRow[]) {
             data.cell.styles.textColor = m.fg;
             data.cell.styles.fontStyle = m.bold ? 'bold' : 'normal';
             if (data.column.index === 2 && m.indent > 0) {
-                data.cell.styles.cellPadding = {
-                    top: 1.5, right: 2, bottom: 1.5, left: 2 + m.indent,
-                };
+                data.cell.styles.cellPadding = { top: 1.5, right: 2, bottom: 1.5, left: 2 + m.indent };
             }
         },
     });
 }
 
 // ── Cronograma ────────────────────────────────────────────────────────────────
-function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[]) {
+async function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[], projectName: string, proyecto: any) {
+    const startY = await addPageHeader(doc, projectName, 'Cronograma General', proyecto);
     const meta = rowMeta(rows);
 
     const body = rows.map((row) => {
@@ -168,7 +294,7 @@ function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[]) {
     });
 
     autoTable(doc, {
-        startY: 26,
+        startY,
         head: [['N°', 'Descripción', 'Dur.', 'Inicio', 'Fin', 'Pred.', 'Costo (S/)']],
         body,
         theme: 'grid',
@@ -191,9 +317,7 @@ function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[]) {
             data.cell.styles.textColor = m.fg;
             data.cell.styles.fontStyle = m.bold ? 'bold' : 'normal';
             if (data.column.index === 1 && m.indent > 0) {
-                data.cell.styles.cellPadding = {
-                    top: 1.5, right: 2, bottom: 1.5, left: 2 + m.indent,
-                };
+                data.cell.styles.cellPadding = { top: 1.5, right: 2, bottom: 1.5, left: 2 + m.indent };
             }
         },
     });
@@ -225,8 +349,7 @@ export async function exportDelphinPdf(
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     if (content === 'budget_only' || content === 'budget_gantt') {
-        addPageHeader(doc, projectName, 'Presupuesto General');
-        buildPresupuestoPdf(doc, filteredRows);
+        await buildPresupuestoPdf(doc, filteredRows, projectName, projectData);
     }
 
     if (content === 'budget_gantt') {
@@ -234,8 +357,7 @@ export async function exportDelphinPdf(
     }
 
     if (content === 'gantt_only' || content === 'budget_gantt') {
-        addPageHeader(doc, projectName, 'Cronograma General');
-        buildCronogramaPdf(doc, filteredRows);
+        await buildCronogramaPdf(doc, filteredRows, projectName, projectData);
     }
 
     // Page numbers
