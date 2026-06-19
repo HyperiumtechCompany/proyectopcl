@@ -84,7 +84,7 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
-    // ─── Relaciones de Ubicación ────────────────────────────────────────────────
+    // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
     public function departamento(): BelongsTo
     {
@@ -108,10 +108,7 @@ class CostoProject extends Model
      */
     public function hasModule(string $moduleType): bool
     {
-        return $this->modules()
-            ->where('module_type', $moduleType)
-            ->where('enabled', true)
-            ->exists();
+        return $this->belongsTo(Ubigeo::class, 'departamento_id');
     }
 
     /**
@@ -119,7 +116,7 @@ class CostoProject extends Model
      */
     public function hasUnifiedPresupuesto(): bool
     {
-        return $this->hasModule('presupuesto');
+        return $this->belongsTo(Ubigeo::class, 'provincia_id');
     }
 
     /**
@@ -127,6 +124,9 @@ class CostoProject extends Model
      */
     public static function generateDatabaseName(int $userId): string
     {
-        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
+        return $this->belongsTo(Ubigeo::class, 'distrito_id');
     }
+
 }
+
+
