@@ -14,7 +14,7 @@
 import { router, usePage } from '@inertiajs/react';
 import {
   AlertCircle, Calculator, CheckCircle2,
-  ChevronLeft, Hash, Loader2, RefreshCcw, Save,
+  ChevronLeft, Hash, Loader2, RefreshCcw, Save, Upload,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
@@ -27,14 +27,15 @@ import type { BreadcrumbItem } from '@/types';
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
-import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradoelectricas/electricas_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
+import { ImportarMetradoElectricasModal, ImportedMetradoRow } from './metradoelectricas/ImportarMetradoElectricasModal';
+import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradoelectricas/electricas_constants';
 import type { CalcPayload, ElectricasPageProps, RowKind } from './metradoelectricas/electricas_types';
 import {
   buildElectricasResumenRows, buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, colLetter, mkBlank,
   mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, pad2,
   sheetToRows, styledNum, styledTxt, toNum, trim0, indent,
-  levelStyle, toRoman,
+  levelStyle, toRoman, isZeroLike,
 } from './metradoelectricas/electricas_utils';
 
 // ═══════════════════════════════════════════════════════════════
@@ -110,12 +111,26 @@ function useLuckysheet() {
   ) => {
     const inst = ls();
     if (!inst || !updates.length || !isLuckysheetReady()) return;
-    updates.forEach((u, i) => {
-      safeSetCellValue(u.r, u.c, u.v, {
-        order,
-        isRefresh: i === updates.length - 1,
-      });
+
+    const sheetObj = (inst.getAllSheets() as any[]).find((s: any) => s.order === order);
+    if (!sheetObj) return;
+
+    const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+    const data = (sheetObj.status === 1 && flowDataArr) ? flowDataArr : sheetObj.data;
+    
+    if (!data) return;
+
+    let hasChanges = false;
+    updates.forEach((u) => {
+      if (data[u.r] !== undefined) {
+        data[u.r][u.c] = u.v;
+        hasChanges = true;
+      }
     });
+
+    if (hasChanges && sheetObj.status === 1) {
+      inst.refresh();
+    }
   };
 
   return { ls, getActive, getAllSheets, setCells };
@@ -313,6 +328,8 @@ export default function ElectricasIndex() {
   const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({
     ri: 0, rowData: {},
   });
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isImporting, setIsImporting]   = useState(false);
 
   const progCount = useRef(0);
   const isProgrammaticChange = useRef(false);
@@ -497,6 +514,110 @@ export default function ElectricasIndex() {
   // ABRIR CALCULADORA (lee fila seleccionada en Luckysheet)
   // ═══════════════════════════════════════════════════════════
 
+  
+  const applyImport = useCallback((rows: ImportedMetradoRow[], targetSheet: string) => {
+    const inst = ls();
+    if (!inst || !isLuckysheetReady()) return;
+
+    const all = inst.getAllSheets() as any[];
+    const targetIdx = all.findIndex((s: any) => s.name === targetSheet);
+    if (targetIdx < 0) throw new Error(`No se encontró la hoja "${targetSheet}"`);
+
+    const targetSheetObj = all[targetIdx];
+    inst.setSheetActive(targetIdx);
+
+    const buffer = 50;
+    const neededRows = rows.length + 1 + buffer;
+    const curRows = targetSheetObj.data?.length || targetSheetObj.row || 100;
+
+    if (curRows < neededRows) {
+      inst.insertRow(curRows - 1, { number: neededRows - curRows });
+    } else if (curRows > neededRows) {
+      inst.deleteRow(neededRows, curRows - 1);
+    }
+
+    const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+    const data = flowDataArr || targetSheetObj.data;
+    if (!data) return;
+
+    ALL_COLS.forEach((col, c) => {
+      data[0][c] = {
+        v: col.label, m: col.label,
+        ct: { fa: 'General', t: 'g' },
+        bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+      };
+    });
+
+    const FORMULA_META = new Set(['_formula_key', '_formula_output', '_formula_expr', '_formula_label']);
+
+    rows.forEach((row, ri) => {
+      const rIdx   = ri + 1;
+      const kind   = (String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf') as RowKind;
+      const level  = Math.max(1, Math.min(10, toNum(row._level) || 1));
+      const st     = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+
+      if (!data[rIdx]) {
+        data[rIdx] = Array(targetSheetObj.column || 26).fill(null);
+      }
+
+      ALL_COLS.forEach((col, c) => {
+        const val = (row as any)[col.key];
+        let cell: any;
+
+        if (col.key === '_dbid') {
+          cell = mkBlank();
+        } else if (col.key === '_level') {
+          cell = mkNum(level, true);
+        } else if (col.key === '_kind') {
+          cell = mkTxt(kind);
+        } else if (FORMULA_META.has(col.key)) {
+          const s = val ? String(val) : '';
+          cell = s ? mkTxt(s) : mkBlank();
+        } else if (col.key === 'descripcion') {
+          const desc = String(val ?? '').trimStart();
+          if (desc) {
+            cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
+          } else {
+            cell = { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+          }
+        } else if (col.key === 'partida') {
+          const p = String(val ?? '').trim();
+          cell = p ? styledTxt(p, p, st) : mkBlank();
+        } else if (col.key === 'unidad') {
+          const u = String(val ?? '').trim();
+          cell = u ? { ...mkTxt(u), bg: st.bg, fc: st.fc, fs: 10 } : { ...mkBlank(), bg: st.bg, fc: st.fc, fs: 10 };
+        } else if (col.key === 'observacion') {
+          const o = String(val ?? '').trim();
+          cell = o ? mkTxt(o) : mkBlank();
+        } else {
+          const n = toNum(val);
+          cell = isZeroLike(n) ? { ...mkBlank(), bg: st.bg, fc: st.fc, fs: 10 } : styledNum(n, st, false);
+        }
+
+        data[rIdx][c] = cell;
+      });
+    });
+
+    for (let r = rows.length + 1; r < data.length; r++) {
+      if (data[r]) {
+        for (let c = 0; c < data[r].length; c++) {
+          data[r][c] = null;
+        }
+      }
+    }
+
+    inst.refresh();
+
+    setTimeout(() => {
+      progCount.current = 0;
+      recalc();
+      const refreshed = inst.getAllSheets() as any[];
+      scheduleSave(refreshed, [targetSheet]);
+      saveNow([targetSheet]);
+    }, 300);
+  }, [ls, scheduleSave, saveNow, recalc]);
+
+
   const openCalc = useCallback(() => {
     const inst   = ls();
     const range  = inst?.getRange?.();
@@ -571,13 +692,22 @@ export default function ElectricasIndex() {
       const newRows = buildElectricasResumenRows(met, resumenRows);
       const prevOrder = inst.getSheet().order;
 
-      // Activar hoja Resumen, limpiar y repoblar
-      inst.setSheetActive(resIdx);
-      inst.clearRange({ row: [0, 3000], column: [0, resumenCols.length + 1] });
+      // Ajustar el número de filas en la hoja destino
+      const neededResRows = newRows.length + 1;
+      const curResRows = all[resIdx].data?.length || all[resIdx].row || 100;
+      if (curResRows < neededResRows) {
+        inst.insertRow(curResRows - 1, { number: neededResRows - curResRows });
+      } else if (curResRows > neededResRows) {
+        inst.deleteRow(neededResRows, curResRows - 1);
+      }
+
+      const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+      const data = flowDataArr || all[resIdx].data;
+      if (!data) { setSyncing(false); return; }
 
       // Encabezados
       resumenCols.forEach((col, c) => {
-        safeSetCellValue(0, c, {
+        data[0][c] = {
           v: col.label,
           m: col.label,
           ct: { fa: 'General', t: 'g' },
@@ -585,7 +715,7 @@ export default function ElectricasIndex() {
           fc: '#94a3b8',
           bl: 1,
           fs: 10,
-        }, { isRefresh: false });
+        };
       });
 
       // Filas de datos
@@ -594,6 +724,8 @@ export default function ElectricasIndex() {
         const kind = String(row._kind ?? 'leaf') as RowKind;
         const st = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
 
+        if (!data[ri + 1]) data[ri + 1] = Array(all[resIdx].column || 26).fill(null);
+
         resumenCols.forEach((col, c) => {
           const raw = (row as any)[col.key] ?? '';
           let cell: any;
@@ -601,11 +733,7 @@ export default function ElectricasIndex() {
           if (col.key === 'total' || col.key === 'unidad') {
             cell = styledNum(toNum(raw), st);
           } else if (col.key === 'partida') {
-            // Normalizar partida con formato de pares: 05, 05.01, 05.01.01, etc.
-            const normalized = String(raw)
-              .split('.')
-              .map(p => pad2(p))
-              .join('.');
+            const normalized = String(raw).split('.').map(p => pad2(p)).join('.');
             cell = styledTxt(normalized, normalized, st);
           } else if (col.key === 'descripcion') {
             const desc = String(raw).trim();
@@ -614,9 +742,18 @@ export default function ElectricasIndex() {
             cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
           }
 
-          safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
+          data[ri + 1][c] = cell;
         });
       });
+
+      // Limpiar celdas sobrantes
+      for (let r = newRows.length + 1; r < data.length; r++) {
+        if (data[r]) {
+          for (let c = 0; c < data[r].length; c++) {
+            data[r][c] = null;
+          }
+        }
+      }
 
       inst.refresh();
       inst.setSheetActive(prevOrder);
@@ -761,6 +898,18 @@ export default function ElectricasIndex() {
               <Hash className="h-3 w-3" /> Numerar
             </button>
 
+            {/* Importar */}
+            <button
+              type="button"
+              title="Importar metrados desde Excel"
+              onClick={() => setIsImportOpen(true)}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md
+                bg-green-600 px-3 text-[10px] font-bold text-white
+                transition-all hover:bg-green-700 active:scale-95"
+            >
+              <Upload className="h-3 w-3" /> Importar
+            </button>
+
             <Divider />
 
             {/* Guardar manual */}
@@ -850,6 +999,28 @@ export default function ElectricasIndex() {
         open    ={numOpen}
         onClose ={() => setNumOpen(false)}
         onApply ={applyNumbering}
+      />
+    
+      <ImportarMetradoElectricasModal
+        open={isImportOpen}
+        moduleCount={1}
+        activeSheetName={ls()?.getSheet?.()?.name ?? 'Metrado'}
+        onClose={() => {
+          if (!isImporting) setIsImportOpen(false);
+        }}
+        onImport={(rows, targetSheet) => {
+          setIsImporting(true);
+          setTimeout(() => {
+            try {
+              applyImport(rows, targetSheet);
+              setIsImportOpen(false);
+            } catch (err: any) {
+              alert(err.message ?? 'Error al aplicar importación');
+            } finally {
+              setIsImporting(false);
+            }
+          }, 100);
+        }}
       />
     </AppLayout>
   );
