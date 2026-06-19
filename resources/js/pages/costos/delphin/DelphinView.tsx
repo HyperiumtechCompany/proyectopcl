@@ -349,24 +349,21 @@ export default function DelphinView({
     );
 
     // ── Row actions ───────────────────────────────────────────────────────────
-    const handleRowAction = useCallback(
-        (taskId: number, action: RowAction) => {
-            switch (action) {
-                case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
-                case 'addChild': setPendingSelect(addChildTask(taskId)); break;
-                case 'delete': deleteTask(taskId); break;
-                case 'indent': indentTask(taskId); break;
-                case 'outdent': outdentTask(taskId); break;
-                case 'moveUp': moveTaskUp(taskId); break;
-                case 'moveDown': moveTaskDown(taskId); break;
-                case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
-                case 'expand':
-                case 'collapse': toggleExpand(taskId); break;
-            }
-        },
-        [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
-            moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect],
-    );
+    const handleRowAction = useCallback((taskId: number, action: RowAction) => {
+        switch (action) {
+            case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
+            case 'addChild': setPendingSelect(addChildTask(taskId)); break;
+            case 'delete': deleteTask(taskId); break;
+            case 'indent': indentTask(taskId); break;
+            case 'outdent': outdentTask(taskId); break;
+            case 'moveUp': moveTaskUp(taskId); break;
+            case 'moveDown': moveTaskDown(taskId); break;
+            case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
+            case 'expand':
+            case 'collapse': toggleExpand(taskId); break;
+        }
+    }, [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
+        moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect]);
 
     // ── Save functions ────────────────────────────────────────────────────────
     const onAcuProgress = useCallback((p: AcuFlushProgress) => {
