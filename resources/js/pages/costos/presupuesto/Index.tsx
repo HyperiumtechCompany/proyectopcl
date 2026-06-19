@@ -634,7 +634,9 @@ export default function Index() {
                         ) : subsection === 'insumos' ? (
                             <InsumosPanel projectId={project.id} />
                         ) : subsection === 'f_polinomica' ? (
-                            <FormulaPolinomica />
+                            <div className="min-h-0 flex-1 overflow-auto p-4">
+                                <FormulaPolinomica rows={storeRows} acuRows={acuRows} projectName={project.nombre} />
+                            </div>
                         ) : (
                             <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>

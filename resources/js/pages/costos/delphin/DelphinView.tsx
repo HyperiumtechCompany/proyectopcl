@@ -27,10 +27,12 @@ import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore'
 
 import { DelphinGrid } from './components/DelphinGrid';
 import { DelphinExportModal } from './components/DelphinExportModal';
+import { DelphinFormulaPolinomicaPanel } from './components/DelphinFormulaPolinomicaPanel';
 import { DelphinToolbar } from './components/DelphinToolbar';
 import { ImportDelphinModal } from './components/ImportDelphinModal';
+import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal';
 import { useDelphinData } from './hooks/useDelphinData';
-import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinMode, type DelphinSubView } from './types';
+import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView } from './types';
 
 const DESC_EXPANDED_EXTRA = 180;
 
@@ -92,6 +94,7 @@ export default function DelphinView({
     }, [project]);
 
     const [subView, setSubView] = useState<DelphinSubView>('gantt');
+    const [budgetView, setBudgetView] = useState<DelphinBudgetView>('presupuesto');
 
     // ── Scheduling mode ───────────────────────────────────────────────────────
     const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(() => {
@@ -110,7 +113,17 @@ export default function DelphinView({
     const [showCriticalPath, setShowCriticalPath] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
+    const [importExcelOpen, setImportExcelOpen] = useState(false);
+    const [insumosOpen, setInsumosOpen] = useState(false);
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
+    const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
+    const [flushProgress, setFlushProgress] = useState<AcuFlushProgress & { active: boolean }>({
+        active: false,
+        done: 0,
+        total: 0,
+        pct: 0,
+        etaSecs: null,
+    });
 
     // ── Column visibility + description expand ────────────────────────────────
     const [hiddenBudgetKeys, setHiddenBudgetKeys] = useState<Set<string>>(new Set());
@@ -177,7 +190,7 @@ export default function DelphinView({
         [commitField, stopEdit],
     );
 
-    const onKeyDown = useGanttKeyboard({
+    const ganttKeyDown = useGanttKeyboard({
         visibleTasks: visibleDelphinRows as GanttTask[],
         selectedRowId, editState,
         selectRow, startEdit, stopEdit, cancelEdit,
@@ -222,7 +235,15 @@ export default function DelphinView({
         return { descripcion: row.descripcion, unidad: row.unidad };
     }, [selectedTask, delphinRows, groupIds]);
 
-    const { acuRows, acuLoading, selectedAcu, saveAcu: baseSaveAcu } = usePresupuestoAcu({
+    const {
+        acuRows,
+        acuLoading,
+        selectedAcu,
+        saveAcu: baseSaveAcu,
+        localSaveAcu,
+        flushPendingAcus,
+        acuDirty,
+    } = usePresupuestoAcu({
         projectId: project_id_int,
         subsection: 'acus',
         selectedCell: null,
@@ -230,6 +251,7 @@ export default function DelphinView({
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
+        refetchVersion: acuRefetchVersion,
     });
 
     // Called by AcuPanel when user edits an individual ACU (visual-first)
@@ -449,8 +471,10 @@ export default function DelphinView({
                 {/* ── 1. Single unified toolbar ──────────────────────────── */}
                 <DelphinToolbar
                     mode={mode}
+                    budgetView={budgetView}
                     subView={subView}
                     onModeChange={handleModeChange}
+                    onBudgetView={setBudgetView}
                     onSubView={setSubView}
 
                     selectedRowId={selectedRowId}
@@ -476,6 +500,7 @@ export default function DelphinView({
                     onOpenSettings={() => setSettingsOpen(true)}
                     onImport={handleImportClick}
                     onImportExcel={() => setImportExcelOpen(true)}
+                    onOpenInsumos={() => setInsumosOpen(true)}
 
                     budgetDirty={budgetDirty || acuDirty}
                     isSavingBudget={isSavingBudget}
@@ -487,7 +512,14 @@ export default function DelphinView({
                 />
 
                 {/* ── 2. Main area ────────────────────────────────────────── */}
-                {mode === 'cpm' && subView === 'network' ? (
+                {mode === 'budget' && budgetView === 'formula_polinomica' ? (
+                    <DelphinFormulaPolinomicaPanel
+                        projectId={project_id_int}
+                        projectName={project_name}
+                        rows={delphinRows}
+                        acuRows={acuRows}
+                    />
+                ) : mode === 'cpm' && subView === 'network' ? (
                     /* Red/Network: full width, no split pane */
                     <div className="min-h-0 flex-1 overflow-hidden">
                         <DiagramaRed
@@ -597,8 +629,20 @@ export default function DelphinView({
                     projectName={project_name}
                     project={project}
                     projectData={projectData}
-                    onClose={() => setExportOpen(false)}
-                />
+                    onClose={() => setExportOpen(false)}/>
+                <ImportDelphinModal
+                    open={importExcelOpen}
+                    project={project}
+                    project_id_int={project_id_int}
+                    delphinRows={delphinRows}
+                    onClose={() => setImportExcelOpen(false)}
+                    onBudgetImported={importDelphinRows}
+                    onAcusImported={handleAcusImported}/>
+                <InsumosConsolidadosModal
+                    open={insumosOpen}
+                    acuRows={acuRows}
+                    projectName={project_name}
+                    onClose={() => setInsumosOpen(false)}/>
                 <input
                     ref={importInputRef}
                     type="file"

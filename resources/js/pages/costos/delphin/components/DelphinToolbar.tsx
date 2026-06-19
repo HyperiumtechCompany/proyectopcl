@@ -7,6 +7,7 @@ import {
     Bot,
     Calendar,
     CalendarDays,
+    Calculator,
     ChevronsDownUp,
     ChevronsUpDown,
     Copy,
@@ -18,6 +19,7 @@ import {
     LayoutDashboard,
     Network,
     NotepadTextIcon,
+    Package,
     Plus,
     Save,
     Settings,
@@ -28,7 +30,7 @@ import type { SchedulingMode } from '../../cronogramas/v2/types/task';
 import type { GanttBarLabel } from '../../cronogramas/v2/types/cell';
 import type { ZoomLevel } from '../../cronogramas/v2/types/timeline';
 import { ZOOM_LABELS } from '../../cronogramas/v2/types/timeline';
-import type { DelphinMode, DelphinSubView } from '../types';
+import type { DelphinBudgetView, DelphinMode, DelphinSubView } from '../types';
 
 const ZOOM_ORDER: ZoomLevel[] = ['DAY_WEEK', 'DAY_MONTH', 'MONTH_YEAR', 'QUARTER_YEAR'];
 
@@ -41,8 +43,10 @@ const BAR_LABEL_OPTIONS = [
 interface Props {
     // Mode
     mode:          DelphinMode;
+    budgetView:    DelphinBudgetView;
     subView:       DelphinSubView;
     onModeChange:  (m: DelphinMode) => void;
+    onBudgetView:  (v: DelphinBudgetView) => void;
     onSubView:     (v: DelphinSubView) => void;
 
     // Row ops (both modes)
@@ -70,6 +74,7 @@ interface Props {
     onOpenSettings:      () => void;
     onImport?:           () => void;
     onImportExcel?:      () => void;
+    onOpenInsumos?:      () => void;
 
     // Save (context-aware)
     budgetDirty:    boolean;
@@ -277,16 +282,17 @@ function ConfigDropdown({
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function DelphinToolbar({
-    mode, subView, onModeChange, onSubView,
+    mode, budgetView, subView, onModeChange, onBudgetView, onSubView,
     selectedRowId, onAddRow, onAddChild, onDeleteRow, onIndent, onOutdent,
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport, onImportExcel,
+    onOpenSettings, onImport, onImportExcel, onOpenInsumos,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,
     onExport,
 }: Props) {
-    const noSel   = selectedRowId === null;
+    const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
+    const noSel   = selectedRowId === null || isFormulaBudgetView;
     const isDirty  = mode === 'budget' ? budgetDirty : ganttDirty;
     const isSaving = mode === 'budget' ? isSavingBudget : isGanttSaving;
     const onSave   = mode === 'budget' ? onSaveBudget : onSaveGantt;
@@ -336,6 +342,37 @@ export function DelphinToolbar({
                 <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-linear-to-l from-slate-900 to-transparent" />
 
                 <div className="flex items-center gap-1 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+
+                    {/* Budget sub-view toggle */}
+                    {mode === 'budget' && (
+                        <>
+                            <div className="flex shrink-0 rounded bg-slate-800 p-0.5">
+                                <button
+                                    type="button"
+                                    title="Presupuesto y ACUs"
+                                    onClick={() => onBudgetView('presupuesto')}
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                        budgetView === 'presupuesto'
+                                            ? 'bg-emerald-700 text-white'
+                                            : 'text-slate-400 hover:text-slate-200'
+                                    }`}>
+                                    <BarChart2 size={11} /> Presupuesto
+                                </button>
+                                <button
+                                    type="button"
+                                    title="Formula Polinomica"
+                                    onClick={() => onBudgetView('formula_polinomica')}
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                        budgetView === 'formula_polinomica'
+                                            ? 'bg-emerald-700 text-white'
+                                            : 'text-slate-400 hover:text-slate-200'
+                                    }`}>
+                                    <Calculator size={11} /> Formula P.
+                                </button>
+                            </div>
+                            <Divider />
+                        </>
+                    )}
 
                     {/* CPM sub-view toggle */}
                     {mode === 'cpm' && (
@@ -493,12 +530,20 @@ export function DelphinToolbar({
                     </span>
                 )}
                 {mode === 'budget' && (
-                    <Btn
-                        icon={<Upload size={13} />}
-                        label="Imp. Excel"
-                        title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
-                        variant="default"
-                        onClick={onImportExcel}/>
+                    <>
+                        <Btn
+                            icon={<Package size={13} />}
+                            label="Insumos"
+                            title="Ver insumos consolidados del proyecto"
+                            variant="default"
+                            onClick={onOpenInsumos}/>
+                        <Btn
+                            icon={<Upload size={13} />}
+                            label="Imp. Excel"
+                            title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
+                            variant="default"
+                            onClick={onImportExcel}/>
+                    </>
                 )}
                 {mode === 'cpm' && (
                     <Btn
