@@ -381,8 +381,7 @@ export default function DelphinView({
         if (ok) setAcuRefetchVersion((v) => v + 1);
     }, [saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
 
-    // Gantt save also saves budget: partida codes change when rows are reordered/indented,
-    // so presupuesto_general must stay in sync with cronograma_general.
+  
     const handleSaveGantt = useCallback(async () => {
         const [ganttOk, budgetOk, acuOk] = await Promise.all([
             saveTasks(project),
@@ -423,7 +422,7 @@ export default function DelphinView({
         [importTasks],
     );
 
-    // ── Ctrl+S ────────────────────────────────────────────────────────────────
+   
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
