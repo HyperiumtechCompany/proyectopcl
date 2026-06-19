@@ -5,6 +5,20 @@ const DEFAULT_UNITS = [
     'ml', 'día', 'sem', 'mes', 'vje', 'pt', 'bls', 'gal', 'lt', 'rll',
 ];
 
+const UNIT_LABELS: Record<string, string> = {
+    '':    '—',
+    'm2':  'm²',
+    'm3':  'm³',
+    'día': 'día',
+    'sem': 'sem',
+    'mes': 'mes',
+    'vje': 'vje',
+    'rll': 'rll',
+    
+};
+
+const getLabel = (opt: string) => UNIT_LABELS[opt] ?? (opt || '—');
+
 interface Props {
     value: string;
     options?: string[];
@@ -25,7 +39,7 @@ export function CellSelect({ value, options = DEFAULT_UNITS, onCommit, onClick }
             >
                 {allOptions.map((opt) => (
                     <option key={opt || '__empty__'} value={opt}>
-                        {opt || '—'}
+                        {getLabel(opt)}
                     </option>
                 ))}
             </select>

@@ -5,6 +5,36 @@ import { saveAs } from 'file-saver';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
 
+// ─── ESPECIALIDADES ─────────────────────────────────────────────────────────────
+
+function filterRowsBySpecialties(rows: DelphinRow[], selectedIds: string[]): DelphinRow[] {
+    if (!selectedIds || selectedIds.length === 0) return rows;
+
+    const parentIds = new Set(selectedIds.map(id => parseInt(id, 10)));
+
+    if (parentIds.size === 0) return rows;
+
+    const rowById = new Map(rows.map(r => [r.id, r]));
+    const result: DelphinRow[] = [];
+
+    rows.forEach(row => {
+        if (row.nivel === 1 && parentIds.has(row.id)) {
+            result.push(row);
+            return;
+        }
+        let parentId = row.parent_id ?? null;
+        while (parentId !== null) {
+            if (parentIds.has(parentId)) {
+                result.push(row);
+                return;
+            }
+            parentId = rowById.get(parentId)?.parent_id ?? null;
+        }
+    });
+
+    return result;
+}
+
 // ── Colores ARGB ──────────────────────────────────────────────────────────────
 const C = {
     headerBg: 'FF1F4E79',
@@ -519,23 +549,23 @@ async function buildCronogramaSheet(
             indent: Math.max(0, nivel - 1),
         };
 
-        // ✅ Fijar altura de la fila
+
         ws.getRow(filaActual).height = 18;
 
         if (isLeaf) altIdx++;
         filaActual++;
     });
 
-    // ✅ AUTO AJUSTAR COLUMNAS DESPUÉS DE ESCRIBIR DATOS
+
     for (let i = 1; i <= totalColumnas; i++) {
-        ws.getColumn(i).autoFit = true;
-        // Ancho mínimo para evitar columnas muy estrechas
-        if (ws.getColumn(i).width < 10) {
-            ws.getColumn(i).width = 10;
+        const column = ws.getColumn(i);
+        // ExcelJS no soporta autoFit directamente en la versión de tipos usada.
+        // Se mantiene un ancho mínimo y máximo para evitar columnas demasiado estrechas o anchas.
+        if (typeof column.width !== 'number' || column.width < 10) {
+            column.width = 10;
         }
-        // Ancho máximo para evitar columnas demasiado anchas
-        if (ws.getColumn(i).width > 70) {
-            ws.getColumn(i).width = 70;
+        else if (column.width > 70) {
+            column.width = 70;
         }
     }
 
@@ -543,18 +573,22 @@ async function buildCronogramaSheet(
 }
 
 // ─── ENTRY POINT ───────────────────────────────────────────────────────────────
+
 export async function exportDelphinExcel(
     content: DelphinExportContent,
     rows: DelphinRow[],
     projectName: string,
-    proyecto?: any
+    proyecto?: any,
+    selectedSpecialties?: string[]
 ): Promise<void> {
-    // 👇 AGREGAR ESTOS LOGS
-    console.log('📦 proyecto recibido en exportDelphinExcel:', proyecto);
-    console.log('📦 plantilla_logo_izq_url:', proyecto?.plantilla_logo_izq_url);
-    console.log('📦 plantilla_logo_der_url:', proyecto?.plantilla_logo_der_url);
-    console.log('📦 plantilla_logo_izq_base64:', proyecto?.plantilla_logo_izq_base64 ? 'SI' : 'NO');
-    console.log('📦 plantilla_logo_der_base64:', proyecto?.plantilla_logo_der_base64 ? 'SI' : 'NO');
+    // Filtrar filas por especialidades seleccionadas
+    const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
+        ? filterRowsBySpecialties(rows, selectedSpecialties)
+        : rows;
+
+    console.log('📦 Filas originales:', rows.length);
+    console.log('📦 Filas filtradas:', filteredRows.length);
+    console.log('📦 Especialidades seleccionadas:', selectedSpecialties);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'PCL Costos';
@@ -562,11 +596,11 @@ export async function exportDelphinExcel(
 
     if (content === 'budget_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Presupuesto General');
-        await buildPresupuestoSheet(ws, rows, proyecto, projectName, wb);
+        await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);  // 👈 filteredRows
     }
     if (content === 'gantt_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Cronograma General');
-        await buildCronogramaSheet(ws, rows, proyecto, projectName, wb);
+        await buildCronogramaSheet(ws, filteredRows, proyecto, projectName, wb);  // 👈 filteredRows
     }
 
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
