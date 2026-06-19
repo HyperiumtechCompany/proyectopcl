@@ -108,19 +108,7 @@ class CostoProject extends Model
      */
     public function hasModule(string $moduleType): bool
     {
-        $moduleTypes = $moduleType === 'presupuesto'
-            ? array_merge(['presupuesto'], self::LEGACY_PRESUPUESTO_MODULE_TYPES)
-            : [$moduleType];
-
-        if ($this->relationLoaded('modules')) {
-            return $this->modules
-                ->whereIn('module_type', $moduleTypes)
-                ->contains('enabled', true);
-        }
-
-        return $this->enabledModules()
-            ->whereIn('module_type', $moduleTypes)
-            ->exists();
+        return $this->belongsTo(Ubigeo::class, 'departamento_id');
     }
 
     /**
@@ -128,7 +116,7 @@ class CostoProject extends Model
      */
     public function hasUnifiedPresupuesto(): bool
     {
-        return $this->hasModule('presupuesto');
+        return $this->belongsTo(Ubigeo::class, 'provincia_id');
     }
 
     /**
@@ -136,7 +124,7 @@ class CostoProject extends Model
      */
     public static function generateDatabaseName(int $userId): string
     {
-        return 'costos_user_'.$userId.'_'.now()->format('YmdHis').'_'.strtolower(str()->random(6));
+        return $this->belongsTo(Ubigeo::class, 'distrito_id');
     }
 
 }

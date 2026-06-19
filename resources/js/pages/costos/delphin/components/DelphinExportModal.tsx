@@ -18,28 +18,28 @@ const CONTENT_OPTIONS: {
     desc: string;
     sheets: string[];
 }[] = [
-    {
-        key: 'budget_only',
-        icon: <BarChart2 size={20} />,
-        title: 'Solo Presupuesto',
-        desc: 'Partidas, unidades, metrados y precios unitarios.',
-        sheets: ['Presupuesto General'],
-    },
-    {
-        key: 'budget_gantt',
-        icon: <Layers size={20} />,
-        title: 'Presupuesto + Cronograma',
-        desc: 'Ambas vistas en un único archivo.',
-        sheets: ['Presupuesto General', 'Cronograma General'],
-    },
-    {
-        key: 'gantt_only',
-        icon: <CalendarDays size={20} />,
-        title: 'Solo Cronograma',
-        desc: 'Duración, fechas, predecesoras y costo por partida.',
-        sheets: ['Cronograma General'],
-    },
-];
+        {
+            key: 'budget_only',
+            icon: <BarChart2 size={20} />,
+            title: 'Solo Presupuesto',
+            desc: 'Partidas, unidades, metrados y precios unitarios.',
+            sheets: ['Presupuesto General'],
+        },
+        {
+            key: 'budget_gantt',
+            icon: <Layers size={20} />,
+            title: 'Presupuesto + Cronograma',
+            desc: 'Ambas vistas en un único archivo.',
+            sheets: ['Presupuesto General', 'Cronograma General'],
+        },
+        {
+            key: 'gantt_only',
+            icon: <CalendarDays size={20} />,
+            title: 'Solo Cronograma',
+            desc: 'Duración, fechas, predecesoras y costo por partida.',
+            sheets: ['Cronograma General'],
+        },
+    ];
 
 const FORMAT_OPTIONS: {
     key: DelphinExportFormat;
