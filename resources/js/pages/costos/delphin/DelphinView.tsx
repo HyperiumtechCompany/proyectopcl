@@ -266,6 +266,7 @@ export default function DelphinView({
         const hasUnit = row.unidad && row.unidad.trim() !== '';
         if (!isLeaf || !hasUnit) return null;
         return { descripcion: row.descripcion, unidad: row.unidad };
+    }, [selectedTask, delphinRows, groupIds]);
 
     const {
         acuRows,
