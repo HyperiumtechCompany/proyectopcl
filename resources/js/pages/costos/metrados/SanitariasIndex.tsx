@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // SanitariasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
-import { FileDown } from 'lucide-react';
+import { FileDown, Upload } from 'lucide-react';
 import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
 import { router, usePage } from '@inertiajs/react';
 import {
@@ -430,6 +430,7 @@ export default function SanitariasIndex() {
     const [syncing, setSyncing] = useState(false);
     const [calcOpen, setCalcOpen] = useState(false);
     const [numOpen, setNumOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
     const [calcRow, setCalcRow] = useState<{
         ri: number;
         rowData: Record<string, any>;
@@ -817,7 +818,106 @@ export default function SanitariasIndex() {
         }, 400);
     }, [ls, moduleCount, resumenCols, saveNow, scheduleSave]);
 
-    const handleExportarExcel = useCallback(async () => {
+    
+  const applyImport = useCallback((rows: ImportedMetradoRow[], targetSheet: string) => {
+    const inst = ls();
+    if (!inst || !isLuckysheetReady()) return;
+
+    const all = inst.getAllSheets() as any[];
+    const targetIdx = all.findIndex((s: any) => s.name === targetSheet);
+    if (targetIdx < 0) throw new Error(`No se encontró la hoja "${targetSheet}"`);
+
+    const targetSheetObj = all[targetIdx];
+
+    inst.setSheetActive(targetIdx);
+
+    const buffer = 50;
+    const neededRows = rows.length + 1 + buffer;
+    const curRows = targetSheetObj.data?.length || targetSheetObj.row || 100;
+
+    if (curRows < neededRows) {
+      inst.insertRow(curRows - 1, { number: neededRows - curRows });
+    } else if (curRows > neededRows) {
+      inst.deleteRow(neededRows, curRows - 1);
+    }
+
+    const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+    const data = flowDataArr || targetSheetObj.data;
+    if (!data) return;
+
+    ALL_COLS.forEach((col, c) => {
+      data[0][c] = {
+        v: col.label, m: col.label,
+        ct: { fa: 'General', t: 'g' },
+        bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+      };
+    });
+
+    const FORMULA_META = new Set(['_formula_key', '_formula_output', '_formula_expr', '_formula_label']);
+
+    rows.forEach((row, ri) => {
+      const rIdx   = ri + 1;
+      const kind   = (String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf') as RowKind;
+      const level  = Math.max(1, Math.min(10, toNum(row._level) || 1));
+      const st     = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+
+      if (!data[rIdx]) {
+        data[rIdx] = Array(targetSheetObj.column || 26).fill(null);
+      }
+
+      ALL_COLS.forEach((col, c) => {
+        const val = (row as any)[col.key];
+        let cell: any;
+
+        if (col.key === '_dbid') {
+          cell = mkBlank();
+        } else if (col.key === '_level') {
+          cell = mkNum(level, true);
+        } else if (col.key === '_kind') {
+          cell = mkTxt(kind);
+        } else if (FORMULA_META.has(col.key)) {
+          const s = val ? String(val) : '';
+          cell = s ? mkTxt(s) : mkBlank();
+        }
+        else if (col.key === 'descripcion') {
+          const desc = String(val ?? '').trim();
+          cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
+        }
+        else if (col.key === 'partida' || col.key === 'unidad') {
+          cell = styledTxt(String(val ?? ''), String(val ?? ''), st);
+        }
+        else if (['elsim', 'largo', 'ancho', 'alto', 'nveces'].includes(col.key)) {
+          cell = val !== undefined && val !== null && String(val).trim() !== ''
+            ? styledNum(toNum(val), st)
+            : { ...mkBlank(), bg: st.bg };
+        }
+        else if (['lon', 'area', 'vol', 'kg', 'parcial', 'total'].includes(col.key)) {
+          const fExpr = (row as any)['_formula_expr'];
+          const fOut  = (row as any)['_formula_output'];
+          if (fOut === col.key && fExpr) {
+            cell = mkFormula(fExpr, styledNum(toNum(val), st));
+          } else {
+            cell = val !== undefined && val !== null && String(val).trim() !== ''
+              ? styledNum(toNum(val), st)
+              : { ...mkBlank(), bg: st.bg };
+          }
+        }
+        else {
+          cell = { ...mkBlank(), bg: st.bg };
+        }
+
+        data[rIdx][c] = cell;
+      });
+    });
+
+    inst.refresh();
+    const active = getActive();
+    scheduleSave(inst.getAllSheets(), active?.name ? [String(active.name)] : undefined);
+    saveNow(active?.name ? [String(active.name)] : undefined);
+  }, [ls, getActive, scheduleSave, saveNow]);
+
+
+  const handleExportarExcel = useCallback(async () => {
         try {
             const inst = ls();
             if (!inst) {
@@ -1140,7 +1240,20 @@ export default function SanitariasIndex() {
                 onApply={applyCalc}
             />
 
-            <NumberingModal
+            
+      <ImportarMetradoSanitariasModal
+        open={importOpen}
+        moduleCount={moduleCount}
+        activeSheetName={(() => {
+          try { return (ls()?.getSheet?.() as any)?.name ?? 'Módulo 1'; } catch { return 'Módulo 1'; }
+        })()}
+        onClose={() => setImportOpen(false)}
+        onImport={(rows, targetSheet) => {
+          applyImport(rows, targetSheet);
+        }}
+      />
+
+      <NumberingModal
                 open={numOpen}
                 onClose={() => setNumOpen(false)}
                 onApply={applyNumbering}
