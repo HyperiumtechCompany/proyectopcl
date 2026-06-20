@@ -13,6 +13,8 @@ import type { DelphinRow } from '../types';
 const fmtCurrency = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const ROW_NUM_W = 32;
+
 /** Returns text color class for the description column based on hierarchy level */
 function getDescTextClass(row: DelphinRow, isGroup: boolean): string | undefined {
     if (!isGroup) return undefined; // leaf → default (text-slate-200)
@@ -154,6 +156,13 @@ function DelphinGridHeader({
             className="flex shrink-0 items-end border-b border-slate-600 bg-slate-800 select-none"
             style={{ height: CHART_HEADER_H }}
         >
+            {/* Row number gutter header */}
+            <div
+                className="shrink-0 border-r border-slate-700 px-1 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 sticky left-0 bg-slate-800 z-10"
+                style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
+            >
+                #
+            </div>
             {columns.map((col) => (
                 <div
                     key={col.key}
@@ -314,6 +323,7 @@ export function DelphinGrid({
                                 isExpanded={expandedIds.has(row.id)}
                                 editState={editState}
                                 descTextClass={getDescTextClass(row, isGroup)}
+                                rowIndex={vRow.index}
                                 style={{
                                     position: 'absolute',
                                     top:      vRow.start,
@@ -342,6 +352,8 @@ export function DelphinGrid({
             {/* ── Costo Directo footer (budget mode only) ──────────────────── */}
             {hasParcialCol && (
                 <div className="flex shrink-0 border-t-2 border-amber-600/60 bg-slate-900 text-xs font-bold select-none">
+                    {/* Row number gutter footer */}
+                    <div style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }} className="shrink-0 border-r border-slate-700/50" />
                     {columns.map((col) => (
                         <div
                             key={col.key}

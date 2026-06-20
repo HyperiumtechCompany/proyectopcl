@@ -83,7 +83,6 @@ interface Props {
     isGanttSaving:  boolean;
     onSaveBudget:   () => void;
     onSaveGantt:    () => void;
-    onImportAcus?:  () => void;
     onExport?: () => void;
 }
 
@@ -286,7 +285,7 @@ export function DelphinToolbar({
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport, onImportExcel, onImportAcus, onOpenInsumos, onExport,
+    onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
@@ -541,13 +540,6 @@ export function DelphinToolbar({
                             title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
                             variant="default"
                             onClick={onImportExcel}/>
-                        <Btn
-                            icon={<Upload size={13} />}
-                            label="Imp. ACUs"
-                            title="Importar ACUs desde Excel"
-                            variant="primary"
-                            onClick={onImportAcus}
-                        />
                     </>
                 )}
                 {mode === 'cpm' && (

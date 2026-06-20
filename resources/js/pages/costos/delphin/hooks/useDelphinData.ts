@@ -142,11 +142,19 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         const map = new Map<number, BudgetFields>();
         for (const task of effectiveTasks) {
             const br = initialRows.find((r) => r.partida === task.partida);
+            const metrado         = +(br?.metrado         ?? 0);
+            const precio_unitario = +(br?.precio_unitario  ?? 0);
+            // Compute parcial from factors when DB value is missing/zero (e.g. old saves
+            // that omitted the parcial field) — prevents the Total column showing all-zeros.
+            const storedParcial   = +(br?.parcial          ?? 0);
+            const parcial = storedParcial !== 0
+                ? storedParcial
+                : +(metrado * precio_unitario).toFixed(2);
             map.set(task.id, {
-                unidad:          br?.unidad          ?? '',
-                metrado:         +(br?.metrado        ?? 0),
-                precio_unitario: +(br?.precio_unitario ?? 0),
-                parcial:         +(br?.parcial         ?? 0),
+                unidad: br?.unidad ?? '',
+                metrado,
+                precio_unitario,
+                parcial,
             });
         }
         return map;
@@ -287,6 +295,7 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
                         unidad:          b.unidad,
                         metrado:         b.metrado,
                         precio_unitario: b.precio_unitario,
+                        parcial:         b.parcial,
                         item_order:      task.item_order,
                         // presupuesto_general uses partida notation for hierarchy,
                         // not parent_id/nivel — omit to avoid column-not-found 500

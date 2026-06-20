@@ -23,6 +23,8 @@ interface Props {
     style: React.CSSProperties;
     /** Text color class applied to the description cell (hierarchy coloring) */
     descTextClass?: string;
+    /** When provided, renders a sticky row-number gutter cell before all columns */
+    rowIndex?: number;
     onSelect: (id: number) => void;
     onStartEdit: (rowId: number, colKey: string) => void;
     onCommitField: <K extends keyof GanttTask>(
@@ -45,6 +47,7 @@ const GanttGridRowComponent = function GanttGridRow({
     editState,
     style,
     descTextClass,
+    rowIndex,
     onSelect,
     onStartEdit,
     onCommitField,
@@ -100,6 +103,14 @@ const GanttGridRowComponent = function GanttGridRow({
             onClick={handleRowClick}
             onContextMenu={handleContextMenu}
         >
+            {rowIndex !== undefined && (
+                <div
+                    className="shrink-0 border-r border-slate-700/50 bg-slate-900/60 font-mono text-[10px] text-slate-600 flex items-center justify-center select-none"
+                    style={{ width: 32, minWidth: 32, position: 'sticky', left: 0, zIndex: 1 }}
+                >
+                    {rowIndex + 1}
+                </div>
+            )}
             {columns.map((col) => {
                 const editing  = isEditing(col.key);
                 const raw      = (task as any)[col.key];
@@ -238,6 +249,7 @@ const areEqual = (prev: Props, next: Props) =>
     prev.isGroup       === next.isGroup &&
     prev.isExpanded    === next.isExpanded &&
     prev.descTextClass === next.descTextClass &&
+    prev.rowIndex      === next.rowIndex &&
     prev.onContextMenu === next.onContextMenu &&
     (prev.editState?.rowId === prev.task.id) ===
         (next.editState?.rowId === next.task.id) &&
