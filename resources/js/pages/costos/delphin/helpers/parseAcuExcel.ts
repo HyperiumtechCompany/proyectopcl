@@ -14,8 +14,8 @@ export interface ParsedAcuComponente {
 }
 
 export interface ParsedAcu {
-    partida_code: string;      // "1.1.1.1" — primary match key
-    partida_desc: string;      // description — fallback match key
+    partida_code: string;      
+    partida_desc: string;     
     unidad: string;
     rendimiento: number;
     mano_de_obra:  ParsedAcuComponente[];

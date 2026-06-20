@@ -23,39 +23,39 @@ interface ExportarExcelOptions {
 }
 
 // HELPERS DE FORMATO
-const fmtN   = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const nivel  = (item: string) => (item?.split('.').length ?? 1) - 1;
+const fmtN = (v: number) => (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nivel = (item: string) => (item?.split('.').length ?? 1) - 1;
 
 // PALETA DE COLORES 
 const C = {
     // Cabecera principal
-    headerBg:        'FF1F4E79', // slate-950
-    headerFg:        'FFFFFFFF',
+    headerBg: 'FF1F4E79', // slate-950
+    headerFg: 'FFFFFFFF',
     // Cabecera parcial
-    parcialBg:       'FF5B9BD5', // azul oscuro
-    parcialFg:       'FFFFFFFF',
+    parcialBg: 'FF5B9BD5', // azul oscuro
+    parcialFg: 'FFFFFFFF',
     // Total (col derecha)
-    totalBg:         'FF70AD47', // emerald-950
-    totalFg:         'FFFFFFFF',
+    totalBg: 'FF70AD47', // emerald-950
+    totalFg: 'FFFFFFFF',
     // Mes pico
-    picoBg:          'FFFFC000', // amber-700
-    picoFg:          'FF3A3A3A',
+    picoBg: 'FFFFC000', // amber-700
+    picoFg: 'FF3A3A3A',
     // Niveles de ítem
-    nivel0Bg:        'FFD9EAF7', nivel0Fg: 'FF1F4E79',   // slate-800
-    nivel1Bg:        'FFEAF4DD', nivel1Fg: 'FF375623',   // slate-200
-    nivel2Bg:        'FFF2F2F2', nivel2Fg: 'FF404040',   // slate-100
-    nivel3Bg:        'FFFFFFFF', nivel3Fg: 'FF404040',
-    leafBg:          'FFFFFFFF', leafFg:  'FF1E293B',
+    nivel0Bg: 'FFD9EAF7', nivel0Fg: 'FF1F4E79',   // slate-800
+    nivel1Bg: 'FFEAF4DD', nivel1Fg: 'FF375623',   // slate-200
+    nivel2Bg: 'FFF2F2F2', nivel2Fg: 'FF404040',   // slate-100
+    nivel3Bg: 'FFFFFFFF', nivel3Fg: 'FF404040',
+    leafBg: 'FFFFFFFF', leafFg: 'FF1E293B',
     // Footer filas
-    footer1Bg:       'FF5B9BD5', footer1Fg: 'FFFFFFFF',  // Valorización mensual
-    footer2Bg:       'FF808080', footer2Fg: 'FFFFFFFF',  // % mensual
-    footer3Bg:       'FF70AD47', footer3Fg: 'FFFFFFFF',  // Val. acumulada
-    footer4Bg:       'FF44546A', footer4Fg: 'FFFFFFFF',  // % acumulado
+    footer1Bg: 'FF5B9BD5', footer1Fg: 'FFFFFFFF',  // Valorización mensual
+    footer2Bg: 'FF808080', footer2Fg: 'FFFFFFFF',  // % mensual
+    footer3Bg: 'FF70AD47', footer3Fg: 'FFFFFFFF',  // Val. acumulada
+    footer4Bg: 'FF44546A', footer4Fg: 'FFFFFFFF',  // % acumulado
     // Celda datos
-    dataBg:          'FFFFFFFF', dataFg: 'FF808080',
-    altRowBg:        'FFF7FBFF',
+    dataBg: 'FFFFFFFF', dataFg: 'FF808080',
+    altRowBg: 'FFF7FBFF',
     // Resumen superior
-    resumeBg:        'FF5B9BD5',
+    resumeBg: 'FF5B9BD5',
 };
 
 // HELPER: aplicar fill sólido
@@ -73,21 +73,21 @@ function style(
         numFmt?: string; indent?: number;
     },
 ) {
-    if (opts.bg)       fill(cell, opts.bg);
+    if (opts.bg) fill(cell, opts.bg);
     if (opts.fg || opts.bold || opts.size || opts.italic) {
         cell.font = {
-            name:   'Arial',
-            color:  opts.fg ? { argb: opts.fg } : undefined,
-            bold:   opts.bold   ?? false,
-            size:   opts.size   ?? 9,
+            name: 'Arial',
+            color: opts.fg ? { argb: opts.fg } : undefined,
+            bold: opts.bold ?? false,
+            size: opts.size ?? 9,
             italic: opts.italic ?? false,
         };
     }
     cell.alignment = {
-        horizontal: opts.hAlign  ?? 'left',
-        vertical:   opts.vAlign  ?? 'middle',
-        wrapText:   opts.wrapText ?? false,
-        indent:     opts.indent,
+        horizontal: opts.hAlign ?? 'left',
+        vertical: opts.vAlign ?? 'middle',
+        wrapText: opts.wrapText ?? false,
+        indent: opts.indent,
     };
     if (opts.numFmt) cell.numFmt = opts.numFmt;
     if (opts.border) {
@@ -100,10 +100,25 @@ function borderAll(cell: ExcelJS.Cell, color = 'FFD1D5DB') {
     const b: ExcelJS.Border = { style: 'thin', color: { argb: color } };
     cell.border = { top: b, left: b, bottom: b, right: b };
 }
+function getFechaFormatoModelo(): string {
+    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const hoy = new Date();
+    return `${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 
 
 // ENCABEZADO 
-const EXCEL_START_COL = 2;
+const EXCEL_START_COL = 3;
 const xcol = (logicalCol: number): number => EXCEL_START_COL + logicalCol - 1;
 const xlast = (logicalTotalCols: number): number => xcol(logicalTotalCols);
 
@@ -207,8 +222,8 @@ async function fetchProjectImage(relativePath?: string): Promise<{ buffer: Array
         const lower = rawPath.toLowerCase();
         const extension: 'png' | 'jpeg' | 'gif' | 'bmp' =
             lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'jpeg' :
-            lower.endsWith('.gif') ? 'gif' :
-            lower.endsWith('.bmp') ? 'bmp' : 'png';
+                lower.endsWith('.gif') ? 'gif' :
+                    lower.endsWith('.bmp') ? 'bmp' : 'png';
 
         const apiUrl = (import.meta as any).env?.VITE_API_URL || (window as any).__API_URL__ || '';
         const appUrl = (import.meta as any).env?.VITE_APP_URL || (window as any).__APP_URL__ || '';
@@ -216,7 +231,7 @@ async function fetchProjectImage(relativePath?: string): Promise<{ buffer: Array
         const appStorage = appUrl ? `${String(appUrl).replace(/\/$/, '')}/storage` : '';
 
         const bases = [
-            
+
             (window as any).__PROYECTAPCL_STORAGE_URL__,
             (window as any).__STORAGE_URL__,
             (import.meta as any).env?.VITE_PROYECTAPCL_STORAGE_URL,
@@ -310,7 +325,7 @@ function findProjectInBrowserStorage(projectName: string): any {
             } catch { /* continuar */ }
         }
 
-        
+
         try {
             for (let i = 0; i < storage.length; i++) {
                 const key = storage.key(i);
@@ -367,9 +382,12 @@ async function resolveProjectDataForExport(options: ExportarExcelOptions, projec
         nombre: pd.nombre,
         codigo_cui: pd.codigo_cui,
         codigo_local: pd.codigo_local,
-        plantilla_logo_izq: pd.plantilla_logo_izq,
-        plantilla_logo_der: pd.plantilla_logo_der,
+
     });
+
+
+    pd.plantilla_logo_izq_url = pd.plantilla_logo_izq || pd.logo_izq || '';
+    pd.plantilla_logo_der_url = pd.plantilla_logo_der || pd.logo_der || '';
 
     return pd;
 }
@@ -410,80 +428,226 @@ function putProjectImage(
     });
 }
 
-async function buildHeaderMaterialStyle(
+
+// ─── ENCABEZADO ──────────────────────────────────────────────────────────────
+async function buildHeader(
+    workbook: ExcelJS.Workbook,
     ws: ExcelJS.Worksheet,
-    projectData: any,
-    title: string,
-    totalLogicalCols: number,
-    totalDias?: number,
+    projectName: string,
+    proyecto: any,
+    totalColumnas: number,
+    tituloPersonalizado: string = 'RESUMEN DE PRESUPUESTO'
 ): Promise<number> {
-    ws.getColumn(1).width = 3; 
 
-    const nombre = getProjectNombre(projectData, projectData?.projectName || '-');
-    const cui = projectData?.codigo_cui || projectData?.cui || '-';
-    const codigoLocal = projectData?.codigo_local || '-';
-    const modular = getCodigoModular(projectData);
-    const unidadEjec = (projectData?.unidad_ejecutora || '-').toString().toUpperCase();
-    const ubicacion = getUbicacionProyecto(projectData, '-');
-    const duracion = calcularDuracionProyecto(projectData, totalDias);
+    const logoIzq = proyecto?.plantilla_logo_izq_url || proyecto?.plantilla_logo_izq;
+    const logoDer = proyecto?.plantilla_logo_der_url || proyecto?.plantilla_logo_der;
 
-    const [imgIzq, imgDer] = await Promise.all([
-        fetchProjectImage(projectData?.plantilla_logo_izq || projectData?.logo_izq || projectData?.logoIzquierdo || projectData?.logo_izquierdo || projectData?.logo_institucion || projectData?.logo_entidad || ''),
-        fetchProjectImage(projectData?.plantilla_logo_der || projectData?.logo_der || projectData?.logoDerecho || projectData?.logo_derecho || projectData?.logo_municipalidad || projectData?.logo_gobierno || ''),
-    ]);
-    const tieneLogos = !!(imgIzq || imgDer);
-    const logoCols = tieneLogos ? 2 : 0;
-    const cIni = logoCols + 1;
-    const cFin = totalLogicalCols - logoCols;
+    const modular = proyecto?.codigos_modulares || '-';
+    const codigoLocal = proyecto?.codigo_local || '-';
+    const cui = proyecto?.codigo_cui || '-';
+    const unidadEjecutora = proyecto?.unidad_ejecutora || '-';
+    const propietario = proyecto?.propietario || unidadEjecutora || '-';
+    const nombreProyecto = projectName || 'PROYECTO';
 
-    ws.getRow(1).height = 85;
+    let filaActual = 1;
 
-    const borderExt: Partial<ExcelJS.Borders> = {
-        top: { style: 'medium', color: { argb: 'FFB0B0B0' } },
-        bottom: { style: 'medium', color: { argb: 'FFB0B0B0' } },
-        left: { style: 'medium', color: { argb: 'FFB0B0B0' } },
-        right: { style: 'medium', color: { argb: 'FFB0B0B0' } },
-    };
+    // ── Configurar anchos ──
+    const colInicio = xcol(1);
+    const colFin = xcol(totalColumnas);
 
-    const mergeSet = (r1: number, lc1: number, r2: number, lc2: number, value: ExcelJS.CellValue, st: Partial<ExcelJS.Style>) => {
-        const c1 = xcol(lc1);
-        const c2 = xcol(lc2);
-        if (c1 <= c2) {
-            try { ws.mergeCells(r1, c1, r2, c2); } catch { /* ya mergeado */ }
-            const cell = ws.getCell(r1, c1);
-            cell.value = value;
-            cell.style = st;
+    ws.getColumn(colInicio).width = 9;
+    ws.getColumn(colInicio + 1).width = 9;
+    if (totalColumnas > 2) {
+        ws.getColumn(colFin - 1).width = 9;
+        ws.getColumn(colFin).width = 9;
+    }
+
+    // ── Altura de filas ──
+    for (let r = filaActual; r <= filaActual + 3; r++) {
+        ws.getRow(r).height = 22;
+    }
+
+    const f1 = filaActual;
+
+    // ── Logo izquierdo ──
+    if (totalColumnas >= 2) {
+        ws.mergeCells(f1, colInicio, f1 + 3, colInicio + 1);
+        const cell = ws.getCell(f1, colInicio);
+        cell.value = '';
+        cell.border = {
+            top: { style: 'medium' },
+            bottom: { style: 'medium' },
+            left: { style: 'medium' },
+            right: { style: 'thin' },
+        };
+    }
+
+    // ── Texto central ──
+    if (totalColumnas >= 3) {
+        const colCentralInicio = colInicio + 2;
+        const colCentralFin = colFin - 2;
+        ws.mergeCells(f1, colCentralInicio, f1 + 3, colCentralFin);
+        const cell = ws.getCell(f1, colCentralInicio);
+        cell.value = {
+            richText: [
+                { font: { bold: true, size: 11, name: 'Calibri' }, text: `"${nombreProyecto.toUpperCase()}"\n` },
+                { font: { bold: false, size: 9, name: 'Calibri' }, text: `CUI: ${cui}; CÓDIGO MODULAR: ${modular}; CÓDIGO LOCAL: ${codigoLocal}\n` },
+                { font: { bold: false, size: 9, name: 'Calibri' }, text: `I.E. ${nombreProyecto}; UNIDAD EJECUTORA: ${unidadEjecutora}` },
+            ],
+        };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+            top: { style: 'medium' },
+            bottom: { style: 'medium' },
+            left: { style: 'thin' },
+            right: { style: 'thin' },
+        };
+    }
+
+    // ── Logo derecho ──
+    if (totalColumnas >= 2) {
+        ws.mergeCells(f1, colFin - 1, f1 + 3, colFin);
+        const cell = ws.getCell(f1, colFin - 1);
+        cell.value = '';
+        cell.border = {
+            top: { style: 'medium' },
+            bottom: { style: 'medium' },
+            left: { style: 'thin' },
+            right: { style: 'medium' },
+        };
+    }
+
+    // ── Agregar logo izquierdo ──
+    if (logoIzq && typeof logoIzq === 'string' && logoIzq.trim() !== '') {
+        try {
+            if (logoIzq.startsWith('data:image')) {
+                const base64Data = logoIzq.split(',')[1];
+                const imgId = workbook.addImage({ base64: base64Data, extension: 'png' });
+                ws.addImage(imgId, {
+                    tl: { col: colInicio - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                    br: { col: colInicio - 1 + 1.85, row: f1 - 1 + 3.85 } as any,
+                    editAs: 'oneCell',
+                } as any);
+            } else {
+                const url = logoIzq.startsWith('http') ? logoIzq : `/storage/${logoIzq.replace(/^\//, '')}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const base64 = await blobToBase64(blob);
+                    const ext = detectImageExt(logoIzq, blob);
+                    const imgId = workbook.addImage({ base64, extension: ext });
+                    ws.addImage(imgId, {
+                        tl: { col: colInicio - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                        br: { col: colInicio - 1 + 1.85, row: f1 - 1 + 3.85 } as any,
+                        editAs: 'oneCell',
+                    } as any);
+                }
+            }
+        } catch (e) {
+            console.error('Error al agregar logo izq:', e);
         }
+    }
+
+    // ── Agregar logo derecho ── (SOLO UNA VEZ)
+    if (logoDer && typeof logoDer === 'string' && logoDer.trim() !== '') {
+        try {
+            if (logoDer.startsWith('data:image')) {
+                const base64Data = logoDer.split(',')[1];
+                const imgId = workbook.addImage({ base64: base64Data, extension: 'png' });
+                ws.addImage(imgId, {
+                    tl: { col: colFin - 1 - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                    br: { col: colFin - 1 + 0.85, row: f1 - 1 + 3.85 } as any,
+                    editAs: 'oneCell',
+                } as any);
+            } else {
+                const url = logoDer.startsWith('http') ? logoDer : `/storage/${logoDer.replace(/^\//, '')}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const base64 = await blobToBase64(blob);
+                    const ext = detectImageExt(logoDer, blob);
+                    const imgId = workbook.addImage({ base64, extension: ext });
+                    ws.addImage(imgId, {
+                        tl: { col: colFin - 1 - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                        br: { col: colFin - 1 + 0.85, row: f1 - 1 + 3.85 } as any,
+                        editAs: 'oneCell',
+                    } as any);
+                }
+            }
+        } catch (e) {
+            console.error('Error al agregar logo der:', e);
+        }
+    }
+
+    filaActual = f1 + 4;
+    filaActual++;
+
+
+    // ── Título ──
+    ws.mergeCells(filaActual, colInicio, filaActual, colFin);
+    const cellTitulo = ws.getCell(filaActual, colInicio);
+    cellTitulo.value = tituloPersonalizado;
+    cellTitulo.font = { bold: true, size: 11, name: 'Calibri', color: { argb: 'FF1A3C5E' } };
+    cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellTitulo.border = {
+        top: { style: 'medium' },
+        bottom: { style: 'medium' },
+        left: { style: 'medium' },
+        right: { style: 'medium' },
+    };
+    ws.getRow(filaActual).height = 24;
+    filaActual++;
+    filaActual++;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATOS DEL PROYECTO - UN SOLO BLOQUE FUSIONADO
+    // ═══════════════════════════════════════════════════════════════════════
+    const fechaFormateada = getFechaFormatoModelo();
+    const inicioFila = filaActual;
+
+    const lineasContenido: string[] = [];
+
+    const datosProyecto = [
+        ['Proyecto', nombreProyecto],
+        ['Propietario', propietario],
+        ['Fecha', fechaFormateada],
+        ['Módulo', proyecto?.modulo || 'GENERAL'],
+    ];
+
+    for (const [label, value] of datosProyecto) {
+        lineasContenido.push(`${label} : ${value}`);
+    }
+
+    lineasContenido.push(`Hecho por : ${proyecto?.hechoPor || ''}          Revisado por : ${proyecto?.revisadoPor || ''}`);
+
+    const totalLineas = lineasContenido.length;
+    const filaFin = inicioFila + totalLineas - 1;
+
+    // ✅ UN SOLO MERGE de todo el bloque (colInicio a colFin)
+    ws.mergeCells(inicioFila, colInicio, filaFin, colFin);
+
+    const cellBloque = ws.getCell(inicioFila, colInicio);
+    let textoCompleto = '';
+    for (const linea of lineasContenido) {
+        textoCompleto += linea + '\n';
+    }
+    cellBloque.value = textoCompleto.trimEnd();
+    cellBloque.font = { size: 9, name: 'Calibri' };
+    cellBloque.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+
+
+    cellBloque.border = {
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'medium', color: { argb: 'FF000000' } },
+        left: { style: 'medium', color: { argb: 'FF000000' } },
+        right: { style: 'medium', color: { argb: 'FF000000' } },
     };
 
-    if (tieneLogos) {
-        mergeSet(1, 1, 1, logoCols, null, { fill: fillX('FFFFFFFF'), alignment: alignX('center'), border: borderExt });
-        mergeSet(1, cFin + 1, 1, totalLogicalCols, null, { fill: fillX('FFFFFFFF'), alignment: alignX('center'), border: borderExt });
-    }
-
-    const headerText = [
-        title.toUpperCase(),
-        `"${nombre}"`,
-        `CUI: ${cui};  CÓDIGO MODULAR: ${modular};  CÓDIGO LOCAL: ${codigoLocal}`,
-        `UBICACIÓN: ${ubicacion};  UNIDAD EJECUTORA: ${unidadEjec};  PLAZO: ${duracion}`,
-    ].join('\n');
-
-    mergeSet(1, cIni, 1, cFin, headerText, {
-        font: fontX({ bold: true, italic: true, size: 10, color: { argb: 'FF0F172A' } }),
-        fill: fillX('FFFFFFFF'),
-        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
-        border: borderExt,
-    });
-
-    if (imgIzq) putProjectImage(ws, imgIzq, xcol(1), 1, xcol(logoCols) + 1, 2);
-    if (imgDer) putProjectImage(ws, imgDer, xcol(cFin + 1), 1, xcol(totalLogicalCols) + 1, 2);
-
-    ws.getRow(2).height = 5;
-    for (let lc = 1; lc <= totalLogicalCols; lc++) {
-        ws.getCell(2, xcol(lc)).style = { fill: fillX('FF64748B'), border: borderX('FF64748B') };
-    }
-
-    return 3;
+    filaActual = filaFin + 1;
+    filaActual++;
+    ws.getRow(filaActual).height = 5;
+    filaActual++;
+    return filaActual;
 }
 
 interface FilaDesembolso {
@@ -605,7 +769,7 @@ async function addCronogramaDesembolsosSheet(
     widths.forEach((w, i) => ws.getColumn(xcol(i + 1)).width = w);
 
     const pd = await resolveProjectDataForExport(options, projectName);
-    let r = await buildHeaderMaterialStyle(ws, pd, 'CRONOGRAMA DE DESEMBOLSOS', 8, data.totalDias);
+    let r = await buildHeader(wb, ws, projectName, pd, 8, 'CRONOGRAMA DE DESEMBOLSOS');
 
     // Resumen ejecutivo corto
     const info: Array<[string, string | number]> = [
@@ -907,18 +1071,20 @@ async function addChartImageSheet(
     for (let r = 1; r <= 55; r++) ws.getRow(r).height = 18;
 
     const pdChart = await resolveProjectDataForExport(options, projectName);
-    await buildHeaderMaterialStyle(
+    await buildHeader(
+        wb,
         ws,
+        projectName,
         pdChart,
-        `CRONOGRAMA VALORIZADO - ${name.toUpperCase()}`,
         13,
-        options.totalDias,
+        `CRONOGRAMA VALORIZADO - ${name.toUpperCase()}`
     );
 
     const png = await svgToPngDataUrl(chart.svg, chart.width, chart.height);
     const imageId = wb.addImage({ base64: png, extension: 'png' });
+    // DESPUÉS
     ws.addImage(imageId, {
-        tl: { col: 1, row: 4 },
+        tl: { col: xcol(1) - 1, row: 4 },
         ext: { width: 1188, height: 576 },
         editAs: 'oneCell',
     });
@@ -1106,13 +1272,13 @@ function addFilasFinancierasValorizado(
 
 // EXPORTAR EXCEL 
 export async function exportarExcel(
-    items:           any[],
-    periodos:        any[],
-    totales:         any,
-    projectName:     string,
-    viewMode:        ViewMode,
-    totalesPorItem:  Record<string | number, number>,
-    options:         ExportarExcelOptions = {},
+    items: any[],
+    periodos: any[],
+    totales: any,
+    projectName: string,
+    viewMode: ViewMode,
+    totalesPorItem: Record<string | number, number>,
+    options: ExportarExcelOptions = {},
 ): Promise<void> {
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Proyecta PCL — Módulo Financiero';
@@ -1126,9 +1292,10 @@ export async function exportarExcel(
         ((totales[p.key]?.monto ?? 0) > (totales[best?.key]?.monto ?? 0) ? p : best), periodos[0]
     )?.key;
 
-    const FIXED = 8; 
+    const FIXED = 8;
     const TOTAL_LOGICAL = FIXED + periodos.length + 1;
     const totalCol = xcol(TOTAL_LOGICAL);
+
 
     const ws = wb.addWorksheet('Cronograma Valorizado', {
         pageSetup: {
@@ -1151,14 +1318,7 @@ export async function exportarExcel(
     [7, 13, 55, 9, 13, 15, 18, 11].forEach((w, i) => ws.getColumn(xcol(i + 1)).width = w);
     periodos.forEach((_, i) => ws.getColumn(xcol(FIXED + 1 + i)).width = 17);
     ws.getColumn(totalCol).width = 20;
-
-    const firstRow = await buildHeaderMaterialStyle(
-        ws,
-        pd,
-        'CRONOGRAMA DE EJECUCIÓN FÍSICO VALORIZADO',
-        TOTAL_LOGICAL,
-        options.totalDias,
-    );
+    const firstRow = await buildHeader(wb, ws, projectName, pd, TOTAL_LOGICAL, 'CRONOGRAMA VALORIZADO')
 
     ws.getRow(firstRow).height = 24;
     ws.mergeCells(firstRow, xcol(1), firstRow, totalCol);
@@ -1444,12 +1604,12 @@ export async function exportarExcel(
 // EXPORTAR PDF — 4 HOJAS (Cronograma valorizado, Cronograma de desembolsos, Gráfico Gauss, Curva S)
 
 export async function exportarPDF(
-    items:          any[],
-    periodos:       any[],
-    totales:        any,
-    projectName:    string,
+    items: any[],
+    periodos: any[],
+    totales: any,
+    projectName: string,
     totalesPorItem: Record<string | number, number>,
-    options:        ExportarExcelOptions = {},
+    options: ExportarExcelOptions = {},
 ): Promise<void> {
     const pd = await resolveProjectDataForExport(options, projectName);
     const logoIzq = projectImageUrl(pd.plantilla_logo_izq || pd.logo_izq || pd.logoIzquierdo || '');
@@ -1592,3 +1752,10 @@ export async function exportarPDF(
     const win = window.open('', '_blank', 'width=1600,height=1000,menubar=yes');
     if (win) { win.document.write(html); win.document.close(); }
 }
+function detectImageExt(url: string, blob: Blob): 'png' | 'jpeg' | 'gif' {
+    if (blob.type === 'image/jpeg' || /\.jpe?g$/i.test(url)) return 'jpeg'
+    if (blob.type === 'image/gif' || /\.gif$/i.test(url)) return 'gif'
+    return 'png';
+}
+
+

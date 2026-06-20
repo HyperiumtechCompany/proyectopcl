@@ -23,7 +23,7 @@ class CronoValorizadoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // INDEX — Cruza Gantt + presupuesto_general para calcular el valorizado
     // ─────────────────────────────────────────────────────────────────────────
-  public function index(Request $request)
+public function index(Request $request)
 {
     $projectId = (int) $request->query('project');
     $modoCalculo = $request->query('modo', self::MODO_CALENDARIO);
@@ -35,6 +35,23 @@ class CronoValorizadoController extends Controller
     $costoProject = CostoProject::findOrFail($projectId);
     app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
     $presupuestoId = $this->resolvePresupuestoId();
+
+    // ✅ DEFINIR projectData UNA SOLA VEZ (después de $presupuestoId)
+    $projectData = [
+        'nombre' => $costoProject->nombre ?? 'PROYECTO',
+        'codigo_cui' => $costoProject->codigo_cui ?? '-',
+        'codigo_local' => $costoProject->codigo_local ?? '-',
+        'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
+        'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
+        'propietario' => $costoProject->unidad_ejecutora ?? '-',
+        'modulo' => 'GENERAL',
+        'plantilla_logo_izq' => $costoProject->plantilla_logo_izq 
+            ? asset('storage/' . ltrim($costoProject->plantilla_logo_izq, '/')) 
+            : null,
+        'plantilla_logo_der' => $costoProject->plantilla_logo_der 
+            ? asset('storage/' . ltrim($costoProject->plantilla_logo_der, '/')) 
+            : null,
+    ];
 
     // ── 1. Leer tareas desde cronograma_general ──────────────────────────
     $filas = $this->loadGanttRows($presupuestoId);
@@ -52,9 +69,9 @@ class CronoValorizadoController extends Controller
             'modoCalculo' => $modoCalculo,
             'materiales' => [],
             'materialesResumen' => null,
+            'projectData' => $projectData, 
         ]);
     }
-
     // ── 2. Leer presupuesto_general (con los últimos valores) ────────────
     $presupuesto = DB::connection('costos_tenant')
         ->table('presupuesto_general')
@@ -242,7 +259,8 @@ try {
         'materiales' => $materiales,
         'materialesResumen' => $materialesResumen,
         'materiales' => $materialesFormateados,
-    'materialesResumen' => $materialesResumen,
+        'materialesResumen' => $materialesResumen,
+        'projectData' => $projectData, 
     ]);
 }
     // ─────────────────────────────────────────────────────────────────────────
