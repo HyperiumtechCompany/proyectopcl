@@ -83,9 +83,7 @@ interface Props {
     isGanttSaving:  boolean;
     onSaveBudget:   () => void;
     onSaveGantt:    () => void;
-    onImportExcel?: () => void;
     onImportAcus?:  () => void;
-    onOpenInsumos?: () => void;
     onExport?: () => void;
 }
 

@@ -541,7 +541,6 @@ export default function DelphinView({
                     isGanttSaving={ganttIsSaving || isSavingBudget}
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
-                    onImportExcel={() => setIsExcelModalOpen(true)}
                     onImportAcus={() => setIsAcusExcelModalOpen(true)}
                     onExport={() => setExportOpen(true)}
                 />
