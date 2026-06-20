@@ -91,7 +91,7 @@ class CronogramaV2Controller extends Controller
                 $row = [
                     'presupuesto_id' => $presupuestoId,
                     'item_order' => (int) ($task['item_order'] ?? 0),
-                    'partida' => $task['partida'] ?? '',
+                    'partida' => $this->normalizePartidaCode($task['partida'] ?? ''),
                     'descripcion' => $task['descripcion'] ?? '',
                     'duracion_dias' => (int) ($task['duracion_dias'] ?? 0),
                     'fecha_inicio' => ! empty($task['fecha_inicio']) ? $task['fecha_inicio'] : null,
@@ -157,10 +157,8 @@ class CronogramaV2Controller extends Controller
             $links = json_decode($row->predecesoras, true) ?? [];
             foreach ($links as $link) {
                 if (isset($link['taskId'])) {
-                    // Ya en formato V2
                     $predecesoras[] = $link;
                 } else {
-                    // Formato DHTMLX
                     $predecesoras[] = [
                         'taskId' => (int) ($link['source'] ?? 0),
                         'tipo' => $typeMap[$link['type'] ?? '0'] ?? 'FC',
@@ -184,6 +182,17 @@ class CronogramaV2Controller extends Controller
             'predecesoras' => $predecesoras,
             'presupuesto' => (float) ($row->presupuesto ?? 0),
         ];
+    }
+
+    private function normalizePartidaCode(string $code): string
+    {
+        $str = trim($code);
+        if ($str === '') {
+            return $str;
+        }
+        $parts = explode('.', $str);
+
+        return implode('.', array_map(fn ($p) => str_pad(preg_replace('/[a-zA-Z]+$/', '', trim($p)), 2, '0', STR_PAD_LEFT), $parts));
     }
 
     private function resolvePresupuestoId(): int

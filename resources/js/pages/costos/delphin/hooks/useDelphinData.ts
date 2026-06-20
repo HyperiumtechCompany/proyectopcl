@@ -22,6 +22,80 @@ function normalizeForMatch(s: string): string {
     return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
+// For orphaned rows (parent not found in file), find or create ancestor nodes.
+// Returns the augmented rows (synthetic parents first, then originals with fixed parent_ids)
+// plus the list of auto-created partida codes.
+function resolveParentsWithSyntheticFill(
+    rows: DelphinRow[],
+    existingPartidaToId: Map<string, number>,
+    startTmpId: number,
+): { augmentedRows: DelphinRow[]; createdPartidas: string[] } {
+    let nextId = startTmpId;
+    const createdPartidas: string[] = [];
+    const synthetic: DelphinRow[] = [];
+
+    // Build combined lookup: existing tree + incoming rows
+    const allByPartida = new Map(existingPartidaToId);
+    for (const row of rows) allByPartida.set(row.partida, row.id);
+
+    // Process shortest partidas first so parent synthetics are created before their children
+    const sorted = [...rows].sort((a, b) => {
+        const da = a.partida.split('.').length;
+        const db = b.partida.split('.').length;
+        return da !== db ? da - db : a.partida.localeCompare(b.partida);
+    });
+
+    for (const row of sorted) {
+        const segs = row.partida.split('.');
+        if (segs.length <= 1) continue;
+
+        // Walk up the chain and collect any missing ancestors
+        let checkCode = segs.slice(0, -1).join('.');
+        const missing: string[] = [];
+        while (checkCode && !allByPartida.has(checkCode)) {
+            missing.unshift(checkCode);
+            const cs = checkCode.split('.');
+            checkCode = cs.length > 1 ? cs.slice(0, -1).join('.') : '';
+        }
+
+        for (const code of missing) {
+            const codeSegs = code.split('.');
+            const parentCode = codeSegs.length > 1 ? codeSegs.slice(0, -1).join('.') : null;
+            const synId = nextId--;
+            synthetic.push({
+                id: synId,
+                parent_id: parentCode ? (allByPartida.get(parentCode) ?? null) : null,
+                nivel: codeSegs.length,
+                item_order: 0,
+                partida: code,
+                descripcion: code,
+                duracion_dias: 0,
+                fecha_inicio: null,
+                fecha_fin: null,
+                avance: 0,
+                predecesoras: [],
+                presupuesto: 0,
+                unidad: '',
+                metrado: 0,
+                precio_unitario: 0,
+                parcial: 0,
+            });
+            allByPartida.set(code, synId);
+            createdPartidas.push(code);
+        }
+    }
+
+    // Re-resolve parent_id for every incoming row now that the map is complete
+    const resolvedRows = rows.map((row) => {
+        const segs = row.partida.split('.');
+        if (segs.length <= 1) return { ...row, parent_id: null };
+        const parentCode = segs.slice(0, -1).join('.');
+        return { ...row, parent_id: allByPartida.get(parentCode) ?? null };
+    });
+
+    return { augmentedRows: [...synthetic, ...resolvedRows], createdPartidas };
+}
+
 // When cronograma is empty but presupuesto has data, synthesize GanttTask skeletons
 // so the budget tree is still visible. CPM fields (dates, duration) default to empty.
 function synthesizeTasksFromRows(rows: any[]): GanttTask[] {
@@ -68,11 +142,19 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         const map = new Map<number, BudgetFields>();
         for (const task of effectiveTasks) {
             const br = initialRows.find((r) => r.partida === task.partida);
+            const metrado         = +(br?.metrado         ?? 0);
+            const precio_unitario = +(br?.precio_unitario  ?? 0);
+            // Compute parcial from factors when DB value is missing/zero (e.g. old saves
+            // that omitted the parcial field) — prevents the Total column showing all-zeros.
+            const storedParcial   = +(br?.parcial          ?? 0);
+            const parcial = storedParcial !== 0
+                ? storedParcial
+                : +(metrado * precio_unitario).toFixed(2);
             map.set(task.id, {
-                unidad:          br?.unidad          ?? '',
-                metrado:         +(br?.metrado        ?? 0),
-                precio_unitario: +(br?.precio_unitario ?? 0),
-                parcial:         +(br?.parcial         ?? 0),
+                unidad: br?.unidad ?? '',
+                metrado,
+                precio_unitario,
+                parcial,
             });
         }
         return map;
@@ -213,6 +295,7 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
                         unidad:          b.unidad,
                         metrado:         b.metrado,
                         precio_unitario: b.precio_unitario,
+                        parcial:         b.parcial,
                         item_order:      task.item_order,
                         // presupuesto_general uses partida notation for hierarchy,
                         // not parent_id/nivel — omit to avoid column-not-found 500
@@ -232,50 +315,108 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
 
     // ── Bulk import from Excel (Presupuesto General) ──────────────────────────
     const importDelphinRows = useCallback(
-        ({ rows }: ParsePresupuestoResult) => {
+        ({ rows }: ParsePresupuestoResult): { createdPartidas: string[] } => {
             const existingTasks = latestTasksRef.current;
-            // CPM data exists when any task has a start date, positive duration, or predecessors
-            const hasCpmData =
-                existingTasks.length > 0 &&
-                existingTasks.some(
-                    (t) => !!t.fecha_inicio || (t.duracion_dias ?? 0) > 0 || (t.predecesoras?.length ?? 0) > 0,
+            const currentBudget = latestBudgetRef.current;
+
+            // ── First import (empty tree) ─────────────────────────────────────
+            if (existingTasks.length === 0) {
+                const minRowId = rows.reduce((min, r) => Math.min(min, r.id), 0);
+                const { augmentedRows, createdPartidas } = resolveParentsWithSyntheticFill(
+                    rows,
+                    new Map<string, number>(),
+                    minRowId - 1,
                 );
 
-            if (!hasCpmData) {
-                // No CPM data to preserve — full replace (original behavior)
                 const budgetByPartida = new Map<string, BudgetFields>();
-                const tasks: GanttTask[] = rows.map(({ unidad, metrado, precio_unitario, parcial, ...task }) => {
-                    budgetByPartida.set(task.partida, { unidad, metrado, precio_unitario, parcial });
-                    return task as GanttTask;
-                });
+                for (const row of rows) {
+                    budgetByPartida.set(row.partida, {
+                        unidad: row.unidad, metrado: row.metrado,
+                        precio_unitario: row.precio_unitario, parcial: row.parcial,
+                    });
+                }
+                for (const row of augmentedRows) {
+                    if (!budgetByPartida.has(row.partida)) budgetByPartida.set(row.partida, defaultBudget());
+                }
+
                 pendingBudgetRef.current = budgetByPartida;
-                ganttState.importTasks(tasks);
-                return;
+                ganttState.importTasks(augmentedRows as GanttTask[]);
+                return { createdPartidas };
             }
 
-            // CPM data exists — only update budget columns for matched rows;
-            // do NOT touch the gantt task tree so dates/predecessors are preserved.
-            const byPartida = new Map(existingTasks.map((t) => [t.partida, t.id]));
-            const byDesc    = new Map(existingTasks.map((t) => [normalizeForMatch(t.descripcion), t.id]));
+            // ── Subsequent imports: MERGE ─────────────────────────────────────
+            const existingByPartida = new Map(existingTasks.map((t) => [t.partida, t]));
+            const existingByDesc    = new Map(existingTasks.map((t) => [normalizeForMatch(t.descripcion), t]));
+            const existingPartidaToId = new Map(existingTasks.map((t) => [t.partida, t.id]));
 
-            setBudgetMap((prev) => {
-                const next = new Map(prev);
-                for (const row of rows) {
-                    const existingId =
-                        byPartida.get(row.partida) ??
-                        byDesc.get(normalizeForMatch(row.descripcion));
-                    if (existingId !== undefined) {
-                        next.set(existingId, {
-                            unidad:          row.unidad,
-                            metrado:         row.metrado,
-                            precio_unitario: row.precio_unitario,
-                            parcial:         row.parcial,
-                        });
+            // Remap ALL parsed row IDs to avoid collisions with existing IDs
+            const minExistingId = existingTasks.reduce((min, t) => Math.min(min, t.id), 0);
+            const minParsedId   = rows.reduce((min, r) => Math.min(min, r.id), 0);
+            let nextRemapId = Math.min(minExistingId, minParsedId) - 1;
+            const oldToNewId = new Map<number, number>();
+            for (const r of rows) oldToNewId.set(r.id, nextRemapId--);
+
+            // Apply remap: new IDs + remap parent_id refs within the same file
+            const remappedRows: DelphinRow[] = rows.map((r) => ({
+                ...r,
+                id:        oldToNewId.get(r.id)!,
+                parent_id: r.parent_id != null ? (oldToNewId.get(r.parent_id) ?? null) : null,
+            }));
+
+            // Separate: truly new rows vs rows that update existing partidas
+            const newRows: DelphinRow[] = remappedRows.filter(
+                (r) => !existingByPartida.has(r.partida) && !existingByDesc.has(normalizeForMatch(r.descripcion)),
+            );
+
+            // Full budget map: preserve existing, override/add with imported values
+            const allBudgetByPartida = new Map<string, BudgetFields>();
+            for (const t of existingTasks) {
+                const b = currentBudget.get(t.id);
+                if (b) allBudgetByPartida.set(t.partida, b);
+            }
+            for (const row of rows) {
+                allBudgetByPartida.set(row.partida, {
+                    unidad: row.unidad, metrado: row.metrado,
+                    precio_unitario: row.precio_unitario, parcial: row.parcial,
+                });
+            }
+
+            if (newRows.length === 0) {
+                // Only budget updates — skip rebuilding task tree
+                setBudgetMap((prev) => {
+                    const next = new Map(prev);
+                    for (const row of remappedRows) {
+                        const existing =
+                            existingByPartida.get(row.partida) ??
+                            existingByDesc.get(normalizeForMatch(row.descripcion));
+                        if (existing) {
+                            next.set(existing.id, {
+                                unidad: row.unidad, metrado: row.metrado,
+                                precio_unitario: row.precio_unitario, parcial: row.parcial,
+                            });
+                        }
                     }
-                }
-                return next;
-            });
-            setBudgetDirty(true);
+                    return next;
+                });
+                setBudgetDirty(true);
+                return { createdPartidas: [] };
+            }
+
+            // Resolve orphaned new rows against existing tree + auto-create missing ancestors
+            const furtherNeg = newRows.reduce((min, r) => Math.min(min, r.id), nextRemapId) - 1;
+            const { augmentedRows: augmentedNewRows, createdPartidas } = resolveParentsWithSyntheticFill(
+                newRows,
+                existingPartidaToId,
+                furtherNeg,
+            );
+
+            for (const row of augmentedNewRows) {
+                if (!allBudgetByPartida.has(row.partida)) allBudgetByPartida.set(row.partida, defaultBudget());
+            }
+
+            pendingBudgetRef.current = allBudgetByPartida;
+            ganttState.importTasks([...existingTasks, ...augmentedNewRows]);
+            return { createdPartidas };
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [ganttState.importTasks],

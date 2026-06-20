@@ -19,7 +19,12 @@ import type { GanttBarLabel, RowAction } from '../cronogramas/v2/types/cell';
 import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
+
+
+import { router } from '@inertiajs/react';
+
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
+import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
 import type { AcuFlushProgress } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
@@ -38,8 +43,28 @@ const DESC_EXPANDED_EXTRA = 180;
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EMPTY_SET = new Set<number>();
 
-function toast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
+function normalizeCode(code: string | number): string {
+    const str = String(code).trim();
+    if (!str) return '';
+    const parts = str.split('.').filter(p => p.trim() !== '');
+    return parts.map(p => p.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.');
+}
 
+function toast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = [
+        'position:fixed;bottom:24px;right:24px;z-index:9999;',
+        'padding:10px 18px;border-radius:8px;font-size:13px;',
+        'color:#fff;font-family:inherit;max-width:340px;',
+        `background:${type === 'success' ? '#059669' : type === 'error' ? '#dc2626' : '#2563eb'};`,
+        'box-shadow:0 4px 14px rgba(0,0,0,.5);transition:opacity .35s;',
+    ].join('');
+    document.body.appendChild(el);
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.addEventListener('transitionend', () => el.remove(), { once: true });
+    }, 3200);
 }
 function getIconForPartida(partida: string): string {
     const num = parseInt(partida?.split('.')?.[0] ?? '0', 10);
@@ -147,6 +172,11 @@ export default function DelphinView({
 
     // ── Search / filter ───────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
+
+
+
+    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
     // ── Project params (needed by AcuPanel cost tables) ───────────────────────
     const initializeParams = useProjectParamsStore((s) => s.initialize);
@@ -257,10 +287,11 @@ export default function DelphinView({
         projectId: project_id_int,
         subsection: 'acus',
         selectedCell: null,
-        selectedPartidaCode: selectedPartidaData ? (selectedTask?.partida ?? null) : null,
+        selectedPartidaCode: selectedPartidaData ? normalizeCode(selectedTask?.partida ?? '') : null,
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
+        refreshKey: 0,
         refetchVersion: acuRefetchVersion,
     });
 
@@ -276,10 +307,13 @@ export default function DelphinView({
     // Called by ImportDelphinModal after ACU Excel parse — applies locally, no DB call
     const handleAcusImported = useCallback((payloads: Array<Record<string, any>>) => {
         for (const payload of payloads) {
-            const result = localSaveAcu(payload);
+            // Normalize partida so it matches selectedPartidaCode (which uses normalizeCode)
+            const rawPartida = String(payload.partida ?? '');
+            const normalizedPayload = { ...payload, partida: normalizeCode(rawPartida) };
+            const result = localSaveAcu(normalizedPayload);
             if (result.success && result.acu && result.acu.costo_unitario_total > 0) {
-                // Update price in budget grid if a matching row exists
-                const row = delphinRows.find((r) => r.partida === result.acu?.partida);
+                // Update price in budget grid — match by original raw partida from delphinRows
+                const row = delphinRows.find((r) => r.partida === rawPartida);
                 if (row) commitField(row.id, 'precio_unitario', result.acu.costo_unitario_total);
             }
         }
@@ -641,7 +675,15 @@ export default function DelphinView({
                     availableSpecialties={availableSpecialties}
                     onClose={() => setExportOpen(false)}
                 />
-
+                <ImportExcelPresupuestoModal
+                    projectId={project_id_int}
+                    isOpen={isExcelModalOpen}
+                    onClose={() => setIsExcelModalOpen(false)}
+                    onSuccess={() => {
+                        setIsExcelModalOpen(false);
+                        router.reload();
+                    }}
+                />
                 <ImportDelphinModal
                     open={importExcelOpen}
                     project={project}

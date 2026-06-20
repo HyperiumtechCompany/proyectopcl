@@ -76,7 +76,8 @@ interface UsePresupuestoAcuProps {
     selectedPartidaData: { descripcion: string; unidad: string } | null;
     lastSaved: Date | null;
     setSheetVersion: React.Dispatch<React.SetStateAction<number>>;
-    refetchVersion?: number;  // increment to force a refetch of acuRows
+    refreshKey?: number;
+    refetchVersion?: number;
 }
 
 export function usePresupuestoAcu({
@@ -87,6 +88,7 @@ export function usePresupuestoAcu({
     selectedPartidaData,
     lastSaved,
     setSheetVersion,
+    refreshKey = 0,
     refetchVersion = 0,
 }: UsePresupuestoAcuProps) {
     const [acuRows, setAcuRows] = useState<ACURowSummary[]>([]);
@@ -258,7 +260,7 @@ export function usePresupuestoAcu({
             });
 
         return () => controller.abort();
-    }, [mapAcuRows, projectId, subsection, refetchVersion]);
+    }, [mapAcuRows, projectId, subsection, refreshKey, refetchVersion]);
 
     const normalizeNumber = (value: unknown, fallback = 0): number => {
         const num = Number(value);

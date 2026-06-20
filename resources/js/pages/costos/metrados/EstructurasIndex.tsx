@@ -2,7 +2,7 @@
 // EstructurasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
 import { router, usePage } from '@inertiajs/react';
-import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save } from 'lucide-react';
+import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save, Upload } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Luckysheet from '@/components/costos/tablas/Luckysheet';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,8 @@ import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
 import { ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS, SAVE_DEBOUNCE, UNITS } from './metradoestructuras/estructuras_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradoestructuras/estructuras_NumberingModal';
 import type { CalcPayload, EstructurasPageProps, RowKind } from './metradoestructuras/estructuras_types';
-import { buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, buildEstructurasResumenRows, colLetter, mkBlank, mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, } from './metradoestructuras/estructuras_utils';
+import { buildRecalcUpdates, buildRowFormulaMeta, buildResumenRows, buildEstructurasResumenRows, colLetter, mkBlank, mkFormula, mkNum, mkTxt, r4, readRow, rowMeta, rowsToSheet, sheetToRows, styledNum, styledTxt, toNum, indent, levelStyle, toRoman, isZeroLike, } from './metradoestructuras/estructuras_utils';
+import { ImportarMetradoEstructurasModal, type ImportedMetradoRow } from './metradoestructuras/ImportarMetradoEstructurasModal';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTES UI LOCALES
@@ -79,12 +80,23 @@ function useLuckysheet() {
   const setCells = (updates: Array<{ r: number; c: number; v: any }>, order: number) => {
     const inst = ls();
     if (!inst || !updates.length || !isLuckysheetReady()) return;
-    updates.forEach((u, i) => {
-      safeSetCellValue(u.r, u.c, u.v, {
-        order,
-        isRefresh: i === updates.length - 1,
-      });
+
+    const all = inst.getAllSheets() as any[];
+    const sheetIdx = all.findIndex((s: any) => s.order === order);
+    if (sheetIdx < 0) return;
+    const sheetObj = all[sheetIdx];
+
+    const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+    const data = (sheetObj.status === 1 && flowDataArr) ? flowDataArr : sheetObj.data;
+    if (!data) return;
+
+    updates.forEach((u) => {
+      if (data[u.r]) {
+        data[u.r][u.c] = u.v;
+      }
     });
+
+    inst.refresh();
   };
 
   return { ls, getActive, getAllSheets, setCells };
@@ -253,10 +265,11 @@ export default function EstructurasIndex() {
   const { ls, getActive, getAllSheets, setCells } = useLuckysheet();
   const { saving, lastSaved, saveError, scheduleSave, saveNow, latestSheets } = useAutoSave(project?.id || 0, resumenCols);
 
-  const [syncing, setSyncing] = useState(false);
-  const [calcOpen, setCalcOpen] = useState(false);
-  const [numOpen, setNumOpen] = useState(false);
-  const [calcRow, setCalcRow] = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
+  const [syncing,     setSyncing]     = useState(false);
+  const [calcOpen,    setCalcOpen]    = useState(false);
+  const [numOpen,     setNumOpen]     = useState(false);
+  const [importOpen,  setImportOpen]  = useState(false);
+  const [calcRow,     setCalcRow]     = useState<{ ri: number; rowData: Record<string, any> }>({ ri: 0, rowData: {} });
 
   const progCount = useRef(0);
   const isProgrammaticChange = useRef(false);
@@ -416,6 +429,133 @@ export default function EstructurasIndex() {
     }, 200);
   }, [getActive, setCells, recalc]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // FUNCIÓN: applyImport — aplica filas importadas del Excel a la hoja destino
+  // ═══════════════════════════════════════════════════════════════
+  const applyImport = useCallback((rows: ImportedMetradoRow[], targetSheet: string) => {
+    const inst = ls();
+    if (!inst || !isLuckysheetReady()) return;
+
+    const all = inst.getAllSheets() as any[];
+    const targetIdx = all.findIndex((s: any) => s.name === targetSheet);
+    if (targetIdx < 0) throw new Error(`No se encontró la hoja "${targetSheet}"`);
+
+    const targetSheetObj = all[targetIdx];
+
+    // Cambiar a la hoja destino
+    inst.setSheetActive(targetIdx);
+
+    // Ajustar el número de filas de la hoja destino para albergar la importación
+    const buffer = 50;
+    const neededRows = rows.length + 1 + buffer; // cabecera + filas + buffer
+    const curRows = targetSheetObj.data?.length || targetSheetObj.row || 100;
+
+    if (curRows < neededRows) {
+      inst.insertRow(curRows - 1, { number: neededRows - curRows });
+    } else if (curRows > neededRows) {
+      inst.deleteRow(neededRows, curRows - 1);
+    }
+
+    const flowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+    const data = flowDataArr || targetSheetObj.data;
+    if (!data) return;
+
+    // ── Escribir fila de cabecera ──────────────────────────────
+    ALL_COLS.forEach((col, c) => {
+      data[0][c] = {
+        v: col.label, m: col.label,
+        ct: { fa: 'General', t: 'g' },
+        bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+      };
+    });
+
+    // ── Escribir filas de datos ────────────────────────────────
+    const FORMULA_META = new Set(['_formula_key', '_formula_output', '_formula_expr', '_formula_label']);
+
+    rows.forEach((row, ri) => {
+      const rIdx   = ri + 1;
+      const kind   = (String(row._kind ?? 'leaf') === 'group' ? 'group' : 'leaf') as RowKind;
+      const level  = Math.max(1, Math.min(10, toNum(row._level) || 1));
+      const st     = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+
+      if (!data[rIdx]) {
+        data[rIdx] = Array(targetSheetObj.column || 26).fill(null);
+      }
+
+      ALL_COLS.forEach((col, c) => {
+        const val = (row as any)[col.key];
+        let cell: any;
+
+        // Columnas de metadatos ocultas
+        if (col.key === '_dbid') {
+          cell = mkBlank();
+        } else if (col.key === '_level') {
+          cell = mkNum(level, true);
+        } else if (col.key === '_kind') {
+          cell = mkTxt(kind);
+        } else if (FORMULA_META.has(col.key)) {
+          const s = val ? String(val) : '';
+          cell = s ? mkTxt(s) : mkBlank();
+        }
+        // Descripción — con sangría y estilo de nivel
+        else if (col.key === 'descripcion') {
+          const desc = String(val ?? '').trimStart();
+          if (desc) {
+            cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
+          } else {
+            cell = { ...mkBlank(), bg: st.bg, fc: st.fc, bl: st.bl, fs: 10 };
+          }
+        }
+        // Partida — con estilo de nivel
+        else if (col.key === 'partida') {
+          const p = String(val ?? '').trim();
+          cell = p ? styledTxt(p, p, st) : mkBlank();
+        }
+        // Unidad — texto con color de nivel
+        else if (col.key === 'unidad') {
+          const u = String(val ?? '').trim();
+          cell = u
+            ? { ...mkTxt(u), bg: st.bg, fc: st.fc, fs: 10 }
+            : { ...mkBlank(), bg: st.bg, fc: st.fc, fs: 10 };
+        }
+        // Observación — texto plano
+        else if (col.key === 'observacion') {
+          const o = String(val ?? '').trim();
+          cell = o ? mkTxt(o) : mkBlank();
+        }
+        // Columnas numéricas
+        else {
+          const n = toNum(val);
+          cell = isZeroLike(n)
+            ? { ...mkBlank(), bg: st.bg, fc: st.fc, fs: 10 }
+            : styledNum(n, st, false);
+        }
+
+        data[rIdx][c] = cell;
+      });
+    });
+
+    // Limpiar celdas en las filas sobrantes del buffer
+    for (let r = rows.length + 1; r < data.length; r++) {
+      if (data[r]) {
+        for (let c = 0; c < data[r].length; c++) {
+          data[r][c] = null;
+        }
+      }
+    }
+
+    // Refrescar y guardar
+    inst.refresh();
+
+    setTimeout(() => {
+      progCount.current = 0;
+      recalc();
+      const refreshed = inst.getAllSheets() as any[];
+      scheduleSave(refreshed, [targetSheet]);
+      saveNow([targetSheet]);
+    }, 300);
+  }, [ls, scheduleSave, saveNow, recalc]);
+
   const syncResumen = useCallback(() => {
     setSyncing(true);
     setTimeout(() => {
@@ -457,39 +597,68 @@ export default function EstructurasIndex() {
       const prevOrder = inst.getSheet().order;
 
       inst.setSheetActive(resIdx);
-      inst.clearRange({ row: [0, 6000], column: [0, resumenCols.length + 1] });
 
-      resumenCols.forEach((col, c) => {
-        safeSetCellValue(0, c, {
-          v: col.label, m: col.label,
-          ct: { fa: 'General', t: 'g' },
-          bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
-        }, { isRefresh: false });
-      });
+      const resumenSheetObj = all[resIdx];
+      const neededResRows = newRows.length + 1;
+      const curResRows = resumenSheetObj.data?.length || resumenSheetObj.row || 100;
 
-      newRows.forEach((row, ri) => {
-        const level = toNum(row._level) || 1;
-        const kind = String(row._kind ?? 'leaf') as RowKind;
-        const st = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+      if (curResRows < neededResRows) {
+        inst.insertRow(curResRows - 1, { number: neededResRows - curResRows });
+      } else if (curResRows > neededResRows) {
+        inst.deleteRow(neededResRows, curResRows - 1);
+      }
 
+      const resFlowDataArr = typeof inst.flowdata === 'function' ? inst.flowdata() : inst.flowdata;
+      const resData = resFlowDataArr || resumenSheetObj.data;
+
+      if (resData) {
+        // Escribir cabecera
         resumenCols.forEach((col, c) => {
-          const raw = (row as any)[col.key] ?? '';
-          let cell: any;
+          resData[0][c] = {
+            v: col.label, m: col.label,
+            ct: { fa: 'General', t: 'g' },
+            bg: '#0f172a', fc: '#94a3b8', bl: 1, fs: 10,
+          };
+        });
 
-          if (col.key === 'total' || col.key === 'exterior' || col.key === 'cisterna' || col.key.startsWith('modulo_')) {
-            cell = styledNum(toNum(raw), st);
-          } else if (col.key === 'partida') {
-            cell = styledTxt(String(raw), String(raw), st);
-          } else if (col.key === 'descripcion') {
-            const desc = String(raw).trim();
-            cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
-          } else {
-            cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
+        // Escribir datos
+        newRows.forEach((row, ri) => {
+          const level = toNum(row._level) || 1;
+          const kind  = String(row._kind ?? 'leaf') as RowKind;
+          const st    = kind === 'group' ? levelStyle(level) : LEAF_STYLE;
+
+          if (!resData[ri + 1]) {
+            resData[ri + 1] = Array(resumenCols.length + 1).fill(null);
           }
 
-          safeSetCellValue(ri + 1, c, cell, { isRefresh: false });
+          resumenCols.forEach((col, c) => {
+            const raw = (row as any)[col.key] ?? '';
+            let cell: any;
+
+            if (col.key === 'total' || col.key === 'exterior' || col.key === 'cisterna' || col.key.startsWith('modulo_')) {
+              cell = styledNum(toNum(raw), st);
+            } else if (col.key === 'partida') {
+              cell = styledTxt(String(raw), String(raw), st);
+            } else if (col.key === 'descripcion') {
+              const desc = String(raw).trim();
+              cell = styledTxt(desc, indent(level, kind === 'leaf') + desc, st);
+            } else {
+              cell = { ...mkTxt(String(raw)), bg: st.bg, fc: st.fc, fs: 10 };
+            }
+
+            resData[ri + 1][c] = cell;
+          });
         });
-      });
+
+        // Limpiar filas sobrantes
+        for (let r = newRows.length + 1; r < resData.length; r++) {
+          if (resData[r]) {
+            for (let c = 0; c < resData[r].length; c++) {
+              resData[r][c] = null;
+            }
+          }
+        }
+      }
 
       inst.refresh();
       inst.setSheetActive(prevOrder);
@@ -701,6 +870,17 @@ export default function EstructurasIndex() {
               <FileDown className="h-3 w-3" /> Exportar Excel
             </button>
 
+            <button
+              type="button"
+              title="Importar metrado desde un archivo Excel (.xlsx)"
+              onClick={() => setImportOpen(true)}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md
+                bg-green-600 px-3 text-[10px] font-bold text-white
+                transition-all hover:bg-green-700 active:scale-95"
+            >
+              <Upload className="h-3 w-3" /> Importar
+            </button>
+
             <Divider />
 
             <Button variant="outline" size="sm" onClick={() => saveNow()} disabled={saving} className="h-7 gap-1.5 text-[11px]">
@@ -756,6 +936,18 @@ export default function EstructurasIndex() {
       <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc} />
 
       <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering} />
+
+      <ImportarMetradoEstructurasModal
+        open={importOpen}
+        moduleCount={moduleCount}
+        activeSheetName={(() => {
+          try { return (ls()?.getSheet?.() as any)?.name ?? 'Módulo 1'; } catch { return 'Módulo 1'; }
+        })()}
+        onClose={() => setImportOpen(false)}
+        onImport={(rows, targetSheet) => {
+          applyImport(rows, targetSheet);
+        }}
+      />
     </AppLayout>
   );
 }

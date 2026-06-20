@@ -83,9 +83,7 @@ interface Props {
     isGanttSaving:  boolean;
     onSaveBudget:   () => void;
     onSaveGantt:    () => void;
-
-    // Export
-    onExport: () => void;
+    onExport?: () => void;
 }
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -287,9 +285,8 @@ export function DelphinToolbar({
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
-    onOpenSettings, onImport, onImportExcel, onOpenInsumos,
-    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,
-    onExport,
+    onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
+    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
     const noSel   = selectedRowId === null || isFormulaBudgetView;

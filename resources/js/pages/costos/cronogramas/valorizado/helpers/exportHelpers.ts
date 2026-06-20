@@ -1083,7 +1083,7 @@ async function addChartImageSheet(
     const png = await svgToPngDataUrl(chart.svg, chart.width, chart.height);
     const imageId = wb.addImage({ base64: png, extension: 'png' });
     // DESPUÉS
-    ws.addImage(imageId, {
+    ws.addImage(imageId, {  
         tl: { col: xcol(1) - 1, row: 4 },
         ext: { width: 1188, height: 576 },
         editAs: 'oneCell',
