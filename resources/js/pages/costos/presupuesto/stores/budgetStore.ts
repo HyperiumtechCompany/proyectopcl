@@ -318,7 +318,24 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   setDirty: (dirty) => set({ isDirty: dirty }),
 
   initialize: (initialRows) => {
-    const enhanced = rebuildHierarchy(initialRows);
+    // Normalize WBS codes: strip letter suffixes and deduplicate keeping highest parcial
+    const rows = initialRows as BudgetItemRow[];
+    for (const r of rows) {
+      if (r.partida) {
+        r.partida = r.partida.split('.').map((s: string) => s.replace(/[a-zA-Z]+$/, '').padStart(2, '0')).join('.');
+      }
+    }
+    const bestByCode = new Map<string, BudgetItemRow>();
+    for (const r of rows) {
+      const code = r.partida;
+      const existing = bestByCode.get(code);
+      if (!existing || (r.parcial ?? 0) > (existing.parcial ?? 0)) {
+        bestByCode.set(code, r);
+      }
+    }
+    const deduped = [...bestByCode.values()];
+
+    const enhanced = rebuildHierarchy(deduped);
     performTreeCalculation(enhanced);
 
     const expandedMap: Record<string, boolean> = {};
@@ -516,8 +533,78 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   },
 
   addRowBefore: (partida, type = 'partida') => {
-    // Same sibling insertion — renumberWBS handles the ordering
-    get().addRowAfter(partida, type);
+    set(produce((state: BudgetState) => {
+      const parentCode = getParentPartida(partida);
+      const newCode = generateNextCode(parentCode, state.rows);
+
+      const newRow: BudgetItemRow = {
+        partida: newCode,
+        descripcion: type === 'titulo' ? 'NUEVO TÍTULO' : 'Nueva partida',
+        unidad: type === 'titulo' ? '' : 'und',
+        metrado: 0,
+        precio_unitario: 0,
+        parcial: 0,
+        metrado_source: null,
+        tipo_fila: type,
+      };
+
+      state.rows.push(newRow);
+
+      if (parentCode && !state.expandedMap[parentCode]) {
+        state.expandedMap[parentCode] = true;
+      }
+
+      // Build desired sibling order: new row inserted before the target
+      const siblings = state.rows
+        .filter(r => getParentPartida(r.partida) === parentCode)
+        .sort((a, b) => a.partida.localeCompare(b.partida, undefined, { numeric: true, sensitivity: 'base' }));
+
+      const targetIdx = siblings.findIndex(s => s.partida === partida);
+      const newIdx = siblings.findIndex(s => s.partida === newCode);
+      if (targetIdx < 0 || newIdx < 0) {
+        state.rows = rebuildHierarchy(state.rows);
+        performTreeCalculation(state.rows);
+        state.isDirty = true;
+        return;
+      }
+
+      // Reorder: move new row from end to before target
+      const desired = [
+        ...siblings.slice(0, targetIdx),
+        siblings[newIdx],
+        ...siblings.slice(targetIdx, newIdx),
+        ...siblings.slice(newIdx + 1),
+      ];
+
+      // Assign sequential codes based on desired order
+      const prefix = parentCode ? parentCode + '.' : '';
+      const codeMap = new Map<string, string>();
+      desired.forEach((s, idx) => {
+        codeMap.set(s.partida, prefix + String(idx + 1).padStart(2, '0'));
+      });
+
+      // Apply renames using temp prefixes to avoid collisions (longest first)
+      const sortedOld = [...codeMap.keys()].sort((a, b) => b.length - a.length);
+      const tempPrefix = `__INS__${Date.now()}__`;
+
+      for (const oldCode of sortedOld) {
+        state.rows.forEach(r => {
+          if (r.partida === oldCode) r.partida = tempPrefix + oldCode;
+          else if (r.partida.startsWith(oldCode + '.')) r.partida = r.partida.replace(oldCode, tempPrefix + oldCode);
+        });
+      }
+      for (const oldCode of sortedOld) {
+        const newPartida = codeMap.get(oldCode)!;
+        state.rows.forEach(r => {
+          if (r.partida === tempPrefix + oldCode) r.partida = newPartida;
+          else if (r.partida.startsWith(tempPrefix + oldCode + '.')) r.partida = r.partida.replace(tempPrefix + oldCode, newPartida);
+        });
+      }
+
+      state.rows = rebuildHierarchy(state.rows);
+      performTreeCalculation(state.rows);
+      state.isDirty = true;
+    }));
   },
 
   // ── Row movement ──────────────────────────────────────────────────────────

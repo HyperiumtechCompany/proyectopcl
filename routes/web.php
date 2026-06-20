@@ -268,6 +268,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/presupuesto/import-metrado', [PresupuestoController::class, 'importFromMetrado'])->name('proyectos.presupuesto.import-metrado');
             Route::post('/presupuesto/import-batch-metrados', [PresupuestoController::class, 'importBatchFromMetrados'])->name('proyectos.presupuesto.import-batch-metrados');
             Route::post('/presupuesto/acus/calculate', [PresupuestoController::class, 'calculateACU'])->name('proyectos.presupuesto.acus.calculate');
+            Route::post('/presupuesto/acus/import-excel', [PresupuestoController::class, 'importAcusFromExcel'])->name('proyectos.presupuesto.acus.import-excel');
             Route::get('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'getGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.show');
             Route::post('/presupuesto/gastos-fijos/{ggFijoId}/desagregado', [PresupuestoController::class, 'saveGGFijoDesagregado'])->name('proyectos.presupuesto.gastos-fijos.desagregado.save');
             Route::get('/presupuesto/gastos-fijos-global/totals', [PresupuestoController::class, 'getGGFijosTotals'])->name('proyectos.presupuesto.gastos-fijos-global.totals');

@@ -18,11 +18,19 @@ import { useBudgetStore } from '../stores/budgetStore';
 
 const fmt = (n: number, d = 2) =>
     n?.toLocaleString('es-PE', {
-        minimumFractionDigits: d,
+        minimumFractionDigits: 0,
         maximumFractionDigits: d,
     }) || '';
 
-const UNIDADES_COMUNES = ['gl', 'und', 'm', 'm2', 'm3', 'kg', 'ton', 'hh', 'hm', 'dia', 'mes', 'est'];
+const stripLocale = (s: string) => s.replace(/,/g, '');
+
+const fmtDisplay = (n: number) => {
+    if (n === 0) return '';
+    const rounded = Math.round(n * 100) / 100;
+    return fmt(rounded, 2);
+};
+
+const UNIDADES_COMUNES = ['gl', 'und', 'm', 'm²', 'm³', 'kg', 'ton', 'hh', 'hm', 'dia', 'mes', 'est'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Editable cells
@@ -40,12 +48,12 @@ const EditableCell = ({
     className?: string;
     activeColor?: string;
 }) => {
-    const [val, setVal] = useState(value?.toString() || '');
+    const [val, setVal] = useState(String(value ?? ''));
     const [isEditing, setIsEditing] = useState(false);
 
-    useEffect(() => { setVal(value?.toString() || ''); }, [value]);
+    useEffect(() => { if (!isEditing) setVal(String(value ?? '')); }, [value, isEditing]);
 
-    if (!isEditable) return <div className={className}>{value > 0 ? fmt(value, 2) : ''}</div>;
+    if (!isEditable) return <div className={className}>{value > 0 ? fmtDisplay(value) : ''}</div>;
 
     if (isEditing) {
         return (
@@ -58,13 +66,14 @@ const EditableCell = ({
                 onClick={(e) => e.stopPropagation()}
                 onBlur={() => {
                     setIsEditing(false);
-                    const num = Number(val);
-                    if (!isNaN(num) && num !== value) onUpdate(num);
-                    else setVal(value?.toString() || '');
+                    const raw = stripLocale(val);
+                    const num = Number(raw);
+                    if (!isNaN(num) && Math.abs(num - value) > 0.001) onUpdate(num);
+                    else setVal(String(value ?? ''));
                 }}
                 onKeyDown={(e) => {
-                    if (e.key === 'Enter') { setIsEditing(false); const num = Number(val); if (!isNaN(num) && num !== value) onUpdate(num); else setVal(value?.toString() || ''); }
-                    if (e.key === 'Escape') { setIsEditing(false); setVal(value?.toString() || ''); }
+                    if (e.key === 'Enter') { setIsEditing(false); const raw = stripLocale(val); const num = Number(raw); if (!isNaN(num) && Math.abs(num - value) > 0.001) onUpdate(num); else setVal(String(value ?? '')); }
+                    if (e.key === 'Escape') { setIsEditing(false); setVal(String(value ?? '')); }
                 }}
             />
         );
@@ -75,7 +84,7 @@ const EditableCell = ({
             className={`-mx-1 min-w-[20px] cursor-text rounded px-1 transition-colors hover:bg-slate-700/80 ${className}`}
             onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
         >
-            {value > 0 ? fmt(value, 2) : '-'}
+            {value > 0 ? fmtDisplay(value) : '-'}
         </div>
     );
 };
@@ -282,6 +291,8 @@ const SelectionToolbar = ({ count }: { count: number }) => {
     );
 };
 
+const GRID_COLS = '1fr 60px 80px 80px 100px';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Memoized Row Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -309,7 +320,7 @@ const MemoizedRow = React.memo(({
             data-index={virtualRow.index}
             ref={measureElement}
             className={[
-                'group absolute top-0 left-0 flex w-full cursor-pointer items-center border-b border-slate-700/60 transition-colors',
+                'group absolute top-0 left-0 w-full cursor-pointer items-center border-b border-slate-700/60 transition-colors',
                 isSelected ? 'border-sky-700/50 bg-sky-900/40' : '',
                 isMultiSelected && !isSelected ? 'bg-indigo-900/30 border-indigo-700/40' : '',
                 isTitle && !isSelected && !isMultiSelected ? 'bg-slate-800/60' : '',
@@ -318,21 +329,24 @@ const MemoizedRow = React.memo(({
             style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
+                display: 'grid',
+                gridTemplateColumns: GRID_COLS,
             }}
             onClick={onRowClick}
             onContextMenu={onContextMenu}>
             {isMultiSelected && (<span className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500" />)}
-            {row.getVisibleCells().map((cell: any) => (
-                <div
-                    key={cell.id}
-                    className="px-2"
-                    style={{
-                        width: cell.column.getSize() === 150 ? 'auto' : cell.column.getSize(),
-                        flex: cell.column.getSize() === 150 ? 1 : 'none',
-                    }}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </div>
-            ))}
+            {row.getVisibleCells().map((cell: any) => {
+                const colId = cell.column.id;
+                const isDescripcion = colId === 'descripcion';
+                return (
+                    <div
+                        key={cell.id}
+                        className={`min-w-0 px-2${isDescripcion ? ' overflow-hidden' : ''}`}
+                    >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </div>
+                );
+            })}
         </div>
     );
 });
@@ -404,7 +418,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                     const indent = item._level! * 18;
 
                     return (
-                        <div style={{ paddingLeft: `${indent + 4}px` }} className="group/cell flex items-center gap-1">
+                        <div style={{ paddingLeft: `${indent + 4}px` }} className="group/cell relative flex min-w-0 items-center gap-1">
                             {item._hasChildren ? (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); toggleExpand(item.partida); }}
@@ -417,8 +431,8 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                             )}
 
                             {isTitle ? (
-                                <span className="flex min-w-0 shrink items-center text-xs font-semibold tracking-wide text-sky-300">
-                                    <span className="mr-1 shrink-0 text-sky-500/70">
+                                <span className="flex min-w-0 items-center text-xs font-semibold tracking-wide text-sky-300">
+                                    <span className="mr-1 shrink-0 whitespace-nowrap text-sky-500/70">
                                         <StringEditableCell
                                             value={item.partida}
                                             isEditable={true}
@@ -430,16 +444,17 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                             className="font-mono text-sky-400"
                                         />
                                     </span>
-                                    <StringEditableCell
-                                        value={item.descripcion}
-                                        isEditable={true}
-                                        onUpdate={(val) => updateCell(item.partida, 'descripcion', val)}
-                                        className="max-w-full truncate"
-                                    />
+                                    <span className="min-w-0 truncate">
+                                        <StringEditableCell
+                                            value={item.descripcion}
+                                            isEditable={true}
+                                            onUpdate={(val) => updateCell(item.partida, 'descripcion', val)}
+                                        />
+                                    </span>
                                 </span>
                             ) : (
-                                <span className="flex min-w-0 shrink items-center text-xs text-slate-300 transition-colors hover:text-sky-200" title={item.descripcion}>
-                                    <span className="mr-1 shrink-0 text-slate-500">
+                                <span className="flex min-w-0 items-center text-xs text-slate-300 transition-colors hover:text-sky-200" title={item.descripcion}>
+                                    <span className="mr-1 shrink-0 whitespace-nowrap text-slate-500">
                                         <StringEditableCell
                                             value={item.partida}
                                             isEditable={true}
@@ -451,15 +466,17 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                                             className="font-mono"
                                         />
                                     </span>
-                                    <StringEditableCell
-                                        value={item.descripcion}
-                                        isEditable={true}
-                                        onUpdate={(val) => updateCell(item.partida, 'descripcion', val)}
-                                        className="max-w-[260px] truncate"/>
+                                    <span className="min-w-0 truncate">
+                                        <StringEditableCell
+                                            value={item.descripcion}
+                                            isEditable={true}
+                                            onUpdate={(val) => updateCell(item.partida, 'descripcion', val)}
+                                        />
+                                    </span>
                                 </span>
                             )}
 
-                            <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/cell:opacity-100">
+                            <span className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/cell:opacity-100">
                                 <button
                                     title="Mover arriba"
                                     onClick={(e) => { e.stopPropagation(); moveUp(item.partida); }}
@@ -485,7 +502,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
             },
             {
                 accessorKey: 'unidad',
-                header: 'Und.',
+                header: () => <div className="text-center">Und.</div>,
                 size: 60,
                 cell: ({ row: { original: item } }) => {
                     const isPartida = item._level! > 0 && !item._hasChildren;
@@ -517,7 +534,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
             },
             {
                 accessorKey: 'metrado',
-                header: 'Cantidad',
+                header: () => <div className="text-right">Cantidad</div>,
                 size: 80,
                 cell: ({ row: { original: item } }) => {
                     const isPartida = item._level! > 0 && !item._hasChildren;
@@ -534,7 +551,7 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
             },
             {
                 accessorKey: 'precio_unitario',
-                header: 'P. Unit.',
+                header: () => <div className="text-right">P. Unit.</div>,
                 size: 80,
                 cell: ({ row: { original: item } }) => {
                     const isPartida = item._level! > 0 && !item._hasChildren;
@@ -552,14 +569,14 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
             },
             {
                 accessorKey: 'parcial',
-                header: 'Total',
+                header: () => <div className="text-right pr-3">Total</div>,
                 size: 100,
                 cell: ({ row: { original: item } }) => {
                     const isTitle = item._level === 0 || item._hasChildren;
                     return (
                         <div className="pr-3 text-right font-mono text-xs font-bold">
                             <span className={isTitle ? 'text-sky-400' : 'text-slate-200'}>
-                                {fmt(item.parcial, 2)}
+                                {fmtDisplay(item.parcial)}
                             </span>
                         </div>
                     );
@@ -588,39 +605,25 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
     const lastClickedItem = React.useRef<BudgetItemRow | null>(null);
 
     return (
-        // ← FIX 1: añadir min-h-0 para romper el crecimiento infinito en flex column
         <div className="flex h-full min-h-0 flex-col border-r border-slate-700 bg-slate-900">
 
-            {/* Table Header — fijo, no scrollea */}
+            {/* Header */}
             <div className="shrink-0 border-b border-slate-600 bg-slate-800">
-                <table className="w-full table-fixed text-[10px] tracking-wider text-slate-500 uppercase">
-                    <thead>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <tr key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => (
-                                    <th
-                                        key={header.id}
-                                        className="px-2 py-1.5 text-left font-medium"
-                                        style={{ width: header.getSize() === 150 ? 'auto' : header.getSize() }}>
-                                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                    </th>
-                                ))}
-                            </tr>
-                        ))}
-                    </thead>
-                </table>
+                <div className="text-[10px] tracking-wider text-slate-500 uppercase" style={{ display: 'grid', gridTemplateColumns: GRID_COLS }}>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                        headerGroup.headers.map((header) => (
+                            <div key={header.id} className={`min-w-0 px-2 py-1.5 font-medium${header.id === 'descripcion' ? ' whitespace-nowrap truncate' : ''}`}>
+                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                        ))
+                    ))}
+                </div>
             </div>
 
-            {/*
-             * ← FIX 2: min-h-0 + overflow-y-auto
-             *   flex-1 solo funciona correctamente cuando el padre tiene min-h-0.
-             *   overflow-y-auto activa el scroll nativo del virtualizer.
-             *   overflow-x-hidden evita scroll horizontal accidental.
-             */}
+            {/* Virtualized scrollable body */}
             <div ref={parentRef}
                 className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-900 [scrollbar-gutter:stable] scrollbar-premium"
                 onContextMenu={handleContainerContextMenu}>
-                {/* Contenedor virtual: alto total calculado, filas posicionadas con translateY */}
                 <div
                     style={{
                         height: `${virtualizer.getTotalSize()}px`,
@@ -658,16 +661,15 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
                 </div>
             </div>
 
-            {/* Footer — fijo abajo */}
+            {/* Footer */}
             <div className="shrink-0 border-t border-slate-700 bg-slate-800/50">
                 <div className="flex items-center border-b border-slate-700/60 px-3 py-1.5">
                     <span className="flex-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">Costo Directo Total</span>
                     <span className="font-mono text-xs font-bold text-sky-300">
-                        {fmt(
+                        {fmtDisplay(
                             storeRows
-                                .filter((r) => !r._parentId)
-                                .reduce((s, r) => s + (Number(r.parcial) || 0), 0),
-                            2,
+                                .filter((r) => r.unidad && r.unidad.trim() !== '')
+                                .reduce((s, r) => s + (Number(r.parcial) || 0), 0)
                         )}
                     </span>
                 </div>

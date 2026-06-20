@@ -24,7 +24,6 @@ export const BUDGET_FIELD_KEYS = new Set(['unidad', 'metrado', 'precio_unitario'
 
 // ── Column definitions ────────────────────────────────────────────────────────
 export const BUDGET_COLUMNS: ColumnDef[] = [
-    { key: 'item_order',      label: 'N°',         type: 'readonly', width: 42,  align: 'center', editable: false },
     { key: 'descripcion',     label: 'Descripción', type: 'text',     width: 260, align: 'left',   editable: true  },
     { key: 'unidad',          label: 'Und.',        type: 'select',   width: 72,  align: 'center', editable: true,
       options: ['', 'und', 'm', 'm2', 'm3', 'kg', 'tn', 'glb', 'est', 'jg', 'ml', 'día', 'sem', 'mes', 'vje', 'pt', 'bls', 'gal', 'lt', 'rll'] },
@@ -34,7 +33,6 @@ export const BUDGET_COLUMNS: ColumnDef[] = [
 ];
 
 export const CPM_COLUMNS: ColumnDef[] = [
-    { key: 'item_order',    label: 'N°',          type: 'readonly',     width: 42,  align: 'center', editable: false },
     { key: 'descripcion',   label: 'Descripción', type: 'text',         width: 230, align: 'left',   editable: true  },
     { key: 'duracion_dias', label: 'Dur.',         type: 'number',       width: 55,  align: 'center', editable: true  },
     { key: 'fecha_inicio',  label: 'Inicio',       type: 'date',         width: 100, align: 'center', editable: true  },

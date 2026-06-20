@@ -185,6 +185,7 @@ class CostoDatabaseService
         try {
             Artisan::call('db:seed', [
                 '--class' => 'Database\\Seeders\\InsumoProductoSeeder',
+                '--database' => 'costos_tenant',
                 '--force' => true,
             ]);
 
@@ -320,18 +321,36 @@ class CostoDatabaseService
         $this->setTenantConnection($databaseName);
         $connection = DB::connection('costos_tenant');
 
-        // Sumar todos los parciales de presupuesto_general vinculados a este presupuesto
-        // Nota: metrado * precio_unitario es la base del parcial en DB.
-        $totalCostoDirecto = (float) $connection->table('presupuesto_general')
+        $this->recalculateParciales($connection, $tenantPresupuestoId);
+
+        // costo_directo = sum of all partida parciales (rows with unidad and metrado/precio > 0)
+        // This is the most reliable total since title parciales may be affected by duplicate WBS codes
+        $costoDirecto = (float) $connection->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
-            ->sum(DB::raw('metrado * precio_unitario'));
+            ->whereNotNull('unidad')
+            ->where('unidad', '!=', '')
+            ->where(function ($q) {
+                $q->where('metrado', '>', 0)
+                  ->orWhere('precio_unitario', '>', 0);
+            })
+            ->sum('parcial');
+
+        // Fallback: if no partida rows found, try root-level titles
+        if ($costoDirecto <= 0) {
+            $costoDirecto = (float) $connection->table('presupuesto_general')
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->whereRaw('partida NOT LIKE "%.%"')
+                ->whereNotNull('partida')
+                ->where('partida', '!=', '')
+                ->sum('parcial');
+        }
 
         // 1. Actualizar tabla maestra de presupuestos del tenant
         if (Schema::connection('costos_tenant')->hasTable('presupuestos')) {
             $connection->table('presupuestos')
                 ->where('id', $tenantPresupuestoId)
                 ->update([
-                    'costo_directo' => $totalCostoDirecto,
+                    'costo_directo' => $costoDirecto,
                     'updated_at' => now(),
                 ]);
         }
@@ -341,7 +360,7 @@ class CostoDatabaseService
             $connection->table('project_params')
                 ->where('id', 1)
                 ->update([
-                    'costo_directo' => $totalCostoDirecto,
+                    'costo_directo' => $costoDirecto,
                     'updated_at' => now(),
                 ]);
         }
@@ -350,16 +369,71 @@ class CostoDatabaseService
         if (Schema::connection('costos_tenant')->hasTable('gg_fijos_fianzas')) {
             $connection->table('gg_fijos_fianzas')
                 ->where('presupuesto_id', $tenantPresupuestoId)
-                ->update(['base_calculo' => $totalCostoDirecto]);
+                ->update(['base_calculo' => $costoDirecto]);
         }
 
         if (Schema::connection('costos_tenant')->hasTable('gg_fijos_polizas')) {
             $connection->table('gg_fijos_polizas')
                 ->where('presupuesto_id', $tenantPresupuestoId)
-                ->update(['base_calculo' => $totalCostoDirecto]);
+                ->update(['base_calculo' => $costoDirecto]);
         }
 
-        Log::info("CostoDatabaseService: Sync costo_directo [{$totalCostoDirecto}] for budget [{$tenantPresupuestoId}]");
+        Log::info("CostoDatabaseService: Sync costo_directo [{$costoDirecto}] for budget [{$tenantPresupuestoId}]");
+    }
+
+    /**
+     * Recalcula los parciales de las filas padre (títulos/subtítulos) de presupuesto_general.
+     * Las partidas (hojas): se conserva el parcial almacenado (viene del import o cálculo ACU).
+     * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
+     */
+    public function recalculateParciales($connection, int $tenantPresupuestoId): void
+    {
+        $rows = $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->orderByRaw('LENGTH(partida) - LENGTH(REPLACE(partida, ".", "")) DESC')
+            ->orderBy('partida')
+            ->get();
+
+        $parentCodes = [];
+        foreach ($rows as $row) {
+            $parts = explode('.', $row->partida);
+            if (count($parts) > 1) {
+                array_pop($parts);
+                $parentCodes[] = implode('.', $parts);
+            }
+        }
+        $parentCodes = array_unique($parentCodes);
+
+        $parciales = [];
+        foreach ($rows as $row) {
+            if (! in_array($row->partida, $parentCodes)) {
+                $parciales[$row->partida] = (float) ($row->parcial ?? 0);
+            }
+        }
+
+        foreach ($rows as $row) {
+            if (in_array($row->partida, $parentCodes)) {
+                $prefix = $row->partida . '.';
+                $sum = 0;
+
+                foreach ($parciales as $childPartida => $childParcial) {
+                    if (str_starts_with($childPartida, $prefix)) {
+                        $remaining = substr($childPartida, strlen($prefix));
+                        if (! str_contains($remaining, '.')) {
+                            $sum += $childParcial;
+                        }
+                    }
+                }
+
+                $parciales[$row->partida] = round($sum, 4);
+                $connection->table('presupuesto_general')
+                    ->where('id', $row->id)
+                    ->update([
+                        'parcial' => round($sum, 4),
+                        'updated_at' => now(),
+                    ]);
+            }
+        }
     }
 
     /**

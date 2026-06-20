@@ -14,10 +14,12 @@ import {
     FilePlus,
     FileSpreadsheet,
     X,
+    ChevronDown,
 } from 'lucide-react';
 import { Download } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { PresupuestoSubsection } from '@/types/presupuestos';
@@ -120,6 +122,7 @@ export default function Index() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState('');
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [acuRefreshKey, setAcuRefreshKey] = useState(0);
     const searchRef = useRef<HTMLInputElement>(null);
 
     // Sync search query to store
@@ -289,6 +292,7 @@ export default function Index() {
         selectedPartidaData,
         lastSaved: null,
         setSheetVersion: () => { },
+        refreshKey: acuRefreshKey,
     });
 
     // Visual-first: calculates locally and marks as pending — no DB call until global save
@@ -454,10 +458,19 @@ export default function Index() {
                                         {/* ── Toolbar S10-style ── */}
                                         <div className="flex flex-wrap items-center gap-1 border-b border-slate-700 bg-slate-800/90 px-2 py-1.5">
                                             <span className="text-[9px] font-bold tracking-wider text-slate-600 uppercase mr-0.5">Insertar</span>
-                                            <button title="Importar Metrados" onClick={() => setIsImportModalOpen(true)}
-                                                className="flex items-center gap-1 rounded bg-amber-900/60 px-2 py-1 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-800">
-                                                <Download size={11} /> Importar...
-                                            </button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button title="Importar"
+                                                        className="flex items-center gap-1 rounded bg-amber-900/60 px-2 py-1 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-800">
+                                                        <Download size={11} /> Importar <ChevronDown size={10} />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="start" className="bg-slate-800 border-slate-700">
+                                                    <DropdownMenuItem className="text-amber-300 focus:bg-amber-900/60 focus:text-amber-200 text-xs cursor-pointer" onClick={() => setIsImportModalOpen(true)}>
+                                                        <Download size={14} /> Importar Metrados
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                             <button title="Nuevo Título raíz" onClick={() => addNode(null, 'titulo')}
                                                 className="flex items-center gap-1 rounded bg-sky-900/60 px-2 py-1 text-[10px] font-semibold text-sky-300 transition-colors hover:bg-sky-800">
                                                 <FilePlus size={11} /> Título
