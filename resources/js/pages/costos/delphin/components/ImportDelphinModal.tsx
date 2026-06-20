@@ -28,7 +28,7 @@ interface Props {
     project_id_int:    number;
     delphinRows:       DelphinRow[];
     onClose:           () => void;
-    onBudgetImported:  (result: ParsePresupuestoResult) => void;
+    onBudgetImported:  (result: ParsePresupuestoResult) => { createdPartidas: string[] };
     // Receives the built ACU payloads ready to apply locally — no DB call
     onAcusImported?:   (payloads: Array<Record<string, any>>) => void;
 }
@@ -103,17 +103,19 @@ function StepBudget({
     onNext,
 }: {
     hasExistingRows: boolean;
-    onImported:      (r: ParsePresupuestoResult) => void;
+    onImported:      (r: ParsePresupuestoResult) => { createdPartidas: string[] };
     onNext:          () => void;
 }) {
-    const [status,   setStatus]   = useState<'idle' | 'parsing' | 'ready' | 'done' | 'error'>('idle');
-    const [result,   setResult]   = useState<ParsePresupuestoResult | null>(null);
-    const [error,    setError]    = useState('');
+    const [status,          setStatus]          = useState<'idle' | 'parsing' | 'ready' | 'done' | 'error'>('idle');
+    const [result,          setResult]          = useState<ParsePresupuestoResult | null>(null);
+    const [error,           setError]           = useState('');
+    const [createdPartidas, setCreatedPartidas] = useState<string[]>([]);
 
     const handleFile = async (files: File[]) => {
         const file = files[0];
         setStatus('parsing');
         setError('');
+        setCreatedPartidas([]);
         try {
             const r = await parsePresupuestoExcel(file);
             setResult(r);
@@ -127,7 +129,8 @@ function StepBudget({
     // Visual-only: update local state, no DB call — user must click Guardar
     const handleImport = () => {
         if (!result) return;
-        onImported(result);
+        const { createdPartidas: created } = onImported(result);
+        setCreatedPartidas(created);
         setStatus('done');
     };
 
@@ -143,9 +146,9 @@ function StepBudget({
             {status === 'idle' || status === 'error' ? (
                 <>
                     {hasExistingRows && (
-                        <div className="flex items-start gap-2 rounded-md border border-amber-800/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
+                        <div className="flex items-start gap-2 rounded-md border border-blue-800/50 bg-blue-900/20 px-3 py-2 text-xs text-blue-300">
                             <AlertCircle size={13} className="mt-0.5 shrink-0" />
-                            Ya hay un presupuesto cargado en la vista. Importar uno nuevo <strong className="ml-1">lo reemplazará</strong>.
+                            Ya hay un presupuesto cargado. Las partidas nuevas se <strong className="ml-1">agregarán</strong> y las existentes se <strong>actualizarán</strong> (sin borrar lo anterior).
                         </div>
                     )}
                     <DropZone
@@ -165,9 +168,29 @@ function StepBudget({
                     <Loader2 size={16} className="animate-spin" /> Analizando archivo…
                 </div>
             ) : status === 'done' ? (
-                <div className="flex items-center gap-2 rounded-md bg-green-900/30 px-3 py-2 text-sm text-green-300">
-                    <CheckCircle2 size={16} />
-                    Árbol cargado en la vista. Usa <strong className="mx-1">Guardar</strong> en la barra de herramientas para persistir los cambios.
+                <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 rounded-md bg-green-900/30 px-3 py-2 text-sm text-green-300">
+                        <CheckCircle2 size={16} />
+                        Árbol cargado en la vista. Usa <strong className="mx-1">Guardar</strong> en la barra de herramientas para persistir los cambios.
+                    </div>
+                    {createdPartidas.length > 0 && (
+                        <div className="rounded-md border border-amber-700/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
+                            <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                                <AlertCircle size={12} />
+                                {createdPartidas.length} grupo{createdPartidas.length !== 1 ? 's' : ''} creado{createdPartidas.length !== 1 ? 's' : ''} automáticamente (padre faltante):
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                                {createdPartidas.map((p) => (
+                                    <span key={p} className="rounded bg-amber-800/40 px-1.5 py-0.5 font-mono text-[10px] text-amber-200">
+                                        {p}
+                                    </span>
+                                ))}
+                            </div>
+                            <p className="mt-1 text-[10px] text-amber-400/70">
+                                Estos grupos vacíos se agregaron para mantener la jerarquía. Puedes editarlos o moverlos en el árbol.
+                            </p>
+                        </div>
+                    )}
                 </div>
             ) : result && status === 'ready' ? (
                 <div className="flex flex-col gap-3">
