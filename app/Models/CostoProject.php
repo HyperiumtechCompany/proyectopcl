@@ -45,21 +45,26 @@ class CostoProject extends Model
 
     // ─── Tipos de módulos disponibles ────────────────────────────────────────────
     public const MODULE_TYPES = [
-        // Metrados
         'metrado_arquitectura',
         'metrado_estructura',
         'metrado_sanitarias',
         'metrado_electricas',
         'metrado_comunicaciones',
         'metrado_gas',
-        // Cronogramas
         'crono_general',
         'crono_valorizado',
         'crono_materiales',
-        // Presupuesto Unificado (incluye: general, ACUs, GG, remuneraciones, insumos, índices)
         'presupuesto',
-        // Especificaciones Técnicas
         'etts',
+    ];
+
+    private const LEGACY_PRESUPUESTO_MODULE_TYPES = [
+        'presupuesto_gg',
+        'presupuesto_insumos',
+        'presupuesto_remuneraciones',
+        'presupuesto_acus',
+        'presupuesto_indice',
+        'presupuesto_indices',
     ];
 
     // ─── Relations ───────────────────────────────────────────────────────────────
@@ -79,22 +84,37 @@ class CostoProject extends Model
         return $this->modules()->where('enabled', true);
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────────
+    // ─── Relaciones de Ubicación ─────────────────────────────────────────────
 
-    /**
-     * Generate a unique database name for this project.
-     */
-    public static function generateDatabaseName(int $userId): string
+    public function departamento(): BelongsTo
     {
-        return 'costos_'.$userId.'_'.now()->format('YmdHis').'_'.mt_rand(100, 999);
+        return $this->belongsTo(Ubigeo::class, 'departamento_id');
     }
+
+    public function provincia(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'provincia_id');
+    }
+
+    public function distrito(): BelongsTo
+    {
+        return $this->belongsTo(Ubigeo::class, 'distrito_id');
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────────
 
     /**
      * Check if a specific module is enabled.
      */
     public function hasModule(string $moduleType): bool
     {
-        return $this->modules()->where('module_type', $moduleType)->where('enabled', true)->exists();
+        if ($moduleType === 'presupuesto') {
+            return $this->hasUnifiedPresupuesto();
+        }
+
+        return $this->enabledModules()
+            ->where('module_type', $moduleType)
+            ->exists();
     }
 
     /**
@@ -102,6 +122,19 @@ class CostoProject extends Model
      */
     public function hasUnifiedPresupuesto(): bool
     {
-        return $this->hasModule('presupuesto');
+        return $this->enabledModules()
+            ->whereIn('module_type', [
+                'presupuesto',
+                ...self::LEGACY_PRESUPUESTO_MODULE_TYPES,
+            ])
+            ->exists();
+    }
+
+    /**
+     * Generate a unique database name for this project.
+     */
+    public static function generateDatabaseName(int $userId): string
+    {
+        return 'costos_user_'.$userId.'_'.time().'_'.bin2hex(random_bytes(4));
     }
 }

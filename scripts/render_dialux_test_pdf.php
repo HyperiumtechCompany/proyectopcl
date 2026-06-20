@@ -66,7 +66,7 @@ $pdf = Pdf::loadView('dialux.export.formal-pdf', [
     'coverAsset' => $coverAsset,
     'tocPages' => $tocPages,
     'contentPages' => $contentPages,
-    'tocChunks' => collect($document['toc'] ?? [])->chunk(18)->values()->all(),
+    'tocChunks' => collect($document['toc'] ?? [])->chunk(14)->values()->all(),
 ])
     ->setPaper('a4', 'portrait')
     ->setOptions([

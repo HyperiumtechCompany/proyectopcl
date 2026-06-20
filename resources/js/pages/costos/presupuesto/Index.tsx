@@ -1,5 +1,6 @@
 import { router, usePage, Head } from '@inertiajs/react';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import {
     Building2,
     Calculator,
@@ -129,7 +130,7 @@ export default function Index() {
 
     const [isSaving, setIsSaving] = useState(false);
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
-    const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | null>(null);
+    const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | 'excel-padres' | null>(null);
 
     const totalBudget = useMemo(() => {
         return storeRows
@@ -138,32 +139,66 @@ export default function Index() {
     }, [storeRows]);
 
     const handleSaveGeneral = async () => {
-        if (!isDirty && !isSaving) return; // Ignore if already saved
+        const anyDirty = isDirty || acuDirty;
+        if (!anyDirty || isSaving) return;
+
+        const confirm = await Swal.fire({
+            title: '¿Guardar cambios?',
+            text: 'Se guardarán todos los cambios pendientes en el presupuesto.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, guardar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d97706',
+            cancelButtonColor: '#475569',
+            background: '#1e293b',
+            color: '#f1f5f9',
+        });
+
+        if (!confirm.isConfirmed) return;
+
         setIsSaving(true);
         try {
-            const rawRows = useBudgetStore.getState().rows;
-            const currentRows = rawRows.map((row) => {
-                const {
-                    _level,
-                    _parentId,
-                    _expanded,
-                    _hasChildren,
-                    _index,
-                    ...cleanRow
-                } = row as any;
-                return cleanRow;
-            });
+            // 1. Persist pending ACU edits first
+            if (acuDirty) {
+                const acuOk = await flushPendingAcus();
+                if (!acuOk) {
+                    await Swal.fire({
+                        title: 'Error',
+                        text: 'No se pudieron guardar algunos ACUs. Intente nuevamente.',
+                        icon: 'error',
+                        background: '#1e293b',
+                        color: '#f1f5f9',
+                        confirmButtonColor: '#d97706',
+                    });
+                    return;
+                }
+            }
 
-            // The backend update controller expects a flat array of objects
-            await axios.patch(
-                `/costos/proyectos/${project.id}/presupuesto/general`,
-                { rows: currentRows },
-            );
-            setDirty(false);
-            setLastSavedTime(new Date());
+            // 2. Save presupuesto general rows
+            if (isDirty) {
+                const rawRows = useBudgetStore.getState().rows;
+                const currentRows = rawRows.map((row) => {
+                    const { _level, _parentId, _expanded, _hasChildren, _index, ...cleanRow } = row as any;
+                    return cleanRow;
+                });
+                await axios.patch(
+                    `/costos/proyectos/${project.id}/presupuesto/general`,
+                    { rows: currentRows },
+                );
+                setDirty(false);
+                setLastSavedTime(new Date());
+            }
         } catch (error) {
             console.error('Error saving budget', error);
-            alert('Error de sincronización con el servidor al guardar.');
+            await Swal.fire({
+                title: 'Error',
+                text: 'Error de sincronización con el servidor al guardar.',
+                icon: 'error',
+                background: '#1e293b',
+                color: '#f1f5f9',
+                confirmButtonColor: '#d97706',
+            });
         } finally {
             setIsSaving(false);
         }
@@ -177,16 +212,36 @@ export default function Index() {
     // }, [isDirty, storeRows]);
 
     // Export handlers
-    const handleExport = async (format: 'excel' | 'pdf') => {
+    const handleExport = async (format: 'excel' | 'excel-padres' | 'pdf') => {
         setExportLoading(format);
         try {
-            const url = `/costos/proyectos/${project.id}/presupuesto/export/${format}`;
-            const response = await axios.get(url, { responseType: 'blob' });
-            const ext = format === 'excel' ? 'xlsx' : 'pdf';
+            let url = '';
+            let ext = '';
+
+            if (format === 'pdf') {
+                url = `/costos/proyectos/${project.id}/presupuesto/export/pdf`;
+                ext = 'pdf';
+            } else {
+                url = `/costos/proyectos/${project.id}/presupuesto/export/excel`;
+                ext = 'xlsx';
+            }
+
+            const response = await axios.get(url, {
+                params: format === 'excel-padres' ? { tipo: 'padres' } : {},
+                responseType: 'blob'
+            });
+
             const blob = new Blob([response.data]);
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `presupuesto_${project.nombre.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+
+            let nombreArchivo = 'presupuesto';
+            if (format === 'excel-padres') {
+                nombreArchivo += '_padres';
+            }
+            nombreArchivo += `_${project.nombre.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
+
+            link.download = nombreArchivo;
             link.click();
             URL.revokeObjectURL(link.href);
         } catch (e) {
@@ -226,7 +281,9 @@ export default function Index() {
         acuRows,
         acuLoading,
         selectedAcu,
-        saveAcu: baseSaveAcu,
+        localSaveAcu,
+        flushPendingAcus,
+        acuDirty,
     } = usePresupuestoAcu({
         projectId: project.id,
         subsection,
@@ -238,15 +295,12 @@ export default function Index() {
         refreshKey: acuRefreshKey,
     });
 
-    // Wrapped save so that AcuPanel updates budgetStore state appropriately
-    const handleSaveAcu = async (acuData: Record<string, any>) => {
-        const result = await baseSaveAcu(acuData);
+    // Visual-first: calculates locally and marks as pending — no DB call until global save
+    const handleSaveAcu = async (acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
+        const result = localSaveAcu(acuData, options);
         if (result.success && result.acu && selectedId === result.acu.partida) {
-            updateCell(
-                selectedId,
-                'precio_unitario',
-                result.acu.costo_unitario_total,
-            );
+            updateCell(selectedId, 'precio_unitario', result.acu.costo_unitario_total);
+            setDirty(true);
         }
         return result;
     };
@@ -447,15 +501,32 @@ export default function Index() {
                                                 className="flex items-center gap-1 rounded bg-emerald-900/50 px-2 py-1 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-800/60 disabled:opacity-50">
                                                 <FileSpreadsheet size={11} />{exportLoading === 'excel' ? '...' : 'Excel'}
                                             </button>
+
+                                        
                                             <button title="Exportar a PDF" onClick={() => handleExport('pdf')} disabled={exportLoading === 'pdf'}
                                                 className="flex items-center gap-1 rounded bg-red-900/50 px-2 py-1 text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-800/60 disabled:opacity-50">
                                                 <FileDown size={11} />{exportLoading === 'pdf' ? '...' : 'PDF'}
                                             </button>
-                                            <span className="mx-1 h-4 w-px bg-slate-700" />
+                                                {/* 🆕 BOTÓN EXCEL (PADRES) - AGREGAR JUSTO AQUÍ */}
                                             <button
-                                                className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
-                                                onClick={handleSaveGeneral} disabled={isSaving || !isDirty}>
-                                                {isSaving ? 'Guardando...' : isDirty ? 'Guardar' : '✓ Guardado'}
+                                                title="Exportar solo partidas padre"
+                                                onClick={() => handleExport('excel-padres')}
+                                                disabled={exportLoading === 'excel-padres'}
+                                                className="flex items-center gap-1 rounded bg-emerald-900/40 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-800/60 disabled:opacity-50"
+                                            >
+                                                <FileSpreadsheet size={11} />
+                                                {exportLoading === 'excel-padres' ? '...' : 'Excel (Padres)'}
+                                            </button>
+                                            
+
+                                            <span className="mx-1 h-4 w-px bg-slate-700" />
+                                            
+
+
+                                            <button
+                                                className={`rounded px-3 py-1 text-[10px] font-bold text-white transition-colors disabled:opacity-50 ${isDirty || acuDirty ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-700 hover:bg-emerald-600'}`}
+                                                onClick={handleSaveGeneral} disabled={isSaving || (!isDirty && !acuDirty)}>
+                                                {isSaving ? 'Guardando...' : (isDirty || acuDirty) ? 'Guardar' : '✓ Guardado'}
                                             </button>
 
                                             <span className="mx-1 h-4 w-px bg-slate-700" />
@@ -576,7 +647,9 @@ export default function Index() {
                         ) : subsection === 'insumos' ? (
                             <InsumosPanel projectId={project.id} />
                         ) : subsection === 'f_polinomica' ? (
-                            <FormulaPolinomica />
+                            <div className="min-h-0 flex-1 overflow-auto p-4">
+                                <FormulaPolinomica rows={storeRows} acuRows={acuRows} projectName={project.nombre} />
+                            </div>
                         ) : (
                             <div className="flex h-full items-center justify-center p-6 text-center text-slate-400">
                                 <div>

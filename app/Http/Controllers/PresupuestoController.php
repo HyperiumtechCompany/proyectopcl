@@ -22,6 +22,12 @@ use Inertia\Inertia;
 use Inertia\Response;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 
 class PresupuestoController extends Controller
 {
@@ -2040,8 +2046,7 @@ class PresupuestoController extends Controller
      */
     private function validateModuleEnabled(CostoProject $project): void
     {
-        $enabled = $project->enabledModules()->where('module_type', 'presupuesto')->exists();
-        if (! $enabled) {
+        if (! $project->hasUnifiedPresupuesto()) {
             abort(403, 'El módulo de presupuesto no está habilitado para este proyecto.');
         }
     }
@@ -2909,54 +2914,289 @@ class PresupuestoController extends Controller
     /**
      * Helper: obtiene las filas del presupuesto general desde el tenant.
      */
-    private function buildPresupuestoRows(CostoProject $project): array
-    {
-        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+private function buildPresupuestoRows(CostoProject $project, string $tipo = 'completo'): array
+{
+    $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
 
-        return DB::connection('costos_tenant')
-            ->table('presupuesto_general')
-            ->where('presupuesto_id', $tenantPresupuestoId)
-            ->orderBy('partida')
-            ->get()
-            ->map(fn ($r) => (array) $r)
-            ->toArray();
+    $rows = DB::connection('costos_tenant')
+        ->table('presupuesto_general')
+        ->where('presupuesto_id', $tenantPresupuestoId)
+        ->orderBy('item_order')
+        ->orderBy('id')
+        ->get()
+        ->map(fn ($r) => (array) $r)
+        ->toArray();
+
+    if ($tipo !== 'padres') {
+        return $rows;
     }
 
+    $rows = $this->attachEspecialidad($rows);
+
+    return array_values(array_filter($rows, function ($row) {
+        $partida = (string) ($row['partida'] ?? '');
+        $dots = $partida === '' ? 0 : substr_count($partida, '.');
+        return $dots <= 1;
+    }));
+}
     /**
      * Exporta el presupuesto general a CSV/Excel (UTF-8 BOM para compatibilidad con Microsoft Excel).
      * Ruta: GET /costos/proyectos/{project}/presupuesto/export/excel
      */
-    public function exportExcel(CostoProject $project): StreamedResponse
-    {
-        abort_unless(Auth::check(), 403);
+    public function exportExcel(CostoProject $project, Request $request): \Illuminate\Http\Response
+{
+    $this->authorizeProject($project);
+    $this->validateModuleEnabled($project);
 
-        $rows = $this->buildPresupuestoRows($project);
-        $filename = 'presupuesto_'.preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre).'_'.date('Ymd').'.csv';
+    $tipo = $request->input('tipo', 'completo');
 
-        return response()->streamDownload(function () use ($rows) {
-            $f = fopen('php://output', 'w');
-            // BOM para que Excel lo abra correctamente en UTF-8
-            fprintf($f, chr(0xEF).chr(0xBB).chr(0xBF));
-            fputcsv($f, ['Ítem', 'Descripción', 'Unidad', 'Metrado', 'Precio Unit.', 'Parcial'], ';');
+    $rows = $this->buildPresupuestoRows($project, $tipo);
 
-            foreach ($rows as $row) {
-                $level = substr_count((string) ($row['partida'] ?? ''), '.');
-                $indent = str_repeat('  ', $level);
-                fputcsv($f, [
-                    $row['partida'] ?? '',
-                    $indent.($row['descripcion'] ?? ''),
-                    $row['unidad'] ?? '',
-                    number_format((float) ($row['metrado'] ?? 0), 4, '.', ''),
-                    number_format((float) ($row['precio_unitario'] ?? 0), 4, '.', ''),
-                    number_format((float) ($row['parcial'] ?? 0), 4, '.', ''),
-                ], ';');
-            }
-            fclose($f);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ]);
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+
+    // ─── VARIABLES DEL PROYECTO ────────────────────────────────────────────────
+    $nombreProyecto = $project->nombre ?? 'PROYECTO SIN NOMBRE';
+    $cui = $project->codigo_cui ?? '-';
+    $codigoLocal = $project->codigo_local ?? '-';
+    
+    $modular = '-';
+    if (is_array($project->codigos_modulares)) {
+        $modular = implode('-', $project->codigos_modulares);
+    } elseif ($project->codigos_modulares) {
+        $modular = (string) $project->codigos_modulares;
     }
+    
+    $unidadEjecutora = $project->unidad_ejecutora ?? '-';
+    $propietario = $project->unidad_ejecutora ?? '-';
+
+    // Extraer I.E.
+    $ieNombre = $project->nombre ?? '';
+    $ieCodigo = '-';
+    $match = preg_match('/N°\s*(\d+)/i', $ieNombre, $matches);
+    if ($match) {
+        $ieCodigo = $matches[1];
+    } else {
+        $ieCodigo = explode('-', $ieNombre)[0] ?? '-';
+    }
+
+    // ─── LOGOS ──────────────────────────────────────────────────────────────────
+    $filaActual = 1;
+
+    // Logo izquierdo
+    if ($project->plantilla_logo_izq) {
+        try {
+            $path = storage_path('app/public/' . $project->plantilla_logo_izq);
+            if (file_exists($path)) {
+                $drawing = new Drawing();
+                $drawing->setPath($path);
+                $drawing->setHeight(55);
+                $drawing->setCoordinates('A1');
+                $drawing->setWorksheet($sheet);
+            }
+        } catch (\Exception $e) {
+            Log::warning('No se pudo cargar logo izquierdo: ' . $e->getMessage());
+        }
+    }
+
+    // Logo derecho
+    if ($project->plantilla_logo_der) {
+        try {
+            $path = storage_path('app/public/' . $project->plantilla_logo_der);
+            if (file_exists($path)) {
+                $drawing = new Drawing();
+                $drawing->setPath($path);
+                $drawing->setHeight(55);
+                $drawing->setCoordinates('F1');
+                $drawing->setWorksheet($sheet);
+            }
+        } catch (\Exception $e) {
+            Log::warning('No se pudo cargar logo derecho: ' . $e->getMessage());
+        }
+    }
+
+    // ─── TÍTULO ─────────────────────────────────────────────────────────────────
+    $sheet->mergeCells('B1:E1');
+    $sheet->setCellValue('B1', '"' . strtoupper($nombreProyecto) . '"');
+    $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(11)->setItalic(true);
+    $sheet->getStyle('B1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+    $filaActual = 4;
+
+    // CUI, Modular, Local
+    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
+    $sheet->setCellValue('A' . $filaActual, 'CUI: ' . $cui . '; CÓDIGO MODULAR: ' . $modular . '; CÓDIGO LOCAL: ' . $codigoLocal);
+    $sheet->getStyle('A' . $filaActual)->getFont()->setSize(9);
+    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $filaActual++;
+
+    // I.E.
+    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
+    $sheet->setCellValue('A' . $filaActual, 'I.E. ' . $ieCodigo . '; UNIDAD EJECUTORA: ' . $unidadEjecutora);
+    $sheet->getStyle('A' . $filaActual)->getFont()->setSize(9);
+    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $filaActual++;
+
+    // Espacio
+    $filaActual++;
+
+    // Título principal
+    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
+    $sheet->setCellValue('A' . $filaActual, 'RESUMEN DE PRESUPUESTO');
+    $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(14);
+    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    $filaActual++;
+
+    // Espacio
+    $filaActual++;
+
+    // ─── DATOS DEL PROYECTO ────────────────────────────────────────────────────
+    $datos = [
+        ['Proyecto', $nombreProyecto],
+        ['Propietario', $propietario],
+        ['Fecha', $this->getFechaFormatoModelo()],
+        ['Módulo', 'GENERAL'],
+    ];
+
+    foreach ($datos as $dato) {
+        $sheet->setCellValue('A' . $filaActual, $dato[0]);
+        $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(10);
+        $sheet->setCellValue('B' . $filaActual, ': ' . $dato[1]);
+        $sheet->getStyle('B' . $filaActual)->getFont()->setSize(10);
+        $filaActual++;
+    }
+
+    // Espacio
+    $filaActual++;
+
+    // Hecho por / Revisado por
+    $sheet->setCellValue('A' . $filaActual, 'Hecho por');
+    $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(10);
+    $sheet->setCellValue('B' . $filaActual, ':');
+
+    $sheet->setCellValue('D' . $filaActual, 'Revisado por');
+    $sheet->getStyle('D' . $filaActual)->getFont()->setBold(true)->setSize(10);
+    $sheet->setCellValue('E' . $filaActual, ':');
+    $filaActual++;
+
+    // Espacio
+    $filaActual++;
+    $filaActual++;
+
+    // ─── CABECERA DE TABLA ──────────────────────────────────────────────────
+    $headers = ['ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'P.U. (S/.)', 'PARCIAL (S/.)'];
+    $colLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    foreach ($headers as $index => $header) {
+        $col = $colLetters[$index];
+        $sheet->setCellValue($col . $filaActual, $header);
+        $sheet->getStyle($col . $filaActual)->getFont()->setBold(true)->setSize(10)
+            ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color(\PhpOffice\PhpSpreadsheet\Style\Color::COLOR_WHITE));
+        $sheet->getStyle($col . $filaActual)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FF1F4E79');
+        $sheet->getStyle($col . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle($col . $filaActual)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    }
+    $filaActual++;
+
+    // ─── DATOS ──────────────────────────────────────────────────────────────────
+    $totalGeneral = 0;
+    $colorFila = 0;
+
+    foreach ($rows as $row) {
+        $level = substr_count((string) ($row['partida'] ?? ''), '.');
+        $indent = str_repeat('    ', $level);
+        $metrado = (float) ($row['metrado'] ?? 0);
+        $precio = (float) ($row['precio_unitario'] ?? 0);
+        $parcial = (float) ($row['parcial'] ?? 0);
+        $totalGeneral += $parcial;
+
+        $esPar = ($colorFila % 2 === 0);
+        $bgColor = $esPar ? 'FFF8FAFE' : 'FFFFFFFF';
+
+        $sheet->setCellValue('A' . $filaActual, $row['partida'] ?? '');
+        $sheet->setCellValue('B' . $filaActual, $indent . ($row['descripcion'] ?? ''));
+        $sheet->setCellValue('C' . $filaActual, $row['unidad'] ?? '');
+        $sheet->setCellValue('D' . $filaActual, $metrado);
+        $sheet->setCellValue('E' . $filaActual, $precio);
+        $sheet->setCellValue('F' . $filaActual, $parcial);
+
+        $sheet->getStyle('D' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
+        $sheet->getStyle('E' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
+        $sheet->getStyle('F' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.00');
+
+        foreach ($colLetters as $col) {
+            $cell = $sheet->getStyle($col . $filaActual);
+            $cell->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+            $cell->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($bgColor);
+        }
+
+        $colorFila++;
+        $filaActual++;
+    }
+
+    // ─── TOTAL ──────────────────────────────────────────────────────────────────
+    if ($filaActual > 7) {
+        $totalRow = $filaActual + 1;
+        $sheet->mergeCells('A' . $totalRow . ':E' . $totalRow);
+        $sheet->setCellValue('A' . $totalRow, 'TOTAL COSTO DIRECTO:');
+        $sheet->getStyle('A' . $totalRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $totalRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+        $sheet->setCellValue('F' . $totalRow, $totalGeneral);
+        $sheet->getStyle('F' . $totalRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('F' . $totalRow)->getFont()->setBold(true)->setSize(11);
+
+        $sheet->getStyle('A' . $totalRow . ':F' . $totalRow)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFD9EAF7');
+
+        foreach ($colLetters as $col) {
+            $sheet->getStyle($col . $totalRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        }
+    }
+
+    // ─── ANCHOS ─────────────────────────────────────────────────────────────────
+    $sheet->getColumnDimension('A')->setWidth(15);
+    $sheet->getColumnDimension('B')->setWidth(50);
+    $sheet->getColumnDimension('C')->setWidth(12);
+    $sheet->getColumnDimension('D')->setWidth(15);
+    $sheet->getColumnDimension('E')->setWidth(15);
+    $sheet->getColumnDimension('F')->setWidth(18);
+
+    // ─── DESCARGAR ──────────────────────────────────────────────────────────────
+    $writer = new Xlsx($spreadsheet);
+
+    $nombreArchivo = 'presupuesto';
+    if ($tipo === 'padres') {
+        $nombreArchivo .= '_padres';
+    }
+    $nombreArchivo .= '_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.xlsx';
+
+    ob_start();
+    $writer->save('php://output');
+    $content = ob_get_clean();
+
+    return response($content, 200, [
+        'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition' => 'attachment; filename="' . $nombreArchivo . '"',
+        'Content-Length' => strlen($content),
+    ]);
+}
+
+/**
+ * Helper para formatear fecha como "JUNIO 2026"
+ */
+private function getFechaFormatoModelo(): string
+{
+    $meses = [
+        'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+    ];
+    $hoy = new \DateTime();
+    return $meses[(int) $hoy->format('m') - 1] . ' ' . $hoy->format('Y');
+}
 
     /**
      * Exporta el presupuesto general como HTML imprimible (o PDF si Dompdf está disponible).

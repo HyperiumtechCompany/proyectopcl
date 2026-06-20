@@ -342,6 +342,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/cronograma/materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
     Route::delete('/cronograma/materiales/destroy', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
     Route::post('/module/crono_valorizado/save', [CronoValorizadoController::class, 'store'])->name('proyectos.cronograma.valorizado.save');
+     // 👇 NUEVA RUTA PARA OBTENER DATOS DE MATERIALES (API)
+    Route::get('/module/crono_materiales/data', [CronoMaterialesController::class, 'getData'])->name('proyectos.cronograma.materiales.data');
+    Route::get('/module/crono_materiales/data', [CronoMaterialesController::class, 'getData'])->name('proyectos.cronograma.materiales.data');
     Route::delete('/cronograma/valorizado/destroy', [CronoValorizadoController::class, 'destroy'])->name('proyectos.cronograma.valorizado.destroy');
     Route::get('/presupuesto/{project}/partidas', [CronogramaController::class, 'getPartidas']);
 

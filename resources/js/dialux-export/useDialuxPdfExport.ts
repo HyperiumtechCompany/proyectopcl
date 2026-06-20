@@ -142,7 +142,10 @@ async function captureEditorBitmaps(): Promise<CapturedViewerBitmaps> {
                 purpose: 'drawn-terrain',
             });
         } catch (error) {
-            console.warn('[DIAlux] Falló la captura compuesta del plano:', error);
+            console.warn(
+                '[DIAlux] Falló la captura compuesta del plano:',
+                error,
+            );
         }
 
         // 2b. Con isolux: plano con curvas/ondas superpuestas
@@ -158,7 +161,10 @@ async function captureEditorBitmaps(): Promise<CapturedViewerBitmaps> {
                 purpose: 'isolux',
             });
         } catch (error) {
-            console.warn('[DIAlux] Falló la captura compuesta con isolux:', error);
+            console.warn(
+                '[DIAlux] Falló la captura compuesta con isolux:',
+                error,
+            );
         }
     } finally {
         // Restaurar el estado original del isolux
@@ -274,7 +280,7 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             showConfirmButton: false,
             didOpen: () => {
                 Swal.showLoading();
-            }
+            },
         });
 
         try {
@@ -287,6 +293,7 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             const snapshot = buildDialuxExportSnapshot({
                 project: exportProject,
                 activeSceneId: exportActiveSceneId,
+                includeAllScenes: true,
                 resultsByRoom: exportState.resultsByRoom,
                 dxfEntities: exportState.dxfEntities,
                 dxfExtents: exportState.dxfExtents,
@@ -304,11 +311,17 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
 
             // ── Step 2: Capturar el editor — 3D (portada) y 2D (plano solo,
             // plano con dibujo, plano con isolux) directamente del canvas real
-            updateSwalProgress('Capturando vista 3D y planos del editor...', 35);
+            updateSwalProgress(
+                'Capturando vista 3D y planos del editor...',
+                35,
+            );
             const captures = await captureEditorBitmaps();
 
             // ── Step 3: Build all export assets
-            updateSwalProgress('Generando planos y gráficos vectoriales...', 45);
+            updateSwalProgress(
+                'Generando planos y gráficos vectoriales...',
+                45,
+            );
             const assets = await buildDialuxExportAssets(snapshot, {
                 includeViewerCapture: false,
                 preCapturedViewerBitmap: captures.viewer3D,
@@ -324,7 +337,10 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             );
 
             // ── Step 5: Send to server and download PDF
-            updateSwalProgress('Generando PDF en servidor (puede tardar un momento)...', 90);
+            updateSwalProgress(
+                'Generando PDF en servidor (puede tardar un momento)...',
+                90,
+            );
             const response = await axios.post(
                 dialuxRoutes.formalExport.url(),
                 { document: formalDocument },
@@ -342,14 +358,13 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             link.href = objectUrl;
             link.download =
                 matchedFileName ?? `${formalDocument.fileBaseName}.pdf`;
-            
+
             updateSwalProgress('¡Completado! Descargando archivo...', 100);
             setTimeout(() => {
                 link.click();
                 window.URL.revokeObjectURL(objectUrl);
                 Swal.close();
             }, 800);
-            
         } catch (error) {
             // When responseType is 'blob', Laravel 422 validation errors arrive
             // as a Blob — we decode it so we can surface the real messages.
@@ -399,15 +414,15 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                     ? error.message
                     : 'No se pudo exportar el PDF.';
             setLastError(message);
-            
+
             Swal.fire({
                 icon: 'error',
                 title: 'Error de Exportación',
                 text: message,
                 confirmButtonColor: '#0d9488',
-                confirmButtonText: 'Entendido'
+                confirmButtonText: 'Entendido',
             });
-            
+
             throw error;
         } finally {
             if (wasShowing3D && !useEditorStore.getState().ui.show3DView) {

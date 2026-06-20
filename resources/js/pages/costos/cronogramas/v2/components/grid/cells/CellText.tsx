@@ -12,6 +12,8 @@ interface Props {
     prefix?: string;
     /** Mostrar hasta 2 líneas en lugar de truncar en una */
     wrap?: boolean;
+    /** Overrides the default text-slate-200 color (for hierarchy level coloring) */
+    textColorClass?: string;
     onClick?: () => void;
     onDoubleClick?: () => void;
 }
@@ -26,6 +28,7 @@ export function CellText({
     placeholder = '',
     prefix,
     wrap = false,
+    textColorClass,
     onClick,
     onDoubleClick,
 }: Props) {
@@ -78,7 +81,7 @@ export function CellText({
 
     return (
         <div
-            className={`flex h-full cursor-pointer overflow-hidden px-2 text-xs text-slate-200 hover:bg-slate-700/40
+            className={`flex h-full cursor-pointer overflow-hidden px-2 text-xs ${textColorClass ?? 'text-slate-200'} hover:bg-slate-700/40
                 ${wrap ? 'items-start py-1.5' : 'items-center'}`}
             style={padStyle}
             title={prefix ? `${prefix} ${value}` : value}

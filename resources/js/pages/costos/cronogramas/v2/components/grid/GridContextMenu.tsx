@@ -1,8 +1,11 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
+    ArrowDown,
+    ArrowUp,
     ChevronDown,
     ChevronRight,
+    Copy,
     CornerDownRight,
     IndentDecrease,
     IndentIncrease,
@@ -87,7 +90,7 @@ export function GridContextMenu({
 
     // Clamp so the menu never goes off-screen
     const menuW = 220;
-    const menuH = isGroup ? 310 : 260;
+    const menuH = isGroup ? 390 : 340;
     const left  = Math.min(x, window.innerWidth  - menuW - 8);
     const top   = Math.min(y, window.innerHeight - menuH - 8);
 
@@ -112,6 +115,29 @@ export function GridContextMenu({
                 label="Fila hija"
                 shortcut="Ctrl+Insert"
                 onClick={() => act('addChild')}
+            />
+            <Item
+                icon={<Copy size={13} />}
+                label="Duplicar fila"
+                shortcut="Ctrl+D"
+                onClick={() => act('duplicate')}
+            />
+
+            <Sep />
+
+            {/* Mover */}
+            <SectionLabel>Mover</SectionLabel>
+            <Item
+                icon={<ArrowUp size={13} />}
+                label="Subir fila"
+                shortcut="Alt+↑"
+                onClick={() => act('moveUp')}
+            />
+            <Item
+                icon={<ArrowDown size={13} />}
+                label="Bajar fila"
+                shortcut="Alt+↓"
+                onClick={() => act('moveDown')}
             />
 
             <Sep />

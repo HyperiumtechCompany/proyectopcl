@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // EstructurasIndex.tsx — Página principal
 // ═══════════════════════════════════════════════════════════════
-
 import { router, usePage } from '@inertiajs/react';
 import { AlertCircle, Calculator, CheckCircle2, ChevronLeft, Hash, Loader2, RefreshCcw, Save, Upload } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
+import { FileDown } from 'lucide-react';
+import { exportarMetradoExcel } from './exportador/metradosExcelExport';
+import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
 
-// Módulo local Estructuras
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal } from './metradoestructuras/estructuras_CalcModal';
@@ -105,10 +106,10 @@ function useLuckysheet() {
 // HOOK: useAutoSave
 // ═══════════════════════════════════════════════════════════════
 function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label: string; width: number }>) {
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSheets = useRef<any[]>([]);
   const dirtySheetNames = useRef<Set<string>>(new Set());
 
@@ -233,12 +234,15 @@ function useAutoSave(projectId: number, resumenCols: Array<{ key: string; label:
 // ═══════════════════════════════════════════════════════════════
 export default function EstructurasIndex() {
   const { project, config, modulos, exterior, cisterna, resumen } = usePage<EstructurasPageProps>().props;
+  
+
+
   const moduleCount = Math.max(1, Number(config?.cantidad_modulos ?? 1));
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',               href: '/costos' },
-    { title: project?.nombre || 'Proyecto',         href: `/costos/${project?.id || 0}` },
-    { title: 'Metrado Estructuras',   href: '#' },
+    { title: 'Costos', href: '/costos' },
+    { title: project?.nombre || 'Proyecto', href: `/costos/${project?.id || 0}` },
+    { title: 'Metrado Estructuras', href: '#' },
   ];
 
   const resumenCols = useMemo(() => ([
@@ -664,6 +668,108 @@ export default function EstructurasIndex() {
       setSyncing(false);
     }, 400);
   }, [ls, moduleCount, resumenCols, saveNow, scheduleSave]);
+  
+const handleExportarExcel = useCallback(async () => {
+  try {
+    const inst = ls();
+    if (!inst) {
+      alert('No se pudo acceder a la tabla');
+      return;
+    }
+
+    // Obtener TODAS las hojas
+    const allSheets = getAllSheets();
+    if (!allSheets.length) {
+      alert('No hay hojas para exportar');
+      return;
+    }
+
+    const sheetsData: any[] = [];
+    
+    // Procesar cada hoja
+ // Dentro de handleExportarExcel, al procesar cada hoja:
+
+for (const sheet of allSheets) {
+  const data = sheet.data || [];
+  const items: any[] = [];
+  
+  for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+    const row = data[rowIdx];
+    if (!row || row.length === 0) continue;
+    
+    const descripcion = row[CI.descripcion]?.v || row[CI.descripcion] || '';
+    if (descripcion && descripcion.toString().trim() !== '') {
+      
+      const item: any = {
+        // Para todas las hojas
+        item: row[CI.partida]?.v || row[CI.partida] || '',
+        descripcion: descripcion.toString(),
+        und: row[CI.unidad]?.v || row[CI.unidad] || '',
+      };
+      
+      // Si es Resumen, usar las columnas específicas del resumen
+      if (sheet.name === 'Resumen') {
+        // Mapear según las columnas de Resumen en Luckysheet
+        // Ajusta los índices según tu estructura real
+        item.modulo1 = Number(row[4]?.v || row[4] || 0);   // Columna E (Módulo I)
+        item.modulo2 = Number(row[5]?.v || row[5] || 0);   // Columna F (Módulo II)
+        item.modulo3 = Number(row[6]?.v || row[6] || 0);   // Columna G (Módulo III)
+        item.exterior = Number(row[7]?.v || row[7] || 0);  // Columna H (Exterior)
+        item.cisterna = Number(row[8]?.v || row[8] || 0);  // Columna I (Cisterna)
+        item.total = Number(row[9]?.v || row[9] || 0);     // Columna J (Total)
+      } else {
+        // Para Módulos, Exterior, Cisterna
+        item.elsim = Number(row[CI.elsim]?.v || row[CI.elsim] || 0);
+        item.largo = Number(row[CI.largo]?.v || row[CI.largo] || 0);
+        item.ancho = Number(row[CI.ancho]?.v || row[CI.ancho] || 0);
+        item.alto = Number(row[CI.alto]?.v || row[CI.alto] || 0);
+        item.nveces = Number(row[CI.nveces]?.v || row[CI.nveces] || 1);
+        item.lon = Number(row[CI.lon]?.v || row[CI.lon] || 0);
+        item.area = Number(row[CI.area]?.v || row[CI.area] || 0);
+        item.vol = Number(row[CI.vol]?.v || row[CI.vol] || 0);
+        item.kg = Number(row[CI.kg]?.v || row[CI.kg] || 0);
+        item.parcial = Number(row[CI.parcial]?.v || row[CI.parcial] || 0);
+        item.total = Number(row[CI.total]?.v || row[CI.total] || 0);
+      }
+      
+      items.push(item);
+    }
+  }
+  
+  if (items.length > 0) {
+    sheetsData.push({
+      name: sheet.name,
+      items: items,
+      esResumen: sheet.name === 'Resumen',
+    });
+  }
+}
+    
+    if (sheetsData.length === 0) {
+      alert('No hay datos para exportar');
+      return;
+    }
+
+    // Datos del proyecto
+    const proyectoExport = {
+      nombre: project?.nombre || 'PROYECTO',
+      codigo_cui: (project as any)?.codigo_cui || '',
+      codigo_local: (project as any)?.codigo_local || '',
+      codigos_modulares: (project as any)?.codigos_modulares || '',
+      unidad_ejecutora: (project as any)?.unidad_ejecutora || '',
+      propietario: (project as any)?.propietario || '',
+      modulo: 'GENERAL',
+      plantilla_logo_izq: (project as any)?.plantilla_logo_izq_url || '',
+      plantilla_logo_der: (project as any)?.plantilla_logo_der_url || '',
+    };
+
+    // Exportar con la nueva función multi-hoja
+ await exportarMetradoExcelMultiSheet('estructuras', sheetsData, proyectoExport);
+  } catch (error: any) {
+    console.error('Error en exportación:', error);
+    alert(error.message || 'Error al exportar');
+  }
+}, [ls, getAllSheets, project]);
 
   useEffect(() => {
     let attempts = 0;
@@ -676,7 +782,7 @@ export default function EstructurasIndex() {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
-      const ci  = CI['unidad'];
+      const ci = CI['unidad'];
       const rng = `${colLetter(ci)}2:${colLetter(ci)}6000`;
       const opt = { type: 'dropdown', value1: UNITS.join(','), prohibitInput: false };
 
@@ -754,6 +860,17 @@ export default function EstructurasIndex() {
                 transition-all hover:bg-violet-700 active:scale-95">
               <Hash className="h-3 w-3" /> Numerar
             </button>
+            <button
+              type="button"
+              title="Exportar metrado a Excel"
+              onClick={handleExportarExcel}
+
+              className="inline-flex h-7 items-center gap-1.5 rounded-md
+    bg-emerald-600 px-3 text-[10px] font-bold text-white
+    transition-all hover:bg-emerald-700 active:scale-95"
+            >
+              <FileDown className="h-3 w-3" /> Exportar Excel
+            </button>
 
             <button
               type="button"
@@ -818,9 +935,9 @@ export default function EstructurasIndex() {
         </main>
       </div>
 
-      <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc}/>
+      <CalcModal open={calcOpen} ri={calcRow.ri} rowData={calcRow.rowData} onClose={() => setCalcOpen(false)} onApply={applyCalc} />
 
-      <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering}/>
+      <NumberingModal open={numOpen} onClose={() => setNumOpen(false)} onApply={applyNumbering} />
 
       <ImportarMetradoEstructurasModal
         open={importOpen}

@@ -10,7 +10,8 @@
 //     NumberingModal.tsx → modal numeración + buildNumberingUpdates
 //     ElectricasIndex.tsx ← ESTE ARCHIVO
 // ═══════════════════════════════════════════════════════════════
-
+import { FileDown } from 'lucide-react';
+import { exportarMetradoExcelMultiSheet } from './exportador/metradosExcelExport';
 import { router, usePage } from '@inertiajs/react';
 import {
   AlertCircle, Calculator, CheckCircle2,
@@ -25,8 +26,10 @@ import type { BreadcrumbItem } from '@/types';
 
 // Módulo local
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+
 import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal }     from './metradoelectricas/electricas_CalcModal';
+
 import { NumberingModal, buildNumberingUpdates } from './metradoelectricas/electricas_NumberingModal';
 import { ImportarMetradoElectricasModal, ImportedMetradoRow } from './metradoelectricas/ImportarMetradoElectricasModal';
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradoelectricas/electricas_constants';
@@ -107,7 +110,7 @@ function useLuckysheet() {
 
   const setCells = (
     updates: Array<{ r: number; c: number; v: any }>,
-    order:   number,
+    order: number,
   ) => {
     const inst = ls();
     if (!inst || !updates.length || !isLuckysheetReady()) return;
@@ -141,13 +144,13 @@ function useLuckysheet() {
 // ═══════════════════════════════════════════════════════════════
 
 function useAutoSave(
-    projectId: number,
-    resumenCols: Array<{ key: string; label: string; width: number }>,
+  projectId: number,
+  resumenCols: Array<{ key: string; label: string; width: number }>,
 ) {
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSheets = useRef<any[]>([]);
   const dirtySheetNames = useRef<Set<string>>(new Set());
 
@@ -155,10 +158,10 @@ function useAutoSave(
     setSaving(true);
     setSaveError(null);
 
-    const csrf    = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+    const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
     const headers = {
-      'Content-Type':     'application/json',
-      'X-CSRF-TOKEN':     csrf,
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrf,
       'X-Requested-With': 'XMLHttpRequest',
     };
 
@@ -188,9 +191,9 @@ function useAutoSave(
           return fetch(
             `/costos/${projectId}/metrado-electricas/${endpoint}`,
             {
-              method:  'PATCH',
+              method: 'PATCH',
               headers,
-              body:    JSON.stringify({
+              body: JSON.stringify({
                 rows: sheetToRows(s, isRes ? resumenCols : ALL_COLS),
               }),
             },
@@ -285,7 +288,7 @@ export default function ElectricasIndex() {
     usePage<ElectricasPageProps>().props;
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Costos',             href: '/costos' },
+    { title: 'Costos', href: '/costos' },
     { title: project?.nombre || 'Proyecto', href: `/costos/${project?.id || 0}` },
     { title: 'Metrado Eléctricas', href: '#' },
   ];
@@ -322,10 +325,10 @@ export default function ElectricasIndex() {
   } = useAutoSave(project?.id || 0, resumenCols);
 
   // ── UI State ───────────────────────────────────────────────
-  const [syncing,  setSyncing]  = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
-  const [numOpen,  setNumOpen]  = useState(false);
-  const [calcRow,  setCalcRow]  = useState<{ ri: number; rowData: Record<string, any> }>({
+  const [numOpen, setNumOpen] = useState(false);
+  const [calcRow, setCalcRow] = useState<{ ri: number; rowData: Record<string, any> }>({
     ri: 0, rowData: {},
   });
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -619,8 +622,8 @@ export default function ElectricasIndex() {
 
 
   const openCalc = useCallback(() => {
-    const inst   = ls();
-    const range  = inst?.getRange?.();
+    const inst = ls();
+    const range = inst?.getRange?.();
     if (!range?.length) return;
 
     const active = getActive();
@@ -767,6 +770,96 @@ export default function ElectricasIndex() {
     }, 100);
   }, [ls, resumenRows, resumenCols, saveNow, scheduleSave]);
 
+
+  const handleExportarExcel = useCallback(async () => {
+    try {
+      const inst = ls();
+      if (!inst) {
+        alert('No se pudo acceder a la tabla');
+        return;
+      }
+
+      const allSheets = getAllSheets();
+      if (!allSheets.length) {
+        alert('No hay hojas para exportar');
+        return;
+      }
+
+      const sheetsData: any[] = [];
+
+      for (const sheet of allSheets) {
+        const data = sheet.data || [];
+        const items: any[] = [];
+
+        for (let rowIdx = 1; rowIdx < data.length; rowIdx++) {
+          const row = data[rowIdx];
+          if (!row || row.length === 0) continue;
+
+          const descripcion = row[CI.descripcion]?.v || row[CI.descripcion] || '';
+          if (descripcion && descripcion.toString().trim() !== '') {
+            const item: any = {
+              item: row[CI.partida]?.v || row[CI.partida] || '',
+              descripcion: descripcion.toString(),
+              und: row[CI.unidad]?.v || row[CI.unidad] || '',
+              elsim: Number(row[CI.elsim]?.v || row[CI.elsim] || 0),
+              largo: Number(row[CI.largo]?.v || row[CI.largo] || 0),
+              ancho: Number(row[CI.ancho]?.v || row[CI.ancho] || 0),
+              alto: Number(row[CI.alto]?.v || row[CI.alto] || 0),
+              nveces: Number(row[CI.nveces]?.v || row[CI.nveces] || 1),
+              lon: Number(row[CI.lon]?.v || row[CI.lon] || 0),
+              area: Number(row[CI.area]?.v || row[CI.area] || 0),
+              vol: Number(row[CI.vol]?.v || row[CI.vol] || 0),
+              kg: Number(row[CI.kg]?.v || row[CI.kg] || 0),
+              parcial: Number(row[CI.parcial]?.v || row[CI.parcial] || 0),
+              total: Number(row[CI.total]?.v || row[CI.total] || 0),
+            };
+
+            if (sheet.name === 'Resumen') {
+              item.modulo1 = Number(row[4]?.v || row[4] || 0);
+              item.modulo2 = Number(row[5]?.v || row[5] || 0);
+              item.modulo3 = Number(row[6]?.v || row[6] || 0);
+              item.exterior = Number(row[7]?.v || row[7] || 0);
+              item.cisterna = Number(row[8]?.v || row[8] || 0);
+            }
+
+            items.push(item);
+          }
+        }
+
+        if (items.length > 0) {
+          sheetsData.push({
+            name: sheet.name,
+            items: items,
+            esResumen: sheet.name === 'Resumen',
+          });
+        }
+      }
+
+      if (sheetsData.length === 0) {
+        alert('No hay datos para exportar');
+        return;
+      }
+
+      const proyectoExport = {
+        nombre: project?.nombre || 'PROYECTO',
+        codigo_cui: (project as any)?.codigo_cui || '',
+        codigo_local: (project as any)?.codigo_local || '',
+        codigos_modulares: (project as any)?.codigos_modulares || '',
+        unidad_ejecutora: (project as any)?.unidad_ejecutora || '',
+        propietario: (project as any)?.propietario || '',
+        modulo: 'GENERAL',
+        plantilla_logo_izq: (project as any)?.plantilla_logo_izq_url || '',
+        plantilla_logo_der: (project as any)?.plantilla_logo_der_url || '',
+      };
+
+      await exportarMetradoExcelMultiSheet('electricas', sheetsData, proyectoExport);
+
+    } catch (error: any) {
+      console.error('Error en exportación:', error);
+      alert(error.message || 'Error al exportar');
+    }
+  }, [ls, getAllSheets, project]);
+
   // ═══════════════════════════════════════════════════════════
   // EFECTOS
   // ═══════════════════════════════════════════════════════════
@@ -777,13 +870,13 @@ export default function ElectricasIndex() {
     let t: ReturnType<typeof setTimeout>;
 
     const apply = () => {
-      const inst   = ls();
+      const inst = ls();
       const sheets = inst?.getAllSheets?.() ?? [];
       if (!inst || typeof inst.setDataVerification !== 'function' || !sheets.length || !isLuckysheetReady()) {
         if (++attempts < 40) t = setTimeout(apply, 250);
         return;
       }
-      const ci  = CI['unidad'];
+      const ci = CI['unidad'];
       const rng = `${colLetter(ci)}2:${colLetter(ci)}3000`;
       const opt = { type: 'dropdown', value1: UNITS.join(','), prohibitInput: false };
 
@@ -859,8 +952,8 @@ export default function ElectricasIndex() {
               <HeaderBadge
                 style={{
                   background: LEAF_STYLE.bg,
-                  color:      LEAF_STYLE.fc,
-                  border:     '1px solid #e2e8f0',
+                  color: LEAF_STYLE.fc,
+                  border: '1px solid #e2e8f0',
                 }}
               >
                 Hoja
@@ -910,6 +1003,18 @@ export default function ElectricasIndex() {
               <Upload className="h-3 w-3" /> Importar
             </button>
 
+            {/* Exportar Excel */}
+            <button
+              type="button"
+              title="Exportar metrado a Excel"
+              onClick={handleExportarExcel}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md
+                bg-emerald-600 px-3 text-[10px] font-bold text-white
+                transition-all hover:bg-emerald-700 active:scale-95"
+            >
+              <FileDown className="h-3 w-3" /> Exportar Excel
+            </button>
+
             <Divider />
 
             {/* Guardar manual */}
@@ -947,9 +1052,9 @@ export default function ElectricasIndex() {
             onDataChange={scheduleSave}
             height="calc(100vh - 112px)"
             options={{
-              title:            'Metrado Eléctricas',
-              showinfobar:      false,
-              sheetFormulaBar:  true,
+              title: 'Metrado Eléctricas',
+              showinfobar: false,
+              sheetFormulaBar: true,
               showstatisticBar: true,
               // Recalcular tras cada edición manual
               afterChange: () => setTimeout(recalc, 80),
@@ -957,21 +1062,21 @@ export default function ElectricasIndex() {
               contextMenu: {
                 row: [
                   {
-                    text:    '🔢  Calculadora de metrado',
-                    type:    'button',
+                    text: '🔢  Calculadora de metrado',
+                    type: 'button',
                     onClick: openCalc,
                   },
                   {
-                    text:    '#   Numeración jerárquica',
-                    type:    'button',
+                    text: '#   Numeración jerárquica',
+                    type: 'button',
                     onClick: () => setNumOpen(true),
                   },
                   { type: 'separator' },
                   {
-                    text:    'Eliminar fila',
-                    type:    'button',
+                    text: 'Eliminar fila',
+                    type: 'button',
                     onClick: () => {
-                      const inst  = ls();
+                      const inst = ls();
                       const range = inst?.getRange?.();
                       if (range?.length) {
                         inst.deleteRow(range[0].row[0], 1);
@@ -988,17 +1093,17 @@ export default function ElectricasIndex() {
 
       {/* ━━━━━━ MODALES ━━━━━━ */}
       <CalcModal
-        open    ={calcOpen}
-        ri      ={calcRow.ri}
-        rowData ={calcRow.rowData}
-        onClose ={() => setCalcOpen(false)}
-        onApply ={applyCalc}
+        open={calcOpen}
+        ri={calcRow.ri}
+        rowData={calcRow.rowData}
+        onClose={() => setCalcOpen(false)}
+        onApply={applyCalc}
       />
 
       <NumberingModal
-        open    ={numOpen}
-        onClose ={() => setNumOpen(false)}
-        onApply ={applyNumbering}
+        open={numOpen}
+        onClose={() => setNumOpen(false)}
+        onApply={applyNumbering}
       />
     
       <ImportarMetradoElectricasModal

@@ -6,7 +6,17 @@ export interface ColumnDef {
 }
 
 export interface EstructurasPageProps {
-  project: { id: number; nombre: string };
+  project: { 
+    id: number; 
+    nombre: string;
+    codigo_cui?: string;
+    codigo_local?: string;
+    unidad_ejecutora?: string;
+    propietario?: string;
+    codigos_modulares?: any;
+    plantilla_logo_izq_url?: string | null;
+    plantilla_logo_der_url?: string | null;
+  };
   titulo: string;
   baseURL: string;
   config: {

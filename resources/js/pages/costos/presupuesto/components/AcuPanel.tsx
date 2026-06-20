@@ -39,6 +39,12 @@ const fmtCantidad = (n: number | undefined | null) => {
     });
 };
 
+const UNIT_LABELS: Record<string, string> = {
+    'm2': 'm²',
+    'm3': 'm³',
+};
+const displayUnit = (u: string) => UNIT_LABELS[u] ?? u;
+
 const sectionIcon = {
     mano_de_obra: Users,
     materiales: Package,
@@ -1564,7 +1570,7 @@ export function AcuPanel({
                         className="w-20 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                     />
                     <span className="text-xs text-slate-400">
-                        {selectedAcu.unidad || 'Und.'}
+                        {displayUnit(selectedAcu.unidad || 'Und.')}
                     </span>
                 </div>
                 <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-600">

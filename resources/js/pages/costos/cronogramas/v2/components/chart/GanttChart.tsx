@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { GanttTask } from '../../types/task';
 import type { GanttTimeline } from '../../types/timeline';
@@ -84,6 +84,16 @@ export function GanttChart({
         [],
     );
 
+    // ── Sync encabezado horizontal ─────────────────────────────────────────────
+    const headerScrollRef = useRef<HTMLDivElement>(null);
+
+    const handleScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+        if (headerScrollRef.current) {
+            headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+        }
+        onScroll(e);
+    }, [onScroll]);
+
     // ── Ctrl+Scroll zoom horizontal ───────────────────────────────────────────
     useEffect(() => {
         const handleWheel = (e: WheelEvent) => {
@@ -160,14 +170,16 @@ export function GanttChart({
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {/* Cabecera tiempo FIJA — nunca scrollea verticalmente */}
-            <GanttChartHeader timeline={timeline} />
+            {/* Cabecera tiempo — fija verticalmente, sincroniza scroll horizontal */}
+            <div ref={headerScrollRef} className="shrink-0 overflow-hidden">
+                <GanttChartHeader timeline={timeline} />
+            </div>
 
             {/* Cuerpo: scroll vertical + horizontal */}
             <div
                 ref={scrollRef as React.RefObject<HTMLDivElement>}
                 className="relative min-h-0 flex-1 overflow-auto"
-                onScroll={onScroll}
+                onScroll={handleScroll}
             >
             {/* Cuerpo interno */}
             <div

@@ -4,9 +4,7 @@ import type {
     TotalesColumna, DistribucionMes,
 } from '../types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // UTILIDADES
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Retorna true si el periodo.key cae dentro del rango [startDate, endDate]
@@ -34,9 +32,7 @@ const periodoEnRango = (
     return keyDate <= endDate && keyEnd >= startDate;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DISTRIBUCIÓN GAUSS (frontend) — redistribución manual con forma de campana
-// ─────────────────────────────────────────────────────────────────────────────
+// DISTRIBUCIÓN GAUSS 
 
 const calcularPesosGauss = (numPeriodos: number): number[] => {
     if (numPeriodos <= 0) return [];
@@ -120,14 +116,12 @@ const normalizarDistribucion = (
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOOK PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
 export const useValorizadoLogic = (
     initialItems:     ItemValorizado[],
     periodos:         Periodo[],
     totalPresupuesto: number,
     modoCalculo:      ModoCalculo = 'calendario',
 ) => {
-    // ── Estado ────────────────────────────────────────────────────────────────
     const [viewMode,   setViewMode]   = useState<ViewMode>('monto');
     const [searchTerm, setSearchTerm] = useState('');
     const [items, setItems]           = useState<ItemValorizado[]>(() =>
@@ -137,7 +131,6 @@ export const useValorizadoLogic = (
         }))
     );
 
-    // ── EDICIÓN INLINE de una celda ───────────────────────────────────────────
     const editarCelda = useCallback((
         itemId:     number | string,
         periodoKey: string,
@@ -158,7 +151,6 @@ export const useValorizadoLogic = (
         }));
     }, []);
 
-    // ── REDISTRIBUIR UNIFORMEMENTE ────────────────────────────────────────────
     const redistribuirItem = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
@@ -201,7 +193,6 @@ export const useValorizadoLogic = (
         }));
     }, [periodos]);
 
-    // ── REDISTRIBUIR CON GAUSS ────────────────────────────────────────────────
     const redistribuirGaussItem = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
@@ -209,7 +200,6 @@ export const useValorizadoLogic = (
         }));
     }, [periodos]);
 
-    // ── LIMPIAR DISTRIBUCIÓN ──────────────────────────────────────────────────
     const limpiarDistribucion = useCallback((itemId: number | string) => {
         setItems(prev => prev.map(item => {
             if (item.id !== itemId) return item;
@@ -219,7 +209,6 @@ export const useValorizadoLogic = (
         }));
     }, [periodos]);
 
-    // ── TOTAL POR FILA — suma de todos los meses de cada ítem ────────────────
     /**
      * Calcula el total acumulado de cada ítem sumando todos sus meses.
      * Se muestra en la columna TOTAL al final de la tabla.
@@ -235,7 +224,6 @@ export const useValorizadoLogic = (
         return map;
     }, [items, periodos]);
 
-    // ── TOTALES POR COLUMNA — solo hojas (is_leaf) ────────────────────────────
     const totalesFinales = useMemo<Record<string, TotalesColumna>>(() => {
         const totales: Record<string, TotalesColumna> = {};
         let acumMonto = 0;
@@ -258,12 +246,10 @@ export const useValorizadoLogic = (
         return totales;
     }, [items, periodos, totalPresupuesto]);
 
-    // ── TOTAL GENERAL de todos los períodos (columna TOTAL del footer) ────────
     const totalGeneralPeriodos = useMemo(() => {
         return Object.values(totalesFinales).reduce((acc, t) => acc + t.monto, 0);
     }, [totalesFinales]);
 
-    // ── CURVA S ───────────────────────────────────────────────────────────────
     const curvaSData = useMemo(() =>
         periodos.map(p => ({
             mes:          p.labelCal,
@@ -276,7 +262,6 @@ export const useValorizadoLogic = (
         })),
     [periodos, totalesFinales]);
 
-    // ── FILTRADO ──────────────────────────────────────────────────────────────
     const itemsFiltrados = useMemo(() => {
         const q = searchTerm.toLowerCase().trim();
         if (!q) return items;
@@ -286,14 +271,12 @@ export const useValorizadoLogic = (
         );
     }, [items, searchTerm]);
 
-    // ── ACUMULADO TOTAL (último período) ──────────────────────────────────────
     const montoAcumuladoTotal = useMemo(() => {
         if (!periodos.length) return 0;
         const lastKey = periodos[periodos.length - 1].key;
         return totalesFinales[lastKey]?.acumuladoMonto ?? 0;
     }, [periodos, totalesFinales]);
 
-    // ── VALIDACIÓN: Desvío por fila ───────────────────────────────────────────
     /**
      * Diferencia absoluta entre parcial declarado y suma de meses distribuidos.
      * > 0.01 (1 céntimo) dispara alerta visual.
@@ -317,7 +300,6 @@ export const useValorizadoLogic = (
         Object.values(desviaciones).filter(d => d > 0.01).length,
     [desviaciones]);
 
-    // ── HELPER: ¿Está el período bloqueado? ───────────────────────────────────
     const isPeriodoBloqueado = useCallback((
         item:       ItemValorizado,
         periodoKey: string,
@@ -338,8 +320,8 @@ export const useValorizadoLogic = (
         // Calculados
         itemsFiltrados,
         totalesFinales,
-        totalesPorItem,          // 🆕 Total por fila (suma de meses)
-        totalGeneralPeriodos,    // 🆕 Total general de todos los periodos
+        totalesPorItem,         
+        totalGeneralPeriodos,    
         curvaSData,
         montoAcumuladoTotal,
         // Validación

@@ -12,7 +12,7 @@ interface Props {
 export function GanttChartHeader({ timeline }: Props) {
     return (
         <div
-            className="sticky top-0 z-10 border-b border-slate-600 bg-slate-800 select-none"
+            className="border-b border-slate-600 bg-slate-800 select-none"
             style={{
                 height: CHART_HEADER_TOP_H + CHART_HEADER_BOTTOM_H,
                 minWidth: timeline.totalWidth,
