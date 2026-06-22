@@ -239,6 +239,30 @@ class PresupuestoController extends Controller
                 }
             }
 
+            // Eliminar ACUs huérfanos cuya partida ya no existe en presupuesto_general
+            if ($subsection === 'general') {
+                $validPartidas = $connection->table('presupuesto_general')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->pluck('partida')
+                    ->toArray();
+
+                $orphanQuery = $connection->table('presupuesto_acus')
+                    ->where('presupuesto_id', $tenantPresupuestoId);
+
+                if (! empty($validPartidas)) {
+                    $orphanQuery->whereNotIn('partida', $validPartidas);
+                }
+
+                $orphanAcuIds = $orphanQuery->pluck('id');
+
+                if ($orphanAcuIds->isNotEmpty()) {
+                    foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $childTable) {
+                        $connection->table($childTable)->whereIn('acu_id', $orphanAcuIds)->delete();
+                    }
+                    $connection->table('presupuesto_acus')->whereIn('id', $orphanAcuIds)->delete();
+                }
+            }
+
             $connection->commit();
 
             // Sincronización automática de totales si es presupuesto general
@@ -936,10 +960,10 @@ class PresupuestoController extends Controller
                             'costo_materiales' => $acu['costo_materiales'] ?? 0,
                             'equipos' => ! empty($acu['equipos']) ? json_encode($acu['equipos']) : null,
                             'costo_equipos' => $acu['costo_equipos'] ?? 0,
-                            'subcontratos' => null,
-                            'costo_subcontratos' => 0,
-                            'subpartidas' => null,
-                            'costo_subpartidas' => 0,
+                            'subcontratos' => ! empty($acu['subcontratos']) ? json_encode($acu['subcontratos']) : null,
+                            'costo_subcontratos' => $acu['costo_subcontratos'] ?? 0,
+                            'subpartidas' => ! empty($acu['subpartidas']) ? json_encode($acu['subpartidas']) : null,
+                            'costo_subpartidas' => $acu['costo_subpartidas'] ?? 0,
                             'item_order' => $acuIndex,
                             'updated_at' => now(),
                         ];
@@ -999,7 +1023,7 @@ class PresupuestoController extends Controller
         $acus = [];
         $currentAcu = null;
         $currentSection = null;
-        $sectionHeaders = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO'];
+        $sectionHeaders = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO', 'SUBCONTRATOS', 'SUBPARTIDAS'];
 
         for ($row = 1; $row <= $maxRow; $row++) {
             $colA = trim((string) $sheet->getCell('A' . $row)->getCalculatedValue());
@@ -1028,23 +1052,33 @@ class PresupuestoController extends Controller
                     'mano_de_obra' => [],
                     'materiales' => [],
                     'equipos' => [],
+                    'subcontratos' => [],
+                    'subpartidas' => [],
                     'costo_mano_obra' => 0,
                     'costo_materiales' => 0,
                     'costo_equipos' => 0,
+                    'costo_subcontratos' => 0,
+                    'costo_subpartidas' => 0,
                 ];
                 $currentSection = null;
                 continue;
             }
 
             $colAUpper = strtoupper($colA);
-            if (in_array($colAUpper, $sectionHeaders)) {
-                $currentSection = $colAUpper;
+            // Normalize hyphenated variants: SUB-CONTRATOS → SUBCONTRATOS
+            $colACanon = in_array($colAUpper, $sectionHeaders)
+                ? $colAUpper
+                : (in_array(str_replace('-', '', $colAUpper), $sectionHeaders) ? str_replace('-', '', $colAUpper) : null);
+            if ($colACanon !== null) {
+                $currentSection = $colACanon;
                 $subtotal = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
-                $costKey = match ($colAUpper) {
+                $costKey = match ($colACanon) {
                     'MANO DE OBRA' => 'costo_mano_obra',
                     'MATERIALES' => 'costo_materiales',
                     'EQUIPO' => 'costo_equipos',
-                    default => 'costo_' . strtolower($colAUpper),
+                    'SUBCONTRATOS' => 'costo_subcontratos',
+                    'SUBPARTIDAS' => 'costo_subpartidas',
+                    default => 'costo_' . strtolower($colACanon),
                 };
                 if ($currentAcu !== null) {
                     $currentAcu[$costKey] = $subtotal;
@@ -1062,7 +1096,10 @@ class PresupuestoController extends Controller
             }
 
             $colE = trim((string) $sheet->getCell('E' . $row)->getCalculatedValue());
-            if (empty($colE) || in_array(strtoupper($colE), $sectionHeaders)) {
+            $colEUpper = strtoupper($colE);
+            $colEIsSection = in_array($colEUpper, $sectionHeaders)
+                || in_array(str_replace('-', '', $colEUpper), $sectionHeaders);
+            if (empty($colE) || $colEIsSection) {
                 continue;
             }
 
@@ -1096,12 +1133,18 @@ class PresupuestoController extends Controller
                     $component['precio_hora'] = $colR;
                     $component['recursos'] = $isHerramientas ? 0 : $recursos;
                     break;
+                case 'SUBCONTRATOS':
+                case 'SUBPARTIDAS':
+                    $component['precio_unitario'] = $colR;
+                    break;
             }
 
             $sectionKey = match ($currentSection) {
                 'MANO DE OBRA' => 'mano_de_obra',
                 'MATERIALES' => 'materiales',
                 'EQUIPO' => 'equipos',
+                'SUBCONTRATOS' => 'subcontratos',
+                'SUBPARTIDAS' => 'subpartidas',
                 default => strtolower($currentSection),
             };
             $currentAcu[$sectionKey][] = $component;
@@ -1186,6 +1229,36 @@ class PresupuestoController extends Controller
                 'cantidad' => $row['cantidad'] ?? 0,
                 'recursos' => $row['recursos'] ?? 0,
                 'precio_hora' => $precioHora,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['subcontratos'] ?? [] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_subcontratos')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'glb',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['subpartidas'] ?? [] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_subpartidas')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'und',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
                 'parcial' => $row['parcial'] ?? 0,
                 'item_order' => $index,
                 'created_at' => now(),
@@ -1443,6 +1516,7 @@ class PresupuestoController extends Controller
             $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
             $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
             $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
+            $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
             $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
 
             // ── Sincronizar con Presupuesto General ───────────────────────────

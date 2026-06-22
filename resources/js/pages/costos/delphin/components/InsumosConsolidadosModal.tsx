@@ -1,7 +1,7 @@
-import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
-import { Briefcase, Check, Layers, Package, Search, Users, Wrench, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Check, Layers, Package, Search, Users, Wrench, X } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
 
 type InsumoType = 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas';
 
@@ -37,6 +37,9 @@ interface ConsolidatedInsumo {
     sourceKeys: string[];
     variantes: string[];
 }
+
+export type InsumoSortKey = 'descripcion' | 'codigo' | 'cantidad' | 'parcial' | 'usos';
+type SortState = { key: InsumoSortKey; direction: 'asc' | 'desc' };
 
 const INSUMO_TYPES: Array<{ key: InsumoType; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
     { key: 'mano_de_obra', label: 'Mano de obra', icon: Users },
@@ -170,18 +173,67 @@ function consolidateInsumos(rawRows: RawInsumo[], aliases: Record<string, string
         .sort((a, b) => b.parcial - a.parcial);
 }
 
+export function sortInsumos<T extends Pick<ConsolidatedInsumo, InsumoSortKey>>(rows: T[], sort: SortState): T[] {
+    const direction = sort.direction === 'asc' ? 1 : -1;
+
+    return [...rows].sort((first, second) => {
+        const firstValue = first[sort.key];
+        const secondValue = second[sort.key];
+
+        if (typeof firstValue === 'string' && typeof secondValue === 'string') {
+            return firstValue.localeCompare(secondValue, 'es', { numeric: true, sensitivity: 'base' }) * direction;
+        }
+
+        return (Number(firstValue) - Number(secondValue)) * direction;
+    });
+}
+
+export function sumInsumoTotals(totals: Array<{ total: number }>): number {
+    return totals.reduce((sum, item) => sum + item.total, 0);
+}
+
+function SortableHeader({ label, sortKey, sort, align = 'left', onSort }: {
+    label: string;
+    sortKey: InsumoSortKey;
+    sort: SortState;
+    align?: 'left' | 'right' | 'center';
+    onSort: (key: InsumoSortKey) => void;
+}) {
+    const active = sort.key === sortKey;
+    const Icon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+    const alignment = align === 'right'
+        ? 'justify-end text-right'
+        : align === 'center'
+            ? 'justify-center text-center'
+            : 'justify-start text-left';
+
+    return (
+        <th className={`border-b border-slate-700 p-0 ${alignment}`}>
+            <button
+                type="button"
+                className={`flex w-full items-center gap-1 p-2 transition-colors hover:bg-slate-700 hover:text-slate-100 ${active ? 'text-sky-300' : ''} ${alignment}`}
+                onClick={() => onSort(sortKey)}
+                title={`Ordenar por ${label.toLowerCase()}`}>
+                <span>{label}</span>
+                <Icon size={11} className={active ? 'opacity-100' : 'opacity-40'} />
+            </button>
+        </th>
+    );
+}
+
 export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }: Props) {
     const [activeType, setActiveType] = useState<InsumoType>('mano_de_obra');
     const [search, setSearch] = useState('');
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [mergeName, setMergeName] = useState('');
     const [aliases, setAliases] = useState<Record<string, string>>({});
+    const [sort, setSort] = useState<SortState>({ key: 'parcial', direction: 'desc' });
 
     const rawRows = useMemo(() => flattenInsumos(acuRows), [acuRows]);
     const consolidated = useMemo(() => consolidateInsumos(rawRows, aliases), [rawRows, aliases]);
     const typeRows = useMemo(() => {
         const query = normalizeText(search);
-        return consolidated.filter((row) => {
+        const filteredRows = consolidated.filter((row) => {
             if (row.type !== activeType) {
                 return false;
             }
@@ -194,7 +246,9 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
                 normalizeText(row.unidad).includes(query)
             );
         });
-    }, [activeType, consolidated, search]);
+
+        return sortInsumos(filteredRows, sort);
+    }, [activeType, consolidated, search, sort]);
 
     const selectedRows = useMemo(
         () => typeRows.filter((row) => selectedKeys.has(row.key)),
@@ -213,6 +267,7 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
     }, [consolidated]);
 
     const activeTotal = totalsByType[activeType]?.total ?? 0;
+    const grandTotal = sumInsumoTotals(Object.values(totalsByType));
     const canMerge = selectedRows.length >= 2 && new Set(selectedRows.map((row) => row.unidad)).size === 1;
 
     const toggleSelected = (key: string) => {
@@ -252,6 +307,13 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
         setMergeName('');
     };
 
+    const handleSort = (key: InsumoSortKey) => {
+        setSort((current) => ({
+            key,
+            direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+        }));
+    };
+
     if (!open) {
         return null;
     }
@@ -281,7 +343,7 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
                                 return (
                                     <button
                                         key={key}
-                                        className={`flex items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors ${
+                                        className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors ${
                                             active
                                                 ? 'bg-sky-700 text-white'
                                                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -292,17 +354,26 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
                                             <Icon size={14} className="shrink-0" />
                                             <span className="truncate text-xs font-medium">{label}</span>
                                         </span>
-                                        <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 text-[10px] tabular-nums">
-                                            {totals.count}
+                                        <span className="flex shrink-0 flex-col items-end gap-0.5 tabular-nums">
+                                            <span className="rounded bg-black/20 px-1.5 py-0.5 text-[10px]">{totals.count}</span>
+                                            <span className={`font-mono text-[10px] ${active ? 'text-sky-100' : 'text-slate-500'}`}>
+                                                S/ {fmt(totals.total)}
+                                            </span>
                                         </span>
                                     </button>
                                 );
                             })}
                         </div>
 
-                        <div className="mt-4 rounded border border-slate-800 bg-slate-900 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total visible</p>
-                            <p className="mt-1 font-mono text-lg font-semibold text-sky-300">S/ {fmt(activeTotal)}</p>
+                        <div className="mt-4 divide-y divide-slate-800 rounded border border-slate-800 bg-slate-900">
+                            <div className="p-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Subtotal seleccionado</p>
+                                <p className="mt-1 font-mono text-lg font-semibold text-sky-300">S/ {fmt(activeTotal)}</p>
+                            </div>
+                            <div className="bg-emerald-950/30 p-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Total general</p>
+                                <p className="mt-1 font-mono text-lg font-bold text-emerald-300">S/ {fmt(grandTotal)}</p>
+                            </div>
                         </div>
                     </aside>
 
@@ -348,13 +419,13 @@ export function InsumosConsolidadosModal({ open, acuRows, projectName, onClose }
                                 <thead className="sticky top-0 z-10 bg-slate-800 text-[10px] uppercase tracking-wider text-slate-400">
                                     <tr>
                                         <th className="w-9 border-b border-slate-700 p-2"></th>
-                                        <th className="border-b border-slate-700 p-2">Codigo</th>
-                                        <th className="border-b border-slate-700 p-2">Descripcion consolidada</th>
+                                        <SortableHeader label="Codigo" sortKey="codigo" sort={sort} onSort={handleSort} />
+                                        <SortableHeader label="Descripcion consolidada" sortKey="descripcion" sort={sort} onSort={handleSort} />
                                         <th className="border-b border-slate-700 p-2 text-center">Und.</th>
-                                        <th className="border-b border-slate-700 p-2 text-right">Cantidad</th>
+                                        <SortableHeader label="Cantidad" sortKey="cantidad" sort={sort} align="right" onSort={handleSort} />
                                         <th className="border-b border-slate-700 p-2 text-right">P. ref.</th>
-                                        <th className="border-b border-slate-700 p-2 text-right">Monto</th>
-                                        <th className="border-b border-slate-700 p-2 text-center">Usos</th>
+                                        <SortableHeader label="Monto" sortKey="parcial" sort={sort} align="right" onSort={handleSort} />
+                                        <SortableHeader label="Usos" sortKey="usos" sort={sort} align="center" onSort={handleSort} />
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800">

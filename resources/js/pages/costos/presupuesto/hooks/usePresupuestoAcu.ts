@@ -412,31 +412,41 @@ export function usePresupuestoAcu({
         return { success: true as const, acu: updatedAcu };
     }, [normalizeAcuData]);
 
-    // Batch-persists all pending ACU edits to DB (called on global save)
-    // Processes BATCH_SIZE requests concurrently to avoid hammering the server.
+    // Batch-persists all pending ACU edits to DB (called on global save).
+    // Accepts an optional AbortSignal to cancel mid-flush; pending map stays
+    // dirty so the next save retries the remaining items.
     const flushPendingAcus = useCallback(
-        async (onProgress?: (p: AcuFlushProgress) => void): Promise<boolean> => {
+        async (onProgress?: (p: AcuFlushProgress) => void, signal?: AbortSignal): Promise<boolean> => {
             const pending = Array.from(pendingAcuRef.current.values());
             if (pending.length === 0) return true;
+            if (signal?.aborted) return false;
 
             const total = pending.length;
             const startMs = Date.now();
             let done = 0;
 
-            // Signal initial state so callers can show the overlay immediately
             onProgress?.({ done: 0, total, pct: 0, etaSecs: null });
 
             try {
                 for (let i = 0; i < total; i += ACU_BATCH_SIZE) {
+                    if (signal?.aborted) break;
+
                     const batch = pending.slice(i, i + ACU_BATCH_SIZE);
-                    await Promise.all(
-                        batch.map((payload) =>
-                            axios.post(
-                                `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
-                                payload,
+                    try {
+                        await Promise.all(
+                            batch.map((payload) =>
+                                axios.post(
+                                    `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
+                                    payload,
+                                    { signal },
+                                ),
                             ),
-                        ),
-                    );
+                        );
+                    } catch (e) {
+                        if (axios.isCancel(e)) break;
+                        throw e;
+                    }
+
                     done = Math.min(i + ACU_BATCH_SIZE, total);
 
                     if (onProgress) {
@@ -447,9 +457,12 @@ export function usePresupuestoAcu({
                     }
                 }
 
-                pendingAcuRef.current.clear();
-                setAcuDirty(false);
-                return true;
+                if (!signal?.aborted) {
+                    pendingAcuRef.current.clear();
+                    setAcuDirty(false);
+                    return true;
+                }
+                return false;
             } catch (e) {
                 console.error('Error al persistir ACUs pendientes:', e);
                 return false;

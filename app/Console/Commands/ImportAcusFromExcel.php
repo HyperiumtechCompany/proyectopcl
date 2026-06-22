@@ -18,7 +18,7 @@ class ImportAcusFromExcel extends Command
 
     protected $description = 'Importa ACUs desde archivos Excel a la base de datos tenant del proyecto';
 
-    private const SECTION_HEADERS = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO'];
+    private const SECTION_HEADERS = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO', 'SUBCONTRATOS', 'SUBPARTIDAS'];
 
     private CostoDatabaseService $dbService;
 
@@ -161,10 +161,10 @@ class ImportAcusFromExcel extends Command
                     'costo_materiales' => $acu['costo_materiales'] ?? 0,
                     'equipos' => ! empty($acu['equipos']) ? json_encode($acu['equipos']) : null,
                     'costo_equipos' => $acu['costo_equipos'] ?? 0,
-                    'subcontratos' => null,
-                    'costo_subcontratos' => 0,
-                    'subpartidas' => null,
-                    'costo_subpartidas' => 0,
+                    'subcontratos' => ! empty($acu['subcontratos']) ? json_encode($acu['subcontratos']) : null,
+                    'costo_subcontratos' => $acu['costo_subcontratos'] ?? 0,
+                    'subpartidas' => ! empty($acu['subpartidas']) ? json_encode($acu['subpartidas']) : null,
+                    'costo_subpartidas' => $acu['costo_subpartidas'] ?? 0,
                     'item_order' => $acuIndex,
                     'updated_at' => now(),
                 ];
@@ -230,21 +230,26 @@ class ImportAcusFromExcel extends Command
                     'mano_de_obra' => [],
                     'materiales' => [],
                     'equipos' => [],
+                    'subcontratos' => [],
+                    'subpartidas' => [],
                     'costo_mano_obra' => 0,
                     'costo_materiales' => 0,
                     'costo_equipos' => 0,
+                    'costo_subcontratos' => 0,
+                    'costo_subpartidas' => 0,
                 ];
                 $currentSection = null;
                 continue;
             }
 
-            // Detect section headers
+            // Detect section headers (normalize hyphens: SUB-CONTRATOS → SUBCONTRATOS)
             $colAUpper = strtoupper($colA);
-            if (in_array($colAUpper, self::SECTION_HEADERS)) {
-                $currentSection = $colAUpper;
+            $resolvedSection = $this->resolveSectionKey($colAUpper);
+            if ($resolvedSection !== null) {
+                $currentSection = $resolvedSection;
                 // Section subtotal is in column S
                 $subtotal = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
-                $costKey = $this->sectionCostKey($colAUpper);
+                $costKey = $this->sectionCostKey($resolvedSection);
                 if ($currentAcu !== null) {
                     $currentAcu[$costKey] = $subtotal;
                 }
@@ -298,7 +303,7 @@ class ImportAcusFromExcel extends Command
         }
 
         // Skip if it looks like a section header repeating
-        if (in_array(strtoupper($colE), self::SECTION_HEADERS)) {
+        if ($this->resolveSectionKey(strtoupper($colE)) !== null) {
             return null;
         }
 
@@ -328,11 +333,15 @@ class ImportAcusFromExcel extends Command
                 if ($isHerramientas) {
                     $component['precio_hora'] = $colR;
                     $component['recursos'] = 0;
-                    // cantidad = percentage, precio_hora = costo_mano_obra (set later)
                 } else {
                     $component['precio_hora'] = $colR;
                     $component['recursos'] = $recursos;
                 }
+                break;
+
+            case 'SUBCONTRATOS':
+            case 'SUBPARTIDAS':
+                $component['precio_unitario'] = $colR;
                 break;
         }
 
@@ -374,12 +383,30 @@ class ImportAcusFromExcel extends Command
         return '';
     }
 
+    /**
+     * Normaliza el header de sección del Excel a la forma canónica.
+     * Maneja variantes con guión: SUB-CONTRATOS → SUBCONTRATOS, SUB-PARTIDAS → SUBPARTIDAS.
+     */
+    private function resolveSectionKey(string $header): ?string
+    {
+        $normalized = str_replace('-', '', $header); // SUB-CONTRATOS → SUBCONTRATOS
+        if (in_array($normalized, self::SECTION_HEADERS)) {
+            return $normalized;
+        }
+        if (in_array($header, self::SECTION_HEADERS)) {
+            return $header;
+        }
+        return null;
+    }
+
     private function sectionCostKey(string $section): string
     {
         return match ($section) {
             'MANO DE OBRA' => 'costo_mano_obra',
             'MATERIALES' => 'costo_materiales',
             'EQUIPO' => 'costo_equipos',
+            'SUBCONTRATOS' => 'costo_subcontratos',
+            'SUBPARTIDAS' => 'costo_subpartidas',
             default => 'costo_' . strtolower($section),
         };
     }
@@ -390,6 +417,8 @@ class ImportAcusFromExcel extends Command
             'MANO DE OBRA' => 'mano_de_obra',
             'MATERIALES' => 'materiales',
             'EQUIPO' => 'equipos',
+            'SUBCONTRATOS' => 'subcontratos',
+            'SUBPARTIDAS' => 'subpartidas',
             default => strtolower($section),
         };
     }
@@ -453,6 +482,36 @@ class ImportAcusFromExcel extends Command
                 'cantidad' => $row['cantidad'] ?? 0,
                 'recursos' => $row['recursos'] ?? 0,
                 'precio_hora' => $precioHora,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['subcontratos'] ?? [] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_subcontratos')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'glb',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
+                'parcial' => $row['parcial'] ?? 0,
+                'item_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($acu['subpartidas'] ?? [] as $index => $row) {
+            DB::connection('costos_tenant')->table('acu_subpartidas')->insert([
+                'acu_id' => $acuId,
+                'insumo_id' => null,
+                'descripcion' => $row['descripcion'] ?? '',
+                'unidad' => $row['unidad'] ?? 'und',
+                'cantidad' => $row['cantidad'] ?? 0,
+                'precio_unitario' => $row['precio_unitario'] ?? 0,
                 'parcial' => $row['parcial'] ?? 0,
                 'item_order' => $index,
                 'created_at' => now(),

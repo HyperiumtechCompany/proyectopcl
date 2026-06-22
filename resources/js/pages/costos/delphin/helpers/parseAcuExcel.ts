@@ -35,15 +35,17 @@ export interface ParseAcuResult {
 type SectionKey = keyof Omit<ParsedAcu, 'partida_code' | 'partida_desc' | 'unidad' | 'rendimiento'>;
 
 const SECTION_PREFIXES: [string, SectionKey][] = [
-    ['mano de obra', 'mano_de_obra'],
-    ['mano obra',    'mano_de_obra'],
-    ['materiales',   'materiales'],
-    ['material',     'materiales'],
-    ['equipo',       'equipos'],
-    ['subcontrato',  'subcontratos'],
-    ['subpartida',   'subpartidas'],
-    ['sub partida',  'subpartidas'],
-    ['sub contrato', 'subcontratos'],
+    ['mano de obra',  'mano_de_obra'],
+    ['mano obra',     'mano_de_obra'],
+    ['materiales',    'materiales'],
+    ['material',      'materiales'],
+    ['equipo',        'equipos'],
+    ['subcontrato',   'subcontratos'],
+    ['sub-contrato',  'subcontratos'],
+    ['sub contrato',  'subcontratos'],
+    ['subpartida',    'subpartidas'],
+    ['sub-partida',   'subpartidas'],
+    ['sub partida',   'subpartidas'],
 ];
 
 function detectSection(text: string): SectionKey | null {

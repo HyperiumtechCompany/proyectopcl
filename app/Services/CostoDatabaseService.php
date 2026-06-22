@@ -313,6 +313,35 @@ class CostoDatabaseService
     }
 
     /**
+     * Garantiza que presupuesto_general.parcial sea columna regular (no GENERATED).
+     * Algunos tenant DBs más antiguos o re-creados pueden conservar la definición STORED GENERATED.
+     */
+    private function ensureParcialRegularColumn(): void
+    {
+        $connection = DB::connection('costos_tenant');
+        $dbName = $connection->getDatabaseName();
+
+        $col = $connection->selectOne(
+            "SELECT EXTRA FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'presupuesto_general' AND COLUMN_NAME = 'parcial'",
+            [$dbName]
+        );
+
+        if ($col && stripos((string) $col->EXTRA, 'GENERATED') !== false) {
+            $connection->statement('ALTER TABLE presupuesto_general DROP COLUMN parcial');
+            $connection->statement(
+                'ALTER TABLE presupuesto_general ADD COLUMN parcial DECIMAL(15,4) NOT NULL DEFAULT 0 AFTER precio_unitario'
+            );
+            // Repoblar parcial para filas hoja con datos ya existentes
+            $connection->statement(
+                'UPDATE presupuesto_general SET parcial = ROUND(metrado * precio_unitario, 4) WHERE metrado > 0 OR precio_unitario > 0'
+            );
+
+            Log::info('CostoDatabaseService: converted presupuesto_general.parcial from GENERATED to regular column', ['db' => $dbName]);
+        }
+    }
+
+    /**
      * Recalcula el costo directo sumando los parciales de presupuesto_general
      * y actualiza project_params y presupuestos (tabla centralizada).
      */
@@ -321,6 +350,7 @@ class CostoDatabaseService
         $this->setTenantConnection($databaseName);
         $connection = DB::connection('costos_tenant');
 
+        $this->ensureParcialRegularColumn();
         $this->recalculateParciales($connection, $tenantPresupuestoId);
 
         // costo_directo = sum of all partida parciales (rows with unidad and metrado/precio > 0)

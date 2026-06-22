@@ -4,6 +4,7 @@ import { Head } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Swal from 'sweetalert2';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 
 import { GanttChart } from '../cronogramas/v2/components/chart/GanttChart';
@@ -24,7 +25,6 @@ import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
-import type { AcuFlushProgress } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 
 import { DelphinGrid } from './components/DelphinGrid';
@@ -148,13 +148,6 @@ export default function DelphinView({
     const [insumosOpen, setInsumosOpen] = useState(false);
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
-    const [flushProgress, setFlushProgress] = useState<AcuFlushProgress & { active: boolean }>({
-        active: false,
-        done: 0,
-        total: 0,
-        pct: 0,
-        etaSecs: null,
-    });
 
 
     // ── Column visibility + description expand ────────────────────────────────
@@ -394,37 +387,123 @@ export default function DelphinView({
         moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect]);
 
     // ── Save functions ────────────────────────────────────────────────────────
-    const onAcuProgress = useCallback((p: AcuFlushProgress) => {
-        setFlushProgress({ active: true, ...p });
-    }, []);
+    const swalDark = {
+        background: '#1e293b',
+        color: '#e2e8f0',
+        confirmButtonColor: '#0ea5e9',
+    } as const;
+
+    const saveSwalHtml = (statusText: string) => `
+        <p id="dsave-status" style="font-size:13px;color:#94a3b8;margin:0 0 12px">${statusText}</p>
+        <div style="background:#334155;border-radius:4px;height:6px;overflow:hidden;margin-bottom:16px">
+            <div id="dsave-bar" style="width:0%;height:100%;background:#38bdf8;border-radius:4px;transition:width 0.25s ease"></div>
+        </div>
+        <button id="dsave-cancel" style="padding:6px 20px;border-radius:6px;background:#475569;border:1px solid #64748b;color:#e2e8f0;cursor:pointer;font-size:13px">
+            Cancelar
+        </button>`;
 
     const handleSaveBudget = useCallback(async () => {
-        const [budgetOk, acuOk] = await Promise.all([
-            saveBudget(project_id_int),
-            flushPendingAcus(onAcuProgress),
-        ]);
-        setFlushProgress((prev) => ({ ...prev, active: false }));
-        const ok = budgetOk && acuOk;
-        toast(ok ? 'Presupuesto guardado.' : 'Error al guardar el presupuesto.', ok ? 'success' : 'error');
-        if (ok) setAcuRefetchVersion((v) => v + 1);
-    }, [saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
+        const ac = new AbortController();
+        let budgetOk = false;
+        let acuOk = false;
 
-  
+        await Swal.fire({
+            title: 'Guardando presupuesto…',
+            html: saveSwalHtml('Guardando partidas…'),
+            showConfirmButton: false,
+            showCancelButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            ...swalDark,
+            didOpen: async () => {
+                document.getElementById('dsave-cancel')?.addEventListener('click', () => {
+                    ac.abort();
+                    const btn = document.getElementById('dsave-cancel') as HTMLButtonElement | null;
+                    if (btn) { btn.disabled = true; btn.textContent = 'Cancelando…'; btn.style.opacity = '0.5'; }
+                    const s = document.getElementById('dsave-status');
+                    if (s) s.textContent = 'Cancelando guardado de ACUs…';
+                }, { once: true });
+
+                try {
+                    [budgetOk, acuOk] = await Promise.all([
+                        saveBudget(project_id_int),
+                        flushPendingAcus((p) => {
+                            const s = document.getElementById('dsave-status');
+                            const b = document.getElementById('dsave-bar');
+                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                            if (b) b.style.width = `${p.pct}%`;
+                        }, ac.signal),
+                    ]);
+                } finally {
+                    Swal.close();
+                }
+            },
+        });
+
+        if (ac.signal.aborted) {
+            await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'Las partidas fueron guardadas. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
+            return;
+        }
+        if (budgetOk && acuOk) {
+            setAcuRefetchVersion((v) => v + 1);
+            void Swal.fire({ icon: 'success', title: 'Presupuesto guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+        } else {
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: 'Ocurrió un error. Intente nuevamente.', ...swalDark });
+        }
+    }, [saveBudget, project_id_int, flushPendingAcus]);
+
     const handleSaveGantt = useCallback(async () => {
-        const [ganttOk, budgetOk, acuOk] = await Promise.all([
-            saveTasks(project),
-            saveBudget(project_id_int),
-            flushPendingAcus(onAcuProgress),
-        ]);
-        setFlushProgress((prev) => ({ ...prev, active: false }));
-        const ok = ganttOk && budgetOk && acuOk;
-        const msg = ok ? 'Delphin guardado.'
-            : !ganttOk ? 'Error al guardar el cronograma.'
-                : !budgetOk ? 'Error al guardar el presupuesto.'
-                    : 'Error al guardar los ACUs.';
-        toast(msg, ok ? 'success' : 'error');
-        if (ok) setAcuRefetchVersion((v) => v + 1);
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
+        const ac = new AbortController();
+        let ganttOk = false;
+        let budgetOk = false;
+        let acuOk = false;
+
+        await Swal.fire({
+            title: 'Guardando Delphin…',
+            html: saveSwalHtml('Guardando cronograma y partidas…'),
+            showConfirmButton: false,
+            showCancelButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            ...swalDark,
+            didOpen: async () => {
+                document.getElementById('dsave-cancel')?.addEventListener('click', () => {
+                    ac.abort();
+                    const btn = document.getElementById('dsave-cancel') as HTMLButtonElement | null;
+                    if (btn) { btn.disabled = true; btn.textContent = 'Cancelando…'; btn.style.opacity = '0.5'; }
+                    const s = document.getElementById('dsave-status');
+                    if (s) s.textContent = 'Cancelando guardado de ACUs…';
+                }, { once: true });
+
+                try {
+                    [ganttOk, budgetOk, acuOk] = await Promise.all([
+                        saveTasks(project),
+                        saveBudget(project_id_int),
+                        flushPendingAcus((p) => {
+                            const s = document.getElementById('dsave-status');
+                            const b = document.getElementById('dsave-bar');
+                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                            if (b) b.style.width = `${p.pct}%`;
+                        }, ac.signal),
+                    ]);
+                } finally {
+                    Swal.close();
+                }
+            },
+        });
+
+        if (ac.signal.aborted) {
+            await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'El cronograma y partidas fueron guardados. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
+            return;
+        }
+        if (ganttOk && budgetOk && acuOk) {
+            setAcuRefetchVersion((v) => v + 1);
+            void Swal.fire({ icon: 'success', title: 'Delphin guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+        } else {
+            const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
+        }
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
 
     // ── Import MSP ────────────────────────────────────────────────────────────
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -708,35 +787,6 @@ export default function DelphinView({
                     onChange={handleImportFile} />
             </div>
 
-            {/* ── ACU flush progress overlay ─────────────────────────────── */}
-            {flushProgress.active && (
-                <div className="fixed bottom-6 right-6 z-9999 w-72 rounded-xl border border-slate-700 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-sm">
-                    <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-200">Guardando ACUs…</span>
-                        <span className="text-xs tabular-nums text-slate-400">
-                            {flushProgress.done} / {flushProgress.total}
-                        </span>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-                        <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: `${flushProgress.pct}%` }} />
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                        <span>{flushProgress.pct}% completado</span>
-                        <span>
-                            {flushProgress.etaSecs === null
-                                ? 'Calculando...'
-                                : flushProgress.etaSecs === 0
-                                    ? 'Finalizando...'
-                                    : flushProgress.etaSecs < 60
-                                        ? `~${flushProgress.etaSecs}s restantes`
-                                        : `~${Math.ceil(flushProgress.etaSecs / 60)}m restantes`}
-                        </span>
-                    </div>
-                </div>
-            )}
         </AppLayout>
     );
 }
