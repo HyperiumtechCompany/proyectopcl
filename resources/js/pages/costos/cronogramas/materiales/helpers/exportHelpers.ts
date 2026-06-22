@@ -273,136 +273,212 @@ const addImageToSheet = (
 };
 
 async function buildReportHeader(
-    ws:          ExcelJS.Worksheet,
+    ws: ExcelJS.Worksheet,
     projectData: any,
-    tipoLabel:   string,
-    viewMode:    ViewMode,
-    totalCols:   number,
+    tipoLabel: string,
+    viewMode: ViewMode,
+    totalCols: number,
 ): Promise<number> {
+    const workbook = ws.workbook;
+    const projectName = projectData?.nombre || 'SIN NOMBRE';
 
-    // ── Colores — igual al ejemplo blanco 
-    const BG_HEADER   = 'FFFFFFFF';   // blanco puro — zona logos+texto
-    const BG_BORDER   = 'FFB0B0B0';   // gris borde exterior visible
-    const BG_SEP      = 'FF64748B';   // separador antes de la tabla
-    const TX_TITULO   = 'FF0F172A';   // negro casi puro — texto principal
+    const logoIzq = projectData?.plantilla_logo_izq_url || projectData?.plantilla_logo_izq;
+    const logoDer = projectData?.plantilla_logo_der_url || projectData?.plantilla_logo_der;
 
-    // ── Helper merge 
-    const mr = (
-        r1: number, lc1: number, r2: number, lc2: number,
-        val: ExcelJS.CellValue,
-        sty: Partial<ExcelJS.Style>,
-        h?: number,
-    ) => {
-        const ec1 = actualCol(lc1);
-        const ec2 = actualCol(lc2);
-        if (r1 !== r2 || ec1 !== ec2) {
-            try { ws.mergeCells(r1, ec1, r2, ec2); } catch { /* ya mergeado */ }
-        }
-        const cell = ws.getCell(r1, ec1);
-        cell.value = val;
-        cell.style = sty;
-        if (h !== undefined) ws.getRow(r1).height = h;
-    };
+    const modular = typeof projectData?.codigos_modulares === 'string'
+        ? projectData.codigos_modulares
+        : (projectData?.codigos_modulares?.nombre ?? projectData?.codigos_modulares?.code ?? '-');
+    const codigoLocal = projectData?.codigo_local || '-';
+    const cui = projectData?.codigo_cui || '-';
+    const unidadEjecutora = projectData?.unidad_ejecutora || '-';
+    const propietario = projectData?.propietario || unidadEjecutora || '-';
+    const nombreProyecto = projectName.toUpperCase();
 
-    // ── Extraer datos 
-    const nombre      = (projectData?.nombre || 'SIN NOMBRE').toUpperCase();
-    const cui         = projectData?.codigo_cui       || '-';
-    const codigoLocal = projectData?.codigo_local     || '-';
-    const modular     = extraerCodigoModular(projectData);
-    const unidadEjec  = projectData?.unidad_ejecutora || '-';
+    const SHEET_START_COL_LOCAL = 2;
+    const xc = (lc: number) => SHEET_START_COL_LOCAL + lc - 1;
+    const colInicio = xc(1);
+    const colFin = xc(totalCols);
 
+    let filaActual = 1;
 
-    // Nombre corto I.E.
-    const mIE    = nombre.match(/(I\.?E\.?(?:I\.?P\.?)?\s*N[°Oº]?\s*\d+)/i);
-    const ieName = mIE ? mIE[0].trim() : nombre.split('-')[0].trim();
-
-    // ── Cargar logos 
-    const [imgIzq, imgDer] = await Promise.all([
-        fetchImageBuffer(projectData?.plantilla_logo_izq || ''),
-        fetchImageBuffer(projectData?.plantilla_logo_der || ''),
-    ]);
-    const tieneLogos = !!(imgIzq || imgDer);
-
-    // ── Anchos de logo (columnas lógicas) 
-    // Logo izq: cols 1..LW   |   Centro: LW+1..totalCols-LW   |   Logo der: totalCols-LW+1..totalCols
-    const LW        = tieneLogos ? 2 : 0;
-    const cIni      = LW + 1;           // inicio centro
-    const cFin      = totalCols - LW;   // fin centro
-
-    // ── Borde exterior del bloque de encabezado principal 
-    const sBordeExt: Partial<ExcelJS.Borders> = {
-        top:    { style: 'medium', color: { argb: BG_BORDER } },
-        bottom: { style: 'medium', color: { argb: BG_BORDER } },
-        left:   { style: 'medium', color: { argb: BG_BORDER } },
-        right:  { style: 'medium', color: { argb: BG_BORDER } },
-    };
-
-    // ── FILA 1: Logo izq | nombre+info | Logo der — bloque principal 
-    //  Tiene 3 sub-filas de texto dentro del mismo bloque de logo:
-    //    sub-fila A: nombre del proyecto (bold, grande)
-    //    sub-fila B: CUI + Cód.Modular + Cód.Local
-    //    sub-fila C: I.E. + Unidad Ejecutora
-    //  Todo compacto en la misma fila Excel (altura grande)
-
-    const TEXTO_CENTRO = [
-        `"${nombre}"`,
-        `CUI: ${cui};  CÓDIGO MODULAR: ${modular};  CÓDIGO LOCAL: ${codigoLocal}`,
-        `I.E: ${ieName}      UNIDAD EJECUTORA: ${unidadEjec.toUpperCase()}`,
-    ].join('\n');
-
-    ws.getRow(1).height = 85;
-
-    // Logo izquierdo (merge fila 1, cols 1..LW) — fondo blanco
-    if (tieneLogos) {
-        mr(1, 1,    1, LW,       null, {
-            fill:      mkFill(BG_HEADER),
-            alignment: mkAlign('center', 'middle'),
-            border:    sBordeExt,
-        });
-        mr(1, cFin + 1, 1, totalCols, null, {
-            fill:      mkFill(BG_HEADER),
-            alignment: mkAlign('center', 'middle'),
-            border:    sBordeExt,
-        });
+    ws.getColumn(colInicio).width = 9;
+    ws.getColumn(colInicio + 1).width = 9;
+    if (totalCols > 2) {
+        ws.getColumn(colFin - 1).width = 9;
+        ws.getColumn(colFin).width = 9;
     }
 
-    // Texto central: nombre completo + info clave
-    mr(1, cIni, 1, cFin, TEXTO_CENTRO, {
-        font: mkFont({
-            bold: true,
-            italic: true,
-            size: 10,
-            color: { argb: TX_TITULO },
-        }),
-        fill:      mkFill(BG_HEADER),
-        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
-        border:    sBordeExt,
-    }, 85);
-
-    // Incrustar logos
-    if (imgIzq) {
-        addImageToSheet(ws, imgIzq,
-            actualCol(1),         1,
-            actualCol(LW) + 1,    2,
-        );
-    }
-    if (imgDer) {
-        addImageToSheet(ws, imgDer,
-            actualCol(cFin + 1),      1,
-            actualCol(totalCols) + 1, 2,
-        );
+    for (let r = filaActual; r <= filaActual + 3; r++) {
+        ws.getRow(r).height = 22;
     }
 
-    // ── Separador fino debajo del bloque de logos 
-    ws.getRow(2).height = 4;
-    for (let lc = 1; lc <= totalCols; lc++) {
-        ws.getCell(2, actualCol(lc)).style = {
-            fill:   mkFill(BG_SEP),
-            border: mkBorder(BG_SEP, 'thin'),
+    const f1 = filaActual;
+
+    // Logo izquierdo
+    if (totalCols >= 2) {
+        ws.mergeCells(f1, colInicio, f1 + 3, colInicio + 1);
+        const cell = ws.getCell(f1, colInicio);
+        cell.value = '';
+        cell.border = {
+            top: { style: 'medium' }, bottom: { style: 'medium' },
+            left: { style: 'medium' }, right: { style: 'thin' },
         };
     }
 
-    return 3;   // primera fila libre = encabezados de columnas de la tabla
+    // Texto central
+    if (totalCols >= 3) {
+        const colCentralInicio = colInicio + 2;
+        const colCentralFin = colFin - 2;
+        ws.mergeCells(f1, colCentralInicio, f1 + 3, colCentralFin);
+        const cell = ws.getCell(f1, colCentralInicio);
+        cell.value = {
+            richText: [
+                { font: { bold: true, size: 11, name: 'Calibri' }, text: `"${nombreProyecto}"\n` },
+                { font: { bold: false, size: 9, name: 'Calibri' }, text: `CUI: ${cui}; CÓDIGO MODULAR: ${modular}; CÓDIGO LOCAL: ${codigoLocal}\n` },
+                { font: { bold: false, size: 9, name: 'Calibri' }, text: `I.E. ${nombreProyecto}; UNIDAD EJECUTORA: ${unidadEjecutora}` },
+            ],
+        };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+            top: { style: 'medium' }, bottom: { style: 'medium' },
+            left: { style: 'thin' }, right: { style: 'thin' },
+        };
+    }
+
+    // Logo derecho
+    if (totalCols >= 2) {
+        ws.mergeCells(f1, colFin - 1, f1 + 3, colFin);
+        const cell = ws.getCell(f1, colFin - 1);
+        cell.value = '';
+        cell.border = {
+            top: { style: 'medium' }, bottom: { style: 'medium' },
+            left: { style: 'thin' }, right: { style: 'medium' },
+        };
+    }
+
+    // Agregar logo izquierdo
+    const blobToBase64 = (blob: Blob): Promise<string> =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+    const detectExt = (url: string, blob: Blob): 'png' | 'jpeg' | 'gif' => {
+        if (blob.type === 'image/jpeg' || /\.jpe?g$/i.test(url)) return 'jpeg';
+        if (blob.type === 'image/gif' || /\.gif$/i.test(url)) return 'gif';
+        return 'png';
+    };
+
+    if (logoIzq && typeof logoIzq === 'string' && logoIzq.trim() !== '') {
+        try {
+            if (logoIzq.startsWith('data:image')) {
+                const base64Data = logoIzq.split(',')[1];
+                const imgId = workbook.addImage({ base64: base64Data, extension: 'png' });
+                ws.addImage(imgId, {
+                    tl: { col: colInicio - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                    br: { col: colInicio - 1 + 1.85, row: f1 - 1 + 3.85 } as any,
+                    editAs: 'oneCell',
+                } as any);
+            } else {
+                const url = logoIzq.startsWith('http') ? logoIzq : `/storage/${logoIzq.replace(/^\//, '')}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const base64 = await blobToBase64(blob);
+                    const ext = detectExt(logoIzq, blob);
+                    const imgId = workbook.addImage({ base64, extension: ext });
+                    ws.addImage(imgId, {
+                        tl: { col: colInicio - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                        br: { col: colInicio - 1 + 1.85, row: f1 - 1 + 3.85 } as any,
+                        editAs: 'oneCell',
+                    } as any);
+                }
+            }
+        } catch (e) { console.error('Error logo izq:', e); }
+    }
+
+    // Agregar logo derecho
+    if (logoDer && typeof logoDer === 'string' && logoDer.trim() !== '') {
+        try {
+            if (logoDer.startsWith('data:image')) {
+                const base64Data = logoDer.split(',')[1];
+                const imgId = workbook.addImage({ base64: base64Data, extension: 'png' });
+                ws.addImage(imgId, {
+                    tl: { col: colFin - 1 - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                    br: { col: colFin - 1 + 0.85, row: f1 - 1 + 3.85 } as any,
+                    editAs: 'oneCell',
+                } as any);
+            } else {
+                const url = logoDer.startsWith('http') ? logoDer : `/storage/${logoDer.replace(/^\//, '')}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const base64 = await blobToBase64(blob);
+                    const ext = detectExt(logoDer, blob);
+                    const imgId = workbook.addImage({ base64, extension: ext });
+                    ws.addImage(imgId, {
+                        tl: { col: colFin - 1 - 1 + 0.15, row: f1 - 1 + 0.15 } as any,
+                        br: { col: colFin - 1 + 0.85, row: f1 - 1 + 3.85 } as any,
+                        editAs: 'oneCell',
+                    } as any);
+                }
+            }
+        } catch (e) { console.error('Error logo der:', e); }
+    }
+
+    filaActual = f1 + 4;
+    filaActual++;
+
+    // Título
+    ws.mergeCells(filaActual, colInicio, filaActual, colFin);
+    const cellTitulo = ws.getCell(filaActual, colInicio);
+    cellTitulo.value = tipoLabel;
+    cellTitulo.font = { bold: true, size: 11, name: 'Calibri', color: { argb: 'FF1A3C5E' } };
+    cellTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellTitulo.border = {
+        top: { style: 'medium' }, bottom: { style: 'medium' },
+        left: { style: 'medium' }, right: { style: 'medium' },
+    };
+    ws.getRow(filaActual).height = 24;
+    filaActual++;
+    filaActual++;
+
+    // Bloque datos del proyecto
+    const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const hoy = new Date();
+    const fechaFormateada = `${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+
+    const inicioFila = filaActual;
+    const lineasContenido = [
+        `Proyecto : ${nombreProyecto}`,
+        `Propietario : ${propietario}`,
+        `Fecha : ${fechaFormateada}`,
+        `Módulo : ${projectData?.modulo || 'GENERAL'}`,
+        `Hecho por : ${projectData?.hechoPor || ''}          Revisado por : ${projectData?.revisadoPor || ''}`,
+    ];
+
+    const filaFin = inicioFila + lineasContenido.length - 1;
+    ws.mergeCells(inicioFila, colInicio, filaFin, colFin);
+
+    const cellBloque = ws.getCell(inicioFila, colInicio);
+    cellBloque.value = lineasContenido.join('\n');
+    cellBloque.font = { size: 9, name: 'Calibri' };
+    cellBloque.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+    cellBloque.border = {
+        top: { style: 'medium', color: { argb: 'FF000000' } },
+        bottom: { style: 'medium', color: { argb: 'FF000000' } },
+        left: { style: 'medium', color: { argb: 'FF000000' } },
+        right: { style: 'medium', color: { argb: 'FF000000' } },
+    };
+
+    filaActual = filaFin + 1;
+    filaActual++;
+    ws.getRow(filaActual).height = 5;
+    filaActual++;
+
+    return filaActual;
 }
 
 function buildColumnHeaders(

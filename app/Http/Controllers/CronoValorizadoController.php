@@ -36,7 +36,7 @@ public function index(Request $request)
     app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
     $presupuestoId = $this->resolvePresupuestoId();
 
-    // ✅ DEFINIR projectData UNA SOLA VEZ (después de $presupuestoId)
+    // ✅ DEFINIR projectData
     $projectData = [
         'nombre' => $costoProject->nombre ?? 'PROYECTO',
         'codigo_cui' => $costoProject->codigo_cui ?? '-',
@@ -45,32 +45,46 @@ public function index(Request $request)
         'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
         'propietario' => $costoProject->unidad_ejecutora ?? '-',
         'modulo' => 'GENERAL',
-        'plantilla_logo_izq' => $costoProject->plantilla_logo_izq 
-            ? asset('storage/' . ltrim($costoProject->plantilla_logo_izq, '/')) 
-            : null,
-        'plantilla_logo_der' => $costoProject->plantilla_logo_der 
-            ? asset('storage/' . ltrim($costoProject->plantilla_logo_der, '/')) 
-            : null,
+        // En CronoValorizadoController.php
+    'plantilla_logo_izq' => $costoProject->plantilla_logo_izq 
+        ? asset('storage/costos/templates/' . basename($costoProject->plantilla_logo_izq)) 
+        : null,
+    'plantilla_logo_der' => $costoProject->plantilla_logo_der 
+        ? asset('storage/costos/templates/' . basename($costoProject->plantilla_logo_der)) 
+        : null,
+    ];
+
+    // ✅ DEFINIR variables de materiales por defecto ANTES del if
+    $materialesFormateados = collect([]);
+    $materialesResumen = [
+        'total_materiales' => 0,
+        'presupuesto_total' => 0,
+        'duracion_meses' => 0,
+        'total_partidas' => 0,
+        'mes_pico' => null,
+        'mes_pico_key' => null,
+        'monto_mes_pico' => 0,
     ];
 
     // ── 1. Leer tareas desde cronograma_general ──────────────────────────
     $filas = $this->loadGanttRows($presupuestoId);
 
     if ($filas->isEmpty()) {
-        return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
-            'project' => (string) $projectId,
-            'projectName' => $costoProject->nombre,
-            'items' => [],
-            'periodos' => [],
-            'totalPresupuesto' => 0,
-            'resumen' => $this->resumenVacio(),
-            'sinGantt' => true,
-            'diasPorMes' => [],
-            'modoCalculo' => $modoCalculo,
-            'materiales' => [],
-            'materialesResumen' => null,
-            'projectData' => $projectData, 
-        ]);
+     return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
+    'project' => (string) $projectId,
+    'projectName' => $costoProject->nombre,
+    'items' => $allItems,
+    'periodos' => $periodos,
+    'totalPresupuesto' => $totalPresupuesto,
+    'resumen' => $resumen,
+    'sinGantt' => false,
+    'estaGuardado' => $estaGuardado,
+    'diasPorMes' => $diasPorMesProyecto,
+    'modoCalculo' => $modoCalculo,
+    'materiales' => $materialesFormateados->toArray(),  
+    'materialesResumen' => $materialesResumen,          
+    'projectData' => $projectData, 
+]);
     }
     // ── 2. Leer presupuesto_general (con los últimos valores) ────────────
     $presupuesto = DB::connection('costos_tenant')
@@ -181,57 +195,126 @@ public function index(Request $request)
 
     $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
 
-    // ── 7. Cargar materiales ─────────────────────────────────────────────
-  // ── 7. Cargar materiales desde cronograma_materiales ─────────────────────────────
+  
+// ── 7. Generar materiales desde ACUs (NO desde cronograma_materiales) ──
 try {
-    $materiales = DB::connection('costos_tenant')
-        ->table('cronograma_materiales')
+    // ✅ Obtener ACUs con sus insumos
+    $acus = DB::connection('costos_tenant')
+        ->table('presupuesto_acus')
         ->where('presupuesto_id', $presupuestoId)
         ->get();
+
+    $materialesFormateados = collect();
+    $totalMateriales = 0;
+    $presupuestoTotal = 0;
+    $acumuladoMensual = [];
     
-    // Transformar los datos al formato que espera el frontend
-    $materialesFormateados = $materiales->map(function ($m) {
-        // Determinar tipo según descripción
-        $tipo = 'materiales';
-        $descripcion = strtolower($m->descripcion ?? '');
-        
-        if (str_contains($descripcion, 'operario') || 
-            str_contains($descripcion, 'peon') || 
-            str_contains($descripcion, 'capataz') ||
-            str_contains($descripcion, 'electricista') ||
-            str_contains($descripcion, 'gasfitero') ||
-            str_contains($descripcion, 'topografo')) {
-            $tipo = 'mano_de_obra';
-        } elseif (str_contains($descripcion, 'mezcladora') || 
-                  str_contains($descripcion, 'vibrador') ||
-                  str_contains($descripcion, 'tractor') ||
-                  str_contains($descripcion, 'herramientas')) {
-            $tipo = 'equipos';
+    // Inicializar acumuladores mensuales
+    foreach ($periodos as $periodo) {
+        $acumuladoMensual[$periodo['key']] = 0;
+    }
+
+    foreach ($acus as $acu) {
+        // Procesar materiales del JSON
+        if ($acu->materiales) {
+            $items = json_decode($acu->materiales, true);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    $descripcion = $item['descripcion'] ?? '';
+                    $unidad = $item['unidad'] ?? '';
+                    $precio = (float) ($item['precio'] ?? 0);
+                    $cantidad = (float) ($item['cantidad'] ?? 0);
+                    $factor = (float) ($item['factor_desperdicio'] ?? 1);
+                    
+                    // Obtener metrado de la partida
+                    $partida = trim($acu->partida);
+                    $presupuestoItem = $presupuesto->get($partida);
+                    $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+                    
+                    $cantidadTotal = $cantidad * $factor * $metrado;
+                    $costoTotal = $cantidadTotal * $precio;
+                    
+                    if ($cantidadTotal <= 0) continue;
+                    
+                    // Distribución uniforme en todos los periodos
+                    $distribucion = [];
+                    $meses = count($periodos);
+                    $cantidadPorMes = $meses > 0 ? $cantidadTotal / $meses : 0;
+                    $costoPorMes = $cantidadPorMes * $precio;
+                    
+                    foreach ($periodos as $periodo) {
+                        $key = $periodo['key'];
+                        $distribucion[$key] = [
+                            'cantidad' => round($cantidadPorMes, 4),
+                            'monto' => round($costoPorMes, 2),
+                        ];
+                        
+                        $acumuladoMensual[$key] += $costoPorMes;
+                    }
+                    
+                    // Determinar tipo
+                    $tipo = 'materiales';
+                    $descripcionLower = strtolower($descripcion);
+                    if (str_contains($descripcionLower, 'operario') || 
+                        str_contains($descripcionLower, 'peon') || 
+                        str_contains($descripcionLower, 'capataz') ||
+                        str_contains($descripcionLower, 'electricista') ||
+                        str_contains($descripcionLower, 'gasfitero') ||
+                        str_contains($descripcionLower, 'topografo')) {
+                        $tipo = 'mano_de_obra';
+                    } elseif (str_contains($descripcionLower, 'mezcladora') || 
+                              str_contains($descripcionLower, 'vibrador') ||
+                              str_contains($descripcionLower, 'tractor') ||
+                              str_contains($descripcionLower, 'herramientas')) {
+                        $tipo = 'equipos';
+                    }
+                    
+                    $materialesFormateados->push([
+                        'descripcion' => $descripcion,
+                        'unidad' => $unidad,
+                        'tipo' => $tipo,
+                        'precio' => $precio,
+                        'cantidad_total' => round($cantidadTotal, 4),
+                        'costo_total' => round($costoTotal, 2),
+                        'distribucion' => $distribucion,
+                    ]);
+                    
+                    $totalMateriales++;
+                    $presupuestoTotal += $costoTotal;
+                }
+            }
         }
-        
-        return [
-            'id' => $m->id,
-            'descripcion' => $m->descripcion,
-            'unidad' => $m->unidad,
-            'tipo' => $tipo,
-            'precio' => (float) ($m->precio_unitario ?? 0),
-            'cantidad_total' => (float) ($m->cantidad_total ?? 0),
-            'costo_total' => (float) ($m->presupuesto_total ?? 0),
-            'distribucion' => json_decode($m->distribucion_mensual ?? '{}', true),
-        ];
-    });
+    }
+    
+    // Calcular mes pico
+    $mesPicoKey = '';
+    $mesPicoMonto = 0;
+    foreach ($acumuladoMensual as $key => $monto) {
+        if ($monto > $mesPicoMonto) {
+            $mesPicoMonto = $monto;
+            $mesPicoKey = $key;
+        }
+    }
+    $mesPicoLabel = '';
+    foreach ($periodos as $p) {
+        if ($p['key'] === $mesPicoKey) {
+            $mesPicoLabel = $p['labelCal'] ?? $p['label'];
+            break;
+        }
+    }
     
     $materialesResumen = [
-        'total_materiales' => $materiales->count(),
-        'presupuesto_total' => (float) $materiales->sum('presupuesto_total'),
+        'total_materiales' => $totalMateriales,
+        'presupuesto_total' => round($presupuestoTotal, 2),
         'duracion_meses' => count($periodos),
-        'total_partidas' => $materiales->count(),
-        'mes_pico' => null,
-        'mes_pico_key' => null,
-        'monto_mes_pico' => 0,
+        'total_partidas' => $totalMateriales,
+        'mes_pico' => $mesPicoLabel,
+        'mes_pico_key' => $mesPicoKey,
+        'monto_mes_pico' => round($mesPicoMonto, 2),
     ];
+    
 } catch (\Exception $e) {
-    \Log::error('Error cargando materiales: ' . $e->getMessage());
+    \Log::error('Error generando materiales desde ACU: ' . $e->getMessage());
     $materialesFormateados = collect([]);
     $materialesResumen = [
         'total_materiales' => 0,
@@ -243,25 +326,22 @@ try {
         'monto_mes_pico' => 0,
     ];
 }
-
     // ── 8. FINALMENTE el return ──────────────────────────────────────────
-    return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
-        'project' => (string) $projectId,
-        'projectName' => $costoProject->nombre,
-        'items' => $allItems,
-        'periodos' => $periodos,
-        'totalPresupuesto' => $totalPresupuesto,
-        'resumen' => $resumen,
-        'sinGantt' => false,
-        'estaGuardado' => $estaGuardado,
-        'diasPorMes' => $diasPorMesProyecto,
-        'modoCalculo' => $modoCalculo,
-        'materiales' => $materiales,
-        'materialesResumen' => $materialesResumen,
-        'materiales' => $materialesFormateados,
-        'materialesResumen' => $materialesResumen,
-        'projectData' => $projectData, 
-    ]);
+return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
+    'project' => (string) $projectId,
+    'projectName' => $costoProject->nombre,
+    'items' => $allItems,
+    'periodos' => $periodos,
+    'totalPresupuesto' => $totalPresupuesto,
+    'resumen' => $resumen,
+    'sinGantt' => false,
+    'estaGuardado' => $estaGuardado,
+    'diasPorMes' => $diasPorMesProyecto,
+    'modoCalculo' => $modoCalculo,
+    'materiales' => $materialesFormateados->toArray(),  
+    'materialesResumen' => $materialesResumen,          
+    'projectData' => $projectData, 
+]);
 }
     // ─────────────────────────────────────────────────────────────────────────
     // STORE — Guarda el valorizado en cronograma_valorizado

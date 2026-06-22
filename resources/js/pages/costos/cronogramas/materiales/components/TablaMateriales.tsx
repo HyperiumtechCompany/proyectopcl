@@ -1,6 +1,19 @@
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Filter, X, Package, Tag } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import type { Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+
+// ✅ Definir MaterialItem aquí (si no existe en types.ts)
+interface MaterialItem {
+    descripcion: string;
+    unidad: string;
+    tipo: string;
+    precio: number;
+    cantidad_total: number;
+    costo_total: number;
+    partida_origen?: string;
+    descripcion_partida?: string;
+    distribucion: Record<string, { cantidad: number; monto: number }>;
+}
 
 // TIPOS / PROPS
 interface Props {
@@ -21,12 +34,24 @@ interface Props {
 }
 
 // UTILIDADES
-const fmtNum = (v: number, dec = 2) =>
-    v.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-const fmtSoles = (v: number) => `S/. ${fmtNum(v)}`;
+const fmtNum = (v: number, dec = 2) => {
+    if (v === undefined || v === null || isNaN(v)) return '0.00';
+    return v.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+};
+const fmtSoles = (v: number) => {
+    if (v === undefined || v === null || isNaN(v)) return 'S/. 0.00';
+    return `S/. ${fmtNum(v)}`;
+};
 
-const getCantidad = (m: MaterialItem, key: string) => m.distribucion[key]?.cantidad || 0;
-const getMonto    = (m: MaterialItem, key: string) => m.distribucion[key]?.monto    || 0;
+const getCantidad = (m: MaterialItem, key: string) => {
+    if (!m || !m.distribucion || !m.distribucion[key]) return 0;
+    return m.distribucion[key].cantidad || 0;
+};
+
+const getMonto = (m: MaterialItem, key: string) => {
+    if (!m || !m.distribucion || !m.distribucion[key]) return 0;
+    return m.distribucion[key].monto || 0;
+};
 
 // CATÁLOGO DE TIPOS
 const TIPO_META: Record<string, { label: string; bg: string; text: string; border: string; headerBg: string }> = {
@@ -374,24 +399,25 @@ const TablaMateriales: React.FC<Props> = ({
     const anchoTabla = 590 + periodos.length * 170;
 
     // ── Sin resultados
-    if (materiales.length === 0) {
-        return (
+  // ── Sin resultados
+if (!materiales || materiales.length === 0) {
+    return (
+        <div style={{
+            background: '#fff', borderRadius: 10,
+            border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        }}>
+            <BarraFiltro filtro={filtro} onFiltroChange={onFiltroChange} count={0} total={0} />
             <div style={{
-                background: '#fff', borderRadius: 10,
-                border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', padding: '80px 0', color: '#94a3b8',
             }}>
-                <BarraFiltro filtro={filtro} onFiltroChange={onFiltroChange} count={0} total={0} />
-                <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    justifyContent: 'center', padding: '80px 0', color: '#94a3b8',
-                }}>
-                    <span style={{ fontSize: 56, marginBottom: 14 }}>📦</span>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: '#475569' }}>No hay insumos que mostrar</p>
-                    <p style={{ fontSize: 13, marginTop: 4 }}>Ajuste los filtros o verifique el Gantt general</p>
-                </div>
+                <span style={{ fontSize: 56, marginBottom: 14 }}>📦</span>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#475569' }}>No hay insumos que mostrar</p>
+                <p style={{ fontSize: 13, marginTop: 4 }}>Ajuste los filtros o verifique el Gantt general</p>
             </div>
-        );
-    }
+        </div>
+    );
+}
 
     return (
         <div style={{

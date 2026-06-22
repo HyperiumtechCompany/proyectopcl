@@ -1,6 +1,16 @@
 import { useMemo, useState, useCallback } from 'react';
-import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import type { Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
+// ✅ Definir el tipo MaterialItem si no está importado
+interface MaterialItem {
+    descripcion: string;
+    unidad: string;
+    tipo: string;
+    precio: number;
+    cantidad_total: number;
+    costo_total: number;
+    distribucion: Record<string, { cantidad: number; monto: number }>;
+}
 
 export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo[]) => {
 
@@ -18,19 +28,24 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
     };
 
     const getValorByMode = useCallback((material: MaterialItem, key: string): number => {
+        // ✅ VALIDACIÓN: Si no hay distribucion o no existe la key, retornar 0
+        if (!material?.distribucion || !material.distribucion[key]) return 0;
         const distribucion = material.distribucion[key];
-        if (!distribucion) return 0;
-        return viewMode === 'cantidad' ? distribucion.cantidad : distribucion.monto;
+        return viewMode === 'cantidad' ? (distribucion.cantidad || 0) : (distribucion.monto || 0);
     }, [viewMode]);
 
     const getTotalByMode = useCallback((material: MaterialItem): number => {
-        return viewMode === 'cantidad' ? material.cantidad_total : material.costo_total;
+        // ✅ VALIDACIÓN: Si no hay material, retornar 0
+        if (!material) return 0;
+        return viewMode === 'cantidad' ? (material.cantidad_total || 0) : (material.costo_total || 0);
     }, [viewMode]);
 
     const materialesFiltrados = useMemo(() => {
+        // ✅ VALIDACIÓN: Si no hay materiales, retornar array vacío
+        if (!materiales || materiales.length === 0) return [];
+
         let lista = [...materiales];
 
-        // Filtro por búsqueda 
         if (filtro.busqueda.trim()) {
             const q = filtro.busqueda.toLowerCase().trim();
             lista = lista.filter(m => {
@@ -42,17 +57,14 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
             });
         }
 
-        // Filtro solo con cantidad > 0
         if (filtro.soloConCant) {
-            lista = lista.filter(m => m.cantidad_total > 0);
+            lista = lista.filter(m => (m.cantidad_total || 0) > 0);
         }
 
-        // Filtro por tipo de material
         if (filtro.tipoFiltro && filtro.tipoFiltro !== '') {
             lista = lista.filter(m => safeString(m.tipo) === filtro.tipoFiltro);
         }
 
-        // Ordenar
         lista.sort((a, b) => {
             let va: any;
             let vb: any;
@@ -88,12 +100,16 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
     }, [materiales, filtro, sortField, sortDir]);
 
     const totalesMensuales = useMemo(() => {
+        // ✅ VALIDACIÓN: Si no hay periodos, retornar objeto vacío
+        if (!periodos || periodos.length === 0) return {};
+
         const totales: Record<string, number> = {};
         periodos.forEach(p => {
             totales[p.key] = materialesFiltrados.reduce((sum, mat) => {
+                // ✅ VALIDACIÓN: Si no hay distribucion o no existe la key, retornar 0
+                if (!mat?.distribucion || !mat.distribucion[p.key]) return sum;
                 const distribucion = mat.distribucion[p.key];
-                if (!distribucion) return sum;
-                const valor = viewMode === 'cantidad' ? distribucion.cantidad : distribucion.monto;
+                const valor = viewMode === 'cantidad' ? (distribucion.cantidad || 0) : (distribucion.monto || 0);
                 return sum + valor;
             }, 0);
         });
@@ -105,14 +121,18 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
     [materialesFiltrados]);
 
     const curvaSData = useMemo(() => {
+        // ✅ VALIDACIÓN: Si no hay materiales o periodos, retornar array vacío
+        if (!materiales || materiales.length === 0 || !periodos || periodos.length === 0) return [];
+
         let acumulado = 0;
         const totalPresupuesto = materiales.reduce((s, m) => s + (m.costo_total || 0), 0);
         if (totalPresupuesto === 0) return [];
 
         return periodos.map(p => {
             const mensualMonto = materiales.reduce((sum, mat) => {
-                const distribucion = mat.distribucion[p.key];
-                return sum + (distribucion?.monto || 0);
+                // ✅ VALIDACIÓN: Si no hay distribucion, retornar 0
+                if (!mat?.distribucion || !mat.distribucion[p.key]) return sum;
+                return sum + (mat.distribucion[p.key]?.monto || 0);
             }, 0);
             acumulado += mensualMonto;
             return {
@@ -126,12 +146,15 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
     }, [materiales, periodos]);
 
     const mesPicoKey = useMemo(() => {
+        // ✅ VALIDACIÓN: Si no hay materiales o periodos, retornar string vacío
+        if (!materiales || materiales.length === 0 || !periodos || periodos.length === 0) return '';
+
         let maxVal = 0;
         let mesPico = '';
         periodos.forEach(p => {
             const mensualMonto = materiales.reduce((sum, mat) => {
-                const distribucion = mat.distribucion[p.key];
-                return sum + (distribucion?.monto || 0);
+                if (!mat?.distribucion || !mat.distribucion[p.key]) return sum;
+                return sum + (mat.distribucion[p.key]?.monto || 0);
             }, 0);
             if (mensualMonto > maxVal) {
                 maxVal = mensualMonto;
@@ -142,14 +165,16 @@ export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo
     }, [materiales, periodos]);
 
     const maxMensualTotal = useMemo(() => {
+        // ✅ VALIDACIÓN: Si no hay materiales o periodos, retornar 1
+        if (!materiales || materiales.length === 0 || !periodos || periodos.length === 0) return 1;
+
         let maxVal = 0;
         periodos.forEach(p => {
             materiales.forEach(mat => {
+                if (!mat?.distribucion || !mat.distribucion[p.key]) return;
                 const distribucion = mat.distribucion[p.key];
-                if (distribucion) {
-                    const valor = viewMode === 'cantidad' ? distribucion.cantidad : distribucion.monto;
-                    if (valor > maxVal) maxVal = valor;
-                }
+                const valor = viewMode === 'cantidad' ? (distribucion.cantidad || 0) : (distribucion.monto || 0);
+                if (valor > maxVal) maxVal = valor;
             });
         });
         return maxVal || 1;
