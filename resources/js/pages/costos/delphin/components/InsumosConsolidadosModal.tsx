@@ -98,7 +98,7 @@ function flattenInsumos(acuRows: ACURowSummary[]): RawInsumo[] {
                 }
 
                 const unidad = String(item.unidad ?? '').trim() || '-';
-                const codigo = String(item.codigo ?? '').trim();
+                const codigo = String(item.cod_insumo ?? item.codigo ?? '').trim();
                 const cantidad = Number(item.cantidad ?? 0);
                 const precio = itemPrecio(key, item);
                 const parcial = itemParcial(key, item);

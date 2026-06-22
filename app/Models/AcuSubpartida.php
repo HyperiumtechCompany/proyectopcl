@@ -17,6 +17,8 @@ class AcuSubpartida extends Model
     protected $fillable = [
         'acu_id',
         'insumo_id',
+        'cod_insumo',
+        'proveedor',
         'descripcion',
         'unidad',
         'cantidad',

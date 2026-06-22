@@ -288,6 +288,8 @@ export function usePresupuestoAcu({
         const normalized: Record<string, unknown> = {
             id: item.id,
             insumo_id: item.insumo_id,
+            cod_insumo: ((item.cod_insumo as string | null | undefined) ?? (item.codigo as string | null | undefined)) || null,
+            proveedor: (item.proveedor as string | null | undefined) || null,
             descripcion: String(item.descripcion ?? '').trim(),
             unidad: String(item.unidad ?? '').trim() || 'und',
             cantidad: normalizeNumber(item.cantidad, 0),

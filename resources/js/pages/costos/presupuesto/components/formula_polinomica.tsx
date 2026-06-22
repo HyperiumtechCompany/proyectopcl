@@ -146,7 +146,7 @@ function extractInsumos(rows: BudgetFormulaRow[], acuRows: ACURowSummary[]): Ext
                 } else {
                     totals.set(key, {
                         tipo,
-                        codigo: String(comp.codigo ?? '').trim(),
+                        codigo: String(comp.cod_insumo ?? comp.codigo ?? '').trim(),
                         descripcion,
                         unidad,
                         total,

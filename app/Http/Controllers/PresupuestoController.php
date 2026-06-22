@@ -1189,6 +1189,8 @@ class PresupuestoController extends Controller
             DB::connection('costos_tenant')->table('acu_mano_de_obra')->insert([
                 'acu_id' => $acuId,
                 'insumo_id' => null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'hh',
                 'cantidad' => $row['cantidad'] ?? 0,
@@ -1205,6 +1207,8 @@ class PresupuestoController extends Controller
             DB::connection('costos_tenant')->table('acu_materiales')->insert([
                 'acu_id' => $acuId,
                 'insumo_id' => null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'und',
                 'cantidad' => $row['cantidad'] ?? 0,
@@ -1224,6 +1228,8 @@ class PresupuestoController extends Controller
             DB::connection('costos_tenant')->table('acu_equipos')->insert([
                 'acu_id' => $acuId,
                 'insumo_id' => null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'hm',
                 'cantidad' => $row['cantidad'] ?? 0,
@@ -1240,6 +1246,8 @@ class PresupuestoController extends Controller
             DB::connection('costos_tenant')->table('acu_subcontratos')->insert([
                 'acu_id' => $acuId,
                 'insumo_id' => null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'glb',
                 'cantidad' => $row['cantidad'] ?? 0,
@@ -1255,6 +1263,8 @@ class PresupuestoController extends Controller
             DB::connection('costos_tenant')->table('acu_subpartidas')->insert([
                 'acu_id' => $acuId,
                 'insumo_id' => null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'] ?? '',
                 'unidad' => $row['unidad'] ?? 'und',
                 'cantidad' => $row['cantidad'] ?? 0,
@@ -1316,6 +1326,8 @@ class PresupuestoController extends Controller
             'mano_de_obra.*.recursos' => 'nullable|numeric|min:0',
             'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
             'mano_de_obra.*.insumo_id' => 'nullable|integer',
+            'mano_de_obra.*.cod_insumo' => 'nullable|string|max:50',
+            'mano_de_obra.*.proveedor' => 'nullable|string|max:100',
             'materiales' => 'nullable|array',
             'materiales.*.descripcion' => 'required|string',
             'materiales.*.unidad' => 'required|string|max:20',
@@ -1323,6 +1335,8 @@ class PresupuestoController extends Controller
             'materiales.*.precio_unitario' => 'required|numeric|min:0',
             'materiales.*.factor_desperdicio' => 'nullable|numeric|min:1',
             'materiales.*.insumo_id' => 'nullable|integer',
+            'materiales.*.cod_insumo' => 'nullable|string|max:50',
+            'materiales.*.proveedor' => 'nullable|string|max:100',
             'equipos' => 'nullable|array',
             'equipos.*.descripcion' => 'required|string',
             'equipos.*.unidad' => 'required|string|max:20',
@@ -1330,18 +1344,24 @@ class PresupuestoController extends Controller
             'equipos.*.recursos' => 'nullable|numeric|min:0',
             'equipos.*.precio_hora' => 'required|numeric|min:0',
             'equipos.*.insumo_id' => 'nullable|integer',
+            'equipos.*.cod_insumo' => 'nullable|string|max:50',
+            'equipos.*.proveedor' => 'nullable|string|max:100',
             'subcontratos' => 'nullable|array',
             'subcontratos.*.descripcion' => 'required|string',
             'subcontratos.*.unidad' => 'required|string|max:20',
             'subcontratos.*.cantidad' => 'required|numeric|min:0',
             'subcontratos.*.precio_unitario' => 'required|numeric|min:0',
             'subcontratos.*.insumo_id' => 'nullable|integer',
+            'subcontratos.*.cod_insumo' => 'nullable|string|max:50',
+            'subcontratos.*.proveedor' => 'nullable|string|max:100',
             'subpartidas' => 'nullable|array',
             'subpartidas.*.descripcion' => 'required|string',
             'subpartidas.*.unidad' => 'required|string|max:20',
             'subpartidas.*.cantidad' => 'required|numeric|min:0',
             'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
             'subpartidas.*.insumo_id' => 'nullable|integer',
+            'subpartidas.*.cod_insumo' => 'nullable|string|max:50',
+            'subpartidas.*.proveedor' => 'nullable|string|max:100',
             'update_project_prices' => 'nullable|boolean',
         ]);
 
@@ -2817,6 +2837,21 @@ class PresupuestoController extends Controller
                 ]);
             }
         }
+
+        // Ensure cod_insumo column exists in all ACU component child tables (legacy DBs)
+        $childTables = ['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'];
+        foreach ($childTables as $childTable) {
+            if ($schema->hasTable($childTable) && ! $schema->hasColumn($childTable, 'cod_insumo')) {
+                $schema->table($childTable, function (Blueprint $table) {
+                    $table->string('cod_insumo', 50)->nullable()->after('insumo_id');
+                });
+            }
+            if ($schema->hasTable($childTable) && ! $schema->hasColumn($childTable, 'proveedor')) {
+                $schema->table($childTable, function (Blueprint $table) {
+                    $table->string('proveedor', 100)->nullable()->after('cod_insumo');
+                });
+            }
+        }
     }
 
     /**
@@ -3606,6 +3641,8 @@ private function getFechaFormatoModelo(): string
             AcuManoDeObra::create([
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
                 'cantidad' => $row['cantidad'],
@@ -3621,6 +3658,8 @@ private function getFechaFormatoModelo(): string
             AcuMaterial::create([
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
                 'cantidad' => $row['cantidad'],
@@ -3636,6 +3675,8 @@ private function getFechaFormatoModelo(): string
             AcuEquipo::create([
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
                 'cantidad' => $row['cantidad'],
@@ -3651,6 +3692,8 @@ private function getFechaFormatoModelo(): string
             AcuSubcontrato::create([
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
                 'cantidad' => $row['cantidad'],
@@ -3665,6 +3708,8 @@ private function getFechaFormatoModelo(): string
             AcuSubpartida::create([
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
+                'cod_insumo' => $row['cod_insumo'] ?? null,
+                'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
                 'cantidad' => $row['cantidad'],

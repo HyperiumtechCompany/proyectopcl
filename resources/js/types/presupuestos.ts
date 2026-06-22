@@ -170,7 +170,9 @@ export type RendimientoModo = 'dia' | 'hora' | 'global';
 export interface ACUComponenteRow {
     id?: number;
     insumo_id?: number | null;
+    cod_insumo?: string | null;
     codigo?: string | null;
+    proveedor?: string | null;
     descripcion: string;
     unidad?: string | null;
     cantidad?: number | null;

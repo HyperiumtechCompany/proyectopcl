@@ -14,8 +14,9 @@ import {
     X,
     Plus,
     Loader2,
+    Trash2,
 } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type {
     ACUComponenteRow,
     ACURowSummary,
@@ -996,15 +997,22 @@ function AcuSection({
                                     key={`${type}-${idx}`}
                                     className="group border-b border-slate-700/50 hover:bg-slate-700/40"
                                 >
-                                    <td
-                                        className="w-28 cursor-pointer py-1 pr-2 pl-8 font-mono text-[10px] text-slate-500 transition-colors group-hover:text-red-400"
-                                        title="Eliminar recurso"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDeleteItem(type, idx);
-                                        }}
-                                    >
-                                        {item.codigo || 'X'}
+                                    <td className="w-28 py-1 pr-2 pl-2 font-mono text-[10px] text-slate-500">
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                className="shrink-0 rounded p-0.5 text-slate-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                                                title="Eliminar recurso"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteItem(type, idx);
+                                                }}
+                                            >
+                                                <Trash2 size={10} />
+                                            </button>
+                                            <span className="truncate">
+                                                {item.cod_insumo ?? item.codigo ?? '—'}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td className="min-w-0 px-2 py-1 text-slate-200">
                                         <EditableTextCell
@@ -1018,6 +1026,11 @@ function AcuSection({
                                                 )
                                             }
                                         />
+                                        {item.proveedor && (
+                                            <span className="block truncate text-[9px] leading-none text-slate-500">
+                                                {item.proveedor}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="w-12 px-2 py-1 text-center text-slate-400">
                                         <EditableTextCell
@@ -1189,11 +1202,17 @@ export function AcuPanel({
 
     const [rendimiento, setRendimiento] = useState(1);
     const [perDay, setPerDay] = useState(true);
-    
+
     const globalHours = useProjectParamsStore(s => s.getJornadaHoras());
     const [hoursPerDay, setHoursPerDay] = useState(globalHours || 8);
     const [updateProjectPrices, setUpdateProjectPrices] = useState(true);
     const [searchOpen, setSearchOpen] = useState(false);
+
+    // Local working copy — all edits apply here; only flushed to DB on "Guardar"
+    const [localAcu, setLocalAcu] = useState<ACURowSummary | null>(selectedAcu);
+    const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const prevPartidaRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
         if (globalHours) setHoursPerDay(globalHours);
@@ -1202,9 +1221,14 @@ export function AcuPanel({
         null,
     );
 
+    // Sync localAcu only when a different partida is selected (not on every prop update)
     useEffect(() => {
-        if (selectedAcu) {
-            setRendimiento(selectedAcu.rendimiento || 1);
+        const newPartida = selectedAcu?.partida;
+        if (newPartida !== prevPartidaRef.current) {
+            prevPartidaRef.current = newPartida;
+            setLocalAcu(selectedAcu);
+            setIsDirty(false);
+            if (selectedAcu) setRendimiento(selectedAcu.rendimiento || 1);
         }
     }, [selectedAcu]);
 
@@ -1288,15 +1312,25 @@ export function AcuPanel({
             return { ...item, recursos: Number(recursos) || 0, cantidad };
         });
 
-    const handleAddResourceClick = (type: SectionType) => {
-        if (!selectedAcu || !onSaveAcu) return;
+    const handleSave = useCallback(async () => {
+        if (!localAcu || !onSaveAcu) return;
+        setIsSaving(true);
+        const result = await onSaveAcu(localAcu, { updateProjectPrices });
+        if (result.success && result.acu) {
+            setLocalAcu(result.acu as ACURowSummary);
+            setIsDirty(false);
+        }
+        setIsSaving(false);
+    }, [localAcu, onSaveAcu, updateProjectPrices]);
 
+    const handleAddResourceClick = (type: SectionType) => {
+        if (!localAcu) return;
         setSearchTargetType(type);
         setSearchOpen(true);
     };
 
-    const handleResourceSelected = async (resource: any) => {
-        if (!selectedAcu || !onSaveAcu || !searchTargetType) return;
+    const handleResourceSelected = (resource: any) => {
+        if (!localAcu || !searchTargetType) return;
 
         const isCrewType =
             searchTargetType === 'mano_de_obra' ||
@@ -1318,166 +1352,141 @@ export function AcuPanel({
             factor_desperdicio: resource.tipo === 'materiales' ? 1.05 : 1,
         };
 
-        const updatedAcuData = {
-            ...selectedAcu,
-            [searchTargetType]: [
-                ...((selectedAcu[
-                    searchTargetType as keyof ACURowSummary
-                ] as any[]) || []),
-                newComponent,
-            ],
-        };
-
-        await onSaveAcu(updatedAcuData, { updateProjectPrices });
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                [searchTargetType]: [
+                    ...((prev[searchTargetType as keyof ACURowSummary] as any[]) || []),
+                    newComponent,
+                ],
+            };
+        });
+        setIsDirty(true);
+        setSearchOpen(false);
     };
 
-    const handleUpdateItem = async (
+    const handleUpdateItem = (
         type: SectionType,
         index: number,
         field: string,
         value: string | number,
     ) => {
-        if (!selectedAcu || !onSaveAcu) return;
-        const arr = [
-            ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
-        ];
-        const currentItem = arr[index] || {};
-        const isEquipos = type === 'equipos';
-        const isHerramientas = isEquipos && isHerramientasRow(currentItem);
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            const arr = [...((prev[type as keyof ACURowSummary] as any[]) || [])];
+            const currentItem = arr[index] || {};
+            const isEquipos = type === 'equipos';
+            const isHerramientas = isEquipos && isHerramientasRow(currentItem);
 
-        if (
-            field === 'recursos' &&
-            (type === 'mano_de_obra' || type === 'equipos')
-        ) {
-            const recursos = Number(value) || 0;
-            const cantidad = computeCantidadFromRecursos(recursos);
-            arr[index] = { ...currentItem, recursos, cantidad };
-        } else if (isHerramientas && field === 'cantidad') {
-            const porcentaje = Number(value) || 0;
-            arr[index] = {
-                ...currentItem,
-                cantidad: porcentaje,
-                precio_hora: selectedAcu.costo_mano_obra || 0,
-            };
-        } else {
-            arr[index] = { ...currentItem, [field]: value };
-        }
+            if (field === 'recursos' && (type === 'mano_de_obra' || type === 'equipos')) {
+                const recursos = Number(value) || 0;
+                const cantidad = computeCantidadFromRecursos(recursos);
+                arr[index] = { ...currentItem, recursos, cantidad };
+            } else if (isHerramientas && field === 'cantidad') {
+                arr[index] = {
+                    ...currentItem,
+                    cantidad: Number(value) || 0,
+                    precio_hora: prev.costo_mano_obra || 0,
+                };
+            } else {
+                arr[index] = { ...currentItem, [field]: value };
+            }
 
-        if (isHerramientas) {
-            arr[index] = {
-                ...arr[index],
-                precio_hora: selectedAcu.costo_mano_obra || 0,
-            };
-        }
-        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
+            if (isHerramientas) {
+                arr[index] = { ...arr[index], precio_hora: prev.costo_mano_obra || 0 };
+            }
+
+            return { ...prev, [type]: arr };
+        });
+        setIsDirty(true);
     };
 
-    const handleDeleteItem = async (type: SectionType, index: number) => {
-        if (!selectedAcu || !onSaveAcu) return;
-        const arr = [
-            ...((selectedAcu[type as keyof ACURowSummary] as any[]) || []),
-        ];
-        arr.splice(index, 1);
-        await onSaveAcu({ ...selectedAcu, [type]: arr }, { updateProjectPrices });
+    const handleDeleteItem = (type: SectionType, index: number) => {
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            const arr = [...((prev[type as keyof ACURowSummary] as any[]) || [])];
+            arr.splice(index, 1);
+            return { ...prev, [type]: arr };
+        });
+        setIsDirty(true);
     };
 
-    const handleUpdateRendimiento = async (newRendimiento: number) => {
-        if (!selectedAcu || !onSaveAcu) return;
+    const handleUpdateRendimiento = (newRendimiento: number) => {
         const safeRend = Number(newRendimiento);
         if (!safeRend || safeRend <= 0) return;
         setRendimiento(safeRend);
-        const updated = {
-            ...selectedAcu,
-            rendimiento: safeRend,
-            mano_de_obra: recalcCrewForModeChange(
-                selectedAcu.mano_de_obra || [],
-                perDay,
-                hoursPerDay,
-                rendimiento,
-                perDay,
-                hoursPerDay,
-                safeRend,
-            ),
-            equipos: ensureHerramientasPrecio(
-                recalcCrewForModeChange(
-                    selectedAcu.equipos || [],
-                    perDay,
-                    hoursPerDay,
-                    rendimiento,
-                    perDay,
-                    hoursPerDay,
-                    safeRend,
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                rendimiento: safeRend,
+                mano_de_obra: recalcCrewForModeChange(
+                    prev.mano_de_obra || [],
+                    perDay, hoursPerDay, rendimiento,
+                    perDay, hoursPerDay, safeRend,
                 ),
-                selectedAcu.costo_mano_obra || 0,
-            ),
-        };
-        await onSaveAcu(updated, { updateProjectPrices });
+                equipos: ensureHerramientasPrecio(
+                    recalcCrewForModeChange(
+                        prev.equipos || [],
+                        perDay, hoursPerDay, rendimiento,
+                        perDay, hoursPerDay, safeRend,
+                    ),
+                    prev.costo_mano_obra || 0,
+                ),
+            };
+        });
+        setIsDirty(true);
     };
 
-    const handleTogglePerDay = async (nextPerDay: boolean) => {
+    const handleTogglePerDay = (nextPerDay: boolean) => {
         setPerDay(nextPerDay);
-        if (!selectedAcu || !onSaveAcu) return;
-
-        const updated = {
-            ...selectedAcu,
-            mano_de_obra: recalcCrewForModeChange(
-                selectedAcu.mano_de_obra || [],
-                perDay,
-                hoursPerDay,
-                rendimiento,
-                nextPerDay,
-                hoursPerDay,
-                rendimiento,
-            ),
-            equipos: ensureHerramientasPrecio(
-                recalcCrewForModeChange(
-                    selectedAcu.equipos || [],
-                    perDay,
-                    hoursPerDay,
-                    rendimiento,
-                    nextPerDay,
-                    hoursPerDay,
-                    rendimiento,
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                mano_de_obra: recalcCrewForModeChange(
+                    prev.mano_de_obra || [],
+                    perDay, hoursPerDay, rendimiento,
+                    nextPerDay, hoursPerDay, rendimiento,
                 ),
-                selectedAcu.costo_mano_obra || 0,
-            ),
-        };
-
-        await onSaveAcu(updated);
+                equipos: ensureHerramientasPrecio(
+                    recalcCrewForModeChange(
+                        prev.equipos || [],
+                        perDay, hoursPerDay, rendimiento,
+                        nextPerDay, hoursPerDay, rendimiento,
+                    ),
+                    prev.costo_mano_obra || 0,
+                ),
+            };
+        });
+        setIsDirty(true);
     };
 
-    const handleHoursPerDayChange = async (nextHoursPerDay: number) => {
+    const handleHoursPerDayChange = (nextHoursPerDay: number) => {
         const safeHours = Number(nextHoursPerDay);
         if (!safeHours || safeHours <= 0) return;
         setHoursPerDay(safeHours);
-        if (!selectedAcu || !onSaveAcu) return;
-
-        const updated = {
-            ...selectedAcu,
-            mano_de_obra: recalcCrewForModeChange(
-                selectedAcu.mano_de_obra || [],
-                perDay,
-                hoursPerDay,
-                rendimiento,
-                perDay,
-                safeHours,
-                rendimiento,
-            ),
-            equipos: ensureHerramientasPrecio(
-                recalcCrewForModeChange(
-                    selectedAcu.equipos || [],
-                    perDay,
-                    hoursPerDay,
-                    rendimiento,
-                    perDay,
-                    safeHours,
-                    rendimiento,
+        setLocalAcu((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                mano_de_obra: recalcCrewForModeChange(
+                    prev.mano_de_obra || [],
+                    perDay, hoursPerDay, rendimiento,
+                    perDay, safeHours, rendimiento,
                 ),
-                selectedAcu.costo_mano_obra || 0,
-            ),
-        };
-
-        await onSaveAcu(updated);
+                equipos: ensureHerramientasPrecio(
+                    recalcCrewForModeChange(
+                        prev.equipos || [],
+                        perDay, hoursPerDay, rendimiento,
+                        perDay, safeHours, rendimiento,
+                    ),
+                    prev.costo_mano_obra || 0,
+                ),
+            };
+        });
+        setIsDirty(true);
     };
 
     if (acuLoading) {
@@ -1488,7 +1497,7 @@ export function AcuPanel({
         );
     }
 
-    if (!selectedAcu) {
+    if (!localAcu) {
         return (
             <div className="bg-slate-850 flex h-full flex-col items-center justify-center gap-3 text-slate-500">
                 <Calculator size={40} className="opacity-30" />
@@ -1502,7 +1511,7 @@ export function AcuPanel({
         );
     }
 
-    const grandTotal = selectedAcu.costo_unitario_total || 0;
+    const grandTotal = localAcu.costo_unitario_total || 0;
 
     return (
         <div className="bg-slate-850 flex h-full flex-col">
@@ -1540,11 +1549,11 @@ export function AcuPanel({
                 <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-slate-500">
                         <span className="font-mono font-semibold text-sky-400">
-                            {selectedAcu.partida}
+                            {localAcu.partida}
                         </span>
                         {' — '}
                         <span className="text-slate-200">
-                            {selectedAcu.descripcion}
+                            {localAcu.descripcion}
                         </span>
                     </span>
                 </div>
@@ -1570,7 +1579,7 @@ export function AcuPanel({
                         className="w-20 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
                     />
                     <span className="text-xs text-slate-400">
-                        {displayUnit(selectedAcu.unidad || 'Und.')}
+                        {displayUnit(localAcu.unidad || 'Und.')}
                     </span>
                 </div>
                 <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-600">
@@ -1657,60 +1666,60 @@ export function AcuPanel({
                     <div className="scrollbar-thin flex-1 overflow-y-auto border-l border-slate-700 bg-slate-900">
                         <AcuSection
                             type="mano_de_obra"
-                            items={selectedAcu.mano_de_obra || []}
-                            subtotal={selectedAcu.costo_mano_obra || 0}
+                            items={localAcu.mano_de_obra || []}
+                            subtotal={localAcu.costo_mano_obra || 0}
                             rendimiento={rendimiento}
                             perDay={perDay}
                             hoursPerDay={hoursPerDay}
-                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            manoObraTotal={localAcu.costo_mano_obra || 0}
                             onAddClick={handleAddResourceClick}
                             onUpdateItem={handleUpdateItem}
                             onDeleteItem={handleDeleteItem}
                         />
                         <AcuSection
                             type="materiales"
-                            items={selectedAcu.materiales || []}
-                            subtotal={selectedAcu.costo_materiales || 0}
+                            items={localAcu.materiales || []}
+                            subtotal={localAcu.costo_materiales || 0}
                             rendimiento={rendimiento}
                             perDay={perDay}
                             hoursPerDay={hoursPerDay}
-                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            manoObraTotal={localAcu.costo_mano_obra || 0}
                             onAddClick={handleAddResourceClick}
                             onUpdateItem={handleUpdateItem}
                             onDeleteItem={handleDeleteItem}
                         />
                         <AcuSection
                             type="equipos"
-                            items={selectedAcu.equipos || []}
-                            subtotal={selectedAcu.costo_equipos || 0}
+                            items={localAcu.equipos || []}
+                            subtotal={localAcu.costo_equipos || 0}
                             rendimiento={rendimiento}
                             perDay={perDay}
                             hoursPerDay={hoursPerDay}
-                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            manoObraTotal={localAcu.costo_mano_obra || 0}
                             onAddClick={handleAddResourceClick}
                             onUpdateItem={handleUpdateItem}
                             onDeleteItem={handleDeleteItem}
                         />
                         <AcuSection
                             type="subcontratos"
-                            items={selectedAcu.subcontratos || []}
-                            subtotal={selectedAcu.costo_subcontratos || 0}
+                            items={localAcu.subcontratos || []}
+                            subtotal={localAcu.costo_subcontratos || 0}
                             rendimiento={rendimiento}
                             perDay={perDay}
                             hoursPerDay={hoursPerDay}
-                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            manoObraTotal={localAcu.costo_mano_obra || 0}
                             onAddClick={handleAddResourceClick}
                             onUpdateItem={handleUpdateItem}
                             onDeleteItem={handleDeleteItem}
                         />
                         <AcuSection
                             type="subpartidas"
-                            items={selectedAcu.subpartidas || []}
-                            subtotal={selectedAcu.costo_subpartidas || 0}
+                            items={localAcu.subpartidas || []}
+                            subtotal={localAcu.costo_subpartidas || 0}
                             rendimiento={rendimiento}
                             perDay={perDay}
                             hoursPerDay={hoursPerDay}
-                            manoObraTotal={selectedAcu.costo_mano_obra || 0}
+                            manoObraTotal={localAcu.costo_mano_obra || 0}
                             onAddClick={handleAddResourceClick}
                             onUpdateItem={handleUpdateItem}
                             onDeleteItem={handleDeleteItem}
@@ -1722,9 +1731,21 @@ export function AcuPanel({
                 <span className="text-sm font-bold tracking-wide text-slate-300">
                     TOTAL ACU.
                 </span>
-                <span className="font-mono text-lg font-bold text-sky-400">
-                    {fmt(grandTotal)}
-                </span>
+                <div className="flex items-center gap-3">
+                    {isDirty && (
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="flex items-center gap-1.5 rounded bg-sky-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-sky-500 disabled:opacity-50"
+                        >
+                            {isSaving && <Loader2 size={11} className="animate-spin" />}
+                            Guardar
+                        </button>
+                    )}
+                    <span className="font-mono text-lg font-bold text-sky-400">
+                        {fmt(grandTotal)}
+                    </span>
+                </div>
             </div>
 
             {/* Dialog for Searching Resources */}

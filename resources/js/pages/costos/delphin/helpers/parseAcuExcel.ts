@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 
 export interface ParsedAcuComponente {
     codigo: string | null;
+    proveedor: string | null;
     descripcion: string;
     unidad: string;
     recursos: number;
@@ -97,16 +98,17 @@ function rowTexts(ws: XLSX.WorkSheet, r: number, maxC: number): string[] {
 
 // ─── Column map ───────────────────────────────────────────────────────────────
 
-interface ColMap { cod: number; desc: number; unidad: number; recursos: number; cantidad: number; precio: number; }
+interface ColMap { cod: number; desc: number; unidad: number; recursos: number; cantidad: number; precio: number; proveedor?: number; }
 
 // Keywords that identify each column type (handles "Código", "Cod.", "CUADRILLA", "Cuadrilla", etc.)
 const COL_KEYWORDS: [keyof ColMap, string[]][] = [
-    ['cod',      ['cod', 'item']],
-    ['desc',     ['descrip']],
-    ['unidad',   ['unid', 'und']],         // Note: "und." and "unid." both match
-    ['recursos', ['recur', 'cuadr', 'c.', 'cua']],
-    ['cantidad', ['cant']],
-    ['precio',   ['precio', 'p.unit', 'p. unit', 'p.u']],
+    ['cod',       ['cod', 'ind', 'item']],
+    ['desc',      ['descrip']],
+    ['unidad',    ['unid', 'und']],
+    ['recursos',  ['recur', 'cuadr', 'c.', 'cua']],
+    ['cantidad',  ['cant']],
+    ['precio',    ['precio', 'p.unit', 'p. unit', 'p.u']],
+    ['proveedor', ['proveed', 'prov.']],
 ];
 
 // Wider trigger: any row with 3+ recognized column keywords (fixes Bug 2)
@@ -359,8 +361,13 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
                         const cm = colMap;
 
                         // ── 7. Parse the resource row ──────────────────────────────
-                        const desc     = cm ? cellStr(ws, r, cm.desc)     : (texts.find((t, i) => t && i > 0 && !IS_NUMERIC.test(t)) ?? '');
-                        const codigo   = cm ? cellStr(ws, r, cm.cod)      : (texts.find((t) => t && IS_CODE.test(t) && t.length <= 10) ?? '');
+                        const desc      = cm ? cellStr(ws, r, cm.desc)     : (texts.find((t, i) => t && i > 0 && !IS_NUMERIC.test(t)) ?? '');
+                        const codigo    = (cm && cm.cod != null && cm.cod >= 0)
+                            ? cellStr(ws, r, cm.cod)
+                            : (texts.find((t) => t && IS_CODE.test(t) && t.length <= 10) ?? '');
+                        const proveedor = (cm && cm.proveedor != null && cm.proveedor >= 0)
+                            ? cellStr(ws, r, cm.proveedor)
+                            : '';
                         const unidad   = cm ? cellStr(ws, r, cm.unidad)   : (texts.find((t) => UNIT_SET.has(t.toLowerCase())) ?? '');
                         const recursos = cm && cm.recursos >= 0 ? cellNum(ws, r, cm.recursos) : 0;
                         const cantidad = cm ? cellNum(ws, r, cm.cantidad) : 0;
@@ -378,6 +385,7 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
 
                         current[section].push({
                             codigo:             codigo || null,
+                            proveedor:          proveedor || null,
                             descripcion:        desc,
                             unidad:             unidad || '',
                             recursos,

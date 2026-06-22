@@ -494,6 +494,8 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             recursos:       c.recursos,
             precio_unitario: c.precio_unitario,
             insumo_id:      null,
+            cod_insumo:     c.codigo || null,
+            proveedor:      c.proveedor || null,
         })),
         materiales:           acu.materiales.map((c) => ({
             descripcion:        c.descripcion,
@@ -502,6 +504,8 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             precio_unitario:    c.precio_unitario,
             factor_desperdicio: c.factor_desperdicio ?? 1,
             insumo_id:          null,
+            cod_insumo:         c.codigo || null,
+            proveedor:          c.proveedor || null,
         })),
         equipos:              acu.equipos.map((c) => ({
             descripcion: c.descripcion,
@@ -510,6 +514,8 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             recursos:    c.recursos,
             precio_hora: c.precio_hora,
             insumo_id:   null,
+            cod_insumo:  c.codigo || null,
+            proveedor:   c.proveedor || null,
         })),
         subcontratos:         acu.subcontratos.map((c) => ({
             descripcion:     c.descripcion,
@@ -517,6 +523,8 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             cantidad:        c.cantidad,
             precio_unitario: c.precio_unitario,
             insumo_id:       null,
+            cod_insumo:      c.codigo || null,
+            proveedor:       c.proveedor || null,
         })),
         subpartidas:          acu.subpartidas.map((c) => ({
             descripcion:     c.descripcion,
@@ -524,6 +532,8 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             cantidad:        c.cantidad,
             precio_unitario: c.precio_unitario,
             insumo_id:       null,
+            cod_insumo:      c.codigo || null,
+            proveedor:       c.proveedor || null,
         })),
         update_project_prices: false,
     };
