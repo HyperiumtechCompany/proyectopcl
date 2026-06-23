@@ -22,6 +22,7 @@ import type {
     ACURowSummary,
     InsumoProducto,
 } from '@/types/presupuestos';
+import { calculateAcuLocally } from '../hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../stores/projectParamsStore';
 
 const fmt = (n: number | undefined | null, d = 2) =>
@@ -98,6 +99,33 @@ const computeRecursosFromCantidadBase = (
     }
     return cantidad * safeRend;
 };
+
+type AcuSectionType = 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas';
+
+export function createAcuComponentFromResource(
+    resource: InsumoProducto,
+    targetType: AcuSectionType,
+    cantidad: number,
+    recursos?: number,
+): ACUComponenteRow {
+    const isEquipment = targetType === 'equipos';
+
+    return {
+        insumo_id: resource.id,
+        cod_insumo: resource.codigo,
+        descripcion: resource.descripcion,
+        unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? '',
+        cantidad,
+        recursos,
+        precio_unitario: isEquipment ? 0 : resource.precio,
+        precio_hora: isEquipment ? resource.precio : 0,
+        factor_desperdicio: targetType === 'materiales' ? 1.05 : 1,
+    };
+}
+
+function recalculateAcu(acu: ACURowSummary): ACURowSummary {
+    return { ...acu, ...calculateAcuLocally(acu) };
+}
 
 function SearchableSelect({
     options,
@@ -1182,6 +1210,10 @@ interface AcuPanelProps {
         acuData: Record<string, any>,
         options?: { updateProjectPrices?: boolean }
     ) => Promise<{ success: boolean; acu?: any; error?: string }>;
+    onAcuChange?: (
+        acuData: Record<string, any>,
+        options?: { updateProjectPrices?: boolean }
+    ) => void;
 }
 
 export function AcuPanel({
@@ -1189,15 +1221,11 @@ export function AcuPanel({
     selectedAcu,
     selectedCell,
     onSaveAcu,
+    onAcuChange,
     acuRows,
     projectId,
 }: AcuPanelProps) {
-    type SectionType =
-        | 'mano_de_obra'
-        | 'materiales'
-        | 'equipos'
-        | 'subcontratos'
-        | 'subpartidas';
+    type SectionType = AcuSectionType;
     type SearchType = 'mano_de_obra' | 'materiales' | 'equipos' | 'subcontratos' | 'subpartidas';
 
     const [rendimiento, setRendimiento] = useState(1);
@@ -1323,6 +1351,13 @@ export function AcuPanel({
         setIsSaving(false);
     }, [localAcu, onSaveAcu, updateProjectPrices]);
 
+    useEffect(() => {
+        if (!isDirty || !localAcu || !onAcuChange) return;
+
+        onAcuChange(localAcu, { updateProjectPrices });
+        setIsDirty(false);
+    }, [isDirty, localAcu, onAcuChange, updateProjectPrices]);
+
     const handleAddResourceClick = (type: SectionType) => {
         if (!localAcu) return;
         setSearchTargetType(type);
@@ -1340,27 +1375,17 @@ export function AcuPanel({
             ? computeCantidadFromRecursos(recursos ?? 0)
             : 1;
 
-        const newComponent = {
-            insumo_id: resource.id,
-            codigo: resource.codigo_producto,
-            descripcion: resource.descripcion,
-            unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? resource.unidad,
-            cantidad,
-            recursos,
-            precio_unitario: resource.tipo === 'equipos' ? 0 : resource.precio,
-            precio_hora: resource.tipo === 'equipos' ? resource.precio : 0,
-            factor_desperdicio: resource.tipo === 'materiales' ? 1.05 : 1,
-        };
+        const newComponent = createAcuComponentFromResource(resource, searchTargetType, cantidad, recursos);
 
         setLocalAcu((prev) => {
             if (!prev) return prev;
-            return {
+            return recalculateAcu({
                 ...prev,
                 [searchTargetType]: [
                     ...((prev[searchTargetType as keyof ACURowSummary] as any[]) || []),
                     newComponent,
                 ],
-            };
+            });
         });
         setIsDirty(true);
         setSearchOpen(false);
@@ -1397,7 +1422,7 @@ export function AcuPanel({
                 arr[index] = { ...arr[index], precio_hora: prev.costo_mano_obra || 0 };
             }
 
-            return { ...prev, [type]: arr };
+            return recalculateAcu({ ...prev, [type]: arr });
         });
         setIsDirty(true);
     };
@@ -1407,7 +1432,7 @@ export function AcuPanel({
             if (!prev) return prev;
             const arr = [...((prev[type as keyof ACURowSummary] as any[]) || [])];
             arr.splice(index, 1);
-            return { ...prev, [type]: arr };
+            return recalculateAcu({ ...prev, [type]: arr });
         });
         setIsDirty(true);
     };
@@ -1418,7 +1443,7 @@ export function AcuPanel({
         setRendimiento(safeRend);
         setLocalAcu((prev) => {
             if (!prev) return prev;
-            return {
+            return recalculateAcu({
                 ...prev,
                 rendimiento: safeRend,
                 mano_de_obra: recalcCrewForModeChange(
@@ -1434,7 +1459,7 @@ export function AcuPanel({
                     ),
                     prev.costo_mano_obra || 0,
                 ),
-            };
+            });
         });
         setIsDirty(true);
     };
@@ -1443,7 +1468,7 @@ export function AcuPanel({
         setPerDay(nextPerDay);
         setLocalAcu((prev) => {
             if (!prev) return prev;
-            return {
+            return recalculateAcu({
                 ...prev,
                 mano_de_obra: recalcCrewForModeChange(
                     prev.mano_de_obra || [],
@@ -1458,7 +1483,7 @@ export function AcuPanel({
                     ),
                     prev.costo_mano_obra || 0,
                 ),
-            };
+            });
         });
         setIsDirty(true);
     };
@@ -1469,7 +1494,7 @@ export function AcuPanel({
         setHoursPerDay(safeHours);
         setLocalAcu((prev) => {
             if (!prev) return prev;
-            return {
+            return recalculateAcu({
                 ...prev,
                 mano_de_obra: recalcCrewForModeChange(
                     prev.mano_de_obra || [],
@@ -1484,7 +1509,7 @@ export function AcuPanel({
                     ),
                     prev.costo_mano_obra || 0,
                 ),
-            };
+            });
         });
         setIsDirty(true);
     };
@@ -1732,7 +1757,7 @@ export function AcuPanel({
                     TOTAL ACU.
                 </span>
                 <div className="flex items-center gap-3">
-                    {isDirty && (
+                    {isDirty && !onAcuChange && (
                         <button
                             onClick={handleSave}
                             disabled={isSaving}

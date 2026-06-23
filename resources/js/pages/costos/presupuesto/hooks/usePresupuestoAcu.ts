@@ -25,7 +25,7 @@ function decimalMul(...factors: number[]): number {
         .toNumber();
 }
 
-function calculateAcuLocally(acuData: Record<string, any>) {
+export function calculateAcuLocally(acuData: Record<string, any>) {
     const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => ({
         ...item,
         parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
@@ -77,6 +77,16 @@ function calculateAcuLocally(acuData: Record<string, any>) {
         subcontratos,
         subpartidas,
     };
+}
+
+export function upsertLocalAcuRow(
+    rows: ACURowSummary[],
+    updatedAcu: ACURowSummary,
+): ACURowSummary[] {
+    const exists = rows.some((acu) => acu.partida === updatedAcu.partida);
+    if (!exists) return [...rows, updatedAcu];
+
+    return rows.map((acu) => acu.partida === updatedAcu.partida ? updatedAcu : acu);
 }
 
 interface UsePresupuestoAcuProps {
@@ -402,11 +412,7 @@ export function usePresupuestoAcu({
             rendimiento: Number(normalized.rendimiento ?? 1),
             ...calculated,
         };
-        setAcuRows((prev) => {
-            const exists = prev.some((a) => a.partida === updatedAcu.partida);
-            if (exists) return prev.map((a) => a.partida === updatedAcu.partida ? updatedAcu : a);
-            return [...prev, updatedAcu];
-        });
+        setAcuRows((prev) => upsertLocalAcuRow(prev, updatedAcu));
         const payload = { ...normalized };
         if (options?.updateProjectPrices !== undefined) payload.update_project_prices = options.updateProjectPrices;
         pendingAcuRef.current.set(updatedAcu.partida, payload);

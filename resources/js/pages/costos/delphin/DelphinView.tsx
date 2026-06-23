@@ -288,7 +288,6 @@ export default function DelphinView({
         acuRows,
         acuLoading,
         selectedAcu,
-        saveAcu: baseSaveAcu,
         localSaveAcu,
         flushPendingAcus,
         acuDirty,
@@ -305,13 +304,12 @@ export default function DelphinView({
     });
 
     // Called by AcuPanel when user edits an individual ACU (visual-first)
-    const handleSaveAcu = useCallback(async (acuData: Record<string, any>) => {
-        const result = await baseSaveAcu(acuData);
+    const handleAcuChange = useCallback((acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
+        const result = localSaveAcu(acuData, options);
         if (result.success && result.acu && selectedTask) {
             commitField(selectedTask.id, 'precio_unitario', result.acu.costo_unitario_total);
         }
-        return result;
-    }, [baseSaveAcu, selectedTask, commitField]);
+    }, [localSaveAcu, selectedTask, commitField]);
 
     // Called by ImportDelphinModal after ACU Excel parse — applies locally, no DB call
     const handleAcusImported = useCallback((payloads: Array<Record<string, any>>) => {
@@ -739,7 +737,7 @@ export default function DelphinView({
                                     selectedAcu={selectedAcu}
                                     projectId={project_id_int}
                                     selectedCell={null}
-                                    onSaveAcu={handleSaveAcu} />
+                                    onAcuChange={handleAcuChange} />
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
                                 <GanttChart
