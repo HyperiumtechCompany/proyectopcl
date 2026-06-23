@@ -1,6 +1,6 @@
 import type { ACURowSummary } from '@/types/presupuestos';
 import { Calculator, GitMerge, Globe } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { FormulaPolinomica } from '../../presupuesto/components/formula_polinomica';
 import type { DelphinRow } from '../types';
@@ -59,19 +59,64 @@ function Tab({
     );
 }
 
+function SubTab({
+    active,
+    onClick,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`flex shrink-0 items-center whitespace-nowrap rounded px-2 py-0.5 text-[9px] font-medium transition-colors ${
+                active
+                    ? 'bg-sky-700 text-white'
+                    : 'bg-slate-800/60 text-slate-500 hover:bg-slate-700 hover:text-slate-300'
+            }`}
+        >
+            {children}
+        </button>
+    );
+}
+
 export function DelphinFormulaPolinomicaPanel({
     projectId,
     projectName,
     rows,
     acuRows,
 }: Props) {
+    // Top-level parents (specialties)
     const specialties = useMemo(
         () => rows.filter((r) => r.parent_id == null),
         [rows],
     );
 
+    // Set of all IDs that are parents (have at least one child)
+    const parentIdSet = useMemo(() => {
+        const ids = new Set<number>();
+        for (const r of rows) {
+            if (r.parent_id != null) ids.add(Number(r.parent_id));
+        }
+        return ids;
+    }, [rows]);
+
     const [activeTab, setActiveTab] = useState<TabMode>('global');
     const [fusionIds, setFusionIds] = useState<number[]>([]);
+    const [activeSubParent, setActiveSubParent] = useState<number | 'all'>('all');
+
+    // Reset sub-parent whenever the specialty tab changes
+    useEffect(() => { setActiveSubParent('all'); }, [activeTab]);
+
+    // Direct children of the selected specialty that are themselves parents
+    const subParents = useMemo(() => {
+        if (typeof activeTab !== 'number') return [];
+        return rows.filter(
+            (r) => r.parent_id === activeTab && parentIdSet.has(r.id),
+        );
+    }, [activeTab, rows, parentIdSet]);
 
     const toggleFusion = (id: number) =>
         setFusionIds((prev) =>
@@ -94,8 +139,12 @@ export function DelphinFormulaPolinomicaPanel({
         }
         const root = rows.find((r) => r.id === (activeTab as number));
         if (!root) return [];
-        return [root, ...getSubtree(rows, activeTab as number)];
-    }, [activeTab, rows, fusionIds]);
+        const specialtyRows = [root, ...getSubtree(rows, activeTab as number)];
+        if (activeSubParent === 'all') return specialtyRows;
+        const subRoot = rows.find((r) => r.id === activeSubParent);
+        if (!subRoot) return specialtyRows;
+        return [subRoot, ...getSubtree(rows, activeSubParent)];
+    }, [activeTab, activeSubParent, rows, fusionIds]);
 
     const totalPresupuesto = useMemo(
         () => rows.reduce((s, r) => s + Number(r.parcial ?? 0), 0),
@@ -109,9 +158,16 @@ export function DelphinFormulaPolinomicaPanel({
             ? 'Fusión de especialidades'
             : specialties.find((s) => s.id === activeTab)?.descripcion ?? null;
 
+    const subLabel =
+        typeof activeTab === 'number' && activeSubParent !== 'all'
+            ? rows.find((r) => r.id === activeSubParent)?.descripcion ?? null
+            : null;
+
     const formulaKey =
         activeTab === 'fusion'
             ? `fusion-${[...fusionIds].sort().join(',')}`
+            : activeSubParent !== 'all'
+            ? `${activeTab}-sub-${activeSubParent}`
             : String(activeTab);
 
     return (
@@ -125,6 +181,11 @@ export function DelphinFormulaPolinomicaPanel({
                         {activeLabel && (
                             <span className="min-w-0 truncate text-xs font-normal text-slate-400">
                                 — {activeLabel}
+                            </span>
+                        )}
+                        {subLabel && (
+                            <span className="min-w-0 truncate text-xs font-normal text-sky-400">
+                                › {subLabel}
                             </span>
                         )}
                     </h2>
@@ -178,6 +239,37 @@ export function DelphinFormulaPolinomicaPanel({
                     ))}
                 </div>
             </div>
+
+            {/* Sub-parent selector — only when a specialty is selected and has intermediate parents */}
+            {typeof activeTab === 'number' && subParents.length > 0 && (
+                <div className="shrink-0 border-b border-slate-700 bg-slate-950/50 px-3 py-1.5">
+                    <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <span className="mr-1.5 shrink-0 text-[9px] uppercase tracking-wider text-slate-600">
+                            Partida
+                        </span>
+                        <SubTab
+                            active={activeSubParent === 'all'}
+                            onClick={() => setActiveSubParent('all')}
+                        >
+                            Todos
+                        </SubTab>
+                        {subParents.map((sp) => (
+                            <SubTab
+                                key={sp.id}
+                                active={activeSubParent === sp.id}
+                                onClick={() => setActiveSubParent(sp.id)}
+                            >
+                                {sp.partida
+                                    ? `${sp.partida} `
+                                    : ''}
+                                {sp.descripcion.length > 28
+                                    ? sp.descripcion.slice(0, 28) + '…'
+                                    : sp.descripcion}
+                            </SubTab>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Fusion picker */}
             {activeTab === 'fusion' && (
@@ -251,7 +343,7 @@ export function DelphinFormulaPolinomicaPanel({
             </div>
 
             <div className="shrink-0 border-t border-slate-800 px-4 py-1.5 text-[10px] text-slate-600">
-                Proyecto #{projectId}
+                Proyecto #{projectId} · DS 011-79-VC: máx. 8 monomios · Σ coef. = 1 · coef. mín. 0.05
             </div>
         </div>
     );

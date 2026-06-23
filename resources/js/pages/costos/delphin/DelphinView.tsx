@@ -4,8 +4,8 @@ import { Head } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Swal from 'sweetalert2';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-
 import { GanttChart } from '../cronogramas/v2/components/chart/GanttChart';
 import { DiagramaRed } from '../cronogramas/v2/components/network/DiagramaRed';
 import { GanttSettingsModal } from '../cronogramas/v2/components/settings/GanttSettingsModal';
@@ -21,22 +21,22 @@ import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 
 
+
 import { router } from '@inertiajs/react';
 
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
-import type { AcuFlushProgress } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 import { DelphinGrid } from './components/DelphinGrid';
 import { DelphinExportModal } from './components/DelphinExportModal';
-import { DelphinFormulaPolinomicaPanel } from './components/DelphinFormulaPolinomicaPanel';
+import { FormulaPolinomicaSplitView } from './components/FormulaPolinomicaSplitView';
 import { DelphinToolbar } from './components/DelphinToolbar';
 import { ImportDelphinModal } from './components/ImportDelphinModal';
 import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal';
 import { useDelphinData } from './hooks/useDelphinData';
+import { useDiccionario } from './hooks/useDiccionario';
 import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView } from './types';
-
 
 const DESC_EXPANDED_EXTRA = 180;
 
@@ -125,6 +125,12 @@ export default function DelphinView({
     const [subView, setSubView] = useState<DelphinSubView>('gantt');
     const [budgetView, setBudgetView] = useState<DelphinBudgetView>('presupuesto');
 
+    // ── Diccionario INEI (para fórmula polinómica) ────────────────────────────
+    const { items: diccionario } = useDiccionario(project);
+
+    // ── Fórmula polinómica: padre seleccionado ────────────────────────────────
+    const [formulaParentId, setFormulaParentId] = useState<number | null>(null);
+
     // ── Scheduling mode ───────────────────────────────────────────────────────
     const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(() => {
         if (typeof window === 'undefined') return 'automatic';
@@ -146,13 +152,6 @@ export default function DelphinView({
     const [insumosOpen, setInsumosOpen] = useState(false);
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
-    const [flushProgress, setFlushProgress] = useState<AcuFlushProgress & { active: boolean }>({
-        active: false,
-        done: 0,
-        total: 0,
-        pct: 0,
-        etaSecs: null,
-    });
 
     // ── Column visibility + description expand ────────────────────────────────
     const [hiddenBudgetKeys, setHiddenBudgetKeys] = useState<Set<string>>(new Set());
@@ -209,6 +208,16 @@ export default function DelphinView({
     // ── Selection & editing ───────────────────────────────────────────────────
     const { selectedRowId, editState, selectRow, startEdit, stopEdit, cancelEdit } =
         useGanttSelection();
+
+    // Enabled only when the selected row is a parent (group) node
+    const isParentSelected = selectedRowId !== null && groupIds.has(selectedRowId);
+
+    const handleFormulaView = useCallback(() => {
+        if (selectedRowId !== null && groupIds.has(selectedRowId)) {
+            setFormulaParentId(selectedRowId);
+            setBudgetView('formula_polinomica');
+        }
+    }, [selectedRowId, groupIds]);
 
     const pendingSelectRef = useRef<number | null>(null);
     const setPendingSelect = useCallback((id: number) => { pendingSelectRef.current = id; }, []);
@@ -279,7 +288,6 @@ export default function DelphinView({
         acuRows,
         acuLoading,
         selectedAcu,
-        saveAcu: baseSaveAcu,
         localSaveAcu,
         flushPendingAcus,
         acuDirty,
@@ -296,13 +304,12 @@ export default function DelphinView({
     });
 
     // Called by AcuPanel when user edits an individual ACU (visual-first)
-    const handleSaveAcu = useCallback(async (acuData: Record<string, any>) => {
-        const result = await baseSaveAcu(acuData);
+    const handleAcuChange = useCallback((acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
+        const result = localSaveAcu(acuData, options);
         if (result.success && result.acu && selectedTask) {
             commitField(selectedTask.id, 'precio_unitario', result.acu.costo_unitario_total);
         }
-        return result;
-    }, [baseSaveAcu, selectedTask, commitField]);
+    }, [localSaveAcu, selectedTask, commitField]);
 
     // Called by ImportDelphinModal after ACU Excel parse — applies locally, no DB call
     const handleAcusImported = useCallback((payloads: Array<Record<string, any>>) => {
@@ -391,37 +398,123 @@ export default function DelphinView({
         moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect]);
 
     // ── Save functions ────────────────────────────────────────────────────────
-    const onAcuProgress = useCallback((p: AcuFlushProgress) => {
-        setFlushProgress({ active: true, ...p });
-    }, []);
+    const swalDark = {
+        background: '#1e293b',
+        color: '#e2e8f0',
+        confirmButtonColor: '#0ea5e9',
+    } as const;
+
+    const saveSwalHtml = (statusText: string) => `
+        <p id="dsave-status" style="font-size:13px;color:#94a3b8;margin:0 0 12px">${statusText}</p>
+        <div style="background:#334155;border-radius:4px;height:6px;overflow:hidden;margin-bottom:16px">
+            <div id="dsave-bar" style="width:0%;height:100%;background:#38bdf8;border-radius:4px;transition:width 0.25s ease"></div>
+        </div>
+        <button id="dsave-cancel" style="padding:6px 20px;border-radius:6px;background:#475569;border:1px solid #64748b;color:#e2e8f0;cursor:pointer;font-size:13px">
+            Cancelar
+        </button>`;
 
     const handleSaveBudget = useCallback(async () => {
-        const [budgetOk, acuOk] = await Promise.all([
-            saveBudget(project_id_int),
-            flushPendingAcus(onAcuProgress),
-        ]);
-        setFlushProgress((prev) => ({ ...prev, active: false }));
-        const ok = budgetOk && acuOk;
-        toast(ok ? 'Presupuesto guardado.' : 'Error al guardar el presupuesto.', ok ? 'success' : 'error');
-        if (ok) setAcuRefetchVersion((v) => v + 1);
-    }, [saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
+        const ac = new AbortController();
+        let budgetOk = false;
+        let acuOk = false;
 
-  
+        await Swal.fire({
+            title: 'Guardando presupuesto…',
+            html: saveSwalHtml('Guardando partidas…'),
+            showConfirmButton: false,
+            showCancelButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            ...swalDark,
+            didOpen: async () => {
+                document.getElementById('dsave-cancel')?.addEventListener('click', () => {
+                    ac.abort();
+                    const btn = document.getElementById('dsave-cancel') as HTMLButtonElement | null;
+                    if (btn) { btn.disabled = true; btn.textContent = 'Cancelando…'; btn.style.opacity = '0.5'; }
+                    const s = document.getElementById('dsave-status');
+                    if (s) s.textContent = 'Cancelando guardado de ACUs…';
+                }, { once: true });
+
+                try {
+                    [budgetOk, acuOk] = await Promise.all([
+                        saveBudget(project_id_int),
+                        flushPendingAcus((p) => {
+                            const s = document.getElementById('dsave-status');
+                            const b = document.getElementById('dsave-bar');
+                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                            if (b) b.style.width = `${p.pct}%`;
+                        }, ac.signal),
+                    ]);
+                } finally {
+                    Swal.close();
+                }
+            },
+        });
+
+        if (ac.signal.aborted) {
+            await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'Las partidas fueron guardadas. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
+            return;
+        }
+        if (budgetOk && acuOk) {
+            setAcuRefetchVersion((v) => v + 1);
+            void Swal.fire({ icon: 'success', title: 'Presupuesto guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+        } else {
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: 'Ocurrió un error. Intente nuevamente.', ...swalDark });
+        }
+    }, [saveBudget, project_id_int, flushPendingAcus]);
+
     const handleSaveGantt = useCallback(async () => {
-        const [ganttOk, budgetOk, acuOk] = await Promise.all([
-            saveTasks(project),
-            saveBudget(project_id_int),
-            flushPendingAcus(onAcuProgress),
-        ]);
-        setFlushProgress((prev) => ({ ...prev, active: false }));
-        const ok = ganttOk && budgetOk && acuOk;
-        const msg = ok ? 'Delphin guardado.'
-            : !ganttOk ? 'Error al guardar el cronograma.'
-                : !budgetOk ? 'Error al guardar el presupuesto.'
-                    : 'Error al guardar los ACUs.';
-        toast(msg, ok ? 'success' : 'error');
-        if (ok) setAcuRefetchVersion((v) => v + 1);
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, onAcuProgress]);
+        const ac = new AbortController();
+        let ganttOk = false;
+        let budgetOk = false;
+        let acuOk = false;
+
+        await Swal.fire({
+            title: 'Guardando Delphin…',
+            html: saveSwalHtml('Guardando cronograma y partidas…'),
+            showConfirmButton: false,
+            showCancelButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            ...swalDark,
+            didOpen: async () => {
+                document.getElementById('dsave-cancel')?.addEventListener('click', () => {
+                    ac.abort();
+                    const btn = document.getElementById('dsave-cancel') as HTMLButtonElement | null;
+                    if (btn) { btn.disabled = true; btn.textContent = 'Cancelando…'; btn.style.opacity = '0.5'; }
+                    const s = document.getElementById('dsave-status');
+                    if (s) s.textContent = 'Cancelando guardado de ACUs…';
+                }, { once: true });
+
+                try {
+                    [ganttOk, budgetOk, acuOk] = await Promise.all([
+                        saveTasks(project),
+                        saveBudget(project_id_int),
+                        flushPendingAcus((p) => {
+                            const s = document.getElementById('dsave-status');
+                            const b = document.getElementById('dsave-bar');
+                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                            if (b) b.style.width = `${p.pct}%`;
+                        }, ac.signal),
+                    ]);
+                } finally {
+                    Swal.close();
+                }
+            },
+        });
+
+        if (ac.signal.aborted) {
+            await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'El cronograma y partidas fueron guardados. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
+            return;
+        }
+        if (ganttOk && budgetOk && acuOk) {
+            setAcuRefetchVersion((v) => v + 1);
+            void Swal.fire({ icon: 'success', title: 'Delphin guardado', timer: 2000, showConfirmButton: false, ...swalDark });
+        } else {
+            const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
+        }
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
 
     // ── Import MSP ────────────────────────────────────────────────────────────
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -508,7 +601,6 @@ export default function DelphinView({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Delphin — ${project_name}`} />
-
             <div className="flex h-[calc(100vh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-900 text-white">
 
                 {/* ── 1. Single unified toolbar ──────────────────────────── */}
@@ -545,6 +637,9 @@ export default function DelphinView({
                     onImportExcel={() => setImportExcelOpen(true)}
                     onOpenInsumos={() => setInsumosOpen(true)}
 
+                    isParentSelected={isParentSelected}
+                    onFormulaView={handleFormulaView}
+
                     budgetDirty={budgetDirty || acuDirty}
                     isSavingBudget={isSavingBudget}
                     ganttDirty={ganttDirty || budgetDirty || acuDirty}
@@ -555,12 +650,15 @@ export default function DelphinView({
                 />
 
                 {/* ── 2. Main area ────────────────────────────────────────── */}
-                {mode === 'budget' && budgetView === 'formula_polinomica' ? (
-                    <DelphinFormulaPolinomicaPanel
-                        projectId={project_id_int}
-                        projectName={project_name}
+                {mode === 'budget' && budgetView === 'formula_polinomica' && formulaParentId !== null ? (
+                    <FormulaPolinomicaSplitView
+                        key={String(formulaParentId)}
+                        parentId={formulaParentId}
                         rows={delphinRows}
                         acuRows={acuRows}
+                        diccionario={diccionario}
+                        projectName={project_name}
+                        onBack={() => setBudgetView('presupuesto')}
                     />
                 ) : mode === 'cpm' && subView === 'network' ? (
                     /* Red/Network: full width, no split pane */
@@ -575,7 +673,6 @@ export default function DelphinView({
                 ) : (
                     /* Split pane: ONE grid (left, columns change) + right panel */
                     <Group orientation="horizontal" className="min-h-0 flex-1">
-
                         {/* ── Left: search bar + DelphinGrid ───────────── */}
                         <Panel
                             defaultSize={40}
@@ -640,7 +737,7 @@ export default function DelphinView({
                                     selectedAcu={selectedAcu}
                                     projectId={project_id_int}
                                     selectedCell={null}
-                                    onSaveAcu={handleSaveAcu} />
+                                    onAcuChange={handleAcuChange} />
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
                                 <GanttChart
@@ -704,36 +801,6 @@ export default function DelphinView({
                     className="hidden"
                     onChange={handleImportFile} />
             </div>
-
-            {/* ── ACU flush progress overlay ─────────────────────────────── */}
-            {flushProgress.active && (
-                <div className="fixed bottom-6 right-6 z-9999 w-72 rounded-xl border border-slate-700 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-sm">
-                    <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-200">Guardando ACUs…</span>
-                        <span className="text-xs tabular-nums text-slate-400">
-                            {flushProgress.done} / {flushProgress.total}
-                        </span>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-                        <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: `${flushProgress.pct}%` }} />
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                        <span>{flushProgress.pct}% completado</span>
-                        <span>
-                            {flushProgress.etaSecs === null
-                                ? 'Calculando...'
-                                : flushProgress.etaSecs === 0
-                                    ? 'Finalizando...'
-                                    : flushProgress.etaSecs < 60
-                                        ? `~${flushProgress.etaSecs}s restantes`
-                                        : `~${Math.ceil(flushProgress.etaSecs / 60)}m restantes`}
-                        </span>
-                    </div>
-                </div>
-            )}
         </AppLayout>
     );
 }

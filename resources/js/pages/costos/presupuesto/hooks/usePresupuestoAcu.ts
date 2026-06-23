@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
@@ -12,20 +13,30 @@ export interface AcuFlushProgress {
 }
 
 // Mirrors the PHP calculateACU logic — keeps visual preview consistent with DB result
+// r2 rounds sums of already-rounded values (float error is negligible there)
 function r2(n: number): number { return Math.round(n * 100) / 100; }
 
-function calculateAcuLocally(acuData: Record<string, any>) {
+// Multiplies operands with Decimal.js precision and rounds the result to 2dp.
+// Avoids float errors like 0.57 * 31.50 = 17.954999... rounding to 17.95 instead of 17.96.
+function decimalMul(...factors: number[]): number {
+    return factors
+        .reduce((acc, f) => acc.times(new Decimal(f)), new Decimal(1))
+        .toDecimalPlaces(2)
+        .toNumber();
+}
+
+export function calculateAcuLocally(acuData: Record<string, any>) {
     const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => ({
         ...item,
-        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
     }));
     const costoManoObra = r2(manoDeObra.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
     const materiales = (acuData.materiales as any[] || []).map((item: any) => ({
         ...item,
-        parcial: r2(
-            Number(item.cantidad ?? 0) *
-            Number(item.precio_unitario ?? 0) *
+        parcial: decimalMul(
+            Number(item.cantidad ?? 0),
+            Number(item.precio_unitario ?? 0),
             Math.max(1, Number(item.factor_desperdicio ?? 1))
         ),
     }));
@@ -34,22 +45,22 @@ function calculateAcuLocally(acuData: Record<string, any>) {
     const equipos = (acuData.equipos as any[] || []).map((item: any) => {
         const isHerramientas = String(item.descripcion ?? '').toLowerCase().includes('herramienta');
         if (isHerramientas) {
-            const parcial = r2(costoManoObra * (Number(item.cantidad ?? 0) / 100));
+            const parcial = decimalMul(costoManoObra, Number(item.cantidad ?? 0) / 100);
             return { ...item, precio_hora: costoManoObra, parcial };
         }
-        return { ...item, parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_hora ?? 0)) };
+        return { ...item, parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_hora ?? 0)) };
     });
     const costoEquipos = r2(equipos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
     const subcontratos = (acuData.subcontratos as any[] || []).map((item: any) => ({
         ...item,
-        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
     }));
     const costoSubcontratos = r2(subcontratos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
     const subpartidas = (acuData.subpartidas as any[] || []).map((item: any) => ({
         ...item,
-        parcial: r2(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)),
+        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
     }));
     const costoSubpartidas = r2(subpartidas.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
@@ -66,6 +77,16 @@ function calculateAcuLocally(acuData: Record<string, any>) {
         subcontratos,
         subpartidas,
     };
+}
+
+export function upsertLocalAcuRow(
+    rows: ACURowSummary[],
+    updatedAcu: ACURowSummary,
+): ACURowSummary[] {
+    const exists = rows.some((acu) => acu.partida === updatedAcu.partida);
+    if (!exists) return [...rows, updatedAcu];
+
+    return rows.map((acu) => acu.partida === updatedAcu.partida ? updatedAcu : acu);
 }
 
 interface UsePresupuestoAcuProps {
@@ -277,6 +298,8 @@ export function usePresupuestoAcu({
         const normalized: Record<string, unknown> = {
             id: item.id,
             insumo_id: item.insumo_id,
+            cod_insumo: ((item.cod_insumo as string | null | undefined) ?? (item.codigo as string | null | undefined)) || null,
+            proveedor: (item.proveedor as string | null | undefined) || null,
             descripcion: String(item.descripcion ?? '').trim(),
             unidad: String(item.unidad ?? '').trim() || 'und',
             cantidad: normalizeNumber(item.cantidad, 0),
@@ -389,11 +412,7 @@ export function usePresupuestoAcu({
             rendimiento: Number(normalized.rendimiento ?? 1),
             ...calculated,
         };
-        setAcuRows((prev) => {
-            const exists = prev.some((a) => a.partida === updatedAcu.partida);
-            if (exists) return prev.map((a) => a.partida === updatedAcu.partida ? updatedAcu : a);
-            return [...prev, updatedAcu];
-        });
+        setAcuRows((prev) => upsertLocalAcuRow(prev, updatedAcu));
         const payload = { ...normalized };
         if (options?.updateProjectPrices !== undefined) payload.update_project_prices = options.updateProjectPrices;
         pendingAcuRef.current.set(updatedAcu.partida, payload);
@@ -401,31 +420,41 @@ export function usePresupuestoAcu({
         return { success: true as const, acu: updatedAcu };
     }, [normalizeAcuData]);
 
-    // Batch-persists all pending ACU edits to DB (called on global save)
-    // Processes BATCH_SIZE requests concurrently to avoid hammering the server.
+    // Batch-persists all pending ACU edits to DB (called on global save).
+    // Accepts an optional AbortSignal to cancel mid-flush; pending map stays
+    // dirty so the next save retries the remaining items.
     const flushPendingAcus = useCallback(
-        async (onProgress?: (p: AcuFlushProgress) => void): Promise<boolean> => {
+        async (onProgress?: (p: AcuFlushProgress) => void, signal?: AbortSignal): Promise<boolean> => {
             const pending = Array.from(pendingAcuRef.current.values());
             if (pending.length === 0) return true;
+            if (signal?.aborted) return false;
 
             const total = pending.length;
             const startMs = Date.now();
             let done = 0;
 
-            // Signal initial state so callers can show the overlay immediately
             onProgress?.({ done: 0, total, pct: 0, etaSecs: null });
 
             try {
                 for (let i = 0; i < total; i += ACU_BATCH_SIZE) {
+                    if (signal?.aborted) break;
+
                     const batch = pending.slice(i, i + ACU_BATCH_SIZE);
-                    await Promise.all(
-                        batch.map((payload) =>
-                            axios.post(
-                                `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
-                                payload,
+                    try {
+                        await Promise.all(
+                            batch.map((payload) =>
+                                axios.post(
+                                    `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
+                                    payload,
+                                    { signal },
+                                ),
                             ),
-                        ),
-                    );
+                        );
+                    } catch (e) {
+                        if (axios.isCancel(e)) break;
+                        throw e;
+                    }
+
                     done = Math.min(i + ACU_BATCH_SIZE, total);
 
                     if (onProgress) {
@@ -436,9 +465,12 @@ export function usePresupuestoAcu({
                     }
                 }
 
-                pendingAcuRef.current.clear();
-                setAcuDirty(false);
-                return true;
+                if (!signal?.aborted) {
+                    pendingAcuRef.current.clear();
+                    setAcuDirty(false);
+                    return true;
+                }
+                return false;
             } catch (e) {
                 console.error('Error al persistir ACUs pendientes:', e);
                 return false;
