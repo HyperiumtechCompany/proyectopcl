@@ -163,7 +163,16 @@ function extractInsumos(rows: BudgetFormulaRow[], acuRows: ACURowSummary[]): Ext
             ...v,
             coefficient: grandTotal > 0 ? v.total / grandTotal : 0,
         }))
-        .sort((a, b) => b.total - a.total);
+        .sort((a, b) => {
+            const na = parseInt(a.codigo, 10);
+            const nb = parseInt(b.codigo, 10);
+            if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+            if (!isNaN(na) && isNaN(nb)) return -1;
+            if (isNaN(na) && !isNaN(nb)) return 1;
+            const cmp = a.codigo.localeCompare(b.codigo, 'es');
+            if (cmp !== 0) return cmp;
+            return a.descripcion.localeCompare(b.descripcion, 'es');
+        });
 
     return { insumos, partidaCount: leafRows.length, matchedCount };
 }

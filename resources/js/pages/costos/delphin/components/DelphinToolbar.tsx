@@ -76,6 +76,10 @@ interface Props {
     onImportExcel?:      () => void;
     onOpenInsumos?:      () => void;
 
+    // Formula polinómica
+    isParentSelected: boolean;
+    onFormulaView:    () => void;
+
     // Save (context-aware)
     budgetDirty:    boolean;
     isSavingBudget: boolean;
@@ -286,6 +290,7 @@ export function DelphinToolbar({
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
     onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
+    isParentSelected, onFormulaView,
     budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
@@ -357,9 +362,16 @@ export function DelphinToolbar({
                                 </button>
                                 <button
                                     type="button"
-                                    title="Formula Polinomica"
-                                    onClick={() => onBudgetView('formula_polinomica')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                                    title={isParentSelected ? 'Fórmula Polinómica del padre seleccionado' : 'Selecciona un ítem padre (amarillo) para abrir la Fórmula Polinómica'}
+                                    disabled={!isParentSelected && budgetView !== 'formula_polinomica'}
+                                    onClick={() => {
+                                        if (budgetView === 'formula_polinomica') {
+                                            onBudgetView('presupuesto');
+                                        } else if (isParentSelected) {
+                                            onFormulaView();
+                                        }
+                                    }}
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                                         budgetView === 'formula_polinomica'
                                             ? 'bg-emerald-700 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
