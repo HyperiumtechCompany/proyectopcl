@@ -44,3 +44,4 @@ export const CPM_COLUMNS: ColumnDef[] = [
 export type DelphinMode = 'budget' | 'cpm';
 export type DelphinBudgetView = 'presupuesto' | 'formula_polinomica';
 export type DelphinSubView = 'gantt' | 'network';
+export type InsumosScope = 'especialidad' | 'presupuesto';
