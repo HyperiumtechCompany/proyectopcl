@@ -133,17 +133,8 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
     const handleExportExcel = useCallback(() => {
         const totalDias = props.periodos.reduce((sum, p) => sum + (props.diasPorMes?.[p.key] || 0), 0);
 
-        // Asegurar que projectData tenga los logos
-        const projectDataConLogos = {
-            ...projectDataExport,
-            plantilla_logo_izq: projectDataExport?.plantilla_logo_izq_url || projectDataExport?.plantilla_logo_izq || '',
-            plantilla_logo_der: projectDataExport?.plantilla_logo_der_url || projectDataExport?.plantilla_logo_der || '',
-            plantilla_logo_izq_url: projectDataExport?.plantilla_logo_izq_url || projectDataExport?.plantilla_logo_izq || '',
-            plantilla_logo_der_url: projectDataExport?.plantilla_logo_der_url || projectDataExport?.plantilla_logo_der || '',
-        };
-
         exportarExcel(itemsFiltrados, props.periodos, totalesFinales, props.projectName, viewMode, totalesPorItem, {
-            projectData: projectDataConLogos,
+            projectData: projectDataExport,
             projectId: props.project,
             totalPresupuesto: props.totalPresupuesto,
             diasPorMes: props.diasPorMes || {},

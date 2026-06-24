@@ -173,6 +173,7 @@ async function buildHeader(
     }
 
     // ── Agregar logo izquierdo ──
+    // ── Agregar logo izquierdo ──
     console.log('🖼️ logoIzq recibido:', logoIzq);
     if (logoIzq && typeof logoIzq === 'string' && logoIzq.trim() !== '') {
         try {
@@ -216,6 +217,7 @@ async function buildHeader(
         console.log('❌ logoIzq es null o undefined');
     }
 
+    // ── Agregar logo derecho ──
     // ── Agregar logo derecho ──
     console.log('🖼️ logoDer recibido:', logoDer);
     if (logoDer && typeof logoDer === 'string' && logoDer.trim() !== '') {

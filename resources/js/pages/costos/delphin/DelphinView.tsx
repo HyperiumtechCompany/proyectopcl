@@ -19,11 +19,7 @@ import type { GanttBarLabel, RowAction } from '../cronogramas/v2/types/cell';
 import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
-
-
-
 import { router } from '@inertiajs/react';
-
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
 import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
@@ -98,6 +94,8 @@ interface PageProps {
     };
 }
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DelphinView({
     project, project_id_int, project_name,
@@ -145,6 +143,7 @@ export default function DelphinView({
     // ── CPM view settings ─────────────────────────────────────────────────────
     const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('MONTH_YEAR');
     const [continuousDayWidth, setContinuousDayWidth] = useState<number | null>(null);
+
     const [showCriticalPath, setShowCriticalPath] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
@@ -152,6 +151,7 @@ export default function DelphinView({
     const [insumosOpen, setInsumosOpen] = useState(false);
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
+
 
     // ── Column visibility + description expand ────────────────────────────────
     const [hiddenBudgetKeys, setHiddenBudgetKeys] = useState<Set<string>>(new Set());
@@ -172,11 +172,10 @@ export default function DelphinView({
     // ── Search / filter ───────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
 
-
-
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
 
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
+
     // ── Project params (needed by AcuPanel cost tables) ───────────────────────
     const initializeParams = useProjectParamsStore((s) => s.initialize);
     useEffect(() => { initializeParams(projectParams); }, [projectParams, initializeParams]);
@@ -205,6 +204,7 @@ export default function DelphinView({
     // ── Timeline & critical path ──────────────────────────────────────────────
     const timeline = useGanttTimeline(tasks, zoomLevel, calendarSettings, continuousDayWidth);
     const { criticalIds, floatByTask } = useGanttCriticalPath(tasks);
+
     // ── Selection & editing ───────────────────────────────────────────────────
     const { selectedRowId, editState, selectRow, startEdit, stopEdit, cancelEdit } =
         useGanttSelection();

@@ -416,59 +416,55 @@ class CostoDatabaseService
      * Las partidas (hojas): se conserva el parcial almacenado (viene del import o cálculo ACU).
      * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
      */
- public function recalculateParciales($connection, int $tenantPresupuestoId): void
-{
-    $rows = $connection->table('presupuesto_general')
-        ->where('presupuesto_id', $tenantPresupuestoId)
-        ->orderByRaw('LENGTH(partida) - LENGTH(REPLACE(partida, ".", "")) DESC')
-        ->orderBy('partida')
-        ->get();
+    public function recalculateParciales($connection, int $tenantPresupuestoId): void
+    {
+        $rows = $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->orderByRaw('LENGTH(partida) - LENGTH(REPLACE(partida, ".", "")) DESC')
+            ->orderBy('partida')
+            ->get();
 
-    $parentCodes = [];
-    foreach ($rows as $row) {
-        $parts = explode('.', $row->partida);
-        if (count($parts) > 1) {
-            array_pop($parts);
-            $parentCodes[] = implode('.', $parts);
+        $parentCodes = [];
+        foreach ($rows as $row) {
+            $parts = explode('.', $row->partida);
+            if (count($parts) > 1) {
+                array_pop($parts);
+                $parentCodes[] = implode('.', $parts);
+            }
         }
-    }
-    $parentCodes = array_unique($parentCodes);
+        $parentCodes = array_unique($parentCodes);
 
-    // Solo calcular parciales en memoria — NO actualizar la columna generada
-    $parciales = [];
-    foreach ($rows as $row) {
-        if (!in_array($row->partida, $parentCodes)) {
-            // Hoja: parcial = metrado * precio_unitario
-            $parciales[$row->partida] = round(
-                (float)($row->metrado ?? 0) * (float)($row->precio_unitario ?? 0),
-                4
-            );
+        $parciales = [];
+        foreach ($rows as $row) {
+            if (! in_array($row->partida, $parentCodes)) {
+                $parciales[$row->partida] = (float) ($row->parcial ?? 0);
+            }
         }
-    }
 
-    foreach ($rows as $row) {
-        if (in_array($row->partida, $parentCodes)) {
-            $prefix = $row->partida . '.';
-            $sum = 0;
+        foreach ($rows as $row) {
+            if (in_array($row->partida, $parentCodes)) {
+                $prefix = $row->partida . '.';
+                $sum = 0;
 
-            foreach ($parciales as $childPartida => $childParcial) {
-                if (str_starts_with($childPartida, $prefix)) {
-                    $remaining = substr($childPartida, strlen($prefix));
-                    if (!str_contains($remaining, '.')) {
-                        $sum += $childParcial;
+                foreach ($parciales as $childPartida => $childParcial) {
+                    if (str_starts_with($childPartida, $prefix)) {
+                        $remaining = substr($childPartida, strlen($prefix));
+                        if (! str_contains($remaining, '.')) {
+                            $sum += $childParcial;
+                        }
                     }
                 }
-            }
 
-            $parciales[$row->partida] = round($sum, 4);
-            // ✅ NO actualizar 'parcial' — es columna generada
-            // Solo actualizamos updated_at para registrar el cambio
-            $connection->table('presupuesto_general')
-                ->where('id', $row->id)
-                ->update(['updated_at' => now()]);
+                $parciales[$row->partida] = round($sum, 4);
+                $connection->table('presupuesto_general')
+                    ->where('id', $row->id)
+                    ->update([
+                        'parcial' => round($sum, 4),
+                        'updated_at' => now(),
+                    ]);
+            }
         }
     }
-}
 
     /**
      * Propaga la actualización de un insumo a todos los ACUs que lo utilizan.
