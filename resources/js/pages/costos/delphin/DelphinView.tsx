@@ -32,7 +32,7 @@ import { ImportDelphinModal } from './components/ImportDelphinModal';
 import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { useDiccionario } from './hooks/useDiccionario';
-import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView } from './types';
+import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope } from './types';
 
 const DESC_EXPANDED_EXTRA = 180;
 
@@ -149,6 +149,7 @@ export default function DelphinView({
     const [exportOpen, setExportOpen] = useState(false);
     const [importExcelOpen, setImportExcelOpen] = useState(false);
     const [insumosOpen, setInsumosOpen] = useState(false);
+    const [insumosScope, setInsumosScope] = useState<InsumosScope>('presupuesto');
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
 
@@ -635,7 +636,10 @@ export default function DelphinView({
                     onOpenSettings={() => setSettingsOpen(true)}
                     onImport={handleImportClick}
                     onImportExcel={() => setImportExcelOpen(true)}
-                    onOpenInsumos={() => setInsumosOpen(true)}
+                    onOpenInsumos={(scope) => {
+                        setInsumosScope(scope);
+                        setInsumosOpen(true);
+                    }}
 
                     isParentSelected={isParentSelected}
                     onFormulaView={handleFormulaView}
@@ -792,6 +796,8 @@ export default function DelphinView({
                 <InsumosConsolidadosModal
                     open={insumosOpen}
                     acuRows={acuRows}
+                    delphinRows={delphinRows}
+                    scope={insumosScope}
                     projectName={project_name}
                     onClose={() => setInsumosOpen(false)} />
                 <input

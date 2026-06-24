@@ -8,6 +8,7 @@ import {
     Calendar,
     CalendarDays,
     Calculator,
+    ChevronDown,
     ChevronsDownUp,
     ChevronsUpDown,
     Copy,
@@ -30,7 +31,7 @@ import type { SchedulingMode } from '../../cronogramas/v2/types/task';
 import type { GanttBarLabel } from '../../cronogramas/v2/types/cell';
 import type { ZoomLevel } from '../../cronogramas/v2/types/timeline';
 import { ZOOM_LABELS } from '../../cronogramas/v2/types/timeline';
-import type { DelphinBudgetView, DelphinMode, DelphinSubView } from '../types';
+import type { DelphinBudgetView, DelphinMode, DelphinSubView, InsumosScope } from '../types';
 
 const ZOOM_ORDER: ZoomLevel[] = ['DAY_WEEK', 'DAY_MONTH', 'MONTH_YEAR', 'QUARTER_YEAR'];
 
@@ -74,7 +75,7 @@ interface Props {
     onOpenSettings:      () => void;
     onImport?:           () => void;
     onImportExcel?:      () => void;
-    onOpenInsumos?:      () => void;
+    onOpenInsumos?:      (scope: InsumosScope) => void;
 
     // Formula polinómica
     isParentSelected: boolean;
@@ -118,6 +119,51 @@ function Btn({
             {icon}
             <span className="hidden sm:inline">{label}</span>
         </button>
+    );
+}
+
+function InsumosDropdown({ onSelect }: { onSelect?: (scope: InsumosScope) => void }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const select = (scope: InsumosScope) => {
+        onSelect?.(scope);
+        setOpen(false);
+    };
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                title="Ver insumos consolidados"
+                className="flex shrink-0 items-center gap-1.5 rounded bg-slate-700 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600"
+                onClick={() => setOpen((current) => !current)}>
+                <Package size={13} />
+                <span className="hidden sm:inline">Insumos</span>
+                <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="absolute right-0 top-full z-[100] mt-1 w-56 overflow-hidden rounded border border-slate-600 bg-slate-800 py-1 shadow-2xl">
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-sky-700 hover:text-white" onClick={() => select('especialidad')}>
+                        <span className="block font-medium">Insumos por especialidad</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-400">Padre seleccionado y todos sus hijos</span>
+                    </button>
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-sky-700 hover:text-white" onClick={() => select('presupuesto')}>
+                        <span className="block font-medium">Insumos por presupuesto</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-400">Consolidado general del proyecto</span>
+                    </button>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -540,12 +586,7 @@ export function DelphinToolbar({
                 )}
                 {mode === 'budget' && (
                     <>
-                        <Btn
-                            icon={<Package size={13} />}
-                            label="Insumos"
-                            title="Ver insumos consolidados del proyecto"
-                            variant="default"
-                            onClick={onOpenInsumos}/>
+                        <InsumosDropdown onSelect={onOpenInsumos} />
                         <Btn
                             icon={<Upload size={13} />}
                             label="Imp. Excel"
