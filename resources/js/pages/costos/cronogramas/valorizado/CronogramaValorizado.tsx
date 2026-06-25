@@ -11,6 +11,7 @@ import { exportarExcel, exportarPDF } from './helpers/exportHelpers';
 import { useValorizadoLogic } from './helpers/useValorizadoLogic';
 import type { ValorizadoProps, ModoCalculo } from './types';
 import CronogramaMateriales from '../materiales/CronogramaMateriales';
+import { ArrowLeft } from 'lucide-react';
 
 // TOAST
 interface ToastItem { id: number; text: string; type: 'success' | 'error' | 'info' }
@@ -206,6 +207,18 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                             {vistaActual === 'valorizado' ? (
                                 // VALORIZADO
                                 <>
+                                    {/*  BOTÓN VOLVER A DELPHIN - SIEMPRE VISIBLE */}
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <a
+                                            href={`/module/delphin?project=${props.project}`}
+                                            className="flex shrink-0 items-center gap-1.5 rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600 transition-colors"
+                                            title="Volver a Delphin"
+                                        >
+                                            <ArrowLeft size={14} />
+                                            Volver a Delphin
+                                        </a>
+                                    </div>
+
                                     {/* Banner modo de cálculo */}
                                     <div className="mb-4 flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-sm">
                                         <div className="flex items-center gap-3 text-xs text-slate-600 font-semibold">
@@ -289,7 +302,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                     <CronogramaMateriales
                                         project={props.project}
                                         projectName={props.projectName}
-                                        materiales={props.materiales || []}      // ← Debe ser props.materiales
+                                        materiales={props.materiales || []}
                                         periodos={props.periodos || []}
                                         resumen={props.materialesResumen || null}
                                         estaGuardado={false}

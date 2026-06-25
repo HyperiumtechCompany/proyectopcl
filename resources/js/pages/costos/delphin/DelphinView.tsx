@@ -158,6 +158,7 @@ export default function DelphinView({
     const [hiddenBudgetKeys, setHiddenBudgetKeys] = useState<Set<string>>(new Set());
     const [hiddenCpmKeys, setHiddenCpmKeys] = useState<Set<string>>(new Set());
     const [descExpanded, setDescExpanded] = useState(false);
+    const [formulaMonomios, setFormulaMonomios] = useState<any[]>([]);
 
     const activeHiddenKeys = mode === 'budget' ? hiddenBudgetKeys : hiddenCpmKeys;
 
@@ -651,9 +652,10 @@ export default function DelphinView({
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
                     onExport={() => setExportOpen(true)}
+                    project={project} 
                 />
 
-                {/* ── 2. Main area ────────────────────────────────────────── */}
+                {/* ──  vista formula polinomida────────────────────────────── */}
                 {mode === 'budget' && budgetView === 'formula_polinomica' && formulaParentId !== null ? (
                     <FormulaPolinomicaSplitView
                         key={String(formulaParentId)}
@@ -663,6 +665,7 @@ export default function DelphinView({
                         diccionario={diccionario}
                         projectName={project_name}
                         onBack={() => setBudgetView('presupuesto')}
+                        onMonomiosChange={setFormulaMonomios}
                     />
                 ) : mode === 'cpm' && subView === 'network' ? (
                     /* Red/Network: full width, no split pane */
@@ -773,6 +776,7 @@ export default function DelphinView({
                     projectName={project_name}
                     project={project}
                     projectData={projectData}
+                    formulaMonomios={formulaMonomios} 
                     availableSpecialties={availableSpecialties}
                     onClose={() => setExportOpen(false)}
                 />

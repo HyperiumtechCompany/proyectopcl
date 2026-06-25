@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    BarChart2, CalendarDays, FileSpreadsheet, FileText,
+    BarChart2, Calculator, CalendarDays, FileSpreadsheet, FileText,
     Layers, Milestone, X, ChevronLeft,
 } from 'lucide-react';
 import type { DelphinRow } from '../types';
@@ -26,6 +26,13 @@ const CONTENT_OPTIONS: {
             sheets: ['Presupuesto General'],
         },
         {
+            key: 'formula_polinomica' as DelphinExportContent,
+            icon: <Calculator size={20} />,
+            title: 'F. Polinómica',
+            desc: 'Fórmula K con coeficientes de incidencia por especialidad.',
+            sheets: ['Fórmula Polinómica'],
+        },
+        {
             key: 'budget_gantt',
             icon: <Layers size={20} />,
             title: 'Presupuesto + Cronograma',
@@ -47,17 +54,29 @@ const FORMAT_OPTIONS: {
     ext: string;
     icon: React.ReactNode;
     onlyGantt?: boolean;
+    disabledWhenFormula?: boolean;
 }[] = [
-    { key: 'excel', label: 'Excel', ext: '.xlsx', icon: <FileSpreadsheet size={14} /> },
-    { key: 'pdf',   label: 'PDF',   ext: '.pdf',  icon: <FileText size={14} /> },
-    { key: 'msp',   label: 'MS Project', ext: '.xml', icon: <Milestone size={14} />, onlyGantt: true },
-];
+        { key: 'excel', label: 'Excel', ext: '.xlsx', icon: <FileSpreadsheet size={14} /> },
+        { key: 'pdf', label: 'PDF', ext: '.pdf', icon: <FileText size={14} /> },
+        { key: 'msp', label: 'MS Project', ext: '.xml', icon: <Milestone size={14} />, onlyGantt: true, disabledWhenFormula: true, },
+    ];
+
+interface MonomioExport {
+    nomenclatura: string;
+    indices: {
+        code: string;
+        descripcion: string;
+        coefCalculado: number;
+        coefDefinido: number;
+    }[];
+}
 
 interface Props {
     open: boolean;
     rows: DelphinRow[];
     projectName: string;
     project?: any;
+
     projectData?: {
         id: number;
         nombre: string;
@@ -69,12 +88,14 @@ interface Props {
         plantilla_logo_izq_url: string | null;
         plantilla_logo_der_url: string | null;
     };
+    formulaMonomios?: MonomioExport[];
     availableSpecialties?: { id: string; label: string; icon?: string }[];
     onClose: () => void;
 }
 
 export function DelphinExportModal({
     open, rows, projectName, project, projectData,
+    formulaMonomios,
     availableSpecialties = [], onClose,
 }: Props) {
     const [content, setContent] = useState<DelphinExportContent>('budget_gantt');
@@ -89,8 +110,10 @@ export function DelphinExportModal({
         format === 'msp' && content === 'budget_only' ? 'excel' : format;
 
     const isBudget = content !== 'gantt_only';
+    const isFormula = content === 'formula_polinomica';
     const hasSpecialties = availableSpecialties.length > 0;
-    const shouldShowSpecialties = (resolvedFormat === 'excel' || resolvedFormat === 'pdf') && isBudget && hasSpecialties;
+    const shouldShowSpecialties = !isFormula && (resolvedFormat === 'excel' || resolvedFormat === 'pdf') && isBudget && hasSpecialties;
+
 
     const totalPres = rows
         .filter((r) => (r.nivel ?? 1) === 1)
@@ -106,14 +129,20 @@ export function DelphinExportModal({
                 projectName,
                 projectData,
                 selectedSpecialties,
+                formulaMonomios,   // ← nuevo
             );
         } finally {
             setExporting(false);
             onClose();
         }
     };
-
     const handleExport = () => {
+        
+        if (content === 'formula_polinomica') {
+            doExport();
+            return;
+        }
+
         if (shouldShowSpecialties) {
             setShowSpecialties(true);
         } else {
@@ -254,11 +283,10 @@ export function DelphinExportModal({
                                 <button
                                     key={opt.key}
                                     onClick={() => setContent(opt.key)}
-                                    className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-all ${
-                                        active
-                                            ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/40'
-                                            : 'border-slate-700 bg-slate-800/60 hover:border-slate-500 hover:bg-slate-800'
-                                    }`}
+                                    className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-all ${active
+                                        ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/40'
+                                        : 'border-slate-700 bg-slate-800/60 hover:border-slate-500 hover:bg-slate-800'
+                                        }`}
                                 >
                                     <span className={`mt-0.5 shrink-0 ${active ? 'text-emerald-400' : 'text-slate-400'}`}>
                                         {opt.icon}
@@ -274,11 +302,10 @@ export function DelphinExportModal({
                                             {opt.sheets.map((s) => (
                                                 <span
                                                     key={s}
-                                                    className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                                        active
-                                                            ? 'bg-emerald-900/60 text-emerald-300'
-                                                            : 'bg-slate-700 text-slate-300'
-                                                    }`}
+                                                    className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${active
+                                                        ? 'bg-emerald-900/60 text-emerald-300'
+                                                        : 'bg-slate-700 text-slate-300'
+                                                        }`}
                                                 >
                                                     <FileSpreadsheet size={9} />
                                                     {s}
@@ -286,9 +313,8 @@ export function DelphinExportModal({
                                             ))}
                                         </div>
                                     </div>
-                                    <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-all ${
-                                        active ? 'border-emerald-500 bg-emerald-500' : 'border-slate-600'
-                                    }`} />
+                                    <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-all ${active ? 'border-emerald-500 bg-emerald-500' : 'border-slate-600'
+                                        }`} />
                                 </button>
                             );
                         })}
@@ -302,19 +328,24 @@ export function DelphinExportModal({
                     </p>
                     <div className="flex gap-2">
                         {FORMAT_OPTIONS.map((opt) => {
-                            const disabled = opt.onlyGantt && content === 'budget_only';
+                            const isFormula = content === 'formula_polinomica';
+                            const disabled = (opt.onlyGantt && content === 'budget_only') || (opt.disabledWhenFormula && isFormula);
                             const active = format === opt.key && !disabled;
+
                             return (
                                 <button
                                     key={opt.key}
                                     disabled={disabled}
                                     onClick={() => !disabled && setFormat(opt.key)}
-                                    title={disabled ? 'No disponible para Solo Presupuesto' : opt.label}
-                                    className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-35 ${
-                                        active
+                                    title={disabled
+                                        ? (isFormula ? 'No disponible para Fórmula Polinómica' : 'No disponible para Solo Presupuesto')
+                                        : opt.label}
+                                    className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border py-3 text-xs font-medium transition-all 
+                ${disabled ? 'cursor-not-allowed opacity-35' : ''}
+                ${active
                                             ? 'border-sky-500 bg-sky-950/50 text-sky-300 ring-1 ring-sky-500/40'
                                             : 'border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-500 hover:text-slate-200'
-                                    }`}
+                                        }`}
                                 >
                                     <span className={active ? 'text-sky-400' : ''}>{opt.icon}</span>
                                     <span>{opt.label}</span>

@@ -11,24 +11,24 @@ const INSUMO_TIPOS = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', '
 type InsumoTipo = typeof INSUMO_TIPOS[number];
 
 // ── Column widths (px) ────────────────────────────────────────────────────────
-const C_IDX  = 44;    // #  + chevron
+const C_IDX = 44;    // #  + chevron
 const C_DESC = 268;   // descripción
-const C_UND  = 58;    // unidad
+const C_UND = 58;    // unidad
 const C_CANT = 90;    // cantidad
-const C_TOT  = 112;   // total S/
-const C_INS  = 82;    // cada columna INEI
+const C_TOT = 112;   // total S/
+const C_INS = 82;    // cada columna INEI
 
 const L_DESC = C_IDX;
-const L_UND  = L_DESC + C_DESC;
-const L_CANT = L_UND  + C_UND;
-const L_TOT  = L_CANT + C_CANT;
+const L_UND = L_DESC + C_DESC;
+const L_CANT = L_UND + C_UND;
+const L_TOT = L_CANT + C_CANT;
 
 // Background colors para sticky cells (deben ser sólidos)
-const BG_HEAD   = '#1e293b'; // slate-800
+const BG_HEAD = '#1e293b'; // slate-800
 const BG_PARENT = '#172033'; // entre slate-800 y slate-900
-const BG_LEAF   = '#020617'; // slate-950
-const BG_FOOT1  = '#1e293b'; // fila total
-const BG_FOOT2  = '#0f172a'; // fila coeficiente
+const BG_LEAF = '#020617'; // slate-950
+const BG_FOOT1 = '#1e293b'; // fila total
+const BG_FOOT2 = '#0f172a'; // fila coeficiente
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const normalize = (s: string) =>
@@ -41,7 +41,7 @@ const normalize = (s: string) =>
 
 function compParcial(tipo: InsumoTipo, comp: ACUComponenteRow): number {
     if (comp.parcial != null) return Number(comp.parcial);
-    const cant   = Number(comp.cantidad ?? 0);
+    const cant = Number(comp.cantidad ?? 0);
     const precio =
         tipo === 'equipos'
             ? Number(comp.precio_hora ?? comp.precio_unitario ?? 0)
@@ -97,7 +97,7 @@ function resolveCleanName(
     const entries = dicByCode.get(code);
     if (!entries?.length) return rawDesc;
 
-    const normRaw  = normalize(rawDesc);
+    const normRaw = normalize(rawDesc);
     const firstWord = normRaw.split(' ')[0];
 
     // 1. Exact normalized match
@@ -111,8 +111,8 @@ function resolveCleanName(
     //    normalize("Clavos").startsWith("clavo") === true.
     if (firstWord.length >= 3) {
         for (const e of entries) {
-            const ne  = normalize(e);
-            const fe  = ne.split(' ')[0];
+            const ne = normalize(e);
+            const fe = ne.split(' ')[0];
             if (ne.startsWith(firstWord) || firstWord.startsWith(fe) || fe.startsWith(firstWord)) {
                 return e;
             }
@@ -130,7 +130,7 @@ function buildMatrix(
     dicByCode: Map<string, string[]>,
 ): MatrixResult {
     const acuByPartida = new Map(acuRows.map((a) => [String(a.partida ?? ''), a]));
-    const acuByDesc    = new Map(
+    const acuByDesc = new Map(
         acuRows.filter((a) => a.descripcion).map((a) => [normalize(a.descripcion), a]),
     );
 
@@ -205,7 +205,7 @@ function buildMatrix(
         const na = parseInt(a, 10), nb = parseInt(b, 10);
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         if (!isNaN(na)) return -1;
-        if (!isNaN(nb)) return  1;
+        if (!isNaN(nb)) return 1;
         return a.localeCompare(b, 'es');
     });
 
@@ -214,18 +214,21 @@ function buildMatrix(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
-    parentId:    number;
-    rows:        DelphinRow[];
-    acuRows:     ACURowSummary[];
+    parentId: number;
+    rows: DelphinRow[];
+    acuRows: ACURowSummary[];
     diccionario: DicEntry[];
     projectName: string;
-    onBack:      () => void;
+    onBack: () => void;
+    onExportFormula?: (formulaData: any) => void; 
+    onMonomiosChange?: (monomios: any[]) => void; 
 }
 
-export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName, onBack }: Props) {
+export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName, onBack,
+     onExportFormula, onMonomiosChange }: Props) {
 
     // Subtree en pre-order
-    const subtree   = useMemo(() => subtreePreorder(rows, parentId), [rows, parentId]);
+    const subtree = useMemo(() => subtreePreorder(rows, parentId), [rows, parentId]);
     const parentRow = useMemo(() => rows.find((r) => r.id === parentId), [rows, parentId]);
     const rootNivel = parentRow?.nivel ?? 1;
 
@@ -268,13 +271,54 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
         return new Set(sub.filter((r) => ps.has(r.id)).map((r) => r.id));
     });
 
+    const [builderMonomios, setBuilderMonomios] = useState<any[]>([]);
+
+    // ── Obtener datos de la fórmula para exportar ──────────────────────────────
+    const getFormulaData = useCallback(() => {
+        const monomios = builderMonomios;
+
+        if (!monomios || monomios.length === 0) {
+            return {
+                formula: 'K = No hay monomios configurados',
+                monomios: [],
+                totalK: 0
+            };
+        }
+
+        const formula = monomios
+            .filter(m => m.indices.some((i: any) => i.coefDefinido > 0))
+            .map((m: any) => {
+                const coef = m.indices.reduce((s: number, i: any) => s + i.coefDefinido, 0);
+                return `${coef.toFixed(3)} ${m.nomenclatura}r`;
+            })
+            .join(' + ');
+
+        return {
+            formula: `K = ${formula}`,
+            monomios: monomios.map((m: any) => ({
+                especialidad: m.indices[0]?.descripcion || '',
+                codigo: m.indices[0]?.code || '',
+                monomio: m.nomenclatura || '',
+                coeficiente: m.indices.reduce((s: number, i: any) => s + i.coefDefinido, 0),
+                indice: m.indices[0]?.code || '',
+                incidencia: m.indices[0]?.coefDefinido || 0,
+                indices_agrupados: m.indices.slice(1).map((i: any) => ({
+                    codigo: i.code,
+                    descripcion: i.descripcion,
+                    coeficiente: i.coefDefinido
+                }))
+            })),
+            totalK: monomios.reduce((s: number, m: any) => s + m.indices.reduce((sum: number, i: any) => sum + i.coefDefinido, 0), 0)
+        };
+    }, [builderMonomios]);
+
     // Cuando cambia el parentId, reiniciar estado
     useEffect(() => {
         const ps = new Set<number>();
         for (const r of rows) if (r.parent_id != null) ps.add(Number(r.parent_id));
         const sub = subtreePreorder(rows, parentId);
         setExpandedIds(new Set(sub.filter((r) => ps.has(r.id)).map((r) => r.id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [parentId]);
 
     const toggleExpand = useCallback((id: number) => {
@@ -285,13 +329,13 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
         });
     }, []);
 
-    const expandAll  = useCallback(() =>
+    const expandAll = useCallback(() =>
         setExpandedIds(new Set(subtree.filter((r) => parentIdSet.has(r.id)).map((r) => r.id))),
-    [subtree, parentIdSet]);
+        [subtree, parentIdSet]);
 
     const collapseAll = useCallback(() =>
         setExpandedIds(new Set()),
-    []);
+        []);
 
     // rowById para navegación en visibleRows
     const rowById = useMemo(() => new Map(subtree.map((r) => [r.id, r])), [subtree]);
@@ -320,7 +364,7 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
     // ── Totales y coeficientes ────────────────────────────────────────────────
     // Total presupuesto del padre seleccionado (base para coeficiente de incidencia)
     const budgetTotal = Number(parentRow?.parcial ?? 0);
-    const parentMap   = matrix.get(parentId) ?? new Map<string, number>();
+    const parentMap = matrix.get(parentId) ?? new Map<string, number>();
 
     // Suma total cubierta por insumos con ACU
     const insumoTotalCovered = Array.from(parentMap.values()).reduce((s, v) => s + v, 0);
@@ -473,11 +517,11 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                             {/* ─ TBODY ─────────────────────────────────────── */}
                             <tbody>
                                 {visibleRows.map((row, idx) => {
-                                    const isGroup   = parentIdSet.has(row.id);
+                                    const isGroup = parentIdSet.has(row.id);
                                     const isExpanded = expandedIds.has(row.id);
-                                    const rowMap    = matrix.get(row.id) ?? new Map<string, number>();
-                                    const indent    = Math.max(0, (row.nivel ?? rootNivel) - rootNivel);
-                                    const bg        = isGroup ? BG_PARENT : BG_LEAF;
+                                    const rowMap = matrix.get(row.id) ?? new Map<string, number>();
+                                    const indent = Math.max(0, (row.nivel ?? rootNivel) - rootNivel);
+                                    const bg = isGroup ? BG_PARENT : BG_LEAF;
 
                                     return (
                                         <tr key={row.id}>
@@ -559,13 +603,12 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                                                     <td
                                                         key={code}
                                                         style={{ width: C_INS }}
-                                                        className={`border-b border-r border-slate-800/50 p-1.5 text-right font-mono text-[10px] ${
-                                                            val > 0
+                                                        className={`border-b border-r border-slate-800/50 p-1.5 text-right font-mono text-[10px] ${val > 0
                                                                 ? isGroup
                                                                     ? 'font-semibold text-slate-100'
                                                                     : 'text-slate-300'
                                                                 : 'text-transparent select-none'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {val > 0 ? fmtS(val) : '·'}
                                                     </td>
@@ -611,7 +654,7 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                                         Coef. incidencia
                                     </td>
                                     {sortedCodes.map((code) => {
-                                        const val  = parentMap.get(code) ?? 0;
+                                        const val = parentMap.get(code) ?? 0;
                                         // normalizar sobre total insumos (no presupuesto con GG)
                                         const coef = insumoTotalCovered > 0 ? val / insumoTotalCovered : 0;
                                         return (
@@ -640,6 +683,7 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                         budgetTotal={budgetTotal}
                         codeToDesc={codeToDesc}
                         sortedCodes={sortedCodes}
+                        onMonomiosChange={setBuilderMonomios} 
                     />
                 </Panel>
             </Group>
