@@ -98,6 +98,7 @@ export function DelphinExportModal({
     formulaMonomios,
     availableSpecialties = [], onClose,
 }: Props) {
+
     const [content, setContent] = useState<DelphinExportContent>('budget_gantt');
     const [format, setFormat] = useState<DelphinExportFormat>('excel');
     const [isExporting, setExporting] = useState(false);
@@ -119,6 +120,7 @@ export function DelphinExportModal({
         .filter((r) => (r.nivel ?? 1) === 1)
         .reduce((s, r) => s + (r.parcial || r.metrado * r.precio_unitario || 0), 0);
 
+    // DESPUÉS
     const doExport = async () => {
         setExporting(true);
         try {
@@ -129,15 +131,17 @@ export function DelphinExportModal({
                 projectName,
                 projectData,
                 selectedSpecialties,
-                formulaMonomios,   // ← nuevo
+                formulaMonomios ?? [],  // ← pasar el array crudo directamente
             );
+        } catch (error) {
+            console.error('doExport error:', error);
         } finally {
             setExporting(false);
             onClose();
         }
     };
     const handleExport = () => {
-        
+
         if (content === 'formula_polinomica') {
             doExport();
             return;
@@ -394,8 +398,11 @@ export function DelphinExportModal({
                         Cancelar
                     </button>
                     <button
-                        disabled={isExporting}
+                        disabled={isExporting || (isFormula && (!formulaMonomios || formulaMonomios.length === 0))}
                         onClick={handleExport}
+                        title={isFormula && (!formulaMonomios || formulaMonomios.length === 0)
+                            ? 'Primero selecciona un padre y abre la vista Fórmula Polinómica'
+                            : undefined}
                         className="flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         <FileSpreadsheet size={12} />

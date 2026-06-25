@@ -137,6 +137,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, o
         setExpandedIds(new Set(gen.map(m => m.id)));
     }, [totalInsumo, sortedCodes, parentMap, codeToDesc]);
     useEffect(() => {
+        
         if (onMonomiosChange) {
             onMonomiosChange(monomios);
         }
