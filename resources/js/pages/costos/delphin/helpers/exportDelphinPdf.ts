@@ -7,19 +7,19 @@ import type { DelphinExportContent } from './exportDelphin';
 // ── Colores RGB para jsPDF ────────────────────────────────────────────────────
 type RGB = [number, number, number];
 const C: Record<string, RGB> = {
-    headerBg: [15,  23,  42],
-    nivel1:   [30,  41,  59],
-    nivel2:   [51,  65,  85],
-    nivel3:   [71,  85,  105],
-    leaf:     [255, 255, 255],
-    altLeaf:  [248, 250, 252],
-    totalBg:  [6,   78,  59],
-    fgLight:  [255, 255, 255],
-    fgMid:    [226, 232, 240],
-    fgDark:   [30,  41,  59],
-    totalFg:  [110, 231, 183],
-    ganttHd:  [30,  58,  95],
-    ganttFg:  [191, 219, 254],
+    headerBg: [15, 23, 42],
+    nivel1: [30, 41, 59],
+    nivel2: [51, 65, 85],
+    nivel3: [71, 85, 105],
+    leaf: [255, 255, 255],
+    altLeaf: [248, 250, 252],
+    totalBg: [6, 78, 59],
+    fgLight: [255, 255, 255],
+    fgMid: [226, 232, 240],
+    fgDark: [30, 41, 59],
+    totalFg: [110, 231, 183],
+    ganttHd: [30, 58, 95],
+    ganttFg: [191, 219, 254],
     borderDark: [30, 41, 59],
 };
 
@@ -27,8 +27,8 @@ const fmtNum = (v: number) =>
     (v ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function getFechaFormatoModelo(): string {
-    const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
-                   'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     const hoy = new Date();
     return `${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
 }
@@ -41,8 +41,8 @@ function rowMeta(rows: DelphinRow[]): RowMeta[] {
         const nivel = row.nivel ?? 1;
         const isLeaf = nivel >= 3;
         let bg: RGB, fg: RGB, bold = false;
-        if (nivel === 1)      { bg = C.nivel1!; fg = C.fgLight!; bold = true; }
-        else if (nivel === 2) { bg = C.nivel2!; fg = C.fgMid!;   bold = true; }
+        if (nivel === 1) { bg = C.nivel1!; fg = C.fgLight!; bold = true; }
+        else if (nivel === 2) { bg = C.nivel2!; fg = C.fgMid!; bold = true; }
         else if (nivel === 3) { bg = C.nivel3!; fg = C.fgMid!; }
         else {
             bg = altCount % 2 === 1 ? C.altLeaf! : C.leaf!;
@@ -129,7 +129,7 @@ async function addPageHeader(
         if (img) {
             try {
                 doc.addImage(img.data, img.format, marginX + 1, headerY + 1, logoW - 2, logoH - 2);
-            } catch {}
+            } catch { }
         }
     }
 
@@ -141,7 +141,7 @@ async function addPageHeader(
             try {
                 doc.addImage(img.data, img.format,
                     marginX + contentW - logoW + 1, headerY + 1, logoW - 2, logoH - 2);
-            } catch {}
+            } catch { }
         }
     }
 
@@ -150,10 +150,10 @@ async function addPageHeader(
     const textW = contentW - logoW * 2;
     const textCenterX = textX + textW / 2;
 
-    const cui            = proyecto?.codigo_cui         || '-';
-    const modular        = proyecto?.codigos_modulares   || '-';
-    const codigoLocal    = proyecto?.codigo_local        || '-';
-    const unidadEjecutora = proyecto?.unidad_ejecutora   || '-';
+    const cui = proyecto?.codigo_cui || '-';
+    const modular = proyecto?.codigos_modulares || '-';
+    const codigoLocal = proyecto?.codigo_local || '-';
+    const unidadEjecutora = proyecto?.unidad_ejecutora || '-';
     const nombreProyecto = projectName || 'PROYECTO';
 
     doc.setFont('helvetica', 'bold');
@@ -183,11 +183,11 @@ async function addPageHeader(
     const afterTitle = afterHeader + 8;
 
     // ── Bloque de datos del proyecto ──
-    const propietario    = proyecto?.propietario || unidadEjecutora || '-';
+    const propietario = proyecto?.propietario || unidadEjecutora || '-';
     const fechaFormateada = getFechaFormatoModelo();
-    const modulo         = proyecto?.modulo || 'GENERAL';
-    const hechoPor       = proyecto?.hechoPor || '';
-    const revisadoPor    = proyecto?.revisadoPor || '';
+    const modulo = proyecto?.modulo || 'GENERAL';
+    const hechoPor = proyecto?.hechoPor || '';
+    const revisadoPor = proyecto?.revisadoPor || '';
 
     const lines = [
         `Proyecto : ${nombreProyecto}`,
@@ -323,6 +323,80 @@ async function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[], projectName: s
     });
 }
 
+async function addFormulaPolinomicaBlock(
+    doc: jsPDF,
+    rows: DelphinRow[],
+    formulaData: any,
+    projectName: string,
+    proyecto: any,
+    startY: number
+): Promise<number> {
+    const pageW = doc.internal.pageSize.getWidth();
+    const marginX = 10;
+    const contentW = pageW - marginX * 2;
+
+    let y = startY;
+
+    // ── FÓRMULA ──
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...C.borderDark!);
+    doc.text('FÓRMULA POLINÓMICA', marginX, y);
+    y += 4;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    const formulaLines = doc.splitTextToSize(formulaData.formula || 'K = ...', contentW - 4);
+    doc.text(formulaLines, marginX + 2, y);
+    y += formulaLines.length * 4 + 4;
+
+    // ── TABLA DE ESPECIALIDADES ──
+    const especialidades = rows.filter(r => (r.nivel ?? 1) === 1);
+    const tableData = especialidades.map((e, i) => {
+        const partida = e.partida || e.descripcion || '';
+        return [
+            String(i + 1),
+            partida,
+            formulaData.monomios?.[partida] || '-',
+            String(formulaData.coeficientes?.[partida] || 0),
+            formulaData.indices?.[partida] || '-',
+            String(formulaData.incidencias?.[partida] || 0),
+        ];
+    });
+
+    // Total
+    const totalK = especialidades.reduce((sum, e) => {
+        return sum + (formulaData.coeficientes?.[e.partida] || 0);
+    }, 0);
+    tableData.push(['', 'TOTAL K =', '', String(totalK), '', '']);
+
+    autoTable(doc, {
+        startY: y,
+        head: [['N°', 'Especialidad', 'Monomio', 'Coeficiente', 'Índice', 'Incidencia']],
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 } },
+        headStyles: { fillColor: C.headerBg!, textColor: C.fgLight!, fontStyle: 'bold', halign: 'center' },
+        columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 20, halign: 'center' },
+            3: { cellWidth: 22, halign: 'right' },
+            4: { cellWidth: 20, halign: 'center' },
+            5: { cellWidth: 22, halign: 'right' },
+        },
+        didParseCell: (data) => {
+            if (data.section === 'body' && data.row.index === tableData.length - 1) {
+                data.cell.styles.fillColor = C.totalBg!;
+                data.cell.styles.textColor = C.totalFg!;
+                data.cell.styles.fontStyle = 'bold';
+            }
+        },
+    });
+
+    return (doc as any).lastAutoTable.finalY + 4;
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 export async function exportDelphinPdf(
     content: DelphinExportContent,
@@ -330,6 +404,7 @@ export async function exportDelphinPdf(
     projectName: string,
     projectData?: any,
     selectedSpecialties?: string[],
+    formulaData?: any
 ): Promise<void> {
 
     const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
@@ -339,9 +414,11 @@ export async function exportDelphinPdf(
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     const suffix = {
-        budget_only:  'Presupuesto',
+        budget_only: 'Presupuesto',
         budget_gantt: 'Presupuesto_Cronograma',
-        gantt_only:   'Cronograma',
+        gantt_only: 'Cronograma',
+        formula_polinomica: 'Formula_Polinomica',
+
     }[content];
 
     const fileName = `${projectName.replace(/\s+/g, '_')}_${suffix}_${date.replace(/\//g, '-')}.pdf`;
@@ -358,6 +435,11 @@ export async function exportDelphinPdf(
 
     if (content === 'gantt_only' || content === 'budget_gantt') {
         await buildCronogramaPdf(doc, filteredRows, projectName, projectData);
+    }
+    if (content === 'formula_polinomica' && formulaData) {
+        
+        const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA', projectData);
+        await addFormulaPolinomicaBlock(doc, filteredRows, formulaData, projectName, projectData, startY);
     }
 
     // Page numbers

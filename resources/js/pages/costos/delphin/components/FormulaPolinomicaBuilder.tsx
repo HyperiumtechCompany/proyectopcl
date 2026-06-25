@@ -3,31 +3,31 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormulaIndice {
-    code:          string;
-    descripcion:   string;
+    code: string;
+    descripcion: string;
     coefCalculado: number;
-    coefDefinido:  number;
+    coefDefinido: number;
 }
 
 // Un monomio tiene siempre 1–MAX_IDX_PER_MON índices.
 // indices[0] = primario (define al padre); el resto son índices agrupados dentro.
 interface FormulaMonomio {
-    id:           string;
+    id: string;
     nomenclatura: string;
-    indices:      FormulaIndice[];
+    indices: FormulaIndice[];
 }
 
 // ── Normativa DS 011-79-VC ────────────────────────────────────────────────────
-const MAX_MONOMIOS    = 8;
+const MAX_MONOMIOS = 8;
 const MAX_IDX_PER_MON = 3;   // art. 2: máx 3 índices por monomio
-const MIN_COEF_MON    = 0.05;
+const MIN_COEF_MON = 0.05;
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtDef  = (n: number) => n.toFixed(3);
-const fmtPct  = (n: number) => n.toFixed(1);
-const sumDef  = (m: FormulaMonomio) => m.indices.reduce((s, i) => s + i.coefDefinido,  0);
+const fmtDef = (n: number) => n.toFixed(3);
+const fmtPct = (n: number) => n.toFixed(1);
+const sumDef = (m: FormulaMonomio) => m.indices.reduce((s, i) => s + i.coefDefinido, 0);
 const sumCalc = (m: FormulaMonomio) => m.indices.reduce((s, i) => s + i.coefCalculado, 0);
 
 function usedLetterSet(list: FormulaMonomio[]): Set<string> {
@@ -45,9 +45,9 @@ function allUsedCodes(list: FormulaMonomio[]): Set<string> {
 
 // ── Auto-build: 1 monomio por insumo, sin agrupación automática ───────────────
 function buildAutoMonomios(
-    parentMap:   Map<string, number>,
+    parentMap: Map<string, number>,
     sortedCodes: string[],
-    codeToDesc:  Map<string, string>,
+    codeToDesc: Map<string, string>,
 ): FormulaMonomio[] {
     const total = Array.from(parentMap.values()).reduce((s, v) => s + v, 0);
     if (total === 0 || sortedCodes.length === 0) return [];
@@ -58,13 +58,13 @@ function buildAutoMonomios(
         .map((c, i) => {
             const coefC = (parentMap.get(c) ?? 0) / total;
             return {
-                id:           `m-${c}-${i}`,
+                id: `m-${c}-${i}`,
                 nomenclatura: LETTERS[i] ?? '?',
                 indices: [{
-                    code:          c,
-                    descripcion:   codeToDesc.get(c) ?? `Índice ${c}`,
+                    code: c,
+                    descripcion: codeToDesc.get(c) ?? `Índice ${c}`,
                     coefCalculado: coefC,
-                    coefDefinido:  parseFloat(coefC.toFixed(3)),
+                    coefDefinido: parseFloat(coefC.toFixed(3)),
                 }],
             };
         });
@@ -72,10 +72,11 @@ function buildAutoMonomios(
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
-    parentMap:   Map<string, number>;
+    parentMap: Map<string, number>;
     budgetTotal: number;
-    codeToDesc:  Map<string, string>;
+    codeToDesc: Map<string, string>;
     sortedCodes: string[];
+    onMonomiosChange?: (monomios: FormulaMonomio[]) => void;
 }
 
 // ── K formula bar ─────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ function KFormulaBar({ monomios }: { monomios: FormulaMonomio[] }) {
                 <span className="mr-1 font-bold text-slate-300">K =</span>
                 {visible.map((m, i) => {
                     const coef = sumDef(m);
-                    const nom  = m.nomenclatura || '?';
+                    const nom = m.nomenclatura || '?';
                     return (
                         <React.Fragment key={m.id}>
                             {i > 0 && <span className="mx-1.5 text-slate-600">+</span>}
@@ -108,17 +109,17 @@ function KFormulaBar({ monomios }: { monomios: FormulaMonomio[] }) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }: Props) {
+export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, onMonomiosChange }: Props) {
 
-    const [monomios,    setMonomios]    = useState<FormulaMonomio[]>([]);
+    const [monomios, setMonomios] = useState<FormulaMonomio[]>([]);
     // expandedIds  → qué padres están expandidos (muestran hijos nivel 2)
     // expandedIdx  → qué hijos están expandidos (muestran nivel 3); key = `${mId}::${code}`
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [expandedIdx, setExpandedIdx] = useState<Set<string>>(new Set());
-    const [editingNom,  setEditingNom]  = useState<string | null>(null);
+    const [editingNom, setEditingNom] = useState<string | null>(null);
     const [editingCoef, setEditingCoef] = useState<{ mId: string; code: string } | null>(null);
-    const [dragId,      setDragId]      = useState<string | null>(null);
-    const [dragOverId,  setDragOverId]  = useState<string | null>(null);
+    const [dragId, setDragId] = useState<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
 
     const autoBuilt = useRef(false);
 
@@ -135,6 +136,11 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
         setMonomios(gen);
         setExpandedIds(new Set(gen.map(m => m.id)));
     }, [totalInsumo, sortedCodes, parentMap, codeToDesc]);
+    useEffect(() => {
+        if (onMonomiosChange) {
+            onMonomiosChange(monomios);
+        }
+    }, [monomios, onMonomiosChange]);
 
     // ── Derivados ─────────────────────────────────────────────────────────────
     const usedCodes = useMemo(() => allUsedCodes(monomios), [monomios]);
@@ -146,17 +152,17 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
             .map(c => {
                 const coefC = (parentMap.get(c) ?? 0) / totalInsumo;
                 return {
-                    code:          c,
-                    descripcion:   codeToDesc.get(c) ?? `Índice ${c}`,
+                    code: c,
+                    descripcion: codeToDesc.get(c) ?? `Índice ${c}`,
                     coefCalculado: coefC,
-                    coefDefinido:  parseFloat(coefC.toFixed(3)),
+                    coefDefinido: parseFloat(coefC.toFixed(3)),
                 };
             })
             .sort((a, b) => b.coefCalculado - a.coefCalculado);
     }, [sortedCodes, usedCodes, parentMap, totalInsumo, codeToDesc]);
 
-    const totalDef    = monomios.reduce((s, m) => s + sumDef(m), 0);
-    const totalOk     = Math.abs(totalDef - 1.0) < 0.005;
+    const totalDef = monomios.reduce((s, m) => s + sumDef(m), 0);
+    const totalOk = Math.abs(totalDef - 1.0) < 0.005;
     const excessAlert = monomios.length > MAX_MONOMIOS;
 
     // ── Toggle expand ─────────────────────────────────────────────────────────
@@ -180,7 +186,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
     const addFromAvailable = useCallback((idx: FormulaIndice) => {
         setMonomios(prev => {
             const nom = nextLetter(prev);
-            const id  = `m-${idx.code}-${Date.now()}`;
+            const id = `m-${idx.code}-${Date.now()}`;
             return [...prev, { id, nomenclatura: nom, indices: [idx] }];
         });
     }, []);
@@ -278,14 +284,12 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Fórmula Polinómica
                 </span>
-                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                    excessAlert ? 'bg-amber-900/40 text-amber-300' : 'bg-slate-800 text-slate-400'
-                }`}>
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${excessAlert ? 'bg-amber-900/40 text-amber-300' : 'bg-slate-800 text-slate-400'
+                    }`}>
                     {monomios.length}/{MAX_MONOMIOS} monomios{excessAlert ? ' ⚠' : ''}
                 </span>
-                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                    totalOk ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'
-                }`}>
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${totalOk ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'
+                    }`}>
                     Σ = {fmtDef(totalDef)}{totalOk ? ' ✓' : ' ≠ 1.000'}
                 </span>
                 <div className="flex-1" />
@@ -322,14 +326,14 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
 
                     <tbody>
                         {monomios.map(mono => {
-                            const isExp      = expandedIds.has(mono.id);
-                            const coefD      = sumDef(mono);
-                            const coefC      = sumCalc(mono);
-                            const primary    = mono.indices[0];
-                            const isLow      = coefD > 0 && coefD < MIN_COEF_MON;
-                            const isDropTgt  = dragOverId === mono.id;
+                            const isExp = expandedIds.has(mono.id);
+                            const coefD = sumDef(mono);
+                            const coefC = sumCalc(mono);
+                            const primary = mono.indices[0];
+                            const isLow = coefD > 0 && coefD < MIN_COEF_MON;
+                            const isDropTgt = dragOverId === mono.id;
                             const isDragging = dragId === mono.id;
-                            const canRcv     = canDropOnto(mono.id);
+                            const canRcv = canDropOnto(mono.id);
 
                             return (
                                 <React.Fragment key={mono.id}>
@@ -439,9 +443,9 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
 
                                     {/* ── NIVEL 2 + 3: hijos (padre expandido) ─ */}
                                     {isExp && mono.indices.map((idx, ii) => {
-                                        const hijoKey   = `${mono.id}::${idx.code}`;
+                                        const hijoKey = `${mono.id}::${idx.code}`;
                                         const isHijoExp = expandedIdx.has(hijoKey);
-                                        const pct       = coefD > 0 ? (idx.coefDefinido / coefD) * 100 : 0;
+                                        const pct = coefD > 0 ? (idx.coefDefinido / coefD) * 100 : 0;
                                         const isEditing = editingCoef?.mId === mono.id && editingCoef?.code === idx.code;
                                         const isPrimary = ii === 0;
 
@@ -577,9 +581,8 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes }:
                             <td colSpan={3} className="border-t-2 border-slate-600 py-1.5 pr-2 text-right text-[10px] font-bold tracking-wider text-slate-300">
                                 TOTAL
                             </td>
-                            <td className={`border-t-2 border-slate-600 py-1.5 pr-2 text-right font-mono text-[12px] font-bold ${
-                                totalOk ? 'text-emerald-300' : 'text-amber-300'
-                            }`}>
+                            <td className={`border-t-2 border-slate-600 py-1.5 pr-2 text-right font-mono text-[12px] font-bold ${totalOk ? 'text-emerald-300' : 'text-amber-300'
+                                }`}>
                                 {fmtDef(totalDef)}
                                 {!totalOk && (
                                     <span className="ml-1 text-[8px] font-normal opacity-60">

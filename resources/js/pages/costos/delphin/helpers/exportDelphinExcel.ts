@@ -173,7 +173,6 @@ async function buildHeader(
     }
 
     // ── Agregar logo izquierdo ──
-    // ── Agregar logo izquierdo ──
     console.log('🖼️ logoIzq recibido:', logoIzq);
     if (logoIzq && typeof logoIzq === 'string' && logoIzq.trim() !== '') {
         try {
@@ -217,7 +216,6 @@ async function buildHeader(
         console.log('❌ logoIzq es null o undefined');
     }
 
-    // ── Agregar logo derecho ──
     // ── Agregar logo derecho ──
     console.log('🖼️ logoDer recibido:', logoDer);
     if (logoDer && typeof logoDer === 'string' && logoDer.trim() !== '') {
@@ -350,14 +348,12 @@ async function buildPresupuestoSheet(
     console.log('📦 proyecto en buildPresupuestoSheet:', proyecto);
     console.log('📦 logo izq en buildPresupuestoSheet:', proyecto?.plantilla_logo_izq_url);
     const totalColumnas = 7;
-    const columnas = [
-        { key: 'no', width: 6 },
-        { key: 'part', width: 12 },
-        { key: 'desc', width: 52 },
-        { key: 'und', width: 8 },
-        { key: 'meta', width: 12 },
-        { key: 'pu', width: 14 },
-        { key: 'total', width: 16 },
+  const columnas = [
+        { key: 'no', width: 8 },          // N° - un poco más ancho
+        { key: 'desc', width: 70 },       // Descripción - MUCHO más ancho
+        { key: 'monomio', width: 18 },    // Monomio - más espacio
+        { key: 'coeficiente', width: 22 }, // Coeficiente - más espacio
+        { key: 'porcentaje', width: 22 }, // % Total - más espacio
     ];
 
     columnas.forEach((col, i) => {
@@ -452,8 +448,6 @@ async function buildPresupuestoSheet(
 
     ws.views = [{ state: 'frozen', ySplit: filaActual - rows.length - 1 }];
 }
-
-// ─── HOJA CRONOGRAMA ───────────────────────────────────────────────────────────
 
 // ─── HOJA CRONOGRAMA ───────────────────────────────────────────────────────────
 async function buildCronogramaSheet(
@@ -572,14 +566,192 @@ async function buildCronogramaSheet(
     ws.views = [{ state: 'frozen', ySplit: 7 }];
 }
 
-// ─── ENTRY POINT ───────────────────────────────────────────────────────────────
+async function buildFormulaPolinomicaSheet(
+    ws: ExcelJS.Worksheet,
+    formulaData: any,
+    proyecto: any,
+    projectName: string,
+    workbook: ExcelJS.Workbook
+) {
+    const totalColumnas = 5;  // ✅ Cambiar a 5
 
+    // ✅ ANCHOS DE COLUMNA OPTIMIZADOS
+    const columnas = [
+        { key: 'no', width: 6 },         // N°
+        { key: 'desc', width: 60 },      // Descripción (más ancho)
+        { key: 'monomio', width: 14 },   // Monomio
+        { key: 'coeficiente', width: 18 }, // Coeficiente
+        { key: 'porcentaje', width: 18 }, // % Total
+    ];
+
+    columnas.forEach((col, i) => {
+        ws.getColumn(i + 1).width = col.width;
+    });
+
+    // ── ENCABEZADO ──
+    const nombreProyecto = String(projectName || 'PROYECTO');
+    let filaActual = await buildHeader(
+        workbook,
+        ws,
+        nombreProyecto,  // ✅ Siempre es un string
+        proyecto,
+        totalColumnas,
+        'FÓRMULA POLINÓMICA'
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE DE LA FÓRMULA (K = ...)
+    // ═══════════════════════════════════════════════════════════════════════
+    ws.mergeCells(filaActual, 1, filaActual + 1, totalColumnas);
+    const formulaCell = ws.getCell(filaActual, 1);
+    formulaCell.value = formulaData?.formula || 'K = No hay fórmula configurada';
+    formulaCell.font = {
+        bold: true,
+        size: 11,
+        name: 'Calibri',
+        color: { argb: 'FF1A3C5E' }
+    };
+    formulaCell.alignment = {
+        horizontal: 'left',
+        vertical: 'middle',
+        wrapText: true
+    };
+    formulaCell.border = {
+        top: { style: 'medium', color: { argb: 'FF1F4E79' } },
+        bottom: { style: 'medium', color: { argb: 'FF1F4E79' } },
+        left: { style: 'medium', color: { argb: 'FF1F4E79' } },
+        right: { style: 'medium', color: { argb: 'FF1F4E79' } },
+    };
+    ws.getRow(filaActual).height = 28;
+    filaActual += 2;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENCABEZADOS DE TABLA
+    // ═══════════════════════════════════════════════════════════════════════
+    const headers = ['N°', 'Descripción', 'Monomio', 'Coeficiente', '% Total'];
+    for (let i = 0; i < headers.length; i++) {
+        const cell = ws.getCell(filaActual, i + 1);
+        cell.value = headers[i];
+        fill(cell, C.headerBg);
+        font(cell, C.headerFg, true, 10);
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        border(cell);
+    }
+    ws.getRow(filaActual).height = 22;
+    filaActual++;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATOS
+    // ═══════════════════════════════════════════════════════════════════════
+    const monomios = formulaData?.monomios || [];
+
+    if (monomios.length === 0) {
+        ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+        const cell = ws.getCell(filaActual, 1);
+        cell.value = 'No hay monomios configurados';
+        fill(cell, C.leafBg);
+        font(cell, C.leafFg, false, 10);
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        return;
+    }
+
+    monomios.forEach((monomio: any, index: number) => {
+        const bg = index % 2 === 0 ? C.leafBg : C.altBg;
+
+        // N°
+        const cell1 = ws.getCell(filaActual, 1);
+        cell1.value = index + 1;
+        fill(cell1, bg);
+        font(cell1, C.leafFg, false, 10);
+        border(cell1);
+        cell1.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Descripción (con wrapText)
+        const cell2 = ws.getCell(filaActual, 2);
+        cell2.value = monomio.especialidad || monomio.descripcion || 'Sin descripción';
+        fill(cell2, bg);
+        font(cell2, C.leafFg, false, 10);
+        border(cell2);
+        cell2.alignment = {
+            vertical: 'middle',
+            horizontal: 'left',
+            wrapText: true
+        };
+
+        // Monomio (en negrita)
+        const cell3 = ws.getCell(filaActual, 3);
+        cell3.value = monomio.monomio || '-';
+        fill(cell3, bg);
+        font(cell3, C.leafFg, true, 10);
+        border(cell3);
+        cell3.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Coeficiente (3 decimales)
+        const cell4 = ws.getCell(filaActual, 4);
+        cell4.value = monomio.coeficiente || 0;
+        fill(cell4, bg);
+        font(cell4, C.leafFg, false, 10);
+        border(cell4);
+        cell4.alignment = { vertical: 'middle', horizontal: 'right' };
+        cell4.numFmt = '#,##0.000';
+
+        // % Total (formato porcentaje)
+        const cell5 = ws.getCell(filaActual, 5);
+        cell5.value = monomio.incidencia || 0;
+        fill(cell5, bg);
+        font(cell5, C.leafFg, false, 10);
+        border(cell5);
+        cell5.alignment = { vertical: 'middle', horizontal: 'right' };
+        cell5.numFmt = '0.00"%"';
+
+        ws.getRow(filaActual).height = 18;
+        filaActual++;
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TOTAL K
+    // ═══════════════════════════════════════════════════════════════════════
+    const totalK = formulaData?.totalK || monomios.reduce((sum: number, m: any) => sum + (m.coeficiente || 0), 0);
+
+
+    ws.getCell(filaActual, 1).value = '';
+    ws.getCell(filaActual, 2).value = 'TOTAL K =';
+    ws.getCell(filaActual, 3).value = '';
+    ws.getCell(filaActual, 4).value = totalK;
+    ws.getCell(filaActual, 5).value = 100;
+
+    for (let c = 1; c <= totalColumnas; c++) {
+        const cell = ws.getCell(filaActual, c);
+        fill(cell, C.totalBg);
+        font(cell, C.totalFg, true, 10);
+        border(cell);
+
+        if (c === 2) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+        } else if (c === 4) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = '#,##0.000';
+        } else if (c === 5) {
+            cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            cell.numFmt = '0.00"%"';
+        } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+    }
+    ws.getRow(filaActual).height = 20;
+
+
+    ws.views = [{ state: 'frozen', ySplit: filaActual - monomios.length - 3 }];
+}
+
+// ✅ MANTENER ESTA FUNCIÓN (la que tiene formulaData)
 export async function exportDelphinExcel(
     content: DelphinExportContent,
     rows: DelphinRow[],
     projectName: string,
     proyecto?: any,
-    selectedSpecialties?: string[]
+    selectedSpecialties?: string[],
+    formulaData?: any
 ): Promise<void> {
     // Filtrar filas por especialidades seleccionadas
     const filteredRows = selectedSpecialties && selectedSpecialties.length > 0
@@ -596,11 +768,17 @@ export async function exportDelphinExcel(
 
     if (content === 'budget_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Presupuesto General');
-        await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);  // 👈 filteredRows
+        await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);
     }
     if (content === 'gantt_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Cronograma General');
-        await buildCronogramaSheet(ws, filteredRows, proyecto, projectName, wb);  // 👈 filteredRows
+        await buildCronogramaSheet(ws, filteredRows, proyecto, projectName, wb);
+    }
+
+    // ✅ NUEVO: Hoja de Fórmula Polinómica
+    if (content === 'formula_polinomica' && formulaData) { 
+        const ws = wb.addWorksheet('Fórmula Polinómica');   
+        await buildFormulaPolinomicaSheet(ws, formulaData, proyecto, projectName, wb); 
     }
 
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -608,9 +786,13 @@ export async function exportDelphinExcel(
         budget_only: 'Presupuesto',
         budget_gantt: 'Presupuesto_Cronograma',
         gantt_only: 'Cronograma',
+        formula_polinomica: 'Formula_Polinomica',
     }[content];
 
     const fileName = `${projectName.replace(/\s+/g, '_')}_${suffix}_${date.replace(/\//g, '-')}.xlsx`;
     const buf = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
+
+
