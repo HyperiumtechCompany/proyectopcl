@@ -37,58 +37,59 @@ const ZOOM_ORDER: ZoomLevel[] = ['DAY_WEEK', 'DAY_MONTH', 'MONTH_YEAR', 'QUARTER
 
 const BAR_LABEL_OPTIONS = [
     { value: 'descripcion', label: 'Descripción' },
-    { value: 'costo',       label: 'Costo'        },
-    { value: 'empty',       label: 'Vacío'         },
+    { value: 'costo', label: 'Costo' },
+    { value: 'empty', label: 'Vacío' },
 ] as const;
 
 interface Props {
     // Mode
-    mode:          DelphinMode;
-    budgetView:    DelphinBudgetView;
-    subView:       DelphinSubView;
-    onModeChange:  (m: DelphinMode) => void;
-    onBudgetView:  (v: DelphinBudgetView) => void;
-    onSubView:     (v: DelphinSubView) => void;
+    mode: DelphinMode;
+    budgetView: DelphinBudgetView;
+    subView: DelphinSubView;
+    onModeChange: (m: DelphinMode) => void;
+    onBudgetView: (v: DelphinBudgetView) => void;
+    onSubView: (v: DelphinSubView) => void;
 
     // Row ops (both modes)
     selectedRowId: number | null;
-    onAddRow:      () => void;
-    onAddChild:    () => void;
-    onDeleteRow:   () => void;
-    onIndent:      () => void;
-    onOutdent:     () => void;
-    onMoveUp:      () => void;
-    onMoveDown:    () => void;
-    onDuplicate:   () => void;
-    onExpandAll:   () => void;
+    onAddRow: () => void;
+    onAddChild: () => void;
+    onDeleteRow: () => void;
+    onIndent: () => void;
+    onOutdent: () => void;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+    onDuplicate: () => void;
+    onExpandAll: () => void;
     onCollapseAll: () => void;
 
     // CPM-specific
-    zoomLevel:           ZoomLevel;
-    showCriticalPath:    boolean;
-    schedulingMode:      SchedulingMode;
-    ganttBarLabel:       GanttBarLabel;
-    onZoomChange:        (z: ZoomLevel) => void;
-    onToggleCritical:    () => void;
-    onSchedulingMode:    (m: SchedulingMode) => void;
-    onBarLabelChange:    (l: GanttBarLabel) => void;
-    onOpenSettings:      () => void;
-    onImport?:           () => void;
-    onImportExcel?:      () => void;
-    onOpenInsumos?:      (scope: InsumosScope) => void;
+    zoomLevel: ZoomLevel;
+    showCriticalPath: boolean;
+    schedulingMode: SchedulingMode;
+    ganttBarLabel: GanttBarLabel;
+    onZoomChange: (z: ZoomLevel) => void;
+    onToggleCritical: () => void;
+    onSchedulingMode: (m: SchedulingMode) => void;
+    onBarLabelChange: (l: GanttBarLabel) => void;
+    onOpenSettings: () => void;
+    onImport?: () => void;
+    onImportExcel?: () => void;
+    onOpenInsumos?: (scope: InsumosScope) => void;
 
     // Formula polinómica
     isParentSelected: boolean;
-    onFormulaView:    () => void;
+    onFormulaView: () => void;
 
     // Save (context-aware)
-    budgetDirty:    boolean;
+    budgetDirty: boolean;
     isSavingBudget: boolean;
-    ganttDirty:     boolean;
-    isGanttSaving:  boolean;
-    onSaveBudget:   () => void;
-    onSaveGantt:    () => void;
+    ganttDirty: boolean;
+    isGanttSaving: boolean;
+    onSaveBudget: () => void;
+    onSaveGantt: () => void;
     onExport?: () => void;
+    project: string;
 }
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -107,8 +108,8 @@ function Btn({
     const styles: Record<string, string> = {
         default: 'bg-slate-700 text-slate-200 hover:bg-slate-600',
         primary: 'bg-blue-600 text-white hover:bg-blue-500',
-        danger:  'bg-red-700/70 text-red-200 hover:bg-red-600',
-        active:  'bg-blue-700 text-blue-100 hover:bg-blue-600',
+        danger: 'bg-red-700/70 text-red-200 hover:bg-red-600',
+        active: 'bg-blue-700 text-blue-100 hover:bg-blue-600',
     };
     return (
         <button
@@ -184,8 +185,8 @@ function IconBtn({
     const styles: Record<string, string> = {
         default: 'bg-slate-700 text-slate-200 hover:bg-slate-600',
         primary: 'bg-blue-600 text-white hover:bg-blue-500',
-        danger:  'bg-red-700/70 text-red-200 hover:bg-red-600',
-        active:  'bg-blue-700 text-blue-100 hover:bg-blue-600',
+        danger: 'bg-red-700/70 text-red-200 hover:bg-red-600',
+        active: 'bg-blue-700 text-blue-100 hover:bg-blue-600',
     };
 
     return (
@@ -230,13 +231,13 @@ function ConfigDropdown({
     onBarLabelChange,
     onOpenSettings,
 }: {
-    ganttBarLabel:    GanttBarLabel;
+    ganttBarLabel: GanttBarLabel;
     onBarLabelChange: (l: GanttBarLabel) => void;
-    onOpenSettings:   () => void;
+    onOpenSettings: () => void;
 }) {
     const [open, setOpen] = useState(false);
-    const [pos, setPos]   = useState({ top: 0, left: 0 });
-    const btnRef   = useRef<HTMLButtonElement>(null);
+    const [pos, setPos] = useState({ top: 0, left: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
 
     const handleToggle = () => {
@@ -266,11 +267,10 @@ function ConfigDropdown({
             <button
                 ref={btnRef}
                 title="Configuración"
-                className={`flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                    open
+                className={`flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${open
                         ? 'bg-blue-700 text-blue-100'
                         : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-                }`}
+                    }`}
                 onClick={handleToggle}
             >
                 <Settings size={13} />
@@ -291,11 +291,10 @@ function ConfigDropdown({
                             {BAR_LABEL_OPTIONS.map(({ value, label }) => (
                                 <button
                                     key={value}
-                                    className={`flex-1 rounded py-1 text-[11px] font-medium transition-colors ${
-                                        ganttBarLabel === value
+                                    className={`flex-1 rounded py-1 text-[11px] font-medium transition-colors ${ganttBarLabel === value
                                             ? 'bg-blue-600 text-white shadow'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}
+                                        }`}
                                     onClick={() => {
                                         onBarLabelChange(value);
                                         setOpen(false);
@@ -337,13 +336,13 @@ export function DelphinToolbar({
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
     onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
-    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt
+    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,  project 
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
-    const noSel   = selectedRowId === null || isFormulaBudgetView;
-    const isDirty  = mode === 'budget' ? budgetDirty : ganttDirty;
+    const noSel = selectedRowId === null || isFormulaBudgetView;
+    const isDirty = mode === 'budget' ? budgetDirty : ganttDirty;
     const isSaving = mode === 'budget' ? isSavingBudget : isGanttSaving;
-    const onSave   = mode === 'budget' ? onSaveBudget : onSaveGantt;
+    const onSave = mode === 'budget' ? onSaveBudget : onSaveGantt;
 
     // Portal tooltip state for the critical-path toggle (custom styling)
     const [cpRect, setCpRect] = useState<DOMRect | null>(null);
@@ -358,11 +357,10 @@ export function DelphinToolbar({
                     type="button"
                     title="Presupuesto / ACUs"
                     onClick={() => onModeChange('budget')}
-                    className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        mode === 'budget'
+                    className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${mode === 'budget'
                             ? 'bg-emerald-700 text-white'
                             : 'text-slate-400 hover:text-slate-200'
-                    }`}>
+                        }`}>
                     <BarChart2 size={11} />
                     <span className="hidden sm:inline">Presupuesto</span>
                     <span className="sm:hidden">$</span>
@@ -371,11 +369,10 @@ export function DelphinToolbar({
                     type="button"
                     title="CPM — Cronograma General"
                     onClick={() => onModeChange('cpm')}
-                    className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        mode === 'cpm'
+                    className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${mode === 'cpm'
                             ? 'bg-sky-700 text-white'
                             : 'text-slate-400 hover:text-slate-200'
-                    }`}>
+                        }`}>
                     <CalendarDays size={11} />
                     <span className="hidden sm:inline">CPM</span>
                     <span className="sm:hidden">⏱</span>
@@ -392,6 +389,7 @@ export function DelphinToolbar({
                 <div className="flex items-center gap-1 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
                     {/* Budget sub-view toggle */}
+                    {/* Budget sub-view toggle */}
                     {mode === 'budget' && (
                         <>
                             <div className="flex shrink-0 rounded bg-slate-800 p-0.5">
@@ -399,11 +397,10 @@ export function DelphinToolbar({
                                     type="button"
                                     title="Presupuesto y ACUs"
                                     onClick={() => onBudgetView('presupuesto')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                                        budgetView === 'presupuesto'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${budgetView === 'presupuesto'
                                             ? 'bg-emerald-700 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <BarChart2 size={11} /> Presupuesto
                                 </button>
                                 <button
@@ -417,14 +414,23 @@ export function DelphinToolbar({
                                             onFormulaView();
                                         }
                                     }}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                                        budgetView === 'formula_polinomica'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${budgetView === 'formula_polinomica'
                                             ? 'bg-emerald-700 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <Calculator size={11} /> Formula P.
                                 </button>
                             </div>
+
+                            {/*Botón Valorizado */}
+                            <a
+                                href={`/module/crono_valorizado?project=${project}`}
+                                className="flex shrink-0 items-center gap-1 rounded bg-blue-600 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-blue-500 transition-colors"
+                                title="Ir al Cronograma Valorizado"
+                            >
+                                <BarChart2 size={11} /> Valorizado
+                            </a>
+
                             <Divider />
                         </>
                     )}
@@ -437,22 +443,20 @@ export function DelphinToolbar({
                                     type="button"
                                     title="Vista Gantt"
                                     onClick={() => onSubView('gantt')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                                        subView === 'gantt'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${subView === 'gantt'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <LayoutDashboard size={11} /> Gantt
                                 </button>
                                 <button
                                     type="button"
                                     title="Diagrama de Red (PERT)"
                                     onClick={() => onSubView('network')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                                        subView === 'network'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${subView === 'network'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <Network size={11} /> Red
                                 </button>
                             </div>
@@ -461,19 +465,19 @@ export function DelphinToolbar({
                     )}
 
                     {/* ── Row ops: icon-only with portal tooltips ── */}
-                    <IconBtn icon={<Plus size={13} />}            tooltip="Agregar fila  ·  Insert"          onClick={onAddRow} />
-                    <IconBtn icon={<CornerDownRight size={13} />} tooltip="Agregar sub-fila  ·  Ctrl+Insert"  disabled={noSel} onClick={onAddChild} />
-                    <IconBtn icon={<Trash2 size={13} />}          tooltip="Eliminar fila  ·  Supr"            variant="danger" disabled={noSel} onClick={onDeleteRow} />
+                    <IconBtn icon={<Plus size={13} />} tooltip="Agregar fila  ·  Insert" onClick={onAddRow} />
+                    <IconBtn icon={<CornerDownRight size={13} />} tooltip="Agregar sub-fila  ·  Ctrl+Insert" disabled={noSel} onClick={onAddChild} />
+                    <IconBtn icon={<Trash2 size={13} />} tooltip="Eliminar fila  ·  Supr" variant="danger" disabled={noSel} onClick={onDeleteRow} />
                     <Divider />
-                    <IconBtn icon={<IndentIncrease size={13} />}  tooltip="Indentar  ·  Tab"                  disabled={noSel} onClick={onIndent} />
-                    <IconBtn icon={<IndentDecrease size={13} />}  tooltip="Outdentar  ·  Shift+Tab"           disabled={noSel} onClick={onOutdent} />
+                    <IconBtn icon={<IndentIncrease size={13} />} tooltip="Indentar  ·  Tab" disabled={noSel} onClick={onIndent} />
+                    <IconBtn icon={<IndentDecrease size={13} />} tooltip="Outdentar  ·  Shift+Tab" disabled={noSel} onClick={onOutdent} />
                     <Divider />
-                    <IconBtn icon={<ArrowUp size={13} />}         tooltip="Subir fila  ·  Alt+↑"             disabled={noSel} onClick={onMoveUp} />
-                    <IconBtn icon={<ArrowDown size={13} />}       tooltip="Bajar fila  ·  Alt+↓"             disabled={noSel} onClick={onMoveDown} />
-                    <IconBtn icon={<Copy size={13} />}            tooltip="Duplicar fila  ·  Ctrl+D"         disabled={noSel} onClick={onDuplicate} />
+                    <IconBtn icon={<ArrowUp size={13} />} tooltip="Subir fila  ·  Alt+↑" disabled={noSel} onClick={onMoveUp} />
+                    <IconBtn icon={<ArrowDown size={13} />} tooltip="Bajar fila  ·  Alt+↓" disabled={noSel} onClick={onMoveDown} />
+                    <IconBtn icon={<Copy size={13} />} tooltip="Duplicar fila  ·  Ctrl+D" disabled={noSel} onClick={onDuplicate} />
                     <Divider />
-                    <IconBtn icon={<ChevronsUpDown size={13} />}  tooltip="Expandir todo"                     onClick={onExpandAll} />
-                    <IconBtn icon={<ChevronsDownUp size={13} />}  tooltip="Colapsar todo"                     onClick={onCollapseAll} />
+                    <IconBtn icon={<ChevronsUpDown size={13} />} tooltip="Expandir todo" onClick={onExpandAll} />
+                    <IconBtn icon={<ChevronsDownUp size={13} />} tooltip="Colapsar todo" onClick={onCollapseAll} />
 
                     {/* CPM-only: Programador + Ruta crítica + Zoom */}
                     {mode === 'cpm' && (
@@ -484,22 +488,20 @@ export function DelphinToolbar({
                                     type="button"
                                     title="Programador automático"
                                     onClick={() => onSchedulingMode('automatic')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                                        schedulingMode === 'automatic'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${schedulingMode === 'automatic'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <Bot size={11} /> Auto
                                 </button>
                                 <button
                                     type="button"
                                     title="Programador manual"
                                     onClick={() => onSchedulingMode('manual')}
-                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                                        schedulingMode === 'manual'
+                                    className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${schedulingMode === 'manual'
                                             ? 'bg-blue-600 text-white'
                                             : 'text-slate-400 hover:text-slate-200'
-                                    }`}>
+                                        }`}>
                                     <Hand size={11} /> Manual
                                 </button>
                             </div>
@@ -509,11 +511,10 @@ export function DelphinToolbar({
                             <button
                                 ref={cpRef}
                                 title="Resaltar ruta crítica"
-                                className={`flex shrink-0 items-center justify-center rounded p-1.5 transition-colors ${
-                                    showCriticalPath
+                                className={`flex shrink-0 items-center justify-center rounded p-1.5 transition-colors ${showCriticalPath
                                         ? 'bg-red-700 text-white hover:bg-red-600'
                                         : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
-                                }`}
+                                    }`}
                                 onClick={onToggleCritical}
                                 onMouseEnter={() => setCpRect(cpRef.current?.getBoundingClientRect() ?? null)}
                                 onMouseLeave={() => setCpRect(null)}
@@ -547,11 +548,10 @@ export function DelphinToolbar({
                                             {ZOOM_ORDER.map((z) => (
                                                 <button
                                                     key={z}
-                                                    className={`rounded px-2 py-0.5 text-[10px] transition-colors ${
-                                                        zoomLevel === z
+                                                    className={`rounded px-2 py-0.5 text-[10px] transition-colors ${zoomLevel === z
                                                             ? 'bg-slate-600 text-white'
                                                             : 'text-slate-400 hover:text-slate-200'
-                                                    }`}
+                                                        }`}
                                                     title={ZOOM_LABELS[z]}
                                                     onClick={() => onZoomChange(z)}>
                                                     {ZOOM_LABELS[z]}
@@ -573,7 +573,7 @@ export function DelphinToolbar({
                     <ConfigDropdown
                         ganttBarLabel={ganttBarLabel}
                         onBarLabelChange={onBarLabelChange}
-                        onOpenSettings={onOpenSettings}/>
+                        onOpenSettings={onOpenSettings} />
                 </>
             )}
 
@@ -592,7 +592,7 @@ export function DelphinToolbar({
                             label="Imp. Excel"
                             title="Importar presupuesto y ACUs desde Excel (Delphin Express)"
                             variant="default"
-                            onClick={onImportExcel}/>
+                            onClick={onImportExcel} />
                     </>
                 )}
                 {mode === 'cpm' && (
@@ -601,20 +601,20 @@ export function DelphinToolbar({
                         label="Imp."
                         title="Importar XML de MS Project"
                         variant="danger"
-                        onClick={onImport}/>
+                        onClick={onImport} />
                 )}
                 <Btn
                     icon={<NotepadTextIcon size={13} />}
                     label="Exportar"
                     title="Exportar a Excel"
                     variant="default"
-                    onClick={onExport}/>
+                    onClick={onExport} />
                 <Btn
                     icon={<Save size={13} />}
                     label={isSaving ? 'Guardando…' : 'Guardar'}
                     variant="primary"
                     disabled={isSaving || !isDirty}
-                    onClick={onSave}/>
+                    onClick={onSave} />
             </div>
         </div>
     );

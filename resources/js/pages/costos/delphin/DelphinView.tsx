@@ -652,6 +652,7 @@ export default function DelphinView({
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
                     onExport={() => setExportOpen(true)}
+                    project={project} 
                 />
 
                 {/* ──  vista formula polinomida────────────────────────────── */}
