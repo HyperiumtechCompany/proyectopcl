@@ -323,73 +323,93 @@ async function buildCronogramaPdf(doc: jsPDF, rows: DelphinRow[], projectName: s
     });
 }
 
-async function addFormulaPolinomicaBlock(
+// Reemplazar buildFormulaPolinomicaBlock por esta versión
+async function buildFormulaPolinomicaBlock(
     doc: jsPDF,
-    rows: DelphinRow[],
     formulaData: any,
-    projectName: string,
-    proyecto: any,
     startY: number
 ): Promise<number> {
     const pageW = doc.internal.pageSize.getWidth();
     const marginX = 10;
     const contentW = pageW - marginX * 2;
-
     let y = startY;
 
-    // ── FÓRMULA ──
+    // ── Fórmula K ────────────────────────────────────────────────────────
+    doc.setFillColor(217, 234, 247);
+    const formulaStr = formulaData?.formula || 'K = (sin datos)';
+    const formulaLines = doc.splitTextToSize(`K = ${formulaStr.replace(/^K = /, '')}`, contentW - 6);
+    const formulaBlockH = formulaLines.length * 4.5 + 4;
+    doc.rect(marginX, y, contentW, formulaBlockH, 'F');
+    doc.setDrawColor(31, 78, 121);
+    doc.setLineWidth(0.4);
+    doc.rect(marginX, y, contentW, formulaBlockH);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.setTextColor(...C.borderDark!);
-    doc.text('FÓRMULA POLINÓMICA', marginX, y);
-    y += 4;
+    doc.setTextColor(26, 60, 94);
+    doc.text(formulaLines, marginX + 3, y + 4.5);
+    y += formulaBlockH + 3;
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    const formulaLines = doc.splitTextToSize(formulaData.formula || 'K = ...', contentW - 4);
-    doc.text(formulaLines, marginX + 2, y);
-    y += formulaLines.length * 4 + 4;
+    // ── Tabla ─────────────────────────────────────────────────────────────
+    const monomios: any[] = formulaData?.monomios ?? [];
+    const totalK = formulaData?.totalK ?? 0;
 
-    // ── TABLA DE ESPECIALIDADES ──
-    const especialidades = rows.filter(r => (r.nivel ?? 1) === 1);
-    const tableData = especialidades.map((e, i) => {
-        const partida = e.partida || e.descripcion || '';
-        return [
-            String(i + 1),
-            partida,
-            formulaData.monomios?.[partida] || '-',
-            String(formulaData.coeficientes?.[partida] || 0),
-            formulaData.indices?.[partida] || '-',
-            String(formulaData.incidencias?.[partida] || 0),
-        ];
-    });
-
-    // Total
-    const totalK = especialidades.reduce((sum, e) => {
-        return sum + (formulaData.coeficientes?.[e.partida] || 0);
-    }, 0);
-    tableData.push(['', 'TOTAL K =', '', String(totalK), '', '']);
+    const body = monomios.map((row: any) => [
+        row.esPadre ? String(row.nro) : '',
+        (row.esPadre ? '' : '    ') + (row.descripcion ?? ''),
+        row.esPadre ? (row.monomio ?? '') : '—',
+        (row.coeficiente ?? 0).toFixed(3),
+        (row.incidencia ?? 0).toFixed(1) + '%',
+    ]);
+    body.push(['', 'TOTAL K =', '', totalK.toFixed(3), '100.0%']);
 
     autoTable(doc, {
         startY: y,
-        head: [['N°', 'Especialidad', 'Monomio', 'Coeficiente', 'Índice', 'Incidencia']],
-        body: tableData,
+        margin: { left: marginX, right: marginX },
+        head: [['N°', 'Descripción', 'Nomen.', 'Coeficiente', '% Total']],
+        body,
         theme: 'grid',
-        styles: { fontSize: 7, cellPadding: { top: 1.5, right: 2, bottom: 1.5, left: 2 } },
-        headStyles: { fillColor: C.headerBg!, textColor: C.fgLight!, fontStyle: 'bold', halign: 'center' },
+        styles: {
+            fontSize: 7.5,
+            cellPadding: { top: 1.5, right: 2.5, bottom: 1.5, left: 2.5 },
+            font: 'helvetica',
+            overflow: 'linebreak',
+        },
+        headStyles: {
+            fillColor: C.headerBg!,
+            textColor: C.fgLight!,
+            fontStyle: 'bold',
+            halign: 'center',
+            fontSize: 8,
+        },
         columnStyles: {
             0: { cellWidth: 10, halign: 'center' },
             1: { cellWidth: 'auto' },
             2: { cellWidth: 20, halign: 'center' },
-            3: { cellWidth: 22, halign: 'right' },
-            4: { cellWidth: 20, halign: 'center' },
-            5: { cellWidth: 22, halign: 'right' },
+            3: { cellWidth: 28, halign: 'right' },
+            4: { cellWidth: 24, halign: 'right' },
         },
         didParseCell: (data) => {
-            if (data.section === 'body' && data.row.index === tableData.length - 1) {
+            if (data.section !== 'body') return;
+            const row = monomios[data.row.index];
+            // Fila total
+            if (data.row.index >= monomios.length) {
                 data.cell.styles.fillColor = C.totalBg!;
                 data.cell.styles.textColor = C.totalFg!;
                 data.cell.styles.fontStyle = 'bold';
+                return;
+            }
+            if (!row) return;
+            if (row.esPadre) {
+                data.cell.styles.fillColor = [217, 234, 247];
+                data.cell.styles.textColor = [31, 78, 121];
+                data.cell.styles.fontStyle = 'bold';
+            } else {
+                data.cell.styles.fillColor = [255, 255, 255];
+                data.cell.styles.textColor = [30, 41, 59];
+            }
+            // Nomenclatura de padre en verde
+            if (row.esPadre && data.column.index === 2) {
+                data.cell.styles.textColor = [5, 150, 105];
             }
         },
     });
@@ -436,11 +456,11 @@ export async function exportDelphinPdf(
     if (content === 'gantt_only' || content === 'budget_gantt') {
         await buildCronogramaPdf(doc, filteredRows, projectName, projectData);
     }
-    if (content === 'formula_polinomica' && formulaData) {
-        
-        const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA', projectData);
-        await addFormulaPolinomicaBlock(doc, filteredRows, formulaData, projectName, projectData, startY);
-    }
+    if (content === 'formula_polinomica') {
+    const startY = await addPageHeader(doc, projectName, 'FÓRMULA POLINÓMICA', projectData);
+
+    await buildFormulaPolinomicaBlock(doc, formulaData, startY);
+}
 
     // Page numbers
     const totalPages = doc.getNumberOfPages();

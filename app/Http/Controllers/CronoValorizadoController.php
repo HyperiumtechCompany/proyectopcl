@@ -1101,78 +1101,279 @@ public function getMaterialesData(Request $request)
     
     $presupuestoId = $this->resolvePresupuestoId();
     
-    // Obtener materiales desde la tabla de materiales (ajusta según tu tabla real)
-    $materiales = DB::connection('costos_tenant')
-        ->table('cronograma_materiales')  // ← Cambia por el nombre real de tu tabla de materiales
+    // ✅ Obtener ACUs desde las tablas específicas
+    // 1. Mano de obra
+    $manoDeObra = DB::connection('costos_tenant')
+        ->table('acu_mano_de_obra')
         ->where('presupuesto_id', $presupuestoId)
         ->get();
-        
-\Log::info('Materiales cargados: ' . $materiales->count());  
     
-    // Obtener periodos (reutiliza la misma lógica del valorizado)
+    // 2. Materiales
+    $materialesACU = DB::connection('costos_tenant')
+        ->table('acu_materiales')
+        ->where('presupuesto_id', $presupuestoId)
+        ->get();
+    
+    // 3. Equipos
+    $equipos = DB::connection('costos_tenant')
+        ->table('acu_equipos')
+        ->where('presupuesto_id', $presupuestoId)
+        ->get();
+    
+    // 4. Subcontratos
+    $subcontratos = DB::connection('costos_tenant')
+        ->table('acu_subcontratos')
+        ->where('presupuesto_id', $presupuestoId)
+        ->get();
+    
+    // 5. Subpartidas
+    $subpartidas = DB::connection('costos_tenant')
+        ->table('acu_subpartidas')
+        ->where('presupuesto_id', $presupuestoId)
+        ->get();
+    
+    // ✅ Obtener presupuesto para metrados
+    $presupuesto = DB::connection('costos_tenant')
+        ->table('presupuesto_general')
+        ->where('presupuesto_id', $presupuestoId)
+        ->whereNull('deleted_at')
+        ->get()
+        ->keyBy(fn ($p) => trim($p->partida ?? ''));
+    
+    // ✅ Obtener periodos
     $modoCalculo = $request->query('modo', self::MODO_CALENDARIO);
     
-    $fechas = DB::connection('costos_tenant')
-        ->table('cronograma_general')
-        ->where('presupuesto_id', $presupuestoId)
-        ->whereNotNull('fecha_inicio')
-        ->whereNotNull('fecha_fin')
-        ->selectRaw('MIN(fecha_inicio) as min_fecha, MAX(fecha_fin) as max_fecha')
-        ->first();
+    // Usar fechas del proyecto
+    $costoProject = CostoProject::findOrFail($projectId);
+    $inicio = $costoProject->fecha_inicio 
+        ? Carbon::parse($costoProject->fecha_inicio)->startOfMonth() 
+        : now()->startOfMonth();
+    $fin = $costoProject->fecha_fin 
+        ? Carbon::parse($costoProject->fecha_fin)->endOfMonth() 
+        : $inicio->copy()->addMonths(5);
     
-    $periodos = $this->generarPeriodosDesdeFechas(
-        $fechas?->min_fecha, 
-        $fechas?->max_fecha, 
-        $modoCalculo
-    );
+    $periodos = $modoCalculo === self::MODO_30_DIAS
+        ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
+        : $this->generarPeriodosCalendario($inicio, $fin);
     
-    // Calcular resumen de materiales
-    $totalMateriales = $materiales->count();
-    $presupuestoTotal = $materiales->sum('costo_total');
+    // ✅ Función para procesar cada tipo de ACU
+    $procesarACU = function($item, $tipo, $partida, $metrado) use ($periodos) {
+        $unidad = $item->unidad ?? '';
+        $cantidad = (float) ($item->cantidad ?? 0);
+        $precio = (float) ($item->precio_unitario ?? $item->precio_hora ?? 0);
+        $factor = (float) ($item->factor_desperdicio ?? 1);
+        $descripcion = $item->descripcion ?? 'Sin descripción';
+        
+        if ($cantidad <= 0 || $precio <= 0) return null;
+        
+        $cantidadTotal = $cantidad * $factor * $metrado;
+        $costoTotal = $cantidadTotal * $precio;
+        
+        if ($cantidadTotal <= 0) return null;
+        
+        $meses = count($periodos);
+        $cantidadPorMes = $meses > 0 ? $cantidadTotal / $meses : 0;
+        $costoPorMes = $cantidadPorMes * $precio;
+        
+        $distribucion = [];
+        foreach ($periodos as $periodo) {
+            $key = $periodo['key'];
+            $distribucion[$key] = [
+                'cantidad' => round($cantidadPorMes, 4),
+                'monto' => round($costoPorMes, 2),
+            ];
+        }
+        
+        return [
+            'partida' => $partida,
+            'descripcion' => $descripcion,
+            'unidad' => $unidad,
+            'tipo' => $tipo,
+            'precio' => round($precio, 2),
+            'cantidad_total' => round($cantidadTotal, 4),
+            'costo_total' => round($costoTotal, 2),
+            'distribucion' => $distribucion,
+        ];
+    };
     
-    // Encontrar mes pico
-    $mesPicoKey = null;
-    $mesPicoMonto = 0;
-    $mesPicoLabel = null;
+    // ✅ Consolidar todos los materiales
+    $materialesConsolidados = [];
+    $acumuladoMensual = [];
+    $presupuestoTotal = 0;
     
     foreach ($periodos as $periodo) {
-        $montoMes = $materiales->sum(function ($m) use ($periodo) {
-            $dist = json_decode($m->distribucion_mensual ?? '{}', true);
-            return $dist[$periodo['key']]['monto'] ?? 0;
-        });
+        $acumuladoMensual[$periodo['key']] = 0;
+    }
+    
+    // Procesar Mano de Obra
+    foreach ($manoDeObra as $item) {
+        $partida = trim($item->partida ?? '');
+        $presupuestoItem = $presupuesto->get($partida);
+        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+        if ($metrado <= 0) continue;
         
-        if ($montoMes > $mesPicoMonto) {
-            $mesPicoMonto = $montoMes;
-            $mesPicoKey = $periodo['key'];
-            $mesPicoLabel = $periodo['labelCal'];
+        $result = $procesarACU($item, 'mano_de_obra', $partida, $metrado);
+        if ($result) {
+            $clave = $result['descripcion'] . '|' . $result['unidad'];
+            if (!isset($materialesConsolidados[$clave])) {
+                $materialesConsolidados[$clave] = $result;
+            } else {
+                $existing = &$materialesConsolidados[$clave];
+                $existing['cantidad_total'] += $result['cantidad_total'];
+                $existing['costo_total'] += $result['costo_total'];
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
+                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
+                }
+            }
+            $presupuestoTotal += $result['costo_total'];
+        }
+    }
+    
+    // Procesar Materiales ACU
+    foreach ($materialesACU as $item) {
+        $partida = trim($item->partida ?? '');
+        $presupuestoItem = $presupuesto->get($partida);
+        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+        if ($metrado <= 0) continue;
+        
+        $result = $procesarACU($item, 'materiales', $partida, $metrado);
+        if ($result) {
+            $clave = $result['descripcion'] . '|' . $result['unidad'];
+            if (!isset($materialesConsolidados[$clave])) {
+                $materialesConsolidados[$clave] = $result;
+            } else {
+                $existing = &$materialesConsolidados[$clave];
+                $existing['cantidad_total'] += $result['cantidad_total'];
+                $existing['costo_total'] += $result['costo_total'];
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
+                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
+                }
+            }
+            $presupuestoTotal += $result['costo_total'];
+        }
+    }
+    
+    // Procesar Equipos
+    foreach ($equipos as $item) {
+        $partida = trim($item->partida ?? '');
+        $presupuestoItem = $presupuesto->get($partida);
+        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+        if ($metrado <= 0) continue;
+        
+        $result = $procesarACU($item, 'equipos', $partida, $metrado);
+        if ($result) {
+            $clave = $result['descripcion'] . '|' . $result['unidad'];
+            if (!isset($materialesConsolidados[$clave])) {
+                $materialesConsolidados[$clave] = $result;
+            } else {
+                $existing = &$materialesConsolidados[$clave];
+                $existing['cantidad_total'] += $result['cantidad_total'];
+                $existing['costo_total'] += $result['costo_total'];
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
+                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
+                }
+            }
+            $presupuestoTotal += $result['costo_total'];
+        }
+    }
+    
+    // Procesar Subcontratos
+    foreach ($subcontratos as $item) {
+        $partida = trim($item->partida ?? '');
+        $presupuestoItem = $presupuesto->get($partida);
+        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+        if ($metrado <= 0) continue;
+        
+        $result = $procesarACU($item, 'subcontratos', $partida, $metrado);
+        if ($result) {
+            $clave = $result['descripcion'] . '|' . $result['unidad'];
+            if (!isset($materialesConsolidados[$clave])) {
+                $materialesConsolidados[$clave] = $result;
+            } else {
+                $existing = &$materialesConsolidados[$clave];
+                $existing['cantidad_total'] += $result['cantidad_total'];
+                $existing['costo_total'] += $result['costo_total'];
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
+                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
+                }
+            }
+            $presupuestoTotal += $result['costo_total'];
+        }
+    }
+    
+    // Procesar Subpartidas
+    foreach ($subpartidas as $item) {
+        $partida = trim($item->partida ?? '');
+        $presupuestoItem = $presupuesto->get($partida);
+        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
+        if ($metrado <= 0) continue;
+        
+        $result = $procesarACU($item, 'subpartidas', $partida, $metrado);
+        if ($result) {
+            $clave = $result['descripcion'] . '|' . $result['unidad'];
+            if (!isset($materialesConsolidados[$clave])) {
+                $materialesConsolidados[$clave] = $result;
+            } else {
+                $existing = &$materialesConsolidados[$clave];
+                $existing['cantidad_total'] += $result['cantidad_total'];
+                $existing['costo_total'] += $result['costo_total'];
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
+                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
+                }
+            }
+            $presupuestoTotal += $result['costo_total'];
+        }
+    }
+    
+    $materialesFormateados = collect(array_values($materialesConsolidados))
+        ->map(function ($m) {
+            $m['cantidad_total'] = round($m['cantidad_total'], 4);
+            $m['costo_total']    = round($m['costo_total'], 2);
+            return $m;
+        });
+    
+    $totalMateriales = $materialesFormateados->count();
+    
+    // Calcular mes pico
+    $mesPicoKey = '';
+    $mesPicoMonto = 0;
+    foreach ($acumuladoMensual as $key => $monto) {
+        if ($monto > $mesPicoMonto) {
+            $mesPicoMonto = $monto;
+            $mesPicoKey = $key;
+        }
+    }
+    $mesPicoLabel = '';
+    foreach ($periodos as $p) {
+        if ($p['key'] === $mesPicoKey) {
+            $mesPicoLabel = $p['labelCal'] ?? $p['label'];
+            break;
         }
     }
     
     return response()->json([
-        'materiales' => $materiales->map(function ($m) {
-            return [
-                'partida_origen' => $m->partida_origen ?? '',
-                'descripcion' => $m->descripcion ?? '',
-                'descripcion_partida' => $m->descripcion_partida ?? '',
-                'unidad' => $m->unidad ?? '',
-                'tipo' => $m->tipo ?? 'otros',
-                'precio' => (float) ($m->precio ?? 0),
-                'cantidad_total' => (float) ($m->cantidad_total ?? 0),
-                'costo_total' => (float) ($m->costo_total ?? 0),
-                'distribucion' => json_decode($m->distribucion_mensual ?? '{}', true),
-            ];
-        }),
+        'materiales' => $materialesFormateados,
         'periodos' => $periodos,
         'resumen' => [
             'total_materiales' => $totalMateriales,
-            'presupuesto_total' => $presupuestoTotal,
+            'presupuesto_total' => round($presupuestoTotal, 2),
             'duracion_meses' => count($periodos),
             'mes_pico' => $mesPicoLabel,
             'mes_pico_key' => $mesPicoKey,
-            'monto_mes_pico' => $mesPicoMonto,
+            'monto_mes_pico' => round($mesPicoMonto, 2),
             'total_partidas' => $totalMateriales,
         ],
-        'estaGuardado' => $materiales->isNotEmpty(),
+        'estaGuardado' => $materialesFormateados->isNotEmpty(),
         'sinGantt' => false,
     ]);
 }

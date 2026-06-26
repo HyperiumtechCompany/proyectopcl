@@ -159,6 +159,7 @@ export default function DelphinView({
     const [hiddenCpmKeys, setHiddenCpmKeys] = useState<Set<string>>(new Set());
     const [descExpanded, setDescExpanded] = useState(false);
     const [formulaMonomios, setFormulaMonomios] = useState<any[]>([]);
+    const [showExportModal, setShowExportModal] = useState(false);
 
     const activeHiddenKeys = mode === 'budget' ? hiddenBudgetKeys : hiddenCpmKeys;
 
@@ -173,12 +174,8 @@ export default function DelphinView({
 
     // ── Search / filter ───────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
-
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
-
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
-
-    // ── Project params (needed by AcuPanel cost tables) ───────────────────────
     const initializeParams = useProjectParamsStore((s) => s.initialize);
     useEffect(() => { initializeParams(projectParams); }, [projectParams, initializeParams]);
 
@@ -206,20 +203,27 @@ export default function DelphinView({
     // ── Timeline & critical path ──────────────────────────────────────────────
     const timeline = useGanttTimeline(tasks, zoomLevel, calendarSettings, continuousDayWidth);
     const { criticalIds, floatByTask } = useGanttCriticalPath(tasks);
-
-    // ── Selection & editing ───────────────────────────────────────────────────
     const { selectedRowId, editState, selectRow, startEdit, stopEdit, cancelEdit } =
         useGanttSelection();
 
-    // Enabled only when the selected row is a parent (group) node
     const isParentSelected = selectedRowId !== null && groupIds.has(selectedRowId);
-
     const handleFormulaView = useCallback(() => {
         if (selectedRowId !== null && groupIds.has(selectedRowId)) {
             setFormulaParentId(selectedRowId);
             setBudgetView('formula_polinomica');
         }
     }, [selectedRowId, groupIds]);
+
+    const handleFormulaData = useCallback((monomios: any[]) => {
+        
+        setFormulaMonomios(monomios);
+        setShowExportModal(true);
+    }, []);
+
+    const handleCloseModal = useCallback(() => {
+        setShowExportModal(false);
+        setFormulaMonomios([]);
+    }, []);
 
     const pendingSelectRef = useRef<number | null>(null);
     const setPendingSelect = useCallback((id: number) => { pendingSelectRef.current = id; }, []);
@@ -542,7 +546,7 @@ export default function DelphinView({
         [importTasks],
     );
 
-   
+
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
@@ -558,7 +562,6 @@ export default function DelphinView({
         return () => document.removeEventListener('keydown', handler);
     }, [mode, budgetDirty, acuDirty, isSavingBudget, ganttDirty, ganttIsSaving, handleSaveBudget, handleSaveGantt]);
 
-    // ── Columns (filtered by visibility + desc expansion) ────────────────────
     const allActiveColumns = mode === 'budget' ? BUDGET_COLUMNS : CPM_COLUMNS;
 
     const activeColumns = useMemo(() => {
@@ -598,6 +601,7 @@ export default function DelphinView({
     // ── Grid scroll ref depends on mode ──────────────────────────────────────
     const activeScrollRef = mode === 'cpm' ? gridScrollRef : undefined;
     const activeOnScroll = mode === 'cpm' ? onGridScroll : undefined;
+  
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
@@ -652,7 +656,7 @@ export default function DelphinView({
                     onSaveBudget={() => void handleSaveBudget()}
                     onSaveGantt={() => void handleSaveGantt()}
                     onExport={() => setExportOpen(true)}
-                    project={project} 
+                    project={project}
                 />
 
                 {/* ──  vista formula polinomida────────────────────────────── */}
@@ -665,7 +669,11 @@ export default function DelphinView({
                         diccionario={diccionario}
                         projectName={project_name}
                         onBack={() => setBudgetView('presupuesto')}
-                        onMonomiosChange={setFormulaMonomios}
+                        onMonomiosChange={(monomios) => {
+                            
+                            setFormulaMonomios(monomios);
+                        }}
+                        onExportFormula={handleFormulaData}
                     />
                 ) : mode === 'cpm' && subView === 'network' ? (
                     /* Red/Network: full width, no split pane */
@@ -760,6 +768,7 @@ export default function DelphinView({
                                     onBarCommit={handleBarCommit}
                                     onContinuousZoom={handleContinuousZoom} />
                             )}
+
                         </Panel>
                     </Group>
                 )}
@@ -769,17 +778,22 @@ export default function DelphinView({
                     open={settingsOpen}
                     settings={calendarSettings}
                     onClose={() => setSettingsOpen(false)}
-                    onSave={setCalendarSettings} />
+                    onSave={setCalendarSettings}
+                />
+
+
+
                 <DelphinExportModal
                     open={exportOpen}
                     rows={delphinRows}
                     projectName={project_name}
                     project={project}
                     projectData={projectData}
-                    formulaMonomios={formulaMonomios} 
+                    formulaMonomios={formulaMonomios}
                     availableSpecialties={availableSpecialties}
                     onClose={() => setExportOpen(false)}
                 />
+
                 <ImportExcelPresupuestoModal
                     projectId={project_id_int}
                     isOpen={isExcelModalOpen}
