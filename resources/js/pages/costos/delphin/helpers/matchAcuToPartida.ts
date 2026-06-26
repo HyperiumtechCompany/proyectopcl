@@ -23,6 +23,21 @@ function normalize(s: string): string {
         .trim();
 }
 
+// Returns true when the descriptions are similar enough to trust a code-based match.
+// Prevents "VALVULA ESFERICA" from matching "EMPALME DE TUBERIA" just because they
+// share the same partida code when the presupuesto was imported from a different source.
+function codeMatchIsValid(existingDesc: string, importedDesc: string): boolean {
+    const a = normalize(existingDesc);
+    const b = normalize(importedDesc);
+    if (!a || !b) return true;
+    const tokA = a.split(/\s+/).filter((w) => w.length >= 4);
+    const tokB = b.split(/\s+/).filter((w) => w.length >= 4);
+    if (tokA.length === 0 || tokB.length === 0) return true;
+    const setB = new Set(tokB);
+    const shared = tokA.filter((w) => setB.has(w)).length;
+    return shared / Math.min(tokA.length, tokB.length) >= 0.4;
+}
+
 // Canonical partida code: strip leading zeros from every numeric segment so
 // "01.01.01.01", "1.1.1.1", and "01.1.01.1" all map to "1.1.1.1".
 function canonicalCode(code: string): string {
@@ -53,10 +68,15 @@ export function matchAcuToPartida(acus: ParsedAcu[], rows: DelphinRow[]): AcuMat
     }
 
     return acus.map((acu): AcuMatch => {
-        // Filter 1: canonical code match
+        // Filter 1: canonical code match — only accepted when descriptions are similar.
+        // A code match alone is not enough: when the presupuesto was built from a
+        // different source, two completely different items can share the same code
+        // (e.g. "VALVULA ESFERICA" and "EMPALME DE TUBERIA" both at 1.1.3.4.2.5.1).
         if (acu.partida_code) {
             const hit = byCode.get(canonicalCode(acu.partida_code));
-            if (hit) return { acu, row: hit, method: 'code' };
+            if (hit && codeMatchIsValid(hit.descripcion, acu.partida_desc)) {
+                return { acu, row: hit, method: 'code' };
+            }
         }
 
         // Filter 2: normalized description match

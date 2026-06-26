@@ -2,7 +2,10 @@ import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGanttTasks } from '../../cronogramas/v2/composables/useGanttTasks';
 import type { GanttCalendarSettings as CalendarSettings } from '../../cronogramas/v2/types/calendar';
-import type { GanttTask, SchedulingMode } from '../../cronogramas/v2/types/task';
+import type {
+    GanttTask,
+    SchedulingMode,
+} from '../../cronogramas/v2/types/task';
 import {
     BUDGET_FIELD_KEYS,
     defaultBudget,
@@ -19,13 +22,63 @@ interface Options {
 }
 
 function normalizeForMatch(s: string): string {
-    return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    return (s ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '') // strip combining diacritics
+        .replace(/[^a-z0-9\s]/g, ' ') // replace punctuation/quotes/symbols with space
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Returns true when the descriptions are similar enough to trust a code-based match.
+// Tokenizes each description, counts significant words (≥4 chars) that overlap.
+// A Jaccard-style ratio ≥ 0.4 on the shorter side is considered a valid match.
+// This prevents "VALVULA ESFERICA" from being misrouted to "EMPALME DE TUBERIA"
+// simply because they share the same partida code across different exports.
+function codeMatchIsValid(existingDesc: string, importedDesc: string): boolean {
+    const a = normalizeForMatch(existingDesc);
+    const b = normalizeForMatch(importedDesc);
+    if (!a || !b) return true;
+    const tokA = a.split(/\s+/).filter((w) => w.length >= 4);
+    const tokB = b.split(/\s+/).filter((w) => w.length >= 4);
+    if (tokA.length === 0 || tokB.length === 0) return true;
+    const setB = new Set(tokB);
+    const shared = tokA.filter((w) => setB.has(w)).length;
+    return shared / Math.min(tokA.length, tokB.length) >= 0.4;
 }
 
 // For orphaned rows (parent not found in file), find or create ancestor nodes.
 // Returns the augmented rows (synthetic parents first, then originals with fixed parent_ids)
 // plus the list of auto-created partida codes.
-function resolveParentsWithSyntheticFill(
+function makeSyntheticRow(
+    id: number,
+    code: string,
+    parentId: number | null,
+): DelphinRow {
+    const codeSegs = code.split('.');
+
+    return {
+        id,
+        parent_id: parentId,
+        nivel: codeSegs.length,
+        item_order: 0,
+        partida: code,
+        descripcion: code,
+        duracion_dias: 0,
+        fecha_inicio: null,
+        fecha_fin: null,
+        avance: 0,
+        predecesoras: [],
+        presupuesto: 0,
+        unidad: '',
+        metrado: 0,
+        precio_unitario: 0,
+        parcial: 0,
+    };
+}
+
+export function resolveParentsWithSyntheticFill(
     rows: DelphinRow[],
     existingPartidaToId: Map<string, number>,
     startTmpId: number,
@@ -60,40 +113,81 @@ function resolveParentsWithSyntheticFill(
 
         for (const code of missing) {
             const codeSegs = code.split('.');
-            const parentCode = codeSegs.length > 1 ? codeSegs.slice(0, -1).join('.') : null;
+            const parentCode =
+                codeSegs.length > 1 ? codeSegs.slice(0, -1).join('.') : null;
             const synId = nextId--;
-            synthetic.push({
-                id: synId,
-                parent_id: parentCode ? (allByPartida.get(parentCode) ?? null) : null,
-                nivel: codeSegs.length,
-                item_order: 0,
-                partida: code,
-                descripcion: code,
-                duracion_dias: 0,
-                fecha_inicio: null,
-                fecha_fin: null,
-                avance: 0,
-                predecesoras: [],
-                presupuesto: 0,
-                unidad: '',
-                metrado: 0,
-                precio_unitario: 0,
-                parcial: 0,
-            });
+            synthetic.push(
+                makeSyntheticRow(
+                    synId,
+                    code,
+                    parentCode ? (allByPartida.get(parentCode) ?? null) : null,
+                ),
+            );
             allByPartida.set(code, synId);
             createdPartidas.push(code);
         }
     }
 
+    const importedCodes = new Set([
+        ...rows.map((row) => row.partida),
+        ...synthetic.map((row) => row.partida),
+    ]);
+    const siblingGroups = new Map<string, Set<number>>();
+    for (const code of importedCodes) {
+        const segs = code.split('.');
+        const last = segs[segs.length - 1];
+        if (!/^\d+$/.test(last)) continue;
+
+        const parentCode = segs.length > 1 ? segs.slice(0, -1).join('.') : '';
+        if (!siblingGroups.has(parentCode))
+            siblingGroups.set(parentCode, new Set());
+        siblingGroups.get(parentCode)!.add(Number(last));
+    }
+
+    const gapRows: DelphinRow[] = [];
+    for (const [parentCode, numbers] of siblingGroups) {
+        const ordered = [...numbers].sort((a, b) => a - b);
+        if (ordered.length < 2) continue;
+
+        for (let index = 1; index < ordered.length; index++) {
+            const previous = ordered[index - 1];
+            const current = ordered[index];
+            for (let missing = previous + 1; missing < current; missing++) {
+                const code = parentCode
+                    ? `${parentCode}.${missing}`
+                    : String(missing);
+                if (allByPartida.has(code)) continue;
+
+                const synId = nextId--;
+                gapRows.push(
+                    makeSyntheticRow(
+                        synId,
+                        code,
+                        parentCode
+                            ? (allByPartida.get(parentCode) ?? null)
+                            : null,
+                    ),
+                );
+                allByPartida.set(code, synId);
+                createdPartidas.push(code);
+            }
+        }
+    }
+
     // Re-resolve parent_id for every incoming row now that the map is complete
-    const resolvedRows = rows.map((row) => {
+    const resolvedRows = [...synthetic, ...gapRows, ...rows].map((row) => {
         const segs = row.partida.split('.');
         if (segs.length <= 1) return { ...row, parent_id: null };
         const parentCode = segs.slice(0, -1).join('.');
         return { ...row, parent_id: allByPartida.get(parentCode) ?? null };
     });
 
-    return { augmentedRows: [...synthetic, ...resolvedRows], createdPartidas };
+    return {
+        augmentedRows: resolvedRows.sort((a, b) =>
+            a.partida.localeCompare(b.partida, undefined, { numeric: true }),
+        ),
+        createdPartidas,
+    };
 }
 
 // When cronograma is empty but presupuesto has data, synthesize GanttTask skeletons
@@ -113,23 +207,28 @@ function synthesizeTasksFromRows(rows: any[]): GanttTask[] {
             parentId = partidaToId.get(parts.join('.')) ?? null;
         }
         return {
-            id:            Number(row.id),
-            parent_id:     parentId,
+            id: Number(row.id),
+            parent_id: parentId,
             nivel,
-            item_order:    Number(row.item_order ?? 0),
+            item_order: Number(row.item_order ?? 0),
             partida,
-            descripcion:   String(row.descripcion ?? ''),
+            descripcion: String(row.descripcion ?? ''),
             duracion_dias: 0,
-            fecha_inicio:  null,
-            fecha_fin:     null,
-            avance:        0,
-            predecesoras:  [],
-            presupuesto:   Number(row.parcial ?? 0),
+            fecha_inicio: null,
+            fecha_fin: null,
+            avance: 0,
+            predecesoras: [],
+            presupuesto: Number(row.parcial ?? 0),
         } as GanttTask;
     });
 }
 
-export function useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings }: Options) {
+export function useDelphinData({
+    initialTasks,
+    initialRows,
+    schedulingMode,
+    calendarSettings,
+}: Options) {
     // If cronograma is empty but presupuesto has rows, build synthetic tasks so
     // the budget panel is visible. CPM data will be blank until the user fills it.
     const effectiveTasks: GanttTask[] =
@@ -138,41 +237,51 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
             : synthesizeTasksFromRows(initialRows);
 
     // ── Budget state keyed by gantt task ID ────────────────────────────────────
-    const [budgetMap, setBudgetMap] = useState<Map<number, BudgetFields>>(() => {
-        const map = new Map<number, BudgetFields>();
-        for (const task of effectiveTasks) {
-            const br = initialRows.find((r) => r.partida === task.partida);
-            const metrado         = +(br?.metrado         ?? 0);
-            const precio_unitario = +(br?.precio_unitario  ?? 0);
-            // Compute parcial from factors when DB value is missing/zero (e.g. old saves
-            // that omitted the parcial field) — prevents the Total column showing all-zeros.
-            const storedParcial   = +(br?.parcial          ?? 0);
-            const parcial = storedParcial !== 0
-                ? storedParcial
-                : +(metrado * precio_unitario).toFixed(2);
-            map.set(task.id, {
-                unidad: br?.unidad ?? '',
-                metrado,
-                precio_unitario,
-                parcial,
-            });
-        }
-        return map;
-    });
-    const [budgetDirty,    setBudgetDirty]    = useState(false);
+    const [budgetMap, setBudgetMap] = useState<Map<number, BudgetFields>>(
+        () => {
+            const map = new Map<number, BudgetFields>();
+            for (const task of effectiveTasks) {
+                const br = initialRows.find((r) => r.partida === task.partida);
+                const metrado = +(br?.metrado ?? 0);
+                const precio_unitario = +(br?.precio_unitario ?? 0);
+                // Compute parcial from factors when DB value is missing/zero (e.g. old saves
+                // that omitted the parcial field) — prevents the Total column showing all-zeros.
+                const storedParcial = +(br?.parcial ?? 0);
+                const parcial =
+                    storedParcial !== 0
+                        ? storedParcial
+                        : +(metrado * precio_unitario).toFixed(2);
+                map.set(task.id, {
+                    unidad: br?.unidad ?? '',
+                    metrado,
+                    precio_unitario,
+                    parcial,
+                });
+            }
+            return map;
+        },
+    );
+    const [budgetDirty, setBudgetDirty] = useState(false);
     const [isSavingBudget, setIsSavingBudget] = useState(false);
 
     // ── Gantt state ────────────────────────────────────────────────────────────
-    const ganttState = useGanttTasks(effectiveTasks, schedulingMode, calendarSettings);
+    // preservePartidaCodes=true: keeps Excel-imported partida codes across page reloads
+    // instead of regenerating them from the task's sibling position in the tree.
+    const ganttState = useGanttTasks(
+        effectiveTasks,
+        schedulingMode,
+        calendarSettings,
+        true,
+    );
 
     // ── Pending budget from Excel import (partida or desc → BudgetFields) ─────
     const pendingBudgetRef = useRef<Map<string, BudgetFields> | null>(null);
 
     // Stable refs so callbacks always read the latest tasks/budget without
     // needing them as useCallback deps (avoids stale-closure bugs).
-    const latestTasksRef  = useRef(ganttState.tasks);
+    const latestTasksRef = useRef(ganttState.tasks);
     const latestBudgetRef = useRef(budgetMap);
-    latestTasksRef.current  = ganttState.tasks;
+    latestTasksRef.current = ganttState.tasks;
     latestBudgetRef.current = budgetMap;
 
     // ── Sync budget entries when tasks are added/removed ──────────────────────
@@ -190,8 +299,8 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
                 next.set(
                     t.id,
                     pending.get(t.partida) ??
-                    pending.get(normalizeForMatch(t.descripcion)) ??
-                    defaultBudget(),
+                        pending.get(normalizeForMatch(t.descripcion)) ??
+                        defaultBudget(),
                 );
             });
             setBudgetMap(next);
@@ -208,7 +317,9 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         if (additions.length > 0) {
             setBudgetMap((prev) => {
                 const next = new Map(prev);
-                additions.forEach((id) => { if (!next.has(id)) next.set(id, defaultBudget()); });
+                additions.forEach((id) => {
+                    if (!next.has(id)) next.set(id, defaultBudget());
+                });
                 return next;
             });
         }
@@ -233,14 +344,21 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
             if (row.parent_id != null) {
                 const pid = Number(row.parent_id);
                 if (parcialMap.has(pid)) {
-                    parcialMap.set(pid, (parcialMap.get(pid) ?? 0) + (parcialMap.get(row.id) ?? 0));
+                    parcialMap.set(
+                        pid,
+                        (parcialMap.get(pid) ?? 0) +
+                            (parcialMap.get(row.id) ?? 0),
+                    );
                 }
             }
         }
 
         return raw.map((row) => {
-            const computed = Math.round((parcialMap.get(row.id) ?? row.parcial) * 100) / 100;
-            return computed === row.parcial ? row : { ...row, parcial: computed };
+            const computed =
+                Math.round((parcialMap.get(row.id) ?? row.parcial) * 100) / 100;
+            return computed === row.parcial
+                ? row
+                : { ...row, parcial: computed };
         });
     }, [ganttState.tasks, budgetMap, ganttState.groupIds]);
 
@@ -255,19 +373,24 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
     }, [ganttState.visibleTasks, budgetMap, delphinRows]);
 
     // ── Update budget field ────────────────────────────────────────────────────
-    const updateBudgetField = useCallback((id: number, field: string, value: any) => {
-        setBudgetMap((prev) => {
-            const next = new Map(prev);
-            const cur  = next.get(id) ?? defaultBudget();
-            const upd  = { ...cur, [field]: value };
-            if (field === 'metrado' || field === 'precio_unitario') {
-                upd.parcial = +(upd.metrado * upd.precio_unitario).toFixed(2);
-            }
-            next.set(id, upd);
-            return next;
-        });
-        setBudgetDirty(true);
-    }, []);
+    const updateBudgetField = useCallback(
+        (id: number, field: string, value: any) => {
+            setBudgetMap((prev) => {
+                const next = new Map(prev);
+                const cur = next.get(id) ?? defaultBudget();
+                const upd = { ...cur, [field]: value };
+                if (field === 'metrado' || field === 'precio_unitario') {
+                    upd.parcial = +(upd.metrado * upd.precio_unitario).toFixed(
+                        2,
+                    );
+                }
+                next.set(id, upd);
+                return next;
+            });
+            setBudgetDirty(true);
+        },
+        [],
+    );
 
     // ── Unified commitField ───────────────────────────────────────────────────
     const commitField = useCallback(
@@ -289,19 +412,22 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
                 const rows = ganttState.tasks.map((task) => {
                     const b = budgetMap.get(task.id) ?? defaultBudget();
                     return {
-                        id:              task.id,
-                        partida:         task.partida,
-                        descripcion:     task.descripcion,
-                        unidad:          b.unidad,
-                        metrado:         b.metrado,
+                        id: task.id,
+                        partida: task.partida,
+                        descripcion: task.descripcion,
+                        unidad: b.unidad,
+                        metrado: b.metrado,
                         precio_unitario: b.precio_unitario,
-                        parcial:         b.parcial,
-                        item_order:      task.item_order,
+                        parcial: b.parcial,
+                        item_order: task.item_order,
                         // presupuesto_general uses partida notation for hierarchy,
                         // not parent_id/nivel — omit to avoid column-not-found 500
                     };
                 });
-                await axios.patch(`/costos/proyectos/${projectId}/presupuesto/general`, { rows });
+                await axios.patch(
+                    `/costos/proyectos/${projectId}/presupuesto/general`,
+                    { rows },
+                );
                 setBudgetDirty(false);
                 return true;
             } catch {
@@ -321,22 +447,29 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
 
             // ── First import (empty tree) ─────────────────────────────────────
             if (existingTasks.length === 0) {
-                const minRowId = rows.reduce((min, r) => Math.min(min, r.id), 0);
-                const { augmentedRows, createdPartidas } = resolveParentsWithSyntheticFill(
-                    rows,
-                    new Map<string, number>(),
-                    minRowId - 1,
+                const minRowId = rows.reduce(
+                    (min, r) => Math.min(min, r.id),
+                    0,
                 );
+                const { augmentedRows, createdPartidas } =
+                    resolveParentsWithSyntheticFill(
+                        rows,
+                        new Map<string, number>(),
+                        minRowId - 1,
+                    );
 
                 const budgetByPartida = new Map<string, BudgetFields>();
                 for (const row of rows) {
                     budgetByPartida.set(row.partida, {
-                        unidad: row.unidad, metrado: row.metrado,
-                        precio_unitario: row.precio_unitario, parcial: row.parcial,
+                        unidad: row.unidad,
+                        metrado: row.metrado,
+                        precio_unitario: row.precio_unitario,
+                        parcial: row.parcial,
                     });
                 }
                 for (const row of augmentedRows) {
-                    if (!budgetByPartida.has(row.partida)) budgetByPartida.set(row.partida, defaultBudget());
+                    if (!budgetByPartida.has(row.partida))
+                        budgetByPartida.set(row.partida, defaultBudget());
                 }
 
                 pendingBudgetRef.current = budgetByPartida;
@@ -345,13 +478,22 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
             }
 
             // ── Subsequent imports: MERGE ─────────────────────────────────────
-            const existingByPartida = new Map(existingTasks.map((t) => [t.partida, t]));
-            const existingByDesc    = new Map(existingTasks.map((t) => [normalizeForMatch(t.descripcion), t]));
-            const existingPartidaToId = new Map(existingTasks.map((t) => [t.partida, t.id]));
+            const existingByPartida = new Map(
+                existingTasks.map((t) => [t.partida, t]),
+            );
+            const existingByDesc = new Map(
+                existingTasks.map((t) => [normalizeForMatch(t.descripcion), t]),
+            );
+            const existingPartidaToId = new Map(
+                existingTasks.map((t) => [t.partida, t.id]),
+            );
 
             // Remap ALL parsed row IDs to avoid collisions with existing IDs
-            const minExistingId = existingTasks.reduce((min, t) => Math.min(min, t.id), 0);
-            const minParsedId   = rows.reduce((min, r) => Math.min(min, r.id), 0);
+            const minExistingId = existingTasks.reduce(
+                (min, t) => Math.min(min, t.id),
+                0,
+            );
+            const minParsedId = rows.reduce((min, r) => Math.min(min, r.id), 0);
             let nextRemapId = Math.min(minExistingId, minParsedId) - 1;
             const oldToNewId = new Map<number, number>();
             for (const r of rows) oldToNewId.set(r.id, nextRemapId--);
@@ -359,67 +501,173 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
             // Apply remap: new IDs + remap parent_id refs within the same file
             const remappedRows: DelphinRow[] = rows.map((r) => ({
                 ...r,
-                id:        oldToNewId.get(r.id)!,
-                parent_id: r.parent_id != null ? (oldToNewId.get(r.parent_id) ?? null) : null,
+                id: oldToNewId.get(r.id)!,
+                parent_id:
+                    r.parent_id != null
+                        ? (oldToNewId.get(r.parent_id) ?? null)
+                        : null,
             }));
 
-            // Separate: truly new rows vs rows that update existing partidas
-            const newRows: DelphinRow[] = remappedRows.filter(
-                (r) => !existingByPartida.has(r.partida) && !existingByDesc.has(normalizeForMatch(r.descripcion)),
-            );
+            const furtherNeg =
+                remappedRows.reduce(
+                    (min, r) => Math.min(min, r.id),
+                    nextRemapId,
+                ) - 1;
+            const { augmentedRows: normalizedRows, createdPartidas } =
+                resolveParentsWithSyntheticFill(
+                    remappedRows,
+                    existingPartidaToId,
+                    furtherNeg,
+                );
 
-            // Full budget map: preserve existing, override/add with imported values
+            // Separate: truly new rows vs rows that update existing partidas.
+            // Code match is only accepted when the descriptions are similar (codeMatchIsValid).
+            // This prevents rows like "VALVULA ESFERICA" from being treated as "already matched"
+            // just because another item ("EMPALME") shares the same code in the DB.
+            const newRows: DelphinRow[] = normalizedRows.filter((r) => {
+                const byCode = existingByPartida.get(r.partida);
+                if (
+                    byCode &&
+                    codeMatchIsValid(byCode.descripcion, r.descripcion)
+                )
+                    return false;
+                if (existingByDesc.has(normalizeForMatch(r.descripcion)))
+                    return false;
+                return true;
+            });
+
+            // Full budget map: preserve existing, override/add with imported values.
+            // Keys are either partida codes OR normalizedForMatch(description) so the
+            // pending-budget resolver (which tries both) can find the correct entry even
+            // when Excel codes differ from DB codes.
             const allBudgetByPartida = new Map<string, BudgetFields>();
             for (const t of existingTasks) {
                 const b = currentBudget.get(t.id);
                 if (b) allBudgetByPartida.set(t.partida, b);
             }
             for (const row of rows) {
-                allBudgetByPartida.set(row.partida, {
-                    unidad: row.unidad, metrado: row.metrado,
-                    precio_unitario: row.precio_unitario, parcial: row.parcial,
-                });
+                const budget: BudgetFields = {
+                    unidad: row.unidad,
+                    metrado: row.metrado,
+                    precio_unitario: row.precio_unitario,
+                    parcial: row.parcial,
+                };
+                // Always store by description so the pending resolver finds it via
+                // the normalizeForMatch(t.descripcion) secondary lookup.
+                const descKey = normalizeForMatch(row.descripcion);
+                if (descKey) allBudgetByPartida.set(descKey, budget);
+                // Store by code only when there is no conflicting DB item at that code.
+                // Skipping avoids writing "VALVULA ESFERICA" data into the slot keyed
+                // by the code that the DB uses for "EMPALME DE TUBERIA".
+                const codeConflict = existingByPartida.get(row.partida);
+                if (
+                    !codeConflict ||
+                    codeMatchIsValid(codeConflict.descripcion, row.descripcion)
+                ) {
+                    allBudgetByPartida.set(row.partida, budget);
+                }
             }
 
             if (newRows.length === 0) {
-                // Only budget updates — skip rebuilding task tree
-                setBudgetMap((prev) => {
-                    const next = new Map(prev);
-                    for (const row of remappedRows) {
-                        const existing =
-                            existingByPartida.get(row.partida) ??
-                            existingByDesc.get(normalizeForMatch(row.descripcion));
-                        if (existing) {
-                            next.set(existing.id, {
-                                unidad: row.unidad, metrado: row.metrado,
-                                precio_unitario: row.precio_unitario, parcial: row.parcial,
+                // Only budget updates — skip rebuilding task tree.
+                // First pass: resolve matches and collect both budget updates and partida
+                // code updates so we can update ganttState outside the setBudgetMap callback.
+                const budgetUpdates = new Map<number, BudgetFields>();
+                const codeUpdates: Array<{ id: number; newPartida: string }> =
+                    [];
+
+                for (const row of remappedRows) {
+                    const byCode = existingByPartida.get(row.partida);
+                    const validCodeHit =
+                        byCode &&
+                        codeMatchIsValid(byCode.descripcion, row.descripcion)
+                            ? byCode
+                            : undefined;
+                    const existing =
+                        validCodeHit ??
+                        existingByDesc.get(normalizeForMatch(row.descripcion));
+                    if (existing) {
+                        budgetUpdates.set(existing.id, {
+                            unidad: row.unidad,
+                            metrado: row.metrado,
+                            precio_unitario: row.precio_unitario,
+                            parcial: row.parcial,
+                        });
+                        // When matched by description (not by code), adopt the Excel partida
+                        // code so the DB and future ACU imports use the same numbering.
+                        if (
+                            !validCodeHit &&
+                            row.partida &&
+                            existing.partida !== row.partida
+                        ) {
+                            codeUpdates.push({
+                                id: existing.id,
+                                newPartida: row.partida,
                             });
                         }
                     }
+                }
+
+                setBudgetMap((prev) => {
+                    const next = new Map(prev);
+                    budgetUpdates.forEach((budget, id) => next.set(id, budget));
                     return next;
                 });
+
+                // Update task partida codes in gantt state so the tree reflects Excel codes
+                // immediately (current session) and persists to DB on next saveBudget call.
+                for (const { id, newPartida } of codeUpdates) {
+                    ganttState.updateField(id, 'partida', newPartida);
+                }
+
                 setBudgetDirty(true);
                 return { createdPartidas: [] };
             }
 
-            // Resolve orphaned new rows against existing tree + auto-create missing ancestors
-            const furtherNeg = newRows.reduce((min, r) => Math.min(min, r.id), nextRemapId) - 1;
-            const { augmentedRows: augmentedNewRows, createdPartidas } = resolveParentsWithSyntheticFill(
-                newRows,
-                existingPartidaToId,
-                furtherNeg,
-            );
-
-            for (const row of augmentedNewRows) {
-                if (!allBudgetByPartida.has(row.partida)) allBudgetByPartida.set(row.partida, defaultBudget());
+            for (const row of newRows) {
+                if (!allBudgetByPartida.has(row.partida))
+                    allBudgetByPartida.set(row.partida, defaultBudget());
             }
 
+            // Remap partida codes on existing tasks that were matched by DESCRIPTION
+            // (not by code) so the tree adopts Excel numbering. With preservePartidaCodes=true,
+            // recomputeHierarchy will keep whichever code is stored on each task — patching
+            // here ensures the Excel code survives the rebuild.
+            const codeRemap = new Map<number, string>();
+            for (const row of rows) {
+                const byCode = existingByPartida.get(row.partida);
+                const validCodeHit =
+                    byCode &&
+                    codeMatchIsValid(byCode.descripcion, row.descripcion)
+                        ? byCode
+                        : undefined;
+                const existing =
+                    validCodeHit ??
+                    existingByDesc.get(normalizeForMatch(row.descripcion));
+                if (
+                    existing &&
+                    !validCodeHit &&
+                    row.partida &&
+                    existing.partida !== row.partida
+                ) {
+                    codeRemap.set(existing.id, row.partida);
+                }
+            }
+            const remappedExistingTasks =
+                codeRemap.size > 0
+                    ? existingTasks.map((t) =>
+                          codeRemap.has(t.id)
+                              ? { ...t, partida: codeRemap.get(t.id)! }
+                              : t,
+                      )
+                    : existingTasks;
+
             pendingBudgetRef.current = allBudgetByPartida;
-            ganttState.importTasks([...existingTasks, ...augmentedNewRows]);
+            ganttState.importTasks([...remappedExistingTasks, ...newRows]);
             return { createdPartidas };
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [ganttState.importTasks],
+        [ganttState.importTasks, ganttState.updateField],
     );
 
     // ── Import Cronograma (MS Project XML) with budget preservation ───────────
@@ -432,7 +680,9 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
             const currentBudget = latestBudgetRef.current;
             const hasBudget = existingTasks.some((t) => {
                 const b = currentBudget.get(t.id);
-                return b && (b.metrado > 0 || b.precio_unitario > 0 || !!b.unidad);
+                return (
+                    b && (b.metrado > 0 || b.precio_unitario > 0 || !!b.unidad)
+                );
             });
 
             if (!hasBudget) {
@@ -466,28 +716,28 @@ export function useDelphinData({ initialTasks, initialRows, schedulingMode, cale
         isSavingBudget,
         saveBudget,
         commitField,
-        tasks:        ganttState.tasks,
+        tasks: ganttState.tasks,
         visibleTasks: ganttState.visibleTasks,
-        taskById:     ganttState.taskById,
-        groupIds:     ganttState.groupIds,
-        expandedIds:  ganttState.expandedIds,
-        isDirty:      ganttState.isDirty,
-        isSaving:     ganttState.isSaving,
-        updateField:  ganttState.updateField,
+        taskById: ganttState.taskById,
+        groupIds: ganttState.groupIds,
+        expandedIds: ganttState.expandedIds,
+        isDirty: ganttState.isDirty,
+        isSaving: ganttState.isSaving,
+        updateField: ganttState.updateField,
         toggleExpand: ganttState.toggleExpand,
-        expandAll:    ganttState.expandAll,
-        collapseAll:  ganttState.collapseAll,
-        addTaskAfter:  ganttState.addTaskAfter,
-        addChildTask:  ganttState.addChildTask,
-        deleteTask:    ganttState.deleteTask,
-        indentTask:    ganttState.indentTask,
-        outdentTask:   ganttState.outdentTask,
-        moveTaskUp:    ganttState.moveTaskUp,
-        moveTaskDown:  ganttState.moveTaskDown,
+        expandAll: ganttState.expandAll,
+        collapseAll: ganttState.collapseAll,
+        addTaskAfter: ganttState.addTaskAfter,
+        addChildTask: ganttState.addChildTask,
+        deleteTask: ganttState.deleteTask,
+        indentTask: ganttState.indentTask,
+        outdentTask: ganttState.outdentTask,
+        moveTaskUp: ganttState.moveTaskUp,
+        moveTaskDown: ganttState.moveTaskDown,
         duplicateTask: ganttState.duplicateTask,
-        saveTasks:            ganttState.saveTasks,
-        applyBarMove:         ganttState.applyBarMove,
-        importTasks:          ganttState.importTasks,
+        saveTasks: ganttState.saveTasks,
+        applyBarMove: ganttState.applyBarMove,
+        importTasks: ganttState.importTasks,
         importDelphinRows,
         importCronogramaTasks,
     };
