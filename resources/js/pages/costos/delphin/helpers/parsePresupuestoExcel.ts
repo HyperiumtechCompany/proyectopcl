@@ -51,8 +51,11 @@ function detectHeaderRow(ws: XLSX.WorkSheet, range: XLSX.Range): number {
     for (let r = range.s.r; r <= Math.min(range.e.r, 30); r++) {
         for (let c = range.s.c; c <= range.e.c; c++) {
             const v = normalize(cellText(ws, r, c));
-            // "item", "ítem" (accent stripped by normalize), "n° item", "n.° item", "nro item"
-            if (v === 'item' || /^n[o°.]?\s*\.?\s*item\.?$/.test(v)) return r;
+            // "item", "ítem", "n° item", "n.° item", "nro item", "código", "partida", etc.
+            if (v === 'item' || /^n[o°.]?\s*\.?\s*item\.?$/.test(v) ||
+                v === 'n°' || v === 'nro' || v === 'nro.' ||
+                v === 'cod' || v === 'cod.' || v === 'codigo' ||
+                v === 'partida') return r;
         }
     }
     return -1;
@@ -69,10 +72,12 @@ function detectColumns(ws: XLSX.WorkSheet, headerRow: number, range: XLSX.Range)
         if (v === 'item' || /^n[o°.]?\s*\.?\s*item\.?$/.test(v))          cols.item    = c;
         else if (v.startsWith('descrip'))                                  cols.desc    = c;
         else if (v.startsWith('unid') || v === 'u' || v === 'und')        cols.unidad  = c;
-        else if (v.startsWith('cant') || v === 'metrado')                  cols.metrado = c;
+        else if (v.startsWith('cant') || v === 'metrado' || v.startsWith('med'))
+                                                                           cols.metrado = c;
         else if (v.startsWith('precio') || v.startsWith('p.unit') ||
                  v.startsWith('p. unit') || v.startsWith('p.u'))          cols.precio  = c;
-        else if ((v === 'parcial' || v === 'sub total' || v === 'subtotal') &&
+        else if ((v === 'parcial' || v === 'sub total' || v === 'subtotal' ||
+                  v === 'sub-total' || v === 'monto' || v === 'importe') &&
                  cols.parcial === FALLBACK_COLS.parcial)                   cols.parcial = c;
     }
     return cols;
@@ -123,13 +128,44 @@ export function parsePresupuestoExcel(file: File): Promise<ParsePresupuestoResul
                         if (t) { descripcion = t; break; }
                     }
 
+                    let metrado = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.metrado })]?.v);
+                    const precio  = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.precio  })]?.v);
+                    let parcial   = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.parcial })]?.v);
+
+                    // Recover missing values using the identity: parcial = metrado × precio.
+                    // Many Delphin formats use non-standard headers ("Sub-Total", "Monto", etc.)
+                    // causing cols.metrado / cols.parcial to point at wrong/empty fallback columns
+                    // while precio IS found. Strategy: scan the ENTIRE row for the largest
+                    // numeric value (that's the parcial), then infer metrado = parcial / precio.
+                    if (precio > 0) {
+                        if (metrado === 0 && parcial > 0) {
+                            metrado = Math.round((parcial / precio) * 10000) / 10000;
+                        } else if (parcial === 0 && metrado > 0) {
+                            parcial = Math.round(metrado * precio * 100) / 100;
+                        } else if (metrado === 0 && parcial === 0) {
+                            // Scan ALL columns after the description column looking for the
+                            // parcial (= the largest value > 10% of precio).  This covers any
+                            // column position regardless of header label or fallback index.
+                            let maxVal = 0;
+                            for (let sc = cols.desc + 1; sc <= range.e.c; sc++) {
+                                if (sc === cols.precio) continue; // skip price column itself
+                                const sv = parseNumber(ws[XLSX.utils.encode_cell({ r, c: sc })]?.v);
+                                if (sv > maxVal && sv >= precio * 0.1) maxVal = sv;
+                            }
+                            if (maxVal > 0) {
+                                parcial = maxVal;
+                                metrado = Math.round((maxVal / precio) * 10000) / 10000;
+                            }
+                        }
+                    }
+
                     rawRows.push({
                         code,
                         descripcion,
                         unidad:  cellText(ws, r, cols.unidad),
-                        metrado: parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.metrado })]?.v),
-                        precio:  parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.precio  })]?.v),
-                        parcial: parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.parcial })]?.v),
+                        metrado,
+                        precio,
+                        parcial,
                     });
                 }
 
