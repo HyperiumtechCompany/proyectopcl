@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     Briefcase,
     Check,
+    FileSpreadsheet,
     Layers,
     Maximize2,
     Minimize2,
@@ -13,11 +14,12 @@ import {
     Wrench,
     X,
 } from 'lucide-react';
+
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
 import type { DelphinRow, InsumosScope } from '../types';
-
+import { exportInsumosConsolidadosExcel } from '../helpers/exportDelphinExcel';
 type InsumoType =
     | 'mano_de_obra'
     | 'materiales'
@@ -25,12 +27,14 @@ type InsumoType =
     | 'subcontratos'
     | 'subpartidas';
 
+
 interface Props {
     open: boolean;
     acuRows: ACURowSummary[];
     delphinRows: DelphinRow[];
     scope: InsumosScope;
     projectName: string;
+    projectData?: any;
     onClose: () => void;
 }
 
@@ -93,12 +97,12 @@ const INSUMO_TYPES: Array<{
     label: string;
     icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = [
-    { key: 'mano_de_obra', label: 'Mano de obra', icon: Users },
-    { key: 'materiales', label: 'Materiales', icon: Package },
-    { key: 'equipos', label: 'Equipos', icon: Wrench },
-    { key: 'subcontratos', label: 'Sub contratos', icon: Briefcase },
-    { key: 'subpartidas', label: 'Sub partidas', icon: Layers },
-];
+        { key: 'mano_de_obra', label: 'Mano de obra', icon: Users },
+        { key: 'materiales', label: 'Materiales', icon: Package },
+        { key: 'equipos', label: 'Equipos', icon: Wrench },
+        { key: 'subcontratos', label: 'Sub contratos', icon: Briefcase },
+        { key: 'subpartidas', label: 'Sub partidas', icon: Layers },
+    ];
 
 const fmt = (value: number, digits = 2) =>
     value.toLocaleString('es-PE', {
@@ -380,14 +384,14 @@ function SortableHeader({
     const Icon = !active
         ? ArrowUpDown
         : sort.direction === 'asc'
-          ? ArrowUp
-          : ArrowDown;
+            ? ArrowUp
+            : ArrowDown;
     const alignment =
         align === 'right'
             ? 'justify-end text-right'
             : align === 'center'
-              ? 'justify-center text-center'
-              : 'justify-start text-left';
+                ? 'justify-center text-center'
+                : 'justify-start text-left';
 
     return (
         <th className={`border-b border-slate-700 p-0 ${alignment}`}>
@@ -408,12 +412,7 @@ function SortableHeader({
 }
 
 export function InsumosConsolidadosModal({
-    open,
-    acuRows,
-    delphinRows,
-    scope,
-    projectName,
-    onClose,
+    open, acuRows, delphinRows, scope, projectName, projectData, onClose,
 }: Props) {
     const [activeType, setActiveType] = useState<InsumoType>('mano_de_obra');
     const [search, setSearch] = useState('');
@@ -600,11 +599,10 @@ export function InsumosConsolidadosModal({
                         ? undefined
                         : `translate(${position.x}px, ${position.y}px)`,
                 }}
-                className={`relative flex min-h-[50vh] min-w-[50vw] flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl ${
-                    isMaximized
-                        ? '!h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] resize-none'
-                        : 'h-[86vh] max-h-[calc(100vh-2rem)] w-[90vw] max-w-[calc(100vw-2rem)] resize'
-                }`}
+                className={`relative flex min-h-[50vh] min-w-[50vw] flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl ${isMaximized
+                    ? '!h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] resize-none'
+                    : 'h-[86vh] max-h-[calc(100vh-2rem)] w-[90vw] max-w-[calc(100vw-2rem)] resize'
+                    }`}
             >
                 <div
                     className="flex shrink-0 cursor-move touch-none items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-3 select-none"
@@ -643,7 +641,23 @@ export function InsumosConsolidadosModal({
                             ))}
                         </select>
                     )}
+
                     <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-950/50 hover:text-emerald-300"
+                            title="Exportar insumos a Excel"
+                            onClick={() => {
+                                const typeLabel = INSUMO_TYPES.find(t => t.key === activeType)?.label ?? activeType;
+                                const specialty = scope === 'especialidad'
+                                    ? specialties.find(s => s.id === activeSpecialtyId)?.descripcion ?? 'General'
+                                    : 'Presupuesto general';
+                                exportInsumosConsolidadosExcel(typeRows, typeLabel, specialty, projectName, projectData);
+                            }}
+                        >
+                            <FileSpreadsheet size={14} />
+                            Exportar
+                        </button>
                         <button
                             type="button"
                             className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
@@ -690,11 +704,10 @@ export function InsumosConsolidadosModal({
                                 return (
                                     <button
                                         key={key}
-                                        className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors ${
-                                            active
-                                                ? 'bg-sky-700 text-white'
-                                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                                        }`}
+                                        className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors ${active
+                                            ? 'bg-sky-700 text-white'
+                                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                            }`}
                                         onClick={() => handleTypeChange(key)}
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
@@ -854,11 +867,10 @@ export function InsumosConsolidadosModal({
                                             return (
                                                 <tr
                                                     key={row.key}
-                                                    className={`transition-colors ${
-                                                        selected
-                                                            ? 'bg-sky-950/60'
-                                                            : 'hover:bg-slate-800/50'
-                                                    }`}
+                                                    className={`transition-colors ${selected
+                                                        ? 'bg-sky-950/60'
+                                                        : 'hover:bg-slate-800/50'
+                                                        }`}
                                                 >
                                                     <td className="p-2 text-center">
                                                         <input
@@ -884,16 +896,16 @@ export function InsumosConsolidadosModal({
                                                         </div>
                                                         {row.variantes.length >
                                                             1 && (
-                                                            <div className="mt-0.5 text-[10px] text-slate-500">
-                                                                {
-                                                                    row
-                                                                        .variantes
-                                                                        .length
-                                                                }{' '}
-                                                                variantes
-                                                                fusionadas
-                                                            </div>
-                                                        )}
+                                                                <div className="mt-0.5 text-[10px] text-slate-500">
+                                                                    {
+                                                                        row
+                                                                            .variantes
+                                                                            .length
+                                                                    }{' '}
+                                                                    variantes
+                                                                    fusionadas
+                                                                </div>
+                                                            )}
                                                     </td>
                                                     <td className="p-2 text-center text-slate-400">
                                                         {row.unidad}

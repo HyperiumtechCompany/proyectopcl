@@ -215,7 +215,7 @@ export default function DelphinView({
     }, [selectedRowId, groupIds]);
 
     const handleFormulaData = useCallback((monomios: any[]) => {
-        
+
         setFormulaMonomios(monomios);
         setShowExportModal(true);
     }, []);
@@ -601,7 +601,7 @@ export default function DelphinView({
     // ── Grid scroll ref depends on mode ──────────────────────────────────────
     const activeScrollRef = mode === 'cpm' ? gridScrollRef : undefined;
     const activeOnScroll = mode === 'cpm' ? onGridScroll : undefined;
-  
+
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
@@ -670,7 +670,7 @@ export default function DelphinView({
                         projectName={project_name}
                         onBack={() => setBudgetView('presupuesto')}
                         onMonomiosChange={(monomios) => {
-                            
+
                             setFormulaMonomios(monomios);
                         }}
                         onExportFormula={handleFormulaData}
@@ -811,13 +811,16 @@ export default function DelphinView({
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
                     onAcusImported={handleAcusImported} />
+                // DESPUÉS
                 <InsumosConsolidadosModal
                     open={insumosOpen}
                     acuRows={acuRows}
                     delphinRows={delphinRows}
                     scope={insumosScope}
                     projectName={project_name}
-                    onClose={() => setInsumosOpen(false)} />
+                    projectData={projectData}
+                    onClose={() => setInsumosOpen(false)}
+                />
                 <input
                     ref={importInputRef}
                     type="file"
