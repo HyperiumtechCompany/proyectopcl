@@ -35,6 +35,7 @@ interface Props {
     selectedRowId:      number | null;
     editState:          EditState | null;
     scrollRef?:         React.RefObject<HTMLDivElement | null>;
+    scrollToRowId?:     number | null;
     onScroll?:          (e: React.UIEvent<HTMLDivElement>) => void;
     onSelect:           (id: number) => void;
     onStartEdit:        (rowId: number, colKey: string) => void;
@@ -224,6 +225,7 @@ export function DelphinGrid({
     selectedRowId,
     editState,
     scrollRef,
+    scrollToRowId,
     onScroll,
     onSelect,
     onStartEdit,
@@ -268,6 +270,13 @@ export function DelphinGrid({
         estimateSize:     () => ROW_HEIGHT,
         overscan:         10,
     });
+
+    useEffect(() => {
+        if (scrollToRowId == null) return;
+        const index = rows.findIndex(r => r.id === scrollToRowId);
+        if (index >= 0) virtualizer.scrollToIndex(index, { align: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scrollToRowId, rows]);
 
     const adaptedCommit: <K extends keyof GanttTask>(id: number, field: K, value: GanttTask[K]) => void =
         onCommitField as any;

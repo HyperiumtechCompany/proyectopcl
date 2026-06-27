@@ -30,6 +30,7 @@ import { FormulaPolinomicaSplitView } from './components/FormulaPolinomicaSplitV
 import { DelphinToolbar } from './components/DelphinToolbar';
 import { ImportDelphinModal } from './components/ImportDelphinModal';
 import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal';
+import { PartidasSinAcuModal } from './components/PartidasSinAcuModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { useDiccionario } from './hooks/useDiccionario';
 import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope } from './types';
@@ -152,6 +153,8 @@ export default function DelphinView({
     const [insumosScope, setInsumosScope] = useState<InsumosScope>('presupuesto');
     const [ganttBarLabel, setGanttBarLabel] = useState<GanttBarLabel>('descripcion');
     const [acuRefetchVersion, setAcuRefetchVersion] = useState(0);
+    const [compatOpen, setCompatOpen] = useState(false);
+    const [scrollToRowId, setScrollToRowId] = useState<number | null>(null);
 
 
     // ── Column visibility + description expand ────────────────────────────────
@@ -308,6 +311,36 @@ export default function DelphinView({
         refreshKey: 0,
         refetchVersion: acuRefetchVersion,
     });
+
+    // ── Compatibilidad Presupuesto ↔ ACU ─────────────────────────────────────
+    const incompatiblesCount = useMemo(() => {
+        const normP = (v: string) =>
+            String(v).split('.').filter(Boolean).map(p => p.padStart(2, '0')).join('.');
+        const acuByPartida = new Map(acuRows.map(acu => [normP(acu.partida), acu]));
+        let count = 0;
+        for (const row of delphinRows) {
+            if (groupIds.has(row.id)) continue;
+            if (!row.unidad?.trim()) continue;
+            const acu = acuByPartida.get(normP(String(row.partida ?? '')));
+            if (!acu || acu.costo_unitario_total === 0 || Math.abs(row.precio_unitario - acu.costo_unitario_total) > 0.01) {
+                count++;
+            }
+        }
+        return count;
+    }, [delphinRows, acuRows, groupIds]);
+
+    const handleSelectPartida = useCallback((rowId: number) => {
+        if (mode !== 'budget') handleModeChange('budget');
+        const rowById = new Map(delphinRows.map(r => [r.id, r]));
+        let parentId = rowById.get(rowId)?.parent_id ?? null;
+        while (parentId != null) {
+            if (!expandedIds.has(parentId)) toggleExpand(parentId);
+            parentId = rowById.get(parentId)?.parent_id ?? null;
+        }
+        selectRow(rowId);
+        setScrollToRowId(rowId);
+        setTimeout(() => setScrollToRowId(null), 400);
+    }, [mode, handleModeChange, delphinRows, expandedIds, toggleExpand, selectRow]);
 
     // Called by AcuPanel when user edits an individual ACU (visual-first)
     const handleAcuChange = useCallback((acuData: Record<string, any>, options?: { updateProjectPrices?: boolean }) => {
@@ -649,6 +682,9 @@ export default function DelphinView({
                     isParentSelected={isParentSelected}
                     onFormulaView={handleFormulaView}
 
+                    incompatiblesCount={incompatiblesCount}
+                    onOpenCompatibilidad={() => setCompatOpen(true)}
+
                     budgetDirty={budgetDirty || acuDirty}
                     isSavingBudget={isSavingBudget}
                     ganttDirty={ganttDirty || budgetDirty || acuDirty}
@@ -728,6 +764,7 @@ export default function DelphinView({
                                 selectedRowId={selectedRowId}
                                 editState={editState}
                                 scrollRef={activeScrollRef}
+                                scrollToRowId={scrollToRowId}
                                 onScroll={activeOnScroll}
                                 onSelect={selectRow}
                                 onStartEdit={startEdit}
@@ -818,6 +855,13 @@ export default function DelphinView({
                     scope={insumosScope}
                     projectName={project_name}
                     onClose={() => setInsumosOpen(false)} />
+                <PartidasSinAcuModal
+                    open={compatOpen}
+                    delphinRows={delphinRows}
+                    acuRows={acuRows}
+                    groupIds={groupIds}
+                    onClose={() => setCompatOpen(false)}
+                    onSelectPartida={handleSelectPartida} />
                 <input
                     ref={importInputRef}
                     type="file"
