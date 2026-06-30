@@ -46,6 +46,7 @@ interface Props {
     onRowAction:        (taskId: number, action: RowAction) => void;
     onToggleHidden:     (key: string) => void;
     onToggleDescExpand: () => void;
+    onRenamePartida:    (taskId: number, newPartida: string) => void;
 }
 
 interface CtxState { taskId: number; x: number; y: number }
@@ -236,6 +237,7 @@ export function DelphinGrid({
     onRowAction,
     onToggleHidden,
     onToggleDescExpand,
+    onRenamePartida,
 }: Props) {
     const internalRef       = useRef<HTMLDivElement>(null);
     const resolvedRef       = (scrollRef ?? internalRef) as React.RefObject<HTMLDivElement>;
@@ -346,6 +348,7 @@ export function DelphinGrid({
                                 onCancelEdit={onCancelEdit}
                                 onToggleExpand={onToggleExpand}
                                 onContextMenu={stableCtx}
+                                onRenamePartida={onRenamePartida}
                             />
                         );
                     })}

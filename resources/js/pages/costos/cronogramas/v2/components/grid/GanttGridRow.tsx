@@ -35,6 +35,8 @@ interface Props {
     onCancelEdit: () => void;
     onToggleExpand: (id: number) => void;
     onContextMenu: (taskId: number, x: number, y: number) => void;
+    /** Cuando se provee, la partida del nodo raíz (nivel 1) es editable con doble clic */
+    onRenamePartida?: (taskId: number, newPartida: string) => void;
 }
 
 const GanttGridRowComponent = function GanttGridRow({
@@ -54,6 +56,7 @@ const GanttGridRowComponent = function GanttGridRow({
     onCancelEdit,
     onToggleExpand,
     onContextMenu,
+    onRenamePartida,
 }: Props) {
     const isEditing = (colKey: string) =>
         editState?.rowId === task.id && editState?.colKey === colKey;
@@ -168,6 +171,17 @@ const GanttGridRowComponent = function GanttGridRow({
                                         ? task.partida
                                         : undefined
                                 }
+                                prefixEditable={
+                                    col.key === 'descripcion' &&
+                                    task.nivel === 1 &&
+                                    isGroup &&
+                                    !!onRenamePartida
+                                }
+                                onPrefixCommit={
+                                    col.key === 'descripcion' && onRenamePartida
+                                        ? (v) => onRenamePartida(task.id, v)
+                                        : undefined
+                                }
                                 textColorClass={col.key === 'descripcion' ? descTextClass : undefined}
                                 onCommit={(v) =>
                                     onCommitField(task.id, col.key as any, v as any)
@@ -242,15 +256,16 @@ const GanttGridRowComponent = function GanttGridRow({
 };
 
 const areEqual = (prev: Props, next: Props) =>
-    prev.task          === next.task &&
-    prev.columns       === next.columns &&
-    prev.style.top     === next.style.top &&
-    prev.isSelected    === next.isSelected &&
-    prev.isGroup       === next.isGroup &&
-    prev.isExpanded    === next.isExpanded &&
-    prev.descTextClass === next.descTextClass &&
-    prev.rowIndex      === next.rowIndex &&
-    prev.onContextMenu === next.onContextMenu &&
+    prev.task               === next.task &&
+    prev.columns            === next.columns &&
+    prev.style.top          === next.style.top &&
+    prev.isSelected         === next.isSelected &&
+    prev.isGroup            === next.isGroup &&
+    prev.isExpanded         === next.isExpanded &&
+    prev.descTextClass      === next.descTextClass &&
+    prev.rowIndex           === next.rowIndex &&
+    prev.onContextMenu      === next.onContextMenu &&
+    prev.onRenamePartida    === next.onRenamePartida &&
     (prev.editState?.rowId === prev.task.id) ===
         (next.editState?.rowId === next.task.id) &&
     (prev.editState?.rowId === prev.task.id

@@ -1506,7 +1506,9 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoManoObra += $componente['parcial'];
             }
-            $costoManoObra = round($costoManoObra, 2);
+            // No rounding at category level — only at component level (round per parcial).
+            // Summing 2-decimal component parcials without extra rounding keeps
+            // costo_unitario_total = exact sum of parcials, matching the insumos total.
 
             // Calculate materiales costs
             $materiales = $validated['materiales'] ?? [];
@@ -1518,7 +1520,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoMateriales += $componente['parcial'];
             }
-            $costoMateriales = round($costoMateriales, 2);
 
             // Calculate equipos costs
             $equipos = $validated['equipos'] ?? [];
@@ -1528,7 +1529,7 @@ class PresupuestoController extends Controller
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
                 if ($isHerramientas) {
-                    // Herramientas: porcentaje de mano de obra
+                    // Herramientas: porcentaje de mano de obra (cantidad = %, e.g. 3 = 3%)
                     $precioBase = $costoManoObra;
                     $porcentaje = $componente['cantidad'] ?? 0;
                     $parcial = $precioBase * ($porcentaje / 100);
@@ -1542,7 +1543,6 @@ class PresupuestoController extends Controller
 
                 $costoEquipos += $componente['parcial'];
             }
-            $costoEquipos = round($costoEquipos, 2);
 
             // Calculate subcontratos costs
             $subcontratos = $validated['subcontratos'] ?? [];
@@ -1553,7 +1553,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoSubcontratos += $componente['parcial'];
             }
-            $costoSubcontratos = round($costoSubcontratos, 2);
 
             // Calculate subpartidas costs
             $subpartidas = $validated['subpartidas'] ?? [];
@@ -1564,7 +1563,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoSubpartidas += $componente['parcial'];
             }
-            $costoSubpartidas = round($costoSubpartidas, 2);
 
             // ─── Update Master Project Prices if flag is active ────────────
             if (! empty($validated['update_project_prices'])) {

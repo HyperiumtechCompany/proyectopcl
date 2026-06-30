@@ -670,6 +670,39 @@ export function useDelphinData({
         [ganttState.importTasks, ganttState.updateField],
     );
 
+    // ── Renombrar la partida raíz y propagar a todos sus descendientes ────────
+    // Solo para nodos de nivel 1 (partidas padre). Actualiza la clave de todos
+    // los hijos: "1.02" → "4.02" si el padre cambia de "1" a "4".
+    const renameRootPartida = useCallback(
+        (rootId: number, newPartida: string) => {
+            const trimmed = newPartida.trim();
+            if (!trimmed) return;
+            const currentTasks = latestTasksRef.current;
+            const rootTask = currentTasks.find((t) => t.id === rootId);
+            if (!rootTask || rootTask.nivel !== 1) return;
+            const oldPartida = rootTask.partida;
+            if (trimmed === oldPartida) return;
+
+            const updates: Array<{ id: number; partida: string }> = [
+                { id: rootId, partida: trimmed },
+            ];
+            const prefix = oldPartida + '.';
+            for (const task of currentTasks) {
+                if (task.partida.startsWith(prefix)) {
+                    updates.push({
+                        id: task.id,
+                        partida: trimmed + '.' + task.partida.slice(prefix.length),
+                    });
+                }
+            }
+
+            ganttState.batchUpdatePartidas(updates);
+            setBudgetDirty(true);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [ganttState.batchUpdatePartidas],
+    );
+
     // ── Import Cronograma (MS Project XML) with budget preservation ───────────
     // When budget data already exists, the incoming tasks are matched by partida
     // (exact) then by normalized description (fallback) so that budget fields
@@ -740,5 +773,6 @@ export function useDelphinData({
         importTasks: ganttState.importTasks,
         importDelphinRows,
         importCronogramaTasks,
+        renameRootPartida,
     };
 }

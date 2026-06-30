@@ -192,7 +192,15 @@ export default function DelphinView({
         addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask,
         saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
+        renameRootPartida,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
+
+    const handleRenameRootPartida = useCallback(
+        (taskId: number, newPartida: string) => {
+            renameRootPartida(taskId, newPartida);
+        },
+        [renameRootPartida],
+    );
 
     const availableSpecialties = useMemo(() => {
         return delphinRows
@@ -774,7 +782,8 @@ export default function DelphinView({
                                 onKeyDown={onKeyDown}
                                 onRowAction={handleRowAction}
                                 onToggleHidden={handleToggleHidden}
-                                onToggleDescExpand={() => setDescExpanded((p) => !p)} />
+                                onToggleDescExpand={() => setDescExpanded((p) => !p)}
+                                onRenamePartida={handleRenameRootPartida} />
                         </Panel>
 
                         <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
