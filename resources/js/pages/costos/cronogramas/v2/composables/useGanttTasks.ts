@@ -85,7 +85,10 @@ function normalizeTaskDates(
 }
 
 // ─── Recalcula partida, nivel e item_order en base a parent_id ───────────────
-function recomputeOrder(taskList: GanttTask[]): GanttTask[] {
+// When preservePartidaCodes=true, keeps each task's stored .partida instead of
+// auto-generating from sibling position. Used for the presupuesto view so that
+// Excel-imported codes survive page reloads without being overwritten.
+function recomputeOrder(taskList: GanttTask[], preservePartidaCodes = false): GanttTask[] {
     const childrenOf = new Map<number | null, GanttTask[]>();
     taskList.forEach((t) => {
         if (!childrenOf.has(t.parent_id)) childrenOf.set(t.parent_id, []);
@@ -107,9 +110,10 @@ function recomputeOrder(taskList: GanttTask[]): GanttTask[] {
 
     while (stack.length > 0) {
         const { task, siblingIndex, parentPartida, nivel } = stack.pop()!;
-        const partida = parentPartida
+        const generated = parentPartida
             ? `${parentPartida}.${siblingIndex + 1}`
             : String(siblingIndex + 1);
+        const partida = (preservePartidaCodes && task.partida) ? task.partida : generated;
         result.push({ ...task, partida, nivel, item_order: ++counter });
 
         const children = childrenOf.get(task.id) ?? [];
@@ -129,9 +133,11 @@ function recomputeOrder(taskList: GanttTask[]): GanttTask[] {
 export function recomputeHierarchy(
     taskList: GanttTask[],
     calendarSettings?: GanttCalendarSettings,
+    preservePartidaCodes = false,
 ): GanttTask[] {
     const ordered = recomputeOrder(
         taskList.map((task) => normalizeTaskDates(task, calendarSettings)),
+        preservePartidaCodes,
     );
     const taskById = new Map(ordered.map((t) => [t.id, { ...t }]));
     const childrenOf = new Map<number, GanttTask[]>();
@@ -265,7 +271,13 @@ export function useGanttTasks(
     initialTasks: GanttTask[] = [],
     schedulingMode: SchedulingMode = 'automatic',
     calendarSettings?: GanttCalendarSettings,
+    preservePartidaCodes = false,
 ) {
+    // Stable ref so callbacks that don't re-create on every render can always
+    // read the latest value without needing it in their deps arrays.
+    const preserveRef = useRef(preservePartidaCodes);
+    preserveRef.current = preservePartidaCodes;
+
     const [tasks, setTasks] = useState<GanttTask[]>(() => {
         const initial = recomputeHierarchy(
             initialTasks.map((t) => ({
@@ -273,6 +285,7 @@ export function useGanttTasks(
                 predecesoras: parsePreds(t.predecesoras as any),
             })),
             calendarSettings,
+            preservePartidaCodes,
         );
         reserveTemporaryIds(initial);
 
@@ -302,7 +315,7 @@ export function useGanttTasks(
         }
 
         setTasks((prev) => {
-            const next = recomputeHierarchy(prev, calendarSettings);
+            const next = recomputeHierarchy(prev, calendarSettings, preserveRef.current);
             setDirtyIds(new Set(next.map((task) => task.id)));
             return next;
         });
@@ -482,6 +495,7 @@ export function useGanttTasks(
                                     calendarSettings,
                                 ),
                                 calendarSettings,
+                                preserveRef.current,
                             );
                         }
                     }
@@ -496,6 +510,7 @@ export function useGanttTasks(
                         calendarSettings,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -545,6 +560,7 @@ export function useGanttTasks(
                         ...prev.slice(insertIdx),
                     ],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             return newId;
@@ -592,6 +608,7 @@ export function useGanttTasks(
                         ...prev.slice(insertIdx),
                     ],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             return newId;
@@ -611,6 +628,7 @@ export function useGanttTasks(
                 return recomputeHierarchy(
                     [...prev.slice(0, idx), ...prev.slice(end)],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => {
@@ -641,6 +659,7 @@ export function useGanttTasks(
                         t.id === id ? { ...t, parent_id: sib.id } : t,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -660,6 +679,7 @@ export function useGanttTasks(
                         t.id === id ? { ...t, parent_id: parent.parent_id } : t,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -696,7 +716,7 @@ export function useGanttTasks(
                     ...currBlock,
                     ...prevSibBlock,
                     ...prev.slice(blockEnd),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
@@ -730,7 +750,7 @@ export function useGanttTasks(
                     ...nextSibBlock,
                     ...currBlock,
                     ...prev.slice(nextSibEnd),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
@@ -768,13 +788,14 @@ export function useGanttTasks(
                     id: idMap.get(t.id)!,
                     parent_id: t.parent_id !== null ? (idMap.get(t.parent_id) ?? t.parent_id) : null,
                     predecesoras: [],
+                    partida: '', // let recomputeOrder auto-generate to avoid duplicate codes
                 }));
 
                 return recomputeHierarchy([
                     ...prev.slice(0, end),
                     ...duplicated,
                     ...prev.slice(end),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
 
             setDirtyIds((prev) => new Set([...prev, newRootId]));
@@ -816,11 +837,30 @@ export function useGanttTasks(
                         calendarSettings,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
         [calendarSettings, schedulingMode],
+    );
+
+    // ── Actualizar partidas de múltiples tareas en bloque ───────────────────
+    const batchUpdatePartidas = useCallback(
+        (updates: Array<{ id: number; partida: string }>) => {
+            const updateMap = new Map(updates.map((u) => [u.id, u.partida]));
+            setTasks((prev) =>
+                prev.map((t) =>
+                    updateMap.has(t.id) ? { ...t, partida: updateMap.get(t.id)! } : t,
+                ),
+            );
+            setDirtyIds((prev) => {
+                const next = new Set(prev);
+                updates.forEach((u) => next.add(u.id));
+                return next;
+            });
+        },
+        [],
     );
 
     // ── Guardar en API ───────────────────────────────────────────────────────
@@ -861,6 +901,7 @@ export function useGanttTasks(
                         : [],
                 })),
                 calendarSettings,
+                preserveRef.current,
             );
             reserveTemporaryIds(recomputed);
             setTasks(recomputed);
@@ -900,5 +941,6 @@ export function useGanttTasks(
         saveTasks,
         applyBarMove,
         importTasks,
+        batchUpdatePartidas,
     };
 }

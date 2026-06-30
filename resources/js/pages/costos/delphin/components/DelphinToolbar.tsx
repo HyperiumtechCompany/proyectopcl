@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+    AlertTriangle,
     ArrowDown,
     ArrowUp,
     BarChart2,
@@ -80,6 +81,10 @@ interface Props {
     // Formula polinómica
     isParentSelected: boolean;
     onFormulaView: () => void;
+
+    // Compatibilidad presupuesto ↔ ACU
+    incompatiblesCount?: number;
+    onOpenCompatibilidad?: () => void;
 
     // Save (context-aware)
     budgetDirty: boolean;
@@ -336,7 +341,8 @@ export function DelphinToolbar({
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
     onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
-    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt,  project 
+    incompatiblesCount, onOpenCompatibilidad,
+    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, project
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
     const noSel = selectedRowId === null || isFormulaBudgetView;
@@ -422,7 +428,7 @@ export function DelphinToolbar({
                                 </button>
                             </div>
 
-                            {/*Botón Valorizado */}
+                            {/* Botón Valorizado */}
                             <a
                                 href={`/module/crono_valorizado?project=${project}`}
                                 className="flex shrink-0 items-center gap-1 rounded bg-blue-600 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-blue-500 transition-colors"
@@ -430,6 +436,28 @@ export function DelphinToolbar({
                             >
                                 <BarChart2 size={11} /> Valorizado
                             </a>
+
+                            {/* Botón Compatibilidad */}
+                            <button
+                                type="button"
+                                title={incompatiblesCount
+                                    ? `${incompatiblesCount} partida${incompatiblesCount !== 1 ? 's' : ''} sin compatibilizar con el ACU`
+                                    : 'Verificar compatibilidad Presupuesto ↔ ACU'}
+                                onClick={onOpenCompatibilidad}
+                                className={`relative flex shrink-0 items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+                                    incompatiblesCount
+                                        ? 'bg-amber-600/80 text-amber-100 hover:bg-amber-500'
+                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                }`}
+                            >
+                                <AlertTriangle size={11} />
+                                <span className="hidden sm:inline">Compat.</span>
+                                {incompatiblesCount ? (
+                                    <span className="ml-0.5 rounded-full bg-amber-400 px-1 py-px text-[9px] font-bold leading-none text-amber-900">
+                                        {incompatiblesCount}
+                                    </span>
+                                ) : null}
+                            </button>
 
                             <Divider />
                         </>

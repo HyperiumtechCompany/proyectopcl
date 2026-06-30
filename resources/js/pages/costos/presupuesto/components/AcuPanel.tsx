@@ -1254,11 +1254,36 @@ export function AcuPanel({
         const newPartida = selectedAcu?.partida;
         if (newPartida !== prevPartidaRef.current) {
             prevPartidaRef.current = newPartida;
-            setLocalAcu(selectedAcu);
             setIsDirty(false);
-            if (selectedAcu) setRendimiento(selectedAcu.rendimiento || 1);
+            if (!selectedAcu) {
+                setLocalAcu(null);
+                return;
+            }
+            const loadedRendimiento = selectedAcu.rendimiento || 1;
+            setRendimiento(loadedRendimiento);
+
+            // Normalize crew item quantities on load: cantidad = (recursos × horasPerDia) / rendimiento.
+            // This ensures the calculation is always consistent with the stored recursos and rendimiento,
+            // regardless of whether the data came from a direct import or a previous session with
+            // different horasPerDia settings.
+            const normalizeItems = (items: ACUComponenteRow[]): ACUComponenteRow[] =>
+                items.map((item) => {
+                    if (isHerramientasRow(item)) return item;
+                    const rec = Number(item.recursos ?? 0);
+                    if (rec <= 0) return item; // no recursos data — keep stored cantidad
+                    const qty = perDay
+                        ? (rec * hoursPerDay) / loadedRendimiento
+                        : rec / loadedRendimiento;
+                    return { ...item, recursos: rec, cantidad: qty };
+                });
+
+            setLocalAcu(recalculateAcu({
+                ...selectedAcu,
+                mano_de_obra: normalizeItems(selectedAcu.mano_de_obra || []),
+                equipos: normalizeItems(selectedAcu.equipos || []),
+            }));
         }
-    }, [selectedAcu]);
+    }, [selectedAcu]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const computeCantidadFromRecursos = (
         recursos: number,

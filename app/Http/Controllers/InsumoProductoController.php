@@ -123,7 +123,8 @@ class InsumoProductoController extends Controller
                     DB::raw("COALESCE(MAX(u.descripcion_singular), MAX(u.abreviatura_unidad), MAX(t.{$conf['unit_column']})) as unidad_nombre"),
                     DB::raw('MAX(p.tipo_proveedor) as tipo_proveedor'),
                     DB::raw("MAX(COALESCE(p.costo_unitario, t.{$conf['price_column']}, 0)) as precio"),
-                    DB::raw('SUM(t.cantidad * COALESCE(g.metrado, 0)) as cantidad_total'),
+                    DB::raw('SUM(CASE WHEN LOWER(t.descripcion) LIKE \'%herramienta%\' THEN (t.cantidad / 100.0) * COALESCE(g.metrado, 0) ELSE t.cantidad * COALESCE(g.metrado, 0) END) as cantidad_total'),
+                    DB::raw('SUM(t.parcial * COALESCE(g.metrado, 0)) as parcial_total'),
                 ])
                 ->where('a.presupuesto_id', $tenantPresupuestoId)
                 ->groupBy('t.insumo_id', 'group_id');
@@ -158,7 +159,7 @@ class InsumoProductoController extends Controller
                     'proveedor' => $row->tipo_proveedor ?: 'SIN CLASIFICAR',
                     'cantidad' => $cantidadTotal,
                     'precio' => $precio,
-                    'total' => round($cantidadTotal * $precio, 2),
+                    'total' => round((float) $row->parcial_total, 2),
                     'tipo' => $tipo,
                 ];
             })->values()->toArray();

@@ -927,9 +927,16 @@ class PresupuestoController extends Controller
                 foreach ($acus as $acu) {
                     $partida = $acu['partida'];
 
+                    // Match by exact stored code first; if not found, try canonical form
+                    // (strips leading zeros per segment: "01.01.03" ≡ "1.1.3").
+                    // This tolerates different zero-padding conventions between the ACU
+                    // Excel export and whatever format the budget was imported with.
                     $existingPartida = DB::connection('costos_tenant')
                         ->table('presupuesto_general')
-                        ->where('partida', $partida)
+                        ->where(function ($q) use ($partida) {
+                            $q->where('partida', $partida)
+                              ->orWhere('partida', $this->canonicalCode($partida));
+                        })
                         ->first();
 
                     if (! $existingPartida) {
@@ -937,7 +944,12 @@ class PresupuestoController extends Controller
                         continue;
                     }
 
-                    $unidad = $this->extractUnidadFromRendimiento($acu['rendimiento_text'] ?? '');
+                    // Use the partida code exactly as stored in presupuesto_general
+                    // so subsequent ACU lookups reference the same key.
+                    $partida = $existingPartida->partida;
+
+                    // Use the budget's stored unit; ACU Excel unit text is unreliable.
+                    $unidad = $existingPartida->unidad ?? '';
 
                     DB::connection('costos_tenant')->beginTransaction();
 
@@ -1018,6 +1030,79 @@ class PresupuestoController extends Controller
         ]);
     }
 
+    /**
+     * Extracts the rendimiento value from a Partida header row.
+     *
+     * Delphin Express versions differ: some embed "Rendimiento:4 und/Día" in a single
+     * cell, others split the label and value across adjacent cells. We scan columns
+     * K–T of the header row, and if nothing is found there, we look at the very next
+     * row (some older formats write rendimiento below the partida header).
+     */
+    private function extractRendimientoFromPartidaRow($sheet, int $row, int $maxRow): float
+    {
+        $scanCols  = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
+        $labelSeen = false;
+
+        foreach ($scanCols as $col) {
+            $val = trim((string) $sheet->getCell($col . $row)->getCalculatedValue());
+            if ($val === '') continue;
+
+            // Cell contains the "Rendimiento" keyword — try to read number from same cell
+            if (stripos($val, 'rendimiento') !== false) {
+                if (preg_match('/(?:rendimiento\s*:?\s*)(\d+(?:[.,]\d+)?)/i', $val, $m)) {
+                    return (float) str_replace(',', '.', $m[1]);
+                }
+                $labelSeen = true; // number is likely in the next non-empty cell
+                continue;
+            }
+
+            // Previous cell was the "Rendimiento" label — grab the first number we see
+            if ($labelSeen) {
+                if (preg_match('/^(\d+(?:[.,]\d+)?)/', $val, $m)) {
+                    return (float) str_replace(',', '.', $m[1]);
+                }
+                $labelSeen = false; // non-numeric — label/value pair is over
+            }
+        }
+
+        // Fallback: check the immediately following row (if it exists and is not a new section)
+        if ($row + 1 <= $maxRow) {
+            $sectionGuard = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO', 'SUBCONTRATOS', 'SUBPARTIDAS'];
+            $nextA = strtoupper(trim((string) $sheet->getCell('A' . ($row + 1))->getCalculatedValue()));
+            $isNewBlock = ($nextA === 'PARTIDA:') || in_array($nextA, $sectionGuard)
+                || in_array(str_replace('-', '', $nextA), $sectionGuard);
+
+            if (! $isNewBlock) {
+                foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'] as $col) {
+                    $val = trim((string) $sheet->getCell($col . ($row + 1))->getCalculatedValue());
+                    if ($val === '') continue;
+                    if (stripos($val, 'rendimiento') !== false) {
+                        if (preg_match('/(?:rendimiento\s*:?\s*)(\d+(?:[.,]\d+)?)/i', $val, $m)) {
+                            return (float) str_replace(',', '.', $m[1]);
+                        }
+                    }
+                }
+            }
+        }
+
+        return 1.0;
+    }
+
+    /**
+     * Strips leading zeros from each dotted segment so codes with different
+     * zero-padding always compare equal: "01.01.03" ≡ "1.1.3".
+     */
+    private function canonicalCode(string $code): string
+    {
+        return implode('.', array_map(
+            function (string $seg): string {
+                $stripped = ltrim(preg_replace('/[a-zA-Z]+$/', '', trim($seg)), '0');
+                return $stripped !== '' ? $stripped : '0';
+            },
+            explode('.', trim($code))
+        ));
+    }
+
     private function parseAcusFromExcel($sheet, int $maxRow): array
     {
         $acus = [];
@@ -1030,7 +1115,7 @@ class PresupuestoController extends Controller
 
             if ($colA === 'Partida:') {
                 if ($currentAcu !== null) {
-                    $acus[] = $currentAcu;
+                    $acus[] = $this->recalcAcuSubtotals($currentAcu);
                 }
 
                 $partidaCode = $this->normalizePartidaCode(trim((string) $sheet->getCell('D' . $row)->getCalculatedValue()));
@@ -1038,17 +1123,14 @@ class PresupuestoController extends Controller
                 if (empty($descripcion)) {
                     $descripcion = trim((string) $sheet->getCell('G' . $row)->getCalculatedValue());
                 }
-                $rendimientoText = trim((string) $sheet->getCell('P' . $row)->getCalculatedValue());
-                $rendimiento = 1.0;
-                if (preg_match('/(\d+[\.,]?\d*)/', $rendimientoText, $matches)) {
-                    $rendimiento = (float) str_replace(',', '.', $matches[1]);
-                }
+
+                // Use the robust multi-column, multi-row rendimiento extractor
+                $rendimiento = $this->extractRendimientoFromPartidaRow($sheet, $row, $maxRow);
 
                 $currentAcu = [
                     'partida' => $partidaCode,
                     'descripcion' => $descripcion,
                     'rendimiento' => $rendimiento,
-                    'rendimiento_text' => $rendimientoText,
                     'mano_de_obra' => [],
                     'materiales' => [],
                     'equipos' => [],
@@ -1071,18 +1153,6 @@ class PresupuestoController extends Controller
                 : (in_array(str_replace('-', '', $colAUpper), $sectionHeaders) ? str_replace('-', '', $colAUpper) : null);
             if ($colACanon !== null) {
                 $currentSection = $colACanon;
-                $subtotal = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
-                $costKey = match ($colACanon) {
-                    'MANO DE OBRA' => 'costo_mano_obra',
-                    'MATERIALES' => 'costo_materiales',
-                    'EQUIPO' => 'costo_equipos',
-                    'SUBCONTRATOS' => 'costo_subcontratos',
-                    'SUBPARTIDAS' => 'costo_subpartidas',
-                    default => 'costo_' . strtolower($colACanon),
-                };
-                if ($currentAcu !== null) {
-                    $currentAcu[$costKey] = $subtotal;
-                }
                 continue;
             }
 
@@ -1103,35 +1173,39 @@ class PresupuestoController extends Controller
                 continue;
             }
 
-            $colM = trim((string) $sheet->getCell('M' . $row)->getCalculatedValue());
-            $colQ = (float) ($sheet->getCell('Q' . $row)->getCalculatedValue() ?? 0);
-            $colR = (float) ($sheet->getCell('R' . $row)->getCalculatedValue() ?? 0);
-            $colS = (float) ($sheet->getCell('S' . $row)->getCalculatedValue() ?? 0);
-            $colN = trim((string) $sheet->getCell('N' . $row)->getCalculatedValue());
+            $colM   = trim((string) $sheet->getCell('M' . $row)->getCalculatedValue());
+            $colQ   = (float) ($sheet->getCell('Q' . $row)->getCalculatedValue() ?? 0);
+            $colR   = (float) ($sheet->getCell('R' . $row)->getCalculatedValue() ?? 0);
+            $colN   = trim((string) $sheet->getCell('N' . $row)->getCalculatedValue());
 
             $isHerramientas = stripos($colE, 'HERRAMIENTA') !== false;
-            $unidad = $colM ?: 'und';
-            $recursos = ($colN === '-' || $colN === '' || $colN === null) ? 0 : (float) $colN;
+            $unidad         = $colM ?: 'und';
+            $recursos       = ($colN === '-' || $colN === '' || $colN === null) ? 0 : (float) $colN;
+
+            // Parcial is always cantidad × precio for regular items.
+            // Herramientas are an exception: their parcial depends on costo_mano_obra
+            // which is not yet known here — recalcAcuSubtotals corrects them later.
+            $parcial = round($colQ * $colR, 2);
 
             $component = [
                 'descripcion' => $colE,
-                'unidad' => $unidad,
-                'cantidad' => $colQ,
-                'parcial' => $colS,
+                'unidad'      => $unidad,
+                'cantidad'    => $colQ,
+                'parcial'     => $parcial,
             ];
 
             switch ($currentSection) {
                 case 'MANO DE OBRA':
                     $component['precio_unitario'] = $colR;
-                    $component['recursos'] = $recursos;
+                    $component['recursos']        = $recursos;
                     break;
                 case 'MATERIALES':
-                    $component['precio_unitario'] = $colR;
+                    $component['precio_unitario']  = $colR;
                     $component['factor_desperdicio'] = 1.0;
                     break;
                 case 'EQUIPO':
                     $component['precio_hora'] = $colR;
-                    $component['recursos'] = $isHerramientas ? 0 : $recursos;
+                    $component['recursos']    = $isHerramientas ? 0 : $recursos;
                     break;
                 case 'SUBCONTRATOS':
                 case 'SUBPARTIDAS':
@@ -1141,20 +1215,73 @@ class PresupuestoController extends Controller
 
             $sectionKey = match ($currentSection) {
                 'MANO DE OBRA' => 'mano_de_obra',
-                'MATERIALES' => 'materiales',
-                'EQUIPO' => 'equipos',
+                'MATERIALES'   => 'materiales',
+                'EQUIPO'       => 'equipos',
                 'SUBCONTRATOS' => 'subcontratos',
-                'SUBPARTIDAS' => 'subpartidas',
-                default => strtolower($currentSection),
+                'SUBPARTIDAS'  => 'subpartidas',
+                default        => strtolower($currentSection),
             };
             $currentAcu[$sectionKey][] = $component;
         }
 
         if ($currentAcu !== null) {
-            $acus[] = $currentAcu;
+            $acus[] = $this->recalcAcuSubtotals($currentAcu);
         }
 
         return $acus;
+    }
+
+    /**
+     * Recomputes section subtotals and fixes herramientas parcial.
+     *
+     * Herramientas manuales: parcial = costo_mano_obra × (porcentaje / 100).
+     * Their "cantidad" column stores the percentage (e.g. 3.0 = 3 %).
+     * costo_mano_obra must be summed first; herramientas and costo_equipos
+     * are derived afterwards.
+     *
+     * Tertiary rendimiento inference: if extraction defaulted to 1.0, derive
+     * rendimiento from the first mano_de_obra item that has recursos > 0:
+     *   rendimiento = (recursos × 8h/day) / cantidad_horas
+     */
+    private function recalcAcuSubtotals(array $acu): array
+    {
+        // ① Mano de obra first — herramientas need this value.
+        $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 2);
+
+        // ② Fix herramientas parcial now that costo_mano_obra is known.
+        foreach ($acu['equipos'] as &$item) {
+            if (stripos($item['descripcion'] ?? '', 'HERRAMIENTA') !== false) {
+                $pct = (float) ($item['cantidad'] ?? 0);
+                $item['parcial']     = round($acu['costo_mano_obra'] * ($pct / 100.0), 2);
+                $item['precio_hora'] = $acu['costo_mano_obra'];
+            }
+        }
+        unset($item);
+
+        // ③ Remaining subtotals.
+        $acu['costo_materiales']   = round(array_sum(array_column($acu['materiales']   ?? [], 'parcial')), 2);
+        $acu['costo_equipos']      = round(array_sum(array_column($acu['equipos']      ?? [], 'parcial')), 2);
+        $acu['costo_subcontratos'] = round(array_sum(array_column($acu['subcontratos'] ?? [], 'parcial')), 2);
+        $acu['costo_subpartidas']  = round(array_sum(array_column($acu['subpartidas']  ?? [], 'parcial')), 2);
+
+        // ④ Rendimiento inference: if header extraction defaulted to 1.0, infer
+        //    from the first crew member that has recursos and cantidad.
+        //    Formula assumes the standard 8-hour work day (Peruvian standard).
+        if (($acu['rendimiento'] ?? 1.0) === 1.0) {
+            foreach ($acu['mano_de_obra'] as $item) {
+                $rec = (float) ($item['recursos'] ?? 0);
+                $qty = (float) ($item['cantidad'] ?? 0);
+                if ($rec > 0 && $qty > 0) {
+                    $inferred = ($rec * 8.0) / $qty;
+                    if ($inferred >= 0.01 && $inferred <= 10000) {
+                        $acu['rendimiento'] = round($inferred, 4);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $acu;
     }
 
     private function normalizePartidaCode(string $code): string
@@ -1379,7 +1506,9 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoManoObra += $componente['parcial'];
             }
-            $costoManoObra = round($costoManoObra, 2);
+            // No rounding at category level — only at component level (round per parcial).
+            // Summing 2-decimal component parcials without extra rounding keeps
+            // costo_unitario_total = exact sum of parcials, matching the insumos total.
 
             // Calculate materiales costs
             $materiales = $validated['materiales'] ?? [];
@@ -1391,7 +1520,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoMateriales += $componente['parcial'];
             }
-            $costoMateriales = round($costoMateriales, 2);
 
             // Calculate equipos costs
             $equipos = $validated['equipos'] ?? [];
@@ -1401,7 +1529,7 @@ class PresupuestoController extends Controller
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
                 if ($isHerramientas) {
-                    // Herramientas: porcentaje de mano de obra
+                    // Herramientas: porcentaje de mano de obra (cantidad = %, e.g. 3 = 3%)
                     $precioBase = $costoManoObra;
                     $porcentaje = $componente['cantidad'] ?? 0;
                     $parcial = $precioBase * ($porcentaje / 100);
@@ -1415,7 +1543,6 @@ class PresupuestoController extends Controller
 
                 $costoEquipos += $componente['parcial'];
             }
-            $costoEquipos = round($costoEquipos, 2);
 
             // Calculate subcontratos costs
             $subcontratos = $validated['subcontratos'] ?? [];
@@ -1426,7 +1553,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoSubcontratos += $componente['parcial'];
             }
-            $costoSubcontratos = round($costoSubcontratos, 2);
 
             // Calculate subpartidas costs
             $subpartidas = $validated['subpartidas'] ?? [];
@@ -1437,7 +1563,6 @@ class PresupuestoController extends Controller
                 $componente['parcial'] = round($parcial, 2);
                 $costoSubpartidas += $componente['parcial'];
             }
-            $costoSubpartidas = round($costoSubpartidas, 2);
 
             // ─── Update Master Project Prices if flag is active ────────────
             if (! empty($validated['update_project_prices'])) {
