@@ -155,6 +155,8 @@ export function calculateReferencePrice(
     );
 }
 
+
+//cambio//
 function itemPrecio(type: InsumoType, item: ACUComponenteRow): number {
     return type === 'equipos'
         ? Number(item.precio_hora ?? item.precio_unitario ?? 0)
@@ -164,13 +166,6 @@ function itemPrecio(type: InsumoType, item: ACUComponenteRow): number {
 function itemCostFactor(type: InsumoType, item: ACUComponenteRow): number {
     if (type === 'materiales')
         return Math.max(1, Number(item.factor_desperdicio ?? 1));
-    if (
-        type === 'equipos' &&
-        String(item.descripcion ?? '')
-            .toLowerCase()
-            .includes('herramienta')
-    )
-        return 0.01;
     return 1;
 }
 
@@ -179,36 +174,90 @@ export function flattenInsumos(
     delphinRows: DelphinRow[],
 ): RawInsumo[] {
     const rows: RawInsumo[] = [];
-    const presupuestoCantidadByPartida = new Map(
-        delphinRows.map((row) => [
-            normalizedPartida(String(row.partida ?? '')),
-            Number(row.metrado ?? 0),
-        ]),
+
+    // Validar datos
+    if (!delphinRows?.length || !acuRows?.length) {
+        console.warn('flattenInsumos: Sin datos');
+        return rows;
+    }
+
+    //  1. Obtener partidas del Excel con metrado > 0
+    //    Y asegurarnos de que coincidan con las partidas de los ACU
+    const partidasACU = new Set(
+        acuRows.map(acu => normalizedPartida(acu.partida))
     );
 
+    //  2. Construir mapa SOLO con partidas que existen en ACU
+    const presupuestoCantidadByPartida = new Map<string, number>();
+
+    for (const row of delphinRows) {
+        const partida = normalizedPartida(String(row.partida ?? ''));
+        if (!partida) continue;
+
+        //  SOLO procesar partidas que están en los ACU
+        if (!partidasACU.has(partida)) continue;
+
+        const metrado = Number(row.metrado ?? 0);
+        const parcial = Number(row.parcial ?? 0);
+
+        if (metrado > 0) {
+            presupuestoCantidadByPartida.set(partida, metrado);
+        } else if (parcial > 0 && !presupuestoCantidadByPartida.has(partida)) {
+            presupuestoCantidadByPartida.set(partida, parcial);
+        }
+    }
+
+
+    if (presupuestoCantidadByPartida.size === 0) {
+        console.warn('flattenInsumos: No se encontraron partidas con datos');
+        return rows;
+    }
+
+    //  3. SOLO tipos que existen en el Excel
+    const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos'];
+
+    let procesados = 0;
+
     for (const acu of acuRows) {
-        const presupuestoCantidad =
-            presupuestoCantidadByPartida.get(normalizedPartida(acu.partida)) ??
-            0;
+        const partidaKey = normalizedPartida(acu.partida);
+        const presupuestoCantidad = presupuestoCantidadByPartida.get(partidaKey) ?? 0;
+
+        if (presupuestoCantidad === 0) continue;
+
+        procesados++;
+
         for (const { key } of INSUMO_TYPES) {
+            if (!tiposValidos.includes(key)) continue;
+
             for (const item of acu[key] ?? []) {
                 const descripcion = String(item.descripcion ?? '').trim();
-                if (!descripcion) {
-                    continue;
-                }
+                if (!descripcion) continue;
 
-                const unidad = String(item.unidad ?? '').trim() || '-';
                 const codigo = String(
                     item.cod_insumo ?? item.codigo ?? '',
                 ).trim();
                 const acuCantidad = Number(item.cantidad ?? 0);
                 const precio = itemPrecio(key, item);
-                const usage = calculateInsumoUsage(
-                    presupuestoCantidad,
-                    acuCantidad,
-                    precio,
-                    itemCostFactor(key, item),
-                );
+                const unidad = String(item.unidad ?? '').toLowerCase().trim() || '-';
+                const esPorcentaje = unidad.startsWith('%');
+
+                if (acuCantidad === 0 || precio === 0) continue;
+
+                const parcialAcu = esPorcentaje
+                    ? (acuCantidad / 100) * precio
+                    : acuCantidad * precio;
+                const usage = esPorcentaje
+                    ? {
+                        cantidad: parcialAcu * presupuestoCantidad,
+                        parcial: parcialAcu * presupuestoCantidad,
+                    }
+                    : calculateInsumoUsage(
+                        presupuestoCantidad,
+                        acuCantidad,
+                        precio,
+                        itemCostFactor(key, item),
+                    );
+
                 const baseKey = [
                     key,
                     normalizeKey(descripcion),
@@ -223,8 +272,8 @@ export function flattenInsumos(
                     descripcion,
                     unidad,
                     cantidad: usage.cantidad,
-                    precio,
-                    precioPonderado: usage.cantidad * precio,
+                    precio: esPorcentaje ? 0 : precio,
+                    precioPonderado: esPorcentaje ? 0 : usage.cantidad * precio,
                     parcial: usage.parcial,
                     usos: 1,
                     reference: {
@@ -240,6 +289,7 @@ export function flattenInsumos(
             }
         }
     }
+
 
     return rows;
 }
@@ -484,6 +534,18 @@ export function InsumosConsolidadosModal({
         return sortInsumos(filteredRows, sort);
     }, [activeType, consolidated, search, sort]);
 
+    // Agregar después de la definición de typeRows
+    const allTypesRows = useMemo(() => {
+        const result: Record<string, ConsolidatedInsumo[]> = {};
+        for (const { key } of INSUMO_TYPES) {
+            const rows = consolidated.filter((row) => row.type === key);
+            if (rows.length > 0) {
+                result[key] = sortInsumos(rows, { key: 'parcial', direction: 'desc' });
+            }
+        }
+        return result;
+    }, [consolidated]);
+
     const selectedRows = useMemo(
         () => typeRows.filter((row) => selectedKeys.has(row.key)),
         [typeRows, selectedKeys],
@@ -648,11 +710,10 @@ export function InsumosConsolidadosModal({
                             className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-950/50 hover:text-emerald-300"
                             title="Exportar insumos a Excel"
                             onClick={() => {
-                                const typeLabel = INSUMO_TYPES.find(t => t.key === activeType)?.label ?? activeType;
                                 const specialty = scope === 'especialidad'
                                     ? specialties.find(s => s.id === activeSpecialtyId)?.descripcion ?? 'General'
                                     : 'Presupuesto general';
-                                exportInsumosConsolidadosExcel(typeRows, typeLabel, specialty, projectName, projectData);
+                                exportInsumosConsolidadosExcel(allTypesRows, specialty, projectName, projectData);
                             }}
                         >
                             <FileSpreadsheet size={14} />
@@ -911,10 +972,10 @@ export function InsumosConsolidadosModal({
                                                         {row.unidad}
                                                     </td>
                                                     <td className="p-2 text-right font-mono text-amber-300">
-                                                        {fmt(row.cantidad, 4)}
+                                                        {row.precio === 0 ? '—' : fmt(row.cantidad, 4)}
                                                     </td>
                                                     <td className="p-2 text-right font-mono text-emerald-300">
-                                                        {fmt(row.precio)}
+                                                        {row.precio === 0 ? '—' : fmt(row.precio)}
                                                     </td>
                                                     <td className="p-2 text-right font-mono font-semibold text-sky-300">
                                                         {fmt(row.parcial)}

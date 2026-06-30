@@ -646,6 +646,7 @@ export default function DelphinView({
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
+
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Delphin — ${project_name}`} />
             <div className="flex h-[calc(100vh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-900 text-white">
@@ -857,7 +858,6 @@ export default function DelphinView({
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
                     onAcusImported={handleAcusImported} />
-                // DESPUÉS
                 <InsumosConsolidadosModal
                     open={insumosOpen}
                     acuRows={acuRows}

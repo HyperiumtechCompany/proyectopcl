@@ -41,7 +41,7 @@ async function exportFormulaPolinomicaExcel(
 
 // ── Construir formulaData desde monomios ──────────────────────────────────────
 function buildFormulaData(monomios: any[]): any {
-    console.log('📊 buildFormulaData - monomios recibidos:', monomios);
+    
 
     if (!monomios || monomios.length === 0) {
         return {
@@ -95,12 +95,12 @@ function buildFormulaData(monomios: any[]): any {
         hasData: true,
     };
 
-    console.log('📊 buildFormulaData - resultado:', result);
+    
     return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// exportDelphin - FUNCIÓN PRINCIPAL (AGREGAR ESTO)
+// exportDelphin - FUNCIÓN PRINCIPAL 
 // ═══════════════════════════════════════════════════════════════════════════════
 export async function exportDelphin(
     content: DelphinExportContent,
@@ -115,7 +115,7 @@ export async function exportDelphin(
     // ── FÓRMULA POLINÓMICA ──────────────────────────────────────────────────
     if (content === 'formula_polinomica') {
         const formulaData = buildFormulaData(formulaMonomios);
-        console.log('📊 exportDelphin - formulaData construido');
+        
 
         if (format === 'excel') {
             return exportDelphinExcel(
