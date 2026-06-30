@@ -8,8 +8,12 @@ interface Props {
     align?: 'left' | 'center' | 'right';
     indent?: number;
     placeholder?: string;
-    /** Prefijo estático no editable (WBS partida) mostrado antes del texto */
+    /** Prefijo WBS mostrado antes del texto */
     prefix?: string;
+    /** Cuando true, el prefijo se puede editar con doble clic */
+    prefixEditable?: boolean;
+    /** Llamado al confirmar edición del prefijo */
+    onPrefixCommit?: (value: string) => void;
     /** Mostrar hasta 2 líneas en lugar de truncar en una */
     wrap?: boolean;
     /** Overrides the default text-slate-200 color (for hierarchy level coloring) */
@@ -27,6 +31,8 @@ export function CellText({
     indent = 0,
     placeholder = '',
     prefix,
+    prefixEditable = false,
+    onPrefixCommit,
     wrap = false,
     textColorClass,
     onClick,
@@ -34,6 +40,28 @@ export function CellText({
 }: Props) {
     const [draft, setDraft] = useState(value);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const [isEditingPrefix, setIsEditingPrefix] = useState(false);
+    const [prefixDraft, setPrefixDraft] = useState('');
+    const prefixInputRef = useRef<HTMLInputElement>(null);
+
+    const startPrefixEdit = () => {
+        if (!prefixEditable || !prefix) return;
+        setPrefixDraft(prefix);
+        setIsEditingPrefix(true);
+        requestAnimationFrame(() => {
+            prefixInputRef.current?.focus();
+            prefixInputRef.current?.select();
+        });
+    };
+
+    const commitPrefixEdit = () => {
+        setIsEditingPrefix(false);
+        const val = prefixDraft.trim();
+        if (val && val !== prefix) onPrefixCommit?.(val);
+    };
+
+    const cancelPrefixEdit = () => setIsEditingPrefix(false);
 
     useEffect(() => {
         if (isEditing) {
@@ -54,9 +82,30 @@ export function CellText({
                 style={padStyle}
             >
                 {prefix && (
-                    <span className="shrink-0 pl-2 pr-1 text-xs text-slate-400/70 select-none">
-                        {prefix}
-                    </span>
+                    isEditingPrefix ? (
+                        <input
+                            ref={prefixInputRef}
+                            className="shrink-0 w-14 border-0 bg-blue-900/60 pl-2 pr-1 text-xs text-amber-300 outline-none ring-1 ring-amber-400/60 rounded"
+                            value={prefixDraft}
+                            onChange={e => setPrefixDraft(e.target.value)}
+                            onBlur={commitPrefixEdit}
+                            onKeyDown={e => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); commitPrefixEdit(); }
+                                if (e.key === 'Escape') { cancelPrefixEdit(); }
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        />
+                    ) : (
+                        <span
+                            className={`shrink-0 pl-2 pr-1 text-xs select-none ${prefixEditable ? 'cursor-text text-amber-300/80 hover:text-amber-300 underline decoration-dotted' : 'text-slate-400/70'}`}
+                            title={prefixEditable ? 'Doble clic para editar numeración' : undefined}
+                            onClick={prefixEditable ? e => e.stopPropagation() : undefined}
+                            onDoubleClick={e => { e.stopPropagation(); startPrefixEdit(); }}
+                        >
+                            {prefix}
+                        </span>
+                    )
                 )}
                 <input
                     ref={inputRef}
@@ -89,9 +138,30 @@ export function CellText({
             onDoubleClick={onDoubleClick}
         >
             {prefix && (
-                <span className="mr-1.5 shrink-0 text-slate-400/70">
-                    {prefix}
-                </span>
+                isEditingPrefix ? (
+                    <input
+                        ref={prefixInputRef}
+                        className="shrink-0 mr-1.5 w-14 border-0 bg-slate-700 text-xs text-amber-300 outline-none ring-1 ring-amber-400/60 rounded px-1"
+                        value={prefixDraft}
+                        onChange={e => setPrefixDraft(e.target.value)}
+                        onBlur={commitPrefixEdit}
+                        onKeyDown={e => {
+                            e.stopPropagation();
+                            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); commitPrefixEdit(); }
+                            if (e.key === 'Escape') { cancelPrefixEdit(); }
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    />
+                ) : (
+                    <span
+                        className={`mr-1.5 shrink-0 text-slate-400/70 ${prefixEditable ? 'cursor-text hover:text-amber-300 hover:underline hover:decoration-dotted' : ''}`}
+                        title={prefixEditable ? 'Doble clic para editar numeración' : undefined}
+                        onClick={prefixEditable ? e => e.stopPropagation() : undefined}
+                        onDoubleClick={e => { e.stopPropagation(); startPrefixEdit(); }}
+                    >
+                        {prefix}
+                    </span>
+                )
             )}
             {wrap ? (
                 <span

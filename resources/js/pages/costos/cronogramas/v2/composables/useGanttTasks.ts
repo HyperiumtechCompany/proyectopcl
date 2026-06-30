@@ -495,6 +495,7 @@ export function useGanttTasks(
                                     calendarSettings,
                                 ),
                                 calendarSettings,
+                                preserveRef.current,
                             );
                         }
                     }
@@ -509,6 +510,7 @@ export function useGanttTasks(
                         calendarSettings,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -558,6 +560,7 @@ export function useGanttTasks(
                         ...prev.slice(insertIdx),
                     ],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             return newId;
@@ -605,6 +608,7 @@ export function useGanttTasks(
                         ...prev.slice(insertIdx),
                     ],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             return newId;
@@ -624,6 +628,7 @@ export function useGanttTasks(
                 return recomputeHierarchy(
                     [...prev.slice(0, idx), ...prev.slice(end)],
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => {
@@ -654,6 +659,7 @@ export function useGanttTasks(
                         t.id === id ? { ...t, parent_id: sib.id } : t,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -673,6 +679,7 @@ export function useGanttTasks(
                         t.id === id ? { ...t, parent_id: parent.parent_id } : t,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
@@ -709,7 +716,7 @@ export function useGanttTasks(
                     ...currBlock,
                     ...prevSibBlock,
                     ...prev.slice(blockEnd),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
@@ -743,7 +750,7 @@ export function useGanttTasks(
                     ...nextSibBlock,
                     ...currBlock,
                     ...prev.slice(nextSibEnd),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
@@ -781,13 +788,14 @@ export function useGanttTasks(
                     id: idMap.get(t.id)!,
                     parent_id: t.parent_id !== null ? (idMap.get(t.parent_id) ?? t.parent_id) : null,
                     predecesoras: [],
+                    partida: '', // let recomputeOrder auto-generate to avoid duplicate codes
                 }));
 
                 return recomputeHierarchy([
                     ...prev.slice(0, end),
                     ...duplicated,
                     ...prev.slice(end),
-                ], calendarSettings);
+                ], calendarSettings, preserveRef.current);
             });
 
             setDirtyIds((prev) => new Set([...prev, newRootId]));
@@ -829,11 +837,30 @@ export function useGanttTasks(
                         calendarSettings,
                     ),
                     calendarSettings,
+                    preserveRef.current,
                 );
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },
         [calendarSettings, schedulingMode],
+    );
+
+    // ── Actualizar partidas de múltiples tareas en bloque ───────────────────
+    const batchUpdatePartidas = useCallback(
+        (updates: Array<{ id: number; partida: string }>) => {
+            const updateMap = new Map(updates.map((u) => [u.id, u.partida]));
+            setTasks((prev) =>
+                prev.map((t) =>
+                    updateMap.has(t.id) ? { ...t, partida: updateMap.get(t.id)! } : t,
+                ),
+            );
+            setDirtyIds((prev) => {
+                const next = new Set(prev);
+                updates.forEach((u) => next.add(u.id));
+                return next;
+            });
+        },
+        [],
     );
 
     // ── Guardar en API ───────────────────────────────────────────────────────
@@ -874,6 +901,7 @@ export function useGanttTasks(
                         : [],
                 })),
                 calendarSettings,
+                preserveRef.current,
             );
             reserveTemporaryIds(recomputed);
             setTasks(recomputed);
@@ -913,5 +941,6 @@ export function useGanttTasks(
         saveTasks,
         applyBarMove,
         importTasks,
+        batchUpdatePartidas,
     };
 }

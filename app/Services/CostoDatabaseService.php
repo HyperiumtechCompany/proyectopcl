@@ -351,6 +351,7 @@ class CostoDatabaseService
         $connection = DB::connection('costos_tenant');
 
         $this->ensureParcialRegularColumn();
+        $this->recalculateACUCategories($connection, $tenantPresupuestoId);
         $this->recalculateParciales($connection, $tenantPresupuestoId);
 
         // costo_directo = sum of all partida parciales (rows with unidad and metrado/precio > 0)
@@ -412,8 +413,54 @@ class CostoDatabaseService
     }
 
     /**
+     * Recalcula los costos por categoría de cada ACU sumando directamente sus componentes
+     * (sin redondeo extra por categoría). Esto garantiza que costo_unitario_total = ΣΣ(parcial_k)
+     * y que el total de insumos coincide con el costo directo del presupuesto.
+     */
+    public function recalculateACUCategories($connection, int $tenantPresupuestoId): void
+    {
+        $acus = $connection->table('presupuesto_acus')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->get();
+
+        foreach ($acus as $acu) {
+            $costoMo = (float) $connection->table('acu_mano_de_obra')->where('acu_id', $acu->id)->sum('parcial');
+            $costoMa = (float) $connection->table('acu_materiales')->where('acu_id', $acu->id)->sum('parcial');
+            $costoEq = (float) $connection->table('acu_equipos')->where('acu_id', $acu->id)->sum('parcial');
+            $costoSc = (float) $connection->table('acu_subcontratos')->where('acu_id', $acu->id)->sum('parcial');
+            $costoSp = (float) $connection->table('acu_subpartidas')->where('acu_id', $acu->id)->sum('parcial');
+
+            $changed = abs($costoMo - (float) $acu->costo_mano_obra) > 0.000001
+                || abs($costoMa - (float) $acu->costo_materiales) > 0.000001
+                || abs($costoEq - (float) $acu->costo_equipos) > 0.000001
+                || abs($costoSc - (float) $acu->costo_subcontratos) > 0.000001
+                || abs($costoSp - (float) $acu->costo_subpartidas) > 0.000001;
+
+            if ($changed) {
+                $connection->table('presupuesto_acus')->where('id', $acu->id)->update([
+                    'costo_mano_obra'    => $costoMo,
+                    'costo_materiales'   => $costoMa,
+                    'costo_equipos'      => $costoEq,
+                    'costo_subcontratos' => $costoSc,
+                    'costo_subpartidas'  => $costoSp,
+                    'updated_at'         => now(),
+                ]);
+
+                // Refresh costo_unitario_total (it may be a GENERATED column; re-read it)
+                $fresh = $connection->table('presupuesto_acus')->where('id', $acu->id)->first();
+                $newTotal = (float) ($fresh->costo_unitario_total ?? ($costoMo + $costoMa + $costoEq + $costoSc + $costoSp));
+
+                $connection->table('presupuesto_general')
+                    ->where('presupuesto_id', $tenantPresupuestoId)
+                    ->where('partida', $acu->partida)
+                    ->update(['precio_unitario' => $newTotal, 'updated_at' => now()]);
+            }
+        }
+    }
+
+    /**
      * Recalcula los parciales de las filas padre (títulos/subtítulos) de presupuesto_general.
-     * Las partidas (hojas): se conserva el parcial almacenado (viene del import o cálculo ACU).
+     * Las partidas (hojas): parcial = round(metrado × precio_unitario, 4).
      * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
      */
     public function recalculateParciales($connection, int $tenantPresupuestoId): void
@@ -437,7 +484,14 @@ class CostoDatabaseService
         $parciales = [];
         foreach ($rows as $row) {
             if (! in_array($row->partida, $parentCodes)) {
-                $parciales[$row->partida] = (float) ($row->parcial ?? 0);
+                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 4);
+                $parciales[$row->partida] = $newParcial;
+
+                if (abs($newParcial - (float) ($row->parcial ?? 0)) > 0.00001) {
+                    $connection->table('presupuesto_general')
+                        ->where('id', $row->id)
+                        ->update(['parcial' => $newParcial, 'updated_at' => now()]);
+                }
             }
         }
 
@@ -503,7 +557,7 @@ class CostoDatabaseService
                         $cant = (float) $row->cantidad;
                         $prec = (float) $insumo->costo_unitario;
                         $falc = (float) ($row->factor_desperdicio ?? 1);
-                        $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 4);
+                        $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 2);
 
                         $connection->table($table)
                             ->where('id', $row->id)
