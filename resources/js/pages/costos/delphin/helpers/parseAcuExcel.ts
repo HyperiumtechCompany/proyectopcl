@@ -279,11 +279,7 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
                         const joined = texts.map(normalize).join('|');
 
                         // ── 1. Column header row — detect BEFORE checking if a partida is open,
-                        //    because in Delphin Express the header row often comes before the
-                        //    first "PARTIDA:" block and would otherwise be skipped by the
-                        //    `if (!current) continue` guard below.
-                        //    colMap/colDetected are NOT reset per-partida: layout is fixed for
-                        //    the whole file, so one detection suffices for all partidas.
+                       
                         if (!colDetected && looksLikeColHeader(joined)) {
                             const detected = detectResourceCols(ws, r, maxC);
                             if (detected) { colMap = detected; colDetected = true; }
@@ -291,8 +287,7 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
                         }
 
                         // ── 2. Partida header ─────────────────────────────────
-                        // Primary: Delphin Express puts the dotted code in column D (index 3).
-                        // Fallback: scan all cells when "partida:" colon marker is present.
+                       
                         const _hasPartidaKw    = joined.includes('partida');
                         const _hasPartidaColon = joined.includes('partida:') || joined.includes('partida :');
                         const codInD           = (texts[COL_PARTIDA_D] ?? '').trim();

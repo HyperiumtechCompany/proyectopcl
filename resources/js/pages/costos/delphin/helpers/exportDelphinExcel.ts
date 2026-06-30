@@ -345,14 +345,14 @@ async function buildPresupuestoSheet(
     projectName: string,
     workbook: ExcelJS.Workbook
 ) {
-   
+
     const totalColumnas = 7;
-  const columnas = [
-        { key: 'no', width: 8 },          
-        { key: 'desc', width: 70 },       
-        { key: 'monomio', width: 18 },    
+    const columnas = [
+        { key: 'no', width: 8 },
+        { key: 'desc', width: 70 },
+        { key: 'monomio', width: 18 },
         { key: 'coeficiente', width: 22 },
-        { key: 'porcentaje', width: 22 }, 
+        { key: 'porcentaje', width: 22 },
     ];
 
     columnas.forEach((col, i) => {
@@ -574,12 +574,12 @@ async function buildFormulaPolinomicaSheet(
 ) {
     const totalColumnas = 5;
 
-    
-    ws.getColumn(1).width = 6;   
-    ws.getColumn(2).width = 55;  
-    ws.getColumn(3).width = 16;  
-    ws.getColumn(4).width = 16;  
-    ws.getColumn(5).width = 14;  
+
+    ws.getColumn(1).width = 6;
+    ws.getColumn(2).width = 55;
+    ws.getColumn(3).width = 16;
+    ws.getColumn(4).width = 16;
+    ws.getColumn(5).width = 14;
 
     const nombreProyecto = String(projectName || 'PROYECTO');
     let filaActual = await buildHeader(
@@ -594,10 +594,10 @@ async function buildFormulaPolinomicaSheet(
     formulaCell.font = { bold: true, size: 10, name: 'Calibri', color: { argb: 'FF1A3C5E' } };
     formulaCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
     formulaCell.border = {
-        top:    { style: 'medium', color: { argb: 'FF1F4E79' } },
+        top: { style: 'medium', color: { argb: 'FF1F4E79' } },
         bottom: { style: 'medium', color: { argb: 'FF1F4E79' } },
-        left:   { style: 'medium', color: { argb: 'FF1F4E79' } },
-        right:  { style: 'medium', color: { argb: 'FF1F4E79' } },
+        left: { style: 'medium', color: { argb: 'FF1F4E79' } },
+        right: { style: 'medium', color: { argb: 'FF1F4E79' } },
     };
     // Altura dinámica: ~18pt por cada línea estimada (1 línea cada 60 chars)
     const lineasEstimadas = Math.max(3, Math.ceil(formulaStr.length / 90));
@@ -683,11 +683,11 @@ async function buildFormulaPolinomicaSheet(
     // ── FILA TOTAL ────────────────────────────────────────────────────────
     const totalK = formulaData?.totalK ?? 0;
     [
-        { v: '',        col: 1 },
+        { v: '', col: 1 },
         { v: 'TOTAL K =', col: 2 },
-        { v: '',        col: 3 },
-        { v: totalK,    col: 4, fmt: '#,##0.000' },
-        { v: 100,       col: 5, fmt: '0.0' },
+        { v: '', col: 3 },
+        { v: totalK, col: 4, fmt: '#,##0.000' },
+        { v: 100, col: 5, fmt: '0.0' },
     ].forEach(({ v, col, fmt }) => {
         const cell = ws.getCell(filaActual, col);
         cell.value = v;
@@ -700,9 +700,9 @@ async function buildFormulaPolinomicaSheet(
     ws.getRow(filaActual).height = 22;
 
     // ── ANCHOS ADAPTATIVOS ────────────────────────────────────────────────
-   
+
     ws.getColumn(2).width = Math.min(80, Math.max(50, maxDescLen * 0.9));
-   
+
     ws.getColumn(1).width = 6;
     ws.getColumn(3).width = 14;
     ws.getColumn(4).width = 16;
@@ -738,9 +738,9 @@ export async function exportDelphinExcel(
     }
 
     //  NUEVO: Hoja de Fórmula Polinómica
-    if (content === 'formula_polinomica' && formulaData) { 
-        const ws = wb.addWorksheet('Fórmula Polinómica');   
-        await buildFormulaPolinomicaSheet(ws, formulaData, proyecto, projectName, wb); 
+    if (content === 'formula_polinomica' && formulaData) {
+        const ws = wb.addWorksheet('Fórmula Polinómica');
+        await buildFormulaPolinomicaSheet(ws, formulaData, proyecto, projectName, wb);
     }
 
     const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -756,9 +756,16 @@ export async function exportDelphinExcel(
     saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
 // ─── HOJA INSUMOS CONSOLIDADOS ────────────────────────────────────────────────
+const INSUMO_TYPE_LABELS: Record<string, string> = {
+    mano_de_obra: 'Mano de obra',
+    materiales: 'Materiales',
+    equipos: 'Equipos',
+    subcontratos: 'Sub contratos',
+    subpartidas: 'Sub partidas',
+};
+
 export async function exportInsumosConsolidadosExcel(
-    rows: any[],
-    typeLabel: string,
+    rowsByType: Record<string, any[]>,
     specialtyLabel: string,
     projectName: string,
     proyecto?: any,
@@ -767,25 +774,26 @@ export async function exportInsumosConsolidadosExcel(
     wb.creator = 'PCL Costos';
     wb.created = new Date();
 
-    const ws = wb.addWorksheet(typeLabel.slice(0, 31));
+    const ws = wb.addWorksheet('Insumos Consolidados'.slice(0, 31));
 
     const totalColumnas = 7;
-    ws.getColumn(1).width = 14;
-    ws.getColumn(2).width = 55;
-    ws.getColumn(3).width = 10;
-    ws.getColumn(4).width = 18;
-    ws.getColumn(5).width = 16;
-    ws.getColumn(6).width = 20;
-    ws.getColumn(7).width = 10;
+    // anchos provisionales — se recalculan abajo con datos reales
+    ws.getColumn(1).width = 12;
+    ws.getColumn(2).width = 40;
+    ws.getColumn(3).width = 8;
+    ws.getColumn(4).width = 14;
+    ws.getColumn(5).width = 12;
+    ws.getColumn(6).width = 16;
+    ws.getColumn(7).width = 8;
 
-    // ── Encabezado igual que las demás hojas ──────────────────────────────
+    // ── Encabezado ──────────────────────────────────────────────────────────
     let filaActual = await buildHeader(
         wb,
         ws,
         projectName,
         proyecto ?? {},
         totalColumnas,
-        `INSUMOS CONSOLIDADOS — ${typeLabel.toUpperCase()}`,
+        'INSUMOS CONSOLIDADOS',
     );
 
     // Subtítulo especialidad
@@ -795,66 +803,104 @@ export async function exportInsumosConsolidadosExcel(
     subCell.font = { bold: false, size: 9, name: 'Calibri', color: { argb: 'FF475569' } };
     subCell.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(filaActual).height = 16;
-    filaActual++;
+    filaActual += 2;
 
-    // ── Cabecera tabla ────────────────────────────────────────────────────
-    const headers = ['Código', 'Descripción consolidada', 'Und.', 'Cantidad', 'P. Ref.', 'Monto (S/)', 'Usos'];
-    headers.forEach((h, i) => {
-        const cell = ws.getCell(filaActual, i + 1);
-        cell.value = h;
-        fill(cell, C.headerBg);
-        font(cell, C.headerFg, true, 10);
-        cell.alignment = {
-            vertical: 'middle',
-            horizontal: i >= 3 ? 'right' : i === 0 ? 'center' : 'left',
-        };
-        border(cell);
-    });
-    ws.getRow(filaActual).height = 20;
-    filaActual++;
+    const typeOrder = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
+    let granTotal = 0;
 
-    // ── Datos ─────────────────────────────────────────────────────────────
-    let totalMonto = 0;
-    rows.forEach((row, idx) => {
-        const bg = idx % 2 === 1 ? C.altBg : C.leafBg;
-        const values = [
-            row.codigo || '-',
-            row.descripcion,
-            row.unidad,
-            row.cantidad,
-            row.precio,
-            row.parcial,
-            row.usos,
-        ];
-        values.forEach((v, i) => {
+    for (const type of typeOrder) {
+        const rows = rowsByType[type];
+        if (!rows || rows.length === 0) continue;
+
+        // ── Título de sección (mismo estilo que nivel 1 en otras hojas) ───
+        ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+        const sectionCell = ws.getCell(filaActual, 1);
+        sectionCell.value = INSUMO_TYPE_LABELS[type] ?? type;
+        fill(sectionCell, C.titulo0Bg);
+        font(sectionCell, C.titulo0Fg, true, 11);
+        sectionCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        border(sectionCell);
+        ws.getRow(filaActual).height = 20;
+        filaActual++;
+
+        // ── Cabecera tabla ───────────────────────────────────────────────
+        const headers = ['Código', 'Descripción consolidada', 'Und.', 'Cantidad', 'P. Ref.', 'Monto (S/)', 'Usos'];
+        headers.forEach((h, i) => {
+            const cell = ws.getCell(filaActual, i + 1);
+            cell.value = h;
+            fill(cell, C.headerBg);
+            font(cell, C.headerFg, true, 10);
+            cell.alignment = {
+                vertical: 'middle',
+                horizontal: i >= 3 ? 'right' : i === 0 ? 'center' : 'left',
+            };
+            border(cell);
+        });
+        ws.getRow(filaActual).height = 20;
+        filaActual++;
+
+        // ── Datos ────────────────────────────────────────────────────────
+        let subtotal = 0;
+        rows.forEach((row, idx) => {
+            const bg = idx % 2 === 1 ? C.altBg : C.leafBg;
+            const values = [
+                row.codigo || '-',
+                row.descripcion,
+                row.unidad,
+                row.cantidad,
+                row.precio,
+                row.parcial,
+                row.usos,
+            ];
+            values.forEach((v, i) => {
+                const cell = ws.getCell(filaActual, i + 1);
+                cell.value = v;
+                fill(cell, bg);
+                font(cell, C.leafFg, false, 10);
+                border(cell);
+                if (i === 3) {
+                    cell.numFmt = '#,##0.0000';
+                    cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                } else if (i === 4 || i === 5) {
+                    cell.numFmt = '#,##0.00';
+                    cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                } else if (i === 6) {
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else {
+                    cell.alignment = { vertical: 'middle' };
+                }
+            });
+            ws.getRow(filaActual).height = 16;
+            subtotal += row.parcial;
+            filaActual++;
+        });
+
+        // ── Subtotal de la sección ───────────────────────────────────────
+        ['', `SUBTOTAL ${INSUMO_TYPE_LABELS[type] ?? type}`, '', '', '', subtotal, ''].forEach((v, i) => {
             const cell = ws.getCell(filaActual, i + 1);
             cell.value = v;
-            fill(cell, bg);
-            font(cell, C.leafFg, false, 10);
+            fill(cell, C.titulo1Bg);
+            font(cell, C.titulo1Fg, true, 10);
             border(cell);
-            if (i === 3) {
-                cell.numFmt = '#,##0.0000';
-                cell.alignment = { horizontal: 'right', vertical: 'middle' };
-            } else if (i === 4 || i === 5) {
+            if (i === 5) {
                 cell.numFmt = '#,##0.00';
                 cell.alignment = { horizontal: 'right', vertical: 'middle' };
-            } else if (i === 6) {
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
             } else {
-                cell.alignment = { vertical: 'middle' };
+                cell.alignment = { horizontal: i === 1 ? 'right' : 'center', vertical: 'middle' };
             }
         });
-        ws.getRow(filaActual).height = 16;
-        totalMonto += row.parcial;
-        filaActual++;
-    });
+        ws.getRow(filaActual).height = 18;
+        filaActual += 2;
 
-    // ── Total ─────────────────────────────────────────────────────────────
-    ['', 'TOTAL', '', '', '', totalMonto, ''].forEach((v, i) => {
+        granTotal += subtotal;
+    }
+
+    // ── Total general ─────────────────────────────────────────────────────
+    ['', 'TOTAL GENERAL', '', '', '', granTotal, ''].forEach((v, i) => {
         const cell = ws.getCell(filaActual, i + 1);
         cell.value = v;
         fill(cell, C.totalBg);
-        font(cell, C.totalFg, true, 10);
+        font(cell, C.totalFg, true, 11);
         border(cell);
         if (i === 5) {
             cell.numFmt = '#,##0.00';
@@ -863,14 +909,43 @@ export async function exportInsumosConsolidadosExcel(
             cell.alignment = { horizontal: i === 1 ? 'right' : 'center', vertical: 'middle' };
         }
     });
-    ws.getRow(filaActual).height = 20;
+    ws.getRow(filaActual).height = 22;
 
-    ws.views = [{ state: 'frozen', ySplit: filaActual - rows.length - 1 }];
+    // ── Anchos adaptativos según contenido real (ANTES de guardar) ─────────
+    const colMaxLen = [0, 0, 0, 0, 0, 0, 0];
+    const headerLens = ['Código', 'Descripción consolidada', 'Und.', 'Cantidad', 'P. Ref.', 'Monto (S/)', 'Usos']
+        .map(h => h.length);
+    headerLens.forEach((len, i) => { colMaxLen[i] = len; });
 
+    for (const type of typeOrder) {
+        const rows = rowsByType[type];
+        if (!rows || rows.length === 0) continue;
+        for (const row of rows) {
+            colMaxLen[0] = Math.max(colMaxLen[0], String(row.codigo || '-').length);
+            colMaxLen[1] = Math.max(colMaxLen[1], String(row.descripcion || '').length);
+            colMaxLen[2] = Math.max(colMaxLen[2], String(row.unidad || '').length);
+            colMaxLen[3] = Math.max(colMaxLen[3], row.cantidad.toLocaleString('es-PE', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).length);
+            colMaxLen[4] = Math.max(colMaxLen[4], row.precio.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
+            colMaxLen[5] = Math.max(colMaxLen[5], row.parcial.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
+            colMaxLen[6] = Math.max(colMaxLen[6], String(row.usos).length);
+        }
+    }
+
+    ws.getColumn(1).width = Math.min(22, Math.max(10, colMaxLen[0] + 3));
+    ws.getColumn(2).width = Math.min(75, Math.max(35, colMaxLen[1] + 4));
+    ws.getColumn(3).width = Math.min(12, Math.max(7, colMaxLen[2] + 3));
+    ws.getColumn(4).width = Math.min(22, Math.max(12, colMaxLen[3] + 3));
+    ws.getColumn(5).width = Math.min(18, Math.max(10, colMaxLen[4] + 3));
+    ws.getColumn(6).width = Math.min(24, Math.max(14, colMaxLen[5] + 3));
+    ws.getColumn(7).width = Math.min(10, Math.max(7, colMaxLen[6] + 3));
+
+    ws.views = [{}];
+
+    // ── Guardar (AL FINAL, después de ajustar anchos) ───────────────────────
     const date = new Date().toLocaleDateString('es-PE', {
         day: '2-digit', month: '2-digit', year: 'numeric',
     });
-    const safeName = `${projectName}_Insumos_${typeLabel}_${date}`.replace(/[\s/\\?%*:|"<>]/g, '_');
+    const safeName = `${projectName}_Insumos_${specialtyLabel}_${date}`.replace(/[\s/\\?%*:|"<>]/g, '_');
     const buf = await wb.xlsx.writeBuffer();
     saveAs(
         new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
