@@ -755,6 +755,127 @@ export async function exportDelphinExcel(
     const buf = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+// ─── HOJA INSUMOS CONSOLIDADOS ────────────────────────────────────────────────
+export async function exportInsumosConsolidadosExcel(
+    rows: any[],
+    typeLabel: string,
+    specialtyLabel: string,
+    projectName: string,
+    proyecto?: any,
+): Promise<void> {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'PCL Costos';
+    wb.created = new Date();
 
+    const ws = wb.addWorksheet(typeLabel.slice(0, 31));
+
+    const totalColumnas = 7;
+    ws.getColumn(1).width = 14;
+    ws.getColumn(2).width = 55;
+    ws.getColumn(3).width = 10;
+    ws.getColumn(4).width = 18;
+    ws.getColumn(5).width = 16;
+    ws.getColumn(6).width = 20;
+    ws.getColumn(7).width = 10;
+
+    // ── Encabezado igual que las demás hojas ──────────────────────────────
+    let filaActual = await buildHeader(
+        wb,
+        ws,
+        projectName,
+        proyecto ?? {},
+        totalColumnas,
+        `INSUMOS CONSOLIDADOS — ${typeLabel.toUpperCase()}`,
+    );
+
+    // Subtítulo especialidad
+    ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
+    const subCell = ws.getCell(filaActual, 1);
+    subCell.value = specialtyLabel;
+    subCell.font = { bold: false, size: 9, name: 'Calibri', color: { argb: 'FF475569' } };
+    subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(filaActual).height = 16;
+    filaActual++;
+
+    // ── Cabecera tabla ────────────────────────────────────────────────────
+    const headers = ['Código', 'Descripción consolidada', 'Und.', 'Cantidad', 'P. Ref.', 'Monto (S/)', 'Usos'];
+    headers.forEach((h, i) => {
+        const cell = ws.getCell(filaActual, i + 1);
+        cell.value = h;
+        fill(cell, C.headerBg);
+        font(cell, C.headerFg, true, 10);
+        cell.alignment = {
+            vertical: 'middle',
+            horizontal: i >= 3 ? 'right' : i === 0 ? 'center' : 'left',
+        };
+        border(cell);
+    });
+    ws.getRow(filaActual).height = 20;
+    filaActual++;
+
+    // ── Datos ─────────────────────────────────────────────────────────────
+    let totalMonto = 0;
+    rows.forEach((row, idx) => {
+        const bg = idx % 2 === 1 ? C.altBg : C.leafBg;
+        const values = [
+            row.codigo || '-',
+            row.descripcion,
+            row.unidad,
+            row.cantidad,
+            row.precio,
+            row.parcial,
+            row.usos,
+        ];
+        values.forEach((v, i) => {
+            const cell = ws.getCell(filaActual, i + 1);
+            cell.value = v;
+            fill(cell, bg);
+            font(cell, C.leafFg, false, 10);
+            border(cell);
+            if (i === 3) {
+                cell.numFmt = '#,##0.0000';
+                cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            } else if (i === 4 || i === 5) {
+                cell.numFmt = '#,##0.00';
+                cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            } else if (i === 6) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            } else {
+                cell.alignment = { vertical: 'middle' };
+            }
+        });
+        ws.getRow(filaActual).height = 16;
+        totalMonto += row.parcial;
+        filaActual++;
+    });
+
+    // ── Total ─────────────────────────────────────────────────────────────
+    ['', 'TOTAL', '', '', '', totalMonto, ''].forEach((v, i) => {
+        const cell = ws.getCell(filaActual, i + 1);
+        cell.value = v;
+        fill(cell, C.totalBg);
+        font(cell, C.totalFg, true, 10);
+        border(cell);
+        if (i === 5) {
+            cell.numFmt = '#,##0.00';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        } else {
+            cell.alignment = { horizontal: i === 1 ? 'right' : 'center', vertical: 'middle' };
+        }
+    });
+    ws.getRow(filaActual).height = 20;
+
+    ws.views = [{ state: 'frozen', ySplit: filaActual - rows.length - 1 }];
+
+    const date = new Date().toLocaleDateString('es-PE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+    const safeName = `${projectName}_Insumos_${typeLabel}_${date}`.replace(/[\s/\\?%*:|"<>]/g, '_');
+    const buf = await wb.xlsx.writeBuffer();
+    saveAs(
+        new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `${safeName}.xlsx`,
+    );
+}
 
 
