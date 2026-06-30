@@ -32,7 +32,9 @@ export type RowAction =
     | 'collapse'
     | 'moveUp'
     | 'moveDown'
-    | 'duplicate';
+    | 'duplicate'
+    | 'copyWithAcu'
+    | 'pasteWithAcu';
 
 export const COLUMNS: ColumnDef[] = [
     { key: 'item_order',    label: 'N°',           type: 'readonly',     width: 42,  align: 'center', editable: false },

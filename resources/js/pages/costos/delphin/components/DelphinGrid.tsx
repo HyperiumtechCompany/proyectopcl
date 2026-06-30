@@ -43,6 +43,7 @@ interface Props {
     onCancelEdit:       () => void;
     onToggleExpand:     (id: number) => void;
     onKeyDown:          (e: React.KeyboardEvent<HTMLDivElement>) => void;
+    hasClipboard?:      boolean;
     onRowAction:        (taskId: number, action: RowAction) => void;
     onToggleHidden:     (key: string) => void;
     onToggleDescExpand: () => void;
@@ -234,6 +235,7 @@ export function DelphinGrid({
     onCancelEdit,
     onToggleExpand,
     onKeyDown,
+    hasClipboard = false,
     onRowAction,
     onToggleHidden,
     onToggleDescExpand,
@@ -394,6 +396,7 @@ export function DelphinGrid({
                     taskId={ctx.taskId}
                     isGroup={groupIds.has(ctx.taskId)}
                     isExpanded={expandedIds.has(ctx.taskId)}
+                    hasClipboard={hasClipboard}
                     onAction={handleCtxAction}
                     onClose={closeCtx}
                 />

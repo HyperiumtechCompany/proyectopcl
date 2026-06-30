@@ -248,6 +248,40 @@ export default function DelphinView({
         }
     }, [visibleTasks, startEdit]);
 
+    // ── ACU copy/paste clipboard (Delphin) ────────────────────────────────────
+    type DelphinClipboard = {
+        taskId: number;
+        descripcion: string;
+        unidad: string;
+        metrado: number;
+        precio_unitario: number;
+        acu: any | null;
+    };
+    const [delphinClipboard, setDelphinClipboard] = useState<DelphinClipboard | null>(null);
+    const pendingAcuPasteRef = useRef<(DelphinClipboard & { newTaskId: number }) | null>(null);
+
+    useEffect(() => {
+        const pending = pendingAcuPasteRef.current;
+        if (!pending) return;
+        const newTask = tasks.find((t) => t.id === pending.newTaskId);
+        if (!newTask?.partida) return;
+        pendingAcuPasteRef.current = null;
+        commitField(pending.newTaskId, 'descripcion', pending.descripcion);
+        commitField(pending.newTaskId, 'unidad', pending.unidad);
+        commitField(pending.newTaskId, 'metrado', pending.metrado);
+        if (pending.acu) {
+            const newPartida = normalizeCode(newTask.partida);
+            const result = localSaveAcu({ ...pending.acu, partida: newPartida, id: 0 });
+            if (result.success && result.acu) {
+                commitField(pending.newTaskId, 'precio_unitario', result.acu.costo_unitario_total);
+            } else {
+                commitField(pending.newTaskId, 'precio_unitario', pending.precio_unitario);
+            }
+        } else {
+            commitField(pending.newTaskId, 'precio_unitario', pending.precio_unitario);
+        }
+    }, [tasks]);
+
     const handleCommitField = useCallback(
         (id: number, field: string, value: any) => {
             commitField(id, field, value);
@@ -440,9 +474,36 @@ export default function DelphinView({
             case 'duplicate': setPendingSelect(duplicateTask(taskId)); break;
             case 'expand':
             case 'collapse': toggleExpand(taskId); break;
+            case 'copyWithAcu': {
+                const row = delphinRows.find((r) => r.id === taskId);
+                if (!row) break;
+                const normPartida = normalizeCode(row.partida ?? '');
+                const acu = acuRows.find((a: any) => normalizeCode(a.partida) === normPartida) ?? null;
+                setDelphinClipboard({
+                    taskId,
+                    descripcion: row.descripcion,
+                    unidad: row.unidad ?? '',
+                    metrado: row.metrado ?? 0,
+                    precio_unitario: row.precio_unitario ?? 0,
+                    acu,
+                });
+                toast(`Copiado: ${row.descripcion || normPartida}`, 'success');
+                break;
+            }
+            case 'pasteWithAcu': {
+                setDelphinClipboard((clip) => {
+                    if (!clip) return clip;
+                    const newTaskId = addTaskAfter(taskId);
+                    pendingAcuPasteRef.current = { ...clip, newTaskId };
+                    setPendingSelect(newTaskId);
+                    return clip;
+                });
+                break;
+            }
         }
     }, [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
-        moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect]);
+        moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect,
+        delphinRows, acuRows, setDelphinClipboard]);
 
     // ── Save functions ────────────────────────────────────────────────────────
     const swalDark = {
@@ -781,6 +842,7 @@ export default function DelphinView({
                                 onCancelEdit={cancelEdit}
                                 onToggleExpand={toggleExpand}
                                 onKeyDown={onKeyDown}
+                                hasClipboard={!!delphinClipboard}
                                 onRowAction={handleRowAction}
                                 onToggleHidden={handleToggleHidden}
                                 onToggleDescExpand={() => setDescExpanded((p) => !p)}

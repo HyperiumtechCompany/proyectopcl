@@ -32,6 +32,7 @@ interface BudgetState {
   selectedId: string | null;
   multiSelection: string[];
   clipboard: { action: 'copy' | 'cut'; partidaId: string; scope: CopyScope } | null;
+  acuClipboard: Record<string, any> | null;
   isDirty: boolean;
 
   // Actions
@@ -72,6 +73,7 @@ interface BudgetState {
 
   // Clipboard - granular copy/paste
   setClipboard: (action: 'copy' | 'cut' | null, partidaId?: string, scope?: CopyScope) => void;
+  setAcuClipboard: (data: Record<string, any> | null) => void;
   pasteNode: (targetParentId: string | null) => void;
   pasteAfter: (targetPartidaId: string) => void;
 
@@ -87,14 +89,14 @@ interface BudgetState {
 // ─────────────────────────────────────────────────────────────────────────────
 const getLevel = (partida: string) => (partida.match(/\./g) || []).length;
 
-const getParentPartida = (partida: string) => {
+export const getParentPartida = (partida: string) => {
   const parts = partida.split('.');
   if (parts.length <= 1) return null;
   parts.pop();
   return parts.join('.');
 };
 
-const generateNextCode = (parentCode: string | null, rows: BudgetItemRow[]) => {
+export const generateNextCode = (parentCode: string | null, rows: BudgetItemRow[]) => {
   if (!parentCode) {
     const rootCodes = rows
       .filter(r => getLevel(r.partida) === 0)
@@ -313,6 +315,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
   selectedId: null,
   multiSelection: [],
   clipboard: null,
+  acuClipboard: null,
   isDirty: false,
 
   setDirty: (dirty) => set({ isDirty: dirty }),
@@ -803,6 +806,8 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
 
   setClipboard: (action, partidaId, scope = 'node') =>
     set({ clipboard: action && partidaId ? { action, partidaId, scope } : null }),
+
+  setAcuClipboard: (data) => set({ acuClipboard: data }),
 
   pasteNode: (targetParentId) => {
     set(produce((state: BudgetState) => {

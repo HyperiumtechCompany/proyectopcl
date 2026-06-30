@@ -119,8 +119,7 @@ export function DelphinExportModal({
     const totalPres = rows
         .filter((r) => (r.nivel ?? 1) === 1)
         .reduce((s, r) => s + (r.parcial || r.metrado * r.precio_unitario || 0), 0);
-
-    // DESPUÉS
+        
     const doExport = async () => {
         setExporting(true);
         try {

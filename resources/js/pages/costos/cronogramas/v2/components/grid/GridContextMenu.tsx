@@ -5,6 +5,7 @@ import {
     ArrowUp,
     ChevronDown,
     ChevronRight,
+    Clipboard,
     Copy,
     CornerDownRight,
     IndentDecrease,
@@ -20,6 +21,7 @@ interface Props {
     taskId: number;
     isGroup: boolean;
     isExpanded: boolean;
+    hasClipboard?: boolean;
     onAction: (action: RowAction) => void;
     onClose: () => void;
 }
@@ -71,6 +73,7 @@ export function GridContextMenu({
     y,
     isGroup,
     isExpanded,
+    hasClipboard = false,
     onAction,
     onClose,
 }: Props) {
@@ -90,7 +93,7 @@ export function GridContextMenu({
 
     // Clamp so the menu never goes off-screen
     const menuW = 220;
-    const menuH = isGroup ? 390 : 340;
+    const menuH = isGroup ? 440 : 390;
     const left  = Math.min(x, window.innerWidth  - menuW - 8);
     const top   = Math.min(y, window.innerHeight - menuH - 8);
 
@@ -121,6 +124,22 @@ export function GridContextMenu({
                 label="Duplicar fila"
                 shortcut="Ctrl+D"
                 onClick={() => act('duplicate')}
+            />
+
+            <Sep />
+
+            {/* Copiar / Pegar con ACU */}
+            <SectionLabel>Copiar / Pegar + ACU</SectionLabel>
+            <Item
+                icon={<Copy size={13} />}
+                label="Copiar partida + ACU"
+                onClick={() => act('copyWithAcu')}
+            />
+            <Item
+                icon={<Clipboard size={13} />}
+                label="Pegar partida + ACU"
+                disabled={!hasClipboard}
+                onClick={() => act('pasteWithAcu')}
             />
 
             <Sep />

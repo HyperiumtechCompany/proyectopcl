@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import type { BudgetItemRow, CopyScope } from '../stores/budgetStore';
-import { useBudgetStore } from '../stores/budgetStore';
+import { useBudgetStore, generateNextCode, getParentPartida } from '../stores/budgetStore';
 
 const fmt = (n: number, d = 2) =>
     n?.toLocaleString('es-PE', {
@@ -174,16 +174,20 @@ interface ContextMenuState {
 const ContextMenu = ({
     ctx,
     onClose,
+    acuRows,
+    onApplyAcu,
 }: {
     ctx: ContextMenuState;
     onClose: () => void;
+    acuRows?: any[];
+    onApplyAcu?: (partida: string, acuData: any) => void;
 }) => {
     const {
         addNode, addRowAfter, moveUp, moveDown,
         setClipboard, pasteNode, pasteAfter,
         deleteRow, calculateTree,
         convertToTitle, convertToPartida,
-        clipboard,
+        clipboard, setAcuClipboard,
     } = useBudgetStore.getState();
 
     const item = ctx.item;
@@ -191,6 +195,8 @@ const ContextMenu = ({
 
     const menuRef = React.useRef<HTMLDivElement>(null);
     const [pos, setPos] = React.useState({ top: ctx.y, left: ctx.x });
+
+    // Adjust position to stay inside viewport
     React.useEffect(() => {
         if (!menuRef.current) return;
         const { offsetWidth: w, offsetHeight: h } = menuRef.current;
@@ -201,6 +207,89 @@ const ContextMenu = ({
             left: ctx.x + w > vw ? Math.max(0, ctx.x - w) : ctx.x,
         });
     }, [ctx.x, ctx.y]);
+
+    // Close on click outside or Escape. Use capture so the event fires even
+    // when the user right-clicks on a row (which would trigger a NEW context
+    // menu — without capture the backdrop's own handler would block that row).
+    React.useEffect(() => {
+        const handleMouseDown = (e: MouseEvent) => {
+            if (menuRef.current?.contains(e.target as Node)) return;
+            onClose();
+        };
+        // Prevent the browser's native context menu while ours is open
+        const handleContextMenu = (e: MouseEvent) => {
+            if (menuRef.current?.contains(e.target as Node)) return;
+            e.preventDefault();
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('mousedown', handleMouseDown, true);
+        document.addEventListener('contextmenu', handleContextMenu, true);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown, true);
+            document.removeEventListener('contextmenu', handleContextMenu, true);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onClose]);
+
+    // ── ACU-aware copy helpers ────────────────────────────────────────────────
+    const captureAcuClipboard = (partidas: string[]) => {
+        if (!acuRows || acuRows.length === 0) { setAcuClipboard(null); return; }
+        const acuMap: Record<string, any> = {};
+        partidas.forEach((p) => {
+            const acu = acuRows.find((a: any) => a.partida === p);
+            if (acu) acuMap[p] = acu;
+        });
+        setAcuClipboard(Object.keys(acuMap).length > 0 ? acuMap : null);
+    };
+
+    const handleCopyWithAcu = (scope: CopyScope) => {
+        const { rows } = useBudgetStore.getState();
+        setClipboard('copy', item.partida, scope);
+        const partidas = scope === 'row'
+            ? [item.partida]
+            : rows.filter((r) => r.partida === item.partida || r.partida.startsWith(`${item.partida}.`)).map((r) => r.partida);
+        captureAcuClipboard(partidas);
+    };
+
+    const handleCutWithAcu = () => {
+        const { rows } = useBudgetStore.getState();
+        setClipboard('cut', item.partida, 'node');
+        const partidas = rows
+            .filter((r) => r.partida === item.partida || r.partida.startsWith(`${item.partida}.`))
+            .map((r) => r.partida);
+        captureAcuClipboard(partidas);
+    };
+
+    // ── ACU-aware paste helpers ───────────────────────────────────────────────
+    const applyAcuAfterPaste = (originalBase: string, newBaseCode: string) => {
+        const { acuClipboard } = useBudgetStore.getState();
+        if (!acuClipboard || !onApplyAcu) return;
+        Object.entries(acuClipboard).forEach(([oldCode, acuData]) => {
+            const suffix = oldCode.substring(originalBase.length);
+            const newCode = `${newBaseCode}${suffix}`;
+            onApplyAcu(newCode, { ...(acuData as any), partida: newCode, id: 0 });
+        });
+    };
+
+    const handlePasteAsChild = () => {
+        const state = useBudgetStore.getState();
+        if (!state.clipboard) return;
+        const newBaseCode = generateNextCode(item.partida, state.rows);
+        pasteNode(item.partida);
+        applyAcuAfterPaste(state.clipboard.partidaId, newBaseCode);
+    };
+
+    const handlePasteAfterSibling = () => {
+        const state = useBudgetStore.getState();
+        if (!state.clipboard) return;
+        const targetParent = getParentPartida(item.partida);
+        const newBaseCode = generateNextCode(targetParent, state.rows);
+        pasteAfter(item.partida);
+        applyAcuAfterPaste(state.clipboard.partidaId, newBaseCode);
+    };
 
     const btn = (label: string, fn: () => void, color?: string, disabled?: boolean) => (
         <button
@@ -219,40 +308,37 @@ const ContextMenu = ({
     );
 
     return (
-        <>
-            <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-            <div ref={menuRef} className="fixed z-50 min-w-[210px] rounded-lg border border-slate-600 bg-slate-800 py-1.5 text-sm shadow-2xl shadow-black/60" style={{ top: pos.top, left: pos.left }}>
-                {label('Insertar')}
-                {btn('+ Hijo → Título', () => addNode(item.partida, 'titulo'))}
-                {btn('+ Hijo → Partida', () => addNode(item.partida, 'partida'))}
-                {btn('+ Fila abajo (sibling)', () => addRowAfter(item.partida, 'partida'))}
-                {divider('d1')}
+        <div ref={menuRef} className="fixed z-50 min-w-[210px] rounded-lg border border-slate-600 bg-slate-800 py-1.5 text-sm shadow-2xl shadow-black/60" style={{ top: pos.top, left: pos.left }}>
+            {label('Insertar')}
+            {btn('+ Hijo → Título', () => addNode(item.partida, 'titulo'))}
+            {btn('+ Hijo → Partida', () => addNode(item.partida, 'partida'))}
+            {btn('+ Fila abajo (sibling)', () => addRowAfter(item.partida, 'partida'))}
+            {divider('d1')}
 
-                {label('Mover')}
-                {btn('↑  Mover arriba', () => moveUp(item.partida))}
-                {btn('↓  Mover abajo', () => moveDown(item.partida))}
-                {divider('d2')}
+            {label('Mover')}
+            {btn('↑  Mover arriba', () => moveUp(item.partida))}
+            {btn('↓  Mover abajo', () => moveDown(item.partida))}
+            {divider('d2')}
 
-                {label('Copiar / Pegar')}
-                {btn('📋 Copiar nodo completo', () => setClipboard('copy', item.partida, 'node'))}
-                {btn('📋 Copiar solo hijos', () => setClipboard('copy', item.partida, 'children'))}
-                {btn('📋 Copiar esta fila', () => setClipboard('copy', item.partida, 'row'))}
-                {btn('✂️  Cortar nodo completo', () => setClipboard('cut', item.partida, 'node'), 'text-amber-400 hover:text-amber-300')}
-                {divider('d3')}
-                {btn('📌 Pegar como hijo', () => pasteNode(item.partida), 'text-emerald-400 hover:text-emerald-300', !clipboard)}
-                {btn('📌 Pegar después (sibling)', () => pasteAfter(item.partida), 'text-emerald-400 hover:text-emerald-300', !clipboard)}
-                {divider('d4')}
+            {label('Copiar / Pegar')}
+            {btn('📋 Copiar nodo+ACU', () => handleCopyWithAcu('node'))}
+            {btn('📋 Copiar solo hijos', () => setClipboard('copy', item.partida, 'children'))}
+            {btn('📋 Copiar fila+ACU', () => handleCopyWithAcu('row'))}
+            {btn('✂️  Cortar nodo+ACU', handleCutWithAcu, 'text-amber-400 hover:text-amber-300')}
+            {divider('d3')}
+            {btn('📌 Pegar como hijo', handlePasteAsChild, 'text-emerald-400 hover:text-emerald-300', !clipboard)}
+            {btn('📌 Pegar después (sibling)', handlePasteAfterSibling, 'text-emerald-400 hover:text-emerald-300', !clipboard)}
+            {divider('d4')}
 
-                {label('Conversión')}
-                {!isTitle && btn('🔼 Convertir a Título', () => convertToTitle(item.partida), 'text-sky-400 hover:text-sky-300')}
-                {isTitle && !item._hasChildren && btn('🔽 Convertir a Partida', () => convertToPartida(item.partida), 'text-orange-400 hover:text-orange-300')}
-                {divider('d5')}
+            {label('Conversión')}
+            {!isTitle && btn('🔼 Convertir a Título', () => convertToTitle(item.partida), 'text-sky-400 hover:text-sky-300')}
+            {isTitle && !item._hasChildren && btn('🔽 Convertir a Partida', () => convertToPartida(item.partida), 'text-orange-400 hover:text-orange-300')}
+            {divider('d5')}
 
-                {btn('⚡ Forzar Cálculo', () => calculateTree(), 'text-emerald-500 hover:text-emerald-400')}
-                {btn('🔢 Generar Ítems', () => useBudgetStore.getState().renumberItems(), 'text-amber-500 hover:text-amber-400')}
-                {btn('🗑  Eliminar rama', () => deleteRow(item.partida), 'text-red-500 hover:text-red-400')}
-            </div>
-        </>
+            {btn('⚡ Forzar Cálculo', () => calculateTree(), 'text-emerald-500 hover:text-emerald-400')}
+            {btn('🔢 Generar Ítems', () => useBudgetStore.getState().renumberItems(), 'text-amber-500 hover:text-amber-400')}
+            {btn('🗑  Eliminar rama', () => deleteRow(item.partida), 'text-red-500 hover:text-red-400')}
+        </div>
     );
 };
 
@@ -356,9 +442,11 @@ const MemoizedRow = React.memo(({
 // ─────────────────────────────────────────────────────────────────────────────
 interface BudgetTreeProps {
     onRowSelect?: (id: string, isPartida: boolean) => void;
+    acuRows?: any[];
+    onApplyAcu?: (partida: string, acuData: any) => void;
 }
 
-export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
+export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect, acuRows, onApplyAcu }) => {
     const getVisibleRows = useBudgetStore((s) => s.getVisibleRows);
     const storeRows = useBudgetStore((s) => s.rows);
     const searchQuery = useBudgetStore((s) => s.searchQuery);
@@ -693,7 +781,12 @@ export const BudgetTree: React.FC<BudgetTreeProps> = ({ onRowSelect }) => {
 
             {/* Context Menu */}
             {contextMenu && (
-                <ContextMenu ctx={contextMenu} onClose={() => setContextMenu(null)} />
+                <ContextMenu
+                    ctx={contextMenu}
+                    onClose={() => setContextMenu(null)}
+                    acuRows={acuRows}
+                    onApplyAcu={onApplyAcu}
+                />
             )}
 
             {/* Floating multi-selection toolbar */}

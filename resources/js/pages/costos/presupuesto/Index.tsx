@@ -17,7 +17,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import { Download } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
@@ -305,6 +305,17 @@ export default function Index() {
         return result;
     };
 
+    // Called by BudgetTree after paste when there is ACU clipboard data.
+    // Applies the remapped ACU locally (no DB call) so it appears immediately
+    // in the panel and is included in the next global save.
+    const handleApplyAcu = useCallback((partida: string, acuData: Record<string, any>) => {
+        const result = localSaveAcu({ ...acuData, partida, id: 0 });
+        if (result.success && result.acu) {
+            updateCell(partida, 'precio_unitario', result.acu.costo_unitario_total);
+            setDirty(true);
+        }
+    }, [localSaveAcu, updateCell, setDirty]);
+
     const { remuneracionesRows, remuneracionesLoading, saveRemuneracion } =
         usePresupuestoRemuneraciones({
             projectId: project.id,
@@ -558,7 +569,11 @@ export default function Index() {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <BudgetTree onRowSelect={(id) => setSelectedId(id)} />
+                                                <BudgetTree
+                                                    onRowSelect={(id) => setSelectedId(id)}
+                                                    acuRows={acuRows}
+                                                    onApplyAcu={handleApplyAcu}
+                                                />
                                             )}
                                         </div>
 
