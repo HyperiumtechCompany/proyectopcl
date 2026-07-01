@@ -177,9 +177,7 @@ export function DelphinExportModal({
                     <span className="text-sm font-semibold">Seleccionar Especialidades</span>
                 </div>
                 <button
-                    className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
-                    onClick={onClose}
-                >
+                    className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors" onClick={onClose}>
                     <X size={15} />
                 </button>
             </div>
