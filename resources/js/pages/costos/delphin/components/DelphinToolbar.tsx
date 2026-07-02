@@ -14,6 +14,7 @@ import {
     ChevronsUpDown,
     Copy,
     CornerDownRight,
+    Eraser,
     GitBranch,
     Hand,
     IndentDecrease,
@@ -56,6 +57,7 @@ interface Props {
     onAddRow: () => void;
     onAddChild: () => void;
     onDeleteRow: () => void;
+    onResetAll: () => void;
     onIndent: () => void;
     onOutdent: () => void;
     onMoveUp: () => void;
@@ -333,9 +335,9 @@ function ConfigDropdown({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export function DelphinToolbar({
+export const DelphinToolbar = React.memo(function DelphinToolbar({
     mode, budgetView, subView, onModeChange, onBudgetView, onSubView,
-    selectedRowId, onAddRow, onAddChild, onDeleteRow, onIndent, onOutdent,
+    selectedRowId, onAddRow, onAddChild, onDeleteRow, onResetAll, onIndent, onOutdent,
     onMoveUp, onMoveDown, onDuplicate, onExpandAll, onCollapseAll,
     zoomLevel, showCriticalPath, schedulingMode, ganttBarLabel,
     onZoomChange, onToggleCritical, onSchedulingMode, onBarLabelChange,
@@ -496,6 +498,7 @@ export function DelphinToolbar({
                     <IconBtn icon={<Plus size={13} />} tooltip="Agregar fila  ·  Insert" onClick={onAddRow} />
                     <IconBtn icon={<CornerDownRight size={13} />} tooltip="Agregar sub-fila  ·  Ctrl+Insert" disabled={noSel} onClick={onAddChild} />
                     <IconBtn icon={<Trash2 size={13} />} tooltip="Eliminar fila  ·  Supr" variant="danger" disabled={noSel} onClick={onDeleteRow} />
+                    <IconBtn icon={<Eraser size={13} />} tooltip="Vaciar presupuesto completo (ACUs, GG, cronograma)" variant="danger" onClick={onResetAll} />
                     <Divider />
                     <IconBtn icon={<IndentIncrease size={13} />} tooltip="Indentar  ·  Tab" disabled={noSel} onClick={onIndent} />
                     <IconBtn icon={<IndentDecrease size={13} />} tooltip="Outdentar  ·  Shift+Tab" disabled={noSel} onClick={onOutdent} />
@@ -646,4 +649,4 @@ export function DelphinToolbar({
             </div>
         </div>
     );
-}
+});

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Command } from 'cmdk';
+import Decimal from 'decimal.js';
 import {
     ChevronRight,
     ChevronDown,
@@ -36,8 +37,8 @@ const fmtCantidad = (n: number | undefined | null) => {
     const rounded = Math.round(value);
     const isInt = Math.abs(value - rounded) < 1e-9;
     return value.toLocaleString('es-PE', {
-        minimumFractionDigits: isInt ? 0 : 3,
-        maximumFractionDigits: isInt ? 0 : 3,
+        minimumFractionDigits: isInt ? 0 : 4,
+        maximumFractionDigits: isInt ? 0 : 4,
     });
 };
 
@@ -74,6 +75,13 @@ const ACU_GRID_TEMPLATE = '7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem';
 const isHerramientasRow = (item: ACUComponenteRow) =>
     (item.descripcion || '').toLowerCase().includes('herramienta');
 
+// Redondeo a 4 decimales para valores de "cantidad" ingresados manualmente
+// (materiales, subcontratos, subpartidas, % de herramientas).
+const round4 = (n: number) => new Decimal(n).toDecimalPlaces(4).toNumber();
+
+// Cantidad calculada (mano de obra/equipos vía recursos/rendimiento) mantiene
+// precisión completa: cantidad = (8 / rendimiento) * recursos, sin redondeo
+// intermedio — el parcial final se redondea a 2 decimales en decimalMul.
 const computeCantidadFromRecursosBase = (
     recursos: number,
     perDay: boolean,
@@ -790,10 +798,12 @@ function EditableAcuCell({
     value,
     onUpdate,
     className,
+    decimals = 2,
 }: {
     value: number;
     onUpdate: (val: number) => void;
     className?: string;
+    decimals?: number;
 }) {
     const [val, setVal] = useState(value?.toString() || '');
     const [isEditing, setIsEditing] = useState(false);
@@ -841,7 +851,7 @@ function EditableAcuCell({
                 setIsEditing(true);
             }}
         >
-            {value >= 0 ? fmt(value, 2) : '-'}
+            {value >= 0 ? fmt(value, decimals) : '-'}
         </div>
     );
 }
@@ -1099,6 +1109,7 @@ function AcuSection({
                                         ) : (
                                             <EditableAcuCell
                                                 value={item.cantidad ?? 0}
+                                                decimals={4}
                                                 onUpdate={(v) =>
                                                     onUpdateItem(
                                                         type,
@@ -1216,7 +1227,7 @@ interface AcuPanelProps {
     ) => void;
 }
 
-export function AcuPanel({
+export const AcuPanel = React.memo(function AcuPanel({
     acuLoading,
     selectedAcu,
     selectedCell,
@@ -1271,9 +1282,7 @@ export function AcuPanel({
                     if (isHerramientasRow(item)) return item;
                     const rec = Number(item.recursos ?? 0);
                     if (rec <= 0) return item; // no recursos data — keep stored cantidad
-                    const qty = perDay
-                        ? (rec * hoursPerDay) / loadedRendimiento
-                        : rec / loadedRendimiento;
+                    const qty = computeCantidadFromRecursosBase(rec, perDay, hoursPerDay, loadedRendimiento);
                     return { ...item, recursos: rec, cantidad: qty };
                 });
 
@@ -1436,9 +1445,11 @@ export function AcuPanel({
             } else if (isHerramientas && field === 'cantidad') {
                 arr[index] = {
                     ...currentItem,
-                    cantidad: Number(value) || 0,
+                    cantidad: round4(Number(value) || 0),
                     precio_hora: prev.costo_mano_obra || 0,
                 };
+            } else if (field === 'cantidad') {
+                arr[index] = { ...currentItem, cantidad: round4(Number(value) || 0) };
             } else {
                 arr[index] = { ...currentItem, [field]: value };
             }
@@ -1808,4 +1819,4 @@ export function AcuPanel({
             />
         </div>
     );
-}
+});

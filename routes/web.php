@@ -7,10 +7,10 @@ use App\Http\Controllers\CostoModuleController;
 use App\Http\Controllers\CostoProjectController;
 use App\Http\Controllers\CronogramaController;
 use App\Http\Controllers\CronogramaV2Controller;
-use App\Http\Controllers\DelphinController;
 use App\Http\Controllers\CronoMaterialesController;
 use App\Http\Controllers\CronoValorizadoController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DelphinController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
@@ -342,7 +342,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/cronograma/materiales/save', [CronoMaterialesController::class, 'store'])->name('proyectos.cronograma.materiales.save');
     Route::delete('/cronograma/materiales/destroy', [CronoMaterialesController::class, 'destroy'])->name('proyectos.cronograma.materiales.destroy');
     Route::post('/module/crono_valorizado/save', [CronoValorizadoController::class, 'store'])->name('proyectos.cronograma.valorizado.save');
-     // 👇 NUEVA RUTA PARA OBTENER DATOS DE MATERIALES (API)
+    // 👇 NUEVA RUTA PARA OBTENER DATOS DE MATERIALES (API)
     Route::get('/module/crono_materiales/data', [CronoMaterialesController::class, 'getData'])->name('proyectos.cronograma.materiales.data');
     Route::get('/module/crono_materiales/data', [CronoMaterialesController::class, 'getData'])->name('proyectos.cronograma.materiales.data');
     Route::delete('/cronograma/valorizado/destroy', [CronoValorizadoController::class, 'destroy'])->name('proyectos.cronograma.valorizado.destroy');
@@ -358,6 +358,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ─── Delphin (Presupuesto + Cronograma CPM fusionados) ────────────────
     Route::get('/module/delphin', [DelphinController::class, 'index'])->name('proyectos.delphin.index');
+    Route::delete('/module/delphin/reset', [DelphinController::class, 'resetPresupuesto'])->name('proyectos.delphin.reset');
 
     // ETTS — Redirecciones heredadas (opcional)
     Route::get('/costos/{costoProject}/ettp/test', [EttpController::class, 'testMetrados']);

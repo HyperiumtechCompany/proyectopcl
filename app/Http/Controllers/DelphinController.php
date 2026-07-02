@@ -12,65 +12,106 @@ class DelphinController extends Controller
 {
     public function __construct(private readonly CostoDatabaseService $dbService) {}
 
-   // GET /module/delphin?project={id}
-public function index(Request $request)
-{
-    $projectId = $request->query('project');
-    if (! $projectId) {
-        abort(404, 'No se recibió el ID del proyecto');
+    // GET /module/delphin?project={id}
+    public function index(Request $request)
+    {
+        $projectId = $request->query('project');
+        if (! $projectId) {
+            abort(404, 'No se recibió el ID del proyecto');
+        }
+
+        $costoProject = CostoProject::findOrFail($projectId);
+        $this->dbService->setTenantConnection($costoProject->database_name);
+
+        $presupuestoId = $this->resolvePresupuestoId();
+
+        $rows = DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->orderByRaw('COALESCE(item_order, 999999), id')
+            ->get()
+            ->map(fn ($r) => (array) $r)
+            ->toArray();
+
+        $tasks = $this->fetchTasks($presupuestoId);
+
+        $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
+
+        $projectData = [
+            'nombre' => $costoProject->nombre ?? 'PROYECTO',
+            'codigo_cui' => $costoProject->codigo_cui ?? '-',
+            'codigo_local' => $costoProject->codigo_local ?? '-',
+            'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
+            'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
+            'propietario' => $costoProject->unidad_ejecutora ?? '-',
+            'modulo' => 'GENERAL',
+            'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq
+                ? asset('storage/'.ltrim($costoProject->plantilla_logo_izq, '/'))
+                : null,
+            'plantilla_logo_der_url' => $costoProject->plantilla_logo_der
+                ? asset('storage/'.ltrim($costoProject->plantilla_logo_der, '/'))
+                : null,
+
+            'plantilla_logo_izq_base64' => $costoProject->plantilla_logo_izq
+                ? $this->getImageBase64($costoProject->plantilla_logo_izq)
+                : null,
+            'plantilla_logo_der_base64' => $costoProject->plantilla_logo_der
+                ? $this->getImageBase64($costoProject->plantilla_logo_der)
+                : null,
+        ];
+
+        return Inertia::render('costos/delphin/DelphinView', [
+            'project' => (string) $projectId,
+            'project_id_int' => (int) $projectId,
+            'project_name' => $costoProject->nombre ?? '',
+            'initialRows' => $rows,
+            'initialTasks' => $tasks,
+            'projectParams' => $projectParams ? (array) $projectParams : null,
+            'projectData' => $projectData,
+        ]);
     }
 
-    $costoProject = CostoProject::findOrFail($projectId);
-    $this->dbService->setTenantConnection($costoProject->database_name);
+    // DELETE /module/delphin/reset?project={id}
+    public function resetPresupuesto(Request $request)
+    {
+        $projectId = $request->query('project');
+        if (! $projectId) {
+            abort(404, 'No se recibió el ID del proyecto');
+        }
 
-    $presupuestoId = $this->resolvePresupuestoId();
+        $costoProject = CostoProject::findOrFail($projectId);
+        $this->dbService->setTenantConnection($costoProject->database_name);
+        $presupuestoId = $this->resolvePresupuestoId();
 
-    $rows = DB::connection('costos_tenant')
-        ->table('presupuesto_general')
-        ->where('presupuesto_id', $presupuestoId)
-        ->orderByRaw('COALESCE(item_order, 999999), id')
-        ->get()
-        ->map(fn ($r) => (array) $r)
-        ->toArray();
+        $tablas = [
+            'presupuesto_general',
+            'presupuesto_indices',
+            'presupuesto_acus',        // cascade FK borra acu_mano_de_obra/materiales/equipos/subcontratos/subpartidas
+            'gg_fijos',
+            'gg_fijos_fianzas',
+            'gg_fijos_polizas',
+            'gg_variables',
+            'presupuesto_remuneraciones',
+            'gg_supervision',
+            'supervision_gg_detalle',
+            'gg_control_concurrente',
+            'gg_consolidado',
+            'cronograma_general',
+            'cronograma_valorizado',
+            'cronograma_materiales',
+        ];
 
-    $tasks = $this->fetchTasks($presupuestoId);
+        DB::connection('costos_tenant')->transaction(function () use ($tablas, $presupuestoId) {
+            foreach ($tablas as $tabla) {
+                DB::connection('costos_tenant')->table($tabla)->where('presupuesto_id', $presupuestoId)->delete();
+            }
+        });
 
-    $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
-
-$projectData = [
-    'nombre' => $costoProject->nombre ?? 'PROYECTO',
-    'codigo_cui' => $costoProject->codigo_cui ?? '-',
-    'codigo_local' => $costoProject->codigo_local ?? '-',
-    'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
-    'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
-    'propietario' => $costoProject->unidad_ejecutora ?? '-',
-    'modulo' => 'GENERAL',
-    'plantilla_logo_izq_url' => $costoProject->plantilla_logo_izq 
-        ? asset('storage/' . ltrim($costoProject->plantilla_logo_izq, '/')) 
-        : null,
-    'plantilla_logo_der_url' => $costoProject->plantilla_logo_der 
-        ? asset('storage/' . ltrim($costoProject->plantilla_logo_der, '/')) 
-        : null,
-   
-    'plantilla_logo_izq_base64' => $costoProject->plantilla_logo_izq 
-        ? $this->getImageBase64($costoProject->plantilla_logo_izq) 
-        : null,
-    'plantilla_logo_der_base64' => $costoProject->plantilla_logo_der 
-        ? $this->getImageBase64($costoProject->plantilla_logo_der) 
-        : null,
-];
-
-    return Inertia::render('costos/delphin/DelphinView', [
-        'project'        => (string) $projectId,
-        'project_id_int' => (int) $projectId,
-        'project_name'   => $costoProject->nombre ?? '',
-        'initialRows'    => $rows,
-        'initialTasks'   => $tasks,
-        'projectParams'  => $projectParams ? (array) $projectParams : null,
-        'projectData'    => $projectData, 
-    ]);
-}
-    
+        return response()->json([
+            'status' => 'success',
+            'message' => 'El presupuesto fue vaciado por completo. El catálogo de insumos no fue afectado.',
+        ]);
+    }
 
     private function resolvePresupuestoId(): int
     {
@@ -128,8 +169,8 @@ $projectData = [
                 } else {
                     $predecesoras[] = [
                         'taskId' => (int) ($link['source'] ?? 0),
-                        'tipo'   => $typeMap[$link['type'] ?? '0'] ?? 'FC',
-                        'lag'    => (int) ($link['lag'] ?? 0),
+                        'tipo' => $typeMap[$link['type'] ?? '0'] ?? 'FC',
+                        'lag' => (int) ($link['lag'] ?? 0),
                     ];
                 }
             }
@@ -150,37 +191,39 @@ $projectData = [
             : null;
 
         if ($parentId === null && str_contains($partida, '.')) {
-            $parts     = explode('.', $partida);
+            $parts = explode('.', $partida);
             array_pop($parts);
             $parentPartida = implode('.', $parts);
-            $parentId  = isset($partidaToId[$parentPartida])
+            $parentId = isset($partidaToId[$parentPartida])
                 ? (int) $partidaToId[$parentPartida]
                 : null;
         }
 
         return [
-            'id'            => $row->id,
-            'parent_id'     => $parentId,
-            'nivel'         => $nivel,
-            'item_order'    => (int) ($row->item_order ?? 0),
-            'partida'       => $partida,
-            'descripcion'   => $row->descripcion ?? '',
+            'id' => $row->id,
+            'parent_id' => $parentId,
+            'nivel' => $nivel,
+            'item_order' => (int) ($row->item_order ?? 0),
+            'partida' => $partida,
+            'descripcion' => $row->descripcion ?? '',
             'duracion_dias' => (int) ($row->duracion_dias ?? 0),
-            'fecha_inicio'  => $row->fecha_inicio,
-            'fecha_fin'     => $row->fecha_fin,
-            'avance'        => (float) ($row->avance ?? 0),
-            'predecesoras'  => $predecesoras,
-            'presupuesto'   => (float) ($row->presupuesto ?? 0),
+            'fecha_inicio' => $row->fecha_inicio,
+            'fecha_fin' => $row->fecha_fin,
+            'avance' => (float) ($row->avance ?? 0),
+            'predecesoras' => $predecesoras,
+            'presupuesto' => (float) ($row->presupuesto ?? 0),
         ];
     }
-     private function getImageBase64($path): ?string
+
+    private function getImageBase64($path): ?string
     {
-        $fullPath = storage_path('app/public/' . ltrim($path, '/'));
-        if (!file_exists($fullPath)) {
+        $fullPath = storage_path('app/public/'.ltrim($path, '/'));
+        if (! file_exists($fullPath)) {
             return null;
         }
         $mime = mime_content_type($fullPath);
         $data = file_get_contents($fullPath);
-        return 'data:' . $mime . ';base64,' . base64_encode($data);
+
+        return 'data:'.$mime.';base64,'.base64_encode($data);
     }
 }

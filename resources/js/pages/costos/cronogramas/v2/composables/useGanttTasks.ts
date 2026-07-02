@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import type { GanttTask, Predecessor, SchedulingMode } from '../types/task';
@@ -402,6 +402,7 @@ export function useGanttTasks(
             field: K,
             value: GanttTask[K],
         ) => {
+            startTransition(() => {
             setTasks((prev) => {
                 const updated = prev.map((t) => {
                     if (t.id !== id) return t;
@@ -512,6 +513,7 @@ export function useGanttTasks(
                     calendarSettings,
                     preserveRef.current,
                 );
+            });
             });
             setDirtyIds((prev) => new Set([...prev, id]));
         },

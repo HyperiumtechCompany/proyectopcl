@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Columns3, Maximize2, Minimize2 } from 'lucide-react';
+import { Check, Columns3, Maximize2, Minimize2, X } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CHART_HEADER_H } from '../../cronogramas/v2/types/timeline';
 import { ROW_HEIGHT } from '../../cronogramas/v2/types/cell';
@@ -48,6 +48,9 @@ interface Props {
     onToggleHidden:     (key: string) => void;
     onToggleDescExpand: () => void;
     onRenamePartida:    (taskId: number, newPartida: string) => void;
+    columnFilters:      Record<string, string>;
+    onColumnFilterChange: (key: string, value: string) => void;
+    onClearColumnFilters: () => void;
 }
 
 interface CtxState { taskId: number; x: number; y: number }
@@ -135,6 +138,9 @@ function DelphinGridHeader({
     descExpanded,
     onToggleHidden,
     onToggleDescExpand,
+    columnFilters,
+    onColumnFilterChange,
+    onClearColumnFilters,
 }: {
     columns:            ColumnDef[];
     allColumns:         ColumnDef[];
@@ -142,7 +148,11 @@ function DelphinGridHeader({
     descExpanded:       boolean;
     onToggleHidden:     (key: string) => void;
     onToggleDescExpand: () => void;
+    columnFilters:      Record<string, string>;
+    onColumnFilterChange: (key: string, value: string) => void;
+    onClearColumnFilters: () => void;
 }) {
+    const hasActiveFilters = Object.values(columnFilters).some((v) => v.trim() !== '');
     const [configOpen, setConfigOpen] = useState(false);
     const configBtnRef = useRef<HTMLButtonElement>(null);
     const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -155,61 +165,111 @@ function DelphinGridHeader({
     };
 
     return (
-        <div
-            className="flex shrink-0 items-end border-b border-slate-600 bg-slate-800 select-none"
-            style={{ height: CHART_HEADER_H }}
-        >
-            {/* Row number gutter header */}
+        <div className="flex shrink-0 flex-col border-b border-slate-600 bg-slate-800 select-none">
             <div
-                className="shrink-0 border-r border-slate-700 px-1 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 sticky left-0 bg-slate-800 z-10"
-                style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
+                className="flex items-end"
+                style={{ height: CHART_HEADER_H }}
             >
-                #
-            </div>
-            {columns.map((col) => (
+                {/* Row number gutter header */}
                 <div
-                    key={col.key}
-                    className={`relative shrink-0 overflow-hidden truncate border-r border-slate-700 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 last:border-r-0 ${
-                        col.align === 'center' ? 'text-center'
-                        : col.align === 'right'  ? 'text-right'
-                        : 'text-left'
-                    }`}
-                    style={{ width: col.width }}
-                    title={col.label}
+                    className="shrink-0 border-r border-slate-700 px-1 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 sticky left-0 bg-slate-800 z-10"
+                    style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
                 >
-                    {col.label}
+                    #
                 </div>
-            ))}
+                {columns.map((col) => (
+                    <div
+                        key={col.key}
+                        className={`relative shrink-0 overflow-hidden truncate border-r border-slate-700 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 last:border-r-0 ${
+                            col.align === 'center' ? 'text-center'
+                            : col.align === 'right'  ? 'text-right'
+                            : 'text-left'
+                        }`}
+                        style={{ width: col.width }}
+                        title={col.label}
+                    >
+                        {col.label}
+                    </div>
+                ))}
 
-            {/* Expand/collapse description width */}
-            <button
-                title={descExpanded ? 'Contraer columna descripción' : 'Ampliar columna descripción'}
-                className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
-                onClick={onToggleDescExpand}
-            >
-                {descExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-            </button>
+                {/* Expand/collapse description width */}
+                <button
+                    title={descExpanded ? 'Contraer columna descripción' : 'Ampliar columna descripción'}
+                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    onClick={onToggleDescExpand}
+                >
+                    {descExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                </button>
 
-            {/* Column visibility */}
-            <button
-                ref={configBtnRef}
-                data-col-config
-                title="Mostrar/ocultar columnas"
-                className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
-                onClick={openConfig}
-            >
-                <Columns3 size={13} />
-            </button>
+                {/* Column visibility */}
+                <button
+                    ref={configBtnRef}
+                    data-col-config
+                    title="Mostrar/ocultar columnas"
+                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    onClick={openConfig}
+                >
+                    <Columns3 size={13} />
+                </button>
 
-            {configOpen && anchorRect && (
-                <ColumnConfigPopover
-                    anchor={anchorRect}
-                    allColumns={allColumns}
-                    hiddenKeys={hiddenKeys}
-                    onToggle={onToggleHidden}
-                    onClose={() => setConfigOpen(false)}
-                />
-            )}
+                {configOpen && anchorRect && (
+                    <ColumnConfigPopover
+                        anchor={anchorRect}
+                        allColumns={allColumns}
+                        hiddenKeys={hiddenKeys}
+                        onToggle={onToggleHidden}
+                        onClose={() => setConfigOpen(false)}
+                    />
+                )}
+            </div>
+
+            {/* Filter row: one input/select per column, aligned with the labels above */}
+            <div className="flex items-center border-t border-slate-700/60 bg-slate-800/60 py-0.5">
+                <div
+                    className="flex shrink-0 items-center justify-center sticky left-0 bg-slate-800/60 z-10"
+                    style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
+                >
+                    {hasActiveFilters && (
+                        <button
+                            title="Limpiar filtros de columna"
+                            className="text-slate-500 transition-colors hover:text-red-400"
+                            onClick={onClearColumnFilters}
+                        >
+                            <X size={11} />
+                        </button>
+                    )}
+                </div>
+                {columns.map((col) =>
+                    col.options ? (
+                        <select
+                            key={col.key}
+                            value={columnFilters[col.key] ?? ''}
+                            onChange={(e) => onColumnFilterChange(col.key, e.target.value)}
+                            className="shrink-0 border-r border-transparent bg-transparent px-1.5 text-[11px] text-slate-300 outline-none focus:border-sky-600"
+                            style={{ width: col.width }}
+                        >
+                            <option value="">Todos</option>
+                            {col.options.filter((o) => o !== '').map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            key={col.key}
+                            type="text"
+                            value={columnFilters[col.key] ?? ''}
+                            onChange={(e) => onColumnFilterChange(col.key, e.target.value)}
+                            placeholder="Filtrar…"
+                            className={`shrink-0 border-r border-transparent bg-transparent px-1.5 text-[11px] text-slate-300 placeholder-slate-600 outline-none focus:border-sky-600 ${
+                                col.align === 'center' ? 'text-center'
+                                : col.align === 'right'  ? 'text-right'
+                                : 'text-left'
+                            }`}
+                            style={{ width: col.width }}
+                        />
+                    ),
+                )}
+            </div>
         </div>
     );
 }
@@ -240,6 +300,9 @@ export function DelphinGrid({
     onToggleHidden,
     onToggleDescExpand,
     onRenamePartida,
+    columnFilters,
+    onColumnFilterChange,
+    onClearColumnFilters,
 }: Props) {
     const internalRef       = useRef<HTMLDivElement>(null);
     const resolvedRef       = (scrollRef ?? internalRef) as React.RefObject<HTMLDivElement>;
@@ -307,6 +370,9 @@ export function DelphinGrid({
                     descExpanded={descExpanded}
                     onToggleHidden={onToggleHidden}
                     onToggleDescExpand={onToggleDescExpand}
+                    columnFilters={columnFilters}
+                    onColumnFilterChange={onColumnFilterChange}
+                    onClearColumnFilters={onClearColumnFilters}
                 />
             </div>
 

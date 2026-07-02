@@ -1,6 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
+import axios from 'axios';
 import dayjs from 'dayjs';
 import { Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -177,6 +178,11 @@ export default function DelphinView({
 
     // ── Search / filter ───────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const handleColumnFilterChange = useCallback((key: string, value: string) => {
+        setColumnFilters((prev) => ({ ...prev, [key]: value }));
+    }, []);
+    const handleClearColumnFilters = useCallback(() => setColumnFilters({}), []);
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
     const initializeParams = useProjectParamsStore((s) => s.initialize);
@@ -624,9 +630,32 @@ export default function DelphinView({
         }
     }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
 
+    // ── Reset total (vaciar presupuesto) ────────────────────────────────────
+    const handleResetAll = useCallback(async () => {
+        const confirmResult = await Swal.fire({
+            icon: 'warning',
+            title: '¿Vaciar presupuesto completo?',
+            text: 'Se eliminarán todas las partidas, ACUs, gastos generales y el cronograma de este presupuesto. El catálogo de insumos no se verá afectado. Esta acción no se puede deshacer.',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, vaciar todo',
+            cancelButtonText: 'Cancelar',
+            ...swalDark,
+            confirmButtonColor: '#dc2626',
+        });
+        if (!confirmResult.isConfirmed) return;
+
+        try {
+            await axios.delete('/module/delphin/reset', { params: { project: project_id_int } });
+            await Swal.fire({ icon: 'success', title: 'Presupuesto vaciado', timer: 2000, showConfirmButton: false, ...swalDark });
+            router.reload();
+        } catch (err: any) {
+            await Swal.fire({ icon: 'error', title: 'Error al vaciar', text: err?.response?.data?.message ?? 'Ocurrió un error. Intente nuevamente.', ...swalDark });
+        }
+    }, [project_id_int]);
+
     // ── Import MSP ────────────────────────────────────────────────────────────
     const importInputRef = useRef<HTMLInputElement>(null);
-    const handleImportClick = () => importInputRef.current?.click();
+    const handleImportClick = useCallback(() => importInputRef.current?.click(), []);
     const handleImportFile = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
@@ -676,16 +705,26 @@ export default function DelphinView({
             );
     }, [allActiveColumns, activeHiddenKeys, descExpanded]);
 
-    // ── Filtered rows (search by description, includes ancestors) ────────────
+    // ── Filtered rows (search by description + per-column header filters, includes ancestors) ──
     const filteredRows = useMemo(() => {
-        if (!searchQuery.trim()) return visibleDelphinRows;
-        const q = searchQuery.trim().toLowerCase();
+        const activeColumnFilters = activeColumns
+            .map((col) => ({ key: col.key, value: (columnFilters[col.key] ?? '').trim().toLowerCase() }))
+            .filter((f) => f.value !== '');
 
-        const matchingIds = new Set(
-            delphinRows
-                .filter((r) => (r.descripcion ?? '').toLowerCase().includes(q))
-                .map((r) => r.id),
-        );
+        const hasSearch = !!searchQuery.trim();
+        if (!hasSearch && activeColumnFilters.length === 0) return visibleDelphinRows;
+
+        const q = searchQuery.trim().toLowerCase();
+        const matchesRow = (r: (typeof delphinRows)[number]) => {
+            if (hasSearch && !(r.descripcion ?? '').toLowerCase().includes(q)) return false;
+            for (const f of activeColumnFilters) {
+                const cellValue = String((r as unknown as Record<string, unknown>)[f.key] ?? '').toLowerCase();
+                if (!cellValue.includes(f.value)) return false;
+            }
+            return true;
+        };
+
+        const matchingIds = new Set(delphinRows.filter(matchesRow).map((r) => r.id));
 
         const ancestorIds = new Set<number>();
         const rowById = new Map(delphinRows.map((r) => [r.id, r]));
@@ -698,11 +737,33 @@ export default function DelphinView({
         }
 
         return visibleDelphinRows.filter((r) => matchingIds.has(r.id) || ancestorIds.has(r.id));
-    }, [visibleDelphinRows, delphinRows, searchQuery]);
+    }, [visibleDelphinRows, delphinRows, searchQuery, columnFilters, activeColumns]);
 
     // ── Grid scroll ref depends on mode ──────────────────────────────────────
     const activeScrollRef = mode === 'cpm' ? gridScrollRef : undefined;
     const activeOnScroll = mode === 'cpm' ? onGridScroll : undefined;
+
+    // ── Toolbar handlers (memoized so DelphinToolbar's React.memo is effective) ──
+    const handleAddRow = useCallback(() => setPendingSelect(addTaskAfter(selectedRowId)), [addTaskAfter, selectedRowId]);
+    const handleAddChild = useCallback(() => { if (selectedRowId !== null) setPendingSelect(addChildTask(selectedRowId)); }, [addChildTask, selectedRowId]);
+    const handleDeleteRowClick = useCallback(() => { if (selectedRowId !== null) deleteTask(selectedRowId); }, [deleteTask, selectedRowId]);
+    const handleResetAllClick = useCallback(() => void handleResetAll(), [handleResetAll]);
+    const handleIndentClick = useCallback(() => { if (selectedRowId !== null) indentTask(selectedRowId); }, [indentTask, selectedRowId]);
+    const handleOutdentClick = useCallback(() => { if (selectedRowId !== null) outdentTask(selectedRowId); }, [outdentTask, selectedRowId]);
+    const handleMoveUpClick = useCallback(() => { if (selectedRowId !== null) moveTaskUp(selectedRowId); }, [moveTaskUp, selectedRowId]);
+    const handleMoveDownClick = useCallback(() => { if (selectedRowId !== null) moveTaskDown(selectedRowId); }, [moveTaskDown, selectedRowId]);
+    const handleDuplicateClick = useCallback(() => { if (selectedRowId !== null) setPendingSelect(duplicateTask(selectedRowId)); }, [duplicateTask, selectedRowId]);
+    const handleToggleCritical = useCallback(() => setShowCriticalPath((p) => !p), []);
+    const handleOpenSettingsClick = useCallback(() => setSettingsOpen(true), []);
+    const handleOpenImportExcelClick = useCallback(() => setImportExcelOpen(true), []);
+    const handleOpenInsumosModal = useCallback((scope: InsumosScope) => {
+        setInsumosScope(scope);
+        setInsumosOpen(true);
+    }, []);
+    const handleOpenCompatibilidadClick = useCallback(() => setCompatOpen(true), []);
+    const handleSaveBudgetClick = useCallback(() => void handleSaveBudget(), [handleSaveBudget]);
+    const handleSaveGanttClick = useCallback(() => void handleSaveGantt(), [handleSaveGantt]);
+    const handleOpenExportClick = useCallback(() => setExportOpen(true), []);
 
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -722,14 +783,15 @@ export default function DelphinView({
                     onSubView={setSubView}
 
                     selectedRowId={selectedRowId}
-                    onAddRow={() => setPendingSelect(addTaskAfter(selectedRowId))}
-                    onAddChild={() => { if (selectedRowId !== null) setPendingSelect(addChildTask(selectedRowId)); }}
-                    onDeleteRow={() => { if (selectedRowId !== null) deleteTask(selectedRowId); }}
-                    onIndent={() => { if (selectedRowId !== null) indentTask(selectedRowId); }}
-                    onOutdent={() => { if (selectedRowId !== null) outdentTask(selectedRowId); }}
-                    onMoveUp={() => { if (selectedRowId !== null) moveTaskUp(selectedRowId); }}
-                    onMoveDown={() => { if (selectedRowId !== null) moveTaskDown(selectedRowId); }}
-                    onDuplicate={() => { if (selectedRowId !== null) setPendingSelect(duplicateTask(selectedRowId)); }}
+                    onAddRow={handleAddRow}
+                    onAddChild={handleAddChild}
+                    onDeleteRow={handleDeleteRowClick}
+                    onResetAll={handleResetAllClick}
+                    onIndent={handleIndentClick}
+                    onOutdent={handleOutdentClick}
+                    onMoveUp={handleMoveUpClick}
+                    onMoveDown={handleMoveDownClick}
+                    onDuplicate={handleDuplicateClick}
                     onExpandAll={expandAll}
                     onCollapseAll={collapseAll}
 
@@ -738,30 +800,27 @@ export default function DelphinView({
                     schedulingMode={schedulingMode}
                     ganttBarLabel={ganttBarLabel}
                     onZoomChange={handleZoomChange}
-                    onToggleCritical={() => setShowCriticalPath((p) => !p)}
+                    onToggleCritical={handleToggleCritical}
                     onSchedulingMode={handleSchedulingMode}
                     onBarLabelChange={setGanttBarLabel}
-                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenSettings={handleOpenSettingsClick}
                     onImport={handleImportClick}
-                    onImportExcel={() => setImportExcelOpen(true)}
-                    onOpenInsumos={(scope) => {
-                        setInsumosScope(scope);
-                        setInsumosOpen(true);
-                    }}
+                    onImportExcel={handleOpenImportExcelClick}
+                    onOpenInsumos={handleOpenInsumosModal}
 
                     isParentSelected={isParentSelected}
                     onFormulaView={handleFormulaView}
 
                     incompatiblesCount={incompatiblesCount}
-                    onOpenCompatibilidad={() => setCompatOpen(true)}
+                    onOpenCompatibilidad={handleOpenCompatibilidadClick}
 
                     budgetDirty={budgetDirty || acuDirty}
                     isSavingBudget={isSavingBudget}
                     ganttDirty={ganttDirty || budgetDirty || acuDirty}
                     isGanttSaving={ganttIsSaving || isSavingBudget}
-                    onSaveBudget={() => void handleSaveBudget()}
-                    onSaveGantt={() => void handleSaveGantt()}
-                    onExport={() => setExportOpen(true)}
+                    onSaveBudget={handleSaveBudgetClick}
+                    onSaveGantt={handleSaveGanttClick}
+                    onExport={handleOpenExportClick}
                     project={project}
                 />
 
@@ -846,7 +905,10 @@ export default function DelphinView({
                                 onRowAction={handleRowAction}
                                 onToggleHidden={handleToggleHidden}
                                 onToggleDescExpand={() => setDescExpanded((p) => !p)}
-                                onRenamePartida={handleRenameRootPartida} />
+                                onRenamePartida={handleRenameRootPartida}
+                                columnFilters={columnFilters}
+                                onColumnFilterChange={handleColumnFilterChange}
+                                onClearColumnFilters={handleClearColumnFilters} />
                         </Panel>
 
                         <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
@@ -928,6 +990,14 @@ export default function DelphinView({
                     projectName={project_name}
                     projectData={projectData}
                     onClose={() => setInsumosOpen(false)}
+                />
+                <PartidasSinAcuModal
+                    open={compatOpen}
+                    delphinRows={delphinRows}
+                    acuRows={acuRows}
+                    groupIds={groupIds}
+                    onClose={() => setCompatOpen(false)}
+                    onSelectPartida={handleSelectPartida}
                 />
                 <input
                     ref={importInputRef}

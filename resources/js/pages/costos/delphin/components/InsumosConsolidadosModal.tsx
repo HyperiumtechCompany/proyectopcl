@@ -466,6 +466,10 @@ export function InsumosConsolidadosModal({
 }: Props) {
     const [activeType, setActiveType] = useState<InsumoType>('mano_de_obra');
     const [search, setSearch] = useState('');
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const handleColumnFilterChange = (key: string, value: string) =>
+        setColumnFilters((prev) => ({ ...prev, [key]: value }));
+    const hasColumnFilters = Object.values(columnFilters).some((v) => v.trim() !== '');
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [mergeName, setMergeName] = useState('');
     const [aliases, setAliases] = useState<Record<string, string>>({});
@@ -501,15 +505,17 @@ export function InsumosConsolidadosModal({
     const activeSpecialtyId = selectedSpecialtyId ?? specialties[0]?.id ?? null;
     const scopedAcuRows = useMemo(
         () =>
-            scope === 'presupuesto'
-                ? acuRows
-                : getSpecialtyAcus(acuRows, delphinRows, activeSpecialtyId),
-        [acuRows, activeSpecialtyId, delphinRows, scope],
+            !open
+                ? []
+                : scope === 'presupuesto'
+                    ? acuRows
+                    : getSpecialtyAcus(acuRows, delphinRows, activeSpecialtyId),
+        [open, acuRows, activeSpecialtyId, delphinRows, scope],
     );
 
     const rawRows = useMemo(
-        () => flattenInsumos(scopedAcuRows, delphinRows),
-        [delphinRows, scopedAcuRows],
+        () => (open ? flattenInsumos(scopedAcuRows, delphinRows) : []),
+        [open, delphinRows, scopedAcuRows],
     );
     const consolidated = useMemo(
         () => consolidateInsumos(rawRows, aliases),
@@ -517,22 +523,30 @@ export function InsumosConsolidadosModal({
     );
     const typeRows = useMemo(() => {
         const query = normalizeText(search);
+        const activeColumnFilters = Object.entries(columnFilters)
+            .map(([key, value]) => [key, normalizeText(value)] as const)
+            .filter(([, value]) => value !== '');
+
         const filteredRows = consolidated.filter((row) => {
             if (row.type !== activeType) {
                 return false;
             }
-            if (!query) {
-                return true;
+            if (query) {
+                const matchesQuery =
+                    normalizeText(row.descripcion).includes(query) ||
+                    normalizeText(row.codigo).includes(query) ||
+                    normalizeText(row.unidad).includes(query);
+                if (!matchesQuery) return false;
             }
-            return (
-                normalizeText(row.descripcion).includes(query) ||
-                normalizeText(row.codigo).includes(query) ||
-                normalizeText(row.unidad).includes(query)
-            );
+            for (const [key, value] of activeColumnFilters) {
+                const cellValue = normalizeText(String((row as unknown as Record<string, unknown>)[key] ?? ''));
+                if (!cellValue.includes(value)) return false;
+            }
+            return true;
         });
 
         return sortInsumos(filteredRows, sort);
-    }, [activeType, consolidated, search, sort]);
+    }, [activeType, consolidated, search, columnFilters, sort]);
 
     // Agregar después de la definición de typeRows
     const allTypesRows = useMemo(() => {
@@ -908,6 +922,43 @@ export function InsumosConsolidadosModal({
                                             Ref.
                                         </th>
                                     </tr>
+                                    <tr className="bg-slate-800/60">
+                                        <th className="border-b border-slate-700 p-1 text-center">
+                                            {hasColumnFilters && (
+                                                <button
+                                                    type="button"
+                                                    title="Limpiar filtros de columna"
+                                                    className="text-slate-500 transition-colors hover:text-red-400"
+                                                    onClick={() => setColumnFilters({})}
+                                                >
+                                                    <X size={11} />
+                                                </button>
+                                            )}
+                                        </th>
+                                        {(
+                                            [
+                                                ['codigo', 'left'],
+                                                ['descripcion', 'left'],
+                                                ['unidad', 'center'],
+                                                ['cantidad', 'right'],
+                                                ['precio', 'right'],
+                                                ['parcial', 'right'],
+                                                ['usos', 'center'],
+                                            ] as const
+                                        ).map(([key, align]) => (
+                                            <th key={key} className="border-b border-slate-700 p-1">
+                                                <input
+                                                    value={columnFilters[key] ?? ''}
+                                                    onChange={(e) => handleColumnFilterChange(key, e.target.value)}
+                                                    placeholder="Filtrar…"
+                                                    className={`w-full min-w-0 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[10px] font-normal normal-case text-slate-200 tracking-normal outline-none placeholder:text-slate-600 focus:border-sky-500 ${
+                                                        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+                                                    }`}
+                                                />
+                                            </th>
+                                        ))}
+                                        <th className="border-b border-slate-700 p-1"></th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800">
                                     {typeRows.length === 0 ? (
@@ -916,8 +967,20 @@ export function InsumosConsolidadosModal({
                                                 colSpan={9}
                                                 className="p-10 text-center text-slate-500"
                                             >
-                                                No hay insumos para esta
-                                                categoria.
+                                                {hasColumnFilters || search ? (
+                                                    <>
+                                                        Sin resultados para este filtro.{' '}
+                                                        <button
+                                                            type="button"
+                                                            className="text-sky-400 hover:text-sky-300"
+                                                            onClick={() => { setColumnFilters({}); setSearch(''); }}
+                                                        >
+                                                            Limpiar filtros
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    'No hay insumos para esta categoria.'
+                                                )}
                                             </td>
                                         </tr>
                                     ) : (
