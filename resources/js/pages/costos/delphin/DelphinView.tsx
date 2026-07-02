@@ -3,7 +3,7 @@ import type { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import { Search, X } from 'lucide-react';
+import { ListFilter, Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import { Group, Panel, Separator } from 'react-resizable-panels';
@@ -179,10 +179,16 @@ export default function DelphinView({
     // ── Search / filter ───────────────────────────────────────────────────────
     const [searchQuery, setSearchQuery] = useState('');
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+    const [showSearch, setShowSearch] = useState(false);
+    const [showColumnFilters, setShowColumnFilters] = useState(false);
     const handleColumnFilterChange = useCallback((key: string, value: string) => {
         setColumnFilters((prev) => ({ ...prev, [key]: value }));
     }, []);
     const handleClearColumnFilters = useCallback(() => setColumnFilters({}), []);
+    const handleClearAllFilters = useCallback(() => {
+        setSearchQuery('');
+        setColumnFilters({});
+    }, []);
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
     const initializeParams = useProjectParamsStore((s) => s.initialize);
@@ -694,6 +700,12 @@ export default function DelphinView({
     }, [mode, budgetDirty, acuDirty, isSavingBudget, ganttDirty, ganttIsSaving, handleSaveBudget, handleSaveGantt]);
 
     const allActiveColumns = mode === 'budget' ? BUDGET_COLUMNS : CPM_COLUMNS;
+    const activeColumnFilterCount = useMemo(
+        () => Object.values(columnFilters).filter((value) => value.trim() !== '').length,
+        [columnFilters],
+    );
+    const hasSearchQuery = searchQuery.trim() !== '';
+    const hasActiveTableFilters = hasSearchQuery || activeColumnFilterCount > 0;
 
     const activeColumns = useMemo(() => {
         return allActiveColumns
@@ -771,7 +783,7 @@ export default function DelphinView({
 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Delphin — ${project_name}`} />
-            <div className="flex h-[calc(100vh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-900 text-white">
+            <div className="flex h-[calc(100vh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-white">
 
                 {/* ── 1. Single unified toolbar ──────────────────────────── */}
                 <DelphinToolbar
@@ -857,27 +869,86 @@ export default function DelphinView({
                         <Panel
                             defaultSize={40}
                             minSize={18}
-                            className="flex min-h-0 flex-col overflow-hidden border-r border-slate-700">
-                            {/* Search bar */}
-                            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-2.5">
-                                <Search size={12} className="shrink-0 text-slate-500" />
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Buscar descripción…"
-                                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none" />
-                                {searchQuery && (<>
-                                    <span className="shrink-0 text-[10px] text-slate-500">
-                                        {filteredRows.length} resultado{filteredRows.length !== 1 ? 's' : ''}
-                                    </span>
+                            className="flex min-h-0 flex-col overflow-hidden border-r border-slate-300 dark:border-slate-700">
+                            {/* Search and filter controls */}
+                            <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-slate-300 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                                <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800/80">
                                     <button
-                                        title="Limpiar búsqueda"
-                                        className="shrink-0 text-slate-500 hover:text-slate-300"
-                                        onClick={() => setSearchQuery('')}>
-                                        <X size={12} />
+                                        type="button"
+                                        title={showSearch ? 'Ocultar buscador' : 'Mostrar buscador'}
+                                        onClick={() => setShowSearch((current) => !current)}
+                                        className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition ${
+                                            showSearch || hasSearchQuery
+                                                ? 'bg-sky-600 text-white shadow-sm'
+                                                : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <Search size={12} />
+                                        <span className="hidden sm:inline">Buscar</span>
                                     </button>
-                                </>
+                                    <button
+                                        type="button"
+                                        title={showColumnFilters ? 'Ocultar filtros de columna' : 'Mostrar filtros de columna'}
+                                        onClick={() => setShowColumnFilters((current) => !current)}
+                                        className={`relative inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition ${
+                                            showColumnFilters || activeColumnFilterCount > 0
+                                                ? 'bg-emerald-600 text-white shadow-sm'
+                                                : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <ListFilter size={12} />
+                                        <span className="hidden sm:inline">Filtros</span>
+                                        {activeColumnFilterCount > 0 && (
+                                            <span className="ml-0.5 rounded-full bg-white px-1.5 py-px text-[9px] font-black leading-none text-emerald-700">
+                                                {activeColumnFilterCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
+
+                                {showSearch ? (
+                                    <div className="flex min-w-[220px] flex-1 items-center gap-2">
+                                        <Search size={13} className="shrink-0 text-slate-500 dark:text-slate-400" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder="Buscar por descripcion..."
+                                            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-900" />
+                                        {hasSearchQuery && (
+                                            <button
+                                                title="Limpiar busqueda"
+                                                className="shrink-0 rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                                onClick={() => setSearchQuery('')}>
+                                                <X size={13} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                            <span className="truncate">
+                                                {hasActiveTableFilters ? `${filteredRows.length} resultado${filteredRows.length !== 1 ? 's' : ''}` : 'Tabla sin filtros visibles'}
+                                            </span>
+                                            {hasSearchQuery && (
+                                                <span className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+                                                    Busqueda activa
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {hasActiveTableFilters && (
+                                    <button
+                                        type="button"
+                                        title="Limpiar busqueda y filtros"
+                                        onClick={handleClearAllFilters}
+                                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 text-[11px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/60"
+                                    >
+                                        <X size={12} />
+                                        <span className="hidden sm:inline">Limpiar</span>
+                                    </button>
                                 )}
                             </div>
 
@@ -908,10 +979,11 @@ export default function DelphinView({
                                 onRenamePartida={handleRenameRootPartida}
                                 columnFilters={columnFilters}
                                 onColumnFilterChange={handleColumnFilterChange}
-                                onClearColumnFilters={handleClearColumnFilters} />
+                                onClearColumnFilters={handleClearColumnFilters}
+                                showColumnFilters={showColumnFilters} />
                         </Panel>
 
-                        <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-700 bg-slate-800 transition-colors hover:bg-sky-600 active:bg-sky-500" />
+                        <Separator className="z-10 w-1.5 cursor-col-resize border-x border-slate-300 bg-slate-200 transition-colors hover:bg-sky-600 active:bg-sky-500 dark:border-slate-700 dark:bg-slate-800" />
 
                         {/* ── Right: changes completely by mode ────────────── */}
                         <Panel defaultSize={60} minSize={20} className="flex min-h-0 flex-col overflow-hidden">

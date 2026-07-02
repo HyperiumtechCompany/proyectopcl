@@ -15,6 +15,7 @@ import {
     X,
 } from 'lucide-react';
 
+import Decimal from 'decimal.js';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ACUComponenteRow, ACURowSummary } from '@/types/presupuestos';
@@ -137,10 +138,10 @@ export function calculateInsumoUsage(
     costoFactor = 1,
 ): { cantidad: number; parcial: number } {
     const cantidad = presupuestoCantidad * acuCantidad;
-    return {
-        cantidad,
-        parcial: cantidad * precio * costoFactor,
-    };
+    // Redondeo con decimal.js a 2 decimales (igual que decimalMul en usePresupuestoAcu.ts) —
+    // evita arrastrar error de punto flotante en el monto de cada uso antes de consolidar.
+    const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(2).toNumber();
+    return { cantidad, parcial };
 }
 
 export function calculateReferencePrice(
@@ -247,10 +248,10 @@ export function flattenInsumos(
                     ? (acuCantidad / 100) * precio
                     : acuCantidad * precio;
                 const usage = esPorcentaje
-                    ? {
-                        cantidad: parcialAcu * presupuestoCantidad,
-                        parcial: parcialAcu * presupuestoCantidad,
-                    }
+                    ? (() => {
+                        const monto = new Decimal(parcialAcu).times(presupuestoCantidad).toDecimalPlaces(2).toNumber();
+                        return { cantidad: monto, parcial: monto };
+                    })()
                     : calculateInsumoUsage(
                         presupuestoCantidad,
                         acuCantidad,
@@ -273,7 +274,11 @@ export function flattenInsumos(
                     unidad,
                     cantidad: usage.cantidad,
                     precio: esPorcentaje ? 0 : precio,
-                    precioPonderado: esPorcentaje ? 0 : usage.cantidad * precio,
+                    // Acumula desde usage.parcial (no cantidad*precio crudo) para que incluya
+                    // el factor de costo (ej. desperdicio de materiales) — así el precio de
+                    // referencia consolidado (parcial/cantidad) siempre reconcilia con "Monto":
+                    // Cantidad × P.REF. = Monto, sin excepciones ocultas por el factor.
+                    precioPonderado: esPorcentaje ? 0 : usage.parcial,
                     parcial: usage.parcial,
                     usos: 1,
                     reference: {

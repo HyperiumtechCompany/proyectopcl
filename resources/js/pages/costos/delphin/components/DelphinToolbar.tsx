@@ -113,9 +113,9 @@ function Btn({
     variant?: 'default' | 'primary' | 'danger' | 'active';
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
     const styles: Record<string, string> = {
-        default: 'bg-slate-700 text-slate-200 hover:bg-slate-600',
+        default: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600',
         primary: 'bg-blue-600 text-white hover:bg-blue-500',
-        danger: 'bg-red-700/70 text-red-200 hover:bg-red-600',
+        danger: 'bg-red-600 text-white hover:bg-red-500 dark:bg-red-700/70 dark:text-red-200 dark:hover:bg-red-600',
         active: 'bg-blue-700 text-blue-100 hover:bg-blue-600',
     };
     return (
@@ -153,21 +153,21 @@ function InsumosDropdown({ onSelect }: { onSelect?: (scope: InsumosScope) => voi
             <button
                 type="button"
                 title="Ver insumos consolidados"
-                className="flex shrink-0 items-center gap-1.5 rounded bg-slate-700 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600"
+                className="flex shrink-0 items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                 onClick={() => setOpen((current) => !current)}>
                 <Package size={13} />
                 <span className="hidden sm:inline">Insumos</span>
                 <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-                <div className="absolute right-0 top-full z-[100] mt-1 w-56 overflow-hidden rounded border border-slate-600 bg-slate-800 py-1 shadow-2xl">
-                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-sky-700 hover:text-white" onClick={() => select('especialidad')}>
+                <div className="absolute right-0 top-full z-[100] mt-1 w-56 overflow-hidden rounded border border-slate-200 bg-white py-1 shadow-2xl dark:border-slate-600 dark:bg-slate-800">
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select('especialidad')}>
                         <span className="block font-medium">Insumos por especialidad</span>
-                        <span className="mt-0.5 block text-[10px] text-slate-400">Padre seleccionado y todos sus hijos</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Padre seleccionado y todos sus hijos</span>
                     </button>
-                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-sky-700 hover:text-white" onClick={() => select('presupuesto')}>
+                    <button type="button" className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sky-600 hover:text-white dark:text-slate-200 dark:hover:bg-sky-700" onClick={() => select('presupuesto')}>
                         <span className="block font-medium">Insumos por presupuesto</span>
-                        <span className="mt-0.5 block text-[10px] text-slate-400">Consolidado general del proyecto</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">Consolidado general del proyecto</span>
                     </button>
                 </div>
             )}
@@ -190,9 +190,9 @@ function IconBtn({
     const ref = useRef<HTMLButtonElement>(null);
 
     const styles: Record<string, string> = {
-        default: 'bg-slate-700 text-slate-200 hover:bg-slate-600',
+        default: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600',
         primary: 'bg-blue-600 text-white hover:bg-blue-500',
-        danger: 'bg-red-700/70 text-red-200 hover:bg-red-600',
+        danger: 'bg-red-600 text-white hover:bg-red-500 dark:bg-red-700/70 dark:text-red-200 dark:hover:bg-red-600',
         active: 'bg-blue-700 text-blue-100 hover:bg-blue-600',
     };
 
@@ -218,7 +218,7 @@ function IconBtn({
                         zIndex: 9999,
                         pointerEvents: 'none',
                     }}
-                    className="whitespace-nowrap rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] leading-none text-slate-200 shadow-xl"
+                    className="whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] leading-none text-slate-700 shadow-xl dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                 >
                     {tooltip}
                 </div>,
@@ -229,7 +229,7 @@ function IconBtn({
 }
 
 function Divider() {
-    return <div className="mx-0.5 h-5 w-px shrink-0 bg-slate-700" />;
+    return <div className="mx-0.5 h-5 w-px shrink-0 bg-slate-300 dark:bg-slate-700" />;
 }
 
 // ── Config dropdown ───────────────────────────────────────────────────────────
@@ -357,17 +357,17 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     const cpRef = useRef<HTMLButtonElement>(null);
 
     return (
-        <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-slate-700 bg-slate-900 px-2">
+        <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-slate-300 bg-white px-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
 
             {/* ── LEFT: Mode toggle ──────────────────────────────────────── */}
-            <div className="flex shrink-0 rounded bg-slate-800 p-0.5">
+            <div className="flex shrink-0 rounded border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800">
                 <button
                     type="button"
                     title="Presupuesto / ACUs"
                     onClick={() => onModeChange('budget')}
                     className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${mode === 'budget'
                             ? 'bg-emerald-700 text-white'
-                            : 'text-slate-400 hover:text-slate-200'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                         }`}>
                     <BarChart2 size={11} />
                     <span className="hidden sm:inline">Presupuesto</span>
@@ -379,7 +379,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     onClick={() => onModeChange('cpm')}
                     className={`flex items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${mode === 'cpm'
                             ? 'bg-sky-700 text-white'
-                            : 'text-slate-400 hover:text-slate-200'
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                         }`}>
                     <CalendarDays size={11} />
                     <span className="hidden sm:inline">CPM</span>
@@ -391,8 +391,8 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
 
             {/* ── CENTER: Scrollable controls ───────────────────────────── */}
             <div className="relative min-w-0 flex-1 overflow-hidden">
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-linear-to-r from-slate-900 to-transparent" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-linear-to-l from-slate-900 to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-linear-to-r from-white to-transparent dark:from-slate-900" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-linear-to-l from-white to-transparent dark:from-slate-900" />
 
                 <div className="flex items-center gap-1 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
@@ -400,14 +400,14 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                     {/* Budget sub-view toggle */}
                     {mode === 'budget' && (
                         <>
-                            <div className="flex shrink-0 rounded bg-slate-800 p-0.5">
+                            <div className="flex shrink-0 rounded border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800">
                                 <button
                                     type="button"
                                     title="Presupuesto y ACUs"
                                     onClick={() => onBudgetView('presupuesto')}
                                     className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${budgetView === 'presupuesto'
                                             ? 'bg-emerald-700 text-white'
-                                            : 'text-slate-400 hover:text-slate-200'
+                                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                                         }`}>
                                     <BarChart2 size={11} /> Presupuesto
                                 </button>
@@ -424,7 +424,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                                     }}
                                     className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${budgetView === 'formula_polinomica'
                                             ? 'bg-emerald-700 text-white'
-                                            : 'text-slate-400 hover:text-slate-200'
+                                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                                         }`}>
                                     <Calculator size={11} /> Formula P.
                                 </button>
@@ -449,7 +449,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                                 className={`relative flex shrink-0 items-center gap-1 rounded px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
                                     incompatiblesCount
                                         ? 'bg-amber-600/80 text-amber-100 hover:bg-amber-500'
-                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
                                 }`}
                             >
                                 <AlertTriangle size={11} />

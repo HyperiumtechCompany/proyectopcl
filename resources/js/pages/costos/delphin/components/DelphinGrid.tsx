@@ -51,6 +51,7 @@ interface Props {
     columnFilters:      Record<string, string>;
     onColumnFilterChange: (key: string, value: string) => void;
     onClearColumnFilters: () => void;
+    showColumnFilters:  boolean;
 }
 
 interface CtxState { taskId: number; x: number; y: number }
@@ -93,10 +94,10 @@ function ColumnConfigPopover({
     return createPortal(
         <div
             data-col-config
-            className="w-48 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-2xl"
+            className="w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-2xl ring-1 ring-slate-950/5 dark:border-slate-700 dark:bg-slate-800 dark:ring-black/30"
             style={style}
         >
-            <div className="mb-1 px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="mb-1 px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Columnas visibles
             </div>
             {allColumns.map((col) => {
@@ -105,7 +106,7 @@ function ColumnConfigPopover({
                 return (
                     <button
                         key={col.key}
-                        className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-200 dark:hover:bg-slate-700"
                         disabled={isLocked}
                         onClick={() => onToggle(col.key)}
                     >
@@ -113,14 +114,14 @@ function ColumnConfigPopover({
                             className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
                                 isVisible
                                     ? 'border-blue-500 bg-blue-600 text-white'
-                                    : 'border-slate-600 bg-transparent'
+                                    : 'border-slate-400 bg-transparent dark:border-slate-600'
                             }`}
                         >
                             {isVisible && <Check size={9} strokeWidth={3} />}
                         </span>
                         <span className="flex-1">{col.label}</span>
                         {isLocked && (
-                            <span className="text-[9px] text-slate-600">fijo</span>
+                            <span className="text-[9px] text-slate-400 dark:text-slate-600">fijo</span>
                         )}
                     </button>
                 );
@@ -141,6 +142,7 @@ function DelphinGridHeader({
     columnFilters,
     onColumnFilterChange,
     onClearColumnFilters,
+    showColumnFilters,
 }: {
     columns:            ColumnDef[];
     allColumns:         ColumnDef[];
@@ -151,6 +153,7 @@ function DelphinGridHeader({
     columnFilters:      Record<string, string>;
     onColumnFilterChange: (key: string, value: string) => void;
     onClearColumnFilters: () => void;
+    showColumnFilters:  boolean;
 }) {
     const hasActiveFilters = Object.values(columnFilters).some((v) => v.trim() !== '');
     const [configOpen, setConfigOpen] = useState(false);
@@ -165,14 +168,14 @@ function DelphinGridHeader({
     };
 
     return (
-        <div className="flex shrink-0 flex-col border-b border-slate-600 bg-slate-800 select-none">
+        <div className="flex shrink-0 flex-col border-b border-slate-300 bg-white shadow-sm select-none dark:border-slate-600 dark:bg-slate-800">
             <div
                 className="flex items-end"
                 style={{ height: CHART_HEADER_H }}
             >
                 {/* Row number gutter header */}
                 <div
-                    className="shrink-0 border-r border-slate-700 px-1 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 sticky left-0 bg-slate-800 z-10"
+                    className="sticky left-0 z-10 shrink-0 border-r border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                     style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
                 >
                     #
@@ -180,7 +183,7 @@ function DelphinGridHeader({
                 {columns.map((col) => (
                     <div
                         key={col.key}
-                        className={`relative shrink-0 overflow-hidden truncate border-r border-slate-700 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 last:border-r-0 ${
+                        className={`relative shrink-0 overflow-hidden truncate border-r border-slate-300 bg-slate-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-slate-700 last:border-r-0 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 ${
                             col.align === 'center' ? 'text-center'
                             : col.align === 'right'  ? 'text-right'
                             : 'text-left'
@@ -195,7 +198,7 @@ function DelphinGridHeader({
                 {/* Expand/collapse description width */}
                 <button
                     title={descExpanded ? 'Contraer columna descripción' : 'Ampliar columna descripción'}
-                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-300 bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                     onClick={onToggleDescExpand}
                 >
                     {descExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
@@ -206,7 +209,7 @@ function DelphinGridHeader({
                     ref={configBtnRef}
                     data-col-config
                     title="Mostrar/ocultar columnas"
-                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-700 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    className="flex h-full w-7 shrink-0 items-center justify-center border-l border-slate-300 bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                     onClick={openConfig}
                 >
                     <Columns3 size={13} />
@@ -224,15 +227,16 @@ function DelphinGridHeader({
             </div>
 
             {/* Filter row: one input/select per column, aligned with the labels above */}
-            <div className="flex items-center border-t border-slate-700/60 bg-slate-800/60 py-0.5">
+            {showColumnFilters && (
+            <div className="flex items-center border-t border-slate-300 bg-slate-50 py-1 dark:border-slate-700/60 dark:bg-slate-900/70">
                 <div
-                    className="flex shrink-0 items-center justify-center sticky left-0 bg-slate-800/60 z-10"
+                    className="sticky left-0 z-10 flex shrink-0 items-center justify-center bg-slate-50 dark:bg-slate-900"
                     style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }}
                 >
                     {hasActiveFilters && (
                         <button
                             title="Limpiar filtros de columna"
-                            className="text-slate-500 transition-colors hover:text-red-400"
+                            className="rounded p-0.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                             onClick={onClearColumnFilters}
                         >
                             <X size={11} />
@@ -245,7 +249,7 @@ function DelphinGridHeader({
                             key={col.key}
                             value={columnFilters[col.key] ?? ''}
                             onChange={(e) => onColumnFilterChange(col.key, e.target.value)}
-                            className="shrink-0 border-r border-transparent bg-transparent px-1.5 text-[11px] text-slate-300 outline-none focus:border-sky-600"
+                            className="h-7 shrink-0 rounded-md border border-slate-300 bg-white px-1.5 text-[11px] font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:border-sky-400"
                             style={{ width: col.width }}
                         >
                             <option value="">Todos</option>
@@ -260,7 +264,7 @@ function DelphinGridHeader({
                             value={columnFilters[col.key] ?? ''}
                             onChange={(e) => onColumnFilterChange(col.key, e.target.value)}
                             placeholder="Filtrar…"
-                            className={`shrink-0 border-r border-transparent bg-transparent px-1.5 text-[11px] text-slate-300 placeholder-slate-600 outline-none focus:border-sky-600 ${
+                            className={`h-7 shrink-0 rounded-md border border-slate-300 bg-white px-1.5 text-[11px] font-medium text-slate-700 placeholder-slate-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:placeholder-slate-500 dark:focus:border-sky-400 ${
                                 col.align === 'center' ? 'text-center'
                                 : col.align === 'right'  ? 'text-right'
                                 : 'text-left'
@@ -270,6 +274,7 @@ function DelphinGridHeader({
                     ),
                 )}
             </div>
+            )}
         </div>
     );
 }
@@ -303,6 +308,7 @@ export function DelphinGrid({
     columnFilters,
     onColumnFilterChange,
     onClearColumnFilters,
+    showColumnFilters,
 }: Props) {
     const internalRef       = useRef<HTMLDivElement>(null);
     const resolvedRef       = (scrollRef ?? internalRef) as React.RefObject<HTMLDivElement>;
@@ -373,6 +379,7 @@ export function DelphinGrid({
                     columnFilters={columnFilters}
                     onColumnFilterChange={onColumnFilterChange}
                     onClearColumnFilters={onClearColumnFilters}
+                    showColumnFilters={showColumnFilters}
                 />
             </div>
 
