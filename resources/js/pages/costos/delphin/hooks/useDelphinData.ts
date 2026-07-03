@@ -1,4 +1,5 @@
 import axios from 'axios';
+import Decimal from 'decimal.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGanttTasks } from '../../cronogramas/v2/composables/useGanttTasks';
 import type { GanttCalendarSettings as CalendarSettings } from '../../cronogramas/v2/types/calendar';
@@ -19,6 +20,14 @@ interface Options {
     initialRows: any[];
     schedulingMode: SchedulingMode;
     calendarSettings: CalendarSettings;
+}
+
+// Redondea con decimal.js a 2 decimales — evita el bug de .toFixed(2) con floats
+// (ej. (1.005).toFixed(2) === '1.00' en vez de '1.01' por representación binaria).
+// Mismo criterio que decimalMul en usePresupuestoAcu.ts, para que ACU, Insumos y
+// Presupuesto redondeen montos económicos de forma consistente.
+function round2(n: number): number {
+    return new Decimal(n).toDecimalPlaces(2).toNumber();
 }
 
 function normalizeForMatch(s: string): string {
@@ -244,13 +253,17 @@ export function useDelphinData({
                 const br = initialRows.find((r) => r.partida === task.partida);
                 const metrado = +(br?.metrado ?? 0);
                 const precio_unitario = +(br?.precio_unitario ?? 0);
-                // Compute parcial from factors when DB value is missing/zero (e.g. old saves
-                // that omitted the parcial field) — prevents the Total column showing all-zeros.
+                // Siempre recalcula parcial desde metrado × precio_unitario (misma fila) en
+                // vez de confiar en el valor guardado en BD: si precio_unitario se actualizó
+                // (ej. sync de precio del ACU) sin que ese guardado alcanzara a persistir el
+                // parcial recalculado, el valor guardado queda desincronizado — Costo Directo
+                // terminaría sumando un monto viejo mientras el resto de la app (Insumos
+                // Consolidados, etc.) ya usa el precio_unitario fresco. Solo se usa el valor
+                // guardado como respaldo cuando no hay factores para recalcular (datos legado
+                // sin metrado/precio_unitario) — evita que la columna Total se vea en cero.
                 const storedParcial = +(br?.parcial ?? 0);
-                const parcial =
-                    storedParcial !== 0
-                        ? storedParcial
-                        : +(metrado * precio_unitario).toFixed(2);
+                const computedParcial = round2(metrado * precio_unitario);
+                const parcial = computedParcial !== 0 ? computedParcial : storedParcial;
                 map.set(task.id, {
                     unidad: br?.unidad ?? '',
                     metrado,
@@ -380,9 +393,7 @@ export function useDelphinData({
                 const cur = next.get(id) ?? defaultBudget();
                 const upd = { ...cur, [field]: value };
                 if (field === 'metrado' || field === 'precio_unitario') {
-                    upd.parcial = +(upd.metrado * upd.precio_unitario).toFixed(
-                        2,
-                    );
+                    upd.parcial = round2(upd.metrado * upd.precio_unitario);
                 }
                 next.set(id, upd);
                 return next;

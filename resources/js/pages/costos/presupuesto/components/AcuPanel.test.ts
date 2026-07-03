@@ -30,9 +30,12 @@ describe('ACU resource selection', () => {
         });
 
         expect(component.cod_insumo).toBe('MO-047');
-        expect(calculated.mano_de_obra[0].parcial).toBe(15.01);
-        expect(calculated.costo_mano_obra).toBe(15.01);
-        expect(calculated.costo_unitario_total).toBe(15.01);
+        // 0.64 * 23.46 = 15.0144 — mantiene 6 decimales internamente (no se
+        // aplana a 2dp) para que Costo Directo e Insumos Consolidados
+        // reconcilien exactamente; la UI sigue mostrando 15.01.
+        expect(calculated.mano_de_obra[0].parcial).toBe(15.0144);
+        expect(calculated.costo_mano_obra).toBe(15.0144);
+        expect(calculated.costo_unitario_total).toBe(15.0144);
     });
 
     it('keeps local ACU changes when the same partida is selected again', () => {

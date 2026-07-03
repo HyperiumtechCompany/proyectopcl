@@ -164,3 +164,79 @@ it('conserva las partidas de origen al consolidar un insumo', () => {
         cemento.references.map((reference) => reference.cantidadTotal),
     ).toEqual([20, 20]);
 });
+
+it('reconcilia el total de insumos consolidados con el costo directo de la partida (metrado × costo ACU), aun con valores que no dividen parejo', () => {
+    const delphinRows = [
+        { id: 1, partida: '01.01', metrado: 7.333 },
+    ] as DelphinRow[];
+    const acus = [
+        {
+            id: 21,
+            partida: '01.01',
+            descripcion: 'Partida con residuo de redondeo',
+            unidad: 'm2',
+            rendimiento: 1,
+            costo_mano_obra: 1.55,
+            costo_materiales: 1.43,
+            costo_equipos: 0,
+            costo_subcontratos: 0,
+            costo_subpartidas: 0,
+            costo_unitario_total: 2.98,
+            mano_de_obra: [
+                { descripcion: 'Peón', unidad: 'hh', cantidad: 0.0667, precio_unitario: 23.17 },
+            ],
+            materiales: [
+                { descripcion: 'Cemento', unidad: 'kg', cantidad: 0.35, precio_unitario: 4.1 },
+            ],
+            equipos: [],
+            subcontratos: [],
+            subpartidas: [],
+        },
+    ] as ACURowSummary[];
+
+    const rawInsumos = flattenInsumos(acus, delphinRows);
+    const sumaInsumos = rawInsumos.reduce((sum, row) => sum + row.parcial, 0);
+
+    // Mismo criterio de redondeo que Costo Directo (metrado × costo, a 2 decimales).
+    const costoDirectoPartida = Math.round(7.333 * 2.98 * 100) / 100;
+
+    expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
+});
+
+it('ancla el reparto al precio_unitario YA GUARDADO en el presupuesto, no al costo_unitario_total del ACU, cuando quedaron desincronizados', () => {
+    // Escenario real reportado: el panel de ACU recalculó localmente (rendimiento/
+    // horas por día) y su costo_unitario_total (2.90) ya no coincide con el
+    // precio_unitario que sigue guardado en la fila del presupuesto (2.82), que
+    // es el que realmente determina Costo Directo.
+    const delphinRows = [
+        { id: 1, partida: '01.01', metrado: 789.81, precio_unitario: 2.82 },
+    ] as DelphinRow[];
+    const acus = [
+        {
+            id: 31,
+            partida: '01.01',
+            descripcion: 'Partida desincronizada',
+            unidad: 'hh',
+            rendimiento: 1,
+            costo_mano_obra: 2.90, // desactualizado respecto al presupuesto
+            costo_materiales: 0,
+            costo_equipos: 0,
+            costo_subcontratos: 0,
+            costo_subpartidas: 0,
+            costo_unitario_total: 2.90,
+            mano_de_obra: [
+                { descripcion: 'Oficial', unidad: 'hh', cantidad: 0.0334, precio_unitario: 22.19 },
+                { descripcion: 'Peón', unidad: 'hh', cantidad: 0.0334, precio_unitario: 20.08 },
+            ],
+            materiales: [],
+            equipos: [],
+            subcontratos: [],
+            subpartidas: [],
+        },
+    ] as ACURowSummary[];
+
+    const sumaInsumos = flattenInsumos(acus, delphinRows).reduce((sum, row) => sum + row.parcial, 0);
+    const costoDirectoPartida = Math.round(789.81 * 2.82 * 100) / 100;
+
+    expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
+});

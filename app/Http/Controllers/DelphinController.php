@@ -25,6 +25,12 @@ class DelphinController extends Controller
 
         $presupuestoId = $this->resolvePresupuestoId();
 
+        // Auto-repara precio_unitario/parcial de partidas cuyo ACU fue calculado
+        // antes de la corrección de precisión (aplanaba a 2 decimales, ej. 1.48 en
+        // vez de 1.479333) — así Costo Directo reconcilia con Insumos Consolidados
+        // sin que el usuario tenga que reguardar cada ACU manualmente.
+        $this->dbService->syncCostoDirecto($costoProject->database_name, $presupuestoId);
+
         $rows = DB::connection('costos_tenant')
             ->table('presupuesto_general')
             ->where('presupuesto_id', $presupuestoId)

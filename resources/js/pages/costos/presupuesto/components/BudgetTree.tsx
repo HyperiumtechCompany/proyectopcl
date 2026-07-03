@@ -48,10 +48,14 @@ const EditableCell = ({
     className?: string;
     activeColor?: string;
 }) => {
-    const [val, setVal] = useState(String(value ?? ''));
+    // El valor interno puede llevar más precisión que la mostrada (ej. precio_unitario
+    // sincronizado desde el ACU con 6 decimales) — se edita siempre sobre el valor
+    // redondeado a 2 decimales para no exponer esa precisión en el input.
+    const displayValue = value ? Math.round(value * 100) / 100 : 0;
+    const [val, setVal] = useState(displayValue ? String(displayValue) : '');
     const [isEditing, setIsEditing] = useState(false);
 
-    useEffect(() => { if (!isEditing) setVal(String(value ?? '')); }, [value, isEditing]);
+    useEffect(() => { if (!isEditing) setVal(displayValue ? String(displayValue) : ''); }, [displayValue, isEditing]);
 
     if (!isEditable) return <div className={className}>{value > 0 ? fmtDisplay(value) : ''}</div>;
 
@@ -68,12 +72,14 @@ const EditableCell = ({
                     setIsEditing(false);
                     const raw = stripLocale(val);
                     const num = Number(raw);
-                    if (!isNaN(num) && Math.abs(num - value) > 0.001) onUpdate(num);
-                    else setVal(String(value ?? ''));
+                    // Umbral de medio centavo: tolera la diferencia entre el valor
+                    // preciso interno y el redondeado que el usuario ve/edita.
+                    if (!isNaN(num) && Math.abs(num - displayValue) > 0.005) onUpdate(num);
+                    else setVal(displayValue ? String(displayValue) : '');
                 }}
                 onKeyDown={(e) => {
-                    if (e.key === 'Enter') { setIsEditing(false); const raw = stripLocale(val); const num = Number(raw); if (!isNaN(num) && Math.abs(num - value) > 0.001) onUpdate(num); else setVal(String(value ?? '')); }
-                    if (e.key === 'Escape') { setIsEditing(false); setVal(String(value ?? '')); }
+                    if (e.key === 'Enter') { setIsEditing(false); const raw = stripLocale(val); const num = Number(raw); if (!isNaN(num) && Math.abs(num - displayValue) > 0.005) onUpdate(num); else setVal(displayValue ? String(displayValue) : ''); }
+                    if (e.key === 'Escape') { setIsEditing(false); setVal(displayValue ? String(displayValue) : ''); }
                 }}
             />
         );

@@ -21,13 +21,13 @@ use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PresupuestoController extends Controller
 {
@@ -125,6 +125,17 @@ class PresupuestoController extends Controller
         $this->validateModuleEnabled($project);
         $this->validateSubsection($subsection);
 
+        // Auto-repara ACUs/partidas guardadas antes de la corrección de precisión
+        // (parcial aplanado a 2 decimales) para que Costo Directo e Insumos
+        // Consolidados reconcilien sin que el usuario tenga que reguardar cada ACU.
+        if (in_array($subsection, ['acus', 'general'], true)) {
+            $this->ensureAcuSchema();
+            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+            if ($tenantPresupuestoId) {
+                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+            }
+        }
+
         $tableName = self::SUBSECTION_TABLE_MAP[$subsection];
 
         $rows = $this->getOrderedRows($tableName)
@@ -189,7 +200,6 @@ class PresupuestoController extends Controller
                         // set to null to avoid FK violation (500 Error)
                         $cleanedRow['parent_id'] = null;
 
-                        
                     }
                 }
 
@@ -935,12 +945,13 @@ class PresupuestoController extends Controller
                         ->table('presupuesto_general')
                         ->where(function ($q) use ($partida) {
                             $q->where('partida', $partida)
-                              ->orWhere('partida', $this->canonicalCode($partida));
+                                ->orWhere('partida', $this->canonicalCode($partida));
                         })
                         ->first();
 
                     if (! $existingPartida) {
                         $totalSkipped++;
+
                         continue;
                     }
 
@@ -1006,7 +1017,7 @@ class PresupuestoController extends Controller
                     $acuIndex++;
                 }
             } catch (\Exception $e) {
-                $errors[] = $uploadedFile->getClientOriginalName() . ': ' . $e->getMessage();
+                $errors[] = $uploadedFile->getClientOriginalName().': '.$e->getMessage();
                 Log::error('Error importing ACU Excel', [
                     'file' => $uploadedFile->getClientOriginalName(),
                     'project' => $project->id,
@@ -1040,12 +1051,14 @@ class PresupuestoController extends Controller
      */
     private function extractRendimientoFromPartidaRow($sheet, int $row, int $maxRow): float
     {
-        $scanCols  = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
+        $scanCols = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
         $labelSeen = false;
 
         foreach ($scanCols as $col) {
-            $val = trim((string) $sheet->getCell($col . $row)->getCalculatedValue());
-            if ($val === '') continue;
+            $val = trim((string) $sheet->getCell($col.$row)->getCalculatedValue());
+            if ($val === '') {
+                continue;
+            }
 
             // Cell contains the "Rendimiento" keyword — try to read number from same cell
             if (stripos($val, 'rendimiento') !== false) {
@@ -1053,6 +1066,7 @@ class PresupuestoController extends Controller
                     return (float) str_replace(',', '.', $m[1]);
                 }
                 $labelSeen = true; // number is likely in the next non-empty cell
+
                 continue;
             }
 
@@ -1068,14 +1082,16 @@ class PresupuestoController extends Controller
         // Fallback: check the immediately following row (if it exists and is not a new section)
         if ($row + 1 <= $maxRow) {
             $sectionGuard = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO', 'SUBCONTRATOS', 'SUBPARTIDAS'];
-            $nextA = strtoupper(trim((string) $sheet->getCell('A' . ($row + 1))->getCalculatedValue()));
+            $nextA = strtoupper(trim((string) $sheet->getCell('A'.($row + 1))->getCalculatedValue()));
             $isNewBlock = ($nextA === 'PARTIDA:') || in_array($nextA, $sectionGuard)
                 || in_array(str_replace('-', '', $nextA), $sectionGuard);
 
             if (! $isNewBlock) {
                 foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'] as $col) {
-                    $val = trim((string) $sheet->getCell($col . ($row + 1))->getCalculatedValue());
-                    if ($val === '') continue;
+                    $val = trim((string) $sheet->getCell($col.($row + 1))->getCalculatedValue());
+                    if ($val === '') {
+                        continue;
+                    }
                     if (stripos($val, 'rendimiento') !== false) {
                         if (preg_match('/(?:rendimiento\s*:?\s*)(\d+(?:[.,]\d+)?)/i', $val, $m)) {
                             return (float) str_replace(',', '.', $m[1]);
@@ -1097,6 +1113,7 @@ class PresupuestoController extends Controller
         return implode('.', array_map(
             function (string $seg): string {
                 $stripped = ltrim(preg_replace('/[a-zA-Z]+$/', '', trim($seg)), '0');
+
                 return $stripped !== '' ? $stripped : '0';
             },
             explode('.', trim($code))
@@ -1111,17 +1128,17 @@ class PresupuestoController extends Controller
         $sectionHeaders = ['MANO DE OBRA', 'MATERIALES', 'EQUIPO', 'SUBCONTRATOS', 'SUBPARTIDAS'];
 
         for ($row = 1; $row <= $maxRow; $row++) {
-            $colA = trim((string) $sheet->getCell('A' . $row)->getCalculatedValue());
+            $colA = trim((string) $sheet->getCell('A'.$row)->getCalculatedValue());
 
             if ($colA === 'Partida:') {
                 if ($currentAcu !== null) {
                     $acus[] = $this->recalcAcuSubtotals($currentAcu);
                 }
 
-                $partidaCode = $this->normalizePartidaCode(trim((string) $sheet->getCell('D' . $row)->getCalculatedValue()));
-                $descripcion = trim((string) $sheet->getCell('F' . $row)->getCalculatedValue());
+                $partidaCode = $this->normalizePartidaCode(trim((string) $sheet->getCell('D'.$row)->getCalculatedValue()));
+                $descripcion = trim((string) $sheet->getCell('F'.$row)->getCalculatedValue());
                 if (empty($descripcion)) {
-                    $descripcion = trim((string) $sheet->getCell('G' . $row)->getCalculatedValue());
+                    $descripcion = trim((string) $sheet->getCell('G'.$row)->getCalculatedValue());
                 }
 
                 // Use the robust multi-column, multi-row rendimiento extractor
@@ -1143,6 +1160,7 @@ class PresupuestoController extends Controller
                     'costo_subpartidas' => 0,
                 ];
                 $currentSection = null;
+
                 continue;
             }
 
@@ -1153,6 +1171,7 @@ class PresupuestoController extends Controller
                 : (in_array(str_replace('-', '', $colAUpper), $sectionHeaders) ? str_replace('-', '', $colAUpper) : null);
             if ($colACanon !== null) {
                 $currentSection = $colACanon;
+
                 continue;
             }
 
@@ -1160,12 +1179,12 @@ class PresupuestoController extends Controller
                 continue;
             }
 
-            $colP = trim((string) $sheet->getCell('P' . $row)->getCalculatedValue());
+            $colP = trim((string) $sheet->getCell('P'.$row)->getCalculatedValue());
             if (stripos($colP, 'Costo unitario') !== false) {
                 continue;
             }
 
-            $colE = trim((string) $sheet->getCell('E' . $row)->getCalculatedValue());
+            $colE = trim((string) $sheet->getCell('E'.$row)->getCalculatedValue());
             $colEUpper = strtoupper($colE);
             $colEIsSection = in_array($colEUpper, $sectionHeaders)
                 || in_array(str_replace('-', '', $colEUpper), $sectionHeaders);
@@ -1173,39 +1192,39 @@ class PresupuestoController extends Controller
                 continue;
             }
 
-            $colM   = trim((string) $sheet->getCell('M' . $row)->getCalculatedValue());
-            $colQ   = (float) ($sheet->getCell('Q' . $row)->getCalculatedValue() ?? 0);
-            $colR   = (float) ($sheet->getCell('R' . $row)->getCalculatedValue() ?? 0);
-            $colN   = trim((string) $sheet->getCell('N' . $row)->getCalculatedValue());
+            $colM = trim((string) $sheet->getCell('M'.$row)->getCalculatedValue());
+            $colQ = (float) ($sheet->getCell('Q'.$row)->getCalculatedValue() ?? 0);
+            $colR = (float) ($sheet->getCell('R'.$row)->getCalculatedValue() ?? 0);
+            $colN = trim((string) $sheet->getCell('N'.$row)->getCalculatedValue());
 
             $isHerramientas = stripos($colE, 'HERRAMIENTA') !== false;
-            $unidad         = $colM ?: 'und';
-            $recursos       = ($colN === '-' || $colN === '' || $colN === null) ? 0 : (float) $colN;
+            $unidad = $colM ?: 'und';
+            $recursos = ($colN === '-' || $colN === '' || $colN === null) ? 0 : (float) $colN;
 
             // Parcial is always cantidad × precio for regular items.
             // Herramientas are an exception: their parcial depends on costo_mano_obra
             // which is not yet known here — recalcAcuSubtotals corrects them later.
-            $parcial = round($colQ * $colR, 2);
+            $parcial = round($colQ * $colR, 6);
 
             $component = [
                 'descripcion' => $colE,
-                'unidad'      => $unidad,
-                'cantidad'    => $colQ,
-                'parcial'     => $parcial,
+                'unidad' => $unidad,
+                'cantidad' => $colQ,
+                'parcial' => $parcial,
             ];
 
             switch ($currentSection) {
                 case 'MANO DE OBRA':
                     $component['precio_unitario'] = $colR;
-                    $component['recursos']        = $recursos;
+                    $component['recursos'] = $recursos;
                     break;
                 case 'MATERIALES':
-                    $component['precio_unitario']  = $colR;
+                    $component['precio_unitario'] = $colR;
                     $component['factor_desperdicio'] = 1.0;
                     break;
                 case 'EQUIPO':
                     $component['precio_hora'] = $colR;
-                    $component['recursos']    = $isHerramientas ? 0 : $recursos;
+                    $component['recursos'] = $isHerramientas ? 0 : $recursos;
                     break;
                 case 'SUBCONTRATOS':
                 case 'SUBPARTIDAS':
@@ -1215,11 +1234,11 @@ class PresupuestoController extends Controller
 
             $sectionKey = match ($currentSection) {
                 'MANO DE OBRA' => 'mano_de_obra',
-                'MATERIALES'   => 'materiales',
-                'EQUIPO'       => 'equipos',
+                'MATERIALES' => 'materiales',
+                'EQUIPO' => 'equipos',
                 'SUBCONTRATOS' => 'subcontratos',
-                'SUBPARTIDAS'  => 'subpartidas',
-                default        => strtolower($currentSection),
+                'SUBPARTIDAS' => 'subpartidas',
+                default => strtolower($currentSection),
             };
             $currentAcu[$sectionKey][] = $component;
         }
@@ -1246,23 +1265,23 @@ class PresupuestoController extends Controller
     private function recalcAcuSubtotals(array $acu): array
     {
         // ① Mano de obra first — herramientas need this value.
-        $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 2);
+        $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 6);
 
         // ② Fix herramientas parcial now that costo_mano_obra is known.
         foreach ($acu['equipos'] as &$item) {
             if (stripos($item['descripcion'] ?? '', 'HERRAMIENTA') !== false) {
                 $pct = (float) ($item['cantidad'] ?? 0);
-                $item['parcial']     = round($acu['costo_mano_obra'] * ($pct / 100.0), 2);
+                $item['parcial'] = round($acu['costo_mano_obra'] * ($pct / 100.0), 6);
                 $item['precio_hora'] = $acu['costo_mano_obra'];
             }
         }
         unset($item);
 
         // ③ Remaining subtotals.
-        $acu['costo_materiales']   = round(array_sum(array_column($acu['materiales']   ?? [], 'parcial')), 2);
-        $acu['costo_equipos']      = round(array_sum(array_column($acu['equipos']      ?? [], 'parcial')), 2);
-        $acu['costo_subcontratos'] = round(array_sum(array_column($acu['subcontratos'] ?? [], 'parcial')), 2);
-        $acu['costo_subpartidas']  = round(array_sum(array_column($acu['subpartidas']  ?? [], 'parcial')), 2);
+        $acu['costo_materiales'] = round(array_sum(array_column($acu['materiales'] ?? [], 'parcial')), 6);
+        $acu['costo_equipos'] = round(array_sum(array_column($acu['equipos'] ?? [], 'parcial')), 6);
+        $acu['costo_subcontratos'] = round(array_sum(array_column($acu['subcontratos'] ?? [], 'parcial')), 6);
+        $acu['costo_subpartidas'] = round(array_sum(array_column($acu['subpartidas'] ?? [], 'parcial')), 6);
 
         // ④ Rendimiento inference: if header extraction defaulted to 1.0, infer
         //    from the first crew member that has recursos and cantidad.
@@ -1291,6 +1310,7 @@ class PresupuestoController extends Controller
             return $str;
         }
         $parts = explode('.', $str);
+
         return implode('.', array_map(fn ($p) => str_pad(preg_replace('/[a-zA-Z]+$/', '', trim($p)), 2, '0', STR_PAD_LEFT), $parts));
     }
 
@@ -1299,6 +1319,7 @@ class PresupuestoController extends Controller
         if (preg_match('/(\d+[\.,]?\d*)\s*([^\s\/]+)/u', $text, $matches)) {
             return $matches[2];
         }
+
         return '';
     }
 
@@ -1503,11 +1524,11 @@ class PresupuestoController extends Controller
             foreach ($manoDeObra as &$componente) {
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 2);
+                $componente['parcial'] = round($parcial, 6);
                 $costoManoObra += $componente['parcial'];
             }
             // No rounding at category level — only at component level (round per parcial).
-            // Summing 2-decimal component parcials without extra rounding keeps
+            // Summing 6-decimal component parcials without extra rounding keeps
             // costo_unitario_total = exact sum of parcials, matching the insumos total.
 
             // Calculate materiales costs
@@ -1517,7 +1538,7 @@ class PresupuestoController extends Controller
                 // Formula: cantidad * precio_unitario * factor_desperdicio
                 $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
-                $componente['parcial'] = round($parcial, 2);
+                $componente['parcial'] = round($parcial, 6);
                 $costoMateriales += $componente['parcial'];
             }
 
@@ -1534,11 +1555,11 @@ class PresupuestoController extends Controller
                     $porcentaje = $componente['cantidad'] ?? 0;
                     $parcial = $precioBase * ($porcentaje / 100);
                     $componente['precio_hora'] = $precioBase;
-                    $componente['parcial'] = round($parcial, 2);
+                    $componente['parcial'] = round($parcial, 6);
                 } else {
                     // Formula: cantidad * precio_hora
                     $parcial = $componente['cantidad'] * $componente['precio_hora'];
-                    $componente['parcial'] = round($parcial, 2);
+                    $componente['parcial'] = round($parcial, 6);
                 }
 
                 $costoEquipos += $componente['parcial'];
@@ -1550,7 +1571,7 @@ class PresupuestoController extends Controller
             foreach ($subcontratos as &$componente) {
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 2);
+                $componente['parcial'] = round($parcial, 6);
                 $costoSubcontratos += $componente['parcial'];
             }
 
@@ -1560,7 +1581,7 @@ class PresupuestoController extends Controller
             foreach ($subpartidas as &$componente) {
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 2);
+                $componente['parcial'] = round($parcial, 6);
                 $costoSubpartidas += $componente['parcial'];
             }
 
@@ -2305,8 +2326,6 @@ class PresupuestoController extends Controller
             }
         }
 
-        
-
         return $errors;
     }
 
@@ -2946,22 +2965,17 @@ class PresupuestoController extends Controller
 
         if (! $schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
-                $table->decimal('costo_unitario_total', 15, 4)
+                $table->decimal('costo_unitario_total', 15, 6)
                     ->storedAs('costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas')
                     ->comment('Calculated: sum of all component costs');
             });
             $this->tenantColumnCache['presupuesto_acus.costo_unitario_total'] = true;
-        } else {
-            try {
-                DB::connection('costos_tenant')->statement(
-                    'ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,4) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED'
-                );
-            } catch (\Throwable $e) {
-                Log::warning('No se pudo actualizar la fórmula de costo_unitario_total', [
-                    'error' => $e->getMessage(),
-                ]);
-            }
         }
+
+        // Amplía a 6 decimales las columnas de costo/precio/parcial/cantidad (legacy DBs
+        // en 4 o menos) para que precio_unitario deje de aplanarse antes de llegar a
+        // Costo Directo/Insumos Consolidados — ver CostoDatabaseService::widenAcuPrecisionColumns().
+        $this->dbService->widenAcuPrecisionColumns();
 
         // Ensure cod_insumo column exists in all ACU component child tables (legacy DBs)
         $childTables = ['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'];
@@ -3148,289 +3162,292 @@ class PresupuestoController extends Controller
     /**
      * Helper: obtiene las filas del presupuesto general desde el tenant.
      */
-private function buildPresupuestoRows(CostoProject $project, string $tipo = 'completo'): array
-{
-    $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+    private function buildPresupuestoRows(CostoProject $project, string $tipo = 'completo'): array
+    {
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
 
-    $rows = DB::connection('costos_tenant')
-        ->table('presupuesto_general')
-        ->where('presupuesto_id', $tenantPresupuestoId)
-        ->orderBy('item_order')
-        ->orderBy('id')
-        ->get()
-        ->map(fn ($r) => (array) $r)
-        ->toArray();
+        $rows = DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->orderBy('item_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($r) => (array) $r)
+            ->toArray();
 
-    if ($tipo !== 'padres') {
-        return $rows;
+        if ($tipo !== 'padres') {
+            return $rows;
+        }
+
+        $rows = $this->attachEspecialidad($rows);
+
+        return array_values(array_filter($rows, function ($row) {
+            $partida = (string) ($row['partida'] ?? '');
+            $dots = $partida === '' ? 0 : substr_count($partida, '.');
+
+            return $dots <= 1;
+        }));
     }
 
-    $rows = $this->attachEspecialidad($rows);
-
-    return array_values(array_filter($rows, function ($row) {
-        $partida = (string) ($row['partida'] ?? '');
-        $dots = $partida === '' ? 0 : substr_count($partida, '.');
-        return $dots <= 1;
-    }));
-}
     /**
      * Exporta el presupuesto general a CSV/Excel (UTF-8 BOM para compatibilidad con Microsoft Excel).
      * Ruta: GET /costos/proyectos/{project}/presupuesto/export/excel
      */
     public function exportExcel(CostoProject $project, Request $request): \Illuminate\Http\Response
-{
-    $this->authorizeProject($project);
-    $this->validateModuleEnabled($project);
+    {
+        $this->authorizeProject($project);
+        $this->validateModuleEnabled($project);
 
-    $tipo = $request->input('tipo', 'completo');
+        $tipo = $request->input('tipo', 'completo');
 
-    $rows = $this->buildPresupuestoRows($project, $tipo);
+        $rows = $this->buildPresupuestoRows($project, $tipo);
 
-    $spreadsheet = new Spreadsheet();
-    $sheet = $spreadsheet->getActiveSheet();
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
 
-    // ─── VARIABLES DEL PROYECTO ────────────────────────────────────────────────
-    $nombreProyecto = $project->nombre ?? 'PROYECTO SIN NOMBRE';
-    $cui = $project->codigo_cui ?? '-';
-    $codigoLocal = $project->codigo_local ?? '-';
-    
-    $modular = '-';
-    if (is_array($project->codigos_modulares)) {
-        $modular = implode('-', $project->codigos_modulares);
-    } elseif ($project->codigos_modulares) {
-        $modular = (string) $project->codigos_modulares;
-    }
-    
-    $unidadEjecutora = $project->unidad_ejecutora ?? '-';
-    $propietario = $project->unidad_ejecutora ?? '-';
+        // ─── VARIABLES DEL PROYECTO ────────────────────────────────────────────────
+        $nombreProyecto = $project->nombre ?? 'PROYECTO SIN NOMBRE';
+        $cui = $project->codigo_cui ?? '-';
+        $codigoLocal = $project->codigo_local ?? '-';
 
-    // Extraer I.E.
-    $ieNombre = $project->nombre ?? '';
-    $ieCodigo = '-';
-    $match = preg_match('/N°\s*(\d+)/i', $ieNombre, $matches);
-    if ($match) {
-        $ieCodigo = $matches[1];
-    } else {
-        $ieCodigo = explode('-', $ieNombre)[0] ?? '-';
-    }
+        $modular = '-';
+        if (is_array($project->codigos_modulares)) {
+            $modular = implode('-', $project->codigos_modulares);
+        } elseif ($project->codigos_modulares) {
+            $modular = (string) $project->codigos_modulares;
+        }
 
-    // ─── LOGOS ──────────────────────────────────────────────────────────────────
-    $filaActual = 1;
+        $unidadEjecutora = $project->unidad_ejecutora ?? '-';
+        $propietario = $project->unidad_ejecutora ?? '-';
 
-    // Logo izquierdo
-    if ($project->plantilla_logo_izq) {
-        try {
-            $path = storage_path('app/public/' . $project->plantilla_logo_izq);
-            if (file_exists($path)) {
-                $drawing = new Drawing();
-                $drawing->setPath($path);
-                $drawing->setHeight(55);
-                $drawing->setCoordinates('A1');
-                $drawing->setWorksheet($sheet);
+        // Extraer I.E.
+        $ieNombre = $project->nombre ?? '';
+        $ieCodigo = '-';
+        $match = preg_match('/N°\s*(\d+)/i', $ieNombre, $matches);
+        if ($match) {
+            $ieCodigo = $matches[1];
+        } else {
+            $ieCodigo = explode('-', $ieNombre)[0] ?? '-';
+        }
+
+        // ─── LOGOS ──────────────────────────────────────────────────────────────────
+        $filaActual = 1;
+
+        // Logo izquierdo
+        if ($project->plantilla_logo_izq) {
+            try {
+                $path = storage_path('app/public/'.$project->plantilla_logo_izq);
+                if (file_exists($path)) {
+                    $drawing = new Drawing;
+                    $drawing->setPath($path);
+                    $drawing->setHeight(55);
+                    $drawing->setCoordinates('A1');
+                    $drawing->setWorksheet($sheet);
+                }
+            } catch (\Exception $e) {
+                Log::warning('No se pudo cargar logo izquierdo: '.$e->getMessage());
             }
-        } catch (\Exception $e) {
-            Log::warning('No se pudo cargar logo izquierdo: ' . $e->getMessage());
         }
-    }
 
-    // Logo derecho
-    if ($project->plantilla_logo_der) {
-        try {
-            $path = storage_path('app/public/' . $project->plantilla_logo_der);
-            if (file_exists($path)) {
-                $drawing = new Drawing();
-                $drawing->setPath($path);
-                $drawing->setHeight(55);
-                $drawing->setCoordinates('F1');
-                $drawing->setWorksheet($sheet);
+        // Logo derecho
+        if ($project->plantilla_logo_der) {
+            try {
+                $path = storage_path('app/public/'.$project->plantilla_logo_der);
+                if (file_exists($path)) {
+                    $drawing = new Drawing;
+                    $drawing->setPath($path);
+                    $drawing->setHeight(55);
+                    $drawing->setCoordinates('F1');
+                    $drawing->setWorksheet($sheet);
+                }
+            } catch (\Exception $e) {
+                Log::warning('No se pudo cargar logo derecho: '.$e->getMessage());
             }
-        } catch (\Exception $e) {
-            Log::warning('No se pudo cargar logo derecho: ' . $e->getMessage());
         }
-    }
 
-    // ─── TÍTULO ─────────────────────────────────────────────────────────────────
-    $sheet->mergeCells('B1:E1');
-    $sheet->setCellValue('B1', '"' . strtoupper($nombreProyecto) . '"');
-    $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(11)->setItalic(true);
-    $sheet->getStyle('B1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        // ─── TÍTULO ─────────────────────────────────────────────────────────────────
+        $sheet->mergeCells('B1:E1');
+        $sheet->setCellValue('B1', '"'.strtoupper($nombreProyecto).'"');
+        $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(11)->setItalic(true);
+        $sheet->getStyle('B1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-    $filaActual = 4;
+        $filaActual = 4;
 
-    // CUI, Modular, Local
-    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
-    $sheet->setCellValue('A' . $filaActual, 'CUI: ' . $cui . '; CÓDIGO MODULAR: ' . $modular . '; CÓDIGO LOCAL: ' . $codigoLocal);
-    $sheet->getStyle('A' . $filaActual)->getFont()->setSize(9);
-    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $filaActual++;
-
-    // I.E.
-    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
-    $sheet->setCellValue('A' . $filaActual, 'I.E. ' . $ieCodigo . '; UNIDAD EJECUTORA: ' . $unidadEjecutora);
-    $sheet->getStyle('A' . $filaActual)->getFont()->setSize(9);
-    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $filaActual++;
-
-    // Espacio
-    $filaActual++;
-
-    // Título principal
-    $sheet->mergeCells('A' . $filaActual . ':F' . $filaActual);
-    $sheet->setCellValue('A' . $filaActual, 'RESUMEN DE PRESUPUESTO');
-    $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(14);
-    $sheet->getStyle('A' . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-    $filaActual++;
-
-    // Espacio
-    $filaActual++;
-
-    // ─── DATOS DEL PROYECTO ────────────────────────────────────────────────────
-    $datos = [
-        ['Proyecto', $nombreProyecto],
-        ['Propietario', $propietario],
-        ['Fecha', $this->getFechaFormatoModelo()],
-        ['Módulo', 'GENERAL'],
-    ];
-
-    foreach ($datos as $dato) {
-        $sheet->setCellValue('A' . $filaActual, $dato[0]);
-        $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(10);
-        $sheet->setCellValue('B' . $filaActual, ': ' . $dato[1]);
-        $sheet->getStyle('B' . $filaActual)->getFont()->setSize(10);
+        // CUI, Modular, Local
+        $sheet->mergeCells('A'.$filaActual.':F'.$filaActual);
+        $sheet->setCellValue('A'.$filaActual, 'CUI: '.$cui.'; CÓDIGO MODULAR: '.$modular.'; CÓDIGO LOCAL: '.$codigoLocal);
+        $sheet->getStyle('A'.$filaActual)->getFont()->setSize(9);
+        $sheet->getStyle('A'.$filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $filaActual++;
-    }
 
-    // Espacio
-    $filaActual++;
-
-    // Hecho por / Revisado por
-    $sheet->setCellValue('A' . $filaActual, 'Hecho por');
-    $sheet->getStyle('A' . $filaActual)->getFont()->setBold(true)->setSize(10);
-    $sheet->setCellValue('B' . $filaActual, ':');
-
-    $sheet->setCellValue('D' . $filaActual, 'Revisado por');
-    $sheet->getStyle('D' . $filaActual)->getFont()->setBold(true)->setSize(10);
-    $sheet->setCellValue('E' . $filaActual, ':');
-    $filaActual++;
-
-    // Espacio
-    $filaActual++;
-    $filaActual++;
-
-    // ─── CABECERA DE TABLA ──────────────────────────────────────────────────
-    $headers = ['ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'P.U. (S/.)', 'PARCIAL (S/.)'];
-    $colLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
-
-    foreach ($headers as $index => $header) {
-        $col = $colLetters[$index];
-        $sheet->setCellValue($col . $filaActual, $header);
-        $sheet->getStyle($col . $filaActual)->getFont()->setBold(true)->setSize(10)
-            ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color(\PhpOffice\PhpSpreadsheet\Style\Color::COLOR_WHITE));
-        $sheet->getStyle($col . $filaActual)->getFill()
-            ->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setARGB('FF1F4E79');
-        $sheet->getStyle($col . $filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle($col . $filaActual)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-    }
-    $filaActual++;
-
-    // ─── DATOS ──────────────────────────────────────────────────────────────────
-    $totalGeneral = 0;
-    $colorFila = 0;
-
-    foreach ($rows as $row) {
-        $level = substr_count((string) ($row['partida'] ?? ''), '.');
-        $indent = str_repeat('    ', $level);
-        $metrado = (float) ($row['metrado'] ?? 0);
-        $precio = (float) ($row['precio_unitario'] ?? 0);
-        $parcial = (float) ($row['parcial'] ?? 0);
-        $totalGeneral += $parcial;
-
-        $esPar = ($colorFila % 2 === 0);
-        $bgColor = $esPar ? 'FFF8FAFE' : 'FFFFFFFF';
-
-        $sheet->setCellValue('A' . $filaActual, $row['partida'] ?? '');
-        $sheet->setCellValue('B' . $filaActual, $indent . ($row['descripcion'] ?? ''));
-        $sheet->setCellValue('C' . $filaActual, $row['unidad'] ?? '');
-        $sheet->setCellValue('D' . $filaActual, $metrado);
-        $sheet->setCellValue('E' . $filaActual, $precio);
-        $sheet->setCellValue('F' . $filaActual, $parcial);
-
-        $sheet->getStyle('D' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
-        $sheet->getStyle('E' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
-        $sheet->getStyle('F' . $filaActual)->getNumberFormat()->setFormatCode('#,##0.00');
-
-        foreach ($colLetters as $col) {
-            $cell = $sheet->getStyle($col . $filaActual);
-            $cell->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-            $cell->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($bgColor);
-        }
-
-        $colorFila++;
+        // I.E.
+        $sheet->mergeCells('A'.$filaActual.':F'.$filaActual);
+        $sheet->setCellValue('A'.$filaActual, 'I.E. '.$ieCodigo.'; UNIDAD EJECUTORA: '.$unidadEjecutora);
+        $sheet->getStyle('A'.$filaActual)->getFont()->setSize(9);
+        $sheet->getStyle('A'.$filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $filaActual++;
-    }
 
-    // ─── TOTAL ──────────────────────────────────────────────────────────────────
-    if ($filaActual > 7) {
-        $totalRow = $filaActual + 1;
-        $sheet->mergeCells('A' . $totalRow . ':E' . $totalRow);
-        $sheet->setCellValue('A' . $totalRow, 'TOTAL COSTO DIRECTO:');
-        $sheet->getStyle('A' . $totalRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A' . $totalRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        // Espacio
+        $filaActual++;
 
-        $sheet->setCellValue('F' . $totalRow, $totalGeneral);
-        $sheet->getStyle('F' . $totalRow)->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle('F' . $totalRow)->getFont()->setBold(true)->setSize(11);
+        // Título principal
+        $sheet->mergeCells('A'.$filaActual.':F'.$filaActual);
+        $sheet->setCellValue('A'.$filaActual, 'RESUMEN DE PRESUPUESTO');
+        $sheet->getStyle('A'.$filaActual)->getFont()->setBold(true)->setSize(14);
+        $sheet->getStyle('A'.$filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $filaActual++;
 
-        $sheet->getStyle('A' . $totalRow . ':F' . $totalRow)->getFill()
-            ->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setARGB('FFD9EAF7');
+        // Espacio
+        $filaActual++;
 
-        foreach ($colLetters as $col) {
-            $sheet->getStyle($col . $totalRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        // ─── DATOS DEL PROYECTO ────────────────────────────────────────────────────
+        $datos = [
+            ['Proyecto', $nombreProyecto],
+            ['Propietario', $propietario],
+            ['Fecha', $this->getFechaFormatoModelo()],
+            ['Módulo', 'GENERAL'],
+        ];
+
+        foreach ($datos as $dato) {
+            $sheet->setCellValue('A'.$filaActual, $dato[0]);
+            $sheet->getStyle('A'.$filaActual)->getFont()->setBold(true)->setSize(10);
+            $sheet->setCellValue('B'.$filaActual, ': '.$dato[1]);
+            $sheet->getStyle('B'.$filaActual)->getFont()->setSize(10);
+            $filaActual++;
         }
+
+        // Espacio
+        $filaActual++;
+
+        // Hecho por / Revisado por
+        $sheet->setCellValue('A'.$filaActual, 'Hecho por');
+        $sheet->getStyle('A'.$filaActual)->getFont()->setBold(true)->setSize(10);
+        $sheet->setCellValue('B'.$filaActual, ':');
+
+        $sheet->setCellValue('D'.$filaActual, 'Revisado por');
+        $sheet->getStyle('D'.$filaActual)->getFont()->setBold(true)->setSize(10);
+        $sheet->setCellValue('E'.$filaActual, ':');
+        $filaActual++;
+
+        // Espacio
+        $filaActual++;
+        $filaActual++;
+
+        // ─── CABECERA DE TABLA ──────────────────────────────────────────────────
+        $headers = ['ÍTEM', 'DESCRIPCIÓN', 'UND', 'METRADO', 'P.U. (S/.)', 'PARCIAL (S/.)'];
+        $colLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+        foreach ($headers as $index => $header) {
+            $col = $colLetters[$index];
+            $sheet->setCellValue($col.$filaActual, $header);
+            $sheet->getStyle($col.$filaActual)->getFont()->setBold(true)->setSize(10)
+                ->setColor(new Color(Color::COLOR_WHITE));
+            $sheet->getStyle($col.$filaActual)->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FF1F4E79');
+            $sheet->getStyle($col.$filaActual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle($col.$filaActual)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        }
+        $filaActual++;
+
+        // ─── DATOS ──────────────────────────────────────────────────────────────────
+        $totalGeneral = 0;
+        $colorFila = 0;
+
+        foreach ($rows as $row) {
+            $level = substr_count((string) ($row['partida'] ?? ''), '.');
+            $indent = str_repeat('    ', $level);
+            $metrado = (float) ($row['metrado'] ?? 0);
+            $precio = (float) ($row['precio_unitario'] ?? 0);
+            $parcial = (float) ($row['parcial'] ?? 0);
+            $totalGeneral += $parcial;
+
+            $esPar = ($colorFila % 2 === 0);
+            $bgColor = $esPar ? 'FFF8FAFE' : 'FFFFFFFF';
+
+            $sheet->setCellValue('A'.$filaActual, $row['partida'] ?? '');
+            $sheet->setCellValue('B'.$filaActual, $indent.($row['descripcion'] ?? ''));
+            $sheet->setCellValue('C'.$filaActual, $row['unidad'] ?? '');
+            $sheet->setCellValue('D'.$filaActual, $metrado);
+            $sheet->setCellValue('E'.$filaActual, $precio);
+            $sheet->setCellValue('F'.$filaActual, $parcial);
+
+            $sheet->getStyle('D'.$filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
+            $sheet->getStyle('E'.$filaActual)->getNumberFormat()->setFormatCode('#,##0.0000');
+            $sheet->getStyle('F'.$filaActual)->getNumberFormat()->setFormatCode('#,##0.00');
+
+            foreach ($colLetters as $col) {
+                $cell = $sheet->getStyle($col.$filaActual);
+                $cell->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+                $cell->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($bgColor);
+            }
+
+            $colorFila++;
+            $filaActual++;
+        }
+
+        // ─── TOTAL ──────────────────────────────────────────────────────────────────
+        if ($filaActual > 7) {
+            $totalRow = $filaActual + 1;
+            $sheet->mergeCells('A'.$totalRow.':E'.$totalRow);
+            $sheet->setCellValue('A'.$totalRow, 'TOTAL COSTO DIRECTO:');
+            $sheet->getStyle('A'.$totalRow)->getFont()->setBold(true)->setSize(11);
+            $sheet->getStyle('A'.$totalRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+            $sheet->setCellValue('F'.$totalRow, $totalGeneral);
+            $sheet->getStyle('F'.$totalRow)->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle('F'.$totalRow)->getFont()->setBold(true)->setSize(11);
+
+            $sheet->getStyle('A'.$totalRow.':F'.$totalRow)->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFD9EAF7');
+
+            foreach ($colLetters as $col) {
+                $sheet->getStyle($col.$totalRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+            }
+        }
+
+        // ─── ANCHOS ─────────────────────────────────────────────────────────────────
+        $sheet->getColumnDimension('A')->setWidth(15);
+        $sheet->getColumnDimension('B')->setWidth(50);
+        $sheet->getColumnDimension('C')->setWidth(12);
+        $sheet->getColumnDimension('D')->setWidth(15);
+        $sheet->getColumnDimension('E')->setWidth(15);
+        $sheet->getColumnDimension('F')->setWidth(18);
+
+        // ─── DESCARGAR ──────────────────────────────────────────────────────────────
+        $writer = new Xlsx($spreadsheet);
+
+        $nombreArchivo = 'presupuesto';
+        if ($tipo === 'padres') {
+            $nombreArchivo .= '_padres';
+        }
+        $nombreArchivo .= '_'.preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre).'_'.date('Ymd').'.xlsx';
+
+        ob_start();
+        $writer->save('php://output');
+        $content = ob_get_clean();
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$nombreArchivo.'"',
+            'Content-Length' => strlen($content),
+        ]);
     }
 
-    // ─── ANCHOS ─────────────────────────────────────────────────────────────────
-    $sheet->getColumnDimension('A')->setWidth(15);
-    $sheet->getColumnDimension('B')->setWidth(50);
-    $sheet->getColumnDimension('C')->setWidth(12);
-    $sheet->getColumnDimension('D')->setWidth(15);
-    $sheet->getColumnDimension('E')->setWidth(15);
-    $sheet->getColumnDimension('F')->setWidth(18);
+    /**
+     * Helper para formatear fecha como "JUNIO 2026"
+     */
+    private function getFechaFormatoModelo(): string
+    {
+        $meses = [
+            'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+            'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
+        ];
+        $hoy = new \DateTime;
 
-    // ─── DESCARGAR ──────────────────────────────────────────────────────────────
-    $writer = new Xlsx($spreadsheet);
-
-    $nombreArchivo = 'presupuesto';
-    if ($tipo === 'padres') {
-        $nombreArchivo .= '_padres';
+        return $meses[(int) $hoy->format('m') - 1].' '.$hoy->format('Y');
     }
-    $nombreArchivo .= '_' . preg_replace('/[^a-zA-Z0-9_]/', '_', $project->nombre) . '_' . date('Ymd') . '.xlsx';
-
-    ob_start();
-    $writer->save('php://output');
-    $content = ob_get_clean();
-
-    return response($content, 200, [
-        'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition' => 'attachment; filename="' . $nombreArchivo . '"',
-        'Content-Length' => strlen($content),
-    ]);
-}
-
-/**
- * Helper para formatear fecha como "JUNIO 2026"
- */
-private function getFechaFormatoModelo(): string
-{
-    $meses = [
-        'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
-        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
-    ];
-    $hoy = new \DateTime();
-    return $meses[(int) $hoy->format('m') - 1] . ' ' . $hoy->format('Y');
-}
 
     /**
      * Exporta el presupuesto general como HTML imprimible (o PDF si Dompdf está disponible).

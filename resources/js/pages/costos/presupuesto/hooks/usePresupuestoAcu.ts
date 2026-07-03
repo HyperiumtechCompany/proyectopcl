@@ -12,16 +12,19 @@ export interface AcuFlushProgress {
     etaSecs: number | null;
 }
 
-// Mirrors the PHP calculateACU logic — keeps visual preview consistent with DB result
-// r2 rounds sums of already-rounded values (float error is negligible there)
-function r2(n: number): number { return Math.round(n * 100) / 100; }
+// Mirrors the PHP calculateACU logic — keeps visual preview consistent with DB result.
+// Rounds to 6dp (not 2) so the preview matches the DB's internal precision: rounding
+// each item's parcial to 2dp before summing was what made Costo Directo (metrado ×
+// precio_unitario, both flattened to 2dp) diverge from Insumos Consolidados (which
+// carried full precision) — see PresupuestoController::calculateAcu for the backend twin.
+function r2(n: number): number { return new Decimal(n).toDecimalPlaces(6).toNumber(); }
 
-// Multiplies operands with Decimal.js precision and rounds the result to 2dp.
+// Multiplies operands with Decimal.js precision and rounds the result to 6dp.
 // Avoids float errors like 0.57 * 31.50 = 17.954999... rounding to 17.95 instead of 17.96.
 function decimalMul(...factors: number[]): number {
     return factors
         .reduce((acc, f) => acc.times(new Decimal(f)), new Decimal(1))
-        .toDecimalPlaces(2)
+        .toDecimalPlaces(6)
         .toNumber();
 }
 

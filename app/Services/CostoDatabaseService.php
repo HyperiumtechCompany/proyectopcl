@@ -330,14 +330,110 @@ class CostoDatabaseService
         if ($col && stripos((string) $col->EXTRA, 'GENERATED') !== false) {
             $connection->statement('ALTER TABLE presupuesto_general DROP COLUMN parcial');
             $connection->statement(
-                'ALTER TABLE presupuesto_general ADD COLUMN parcial DECIMAL(15,4) NOT NULL DEFAULT 0 AFTER precio_unitario'
+                'ALTER TABLE presupuesto_general ADD COLUMN parcial DECIMAL(15,6) NOT NULL DEFAULT 0 AFTER precio_unitario'
             );
             // Repoblar parcial para filas hoja con datos ya existentes
             $connection->statement(
-                'UPDATE presupuesto_general SET parcial = ROUND(metrado * precio_unitario, 4) WHERE metrado > 0 OR precio_unitario > 0'
+                'UPDATE presupuesto_general SET parcial = ROUND(metrado * precio_unitario, 6) WHERE metrado > 0 OR precio_unitario > 0'
             );
 
             Log::info('CostoDatabaseService: converted presupuesto_general.parcial from GENERATED to regular column', ['db' => $dbName]);
+        }
+    }
+
+    /**
+     * Amplía una columna DECIMAL a 6 decimales si aún no lo está. Antes varias de
+     * estas columnas truncaban a 4 (o 2, a nivel de cálculo) decimales, lo que
+     * aplanaba el precio_unitario sincronizado desde el ACU (ej. 1.48 en vez de
+     * 1.479333) y hacía que Costo Directo divergiera de Insumos Consolidados.
+     * Consulta information_schema primero para no re-ejecutar el ALTER (costoso
+     * en tablas grandes) cuando la columna ya tiene la precisión objetivo.
+     */
+    private function widenColumnScale(string $table, string $column, int $scale = 6, int $precision = 15): void
+    {
+        $connection = DB::connection('costos_tenant');
+        $dbName = $connection->getDatabaseName();
+
+        $schema = Schema::connection('costos_tenant');
+        if (! $schema->hasTable($table) || ! $schema->hasColumn($table, $column)) {
+            return;
+        }
+
+        $col = $connection->selectOne(
+            'SELECT NUMERIC_SCALE AS scale FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [$dbName, $table, $column]
+        );
+
+        if ($col && (int) $col->scale >= $scale) {
+            return;
+        }
+
+        try {
+            $connection->statement(
+                "ALTER TABLE {$table} MODIFY COLUMN {$column} DECIMAL({$precision},{$scale}) NOT NULL DEFAULT 0"
+            );
+        } catch (\Throwable $e) {
+            Log::warning("No se pudo ampliar la precisión de {$table}.{$column}", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function widenPresupuestoGeneralPrecision(): void
+    {
+        $this->widenColumnScale('presupuesto_general', 'precio_unitario');
+        $this->widenColumnScale('presupuesto_general', 'parcial');
+    }
+
+    /**
+     * Amplía a 6 decimales las columnas de presupuesto_acus/acu_* que participan
+     * en el cálculo del ACU. Se llama desde syncCostoDirecto() para que cualquier
+     * punto de entrada que lo invoque (Delphin, Presupuesto General, import Excel)
+     * auto-repare tenants antiguos, no solo el flujo de guardado de un ACU.
+     */
+    public function widenAcuPrecisionColumns(): void
+    {
+        foreach ([
+            'costo_mano_obra', 'costo_materiales', 'costo_equipos', 'costo_subcontratos', 'costo_subpartidas',
+        ] as $column) {
+            $this->widenColumnScale('presupuesto_acus', $column);
+        }
+
+        $connection = DB::connection('costos_tenant');
+        $dbName = $connection->getDatabaseName();
+        $schema = Schema::connection('costos_tenant');
+
+        if ($schema->hasTable('presupuesto_acus') && $schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
+            $col = $connection->selectOne(
+                "SELECT NUMERIC_SCALE AS scale FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'presupuesto_acus' AND COLUMN_NAME = 'costo_unitario_total'",
+                [$dbName]
+            );
+
+            if (! $col || (int) $col->scale < 6) {
+                try {
+                    $connection->statement(
+                        'ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,6) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED'
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo actualizar la fórmula de costo_unitario_total', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        foreach ([
+            'acu_mano_de_obra' => 'precio_unitario',
+            'acu_materiales' => 'precio_unitario',
+            'acu_equipos' => 'precio_hora',
+            'acu_subcontratos' => 'precio_unitario',
+            'acu_subpartidas' => 'precio_unitario',
+        ] as $table => $priceColumn) {
+            $this->widenColumnScale($table, $priceColumn);
+            $this->widenColumnScale($table, 'parcial');
+            $this->widenColumnScale($table, 'cantidad', 6, 12);
         }
     }
 
@@ -351,6 +447,8 @@ class CostoDatabaseService
         $connection = DB::connection('costos_tenant');
 
         $this->ensureParcialRegularColumn();
+        $this->widenPresupuestoGeneralPrecision();
+        $this->widenAcuPrecisionColumns();
         $this->recalculateACUCategories($connection, $tenantPresupuestoId);
         $this->recalculateParciales($connection, $tenantPresupuestoId);
 
@@ -362,7 +460,7 @@ class CostoDatabaseService
             ->where('unidad', '!=', '')
             ->where(function ($q) {
                 $q->where('metrado', '>', 0)
-                  ->orWhere('precio_unitario', '>', 0);
+                    ->orWhere('precio_unitario', '>', 0);
             })
             ->sum('parcial');
 
@@ -413,9 +511,162 @@ class CostoDatabaseService
     }
 
     /**
-     * Recalcula los costos por categoría de cada ACU sumando directamente sus componentes
-     * (sin redondeo extra por categoría). Esto garantiza que costo_unitario_total = ΣΣ(parcial_k)
-     * y que el total de insumos coincide con el costo directo del presupuesto.
+     * Decodes an ACU component JSON column (mano_de_obra, materiales, ...) into an array.
+     * Query builder rows return JSON columns as raw strings, unlike Eloquent casts.
+     */
+    private function decodeAcuComponentField(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (! is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Recalcula los costos por categoría de un ACU a partir de sus componentes JSON —
+     * la MISMA fuente que lee el frontend (AcuPanel, Insumos Consolidados vía
+     * presupuesto_acus.mano_de_obra/materiales/...). Las tablas relacionales
+     * acu_mano_de_obra/etc. son un índice secundario (propagación de precios al
+     * catálogo) con su propia precisión de columna; recalcular desde ahí en vez del
+     * JSON reintroducía la misma divergencia que se quiere eliminar.
+     *
+     * ACUs guardados antes de la corrección de precisión tienen su parcial de ítem
+     * aplanado a 2 decimales (ej. 1.48 en vez de 1.479333) — este método lo recalcula
+     * a 6 decimales y solo reescribe el JSON/columnas si el valor realmente cambió.
+     */
+    private function recalculateAcuFromJson($connection, object $acu, int $tenantPresupuestoId): void
+    {
+        $manoDeObra = $this->decodeAcuComponentField($acu->mano_de_obra ?? null);
+        $costoManoObra = 0.0;
+        $manoDeObraChanged = false;
+        foreach ($manoDeObra as &$item) {
+            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                $item['parcial'] = $parcial;
+                $manoDeObraChanged = true;
+            }
+            $costoManoObra += (float) $item['parcial'];
+        }
+        unset($item);
+
+        $materiales = $this->decodeAcuComponentField($acu->materiales ?? null);
+        $costoMateriales = 0.0;
+        $materialesChanged = false;
+        foreach ($materiales as &$item) {
+            $factor = (float) ($item['factor_desperdicio'] ?? 1) ?: 1.0;
+            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                $item['parcial'] = $parcial;
+                $materialesChanged = true;
+            }
+            $costoMateriales += (float) $item['parcial'];
+        }
+        unset($item);
+
+        $equipos = $this->decodeAcuComponentField($acu->equipos ?? null);
+        $costoEquipos = 0.0;
+        $equiposChanged = false;
+        foreach ($equipos as &$item) {
+            $isHerramientas = stripos((string) ($item['descripcion'] ?? ''), 'herramienta') !== false;
+
+            if ($isHerramientas) {
+                $parcial = round($costoManoObra * ((float) ($item['cantidad'] ?? 0) / 100.0), 6);
+                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001 || abs($costoManoObra - (float) ($item['precio_hora'] ?? 0)) > 0.0000001) {
+                    $item['parcial'] = $parcial;
+                    $item['precio_hora'] = $costoManoObra;
+                    $equiposChanged = true;
+                }
+            } else {
+                $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_hora'] ?? 0), 6);
+                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                    $item['parcial'] = $parcial;
+                    $equiposChanged = true;
+                }
+            }
+            $costoEquipos += (float) $item['parcial'];
+        }
+        unset($item);
+
+        $subcontratos = $this->decodeAcuComponentField($acu->subcontratos ?? null);
+        $costoSubcontratos = 0.0;
+        $subcontratosChanged = false;
+        foreach ($subcontratos as &$item) {
+            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                $item['parcial'] = $parcial;
+                $subcontratosChanged = true;
+            }
+            $costoSubcontratos += (float) $item['parcial'];
+        }
+        unset($item);
+
+        $subpartidas = $this->decodeAcuComponentField($acu->subpartidas ?? null);
+        $costoSubpartidas = 0.0;
+        $subpartidasChanged = false;
+        foreach ($subpartidas as &$item) {
+            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                $item['parcial'] = $parcial;
+                $subpartidasChanged = true;
+            }
+            $costoSubpartidas += (float) $item['parcial'];
+        }
+        unset($item);
+
+        $categoryChanged = abs($costoManoObra - (float) $acu->costo_mano_obra) > 0.000001
+            || abs($costoMateriales - (float) $acu->costo_materiales) > 0.000001
+            || abs($costoEquipos - (float) $acu->costo_equipos) > 0.000001
+            || abs($costoSubcontratos - (float) $acu->costo_subcontratos) > 0.000001
+            || abs($costoSubpartidas - (float) $acu->costo_subpartidas) > 0.000001;
+
+        if (! $categoryChanged && ! $manoDeObraChanged && ! $materialesChanged && ! $equiposChanged && ! $subcontratosChanged && ! $subpartidasChanged) {
+            return;
+        }
+
+        $update = [
+            'costo_mano_obra' => $costoManoObra,
+            'costo_materiales' => $costoMateriales,
+            'costo_equipos' => $costoEquipos,
+            'costo_subcontratos' => $costoSubcontratos,
+            'costo_subpartidas' => $costoSubpartidas,
+            'updated_at' => now(),
+        ];
+        if ($manoDeObraChanged) {
+            $update['mano_de_obra'] = json_encode($manoDeObra);
+        }
+        if ($materialesChanged) {
+            $update['materiales'] = json_encode($materiales);
+        }
+        if ($equiposChanged) {
+            $update['equipos'] = json_encode($equipos);
+        }
+        if ($subcontratosChanged) {
+            $update['subcontratos'] = json_encode($subcontratos);
+        }
+        if ($subpartidasChanged) {
+            $update['subpartidas'] = json_encode($subpartidas);
+        }
+
+        $connection->table('presupuesto_acus')->where('id', $acu->id)->update($update);
+
+        // Refresh costo_unitario_total (it may be a GENERATED column; re-read it)
+        $fresh = $connection->table('presupuesto_acus')->where('id', $acu->id)->first();
+        $newTotal = (float) ($fresh->costo_unitario_total ?? ($costoManoObra + $costoMateriales + $costoEquipos + $costoSubcontratos + $costoSubpartidas));
+
+        $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('partida', $acu->partida)
+            ->update(['precio_unitario' => $newTotal, 'updated_at' => now()]);
+    }
+
+    /**
+     * Recalcula los costos por categoría de cada ACU del presupuesto. Ver
+     * recalculateAcuFromJson() para el detalle de la fuente y el porqué.
      */
     public function recalculateACUCategories($connection, int $tenantPresupuestoId): void
     {
@@ -424,43 +675,13 @@ class CostoDatabaseService
             ->get();
 
         foreach ($acus as $acu) {
-            $costoMo = (float) $connection->table('acu_mano_de_obra')->where('acu_id', $acu->id)->sum('parcial');
-            $costoMa = (float) $connection->table('acu_materiales')->where('acu_id', $acu->id)->sum('parcial');
-            $costoEq = (float) $connection->table('acu_equipos')->where('acu_id', $acu->id)->sum('parcial');
-            $costoSc = (float) $connection->table('acu_subcontratos')->where('acu_id', $acu->id)->sum('parcial');
-            $costoSp = (float) $connection->table('acu_subpartidas')->where('acu_id', $acu->id)->sum('parcial');
-
-            $changed = abs($costoMo - (float) $acu->costo_mano_obra) > 0.000001
-                || abs($costoMa - (float) $acu->costo_materiales) > 0.000001
-                || abs($costoEq - (float) $acu->costo_equipos) > 0.000001
-                || abs($costoSc - (float) $acu->costo_subcontratos) > 0.000001
-                || abs($costoSp - (float) $acu->costo_subpartidas) > 0.000001;
-
-            if ($changed) {
-                $connection->table('presupuesto_acus')->where('id', $acu->id)->update([
-                    'costo_mano_obra'    => $costoMo,
-                    'costo_materiales'   => $costoMa,
-                    'costo_equipos'      => $costoEq,
-                    'costo_subcontratos' => $costoSc,
-                    'costo_subpartidas'  => $costoSp,
-                    'updated_at'         => now(),
-                ]);
-
-                // Refresh costo_unitario_total (it may be a GENERATED column; re-read it)
-                $fresh = $connection->table('presupuesto_acus')->where('id', $acu->id)->first();
-                $newTotal = (float) ($fresh->costo_unitario_total ?? ($costoMo + $costoMa + $costoEq + $costoSc + $costoSp));
-
-                $connection->table('presupuesto_general')
-                    ->where('presupuesto_id', $tenantPresupuestoId)
-                    ->where('partida', $acu->partida)
-                    ->update(['precio_unitario' => $newTotal, 'updated_at' => now()]);
-            }
+            $this->recalculateAcuFromJson($connection, $acu, $tenantPresupuestoId);
         }
     }
 
     /**
      * Recalcula los parciales de las filas padre (títulos/subtítulos) de presupuesto_general.
-     * Las partidas (hojas): parcial = round(metrado × precio_unitario, 4).
+     * Las partidas (hojas): parcial = round(metrado × precio_unitario, 6).
      * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
      */
     public function recalculateParciales($connection, int $tenantPresupuestoId): void
@@ -484,7 +705,7 @@ class CostoDatabaseService
         $parciales = [];
         foreach ($rows as $row) {
             if (! in_array($row->partida, $parentCodes)) {
-                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 4);
+                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 6);
                 $parciales[$row->partida] = $newParcial;
 
                 if (abs($newParcial - (float) ($row->parcial ?? 0)) > 0.00001) {
@@ -497,7 +718,7 @@ class CostoDatabaseService
 
         foreach ($rows as $row) {
             if (in_array($row->partida, $parentCodes)) {
-                $prefix = $row->partida . '.';
+                $prefix = $row->partida.'.';
                 $sum = 0;
 
                 foreach ($parciales as $childPartida => $childParcial) {
@@ -509,11 +730,11 @@ class CostoDatabaseService
                     }
                 }
 
-                $parciales[$row->partida] = round($sum, 4);
+                $parciales[$row->partida] = round($sum, 6);
                 $connection->table('presupuesto_general')
                     ->where('id', $row->id)
                     ->update([
-                        'parcial' => round($sum, 4),
+                        'parcial' => round($sum, 6),
                         'updated_at' => now(),
                     ]);
             }
