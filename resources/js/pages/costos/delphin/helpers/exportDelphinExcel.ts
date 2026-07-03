@@ -335,7 +335,7 @@ async function buildHeader(
     filaActual++;
 
     return filaActual;
-} // ⬅️ CIERRE DE buildHeader
+} // CIERRE DE buildHeader
 
 // ─── HOJA PRESUPUESTO ──────────────────────────────────────────────────────────
 async function buildPresupuestoSheet(
@@ -471,7 +471,7 @@ async function buildCronogramaSheet(
         ws.getColumn(i + 1).width = col.width;
     });
 
-    // ✅ Fijar altura de todas las filas
+    // Fijar altura de todas las filas
     ws.properties.defaultRowHeight = 18;
 
     let filaActual = await buildHeader(
