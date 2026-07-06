@@ -22,7 +22,6 @@ import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 import { router } from '@inertiajs/react';
 import { AcuPanel } from '../presupuesto/components/AcuPanel';
-import { ImportExcelPresupuestoModal } from '../presupuesto/components/ImportExcelPresupuestoModal';
 import { usePresupuestoAcu } from '../presupuesto/hooks/usePresupuestoAcu';
 import { useProjectParamsStore } from '../presupuesto/stores/projectParamsStore';
 import { DelphinGrid } from './components/DelphinGrid';
@@ -189,7 +188,6 @@ export default function DelphinView({
         setSearchQuery('');
         setColumnFilters({});
     }, []);
-    const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
     const { calendarSettings, setCalendarSettings } = useGanttSettings(project, initialTasks);
     const initializeParams = useProjectParamsStore((s) => s.initialize);
     useEffect(() => { initializeParams(projectParams); }, [projectParams, initializeParams]);
@@ -353,6 +351,8 @@ export default function DelphinView({
         selectedAcu,
         localSaveAcu,
         flushPendingAcus,
+        registerPendingInsumo,
+        flushPendingInsumos,
         acuDirty,
     } = usePresupuestoAcu({
         projectId: project_id_int,
@@ -417,6 +417,25 @@ export default function DelphinView({
                 if (row) commitField(row.id, 'precio_unitario', result.acu.costo_unitario_total);
             }
         }
+    }, [localSaveAcu, delphinRows, commitField]);
+
+    // Called by InsumosConsolidadosModal after confirming a price change — applies
+    // to every affected ACU locally (visual-first, no DB call until "Guardar")
+    const handleApplyConsolidatedAcuChanges = useCallback((updatedAcus: Array<Record<string, any>>) => {
+        let appliedCount = 0;
+        for (const clonedAcu of updatedAcus) {
+            const result = localSaveAcu(clonedAcu);
+            if (result.success && result.acu) {
+                appliedCount += 1;
+                const partidaKey = normalizeCode(String(clonedAcu.partida ?? ''));
+                const budgetRow = delphinRows.find((r) => normalizeCode(String(r.partida ?? '')) === partidaKey);
+                if (budgetRow) commitField(budgetRow.id, 'precio_unitario', result.acu.costo_unitario_total);
+            }
+        }
+        toast(
+            `Precio aplicado en ${appliedCount} ACU(s) (local). Pulsa "Guardar" para persistir.`,
+            'success',
+        );
     }, [localSaveAcu, delphinRows, commitField]);
 
     // ── Scroll sync (CPM gantt mode) ──────────────────────────────────────────
@@ -537,6 +556,7 @@ export default function DelphinView({
         const ac = new AbortController();
         let budgetOk = false;
         let acuOk = false;
+        let insumosOk = false;
 
         await Swal.fire({
             title: 'Guardando presupuesto…',
@@ -556,15 +576,20 @@ export default function DelphinView({
                 }, { once: true });
 
                 try {
-                    [budgetOk, acuOk] = await Promise.all([
-                        saveBudget(project_id_int),
-                        flushPendingAcus((p) => {
-                            const s = document.getElementById('dsave-status');
-                            const b = document.getElementById('dsave-bar');
-                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
-                            if (b) b.style.width = `${p.pct}%`;
-                        }, ac.signal),
-                    ]);
+                    // Crea primero los insumos nuevos (si hay) y parcha su insumo_id
+                    // en los ACUs pendientes, antes de guardar presupuesto/ACUs.
+                    insumosOk = await flushPendingInsumos();
+                    if (insumosOk) {
+                        [budgetOk, acuOk] = await Promise.all([
+                            saveBudget(project_id_int),
+                            flushPendingAcus((p) => {
+                                const s = document.getElementById('dsave-status');
+                                const b = document.getElementById('dsave-bar');
+                                if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                                if (b) b.style.width = `${p.pct}%`;
+                            }, ac.signal),
+                        ]);
+                    }
                 } finally {
                     Swal.close();
                 }
@@ -575,19 +600,21 @@ export default function DelphinView({
             await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'Las partidas fueron guardadas. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
             return;
         }
-        if (budgetOk && acuOk) {
+        if (insumosOk && budgetOk && acuOk) {
             setAcuRefetchVersion((v) => v + 1);
             void Swal.fire({ icon: 'success', title: 'Presupuesto guardado', timer: 2000, showConfirmButton: false, ...swalDark });
         } else {
-            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: 'Ocurrió un error. Intente nuevamente.', ...swalDark });
+            const errMsg = !insumosOk ? 'Error al crear los insumos nuevos.' : 'Ocurrió un error. Intente nuevamente.';
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveBudget, project_id_int, flushPendingAcus]);
+    }, [saveBudget, project_id_int, flushPendingAcus, flushPendingInsumos]);
 
     const handleSaveGantt = useCallback(async () => {
         const ac = new AbortController();
         let ganttOk = false;
         let budgetOk = false;
         let acuOk = false;
+        let insumosOk = false;
 
         await Swal.fire({
             title: 'Guardando Delphin…',
@@ -607,16 +634,21 @@ export default function DelphinView({
                 }, { once: true });
 
                 try {
-                    [ganttOk, budgetOk, acuOk] = await Promise.all([
-                        saveTasks(project),
-                        saveBudget(project_id_int),
-                        flushPendingAcus((p) => {
-                            const s = document.getElementById('dsave-status');
-                            const b = document.getElementById('dsave-bar');
-                            if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
-                            if (b) b.style.width = `${p.pct}%`;
-                        }, ac.signal),
-                    ]);
+                    // Crea primero los insumos nuevos (si hay) y parcha su insumo_id
+                    // en los ACUs pendientes, antes de guardar cronograma/presupuesto/ACUs.
+                    insumosOk = await flushPendingInsumos();
+                    if (insumosOk) {
+                        [ganttOk, budgetOk, acuOk] = await Promise.all([
+                            saveTasks(project),
+                            saveBudget(project_id_int),
+                            flushPendingAcus((p) => {
+                                const s = document.getElementById('dsave-status');
+                                const b = document.getElementById('dsave-bar');
+                                if (s) s.textContent = `Guardando ACUs… ${p.done}/${p.total}`;
+                                if (b) b.style.width = `${p.pct}%`;
+                            }, ac.signal),
+                        ]);
+                    }
                 } finally {
                     Swal.close();
                 }
@@ -627,14 +659,14 @@ export default function DelphinView({
             await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'El cronograma y partidas fueron guardados. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
             return;
         }
-        if (ganttOk && budgetOk && acuOk) {
+        if (insumosOk && ganttOk && budgetOk && acuOk) {
             setAcuRefetchVersion((v) => v + 1);
             void Swal.fire({ icon: 'success', title: 'Delphin guardado', timer: 2000, showConfirmButton: false, ...swalDark });
         } else {
-            const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
+            const errMsg = !insumosOk ? 'Error al crear los insumos nuevos.' : !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus, flushPendingInsumos]);
 
     // ── Reset total (vaciar presupuesto) ────────────────────────────────────
     const handleResetAll = useCallback(async () => {
@@ -1037,15 +1069,6 @@ export default function DelphinView({
                     onClose={() => setExportOpen(false)}
                 />
 
-                <ImportExcelPresupuestoModal
-                    projectId={project_id_int}
-                    isOpen={isExcelModalOpen}
-                    onClose={() => setIsExcelModalOpen(false)}
-                    onSuccess={() => {
-                        setIsExcelModalOpen(false);
-                        router.reload();
-                    }}
-                />
                 <ImportDelphinModal
                     open={importExcelOpen}
                     project={project}
@@ -1053,7 +1076,8 @@ export default function DelphinView({
                     delphinRows={delphinRows}
                     onClose={() => setImportExcelOpen(false)}
                     onBudgetImported={importDelphinRows}
-                    onAcusImported={handleAcusImported} />
+                    onAcusImported={handleAcusImported}
+                    onRegisterPendingInsumo={registerPendingInsumo} />
                 <InsumosConsolidadosModal
                     open={insumosOpen}
                     acuRows={acuRows}
@@ -1062,6 +1086,7 @@ export default function DelphinView({
                     projectName={project_name}
                     projectData={projectData}
                     onClose={() => setInsumosOpen(false)}
+                    onApplyAcuChanges={handleApplyConsolidatedAcuChanges}
                 />
                 <PartidasSinAcuModal
                     open={compatOpen}

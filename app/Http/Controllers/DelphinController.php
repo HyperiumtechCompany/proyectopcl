@@ -80,6 +80,11 @@ class DelphinController extends Controller
     // DELETE /module/delphin/reset?project={id}
     public function resetPresupuesto(Request $request)
     {
+        \Log::warning('DelphinController::resetPresupuesto LLAMADO', [
+            'project' => $request->query('project'),
+            'trace' => collect(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8))->map(fn ($t) => ($t['class'] ?? '').($t['type'] ?? '').($t['function'] ?? ''))->toArray(),
+        ]);
+
         $projectId = $request->query('project');
         if (! $projectId) {
             abort(404, 'No se recibió el ID del proyecto');

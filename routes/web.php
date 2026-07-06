@@ -298,6 +298,8 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::post('/presupuesto/insumos', [InsumoProductoController::class, 'store'])->name('proyectos.presupuesto.insumos.store');
             Route::post('/presupuesto/insumos/replace-project-insumo', [InsumoProductoController::class, 'replaceProjectInsumo'])->name('proyectos.presupuesto.insumos.replace');
             Route::post('/presupuesto/insumos/seed', [InsumoProductoController::class, 'seedCatalog'])->name('proyectos.presupuesto.insumos.seed');
+            Route::post('/presupuesto/insumos/resolve', [InsumoProductoController::class, 'resolve'])->name('proyectos.presupuesto.insumos.resolve');
+            Route::post('/presupuesto/insumos/create-batch', [InsumoProductoController::class, 'createBatch'])->name('proyectos.presupuesto.insumos.create-batch');
             Route::put('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'update'])->name('proyectos.presupuesto.insumos.update');
             Route::delete('/presupuesto/insumos/{insumoId}', [InsumoProductoController::class, 'destroy'])->name('proyectos.presupuesto.insumos.destroy');
 

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ACURowSummary } from '@/types/presupuestos';
 import type { DelphinRow } from '../types';
+import { calculateAcuLocally } from '../../presupuesto/hooks/usePresupuestoAcu';
 import {
+    applyConsolidatedPrice,
     calculateInsumoUsage,
     calculateReferencePrice,
     consolidateInsumos,
@@ -239,4 +241,74 @@ it('ancla el reparto al precio_unitario YA GUARDADO en el presupuesto, no al cos
     const costoDirectoPartida = Math.round(789.81 * 2.82 * 100) / 100;
 
     expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
+});
+
+describe('applyConsolidatedPrice + reflujo por localSaveAcu', () => {
+    // Reproduce el flujo real: DelphinView clona los ACUs afectados con
+    // applyConsolidatedPrice, los pasa por calculateAcuLocally (igual que
+    // localSaveAcu) y actualiza delphinRows.precio_unitario (igual que
+    // commitField) antes de que el modal vuelva a correr flattenInsumos.
+    const buildScene = () => {
+        const delphinRows = [
+            { id: 1, partida: '01.01', metrado: 10, precio_unitario: 50.15 },
+        ] as DelphinRow[];
+
+        const acus = [
+            {
+                id: 100,
+                partida: '01.01',
+                descripcion: 'Encofrado',
+                unidad: 'm2',
+                rendimiento: 1,
+                costo_mano_obra: 0,
+                costo_materiales: 0,
+                costo_equipos: 50.15,
+                costo_subcontratos: 0,
+                costo_subpartidas: 0,
+                costo_unitario_total: 50.15,
+                mano_de_obra: [],
+                materiales: [],
+                equipos: [
+                    { descripcion: 'ANDAMIO METALICO', unidad: 'hm', cantidad: 5, precio_hora: 10.03 },
+                ],
+                subcontratos: [],
+                subpartidas: [],
+            },
+        ] as ACURowSummary[];
+
+        return { delphinRows, acus };
+    };
+
+    it('el P.REF. inicial refleja el precio_hora bruto del componente', () => {
+        const { delphinRows, acus } = buildScene();
+        const [andamio] = consolidateInsumos(flattenInsumos(acus, delphinRows), {});
+        expect(andamio.precio).toBeCloseTo(10.03, 2);
+    });
+
+    it('tras aplicar el nuevo precio y refluir por localSaveAcu + commitField, el P.REF. muestra el precio nuevo', () => {
+        const { delphinRows, acus } = buildScene();
+        const [andamio] = consolidateInsumos(flattenInsumos(acus, delphinRows), {});
+
+        const updatedAcuClones = applyConsolidatedPrice(andamio, acus, 10);
+        expect(updatedAcuClones).toHaveLength(1);
+
+        // Igual que localSaveAcu: recalcula subtotales/total del ACU clonado.
+        const calculated = calculateAcuLocally(updatedAcuClones[0]);
+        const updatedAcu = { ...acus[0], ...calculated } as ACURowSummary;
+
+        // Igual que handleApplyConsolidatedAcuChanges → commitField: sincroniza
+        // el precio_unitario del presupuesto con el nuevo total del ACU.
+        const updatedDelphinRows = delphinRows.map((row) =>
+            row.partida === updatedAcu.partida
+                ? { ...row, precio_unitario: updatedAcu.costo_unitario_total }
+                : row,
+        );
+
+        const [andamioActualizado] = consolidateInsumos(
+            flattenInsumos([updatedAcu], updatedDelphinRows),
+            {},
+        );
+
+        expect(andamioActualizado.precio).toBeCloseTo(10, 2);
+    });
 });

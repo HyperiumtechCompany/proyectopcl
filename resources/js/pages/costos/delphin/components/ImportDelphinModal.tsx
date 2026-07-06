@@ -1,13 +1,66 @@
-import { AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react';
+import axios from 'axios';
+import { defaultFilter } from 'cmdk';
+import { AlertCircle, AlertTriangle, ChevronDown, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Package, Upload, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { ParseAcuResult, ParsedAcu } from '../helpers/parseAcuExcel';
+import type { ParseAcuResult, ParsedAcu, ParsedAcuComponente } from '../helpers/parseAcuExcel';
 import { parseAcuExcel } from '../helpers/parseAcuExcel';
 import type { ParsePresupuestoResult } from '../helpers/parsePresupuestoExcel';
 import { parsePresupuestoExcel } from '../helpers/parsePresupuestoExcel';
 import type { AcuMatch } from '../helpers/matchAcuToPartida';
 import { matchAcuToPartida, summarizeMatches } from '../helpers/matchAcuToPartida';
 import type { DelphinRow } from '../types';
+import { useDiccionario } from '../hooks/useDiccionario';
+import type { DicEntry } from '../hooks/useDiccionario';
+import { buildInsumoKey } from '../../presupuesto/hooks/usePresupuestoAcu';
+import type { PendingNewInsumo } from '../../presupuesto/hooks/usePresupuestoAcu';
+
+const ACU_TIPOS = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'] as const;
+type AcuTipo = (typeof ACU_TIPOS)[number];
+
+function componentePrecio(tipo: AcuTipo, c: ParsedAcuComponente): number {
+    return tipo === 'equipos' ? c.precio_hora : c.precio_unitario;
+}
+
+interface ResolveResultItem {
+    key: string;
+    matched: boolean;
+    insumo_id?: number;
+    diccionario_sugerido?: { id: number; codigo: string; descripcion: string } | null;
+}
+
+interface NewInsumoDraft {
+    key: string;
+    tipo: AcuTipo;
+    descripcion: string;
+    unidad: string;
+    precio: number;
+    diccionario_id: number | null;
+    // true mientras el diccionario venga de una sugerencia automática (del
+    // backend por código, o por similitud en el cliente) y el usuario aún no
+    // lo haya confirmado/cambiado a propósito.
+    diccionarioIsGuess: boolean;
+    // Código/índice crudo tal como vino del Excel (columna "Cód./Ind./Item") —
+    // se muestra en la revisión para cotejarlo a simple vista contra el
+    // diccionario interno al elegir la clasificación correcta.
+    codInsumo: string | null;
+}
+
+// Mejor diccionario por similitud de texto contra la descripción del insumo,
+// reusando el mismo scorer fuzzy que ya usa cmdk para buscar. Solo se usa
+// cuando el backend no encontró una sugerencia por código de diccionario.
+function bestDiccionarioMatch(descripcion: string, diccionarios: DicEntry[]): DicEntry | null {
+    let best: DicEntry | null = null;
+    let bestScore = 0;
+    for (const d of diccionarios) {
+        const score = defaultFilter(`${d.codigo} ${d.descripcion}`, descripcion);
+        if (score > bestScore) {
+            bestScore = score;
+            best = d;
+        }
+    }
+    return bestScore > 0 ? best : null;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +84,9 @@ interface Props {
     onBudgetImported:  (result: ParsePresupuestoResult) => { createdPartidas: string[] };
     // Receives the built ACU payloads ready to apply locally — no DB call
     onAcusImported?:   (payloads: Array<Record<string, any>>) => void;
+    // Encola un insumo nuevo confirmado por el usuario — no crea nada en el
+    // catálogo todavía, solo al pulsar "Guardar" (flushPendingInsumos)
+    onRegisterPendingInsumo?: (key: string, descriptor: PendingNewInsumo) => void;
 }
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -354,15 +410,38 @@ function AcuFileRow({ state, onRemove }: { state: AcuFileState; onRemove: () => 
 
 function StepAcus({
     delphinRows,
+    projectIdInt,
     onDone,
     onAcusImported,
+    onRegisterPendingInsumo,
 }: {
     delphinRows:      DelphinRow[];
+    projectIdInt:     number;
     onDone:           () => void;
     onAcusImported?:  (payloads: Array<Record<string, any>>) => void;
+    onRegisterPendingInsumo?: (key: string, descriptor: PendingNewInsumo) => void;
 }) {
     const [files,      setFiles]      = useState<AcuFileState[]>([]);
     const [importDone, setImportDone] = useState(false);
+    const [resolving,  setResolving]  = useState(false);
+    // null = aún no se resolvió contra el catálogo; una vez resuelto, contiene
+    // los insumos que NO existen y deben confirmarse antes de importar.
+    const [newInsumos, setNewInsumos] = useState<NewInsumoDraft[] | null>(null);
+    const [matchedIds, setMatchedIds] = useState<Map<string, number>>(new Map());
+    const [seeding,    setSeeding]    = useState(false);
+    const { items: diccionarios, ready: diccionariosReady, refetch: refetchDiccionarios } = useDiccionario(String(projectIdInt));
+
+    const handleSeedCatalog = useCallback(async () => {
+        setSeeding(true);
+        try {
+            await axios.post(`/costos/proyectos/${projectIdInt}/presupuesto/insumos/seed`);
+            await refetchDiccionarios();
+        } catch (e: any) {
+            alert(e?.response?.data?.message ?? 'No se pudo inicializar el catálogo. Intente nuevamente.');
+        } finally {
+            setSeeding(false);
+        }
+    }, [projectIdInt, refetchDiccionarios]);
 
     const addFiles = useCallback(async (newFiles: File[]) => {
         const stubs: AcuFileState[] = newFiles.map((f) => ({
@@ -401,15 +480,112 @@ function StepAcus({
         0,
     );
 
-    // Visual-only: build payloads and send to parent — no API call here
-    const handleImport = () => {
-        const allMatched: AcuMatch[] = files.flatMap((s) => s.matches.filter((m) => m.method !== 'none'));
-        const payloads = allMatched
-            .filter((m) => m.row)
-            .map((m) => buildAcuPayload(m.acu, m.row!.partida));
+    const getAllMatched = useCallback(
+        (): AcuMatch[] => files.flatMap((s) => s.matches.filter((m) => m.method !== 'none' && m.row)),
+        [files],
+    );
+
+    const applyImport = useCallback((insumoIdMap: Map<string, number>) => {
+        const payloads = getAllMatched().map((m) => buildAcuPayload(m.acu, m.row!.partida, insumoIdMap));
         onAcusImported?.(payloads);
         setImportDone(true);
-    };
+        setNewInsumos(null);
+    }, [getAllMatched, onAcusImported]);
+
+    // Consulta el catálogo (solo lectura) para saber qué insumos ya existen y
+    // cuáles son nuevos, antes de aplicar nada localmente.
+    const handleResolve = useCallback(async () => {
+        const allMatched = getAllMatched();
+
+        const seen = new Map<string, { tipo: AcuTipo; descripcion: string; unidad: string; cod_insumo: string | null; precio: number }>();
+        for (const m of allMatched) {
+            for (const tipo of ACU_TIPOS) {
+                for (const c of m.acu[tipo]) {
+                    if (!c.descripcion?.trim()) continue;
+                    const key = buildInsumoKey(tipo, c.descripcion, c.unidad);
+                    if (!seen.has(key)) {
+                        seen.set(key, { tipo, descripcion: c.descripcion, unidad: c.unidad, cod_insumo: c.codigo, precio: componentePrecio(tipo, c) });
+                    }
+                }
+            }
+        }
+
+        if (seen.size === 0) {
+            applyImport(new Map());
+            return;
+        }
+
+        setResolving(true);
+        try {
+            const items = Array.from(seen.entries()).map(([key, v]) => ({
+                key, tipo: v.tipo, descripcion: v.descripcion, unidad: v.unidad, cod_insumo: v.cod_insumo,
+            }));
+            const { data } = await axios.post(
+                `/costos/proyectos/${projectIdInt}/presupuesto/insumos/resolve`,
+                { items },
+            );
+            const results: ResolveResultItem[] = data?.items ?? [];
+
+            const matched = new Map<string, number>();
+            const drafts: NewInsumoDraft[] = [];
+            for (const r of results) {
+                if (r.matched && r.insumo_id != null) {
+                    matched.set(r.key, r.insumo_id);
+                    continue;
+                }
+                const source = seen.get(r.key);
+                if (!source) continue;
+
+                // 1. Sugerencia del backend (cod_insumo crudo == diccionario.codigo).
+                // 2. Si no hay, sugerencia por similitud de texto en el cliente.
+                // Ambas son solo un punto de partida — se marcan como "guess"
+                // para que la UI avise y el usuario confirme o cambie.
+                const suggestedId = r.diccionario_sugerido?.id
+                    ?? bestDiccionarioMatch(source.descripcion, diccionarios)?.id
+                    ?? null;
+
+                drafts.push({
+                    key: r.key,
+                    tipo: source.tipo,
+                    descripcion: source.descripcion,
+                    unidad: source.unidad,
+                    precio: source.precio,
+                    diccionario_id: suggestedId,
+                    diccionarioIsGuess: suggestedId != null,
+                    codInsumo: source.cod_insumo,
+                });
+            }
+
+            setMatchedIds(matched);
+            if (drafts.length === 0) {
+                applyImport(matched);
+            } else {
+                setNewInsumos(drafts);
+            }
+        } catch (e: any) {
+            alert(e?.response?.data?.message ?? 'No se pudo resolver el catálogo de insumos. Intente nuevamente.');
+        } finally {
+            setResolving(false);
+        }
+    }, [getAllMatched, projectIdInt, applyImport, diccionarios]);
+
+    const allDraftsHaveDiccionario = newInsumos?.every((d) => d.diccionario_id != null) ?? false;
+
+    const handleConfirmNewInsumos = useCallback(() => {
+        if (!newInsumos || !allDraftsHaveDiccionario) return;
+
+        const finalMap = new Map(matchedIds);
+        for (const draft of newInsumos) {
+            onRegisterPendingInsumo?.(draft.key, {
+                tipo: draft.tipo,
+                descripcion: draft.descripcion,
+                unidad: draft.unidad,
+                precio: draft.precio,
+                diccionario_id: draft.diccionario_id!,
+            });
+        }
+        applyImport(finalMap);
+    }, [newInsumos, allDraftsHaveDiccionario, matchedIds, onRegisterPendingInsumo, applyImport]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -421,58 +597,293 @@ function StepAcus({
                 </p>
             </div>
 
-            {!importDone && delphinRows.length === 0 && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-800/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
-                    <AlertCircle size={13} className="mt-0.5 shrink-0" />
-                    No hay partidas cargadas. Importa primero el <strong className="mx-1">Presupuesto</strong> para poder vincular los ACUs.
-                </div>
-            )}
-
-            {!importDone && (
-                <DropZone
-                    accept=".xlsx,.xls"
-                    multiple
-                    disabled={delphinRows.length === 0}
-                    label="Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)"
-                    onFiles={addFiles}
+            {newInsumos !== null ? (
+                <InsumosReviewPanel
+                    newInsumos={newInsumos}
+                    matchedCount={matchedIds.size}
+                    diccionarios={diccionarios}
+                    diccionariosReady={diccionariosReady}
+                    seeding={seeding}
+                    onSeedCatalog={handleSeedCatalog}
+                    onChangeDiccionario={(key, diccionarioId) =>
+                        setNewInsumos((prev) =>
+                            prev
+                                ? prev.map((d) =>
+                                      d.key === key ? { ...d, diccionario_id: diccionarioId, diccionarioIsGuess: false } : d,
+                                  )
+                                : prev,
+                        )
+                    }
+                    onCancel={() => setNewInsumos(null)}
+                    onConfirm={handleConfirmNewInsumos}
+                    canConfirm={allDraftsHaveDiccionario}
                 />
-            )}
-
-            {files.length > 0 && (
-                <div className="flex flex-col gap-2">
-                    {files.map((s) => (
-                        <AcuFileRow
-                            key={s.file.name + s.file.size}
-                            state={s}
-                            onRemove={() => removeFile(s.file)}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {importDone ? (
-                <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-2 rounded-md bg-green-900/30 px-3 py-2 text-sm text-green-300">
-                        <CheckCircle2 size={16} />
-                        {totalMatched} ACU{totalMatched !== 1 ? 's' : ''} cargados en la vista. Usa <strong className="mx-1">Guardar</strong> para persistirlos.
-                    </div>
-                    <button
-                        onClick={onDone}
-                        className="flex items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600"
-                    >
-                        Finalizar
-                    </button>
-                </div>
             ) : (
-                totalMatched > 0 && (
+                <>
+                    {!importDone && delphinRows.length === 0 && (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-800/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
+                            <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                            No hay partidas cargadas. Importa primero el <strong className="mx-1">Presupuesto</strong> para poder vincular los ACUs.
+                        </div>
+                    )}
+
+                    {!importDone && (
+                        <DropZone
+                            accept=".xlsx,.xls"
+                            multiple
+                            disabled={delphinRows.length === 0}
+                            label="Arrastra o haz clic para agregar archivos de ACUs (puedes subir varios)"
+                            onFiles={addFiles}
+                        />
+                    )}
+
+                    {files.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            {files.map((s) => (
+                                <AcuFileRow
+                                    key={s.file.name + s.file.size}
+                                    state={s}
+                                    onRemove={() => removeFile(s.file)}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {importDone ? (
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center gap-2 rounded-md bg-green-900/30 px-3 py-2 text-sm text-green-300">
+                                <CheckCircle2 size={16} />
+                                {totalMatched} ACU{totalMatched !== 1 ? 's' : ''} cargados en la vista. Usa <strong className="mx-1">Guardar</strong> para persistirlos.
+                            </div>
+                            <button
+                                onClick={onDone}
+                                className="flex items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600"
+                            >
+                                Finalizar
+                            </button>
+                        </div>
+                    ) : (
+                        totalMatched > 0 && (
+                            <button
+                                onClick={handleResolve}
+                                disabled={resolving}
+                                className="flex items-center justify-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {resolving ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                {resolving
+                                    ? 'Verificando insumos…'
+                                    : `Cargar ${totalMatched} ACU${totalMatched !== 1 ? 's' : ''} en vista`}
+                            </button>
+                        )
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+// ─── Revisión de insumos antes de importar ────────────────────────────────────
+
+function InsumosReviewPanel({
+    newInsumos, matchedCount, diccionarios, diccionariosReady, seeding, onSeedCatalog,
+    onChangeDiccionario, onCancel, onConfirm, canConfirm,
+}: {
+    newInsumos:           NewInsumoDraft[];
+    matchedCount:         number;
+    diccionarios:         DicEntry[];
+    diccionariosReady:    boolean;
+    seeding:              boolean;
+    onSeedCatalog:        () => void;
+    onChangeDiccionario:  (key: string, diccionarioId: number) => void;
+    onCancel:             () => void;
+    onConfirm:            () => void;
+    canConfirm:           boolean;
+}) {
+    const guessCount = newInsumos.filter((d) => d.diccionarioIsGuess).length;
+
+    return (
+        <div className="flex flex-col gap-3">
+            {matchedCount > 0 && (
+                <div className="flex items-center gap-2 rounded-md bg-green-900/30 px-3 py-2 text-xs text-green-300">
+                    <CheckCircle2 size={14} />
+                    {matchedCount} insumo{matchedCount !== 1 ? 's' : ''} ya existen en el catálogo y se vincularán automáticamente.
+                </div>
+            )}
+
+            <div className="flex items-start gap-2 rounded-md border border-amber-800/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
+                <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                {newInsumos.length} insumo{newInsumos.length !== 1 ? 's son nuevos' : ' es nuevo'} y se {newInsumos.length !== 1 ? 'crearán' : 'creará'} en el catálogo al guardar. Elige el diccionario de cada uno.
+                {guessCount > 0 && ` ${guessCount} ya tienen una sugerencia por similitud — revísala antes de confirmar.`}
+            </div>
+
+            {diccionariosReady && diccionarios.length === 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-sky-800/50 bg-sky-900/20 px-3 py-2 text-xs text-sky-300">
+                    <span className="flex items-center gap-2">
+                        <Package size={14} className="shrink-0" />
+                        El catálogo de diccionarios está vacío — no se puede clasificar ningún insumo nuevo.
+                    </span>
                     <button
-                        onClick={handleImport}
-                        className="flex items-center justify-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
+                        onClick={onSeedCatalog}
+                        disabled={seeding}
+                        className="flex shrink-0 items-center gap-1.5 rounded-md bg-sky-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-600 disabled:opacity-50"
                     >
-                        <Upload size={14} />
-                        Cargar {totalMatched} ACU{totalMatched !== 1 ? 's' : ''} en vista
+                        {seeding ? <Loader2 size={12} className="animate-spin" /> : '📦'}
+                        {seeding ? 'Inicializando…' : 'Sembrar catálogo base'}
                     </button>
-                )
+                </div>
+            )}
+
+            <div className="max-h-72 overflow-y-auto rounded-md border border-slate-700">
+                <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-slate-800 text-[10px] tracking-wide text-slate-400 uppercase">
+                        <tr>
+                            <th className="p-2">Índice</th>
+                            <th className="p-2">Descripción</th>
+                            <th className="p-2">Und.</th>
+                            <th className="p-2 text-right">Precio</th>
+                            <th className="p-2">Diccionario</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                        {newInsumos.map((draft) => (
+                            <tr key={draft.key}>
+                                <td className="p-2 font-mono text-amber-300" title="Índice/código tal como vino del Excel">
+                                    {draft.codInsumo || '—'}
+                                </td>
+                                <td className="max-w-52 truncate p-2 text-slate-200" title={draft.descripcion}>{draft.descripcion}</td>
+                                <td className="p-2 text-slate-400">{draft.unidad}</td>
+                                <td className="p-2 text-right font-mono text-slate-300">{draft.precio.toFixed(2)}</td>
+                                <td className="p-2">
+                                    <DiccionarioCombobox
+                                        diccionarios={diccionarios}
+                                        value={draft.diccionario_id}
+                                        isGuess={draft.diccionarioIsGuess}
+                                        onChange={(id) => onChangeDiccionario(draft.key, id)}
+                                        initialQuery={draft.codInsumo}
+                                    />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+                <button
+                    onClick={onCancel}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800"
+                >
+                    Cancelar
+                </button>
+                <button
+                    onClick={onConfirm}
+                    disabled={!canConfirm}
+                    className="flex items-center gap-2 rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    <Upload size={14} />
+                    Confirmar e importar
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// Selector con búsqueda para elegir el diccionario de un insumo nuevo — usa el
+// mismo scorer fuzzy (defaultFilter) de cmdk, así funciona bien con catálogos
+// de miles de diccionarios sin necesitar un <select> plano imposible de usar.
+function DiccionarioCombobox({
+    diccionarios, value, isGuess, onChange, initialQuery,
+}: {
+    diccionarios: DicEntry[];
+    value:        number | null;
+    isGuess:      boolean;
+    onChange:     (id: number) => void;
+    // Índice/código crudo del Excel — al abrir el buscador se precarga como
+    // texto de búsqueda para cotejar más rápido contra el diccionario interno.
+    initialQuery?: string | null;
+}) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const containerRef = useRef<HTMLDivElement>(null);
+    const selected = diccionarios.find((d) => d.id === value) ?? null;
+
+    const handleToggle = () => {
+        setOpen((o) => {
+            const next = !o;
+            if (next) setQuery(initialQuery?.trim() || '');
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+                setQuery('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [open]);
+
+    const filtered = query.trim()
+        ? diccionarios
+            .map((d) => ({ d, score: defaultFilter(`${d.codigo} ${d.descripcion}`, query) }))
+            .filter((s) => s.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 50)
+            .map((s) => s.d)
+        : diccionarios.slice(0, 50);
+
+    return (
+        <div ref={containerRef} className="relative">
+            <button
+                type="button"
+                onClick={handleToggle}
+                className={`flex w-full items-center justify-between gap-1 rounded border bg-slate-950 px-1.5 py-1 text-left text-[11px] outline-none ${
+                    value == null ? 'border-red-700 text-slate-500' : isGuess ? 'border-amber-500 text-slate-100' : 'border-slate-700 text-slate-100'
+                }`}
+                title={selected ? `${selected.codigo} - ${selected.descripcion}` : undefined}
+            >
+                <span className="flex min-w-0 items-center gap-1 truncate">
+                    {isGuess && <AlertTriangle size={11} className="shrink-0 text-amber-400" />}
+                    <span className="truncate">
+                        {selected ? `${selected.codigo} - ${selected.descripcion}` : 'Selecciona…'}
+                    </span>
+                </span>
+                <ChevronDown size={12} className="shrink-0 text-slate-500" />
+            </button>
+
+            {open && (
+                <div className="absolute right-0 z-20 mt-1 w-72 rounded border border-slate-700 bg-slate-900 shadow-2xl">
+                    <input
+                        autoFocus
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Buscar diccionario…"
+                        className="w-full border-b border-slate-700 bg-transparent px-2 py-1.5 text-[11px] text-slate-100 outline-none placeholder:text-slate-600"
+                    />
+                    <div className="max-h-48 overflow-y-auto">
+                        {filtered.map((d) => (
+                            <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => {
+                                    onChange(d.id);
+                                    setOpen(false);
+                                    setQuery('');
+                                }}
+                                className="block w-full truncate px-2 py-1.5 text-left text-[11px] text-slate-300 transition-colors hover:bg-sky-900/40 hover:text-sky-200"
+                            >
+                                {d.codigo} - {d.descripcion}
+                            </button>
+                        ))}
+                        {filtered.length === 0 && (
+                            <div className="px-2 py-3 text-center text-[11px] text-slate-500">Sin resultados</div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -480,7 +891,12 @@ function StepAcus({
 
 // ─── ACU payload builder ──────────────────────────────────────────────────────
 
-function buildAcuPayload(acu: ParsedAcu, partida: string) {
+function buildAcuPayload(acu: ParsedAcu, partida: string, insumoIdMap: Map<string, number>) {
+    // insumo_id resuelto contra el catálogo (matched) o null si es un insumo
+    // nuevo — en ese caso se parcha después en flushPendingInsumos, al guardar.
+    const resolveInsumoId = (tipo: AcuTipo, c: ParsedAcuComponente): number | null =>
+        insumoIdMap.get(buildInsumoKey(tipo, c.descripcion, c.unidad)) ?? null;
+
     return {
         id:                   null,
         partida,
@@ -493,7 +909,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             cantidad:       c.cantidad,
             recursos:       c.recursos,
             precio_unitario: c.precio_unitario,
-            insumo_id:      null,
+            insumo_id:      resolveInsumoId('mano_de_obra', c),
             cod_insumo:     c.codigo || null,
             proveedor:      c.proveedor || null,
         })),
@@ -503,7 +919,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             cantidad:           c.cantidad,
             precio_unitario:    c.precio_unitario,
             factor_desperdicio: c.factor_desperdicio ?? 1,
-            insumo_id:          null,
+            insumo_id:          resolveInsumoId('materiales', c),
             cod_insumo:         c.codigo || null,
             proveedor:          c.proveedor || null,
         })),
@@ -513,7 +929,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             cantidad:    c.cantidad,
             recursos:    c.recursos,
             precio_hora: c.precio_hora,
-            insumo_id:   null,
+            insumo_id:   resolveInsumoId('equipos', c),
             cod_insumo:  c.codigo || null,
             proveedor:   c.proveedor || null,
         })),
@@ -522,7 +938,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             unidad:          c.unidad || 'glb',
             cantidad:        c.cantidad,
             precio_unitario: c.precio_unitario,
-            insumo_id:       null,
+            insumo_id:       resolveInsumoId('subcontratos', c),
             cod_insumo:      c.codigo || null,
             proveedor:       c.proveedor || null,
         })),
@@ -531,7 +947,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
             unidad:          c.unidad || 'und',
             cantidad:        c.cantidad,
             precio_unitario: c.precio_unitario,
-            insumo_id:       null,
+            insumo_id:       resolveInsumoId('subpartidas', c),
             cod_insumo:      c.codigo || null,
             proveedor:       c.proveedor || null,
         })),
@@ -544,11 +960,12 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
 export function ImportDelphinModal({
     open,
     project: _project,
-    project_id_int: _pid,
+    project_id_int,
     delphinRows,
     onClose,
     onBudgetImported,
     onAcusImported,
+    onRegisterPendingInsumo,
 }: Props) {
     // Default to ACUs tab when presupuesto already exists; reset each time the modal opens
     const [step, setStep] = useState<Step>('budget');
@@ -606,8 +1023,10 @@ export function ImportDelphinModal({
                     ) : (
                         <StepAcus
                             delphinRows={delphinRows}
+                            projectIdInt={project_id_int}
                             onDone={onClose}
                             onAcusImported={onAcusImported}
+                            onRegisterPendingInsumo={onRegisterPendingInsumo}
                         />
                     )}
                 </div>

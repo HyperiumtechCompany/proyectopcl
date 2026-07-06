@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface DicEntry {
     id:          number;
@@ -11,8 +11,9 @@ export function useDiccionario(project: string) {
     const [items, setItems]   = useState<DicEntry[]>([]);
     const [ready, setReady]   = useState(false);
 
-    useEffect(() => {
-        axios
+    const refetch = useCallback(() => {
+        setReady(false);
+        return axios
             .get(`/costos/proyectos/${project}/presupuesto/insumos/diccionarios`)
             .then((res) => {
                 if (res.data?.success) setItems(res.data.diccionarios ?? []);
@@ -21,5 +22,10 @@ export function useDiccionario(project: string) {
             .finally(() => setReady(true));
     }, [project]);
 
-    return { items, ready };
+    useEffect(() => {
+        void refetch();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [project]);
+
+    return { items, ready, refetch };
 }

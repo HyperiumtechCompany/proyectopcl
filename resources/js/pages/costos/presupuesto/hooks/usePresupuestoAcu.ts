@@ -92,6 +92,24 @@ export function upsertLocalAcuRow(
     return rows.map((acu) => acu.partida === updatedAcu.partida ? updatedAcu : acu);
 }
 
+// Clave canónica para matchear un componente de ACU contra el catálogo de
+// insumos. Debe coincidir EXACTAMENTE con la normalización del backend
+// (InsumoProductoController::normalizeDescripcion: trim + espacios colapsados
+// + minúsculas) para que /insumos/resolve, el registro de pendientes y el
+// parcheo posterior de insumo_id usen siempre la misma clave.
+export function buildInsumoKey(tipo: string, descripcion: string, unidad: string): string {
+    const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+    return `${tipo}|${normalize(descripcion)}|${normalize(unidad)}`;
+}
+
+export interface PendingNewInsumo {
+    tipo: string;
+    descripcion: string;
+    unidad: string;
+    precio: number;
+    diccionario_id: number;
+}
+
 interface UsePresupuestoAcuProps {
     projectId: number;
     subsection: PresupuestoSubsection;
@@ -121,6 +139,15 @@ export function usePresupuestoAcu({
     const [acuDirty, setAcuDirty] = useState(false);
     // Pending ACU edits not yet persisted to DB (partida → payload)
     const pendingAcuRef = useRef<Map<string, Record<string, any>>>(new Map());
+    // Insumos nuevos confirmados por el usuario en un import, pendientes de
+    // crearse en el catálogo — solo se crean al guardar (flushPendingInsumos),
+    // nunca al confirmar el import, para no dejar insumos huérfanos si se
+    // abandona el import sin guardar.
+    const pendingNewInsumosRef = useRef<Map<string, PendingNewInsumo>>(new Map());
+
+    const registerPendingInsumo = useCallback((key: string, descriptor: PendingNewInsumo) => {
+        pendingNewInsumosRef.current.set(key, descriptor);
+    }, []);
 
     const parseJsonArrayField = useCallback(
         (value: unknown): ACUComponenteRow[] => {
@@ -424,63 +451,121 @@ export function usePresupuestoAcu({
     }, [normalizeAcuData]);
 
     // Batch-persists all pending ACU edits to DB (called on global save).
+    // Cada ACU se intenta de forma INDEPENDIENTE (Promise.allSettled): si uno
+    // falla (ej. un dato mal formado en una sola partida), NO bloquea a los
+    // demás — solo el que falló queda pendiente para reintentar en el próximo
+    // guardado, mientras el resto se persiste normalmente. Antes, un solo
+    // fallo abortaba TODA la cola restante (Promise.all + throw), dejando sin
+    // guardar decenas de ACUs que nunca llegaron ni siquiera a intentarse.
     // Accepts an optional AbortSignal to cancel mid-flush; pending map stays
     // dirty so the next save retries the remaining items.
     const flushPendingAcus = useCallback(
         async (onProgress?: (p: AcuFlushProgress) => void, signal?: AbortSignal): Promise<boolean> => {
-            const pending = Array.from(pendingAcuRef.current.values());
+            const pending = Array.from(pendingAcuRef.current.entries());
             if (pending.length === 0) return true;
             if (signal?.aborted) return false;
 
             const total = pending.length;
             const startMs = Date.now();
             let done = 0;
+            const failures: Array<{ partida: string; message: string }> = [];
 
             onProgress?.({ done: 0, total, pct: 0, etaSecs: null });
 
-            try {
-                for (let i = 0; i < total; i += ACU_BATCH_SIZE) {
-                    if (signal?.aborted) break;
+            for (let i = 0; i < total; i += ACU_BATCH_SIZE) {
+                if (signal?.aborted) break;
 
-                    const batch = pending.slice(i, i + ACU_BATCH_SIZE);
-                    try {
-                        await Promise.all(
-                            batch.map((payload) =>
-                                axios.post(
-                                    `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
-                                    payload,
-                                    { signal },
-                                ),
-                            ),
-                        );
-                    } catch (e) {
-                        if (axios.isCancel(e)) break;
-                        throw e;
+                const batch = pending.slice(i, i + ACU_BATCH_SIZE);
+                const results = await Promise.allSettled(
+                    batch.map(([, payload]) =>
+                        axios.post(
+                            `/costos/proyectos/${projectId}/presupuesto/acus/calculate`,
+                            payload,
+                            { signal },
+                        ),
+                    ),
+                );
+
+                results.forEach((result, idx) => {
+                    const [partida] = batch[idx];
+                    if (result.status === 'fulfilled') {
+                        pendingAcuRef.current.delete(partida);
+                    } else if (!axios.isCancel(result.reason)) {
+                        const message = result.reason?.response?.data?.message ?? result.reason?.message ?? 'Error desconocido';
+                        failures.push({ partida, message });
+                        console.error(`Error al guardar ACU [partida ${partida}]:`, result.reason);
                     }
+                });
 
-                    done = Math.min(i + ACU_BATCH_SIZE, total);
+                done = Math.min(i + ACU_BATCH_SIZE, total);
 
-                    if (onProgress) {
-                        const elapsedSec = (Date.now() - startMs) / 1000;
-                        const rate = elapsedSec > 0 ? done / elapsedSec : 0;
-                        const etaSecs = rate > 0 ? Math.round((total - done) / rate) : null;
-                        onProgress({ done, total, pct: Math.round((done / total) * 100), etaSecs });
-                    }
+                if (onProgress) {
+                    const elapsedSec = (Date.now() - startMs) / 1000;
+                    const rate = elapsedSec > 0 ? done / elapsedSec : 0;
+                    const etaSecs = rate > 0 ? Math.round((total - done) / rate) : null;
+                    onProgress({ done, total, pct: Math.round((done / total) * 100), etaSecs });
                 }
+            }
 
-                if (!signal?.aborted) {
-                    pendingAcuRef.current.clear();
-                    setAcuDirty(false);
-                    return true;
-                }
-                return false;
-            } catch (e) {
-                console.error('Error al persistir ACUs pendientes:', e);
+            if (signal?.aborted) return false;
+
+            if (failures.length > 0) {
+                console.error(`${failures.length} ACU(s) no se pudieron guardar:`, failures);
+                setAcuDirty(pendingAcuRef.current.size > 0);
                 return false;
             }
+
+            setAcuDirty(false);
+            return true;
         },
         [projectId],
     );
+
+    // Crea en el catálogo los insumos nuevos pendientes (registrados durante un
+    // import) y parcha su insumo_id en los componentes ya encolados en
+    // pendingAcuRef. Debe correr ANTES de flushPendingAcus en el flujo de
+    // Guardar, para que los ACUs se persistan con el insumo_id ya resuelto.
+    const flushPendingInsumos = useCallback(async (): Promise<boolean> => {
+        const pending = Array.from(pendingNewInsumosRef.current.entries());
+        if (pending.length === 0) return true;
+
+        try {
+            const response = await axios.post(
+                `/costos/proyectos/${projectId}/presupuesto/insumos/create-batch`,
+                {
+                    items: pending.map(([key, descriptor]) => ({ key, ...descriptor })),
+                },
+            );
+
+            if (!response.data?.success) return false;
+
+            const resolved = new Map<string, number>(
+                (response.data.items as Array<{ key: string; insumo_id: number }>).map(
+                    (item) => [item.key, item.insumo_id],
+                ),
+            );
+
+            for (const payload of pendingAcuRef.current.values()) {
+                for (const tipo of ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'] as const) {
+                    const items = payload[tipo];
+                    if (!Array.isArray(items)) continue;
+
+                    for (const item of items) {
+                        if (item.insumo_id != null) continue;
+                        const key = buildInsumoKey(tipo, String(item.descripcion ?? ''), String(item.unidad ?? ''));
+                        const insumoId = resolved.get(key);
+                        if (insumoId != null) item.insumo_id = insumoId;
+                    }
+                }
+            }
+
+            pendingNewInsumosRef.current.clear();
+            return true;
+        } catch (e) {
+            console.error('Error al crear insumos pendientes:', e);
+            return false;
+        }
+    }, [projectId]);
 
     return {
         acuRows,
@@ -490,6 +575,8 @@ export function usePresupuestoAcu({
         saveAcu,
         localSaveAcu,
         flushPendingAcus,
+        registerPendingInsumo,
+        flushPendingInsumos,
         acuDirty,
         pendingAcuCount: pendingAcuRef.current.size,
     };

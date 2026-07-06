@@ -9,6 +9,7 @@ import {
     Maximize2,
     Minimize2,
     Package,
+    PencilLine,
     Search,
     Users,
     Wrench,
@@ -37,6 +38,11 @@ interface Props {
     projectName: string;
     projectData?: any;
     onClose: () => void;
+    // Aplica el nuevo precio localmente (visual-first, igual que el resto de
+    // Delphin): recibe los ACUs completos ya clonados con el precio actualizado
+    // en el/los componente(s) que correspondan, listos para localSaveAcu(). No
+    // se persiste nada hasta que el usuario pulse "Guardar".
+    onApplyAcuChanges: (updatedAcus: Array<Record<string, any>>) => void;
 }
 
 interface SpecialtyOption {
@@ -430,6 +436,69 @@ export function consolidateInsumos(
         .sort((a, b) => b.parcial - a.parcial);
 }
 
+// Busca el precio EXACTO tal como está almacenado en el primer componente que
+// coincide con esta fila consolidada (sin pasar por el reparto proporcional,
+// que redistribuye el monto para reconciliar con Costo Directo y por diseño
+// puede diferir en fracciones de centavo del precio real guardado). Se usa
+// para inicializar el editor con el valor exacto que el usuario fijó la
+// última vez, no el valor reconciliado que se muestra en la columna P. REF.
+export function getRawComponentPrice(
+    row: ConsolidatedInsumo,
+    acuRows: ACURowSummary[],
+): number | null {
+    const variantSet = new Set(row.variantes);
+    const unidadKey = normalizeKey(row.unidad);
+    const priceField = row.type === 'equipos' ? 'precio_hora' : 'precio_unitario';
+
+    for (const acu of acuRows) {
+        const items = (acu[row.type] ?? []) as ACUComponenteRow[];
+        for (const item of items) {
+            const descripcion = String(item.descripcion ?? '').trim();
+            if (!variantSet.has(descripcion)) continue;
+            if (normalizeKey(String(item.unidad ?? '')) !== unidadKey) continue;
+            return Number((item as unknown as Record<string, unknown>)[priceField] ?? 0);
+        }
+    }
+
+    return null;
+}
+
+// Aplica un nuevo precio de referencia a TODOS los ACUs del proyecto (no solo
+// los de la especialidad/scope actual) que contengan un componente del mismo
+// tipo cuya descripción coincida con alguna variante fusionada de la fila
+// consolidada y cuya unidad coincida. Devuelve clones de los ACUs afectados
+// listos para localSaveAcu() — no muta acuRows ni llama al backend.
+export function applyConsolidatedPrice(
+    row: ConsolidatedInsumo,
+    acuRows: ACURowSummary[],
+    newPrice: number,
+): Array<Record<string, unknown>> {
+    const variantSet = new Set(row.variantes);
+    const unidadKey = normalizeKey(row.unidad);
+    const priceField = row.type === 'equipos' ? 'precio_hora' : 'precio_unitario';
+    const updated: Array<Record<string, unknown>> = [];
+
+    for (const acu of acuRows) {
+        const items = (acu[row.type] ?? []) as ACUComponenteRow[];
+        if (!items.length) continue;
+
+        let changed = false;
+        const nextItems = items.map((item) => {
+            const descripcion = String(item.descripcion ?? '').trim();
+            if (!variantSet.has(descripcion)) return item;
+            if (normalizeKey(String(item.unidad ?? '')) !== unidadKey) return item;
+            changed = true;
+            return { ...item, [priceField]: newPrice };
+        });
+
+        if (changed) {
+            updated.push({ ...acu, [row.type]: nextItems });
+        }
+    }
+
+    return updated;
+}
+
 export function sortInsumos<T extends Pick<ConsolidatedInsumo, InsumoSortKey>>(
     rows: T[],
     sort: SortState,
@@ -536,7 +605,7 @@ function SortableHeader({
 }
 
 export function InsumosConsolidadosModal({
-    open, acuRows, delphinRows, scope, projectName, projectData, onClose,
+    open, acuRows, delphinRows, scope, projectName, projectData, onClose, onApplyAcuChanges,
 }: Props) {
     const [activeType, setActiveType] = useState<InsumoType>('mano_de_obra');
     const [search, setSearch] = useState('');
@@ -557,6 +626,10 @@ export function InsumosConsolidadosModal({
     const [referenceRow, setReferenceRow] = useState<ConsolidatedInsumo | null>(
         null,
     );
+    const [editRow, setEditRow] = useState<ConsolidatedInsumo | null>(null);
+    const [editPrice, setEditPrice] = useState('');
+    const [editStep, setEditStep] = useState<'form' | 'confirm'>('form');
+    const [editError, setEditError] = useState<string | null>(null);
     const [isMaximized, setIsMaximized] = useState(false);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const dragRef = useRef<{
@@ -698,6 +771,60 @@ export function InsumosConsolidadosModal({
         setMergeName('');
         setReferenceRow(null);
     };
+
+    const openEditPrice = (row: ConsolidatedInsumo) => {
+        setEditRow(row);
+        // row.precio es un promedio ponderado (reparto proporcional para
+        // reconciliar con Costo Directo) y puede diferir en centavos del precio
+        // real guardado. Para editar se usa el precio EXACTO tal como está
+        // almacenado en el componente del ACU, no el valor reconciliado.
+        const rawPrice = getRawComponentPrice(row, acuRows);
+        const initialPrice = rawPrice ?? row.precio;
+        setEditPrice(String(new Decimal(initialPrice).toDecimalPlaces(4).toNumber()));
+        setEditStep('form');
+        setEditError(null);
+    };
+
+    const closeEditPrice = () => {
+        setEditRow(null);
+        setEditPrice('');
+        setEditStep('form');
+        setEditError(null);
+    };
+
+    const handleContinueEdit = () => {
+        const parsed = Number(editPrice);
+        if (!editPrice.trim() || Number.isNaN(parsed) || parsed < 0) {
+            setEditError('Ingrese un precio válido.');
+            return;
+        }
+        setEditError(null);
+        setEditStep('confirm');
+    };
+
+    // Visual-first: no llama al backend. Solo actualiza acuRows en memoria
+    // (vía onApplyAcuChanges → localSaveAcu) y queda pendiente hasta que el
+    // usuario pulse "Guardar" en el toolbar, igual que el resto de Delphin.
+    const handleConfirmEdit = () => {
+        if (!editRow) return;
+        const newPrice = Number(editPrice);
+        const updatedAcus = applyConsolidatedPrice(editRow, acuRows, newPrice);
+
+        if (updatedAcus.length === 0) {
+            setEditError('No se encontraron ACUs para actualizar con este insumo.');
+            return;
+        }
+
+        onApplyAcuChanges(updatedAcus);
+        setEditRow(null);
+        setEditPrice('');
+        setEditStep('form');
+    };
+
+    const editAffectedAcus = useMemo(
+        () => (editRow ? applyConsolidatedPrice(editRow, acuRows, 0).length : 0),
+        [editRow, acuRows],
+    );
 
     const handleSort = (key: InsumoSortKey) => {
         setSort((current) => ({
@@ -992,7 +1119,7 @@ export function InsumosConsolidadosModal({
                                             align="center"
                                             onSort={handleSort}
                                         />
-                                        <th className="w-12 border-b border-slate-700 p-2 text-center">
+                                        <th className="w-16 border-b border-slate-700 p-2 text-center">
                                             Ref.
                                         </th>
                                     </tr>
@@ -1121,19 +1248,35 @@ export function InsumosConsolidadosModal({
                                                         {row.usos}
                                                     </td>
                                                     <td className="p-2 text-center">
-                                                        <button
-                                                            type="button"
-                                                            className="inline-flex rounded p-1.5 text-sky-400 transition-colors hover:bg-sky-950 hover:text-sky-200"
-                                                            onClick={() =>
-                                                                setReferenceRow(
-                                                                    row,
-                                                                )
-                                                            }
-                                                            title={`Ver de dónde proviene ${row.descripcion}`}
-                                                            aria-label={`Ver referencias de ${row.descripcion}`}
-                                                        >
-                                                            <Search size={14} />
-                                                        </button>
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex rounded p-1.5 text-sky-400 transition-colors hover:bg-sky-950 hover:text-sky-200"
+                                                                onClick={() =>
+                                                                    setReferenceRow(
+                                                                        row,
+                                                                    )
+                                                                }
+                                                                title={`Ver de dónde proviene ${row.descripcion}`}
+                                                                aria-label={`Ver referencias de ${row.descripcion}`}
+                                                            >
+                                                                <Search size={14} />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="inline-flex rounded p-1.5 text-amber-400 transition-colors hover:bg-amber-950 hover:text-amber-200 disabled:cursor-not-allowed disabled:text-slate-600 disabled:hover:bg-transparent"
+                                                                disabled={row.precio === 0}
+                                                                onClick={() => openEditPrice(row)}
+                                                                title={
+                                                                    row.precio === 0
+                                                                        ? 'No se puede editar: precio calculado automáticamente (ej. Herramientas Manuales)'
+                                                                        : `Editar precio referencial de ${row.descripcion}`
+                                                                }
+                                                                aria-label={`Editar precio de ${row.descripcion}`}
+                                                            >
+                                                                <PencilLine size={14} />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1239,6 +1382,126 @@ export function InsumosConsolidadosModal({
                                     ? 'referencia'
                                     : 'referencias'}{' '}
                                 encontradas
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {editRow && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 p-6">
+                        <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-600 bg-slate-900 shadow-2xl">
+                            <div className="flex items-start justify-between gap-4 border-b border-slate-700 bg-slate-800 px-4 py-3">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm font-semibold text-slate-100">
+                                        {editStep === 'form'
+                                            ? 'Editar precio referencial'
+                                            : 'Confirmar actualización'}
+                                    </h3>
+                                    <p className="mt-1 truncate text-xs text-sky-300">
+                                        {editRow.descripcion}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
+                                    onClick={closeEditPrice}
+                                    aria-label="Cerrar editor de precio"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3 px-4 py-4">
+                                {editStep === 'form' ? (
+                                    <>
+                                        <p className="text-xs text-slate-400">
+                                            Este insumo se usa en{' '}
+                                            <span className="font-semibold text-amber-300">
+                                                {editAffectedAcus}
+                                            </span>{' '}
+                                            {editAffectedAcus === 1 ? 'ACU' : 'ACUs'} del
+                                            proyecto. El nuevo precio se aplicará a todas
+                                            sus ocurrencias en el editor — no se guardará en
+                                            la base de datos hasta que pulses "Guardar".
+                                        </p>
+                                        <label className="block text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                                            Nuevo precio referencial (S/ por {editRow.unidad})
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            autoFocus
+                                            className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+                                            value={editPrice}
+                                            onChange={(e) => setEditPrice(e.target.value)}
+                                        />
+                                        {editError && (
+                                            <p className="text-xs text-red-400">{editError}</p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-slate-200">
+                                        ¿Confirma actualizar el precio de{' '}
+                                        <span className="font-semibold text-sky-300">
+                                            {editRow.descripcion}
+                                        </span>{' '}
+                                        a{' '}
+                                        <span className="font-mono font-semibold text-emerald-300">
+                                            S/ {fmt(Number(editPrice), 4)}
+                                        </span>
+                                        ? Se actualizará en los{' '}
+                                        <span className="font-semibold text-amber-300">
+                                            {editAffectedAcus}
+                                        </span>{' '}
+                                        {editAffectedAcus === 1 ? 'ACU que lo usa' : 'ACUs que lo usan'},
+                                        recalculando sus costos y el presupuesto. El cambio
+                                        queda pendiente hasta que pulses "Guardar".
+                                    </p>
+                                )}
+                                {editStep === 'confirm' && editError && (
+                                    <p className="rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs font-medium text-red-300">
+                                        {editError}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 border-t border-slate-700 bg-slate-950/40 px-4 py-3">
+                                {editStep === 'form' ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="rounded px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800"
+                                            onClick={closeEditPrice}
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sky-600"
+                                            onClick={handleContinueEdit}
+                                        >
+                                            Continuar
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="rounded px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800"
+                                            onClick={() => setEditStep('form')}
+                                        >
+                                            Volver
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
+                                            onClick={handleConfirmEdit}
+                                        >
+                                            Sí, actualizar precio
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

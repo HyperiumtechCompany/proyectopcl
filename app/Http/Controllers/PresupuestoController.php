@@ -180,6 +180,14 @@ class PresupuestoController extends Controller
 
         try {
             // Strategy: clear + re-insert (simple for spreadsheet-like data)
+            $countBefore = $connection->table($tableName)->count();
+            \Log::warning("PresupuestoController::update BULK DELETE en tabla [{$tableName}]", [
+                'subsection' => $subsection,
+                'project' => $project->id,
+                'rows_before_delete' => $countBefore,
+                'rows_in_request' => count($rows),
+                'trace' => collect(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8))->map(fn ($t) => ($t['class'] ?? '').($t['type'] ?? '').($t['function'] ?? ''))->toArray(),
+            ]);
             $connection->table($tableName)->delete();
 
             $idMapping = []; // Maps client-side IDs to new database IDs
@@ -1457,6 +1465,12 @@ class PresupuestoController extends Controller
         $this->authorizeProject($project);
         $this->validateModuleEnabled($project);
 
+        \Log::info('calculateACU llamado', [
+            'project' => $project->id,
+            'id' => $request->input('id'),
+            'partida' => $request->input('partida'),
+        ]);
+
         // Ensure tenant schema has required ACU columns (for legacy tenant DBs)
         $this->ensureAcuSchema();
 
@@ -1647,15 +1661,47 @@ class PresupuestoController extends Controller
             ];
 
             // Update or insert ACU
+            $acuId = null;
             if (! empty($validated['id'])) {
-                // Update existing ACU
-                DB::connection('costos_tenant')
+                // Update existing ACU — scoped to this presupuesto so we don't
+                // silently touch (or match) a row from another project's data.
+                $updated = DB::connection('costos_tenant')
                     ->table('presupuesto_acus')
                     ->where('id', $validated['id'])
+                    ->where('presupuesto_id', $tenantPresupuestoId)
                     ->update($acuData);
 
-                $acuId = $validated['id'];
-            } else {
+                if ($updated > 0) {
+                    $acuId = $validated['id'];
+                }
+
+                if ($acuId === null) {
+                    // El id enviado no existe (o no pertenece a este presupuesto) —
+                    // cliente con datos desincronizados tras un reset o reimport.
+                    // Antes de rechazar, verificamos si YA existe otro ACU real
+                    // para esta misma partida: si lo hay, es riesgoso adivinar (se
+                    // sobrescribiría un ACU distinto y vigente con el payload
+                    // obsoleto del cliente) y se rechaza. Si NO existe ninguno
+                    // (típico tras reimportar en una base nueva/vacía), es seguro
+                    // crear uno nuevo — no hay nada que se pueda sobrescribir.
+                    $existingForPartida = DB::connection('costos_tenant')
+                        ->table('presupuesto_acus')
+                        ->where('presupuesto_id', $tenantPresupuestoId)
+                        ->where('partida', $validated['partida'])
+                        ->first();
+
+                    if ($existingForPartida) {
+                        DB::connection('costos_tenant')->rollBack();
+
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Este ACU ya no existe o fue modificado por otra sesión. Recarga la página e intenta nuevamente.',
+                        ], 409);
+                    }
+                }
+            }
+
+            if ($acuId === null) {
                 // Insert new ACU
                 $acuData['created_at'] = now();
                 if ($this->hasTenantColumn('presupuesto_acus', 'item_order')) {
@@ -3771,6 +3817,17 @@ class PresupuestoController extends Controller
         array $subcontratos,
         array $subpartidas
     ): void {
+        \Log::info('syncAcuComponents', [
+            'acu_id' => $acuId,
+            'counts' => [
+                'mano_de_obra' => count($manoDeObra),
+                'materiales' => count($materiales),
+                'equipos' => count($equipos),
+                'subcontratos' => count($subcontratos),
+                'subpartidas' => count($subpartidas),
+            ],
+        ]);
+
         // Limpiar registros previos
         AcuManoDeObra::where('acu_id', $acuId)->delete();
         AcuMaterial::where('acu_id', $acuId)->delete();

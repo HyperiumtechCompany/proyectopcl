@@ -345,23 +345,9 @@ class InsumoProductoController extends Controller
             return response()->json(['success' => false, 'message' => 'Diccionario inválido.'], 422);
         }
 
-        $diccionarioCodigo = data_get($diccionario, 'codigo', '');
-        $prefix = $diccionarioCodigo.$validated['tipo_proveedor'];
-
-        $lastM = $connection->table('insumo_productos')
-            ->where('codigo_producto', 'like', $prefix.'%')
-            ->orderBy('codigo_producto', 'desc')
-            ->first();
-
-        $nextSequence = 1;
-        if ($lastM) {
-            $lastSequence = substr((string) $lastM->codigo_producto, strlen($prefix));
-            if (is_numeric($lastSequence)) {
-                $nextSequence = intval($lastSequence) + 1;
-            }
-        }
-
-        $codigoProducto = $prefix.str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
+        $prefix = data_get($diccionario, 'codigo', '').$validated['tipo_proveedor'];
+        $sequenceCache = [];
+        $codigoProducto = $this->generateCodigoProducto($connection, $prefix, $sequenceCache);
 
         $now = now();
         $id = $connection->table('insumo_productos')->insertGetId(array_merge($validated, [
@@ -379,6 +365,230 @@ class InsumoProductoController extends Controller
             'message' => 'Producto creado exitosamente',
             'producto' => $producto,
         ], 201);
+    }
+
+    /**
+     * Genera el siguiente codigo_producto para un prefijo (diccionario.codigo +
+     * tipo_proveedor). Usa un cache en memoria (por request) para que varias
+     * inserciones del mismo prefijo dentro de un mismo batch incrementen la
+     * secuencia correctamente sin volver a consultar la BD en cada una.
+     */
+    private function generateCodigoProducto($connection, string $prefix, array &$sequenceCache): string
+    {
+        if (! array_key_exists($prefix, $sequenceCache)) {
+            $last = $connection->table('insumo_productos')
+                ->where('codigo_producto', 'like', $prefix.'%')
+                ->orderBy('codigo_producto', 'desc')
+                ->first();
+
+            $nextSequence = 1;
+            if ($last) {
+                $lastSequence = substr((string) $last->codigo_producto, strlen($prefix));
+                if (is_numeric($lastSequence)) {
+                    $nextSequence = intval($lastSequence) + 1;
+                }
+            }
+
+            $sequenceCache[$prefix] = $nextSequence;
+        }
+
+        $codigoProducto = $prefix.str_pad($sequenceCache[$prefix], 4, '0', STR_PAD_LEFT);
+        $sequenceCache[$prefix]++;
+
+        return $codigoProducto;
+    }
+
+    /**
+     * Normaliza una descripción para comparar insumos de forma consistente:
+     * recorta espacios, colapsa espacios internos y pasa a minúsculas.
+     */
+    private function normalizeDescripcion(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return mb_strtolower($value);
+    }
+
+    /**
+     * Resuelve un batch de insumos importados contra el catálogo (solo lectura,
+     * no escribe nada). Matchea por tipo + descripción normalizada exacta; si no
+     * hay match, sugiere un diccionario buscando el código crudo del Excel contra
+     * diccionario.codigo (no es único, se toma el primero como sugerencia).
+     * POST /costos/proyectos/{project}/presupuesto/insumos/resolve
+     */
+    public function resolve(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'required|array',
+            'items.*.key' => 'required|string',
+            'items.*.tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'items.*.descripcion' => 'required|string',
+            'items.*.unidad' => 'nullable|string',
+            'items.*.cod_insumo' => 'nullable|string',
+        ]);
+
+        $connection = DB::connection('costos_tenant');
+        $items = $validated['items'];
+        $tipos = array_values(array_unique(array_column($items, 'tipo')));
+
+        $catalogo = $connection->table('insumo_productos')
+            ->where('estado', true)
+            ->whereIn('tipo', $tipos)
+            ->get(['id', 'tipo', 'descripcion', 'costo_unitario', 'unidad_id']);
+
+        $unidadesById = $connection->table('unidad')->get(['id', 'abreviatura_unidad'])->keyBy('id');
+
+        $catalogoPorClave = [];
+        foreach ($catalogo as $producto) {
+            $clave = $producto->tipo.'|'.$this->normalizeDescripcion($producto->descripcion);
+            $catalogoPorClave[$clave] ??= $producto;
+        }
+
+        $codigosCrudos = array_values(array_unique(array_filter(array_column($items, 'cod_insumo'))));
+        $diccionarioPorCodigo = [];
+        if (! empty($codigosCrudos)) {
+            foreach ($connection->table('diccionario')->whereIn('codigo', $codigosCrudos)->get() as $dicc) {
+                $diccionarioPorCodigo[$dicc->codigo] ??= $dicc;
+            }
+        }
+
+        $resultados = [];
+        foreach ($items as $item) {
+            $clave = $item['tipo'].'|'.$this->normalizeDescripcion($item['descripcion']);
+            $match = $catalogoPorClave[$clave] ?? null;
+
+            if ($match) {
+                $resultados[] = [
+                    'key' => $item['key'],
+                    'matched' => true,
+                    'insumo_id' => $match->id,
+                    'costo_unitario' => (float) $match->costo_unitario,
+                    'unidad_catalogo' => optional($unidadesById->get($match->unidad_id))->abreviatura_unidad,
+                ];
+
+                continue;
+            }
+
+            $diccionarioSugerido = null;
+            $codigoCrudo = $item['cod_insumo'] ?? null;
+            if ($codigoCrudo && isset($diccionarioPorCodigo[$codigoCrudo])) {
+                $dicc = $diccionarioPorCodigo[$codigoCrudo];
+                $diccionarioSugerido = ['id' => $dicc->id, 'codigo' => $dicc->codigo, 'descripcion' => $dicc->descripcion];
+            }
+
+            $resultados[] = [
+                'key' => $item['key'],
+                'matched' => false,
+                'diccionario_sugerido' => $diccionarioSugerido,
+            ];
+        }
+
+        return response()->json(['success' => true, 'items' => $resultados]);
+    }
+
+    /**
+     * Crea en el catálogo los insumos nuevos ya confirmados por el usuario tras
+     * un import. Único punto de escritura de este flujo — se llama solo al
+     * guardar (flushPendingInsumos), nunca al confirmar el paso de importación,
+     * para no dejar insumos huérfanos si el usuario abandona el import sin
+     * guardar. Vuelve a chequear el catálogo dentro de la misma transacción
+     * (por si algo se creó entre el /resolve original y este guardado) y evita
+     * duplicados dentro del propio batch actualizando el mapa en memoria.
+     * POST /costos/proyectos/{project}/presupuesto/insumos/create-batch
+     */
+    public function createBatch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'required|array',
+            'items.*.key' => 'required|string',
+            'items.*.tipo' => 'required|in:mano_de_obra,materiales,equipos,subcontratos,subpartidas',
+            'items.*.descripcion' => 'required|string',
+            'items.*.unidad' => 'nullable|string',
+            'items.*.precio' => 'required|numeric|min:0',
+            'items.*.diccionario_id' => 'required|integer',
+        ]);
+
+        $connection = DB::connection('costos_tenant');
+        $items = $validated['items'];
+        $tipos = array_values(array_unique(array_column($items, 'tipo')));
+
+        $connection->beginTransaction();
+
+        try {
+            $catalogoPorClave = [];
+            $existentes = $connection->table('insumo_productos')
+                ->where('estado', true)
+                ->whereIn('tipo', $tipos)
+                ->get(['id', 'tipo', 'descripcion']);
+            foreach ($existentes as $producto) {
+                $clave = $producto->tipo.'|'.$this->normalizeDescripcion($producto->descripcion);
+                $catalogoPorClave[$clave] ??= $producto->id;
+            }
+
+            $sequenceCache = [];
+            $resultados = [];
+
+            foreach ($items as $item) {
+                $clave = $item['tipo'].'|'.$this->normalizeDescripcion($item['descripcion']);
+
+                if (isset($catalogoPorClave[$clave])) {
+                    $resultados[] = ['key' => $item['key'], 'insumo_id' => $catalogoPorClave[$clave], 'created' => false];
+
+                    continue;
+                }
+
+                $diccionario = $connection->table('diccionario')->where('id', $item['diccionario_id'])->first();
+                if (! $diccionario) {
+                    throw new \RuntimeException("Diccionario inválido para el insumo \"{$item['descripcion']}\".");
+                }
+
+                $tipoProveedor = '106';
+                $prefix = data_get($diccionario, 'codigo', '').$tipoProveedor;
+                $codigoProducto = $this->generateCodigoProducto($connection, $prefix, $sequenceCache);
+
+                $unidadTexto = trim((string) ($item['unidad'] ?? ''));
+                $unidadId = null;
+                if ($unidadTexto !== '') {
+                    $unidad = $connection->table('unidad')
+                        ->whereRaw('LOWER(abreviatura_unidad) = ?', [mb_strtolower($unidadTexto)])
+                        ->orWhereRaw('LOWER(descripcion_singular) = ?', [mb_strtolower($unidadTexto)])
+                        ->first();
+                    $unidadId = $unidad->id ?? null;
+                }
+
+                $now = now();
+                $precio = (float) $item['precio'];
+                $insumoId = $connection->table('insumo_productos')->insertGetId([
+                    'codigo_producto' => $codigoProducto,
+                    'descripcion' => $item['descripcion'],
+                    'diccionario_id' => $diccionario->id,
+                    'unidad_id' => $unidadId,
+                    'tipo_proveedor' => $tipoProveedor,
+                    'costo_unitario_lista' => $precio,
+                    'costo_unitario' => $precio,
+                    'costo_flete' => 0,
+                    'tipo' => $item['tipo'],
+                    'estado' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                $catalogoPorClave[$clave] = $insumoId;
+                $resultados[] = ['key' => $item['key'], 'insumo_id' => $insumoId, 'created' => true];
+            }
+
+            $connection->commit();
+        } catch (\Throwable $e) {
+            $connection->rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron crear los insumos: '.$e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json(['success' => true, 'items' => $resultados]);
     }
 
     /**
