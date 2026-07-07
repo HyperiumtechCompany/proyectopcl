@@ -859,7 +859,7 @@ export async function exportInsumosConsolidadosExcel(
                 font(cell, C.leafFg, false, 10);
                 border(cell);
                 if (i === 3) {
-                    cell.numFmt = '#,##0.0000';
+                    cell.numFmt = '#,##0.000';
                     cell.alignment = { horizontal: 'right', vertical: 'middle' };
                 } else if (i === 4 || i === 5) {
                     cell.numFmt = '#,##0.00';
@@ -924,7 +924,7 @@ export async function exportInsumosConsolidadosExcel(
             colMaxLen[0] = Math.max(colMaxLen[0], String(row.codigo || '-').length);
             colMaxLen[1] = Math.max(colMaxLen[1], String(row.descripcion || '').length);
             colMaxLen[2] = Math.max(colMaxLen[2], String(row.unidad || '').length);
-            colMaxLen[3] = Math.max(colMaxLen[3], row.cantidad.toLocaleString('es-PE', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).length);
+            colMaxLen[3] = Math.max(colMaxLen[3], row.cantidad.toLocaleString('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).length);
             colMaxLen[4] = Math.max(colMaxLen[4], row.precio.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
             colMaxLen[5] = Math.max(colMaxLen[5], row.parcial.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
             colMaxLen[6] = Math.max(colMaxLen[6], String(row.usos).length);
@@ -952,5 +952,4 @@ export async function exportInsumosConsolidadosExcel(
         `${safeName}.xlsx`,
     );
 }
-
 

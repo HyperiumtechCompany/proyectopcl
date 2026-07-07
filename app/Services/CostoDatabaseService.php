@@ -527,6 +527,11 @@ class CostoDatabaseService
         return is_array($decoded) ? $decoded : [];
     }
 
+    private function roundAcuCantidad(mixed $cantidad): float
+    {
+        return round((float) ($cantidad ?? 0), 3);
+    }
+
     /**
      * Recalcula los costos por categoría de un ACU a partir de sus componentes JSON —
      * la MISMA fuente que lee el frontend (AcuPanel, Insumos Consolidados vía
@@ -545,7 +550,12 @@ class CostoDatabaseService
         $costoManoObra = 0.0;
         $manoDeObraChanged = false;
         foreach ($manoDeObra as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $manoDeObraChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 6);
             if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
                 $item['parcial'] = $parcial;
                 $manoDeObraChanged = true;
@@ -558,8 +568,13 @@ class CostoDatabaseService
         $costoMateriales = 0.0;
         $materialesChanged = false;
         foreach ($materiales as &$item) {
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $materialesChanged = true;
+            }
             $factor = (float) ($item['factor_desperdicio'] ?? 1) ?: 1.0;
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
             if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
                 $item['parcial'] = $parcial;
                 $materialesChanged = true;
@@ -573,16 +588,21 @@ class CostoDatabaseService
         $equiposChanged = false;
         foreach ($equipos as &$item) {
             $isHerramientas = stripos((string) ($item['descripcion'] ?? ''), 'herramienta') !== false;
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $equiposChanged = true;
+            }
 
             if ($isHerramientas) {
-                $parcial = round($costoManoObra * ((float) ($item['cantidad'] ?? 0) / 100.0), 6);
+                $parcial = round($costoManoObra * ($cantidad / 100.0), 6);
                 if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001 || abs($costoManoObra - (float) ($item['precio_hora'] ?? 0)) > 0.0000001) {
                     $item['parcial'] = $parcial;
                     $item['precio_hora'] = $costoManoObra;
                     $equiposChanged = true;
                 }
             } else {
-                $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_hora'] ?? 0), 6);
+                $parcial = round($cantidad * (float) ($item['precio_hora'] ?? 0), 6);
                 if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
                     $item['parcial'] = $parcial;
                     $equiposChanged = true;
@@ -596,7 +616,12 @@ class CostoDatabaseService
         $costoSubcontratos = 0.0;
         $subcontratosChanged = false;
         foreach ($subcontratos as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $subcontratosChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 6);
             if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
                 $item['parcial'] = $parcial;
                 $subcontratosChanged = true;
@@ -609,7 +634,12 @@ class CostoDatabaseService
         $costoSubpartidas = 0.0;
         $subpartidasChanged = false;
         foreach ($subpartidas as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $subpartidasChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 6);
             if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
                 $item['parcial'] = $parcial;
                 $subpartidasChanged = true;

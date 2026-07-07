@@ -90,6 +90,10 @@ function cellNum(ws: XLSX.WorkSheet, r: number, c: number): number {
     return isNaN(n) ? 0 : n;
 }
 
+function roundCantidad(n: number): number {
+    return Math.round(n * 1000) / 1000;
+}
+
 function rowTexts(ws: XLSX.WorkSheet, r: number, maxC: number): string[] {
     const out: string[] = [];
     for (let c = 0; c <= maxC; c++) out.push(cellStr(ws, r, c));
@@ -365,7 +369,7 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
                             : '';
                         const unidad   = cm ? cellStr(ws, r, cm.unidad)   : (texts.find((t) => UNIT_SET.has(t.toLowerCase())) ?? '');
                         const recursos = cm && cm.recursos >= 0 ? cellNum(ws, r, cm.recursos) : 0;
-                        const cantidad = cm ? cellNum(ws, r, cm.cantidad) : 0;
+                        const cantidad = cm ? roundCantidad(cellNum(ws, r, cm.cantidad)) : 0;
                         const precio   = cm ? cellNum(ws, r, cm.precio)   : 0;
 
                         if (!desc) continue;

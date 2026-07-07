@@ -7,13 +7,26 @@
  * AC1009 structure (all four sections are mandatory):
  *   HEADER  – drawing metadata
  *   TABLES  – layer / linetype / style definitions
- *   BLOCKS  – block definitions (empty but required)
+ *   BLOCKS  – block definitions (holds the background-plan block, see below)
  *   ENTITIES – all drawing geometry
  *   EOF
  *
  * Geometry strategy: every polygon is exploded into individual LINE entities.
  * This avoids LWPOLYLINE (R2000+) and POLYLINE/VERTEX complexity while
  * remaining fully parseable by every CAD tool.
+ *
+ * Editability strategy: the architectural background (imported CAD entities,
+ * rooms, walls, windows, doors, canopies) is bundled into a single BLOCK
+ * ("PLANO_BASE") and referenced once via INSERT, so in AutoCAD it selects as
+ * ONE object. Electrical design entities (fixtures, conductors, switches,
+ * devices, junction boxes) are emitted as loose, individually-editable
+ * entities outside the block.
+ *
+ * Conductor curves are exported as true ARC entities (circular arc through
+ * the two endpoints and the curve's midpoint) instead of Bezier-sampled
+ * LINE chains — one entity per cable segment instead of many. Wire-count
+ * tick marks stay as graphics, but the wire-label TEXT (e.g. "F+N+T") is
+ * intentionally omitted from the export.
  *
  * Layers exported:
  *   DXF_BASE        – imported CAD base plan             (color 8  gray)
@@ -147,6 +160,24 @@ function dxfCircle(out: DxfLines, layer: string, cx: number, cy: number, r: numb
     p(out, 40, f(r));
 }
 
+/**
+ * Filled dot (DXF SOLID entity — a plain CIRCLE can't be filled in AC1009)
+ * with an explicit ACI `color`, overriding the layer's default color.
+ * Drawn as a small diamond; at marker scale it reads as a solid dot.
+ */
+function dxfFilledDot(
+    out: DxfLines, layer: string,
+    cx: number, cy: number, r: number, color: number,
+): void {
+    p(out, 0, 'SOLID');
+    p(out, 8, layer);
+    p(out, 62, color);
+    p(out, 10, f(cx));     p(out, 20, f(cy - r)); p(out, 30, '0.0');
+    p(out, 11, f(cx + r)); p(out, 21, f(cy));     p(out, 31, '0.0');
+    p(out, 12, f(cx - r)); p(out, 22, f(cy));     p(out, 32, '0.0');
+    p(out, 13, f(cx));     p(out, 23, f(cy + r)); p(out, 33, '0.0');
+}
+
 function dxfArc(
     out: DxfLines, layer: string,
     cx: number, cy: number, r: number,
@@ -244,11 +275,42 @@ function buildTables(out: DxfLines): void {
     p(out, 0, 'ENDSEC');
 }
 
-/** Required even when empty. */
-function buildBlocks(out: DxfLines): void {
+/** Name of the block that bundles the whole architectural background plan. */
+const BASE_BLOCK_NAME = 'PLANO_BASE';
+
+/**
+ * BLOCKS section holding a single block definition ("PLANO_BASE") with the
+ * architectural background geometry. Referenced once via INSERT in the
+ * ENTITIES section so the whole background acts as ONE selectable/editable
+ * object in AutoCAD, leaving electrical design entities individually
+ * editable.
+ */
+function buildBlocks(out: DxfLines, renderBackground: () => void): void {
     p(out, 0, 'SECTION');
     p(out, 2, 'BLOCKS');
+
+    p(out, 0, 'BLOCK');
+    p(out, 8, '0');
+    p(out, 2, BASE_BLOCK_NAME);
+    p(out, 70, 0);
+    p(out, 10, '0.0'); p(out, 20, '0.0'); p(out, 30, '0.0');
+    p(out, 3, BASE_BLOCK_NAME);
+    p(out, 1, '');
+    renderBackground();
+    p(out, 0, 'ENDBLK');
+    p(out, 8, '0');
+
     p(out, 0, 'ENDSEC');
+}
+
+/** Insert the background block once, so it selects as a single object. */
+function insertBaseBlock(out: DxfLines): void {
+    p(out, 0, 'INSERT');
+    p(out, 8, 'DXF_BASE');
+    p(out, 2, BASE_BLOCK_NAME);
+    p(out, 10, '0.0'); p(out, 20, '0.0'); p(out, 30, '0.0');
+    p(out, 41, '1.0'); p(out, 42, '1.0'); p(out, 43, '1.0');
+    p(out, 50, '0.0');
 }
 
 // ── Domain renderers ──────────────────────────────────────────────────────────
@@ -399,12 +461,6 @@ function resolvePos(
 
 // ── Conductor curve helpers (mirrors OverlayWires.tsx logic) ─────────────────
 
-/** Steps used to approximate each quadratic Bezier segment with LINE entities. */
-const BEZIER_STEPS = 8;
-
-/** Half-distance (metres) between the two parallel lines of a floor-route conductor. */
-const FLOOR_OFFSET = 0.04;
-
 /** Half-length (metres) of a wire-count tick mark perpendicular to the wire. */
 const TICK_HALF = 0.12;
 
@@ -414,7 +470,10 @@ const TICK_SPACING = 0.055;
 /**
  * Compute the quadratic Bezier control point for a conductor segment.
  * Matches the canvas formula: midpoint + perpendicular * length * 0.18 * curveDir.
- *   curveDir = +1 for floor routes, -1 for wall/ceiling routes.
+ *   curveDir = +1 bows the segment into an arc (floor routes).
+ *   curveDir = 0 collapses the control point onto the chord midpoint, so the
+ *   segment is exactly straight (wall/ceiling routes — conduit runs the
+ *   direct way, it doesn't sweep like floor-embedded conduit does).
  */
 function conductorCp(a: Pt, b: Pt, curveDir: number): Pt {
     const dx = b.x - a.x;
@@ -427,36 +486,69 @@ function conductorCp(a: Pt, b: Pt, curveDir: number): Pt {
     };
 }
 
-/**
- * Sample BEZIER_STEPS+1 points on the quadratic Bezier a→cp→b.
- */
-function sampleBezier(a: Pt, cp: Pt, b: Pt): Pt[] {
-    const pts: Pt[] = [];
-    for (let i = 0; i <= BEZIER_STEPS; i++) {
-        const t = i / BEZIER_STEPS;
-        const mt = 1 - t;
-        pts.push({
-            x: mt * mt * a.x + 2 * mt * t * cp.x + t * t * b.x,
-            y: mt * mt * a.y + 2 * mt * t * cp.y + t * t * b.y,
-        });
-    }
-    return pts;
+/** Circumcircle of three points, or `null` when they are (near-)collinear. */
+function circumcircle(p1: Pt, p2: Pt, p3: Pt): { cx: number; cy: number; r: number } | null {
+    const d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
+    if (Math.abs(d) < 1e-9) return null;
+    const p1sq = p1.x * p1.x + p1.y * p1.y;
+    const p2sq = p2.x * p2.x + p2.y * p2.y;
+    const p3sq = p3.x * p3.x + p3.y * p3.y;
+    const cx = (p1sq * (p2.y - p3.y) + p2sq * (p3.y - p1.y) + p3sq * (p1.y - p2.y)) / d;
+    const cy = (p1sq * (p3.x - p2.x) + p2sq * (p1.x - p3.x) + p3sq * (p2.x - p1.x)) / d;
+    return { cx, cy, r: Math.hypot(p1.x - cx, p1.y - cy) };
 }
 
+/** Angle (degrees, 0-360) from `center` to `pt`. */
+function angleDeg(center: { cx: number; cy: number }, pt: Pt): number {
+    const deg = (Math.atan2(pt.y - center.cy, pt.x - center.cx) * 180) / Math.PI;
+    return deg < 0 ? deg + 360 : deg;
+}
+
+/** True if sweeping counter-clockwise from `start` to `end` (degrees) passes through `mid`. */
+function arcSweepContainsAngle(start: number, end: number, mid: number): boolean {
+    const sweep = (end - start + 360) % 360;
+    const rel = (mid - start + 360) % 360;
+    return rel <= sweep + 1e-6;
+}
+
+type ConductorCurve =
+    | { kind: 'line' }
+    | { kind: 'arc'; cx: number; cy: number; r: number; startDeg: number; endDeg: number };
+
 /**
- * Offset each point in `pts` by `d` metres perpendicular to the local tangent,
- * producing a parallel copy of the polyline.
+ * Compute the true circular arc through `a`, the curve midpoint (derived from
+ * the same control point formula the canvas uses) and `b`. Falls back to
+ * `{ kind: 'line' }` for degenerate (near-zero-length) segments.
  */
-function offsetPolyline(pts: Pt[], d: number): Pt[] {
-    return pts.map((p, i) => {
-        const prev = pts[Math.max(0, i - 1)];
-        const next = pts[Math.min(pts.length - 1, i + 1)];
-        const dx = next.x - prev.x;
-        const dy = next.y - prev.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 1e-6) return p;
-        return { x: p.x + (-dy / len) * d, y: p.y + (dx / len) * d };
-    });
+function computeConductorCurve(a: Pt, b: Pt, curveDir: number): ConductorCurve {
+    const cp = conductorCp(a, b, curveDir);
+    const mid: Pt = {
+        x: 0.25 * a.x + 0.5 * cp.x + 0.25 * b.x,
+        y: 0.25 * a.y + 0.5 * cp.y + 0.25 * b.y,
+    };
+    const circ = circumcircle(a, mid, b);
+    if (!circ) return { kind: 'line' };
+
+    const angA = angleDeg(circ, a);
+    const angB = angleDeg(circ, b);
+    const angMid = angleDeg(circ, mid);
+    const [startDeg, endDeg] = arcSweepContainsAngle(angA, angB, angMid)
+        ? [angA, angB]
+        : [angB, angA];
+
+    return { kind: 'arc', cx: circ.cx, cy: circ.cy, r: circ.r, startDeg, endDeg };
+}
+
+/** Emit one conductor curve as a single ARC entity, or LINE when it's straight. */
+function emitConductorCurve(
+    out: DxfLines, layer: string,
+    curve: ConductorCurve, a: Pt, b: Pt,
+): void {
+    if (curve.kind === 'line') {
+        dxfLine(out, layer, a.x, a.y, b.x, b.y);
+        return;
+    }
+    dxfArc(out, layer, curve.cx, curve.cy, curve.r, curve.startDeg, curve.endDeg);
 }
 
 /**
@@ -523,9 +615,11 @@ function emitConductorTicks(
                 topX + ux * barHalf, topY + uy * barHalf,
             );
         } else if (type === 'N') {
-            // Small filled circle at the top of the tick
+            // Filled dot at the top of the tick, in neutral-wire blue (ACI 5)
+            // so it reads as a distinct, colored marker rather than a hollow
+            // ring in the cable's own (red) layer color.
             const r = TICK_HALF * 0.22;
-            dxfCircle(out, layer, topX + nx * r, topY + ny * r, r);
+            dxfFilledDot(out, layer, topX + nx * r, topY + ny * r, r, 5);
         }
         // 'F' = plain vertical tick only
     }
@@ -552,53 +646,29 @@ function renderConductors(
         if (nodes.length < 2) continue;
 
         const isFloor = c.routeType === 'floor';
-        // +1 curves to the right of travel (floor), -1 curves left (wall/ceiling)
-        const curveDir = isFloor ? 1 : -1;
+        // Floor-embedded conduit sweeps in a gentle arc; wall/ceiling conduit
+        // runs the direct, straight way (curveDir=0 collapses the curve to a
+        // straight chord — see computeConductorCurve).
+        const curveDir = isFloor ? 1 : 0;
         const layer = 'CABLEADO';
         const midSegIdx = Math.floor((nodes.length - 2) / 2);
 
         for (let i = 0; i < nodes.length - 1; i++) {
             const a = nodes[i];
             const b = nodes[i + 1];
-            const cp = conductorCp(a, b, curveDir);
-            const bezPts = sampleBezier(a, cp, b);
-
-            if (isFloor) {
-                // Floor route → two parallel lines (double-line convention)
-                dxfPolyLines(out, layer, offsetPolyline(bezPts, +FLOOR_OFFSET), false);
-                dxfPolyLines(out, layer, offsetPolyline(bezPts, -FLOOR_OFFSET), false);
-            } else {
-                // Wall/ceiling route → single line
-                dxfPolyLines(out, layer, bezPts, false);
-            }
+            const curve = computeConductorCurve(a, b, curveDir);
+            emitConductorCurve(out, layer, curve, a, b);
 
             // Draw wire-count tick marks on the middle segment only
             if (i === midSegIdx) {
+                const cp = conductorCp(a, b, curveDir);
                 emitConductorTicks(out, a, cp, b, c.wireCount, layer);
             }
         }
 
-        // Wire label at the midpoint of the middle segment, offset slightly
-        const midA = nodes[midSegIdx];
-        const midB = nodes[midSegIdx + 1];
-        const midCp = conductorCp(midA, midB, curveDir);
-        const labelX = 0.25 * midA.x + 0.5 * midCp.x + 0.25 * midB.x;
-        const labelY = 0.25 * midA.y + 0.5 * midCp.y + 0.25 * midB.y;
-
-        // Perpendicular offset for the label (away from the curve)
-        const ldx = midB.x - midA.x;
-        const ldy = midB.y - midA.y;
-        const llen = Math.sqrt(ldx * ldx + ldy * ldy);
-        const lnx = llen > 1e-6 ? -ldy / llen : 0;
-        const lny = llen > 1e-6 ?  ldx / llen : 1;
-        const labelOffset = FLOOR_OFFSET + TICK_HALF + 0.06;
-
-        const label = c.wireLabel ?? `${c.wireCount}C`;
-        dxfText(out, 'TEXTO_ELEC',
-            labelX + lnx * labelOffset,
-            labelY + lny * labelOffset,
-            0.08, label,
-        );
+        // Note: the wire-label TEXT (e.g. "F+N+T") is intentionally not
+        // exported — the tick marks above already encode wire type/count,
+        // and the label clutters the plan when overlaid on the base CAD.
     }
 }
 
@@ -613,9 +683,62 @@ function renderLightSwitches(out: DxfLines, switches: LightSwitch[]): void {
     }
 }
 
+function renderWallOutlet(out: DxfLines, dev: ElectricalDevice, waterproof = false): void {
+    const r = 0.075;
+    dxfCircle(out, 'DISP_ELECTRICOS', dev.x, dev.y, r);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x - r, dev.y, dev.x + r, dev.y);
+    dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y - 0.025, 0.06, 'T');
+
+    if (waterproof) {
+        dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y + 0.055, 0.04, 'AP');
+        dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y - 0.085, 0.035, '1.20m');
+    }
+}
+
+function renderCeilingOutlet(out: DxfLines, dev: ElectricalDevice): void {
+    const r = 0.075;
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x - r * 1.6, dev.y + r * 0.7, dev.x + r * 1.25, dev.y + r * 0.7);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x - r * 0.95, dev.y + r * 0.7, dev.x - r * 0.95, dev.y - r * 1.8);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x, dev.y + r * 0.7, dev.x, dev.y - r * 1.8);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x + r * 0.95, dev.y + r * 0.7, dev.x + r * 0.95, dev.y - r * 1.8);
+    dxfCircle(out, 'DISP_ELECTRICOS', dev.x + r * 1.25, dev.y + r * 0.7, r * 0.45);
+}
+
+function renderRackOutlet(out: DxfLines, dev: ElectricalDevice): void {
+    const hw = 0.10;
+    const hh = 0.06;
+    dxfPolyLines(out, 'DISP_ELECTRICOS', [
+        { x: dev.x - hw, y: dev.y - hh },
+        { x: dev.x + hw, y: dev.y - hh },
+        { x: dev.x + hw, y: dev.y + hh },
+        { x: dev.x - hw, y: dev.y + hh },
+    ], true);
+    dxfText(out, 'TEXTO_ELEC', dev.x - 0.045, dev.y - 0.02, 0.055, 'TR');
+}
+
 function renderElectricalDevices(out: DxfLines, devices: ElectricalDevice[]): void {
     const HS = 0.075; // half-size: 15 cm square symbol
     for (const dev of devices) {
+        if (dev.type === 'outlet_floor') {
+            renderWallOutlet(out, dev);
+            continue;
+        }
+
+        if (dev.type === 'outlet_waterproof') {
+            renderWallOutlet(out, dev, true);
+            continue;
+        }
+
+        if (dev.type === 'outlet_ceiling') {
+            renderCeilingOutlet(out, dev);
+            continue;
+        }
+
+        if (dev.type === 'outlet_rack') {
+            renderRackOutlet(out, dev);
+            continue;
+        }
+
         dxfPolyLines(out, 'DISP_ELECTRICOS', [
             { x: dev.x - HS, y: dev.y - HS },
             { x: dev.x + HS, y: dev.y - HS },
@@ -671,17 +794,24 @@ export function buildDialuxDxfExport(snapshot: DialuxExportSnapshot): string {
     // ── Four mandatory AC1009 sections ────────────────────────────────────────
     buildHeader(out, minX - PAD, minY - PAD, maxX + PAD, maxY + PAD);
     buildTables(out);
-    buildBlocks(out);  // ← empty but required
+
+    // Background plan (imported CAD + architectural elements) → one block.
+    buildBlocks(out, () => {
+        renderImportedEntities(out, dxfEntities);
+        renderRooms(out, rooms);
+        renderWalls(out, walls);
+        renderWindows(out, windows, wallMap);
+        renderDoors(out, doors, wallMap);
+        renderCanopies(out, canopies);
+    });
 
     p(out, 0, 'SECTION');
     p(out, 2, 'ENTITIES');
 
-    renderImportedEntities(out, dxfEntities);
-    renderRooms(out, rooms);
-    renderWalls(out, walls);
-    renderWindows(out, windows, wallMap);
-    renderDoors(out, doors, wallMap);
-    renderCanopies(out, canopies);
+    // Single INSERT makes the background plan act as ONE object in AutoCAD.
+    insertBaseBlock(out);
+
+    // Electrical design entities stay loose and individually editable.
     renderFixtures(out, fixtures);
     renderConductors(out, conductors, fixtures, lightSwitches, electricalDevices, junctionBoxes);
     renderLightSwitches(out, lightSwitches);

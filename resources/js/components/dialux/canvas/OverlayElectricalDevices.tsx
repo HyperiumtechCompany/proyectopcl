@@ -136,26 +136,109 @@ function FacpSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: string
  * CAD symbol: two concentric circles with horizontal lines (outlet) + letter tag.
  * stroke color: green (floor/ceiling) | blue (waterproof) | red (rack)
  */
-function OutletSymbol({
-    r, stroke, tag, tagColor,
-}: { r: number; stroke: string; tag: string; tagColor?: string }) {
-    const lineY = [-r * 0.4, 0, r * 0.4];
-    const fs = Math.max(5, r * 0.7);
+function WallOutletSymbol({
+    r,
+    stroke,
+    waterproof = false,
+}: {
+    r: number;
+    stroke: string;
+    waterproof?: boolean;
+}) {
+    const fs = Math.max(5, r * 0.72);
+    const textX = r + 4;
+
     return (
         <>
-            {/* Outer circle */}
             <circle r={r} fill="none" stroke={stroke} strokeWidth={1.5} />
-            {/* Inner circle */}
-            <circle r={r * 0.55} fill="none" stroke={stroke} strokeWidth={1} />
-            {/* Horizontal lines (outlet slots) */}
-            {lineY.map((y, i) => (
-                <line key={i} x1={-r * 0.45} y1={y} x2={r * 0.45} y2={y}
-                    stroke={stroke} strokeWidth={0.9} />
-            ))}
-            {/* Tag label to the right */}
-            <text x={r + 3} y={2} textAnchor="start" dominantBaseline="middle"
-                fontSize={fs} fontWeight="bold" fill={tagColor ?? stroke}
-                fontFamily="monospace" style={{ userSelect: 'none' }}>{tag}</text>
+            <line x1={-r} y1={0} x2={r} y2={0} stroke={stroke} strokeWidth={1.4} />
+            <text
+                x={textX}
+                y={2}
+                textAnchor="start"
+                dominantBaseline="middle"
+                fontSize={fs}
+                fontWeight="bold"
+                fill="#facc15"
+                fontFamily="monospace"
+                style={{ userSelect: 'none' }}
+            >
+                T
+            </text>
+            {waterproof && (
+                <>
+                    <text
+                        x={textX}
+                        y={-fs * 0.72}
+                        textAnchor="start"
+                        dominantBaseline="middle"
+                        fontSize={fs * 0.75}
+                        fontWeight="bold"
+                        fill="#ef4444"
+                        fontFamily="monospace"
+                        style={{ userSelect: 'none' }}
+                    >
+                        AP
+                    </text>
+                    <text
+                        x={textX}
+                        y={fs * 0.95}
+                        textAnchor="start"
+                        dominantBaseline="middle"
+                        fontSize={fs * 0.62}
+                        fontWeight="bold"
+                        fill="#ef4444"
+                        fontFamily="monospace"
+                        style={{ userSelect: 'none' }}
+                    >
+                        1.20m
+                    </text>
+                </>
+            )}
+        </>
+    );
+}
+
+function CeilingOutletSymbol({ r, stroke }: { r: number; stroke: string }) {
+    return (
+        <>
+            <line x1={-r * 1.6} y1={-r * 0.7} x2={r * 1.25} y2={-r * 0.7} stroke={stroke} strokeWidth={1.4} />
+            <line x1={-r * 0.95} y1={-r * 0.7} x2={-r * 0.95} y2={r * 1.8} stroke={stroke} strokeWidth={1.4} />
+            <line x1={0} y1={-r * 0.7} x2={0} y2={r * 1.8} stroke={stroke} strokeWidth={1.4} />
+            <line x1={r * 0.95} y1={-r * 0.7} x2={r * 0.95} y2={r * 1.8} stroke={stroke} strokeWidth={1.4} />
+            <circle cx={r * 1.25} cy={-r * 0.7} r={r * 0.45} fill={stroke} stroke={stroke} strokeWidth={1} />
+        </>
+    );
+}
+
+function RackOutletSymbol({ r, stroke }: { r: number; stroke: string }) {
+    const fs = Math.max(5, r * 0.7);
+
+    return (
+        <>
+            <rect
+                x={-r * 1.35}
+                y={-r * 0.8}
+                width={r * 2.7}
+                height={r * 1.6}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={1.5}
+                rx={2}
+            />
+            <text
+                x={0}
+                y={2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={fs}
+                fontWeight="bold"
+                fill={stroke}
+                fontFamily="monospace"
+                style={{ userSelect: 'none' }}
+            >
+                TR
+            </text>
         </>
     );
 }
@@ -200,10 +283,6 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                     outlet_rack:       '#ef4444',
                 };
                 const baseColor = isSelected ? '#f59e0b' : (colorMap[dev.type] || '#22c55e');
-                const labelFs = Math.max(7, Math.min(hh * 0.7, 14));
-
-                const isOutlet = dev.type.includes('outlet') || dev.type.includes('tomacorriente');
-
                 return (
                     <g
                         key={dev.id}
@@ -228,8 +307,17 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                         {dev.type === 'earth_pit' && <EarthPitSymbol r={hw} stroke={baseColor} />}
                         {dev.type === 'facp' && <FacpSymbol hw={hw} hh={hh} stroke={baseColor} />}
                         
-                        {(isOutlet || (!['meter','main_panel','sub_panel','transfer_switch','arrival_panel','junction_box','earth_pit','facp'].includes(dev.type))) && (
-                            <OutletSymbol r={hw} stroke={baseColor} tag="T" tagColor={dev.type === 'outlet_waterproof' ? '#3b82f6' : (dev.type === 'outlet_rack' ? '#ef4444' : undefined)} />
+                        {dev.type === 'outlet_floor' && (
+                            <WallOutletSymbol r={hw} stroke={baseColor} />
+                        )}
+                        {dev.type === 'outlet_waterproof' && (
+                            <WallOutletSymbol r={hw} stroke={baseColor} waterproof />
+                        )}
+                        {dev.type === 'outlet_ceiling' && (
+                            <CeilingOutletSymbol r={hw} stroke="#f8fafc" />
+                        )}
+                        {dev.type === 'outlet_rack' && (
+                            <RackOutletSymbol r={hw} stroke={baseColor} />
                         )}
 
                         {/* Label below (ocultado por solicitud del usuario por ahora)

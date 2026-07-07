@@ -1265,6 +1265,41 @@ class PresupuestoController extends Controller
     private function recalcAcuSubtotals(array $acu): array
     {
         // ① Mano de obra first — herramientas need this value.
+        $roundCantidad = fn ($value): float => round((float) ($value ?? 0), 3);
+
+        foreach ($acu['mano_de_obra'] ?? [] as &$item) {
+            $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+        }
+        unset($item);
+
+        foreach ($acu['materiales'] ?? [] as &$item) {
+            $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
+            $factor = (float) ($item['factor_desperdicio'] ?? 1) ?: 1.0;
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
+        }
+        unset($item);
+
+        foreach ($acu['subcontratos'] ?? [] as &$item) {
+            $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+        }
+        unset($item);
+
+        foreach ($acu['subpartidas'] ?? [] as &$item) {
+            $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+        }
+        unset($item);
+
+        foreach ($acu['equipos'] ?? [] as &$item) {
+            $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
+            if (stripos($item['descripcion'] ?? '', 'HERRAMIENTA') === false) {
+                $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_hora'] ?? 0), 6);
+            }
+        }
+        unset($item);
+
         $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 6);
 
         // ② Fix herramientas parcial now that costo_mano_obra is known.
@@ -1522,6 +1557,7 @@ class PresupuestoController extends Controller
             $manoDeObra = $validated['mano_de_obra'] ?? [];
             $costoManoObra = 0;
             foreach ($manoDeObra as &$componente) {
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);
@@ -1535,6 +1571,7 @@ class PresupuestoController extends Controller
             $materiales = $validated['materiales'] ?? [];
             $costoMateriales = 0;
             foreach ($materiales as &$componente) {
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
                 // Formula: cantidad * precio_unitario * factor_desperdicio
                 $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
@@ -1546,6 +1583,7 @@ class PresupuestoController extends Controller
             $equipos = $validated['equipos'] ?? [];
             $costoEquipos = 0;
             foreach ($equipos as &$componente) {
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
                 $descripcion = strtolower((string) ($componente['descripcion'] ?? ''));
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
@@ -1569,6 +1607,7 @@ class PresupuestoController extends Controller
             $subcontratos = $validated['subcontratos'] ?? [];
             $costoSubcontratos = 0;
             foreach ($subcontratos as &$componente) {
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);
@@ -1579,6 +1618,7 @@ class PresupuestoController extends Controller
             $subpartidas = $validated['subpartidas'] ?? [];
             $costoSubpartidas = 0;
             foreach ($subpartidas as &$componente) {
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);

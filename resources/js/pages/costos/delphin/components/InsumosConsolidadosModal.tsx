@@ -131,13 +131,16 @@ const normalizedPartida = (value: string) =>
         .map((part) => part.padStart(2, '0'))
         .join('.');
 
+const roundCantidad = (value: number) =>
+    new Decimal(value).toDecimalPlaces(3).toNumber();
+
 export function calculateInsumoUsage(
     presupuestoCantidad: number,
     acuCantidad: number,
     precio: number,
     costoFactor = 1,
 ): { cantidad: number; parcial: number } {
-    const cantidad = presupuestoCantidad * acuCantidad;
+    const cantidad = roundCantidad(presupuestoCantidad * acuCantidad);
     // Redondeo con decimal.js a 2 decimales (igual que decimalMul en usePresupuestoAcu.ts) —
     // evita arrastrar error de punto flotante en el monto de cada uso antes de consolidar.
     const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(2).toNumber();
@@ -291,7 +294,7 @@ export function flattenInsumos(
                 const codigo = String(
                     item.cod_insumo ?? item.codigo ?? '',
                 ).trim();
-                const acuCantidad = Number(item.cantidad ?? 0);
+                const acuCantidad = roundCantidad(Number(item.cantidad ?? 0));
                 const precio = itemPrecio(key, item);
                 const unidad = String(item.unidad ?? '').toLowerCase().trim() || '-';
                 // Mismo criterio que isHerramientasRow (AcuPanel.tsx) y recalcAcuSubtotals
@@ -328,7 +331,7 @@ export function flattenInsumos(
                 : new Decimal(peso).times(partidaBaseParcial).toDecimalPlaces(2).toNumber();
             acumulado = acumulado.plus(monto);
 
-            const cantidadFisica = p.esHerramientas ? monto : presupuestoCantidad * p.acuCantidad;
+            const cantidadFisica = p.esHerramientas ? monto : roundCantidad(presupuestoCantidad * p.acuCantidad);
 
             const baseKey = [
                 p.key,

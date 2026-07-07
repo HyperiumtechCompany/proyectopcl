@@ -13,6 +13,8 @@ import {
     Layers,
     ToggleLeft,
     Box,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import type { CorridorConfig } from '@/hooks/dialux/types';
@@ -33,6 +35,8 @@ interface CatalogPanelProps {
     filterMaterial?: string;
     search?: string;
     onSelect?: () => void;
+    variant?: 'default' | 'compact-grid';
+    fixtureItemsPerPage?: number;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -760,6 +764,8 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     filterMaterial,
     search = '',
     onSelect,
+    variant = 'default',
+    fixtureItemsPerPage,
 }) => {
     const store = useEditorStore();
     const { fixtureTemplate, windowTemplate, doorTemplate, corridorTemplate } =
@@ -797,6 +803,9 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         filterCategory === 'doors' ||
         filterCategory === 'architecture' ||
         !filterCategory;
+    const isCompactFixtureGrid =
+        variant === 'compact-grid' && filterCategory === 'luminaires';
+    const fixturePageSize = fixtureItemsPerPage ?? ITEMS_PER_PAGE;
 
     const filteredFixtures = fixtureCatalog.filter((item) => {
         if (
@@ -899,10 +908,10 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         filteredImportedProducts.length + filteredFixtures.length;
     const fixturePageCount = Math.max(
         1,
-        Math.ceil(totalFixtures / ITEMS_PER_PAGE),
+        Math.ceil(totalFixtures / fixturePageSize),
     );
-    const fixturePageStart = (fixturePage - 1) * ITEMS_PER_PAGE;
-    const fixturePageEnd = fixturePageStart + ITEMS_PER_PAGE;
+    const fixturePageStart = (fixturePage - 1) * fixturePageSize;
+    const fixturePageEnd = fixturePageStart + fixturePageSize;
     const paginatedImportedProducts = filteredImportedProducts.slice(
         fixturePageStart,
         fixturePageEnd,
@@ -1195,7 +1204,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                             type="button"
                             onClick={() => setImportMode((v) => !v)}
                             title="Importar catalogo IES / LDT"
-                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300"
+                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300`}
                         >
                             <Upload size={9} />
                             IES/LDT
@@ -1335,7 +1344,134 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                         </form>
                     )}
 
-                    {paginatedImportedProducts.length > 0 && (
+                    {isCompactFixtureGrid && (
+                        <>
+                            <div className="grid min-h-[17.5rem] grid-cols-3 grid-rows-5 gap-1">
+                                {paginatedImportedProducts.map((product) => {
+                                    const isActive =
+                                        fixtureTemplate.brand ===
+                                            (product.manufacturer ??
+                                                undefined) &&
+                                        fixtureTemplate.lumens ===
+                                            (product.total_lumens ?? 1000) &&
+                                        fixtureTemplate.fixtureType ===
+                                            toFixtureType(product.fixture_type);
+
+                                    return (
+                                        <button
+                                            key={`imported-${product.id}`}
+                                            type="button"
+                                            onClick={() =>
+                                                setImportedFixture(product)
+                                            }
+                                            className={`group flex min-h-13 flex-col items-center justify-center gap-1 rounded border px-1 py-1 text-center transition-colors ${
+                                                isActive
+                                                    ? 'border-emerald-600/50 bg-emerald-900/30 text-emerald-200'
+                                                    : 'border-gray-700/50 bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-gray-100'
+                                            }`}
+                                            title={product.name}
+                                        >
+                                            {product.product_image_url ? (
+                                                <img
+                                                    src={
+                                                        product.product_image_url
+                                                    }
+                                                    alt=""
+                                                    className="h-5 w-5 rounded object-cover"
+                                                />
+                                            ) : (
+                                                <Upload
+                                                    size={14}
+                                                    className="text-emerald-400"
+                                                />
+                                            )}
+                                            <span className="line-clamp-2 max-w-full text-[9px] leading-tight">
+                                                {product.name}
+                                            </span>
+                                            <span className="text-[8px] leading-none text-gray-600">
+                                                {product.total_lumens ?? '-'}lm
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+
+                                {paginatedFixtures.map((item, i) => {
+                                    const isActive = isFixtureMatch(
+                                        item.template,
+                                        fixtureTemplate,
+                                    );
+
+                                    return (
+                                        <button
+                                            key={`${item.brand}-${item.label}-${i}`}
+                                            type="button"
+                                            onClick={() => setFixture(item)}
+                                            className={`group flex min-h-13 flex-col items-center justify-center gap-1 rounded border px-1 py-1 text-center transition-colors ${
+                                                isActive
+                                                    ? 'border-amber-600/50 bg-amber-900/30 text-amber-200'
+                                                    : 'border-gray-700/50 bg-gray-900/50 text-gray-400 hover:bg-gray-800 hover:text-gray-100'
+                                            }`}
+                                            title={item.label}
+                                        >
+                                            <span
+                                                className={`shrink-0 ${isActive ? 'text-amber-400' : 'text-gray-500 group-hover:text-gray-400'}`}
+                                            >
+                                                {item.icon}
+                                            </span>
+                                            <span className="line-clamp-2 max-w-full text-[9px] leading-tight">
+                                                {item.label}
+                                            </span>
+                                            <span className="text-[8px] leading-none text-gray-600">
+                                                {item.lumens}lm
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {totalFixtures > fixturePageSize && (
+                                <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-700/40 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFixturePage((page) =>
+                                                Math.max(1, page - 1),
+                                            )
+                                        }
+                                        disabled={fixturePage === 1}
+                                        className="flex h-7 w-8 items-center justify-center rounded border border-gray-700/60 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                        title="Anterior"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <span className="text-[10px] text-gray-500">
+                                        Pagina {fixturePage} de{' '}
+                                        {fixturePageCount}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFixturePage((page) =>
+                                                Math.min(
+                                                    fixturePageCount,
+                                                    page + 1,
+                                                ),
+                                            )
+                                        }
+                                        disabled={
+                                            fixturePage === fixturePageCount
+                                        }
+                                        className="flex h-7 w-8 items-center justify-center rounded border border-gray-700/60 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                        title="Siguiente"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {!isCompactFixtureGrid && paginatedImportedProducts.length > 0 && (
                         <div className="mb-1 space-y-0.5">
                             <p className="px-1 text-[8px] font-semibold tracking-widest text-emerald-500/80 uppercase">
                                 Importadas ({filteredImportedProducts.length})
@@ -1418,7 +1554,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                         </div>
                     )}
 
-                    {paginatedFixtures.map((item, i) => {
+                    {!isCompactFixtureGrid && paginatedFixtures.map((item, i) => {
                         const isActive = isFixtureMatch(
                             item.template,
                             fixtureTemplate,
@@ -1461,7 +1597,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                         );
                     })}
 
-                    {totalFixtures > ITEMS_PER_PAGE && (
+                    {!isCompactFixtureGrid && totalFixtures > fixturePageSize && (
                         <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-700/40 pt-2">
                             <button
                                 type="button"

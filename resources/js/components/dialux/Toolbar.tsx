@@ -175,7 +175,7 @@ export const Toolbar: React.FC = () => {
                     'fixture-grid',
                     'switch',
                     'wire',
-                ].includes(activeTool),
+                ].includes(activeTool) || activeTool.startsWith('elec-'),
             },
             {
                 id: 'medir' as PanelId,
@@ -310,6 +310,8 @@ export const Toolbar: React.FC = () => {
                     <LuzPanel
                         activeTool={activeTool}
                         onSetTool={store.setTool}
+                        switchTemplate={store.ui.switchTemplate}
+                        onSetSwitchTemplate={store.setSwitchTemplate}
                         gridRows={store.ui.fixtureGridRows}
                         gridCols={store.ui.fixtureGridCols}
                         onSetRows={store.setFixtureGridRows}

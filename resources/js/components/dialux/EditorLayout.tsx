@@ -2,7 +2,7 @@
  * EditorLayout.tsx - Layout principal del editor DIAlux
  */
 
-import { Calculator, Download, Eye, EyeOff, Lightbulb } from 'lucide-react';
+import { Calculator, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import {
     Dialog,
@@ -198,6 +198,10 @@ export const EditorLayout = memo(function EditorLayout() {
         setResult,
         setResultsByRoom,
     ]);
+    /**buttons esportados */
+    const [showExportMenu, setShowExportMenu] = useState(false);
+
+    const isExportDisabled = !project || isExporting || isExportingDxf;
 
     useEffect(() => {
         if (!activeScene || activeScene.rooms.length === 0) {
@@ -320,19 +324,18 @@ export const EditorLayout = memo(function EditorLayout() {
                             id="dialux-floor-selector"
                             onClick={() => setShowFloorPanel((v) => !v)}
                             title="Gestionar pisos"
-                            className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${
-                                showFloorPanel
-                                    ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
-                                    : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
-                            }`}
+                            className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${showFloorPanel
+                                ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
+                                : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
+                                }`}
                         >
                             <span className="text-amber-400">⬛</span>
                             <span>
                                 {activeScene
                                     ? floorLabel({
-                                          floorIndex: activeScene.floorIndex ?? 0,
-                                          name: activeScene.name,
-                                      })
+                                        floorIndex: activeScene.floorIndex ?? 0,
+                                        name: activeScene.name,
+                                    })
                                     : '—'}
                             </span>
                             {floorsSorted.length > 1 && (
@@ -355,11 +358,10 @@ export const EditorLayout = memo(function EditorLayout() {
                                     {[...floorsSorted].reverse().map((floor) => (
                                         <div
                                             key={floor.id}
-                                            className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${
-                                                floor.id === activeSceneId
-                                                    ? 'bg-amber-900/30'
-                                                    : 'hover:bg-slate-800/60'
-                                            }`}
+                                            className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${floor.id === activeSceneId
+                                                ? 'bg-amber-900/30'
+                                                : 'hover:bg-slate-800/60'
+                                                }`}
                                         >
                                             {/* Eye toggle */}
                                             <button
@@ -375,9 +377,8 @@ export const EditorLayout = memo(function EditorLayout() {
                                             {/* Floor selector */}
                                             <button
                                                 onClick={() => { setActiveScene(floor.id); setShowFloorPanel(false); }}
-                                                className={`flex flex-1 items-center gap-2 text-left ${
-                                                    floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-400 hover:text-slate-100'
-                                                } ${ (floor.visible ?? true) ? '' : 'opacity-40' }`}
+                                                className={`flex flex-1 items-center gap-2 text-left ${floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-400 hover:text-slate-100'
+                                                    } ${(floor.visible ?? true) ? '' : 'opacity-40'}`}
                                             >
                                                 <span className="font-mono text-[9px] w-6 text-center text-slate-500">
                                                     {floor.floorIndex === 0 ? 'PB' : floor.floorIndex > 0 ? `P${floor.floorIndex}` : `S${Math.abs(floor.floorIndex)}`}
@@ -397,11 +398,10 @@ export const EditorLayout = memo(function EditorLayout() {
                                     {/* Ver todos los pisos toggle */}
                                     <button
                                         onClick={toggleAllFloors}
-                                        className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${
-                                            showAllFloors
-                                                ? 'bg-cyan-900/40 text-cyan-300'
-                                                : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-100'
-                                        }`}
+                                        className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${showAllFloors
+                                            ? 'bg-cyan-900/40 text-cyan-300'
+                                            : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-100'
+                                            }`}
                                         title={showAllFloors ? 'Mostrar solo piso activo' : 'Ver todos los pisos superpuestos'}
                                     >
                                         <Eye size={11} />
@@ -449,11 +449,10 @@ export const EditorLayout = memo(function EditorLayout() {
 
                 <button
                     onClick={toggle3DView}
-                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all ${
-                        show3DView
-                            ? 'bg-purple-700/80 text-purple-200'
-                            : 'bg-cyan-700/80 text-cyan-200 hover:bg-cyan-600/80'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all ${show3DView
+                        ? 'bg-purple-700/80 text-purple-200'
+                        : 'bg-cyan-700/80 text-cyan-200 hover:bg-cyan-600/80'
+                        }`}
                     title={
                         show3DView ? 'Cambiar a vista 2D' : 'Cambiar a vista 3D'
                     }>
@@ -463,11 +462,10 @@ export const EditorLayout = memo(function EditorLayout() {
                 {show3DView && (
                     <button
                         onClick={toggleRoof}
-                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-all ${
-                            showRoof
-                                ? 'bg-slate-700 text-slate-100'
-                                : 'bg-slate-900/70 text-slate-400 hover:bg-slate-800'
-                        }`}
+                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-all ${showRoof
+                            ? 'bg-slate-700 text-slate-100'
+                            : 'bg-slate-900/70 text-slate-400 hover:bg-slate-800'
+                            }`}
                         title={showRoof ? 'Ocultar techo 3D' : 'Mostrar techo 3D'}
                     >
                         {showRoof ? <Eye size={13} /> : <EyeOff size={13} />}
@@ -484,30 +482,55 @@ export const EditorLayout = memo(function EditorLayout() {
                         disabled={!engine.ready || isCalculating || !hasRooms}
                         className="flex items-center gap-1.5 rounded bg-gradient-to-r from-green-700/80 to-emerald-700/80 px-3 py-1.5 text-xs text-green-200 shadow-sm transition-all hover:from-green-600/80 hover:to-emerald-600/80 disabled:cursor-not-allowed disabled:opacity-40">
                         <Calculator size={13} />
-                        {isCalculating ? 'Calculando...' : 'Calcular (Enter)'}
+                        {isCalculating ? 'Calculando...' : 'Calcular'}
                     </button>
 
-                    <button
-                        id="dialux-btn-export-pdf"
-                        onClick={handleExportPdf}
-                        disabled={!project || isExporting}
-                        className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
-                        title="Exportar reporte PDF"
-                    >
-                        <Download size={13} />
-                        {isExporting ? (exportStep || 'Exportando PDF...') : 'Exportar PDF'}
-                    </button>
+                    <div className="relative">
+                        <button
+                            id="dialux-btn-export"
+                            onClick={() => setShowExportMenu((prev) => !prev)}
+                            disabled={!project}
+                            className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Exportar proyecto">
+                            <Download size={13} />
 
-                    <button
-                        id="dialux-btn-export-dxf"
-                        onClick={exportDxf}
-                        disabled={!project || isExportingDxf}
-                        className="flex items-center gap-1.5 rounded border border-emerald-700/40 bg-emerald-950/60 px-3 py-1.5 text-xs text-emerald-100 transition-all hover:bg-emerald-900/70 disabled:cursor-not-allowed disabled:opacity-40"
-                        title="Exportar plano 2D en formato DXF (CAD)"
-                    >
-                        <Download size={13} />
-                        {isExportingDxf ? 'Exportando DXF...' : 'Exportar DXF'}
-                    </button>
+                            {isExporting
+                                ? exportStep || "Exportando PDF..."
+                                : isExportingDxf
+                                    ? "Exportando DXF..."
+                                    : "Exportar"}
+
+                            <ChevronDown size={13} />
+                        </button>
+
+                        {showExportMenu && (
+                            <div className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded border border-slate-700 bg-slate-950 shadow-lg">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowExportMenu(false);
+                                        handleExportPdf();
+                                    }}
+                                    disabled={!project || isExporting}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <FileText size={13} />
+                                    Exportar PDF
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowExportMenu(false);
+                                        exportDxf();
+                                    }}
+                                    disabled={!project || isExportingDxf}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <FileCode size={13} />
+                                    Exportar DXF
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 

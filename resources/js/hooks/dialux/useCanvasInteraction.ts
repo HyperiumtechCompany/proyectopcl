@@ -90,7 +90,7 @@ interface InteractionOptions {
     onAddLightSwitch: (x: number, y: number, wallId?: string) => void;
     onMoveLightSwitch: (id: string, x: number, y: number, wallId?: string) => void;
     onMoveElectricalDevice?: (id: string, x: number, y: number, wallId?: string) => void;
-    onConnectWire?: (sourceId: string, targetId: string) => void;
+    onConnectWire?: (sourceId: string, targetId: string, waypoints?: { x: number; y: number }[]) => void;
     onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
     electricalDevices?: ElectricalDevice[];
 }
@@ -110,6 +110,8 @@ interface DrawState {
     /** Vértices acumulados para la herramienta measure-area (metros de escena). */
     measureAreaVertices: CanvasPoint[];
     wireStartNode: { type: 'switch' | 'fixture' | 'device'; id: string } | null;
+    /** Puntos intermedios acumulados mientras se traza un cable (clics en vacío entre nodos). */
+    wireWaypoints: CanvasPoint[];
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
@@ -191,6 +193,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         calibrationStart: null,
         measureAreaVertices: [],
         wireStartNode: null,
+        wireWaypoints: [],
         isDragging: false,
         dragStartScene: null,
         dragObjectId: null,
@@ -545,20 +548,24 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     const start = s.wireStartNode;
 
                     if (start && start.id !== winner.id) {
-                        onConnectWire?.(start.id, winner.id);
+                        onConnectWire?.(start.id, winner.id, s.wireWaypoints.length ? s.wireWaypoints : undefined);
                     }
                     s.wireStartNode = { type: winner.kind, id: winner.id };
+                    s.wireWaypoints = [];
                     return;
                 }
 
-                // Clic en vacío: si hay un conductor activo desde un switch, agregar waypoint
-                if (s.wireStartNode?.type === 'switch') {
-                    onAddWaypoint?.(s.wireStartNode.id, scPt.x, scPt.y);
+                // Clic en vacío mientras se traza un cable: acumular el punto como
+                // waypoint intermedio; se aplicará al conductor al conectar con el
+                // siguiente nodo (fixture, switch o dispositivo).
+                if (s.wireStartNode) {
+                    s.wireWaypoints = [...s.wireWaypoints, scPt];
                     return;
                 }
 
                 // Clic en vacío sin nada → cancelar
                 s.wireStartNode = null;
+                s.wireWaypoints = [];
                 return;
             }
 

@@ -91,6 +91,12 @@ const CURSOR_MAP: Record<string, string> = {
     'elec-transfer': 'cell',
     'elec-arrival': 'cell',
     'elec-junction-box': 'cell',
+    'elec-earth-pit': 'cell',
+    'elec-facp': 'cell',
+    'elec-outlet-floor': 'cell',
+    'elec-outlet-waterproof': 'cell',
+    'elec-outlet-ceiling': 'cell',
+    'elec-outlet-rack': 'cell',
 };
 
 const DRAWING_TOOLS = new Set([
@@ -116,6 +122,12 @@ const DRAWING_TOOLS = new Set([
     'elec-transfer',
     'elec-arrival',
     'elec-junction-box',
+    'elec-earth-pit',
+    'elec-facp',
+    'elec-outlet-floor',
+    'elec-outlet-waterproof',
+    'elec-outlet-ceiling',
+    'elec-outlet-rack',
 ]);
 
 const INTERACTIVE_TOOLS = new Set([...DRAWING_TOOLS, 'select']);
@@ -406,9 +418,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onMoveElectricalDevice: (id, x, y, wallId) => {
                 store.updateElectricalDevice(id, { x, y, wallId });
             },
-            onConnectWire: (sourceId, targetId) => {
+            onConnectWire: (sourceId, targetId, waypoints) => {
                 // If it already exists, remove it (toggle connection)
-                const existingWire = scene?.conductors?.find(c => 
+                const existingWire = scene?.conductors?.find(c =>
                     (c.sourceId === sourceId && c.targetId === targetId) ||
                     (c.sourceId === targetId && c.targetId === sourceId)
                 );
@@ -424,7 +436,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',
-                        waypoints: [],
+                        waypoints: waypoints ?? [],
                     });
                 }
                 
@@ -703,8 +715,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     x,
                     y,
                     wallId,
-                    type: 'single',
-                    mountingHeight: 1.20,
+                    type: ui.switchTemplate.type,
+                    mountingHeight: ui.switchTemplate.mountingHeight,
+                    label: ui.switchTemplate.label,
                 });
                 store.setSelectedId(id);
             },

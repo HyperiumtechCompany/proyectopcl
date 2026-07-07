@@ -514,7 +514,7 @@ export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
     earth_pit:         { label: 'PAT',        mountingHeight: 0.00, properties: {} },
     facp:              { label: 'FACP',       mountingHeight: 1.40, properties: { voltage: '220V', phases: '1O' } },
     outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_waterproof: { label: 'T',          mountingHeight: 1.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
 };

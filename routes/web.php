@@ -16,6 +16,8 @@ use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\EttpController;
+use App\Http\Controllers\GestorProyectoController;
+use App\Http\Controllers\GestorProyectoNodoController;
 use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\MetradoArquitecturaController;
 use App\Http\Controllers\MetradoComunicacionesController;
@@ -168,6 +170,19 @@ Route::middleware(['auth', 'verified'])->prefix('spatt-pararrayos')->name('spatt
     Route::patch('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'update'])->name('update');
     Route::delete('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'destroy'])->name('destroy');
     Route::post('/{spattPararrayo}/enable-collab', [SpattPararrayoSpreadsheetController::class, 'enableCollaboration'])->name('enable-collab');
+});
+
+// ─── Gestor de Proyectos ───────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('gestor-proyectos')->name('gestor-proyectos.')->group(function () {
+    Route::get('/', [GestorProyectoController::class, 'index'])->name('index');
+    Route::post('/', [GestorProyectoController::class, 'store'])->name('store');
+    Route::get('/{gestorProyecto}', [GestorProyectoController::class, 'show'])->name('show');
+    Route::patch('/{gestorProyecto}', [GestorProyectoController::class, 'update'])->name('update');
+    Route::delete('/{gestorProyecto}', [GestorProyectoController::class, 'destroy'])->name('destroy');
+
+    Route::post('/{gestorProyecto}/nodos', [GestorProyectoNodoController::class, 'store'])->name('nodos.store');
+    Route::patch('/{gestorProyecto}/nodos/{nodo}', [GestorProyectoNodoController::class, 'update'])->name('nodos.update');
+    Route::delete('/{gestorProyecto}/nodos/{nodo}', [GestorProyectoNodoController::class, 'destroy'])->name('nodos.destroy');
 });
 
 // ─── Proyectos de Costos ─────────────────────────────────────────────────────

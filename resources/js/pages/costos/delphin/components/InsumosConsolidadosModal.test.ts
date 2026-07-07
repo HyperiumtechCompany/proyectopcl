@@ -69,6 +69,13 @@ it('calcula la cantidad y el monto del insumo usando el metrado del presupuesto'
     });
 });
 
+it('redondea la cantidad calculada del insumo a tres decimales', () => {
+    expect(calculateInsumoUsage(7.333, 0.0667, 23.17)).toEqual({
+        cantidad: 0.489,
+        parcial: 11.33,
+    });
+});
+
 it('mantiene el precio real de referencia sin derivarlo de parciales redondeados', () => {
     expect(
         calculateReferencePrice([
