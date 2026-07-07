@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
-import GestorProyectoNodoController from '@/actions/App/Http/Controllers/GestorProyectoNodoController';
 import { buildTree } from '@/pages/gestor-proyectos/components/layout';
 import type { ApiNodo, ApiNodoContent, NodeColor, NodeShape, NodeStatus, NodeType } from '@/pages/gestor-proyectos/components/types';
 
@@ -23,6 +22,12 @@ interface UseGestorProyectoNodosReturn {
 
 function csrfToken(): string {
     return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
+function gestorProyectoNodoUrl(gestorProyectoId: number, nodoId?: number): string {
+    const baseUrl = `/gestor-proyectos/${gestorProyectoId}/nodos`;
+
+    return nodoId === undefined ? baseUrl : `${baseUrl}/${nodoId}`;
 }
 
 async function requestJson<T>(url: string, method: string, body?: unknown): Promise<T> {
@@ -60,7 +65,7 @@ export function useGestorProyectoNodos(gestorProyectoId: number, initialNodos: A
             setIsSaving(true);
 
             try {
-                const url = GestorProyectoNodoController.store.url({ gestorProyecto: gestorProyectoId });
+                const url = gestorProyectoNodoUrl(gestorProyectoId);
                 const { nodo } = await requestJson<{ nodo: ApiNodo }>(url, 'post', { parent_id: parentId, ...values });
                 setNodos((current) => [...current, nodo]);
                 return nodo;
@@ -82,7 +87,7 @@ export function useGestorProyectoNodos(gestorProyectoId: number, initialNodos: A
             setNodos((current) => current.map((n) => (n.id === id ? { ...n, ...values } : n)));
 
             try {
-                const url = GestorProyectoNodoController.update.url({ gestorProyecto: gestorProyectoId, nodo: id });
+                const url = gestorProyectoNodoUrl(gestorProyectoId, id);
                 const { nodo } = await requestJson<{ nodo: ApiNodo }>(url, 'patch', values);
                 setNodos((current) => current.map((n) => (n.id === id ? nodo : n)));
                 return nodo;
@@ -116,7 +121,7 @@ export function useGestorProyectoNodos(gestorProyectoId: number, initialNodos: A
             setNodos((current) => current.filter((n) => !idsToRemove.has(n.id)));
 
             try {
-                const url = GestorProyectoNodoController.destroy.url({ gestorProyecto: gestorProyectoId, nodo: id });
+                const url = gestorProyectoNodoUrl(gestorProyectoId, id);
                 await requestJson<{ deleted: boolean }>(url, 'delete');
                 return true;
             } catch (err) {
