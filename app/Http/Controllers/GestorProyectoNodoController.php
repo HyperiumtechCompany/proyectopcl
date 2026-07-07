@@ -19,8 +19,19 @@ class GestorProyectoNodoController extends Controller
 
         $validated = $request->validated();
 
+        $parent = GestorProyectoNodo::findOrFail($validated['parent_id']);
+
+        if ($parent->role === 'tail') {
+            return response()->json([
+                'message' => 'El nodo de cierre (Expediente Técnico) no puede tener hijos.',
+            ], 422);
+        }
+
+        // Se excluye el nodo cola del calculo de orden para que los nuevos hermanos
+        // siempre queden antes que el, sin importar su orden fijo alto (ver TAIL_ORDER).
         $nextOrder = GestorProyectoNodo::where('gestor_proyecto_id', $gestorProyecto->id)
             ->where('parent_id', $validated['parent_id'])
+            ->where(fn ($query) => $query->whereNull('role')->orWhere('role', '!=', 'tail'))
             ->max('order');
 
         $nodo = $gestorProyecto->nodos()->create([
@@ -45,16 +56,22 @@ class GestorProyectoNodoController extends Controller
     }
 
     /**
-     * Elimina un nodo (y sus descendientes en cascada). El nodo raíz no se puede eliminar.
+     * Elimina un nodo (y sus descendientes en cascada). La cabeza y la cola del proyecto no se pueden eliminar.
      */
     public function destroy(GestorProyecto $gestorProyecto, GestorProyectoNodo $nodo)
     {
         $this->authorizeProyecto($gestorProyecto);
         $this->authorizeNodo($gestorProyecto, $nodo);
 
-        if ($nodo->parent_id === null) {
+        if ($nodo->parent_id === null || $nodo->role === 'head') {
             return response()->json([
-                'message' => 'El nodo raíz no se puede eliminar. Elimina el proyecto completo en su lugar.',
+                'message' => 'El nodo raíz (cabeza) no se puede eliminar. Elimina el proyecto completo en su lugar.',
+            ], 422);
+        }
+
+        if ($nodo->role === 'tail') {
+            return response()->json([
+                'message' => 'El nodo de cierre (Expediente Técnico) no se puede eliminar.',
             ], 422);
         }
 

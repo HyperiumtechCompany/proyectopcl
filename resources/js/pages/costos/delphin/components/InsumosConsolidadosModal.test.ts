@@ -247,3 +247,45 @@ it('ancla el reparto al precio_unitario YA GUARDADO en el presupuesto, no al cos
 
     expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
 });
+
+it('el precio de referencia consolidado siempre coincide con el precio real del insumo en el ACU, aunque el reparto proporcional distorsione el Monto', () => {
+    // Bug reportado: en el ACU, Capataz cuesta 27.54 y Electricista 23.46, pero al
+    // abrir Insumos Consolidados el precio mostrado para Capataz salía en 27.59 —
+    // el reparto proporcional (que ajusta "Monto" para reconciliar con Costo
+    // Directo) se filtraba también al precio de referencia. El precio mostrado
+    // debe ser siempre el real (cantidad × precio_unitario crudo), sin importar
+    // cómo se reparta el monto total de la partida.
+    const delphinRows = [
+        { id: 1, partida: '01.01', metrado: 20, precio_unitario: 3.45 },
+    ] as DelphinRow[];
+    const acus = [
+        {
+            id: 41,
+            partida: '01.01',
+            descripcion: 'Cuadrilla',
+            unidad: 'hh',
+            rendimiento: 1,
+            costo_mano_obra: 3.42,
+            costo_materiales: 0,
+            costo_equipos: 0,
+            costo_subcontratos: 0,
+            costo_subpartidas: 0,
+            costo_unitario_total: 3.42,
+            mano_de_obra: [
+                { descripcion: 'Capataz', unidad: 'hh', cantidad: 0.067, precio_unitario: 27.54 },
+                { descripcion: 'Electricista', unidad: 'hh', cantidad: 0.067, precio_unitario: 23.46 },
+            ],
+            materiales: [],
+            equipos: [],
+            subcontratos: [],
+            subpartidas: [],
+        },
+    ] as ACURowSummary[];
+
+    const consolidated = consolidateInsumos(flattenInsumos(acus, delphinRows), {});
+    const capataz = consolidated.find((row) => row.descripcion === 'Capataz');
+    const electricista = consolidated.find((row) => row.descripcion === 'Electricista');
+
+    expect(capataz?.precio).toBeCloseTo(27.54, 6);
+    expect(electricista?.precio).toBeCloseTo(23.46, 6);
+});

@@ -348,10 +348,14 @@ export function flattenInsumos(
                 unidad: p.unidad,
                 cantidad: cantidadFisica,
                 precio: p.esHerramientas ? 0 : p.precio,
-                // Acumula desde el monto repartido (no cantidad*precio crudo) para que
-                // el precio de referencia consolidado (parcial/cantidad) siempre
-                // reconcilie con "Monto": Cantidad × P.REF. = Monto, sin excepciones.
-                precioPonderado: p.esHerramientas ? 0 : monto,
+                // Acumula desde cantidad*precio CRUDO (no el monto repartido) para que
+                // el precio de referencia consolidado (precioPonderado/cantidad) sea
+                // siempre el precio real del insumo en el ACU — igual al que se ve en
+                // el panel de ACU. "Monto" sigue usando el reparto proporcional para
+                // que el total reconcilie con Costo Directo, pero ya no se deriva de
+                // ahí el precio mostrado (eso era lo que hacía que, p.ej., un CAPATAZ
+                // a 27.54 en el ACU apareciera a 27.59 en Insumos Consolidados).
+                precioPonderado: p.esHerramientas ? 0 : new Decimal(cantidadFisica).times(p.precio).toNumber(),
                 parcial: monto,
                 usos: 1,
                 reference: {

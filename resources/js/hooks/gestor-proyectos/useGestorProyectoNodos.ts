@@ -10,6 +10,8 @@ export interface NodoFormValues {
     color: NodeColor;
     status: NodeStatus;
     content: ApiNodoContent;
+    peso: number | null;
+    dias: number | null;
 }
 
 interface UseGestorProyectoNodosReturn {
@@ -32,7 +34,7 @@ function gestorProyectoNodoUrl(gestorProyectoId: number, nodoId?: number): strin
 
 async function requestJson<T>(url: string, method: string, body?: unknown): Promise<T> {
     const response = await fetch(url, {
-        method,
+        method: method.toUpperCase(),
         headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
@@ -51,6 +53,7 @@ async function requestJson<T>(url: string, method: string, body?: unknown): Prom
 }
 
 function notifyError(message: string): void {
+    (document.activeElement as HTMLElement | null)?.blur();
     void Swal.fire({ icon: 'error', title: 'Ocurrio un error', text: message, timer: 3200, showConfirmButton: false });
 }
 

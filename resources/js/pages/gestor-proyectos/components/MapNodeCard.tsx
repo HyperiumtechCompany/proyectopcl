@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { ChevronRight, FileText, Plus } from 'lucide-react';
-import { COLORS, LEVEL_LABELS, STATUS_DOT, TYPE_ICON } from './types';
+import { Archive, ChevronRight, FileText, Flag, Plus } from 'lucide-react';
+import { avanceTier, COLORS, LEVEL_LABELS, STATUS_DOT, TYPE_ICON } from './types';
 import type { LayoutPosition, TreeNode } from './types';
 import { NODE_H, NODE_W } from './layout';
 
@@ -14,13 +14,18 @@ interface MapNodeCardProps {
 
 function MapNodeCardComponent({ position, isSelected, onSelect, onToggle, onAddChild }: MapNodeCardProps) {
     const color = COLORS[position.node.color] || COLORS.violet;
-    const Icon = TYPE_ICON[position.node.type] || FileText;
+    const isHead = position.node.role === 'head';
+    const isTail = position.node.role === 'tail';
+    const isStructural = isHead || isTail;
+    const Icon = isHead ? Flag : isTail ? Archive : TYPE_ICON[position.node.type] || FileText;
     const isRoot = position.parentId === null;
     const isCircle = position.node.shape === 'circle';
+    const roleLabel = isHead ? 'Proyecto' : isTail ? 'Expediente' : null;
     const levelLabel = isRoot ? 'Padre' : position.lane === 'main' ? 'Hijo' : (LEVEL_LABELS[position.depth] ?? `Nivel ${position.depth + 1}`);
     const detailDepth = position.lane === 'detail' ? Math.max(1, position.depth) : 0;
     const visualScale = Math.max(0.9, 1 - detailDepth * 0.025);
     const visualOpacity = Math.max(0.78, 1 - detailDepth * 0.035);
+    const tier = avanceTier(position.node.avance);
 
     return (
         <div
@@ -29,8 +34,11 @@ function MapNodeCardComponent({ position, isSelected, onSelect, onToggle, onAddC
             className="absolute">
             <button
                 onClick={() => onSelect(position.node)}
-                className={`group relative flex h-full w-full flex-col justify-between rounded-lg border bg-[#13151b] p-3 text-left shadow-[0_1px_0_rgba(255,255,255,0.03)] transition-all hover:border-white/20 ${isSelected ? color.border.replace('/40', '/90') : 'border-white/10'} ${isSelected ? `ring-1 ${color.border.replace('border-', 'ring-')}` : ''}`}>
-                <span className={`absolute left-0 top-2 bottom-2 w-0.75 rounded-full ${color.bg}`} />
+                className={`group relative flex h-full w-full flex-col justify-between rounded-lg border bg-[#13151b] p-3 text-left shadow-[0_1px_0_rgba(255,255,255,0.03)] transition-all hover:brightness-110 ${tier.border} ${
+                    isStructural ? `ring-2 ${color.ring}` : isSelected ? `ring-1 ${color.ring}` : ''
+                }`}>
+                <span className={`pointer-events-none absolute inset-0 rounded-lg ${tier.bg}`} />
+                <span className={`absolute left-0 top-2 bottom-2 rounded-full ${color.bg} ${isStructural ? 'w-1.5' : 'w-0.75'}`} />
 
                 <div className="pl-2.5">
                     <div className="mb-1 flex items-center justify-between gap-2">
@@ -38,10 +46,10 @@ function MapNodeCardComponent({ position, isSelected, onSelect, onToggle, onAddC
                             <span className={`flex h-5 w-5 shrink-0 items-center justify-center ${isCircle ? 'rounded-full' : 'rounded-sm'} ${color.soft}`}>
                                 <Icon size={11} className={color.text} />
                             </span>
-                            <span className="truncate text-[13px] font-medium leading-tight text-zinc-100">{position.node.title}</span>
+                            <span className={`truncate text-[13px] leading-tight text-zinc-100 ${isStructural ? 'font-semibold' : 'font-medium'}`}>{position.node.title}</span>
                         </div>
-                        {isRoot && (
-                            <span className="shrink-0 rounded border border-white/10 px-1 py-0.5 text-[9px] uppercase tracking-wide text-zinc-500">Proyecto</span>
+                        {roleLabel && (
+                            <span className={`flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${color.soft} ${color.text}`}>{roleLabel}</span>
                         )}
                     </div>
                     <div className="flex items-center gap-1.5 pl-0.5">
@@ -49,6 +57,7 @@ function MapNodeCardComponent({ position, isSelected, onSelect, onToggle, onAddC
                         <span className="text-[10.5px] text-zinc-500">{position.node.status || '-'}</span>
                         <span className="text-zinc-700">/</span>
                         <span className="text-[10.5px] uppercase tracking-wide text-zinc-600">{levelLabel}</span>
+                        <span className={`ml-auto text-[10.5px] font-semibold ${tier.text}`}>{position.node.avance.toFixed(0)}%</span>
                     </div>
                 </div>
 
@@ -65,7 +74,7 @@ function MapNodeCardComponent({ position, isSelected, onSelect, onToggle, onAddC
                     </span>
                 )}
 
-                {!position.hasChildren && (
+                {!position.hasChildren && position.node.role !== 'tail' && (
                     <span
                         role="button"
                         tabIndex={0}

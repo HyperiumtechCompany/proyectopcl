@@ -9,10 +9,32 @@ interface Proyecto {
     id: number;
     nombre: string;
     descripcion: string | null;
+    numero_expediente: string | null;
+    responsable: string | null;
+    cantidad_modulos: number | null;
+    monto_designado: number | null;
+    tiempo_estimado_dias: number | null;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
     nodos_count: number;
     created_at: string;
     updated_at: string;
 }
+
+interface ProyectoFormValues {
+    [key: string]: string | number | null;
+    nombre: string;
+    descripcion: string;
+    numero_expediente: string | null;
+    responsable: string | null;
+    cantidad_modulos: number | null;
+    monto_designado: number | null;
+    tiempo_estimado_dias: number | null;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
+}
+
+const currencyFormatter = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 });
 
 interface PageProps {
     proyectos: Proyecto[];
@@ -28,12 +50,44 @@ const swalDark = {
     color: '#e4e4e7',
 };
 
-async function promptProyecto(initial?: { nombre: string; descripcion: string }) {
+function readInput(id: string): string {
+    return (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
+}
+
+function toNullableInt(raw: string): number | null {
+    if (!raw) {
+        return null;
+    }
+
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function toNullableFloat(raw: string): number | null {
+    if (!raw) {
+        return null;
+    }
+
+    const parsed = Number.parseFloat(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+async function promptProyecto(initial?: Partial<ProyectoFormValues>) {
+    const halfInput = 'swal2-input !w-[calc(50%-6px)] !inline-block !my-1';
+
     const { value } = await Swal.fire({
         title: initial ? 'Editar proyecto' : 'Nuevo proyecto',
+        width: 560,
         html:
             `<input id="swal-nombre" class="swal2-input" placeholder="Nombre del proyecto" value="${initial?.nombre ?? ''}">` +
-            `<textarea id="swal-descripcion" class="swal2-textarea" placeholder="Descripcion (opcional)">${initial?.descripcion ?? ''}</textarea>`,
+            `<textarea id="swal-descripcion" class="swal2-textarea" placeholder="Descripcion (opcional)">${initial?.descripcion ?? ''}</textarea>` +
+            `<input id="swal-numero-expediente" class="${halfInput}" placeholder="N° de expediente" value="${initial?.numero_expediente ?? ''}">` +
+            `<input id="swal-responsable" class="${halfInput}" placeholder="Responsable / encargado" value="${initial?.responsable ?? ''}">` +
+            `<input id="swal-cantidad-modulos" type="number" min="0" class="${halfInput}" placeholder="Cantidad de modulos" value="${initial?.cantidad_modulos ?? ''}">` +
+            `<input id="swal-monto-designado" type="number" min="0" step="0.01" class="${halfInput}" placeholder="Monto designado (S/)" value="${initial?.monto_designado ?? ''}">` +
+            `<input id="swal-tiempo-estimado" type="number" min="0" class="${halfInput}" placeholder="Tiempo estimado (dias)" value="${initial?.tiempo_estimado_dias ?? ''}">` +
+            `<input id="swal-fecha-inicio" type="date" class="${halfInput}" placeholder="Fecha de inicio" value="${initial?.fecha_inicio ?? ''}">` +
+            `<input id="swal-fecha-fin" type="date" class="${halfInput}" placeholder="Fecha de fin estimada" value="${initial?.fecha_fin ?? ''}">`,
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: initial ? 'Guardar' : 'Crear',
@@ -41,19 +95,38 @@ async function promptProyecto(initial?: { nombre: string; descripcion: string })
         confirmButtonColor: '#2563eb',
         ...swalDark,
         preConfirm: () => {
-            const nombre = (document.getElementById('swal-nombre') as HTMLInputElement | null)?.value.trim() ?? '';
-            const descripcion = (document.getElementById('swal-descripcion') as HTMLTextAreaElement | null)?.value.trim() ?? '';
+            const nombre = readInput('swal-nombre');
+            const descripcion = readInput('swal-descripcion');
+            const fechaInicio = readInput('swal-fecha-inicio');
+            const fechaFin = readInput('swal-fecha-fin');
 
             if (!nombre) {
                 Swal.showValidationMessage('El nombre es obligatorio');
                 return;
             }
 
-            return { nombre, descripcion };
+            if (fechaInicio && fechaFin && fechaFin < fechaInicio) {
+                Swal.showValidationMessage('La fecha de fin no puede ser anterior a la fecha de inicio');
+                return;
+            }
+
+            const values: ProyectoFormValues = {
+                nombre,
+                descripcion,
+                numero_expediente: readInput('swal-numero-expediente') || null,
+                responsable: readInput('swal-responsable') || null,
+                cantidad_modulos: toNullableInt(readInput('swal-cantidad-modulos')),
+                monto_designado: toNullableFloat(readInput('swal-monto-designado')),
+                tiempo_estimado_dias: toNullableInt(readInput('swal-tiempo-estimado')),
+                fecha_inicio: fechaInicio || null,
+                fecha_fin: fechaFin || null,
+            };
+
+            return values;
         },
     });
 
-    return value as { nombre: string; descripcion: string } | undefined;
+    return value as ProyectoFormValues | undefined;
 }
 
 export default function GestorProyectosIndex({ proyectos }: PageProps) {
@@ -71,7 +144,17 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
     };
 
     const handleRename = async (proyecto: Proyecto) => {
-        const values = await promptProyecto({ nombre: proyecto.nombre, descripcion: proyecto.descripcion ?? '' });
+        const values = await promptProyecto({
+            nombre: proyecto.nombre,
+            descripcion: proyecto.descripcion ?? '',
+            numero_expediente: proyecto.numero_expediente,
+            responsable: proyecto.responsable,
+            cantidad_modulos: proyecto.cantidad_modulos,
+            monto_designado: proyecto.monto_designado,
+            tiempo_estimado_dias: proyecto.tiempo_estimado_dias,
+            fecha_inicio: proyecto.fecha_inicio,
+            fecha_fin: proyecto.fecha_fin,
+        });
         if (!values) {
             return;
         }
@@ -174,6 +257,21 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
                                         </div>
                                     </div>
                                     <p className="mb-3 line-clamp-2 min-h-8 text-xs text-zinc-500">{proyecto.descripcion || 'Sin descripcion'}</p>
+
+                                    {(proyecto.numero_expediente || proyecto.monto_designado !== null || proyecto.tiempo_estimado_dias !== null) && (
+                                        <div className="mb-2 flex flex-wrap items-center gap-1">
+                                            {proyecto.numero_expediente && (
+                                                <span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">Exp. {proyecto.numero_expediente}</span>
+                                            )}
+                                            {proyecto.monto_designado !== null && (
+                                                <span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-emerald-400">{currencyFormatter.format(proyecto.monto_designado)}</span>
+                                            )}
+                                            {proyecto.tiempo_estimado_dias !== null && (
+                                                <span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{proyecto.tiempo_estimado_dias} dias</span>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
                                         <span className="shrink-0 whitespace-nowrap">{proyecto.nodos_count} nodos</span>
                                         <span className="truncate whitespace-nowrap">Actualizado {proyecto.updated_at}</span>

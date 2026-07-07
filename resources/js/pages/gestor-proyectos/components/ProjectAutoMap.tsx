@@ -12,6 +12,7 @@ interface ProjectAutoMapProps {
     gestorProyectoId: number;
     nombre: string;
     initialNodos: ApiNodo[];
+    cantidadModulos: number | null;
 }
 
 type FormState = { mode: 'create'; parentId: string } | { mode: 'edit'; node: TreeNode };
@@ -35,10 +36,12 @@ function nodeToFormValues(node: TreeNode): NodoFormValues {
         color: node.color,
         status: node.status,
         content: apiContent,
+        peso: node.peso,
+        dias: node.dias,
     };
 }
 
-export default function ProjectAutoMap({ gestorProyectoId, nombre, initialNodos }: ProjectAutoMapProps) {
+export default function ProjectAutoMap({ gestorProyectoId, nombre, initialNodos, cantidadModulos }: ProjectAutoMapProps) {
     const { tree, isSaving, createNodo, updateNodo, deleteNodo } = useGestorProyectoNodos(gestorProyectoId, initialNodos);
 
     const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
@@ -146,7 +149,7 @@ export default function ProjectAutoMap({ gestorProyectoId, nombre, initialNodos 
     const selected = selectedId ? (positions[selectedId]?.node ?? null) : null;
     const selectedPosition = selected ? positions[selected.id] : null;
     const selectedChildrenLabel = selectedPosition?.parentId === null ? 'Hijos directos' : 'Descendencias';
-    const isSelectedRoot = selectedPosition?.parentId === null;
+    const isSelectedProtected = selectedPosition?.parentId === null || selected?.role === 'head' || selected?.role === 'tail';
 
     const maxX = nodeList.length > 0 ? Math.max(...nodeList.map((position) => position.x)) + 232 : 232;
     const maxY = nodeList.length > 0 ? Math.max(...nodeList.map((position) => position.y)) + 80 : 80;
@@ -179,8 +182,10 @@ export default function ProjectAutoMap({ gestorProyectoId, nombre, initialNodos 
                 {selected && (
                     <NodeDetailPanel
                         selected={selected}
-                        isRoot={isSelectedRoot}
+                        isProtected={isSelectedProtected}
                         selectedChildrenLabel={selectedChildrenLabel}
+                        depth={selectedPosition?.depth ?? 0}
+                        cantidadModulos={cantidadModulos}
                         onClose={() => setSelectedId(null)}
                         onSelectChild={handleSelectNode}
                         onRequestAddChild={() => handleAddChildRequest(selected.id)}

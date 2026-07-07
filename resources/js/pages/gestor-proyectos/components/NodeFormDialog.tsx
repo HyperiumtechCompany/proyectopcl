@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { NodoFormValues } from '@/hooks/gestor-proyectos/useGestorProyectoNodos';
 import { NODE_COLORS, NODE_SHAPES, NODE_STATUSES, NODE_TYPES } from './types';
 
@@ -19,6 +19,8 @@ const DEFAULT_VALUES: NodoFormValues = {
     color: 'violet',
     status: 'Pendiente',
     content: { text: '' },
+    peso: null,
+    dias: null,
 };
 
 const inputClassName = 'w-full rounded-md border border-white/10 bg-[#1a1d27] px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-white/30';
@@ -35,6 +37,8 @@ export function NodeFormDialog({ open, mode, initialValues, isSaving, onClose, o
     const [rowsInput, setRowsInput] = useState('');
     const [url, setUrl] = useState('');
     const [caption, setCaption] = useState('');
+    const [peso, setPeso] = useState('');
+    const [dias, setDias] = useState('');
 
     useEffect(() => {
         if (!open) {
@@ -52,6 +56,8 @@ export function NodeFormDialog({ open, mode, initialValues, isSaving, onClose, o
         setRowsInput((values.content.rows ?? []).map((row) => row.join(', ')).join('\n'));
         setUrl(values.content.url ?? '');
         setCaption(values.content.caption ?? '');
+        setPeso(values.peso === null || values.peso === undefined ? '' : String(values.peso));
+        setDias(values.dias === null || values.dias === undefined ? '' : String(values.dias));
     }, [open, initialValues]);
 
     const handleSubmit = async () => {
@@ -72,7 +78,19 @@ export function NodeFormDialog({ open, mode, initialValues, isSaving, onClose, o
                     }
                   : { url, caption };
 
-        await onSubmit({ title: title.trim(), type, shape, color, status, content });
+        const parsedPeso = peso.trim() === '' ? null : Number(peso);
+        const parsedDias = dias.trim() === '' ? null : Number(dias);
+
+        await onSubmit({
+            title: title.trim(),
+            type,
+            shape,
+            color,
+            status,
+            content,
+            peso: parsedPeso !== null && Number.isNaN(parsedPeso) ? null : parsedPeso,
+            dias: parsedDias !== null && Number.isNaN(parsedDias) ? null : parsedDias,
+        });
     };
 
     return (
@@ -80,6 +98,7 @@ export function NodeFormDialog({ open, mode, initialValues, isSaving, onClose, o
             <DialogContent className="max-h-[85vh] overflow-y-auto border-white/10 bg-[#101218] text-zinc-100 sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="text-zinc-100">{mode === 'create' ? 'Anadir nodo' : 'Editar nodo'}</DialogTitle>
+                    <DialogDescription className="text-zinc-500">Completa los campos del nodo y guarda para actualizar el mapa del proyecto.</DialogDescription>
                 </DialogHeader>
 
                 <div className="flex flex-col gap-3">
@@ -128,6 +147,17 @@ export function NodeFormDialog({ open, mode, initialValues, isSaving, onClose, o
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className={labelClassName}>Peso (solo si no tiene hijos)</label>
+                            <input type="number" min="0" step="any" className={inputClassName} value={peso} onChange={(e) => setPeso(e.target.value)} placeholder="0.00" />
+                        </div>
+                        <div>
+                            <label className={labelClassName}>Dias (solo si no tiene hijos)</label>
+                            <input type="number" min="0" step="any" className={inputClassName} value={dias} onChange={(e) => setDias(e.target.value)} placeholder="0.00" />
                         </div>
                     </div>
 

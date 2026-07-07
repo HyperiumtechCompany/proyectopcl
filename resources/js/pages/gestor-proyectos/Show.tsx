@@ -5,7 +5,7 @@ import type { ApiNodo } from '@/pages/gestor-proyectos/components/types';
 import type { BreadcrumbItem } from '@/types';
 
 interface ShowProps {
-    proyecto: { id: number; nombre: string; descripcion: string | null };
+    proyecto: { id: number; nombre: string; descripcion: string | null; cantidad_modulos: number | null };
     nodos: ApiNodo[];
 }
 
@@ -20,7 +20,7 @@ export default function GestorProyectoShow({ proyecto, nodos }: ShowProps) {
             <Head title={proyecto.nombre} />
 
             <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 sm:px-6 sm:py-6">
-                <ProjectAutoMap gestorProyectoId={proyecto.id} nombre={proyecto.nombre} initialNodos={nodos} />
+                <ProjectAutoMap gestorProyectoId={proyecto.id} nombre={proyecto.nombre} initialNodos={nodos} cantidadModulos={proyecto.cantidad_modulos} />
             </div>
         </AppLayout>
     );

@@ -1,4 +1,4 @@
-import { memo, useRef, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react';
+import { memo, useEffect, useRef, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react';
 import { COLORS } from './types';
 import type { LayoutPosition, TreeNode } from './types';
 import { MapNodeCard } from './MapNodeCard';
@@ -81,6 +81,7 @@ interface AutoMapCanvasProps {
 
 export function AutoMapCanvas({ nodeList, edges, maxX, maxY, scale, pan, setScale, setPan, selectedId, onSelectNode, onToggleNode, onAddChildNode, children }: AutoMapCanvasProps) {
     const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+    const canvasRef = useRef<HTMLDivElement>(null);
 
     const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
         if (event.target instanceof Element && event.target.closest('[data-node]')) {
@@ -109,15 +110,28 @@ export function AutoMapCanvas({ nodeList, edges, maxX, maxY, scale, pan, setScal
         dragRef.current = null;
     };
 
-    const onWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        const delta = -event.deltaY * 0.001;
-        setScale((current) => Math.min(2, Math.max(0.3, current + delta)));
-    };
+    useEffect(() => {
+        const node = canvasRef.current;
+        if (!node) {
+            return;
+        }
+
+        const onWheel = (event: WheelEvent) => {
+            event.preventDefault();
+            const delta = -event.deltaY * 0.001;
+            setScale((current) => Math.min(2, Math.max(0.3, current + delta)));
+        };
+
+        // React registra onWheel como listener pasivo por defecto, lo que impide
+        // preventDefault ahi; por eso se agrega manualmente como no-pasivo.
+        node.addEventListener('wheel', onWheel, { passive: false });
+        return () => node.removeEventListener('wheel', onWheel);
+    }, [setScale]);
 
     return (
         <div className="relative flex-1 min-h-0 overflow-hidden">
             <div
+                ref={canvasRef}
                 className="absolute inset-0 cursor-grab active:cursor-grabbing"
                 style={{
                     backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)',
@@ -127,8 +141,7 @@ export function AutoMapCanvas({ nodeList, edges, maxX, maxY, scale, pan, setScal
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
-                onPointerLeave={onPointerUp}
-                onWheel={onWheel}>
+                onPointerLeave={onPointerUp}>
                 <div
                     className="absolute left-0 top-0"
                     style={{

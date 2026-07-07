@@ -1,3 +1,4 @@
+import { STATUS_PROGRESS } from './types';
 import type { ApiNodo, LayoutPosition, TreeContent, TreeNode } from './types';
 
 export const NODE_W = 232;
@@ -37,16 +38,41 @@ export function buildTree(apiNodos: ApiNodo[]): TreeNode[] {
         siblings.sort((a, b) => a.order - b.order);
     }
 
-    const build = (nodo: ApiNodo): TreeNode => ({
-        id: String(nodo.id),
-        title: nodo.title,
-        type: nodo.type,
-        shape: nodo.shape,
-        color: nodo.color,
-        status: nodo.status,
-        content: toTreeContent(nodo),
-        children: (byParent.get(nodo.id) ?? []).map(build),
-    });
+    const build = (nodo: ApiNodo): TreeNode => {
+        const children = (byParent.get(nodo.id) ?? []).map(build);
+        const hasChildren = children.length > 0;
+
+        // Suma ascendente: hojas aportan su propio valor, los nodos con hijos suman lo ya calculado en ellos.
+        const pesoTotal = hasChildren ? children.reduce((sum, child) => sum + child.pesoTotal, 0) : (nodo.peso ?? 0);
+        const diasTotal = hasChildren ? children.reduce((sum, child) => sum + child.diasTotal, 0) : (nodo.dias ?? 0);
+
+        let avance: number;
+        if (!hasChildren) {
+            avance = STATUS_PROGRESS[nodo.status] ?? 0;
+        } else if (pesoTotal > 0) {
+            // Promedio ponderado por peso: los hijos con mas peso pesan mas en el avance del padre.
+            avance = children.reduce((sum, child) => sum + child.pesoTotal * child.avance, 0) / pesoTotal;
+        } else {
+            avance = children.reduce((sum, child) => sum + child.avance, 0) / children.length;
+        }
+
+        return {
+            id: String(nodo.id),
+            title: nodo.title,
+            type: nodo.type,
+            shape: nodo.shape,
+            color: nodo.color,
+            status: nodo.status,
+            content: toTreeContent(nodo),
+            role: nodo.role,
+            peso: nodo.peso,
+            dias: nodo.dias,
+            pesoTotal,
+            diasTotal,
+            avance,
+            children,
+        };
+    };
 
     return (byParent.get(null) ?? []).map(build);
 }

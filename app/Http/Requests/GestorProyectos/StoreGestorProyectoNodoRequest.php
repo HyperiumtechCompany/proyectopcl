@@ -28,6 +28,8 @@ class StoreGestorProyectoNodoRequest extends FormRequest
             'shape' => ['required', Rule::in(['circle', 'square'])],
             'color' => ['required', Rule::in(['violet', 'sky', 'emerald', 'amber', 'rose', 'fuchsia', 'cyan'])],
             'status' => ['required', Rule::in(['Completo', 'En curso', 'Pendiente'])],
+            'peso' => ['nullable', 'numeric', 'min:0'],
+            'dias' => ['nullable', 'numeric', 'min:0'],
             'content' => ['nullable', 'array'],
             'content.text' => ['nullable', 'string'],
             'content.headers' => ['nullable', 'array'],

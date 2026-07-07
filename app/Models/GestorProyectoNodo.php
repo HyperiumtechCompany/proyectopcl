@@ -11,9 +11,13 @@ class GestorProyectoNodo extends Model
 {
     use HasFactory;
 
+    /** Orden fijo del nodo cola para que quede siempre al final del flujo principal. */
+    public const TAIL_ORDER = 1000000;
+
     protected $fillable = [
         'gestor_proyecto_id',
         'parent_id',
+        'role',
         'title',
         'type',
         'shape',
@@ -21,6 +25,8 @@ class GestorProyectoNodo extends Model
         'status',
         'content',
         'order',
+        'peso',
+        'dias',
     ];
 
     protected function casts(): array
@@ -28,6 +34,8 @@ class GestorProyectoNodo extends Model
         return [
             'content' => 'array',
             'order' => 'integer',
+            'peso' => 'float',
+            'dias' => 'float',
         ];
     }
 
