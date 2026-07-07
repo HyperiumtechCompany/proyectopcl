@@ -3,7 +3,6 @@ import { FolderKanban, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/app-layout';
-import { destroy, show, store, update } from '@/routes/gestor-proyectos';
 import type { BreadcrumbItem } from '@/types';
 
 interface Proyecto {
@@ -21,6 +20,8 @@ interface PageProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Gestor de Proyectos', href: '/gestor-proyectos' }];
+
+const gestorProyectoUrl = (id?: number) => (id === undefined ? '/gestor-proyectos' : `/gestor-proyectos/${id}`);
 
 const swalDark = {
     background: '#101218',
@@ -66,7 +67,7 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
             return;
         }
 
-        router.post(store().url, values);
+        router.post(gestorProyectoUrl(), values);
     };
 
     const handleRename = async (proyecto: Proyecto) => {
@@ -75,7 +76,7 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
             return;
         }
 
-        router.patch(update({ gestorProyecto: proyecto.id }).url, values);
+        router.patch(gestorProyectoUrl(proyecto.id), values);
     };
 
     const handleDelete = async (proyecto: Proyecto) => {
@@ -91,7 +92,7 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
         });
 
         if (result.isConfirmed) {
-            router.delete(destroy({ gestorProyecto: proyecto.id }).url);
+            router.delete(gestorProyectoUrl(proyecto.id));
         }
     };
 
@@ -147,7 +148,7 @@ export default function GestorProyectosIndex({ proyectos }: PageProps) {
                             {filtered.map((proyecto) => (
                                 <div
                                     key={proyecto.id}
-                                    onClick={() => router.get(show({ gestorProyecto: proyecto.id }).url)}
+                                    onClick={() => router.get(gestorProyectoUrl(proyecto.id))}
                                     className="group relative cursor-pointer rounded-xl border border-white/10 bg-[#101218] p-4 shadow-sm transition-colors hover:border-white/25">
                                     <div className="mb-2 flex items-start justify-between gap-2">
                                         <h3 className="truncate text-sm font-semibold text-zinc-100">{proyecto.nombre}</h3>
