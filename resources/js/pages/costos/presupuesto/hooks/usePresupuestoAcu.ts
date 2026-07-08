@@ -19,7 +19,9 @@ export interface AcuFlushProgress {
 // carried full precision) — see PresupuestoController::calculateAcu for the backend twin.
 function r2(n: number): number { return new Decimal(n).toDecimalPlaces(6).toNumber(); }
 
-function roundCantidad(n: number): number { return new Decimal(n).toDecimalPlaces(3).toNumber(); }
+function roundCantidad(n: number): number { return new Decimal(n).toDecimalPlaces(4).toNumber(); }
+
+function roundPrecio(n: number): number { return new Decimal(n).toDecimalPlaces(2).toNumber(); }
 
 // Multiplies operands with Decimal.js precision and rounds the result to 6dp.
 // Avoids float errors like 0.57 * 31.50 = 17.954999... rounding to 17.95 instead of 17.96.
@@ -332,15 +334,15 @@ export function usePresupuestoAcu({
         }
 
         if (type === 'materiales' || type === 'subcontratos' || type === 'subpartidas') {
-            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
         }
 
         if (type === 'mano_de_obra') {
-            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
         }
 
         if (type === 'equipos') {
-            normalized.precio_hora = normalizeNumber(item.precio_hora, 0);
+            normalized.precio_hora = roundPrecio(normalizeNumber(item.precio_hora, 0));
         }
 
         if (type === 'materiales') {

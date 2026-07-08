@@ -367,8 +367,7 @@ export function useDelphinData({
         }
 
         return raw.map((row) => {
-            const computed =
-                Math.round((parcialMap.get(row.id) ?? row.parcial) * 100) / 100;
+            const computed = round2(parcialMap.get(row.id) ?? row.parcial);
             return computed === row.parcial
                 ? row
                 : { ...row, parcial: computed };

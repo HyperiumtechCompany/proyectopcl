@@ -132,7 +132,7 @@ const normalizedPartida = (value: string) =>
         .join('.');
 
 const roundCantidad = (value: number) =>
-    new Decimal(value).toDecimalPlaces(3).toNumber();
+    new Decimal(value).toDecimalPlaces(4).toNumber();
 
 export function calculateInsumoUsage(
     presupuestoCantidad: number,

@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -480,7 +481,7 @@ function StepAcus({
 
 // ─── ACU payload builder ──────────────────────────────────────────────────────
 
-const roundCantidad = (value: number) => Math.round(value * 1000) / 1000;
+const roundCantidad = (value: number) => new Decimal(value).toDecimalPlaces(4).toNumber();
 
 function buildAcuPayload(acu: ParsedAcu, partida: string) {
     return {

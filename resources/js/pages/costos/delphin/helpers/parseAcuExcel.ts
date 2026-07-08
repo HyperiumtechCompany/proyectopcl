@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import * as XLSX from 'xlsx';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ function cellNum(ws: XLSX.WorkSheet, r: number, c: number): number {
 }
 
 function roundCantidad(n: number): number {
-    return Math.round(n * 1000) / 1000;
+    return new Decimal(n).toDecimalPlaces(4).toNumber();
 }
 
 function rowTexts(ws: XLSX.WorkSheet, r: number, maxC: number): string[] {

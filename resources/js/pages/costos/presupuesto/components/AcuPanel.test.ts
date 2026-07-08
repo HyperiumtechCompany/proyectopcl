@@ -57,13 +57,13 @@ describe('ACU resource selection', () => {
         expect(rows[0].mano_de_obra[0].cod_insumo).toBe('MO-047');
     });
 
-    it('rounds ACU component quantities to three decimals before calculating', () => {
+    it('rounds ACU component quantities to four decimals before calculating', () => {
         const calculated = calculateAcuLocally({
             mano_de_obra: [
                 {
                     descripcion: 'Peon',
                     unidad: 'hh',
-                    cantidad: 0.0667,
+                    cantidad: 0.06667,
                     precio_unitario: 23.17,
                 },
             ],
@@ -71,7 +71,7 @@ describe('ACU resource selection', () => {
                 {
                     descripcion: 'Cemento',
                     unidad: 'kg',
-                    cantidad: 1.2345,
+                    cantidad: 1.23456,
                     precio_unitario: 4.1,
                 },
             ],
@@ -80,9 +80,9 @@ describe('ACU resource selection', () => {
             subpartidas: [],
         });
 
-        expect(calculated.mano_de_obra[0].cantidad).toBe(0.067);
-        expect(calculated.mano_de_obra[0].parcial).toBe(1.55239);
-        expect(calculated.materiales[0].cantidad).toBe(1.235);
-        expect(calculated.materiales[0].parcial).toBe(5.0635);
+        expect(calculated.mano_de_obra[0].cantidad).toBe(0.0667);
+        expect(calculated.mano_de_obra[0].parcial).toBe(1.545439);
+        expect(calculated.materiales[0].cantidad).toBe(1.2346);
+        expect(calculated.materiales[0].parcial).toBe(5.06186);
     });
 });

@@ -32,15 +32,8 @@ const fmt = (n: number | undefined | null, d = 2) =>
         maximumFractionDigits: d,
     });
 
-const fmtCantidad = (n: number | undefined | null) => {
-    const value = Number(n ?? 0);
-    const rounded = Math.round(value);
-    const isInt = Math.abs(value - rounded) < 1e-9;
-    return value.toLocaleString('es-PE', {
-        minimumFractionDigits: isInt ? 0 : 3,
-        maximumFractionDigits: isInt ? 0 : 3,
-    });
-};
+const fmtCantidad = (n: number | undefined | null) =>
+    fmt(new Decimal(n ?? 0).toDecimalPlaces(4).toNumber(), 4);
 
 const UNIT_LABELS: Record<string, string> = {
     'm2': 'm²',
@@ -75,12 +68,15 @@ const ACU_GRID_TEMPLATE = '7rem 1fr 2.5rem 4rem 4rem 3.5rem 5rem 5rem';
 const isHerramientasRow = (item: ACUComponenteRow) =>
     (item.descripcion || '').toLowerCase().includes('herramienta');
 
-// Redondeo a 3 decimales para valores de "cantidad" ingresados manualmente
+// Redondeo a 4 decimales para valores de "cantidad" ingresados manualmente
 // (materiales, subcontratos, subpartidas, % de herramientas).
-const roundCantidad = (n: number) => new Decimal(n).toDecimalPlaces(3).toNumber();
+const roundCantidad = (n: number) => new Decimal(n).toDecimalPlaces(4).toNumber();
+
+// Redondeo a 2 decimales para precios (precio_unitario / precio_hora).
+const roundPrecio = (n: number) => new Decimal(n).toDecimalPlaces(2).toNumber();
 
 // Cantidad calculada (mano de obra/equipos via recursos/rendimiento) usa
-// 3 decimales para mantener el mismo criterio que Delphin al importar.
+// 4 decimales para mantener el mismo criterio que Delphin al importar.
 const computeCantidadFromRecursosBase = (
     recursos: number,
     perDay: boolean,
@@ -116,6 +112,7 @@ export function createAcuComponentFromResource(
     recursos?: number,
 ): ACUComponenteRow {
     const isEquipment = targetType === 'equipos';
+    const precio = roundPrecio(resource.precio);
 
     return {
         insumo_id: resource.id,
@@ -124,8 +121,8 @@ export function createAcuComponentFromResource(
         unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? '',
         cantidad,
         recursos,
-        precio_unitario: isEquipment ? 0 : resource.precio,
-        precio_hora: isEquipment ? resource.precio : 0,
+        precio_unitario: isEquipment ? 0 : precio,
+        precio_hora: isEquipment ? precio : 0,
         factor_desperdicio: targetType === 'materiales' ? 1.05 : 1,
     };
 }
@@ -1109,7 +1106,7 @@ function AcuSection({
                                         ) : (
                                             <EditableAcuCell
                                                 value={item.cantidad ?? 0}
-                                                decimals={3}
+                                                decimals={4}
                                                 onUpdate={(v) =>
                                                     onUpdateItem(
                                                         type,
@@ -1450,6 +1447,8 @@ export const AcuPanel = React.memo(function AcuPanel({
                 };
             } else if (field === 'cantidad') {
                 arr[index] = { ...currentItem, cantidad: roundCantidad(Number(value) || 0) };
+            } else if (field === 'precio_unitario' || field === 'precio_hora') {
+                arr[index] = { ...currentItem, [field]: roundPrecio(Number(value) || 0) };
             } else {
                 arr[index] = { ...currentItem, [field]: value };
             }

@@ -1265,7 +1265,7 @@ class PresupuestoController extends Controller
     private function recalcAcuSubtotals(array $acu): array
     {
         // ① Mano de obra first — herramientas need this value.
-        $roundCantidad = fn ($value): float => round((float) ($value ?? 0), 3);
+        $roundCantidad = fn ($value): float => round((float) ($value ?? 0), 4);
 
         foreach ($acu['mano_de_obra'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
@@ -1557,7 +1557,7 @@ class PresupuestoController extends Controller
             $manoDeObra = $validated['mano_de_obra'] ?? [];
             $costoManoObra = 0;
             foreach ($manoDeObra as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);
@@ -1571,7 +1571,7 @@ class PresupuestoController extends Controller
             $materiales = $validated['materiales'] ?? [];
             $costoMateriales = 0;
             foreach ($materiales as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario * factor_desperdicio
                 $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
@@ -1583,7 +1583,7 @@ class PresupuestoController extends Controller
             $equipos = $validated['equipos'] ?? [];
             $costoEquipos = 0;
             foreach ($equipos as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 $descripcion = strtolower((string) ($componente['descripcion'] ?? ''));
                 $isHerramientas = str_contains($descripcion, 'herramienta');
 
@@ -1607,7 +1607,7 @@ class PresupuestoController extends Controller
             $subcontratos = $validated['subcontratos'] ?? [];
             $costoSubcontratos = 0;
             foreach ($subcontratos as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);
@@ -1618,7 +1618,7 @@ class PresupuestoController extends Controller
             $subpartidas = $validated['subpartidas'] ?? [];
             $costoSubpartidas = 0;
             foreach ($subpartidas as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 3);
+                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                 $componente['parcial'] = round($parcial, 6);
