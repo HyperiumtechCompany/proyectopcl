@@ -1,5 +1,8 @@
+import Decimal from 'decimal.js';
 import { produce } from 'immer';
 import { create } from 'zustand';
+
+const roundMonto = (value: number) => new Decimal(value).toDecimalPlaces(2).toNumber();
 
 // Types
 export interface BudgetItemRow {
@@ -408,7 +411,7 @@ export const useBudgetStore = create<BudgetState>((set, get) => ({
       if (row) {
         (row as any)[field] = value;
         if (field === 'metrado' || field === 'precio_unitario') {
-          row.parcial = Number(row.metrado || 0) * Number(row.precio_unitario || 0);
+          row.parcial = roundMonto(new Decimal(row.metrado || 0).times(row.precio_unitario || 0).toNumber());
         }
       }
       performTreeCalculation(state.rows);

@@ -19,7 +19,7 @@ export default function GestorProyectoShow({ proyecto, nodos }: ShowProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={proyecto.nombre} />
 
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 sm:px-6 sm:py-6">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 px-2 py-2 text-slate-100 sm:px-2 sm:py-2">
                 <ProjectAutoMap gestorProyectoId={proyecto.id} nombre={proyecto.nombre} initialNodos={nodos} cantidadModulos={proyecto.cantidad_modulos} />
             </div>
         </AppLayout>

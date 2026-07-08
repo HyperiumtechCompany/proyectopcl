@@ -1,5 +1,9 @@
+import Decimal from 'decimal.js';
 import * as XLSX from 'xlsx';
 import type { DelphinRow } from '../types';
+
+const roundCantidad = (value: number) => new Decimal(value).toDecimalPlaces(4).toNumber();
+const roundMonto = (value: number) => new Decimal(value).toDecimalPlaces(2).toNumber();
 
 export interface ParsePresupuestoResult {
     rows: DelphinRow[];
@@ -128,9 +132,9 @@ export function parsePresupuestoExcel(file: File): Promise<ParsePresupuestoResul
                         if (t) { descripcion = t; break; }
                     }
 
-                    let metrado = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.metrado })]?.v);
+                    let metrado = roundCantidad(parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.metrado })]?.v));
                     const precio  = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.precio  })]?.v);
-                    let parcial   = parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.parcial })]?.v);
+                    let parcial   = roundMonto(parseNumber(ws[XLSX.utils.encode_cell({ r, c: cols.parcial })]?.v));
 
                     // Recover missing values using the identity: parcial = metrado × precio.
                     // Many Delphin formats use non-standard headers ("Sub-Total", "Monto", etc.)
@@ -139,9 +143,9 @@ export function parsePresupuestoExcel(file: File): Promise<ParsePresupuestoResul
                     // numeric value (that's the parcial), then infer metrado = parcial / precio.
                     if (precio > 0) {
                         if (metrado === 0 && parcial > 0) {
-                            metrado = Math.round((parcial / precio) * 10000) / 10000;
+                            metrado = roundCantidad(new Decimal(parcial).div(precio).toNumber());
                         } else if (parcial === 0 && metrado > 0) {
-                            parcial = Math.round(metrado * precio * 100) / 100;
+                            parcial = roundMonto(new Decimal(metrado).times(precio).toNumber());
                         } else if (metrado === 0 && parcial === 0) {
                             // Scan ALL columns after the description column looking for the
                             // parcial (= the largest value > 10% of precio).  This covers any
@@ -153,8 +157,8 @@ export function parsePresupuestoExcel(file: File): Promise<ParsePresupuestoResul
                                 if (sv > maxVal && sv >= precio * 0.1) maxVal = sv;
                             }
                             if (maxVal > 0) {
-                                parcial = maxVal;
-                                metrado = Math.round((maxVal / precio) * 10000) / 10000;
+                                parcial = roundMonto(maxVal);
+                                metrado = roundCantidad(new Decimal(maxVal).div(precio).toNumber());
                             }
                         }
                     }

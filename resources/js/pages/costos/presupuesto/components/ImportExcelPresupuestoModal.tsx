@@ -1,8 +1,12 @@
+import Decimal from 'decimal.js';
 import * as XLSX from 'xlsx';
 import { X, FileSpreadsheet, AlertCircle, Upload, Eye, CheckCircle } from 'lucide-react';
 import React, { useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { useBudgetStore, type BudgetItemRow } from '../stores/budgetStore';
+
+const roundCantidad = (value: number) => new Decimal(value).toDecimalPlaces(4).toNumber();
+const roundMonto = (value: number) => new Decimal(value).toDecimalPlaces(2).toNumber();
 
 interface ImportExcelPresupuestoModalProps {
     projectId: number;
@@ -87,15 +91,15 @@ function parseExcelFile(file: File): Promise<ParsedRow[]> {
                         unidad = String(row[colUnidad]).trim().replace(/m2/g, 'm²').replace(/m3/g, 'm³');
                     }
 
-                    const metrado = colMetrado !== -1 ? parseNum(row[colMetrado]) : 0;
+                    const metrado = roundCantidad(colMetrado !== -1 ? parseNum(row[colMetrado]) : 0);
                     const precioUnitario = colPrecio !== -1 ? parseNum(row[colPrecio]) : 0;
-                    
-                    let parcial = colParcial !== -1 ? parseNum(row[colParcial]) : 0;
+
+                    let parcial = colParcial !== -1 ? roundMonto(parseNum(row[colParcial])) : 0;
 
                     // Fallback: Si el exportador desplazó el parcial por combinación de celdas
                     if (parcial === 0 && colParcial !== -1) {
                         for (let offset = 1; offset <= 3; offset++) {
-                            const p = parseNum(row[colParcial + offset]);
+                            const p = roundMonto(parseNum(row[colParcial + offset]));
                             if (p > 0) {
                                 parcial = p;
                                 break;
@@ -103,9 +107,11 @@ function parseExcelFile(file: File): Promise<ParsedRow[]> {
                         }
                     }
 
-                    // Autocalcular si no hay parcial pero hay precio y metrado
+                    // Autocalcular si no hay parcial pero hay precio y metrado — cálculo directo
+                    // (cantidad × precio, redondeado a 2 decimales), sin arrastrar ruido de punto
+                    // flotante nativo de JS.
                     if (parcial === 0 && metrado > 0 && precioUnitario > 0) {
-                        parcial = metrado * precioUnitario;
+                        parcial = roundMonto(new Decimal(metrado).times(precioUnitario).toNumber());
                     }
 
                     const partida = normalizeCode(rawCode);

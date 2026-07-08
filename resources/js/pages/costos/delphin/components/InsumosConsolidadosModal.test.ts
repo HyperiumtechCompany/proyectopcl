@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { describe, expect, it } from 'vitest';
 import type { ACURowSummary } from '@/types/presupuestos';
 import type { DelphinRow } from '../types';
@@ -210,11 +211,14 @@ it('reconcilia el total de insumos consolidados con el costo directo de la parti
     expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
 });
 
-it('ancla el reparto al precio_unitario YA GUARDADO en el presupuesto, no al costo_unitario_total del ACU, cuando quedaron desincronizados', () => {
-    // Escenario real reportado: el panel de ACU recalculó localmente (rendimiento/
-    // horas por día) y su costo_unitario_total (2.90) ya no coincide con el
-    // precio_unitario que sigue guardado en la fila del presupuesto (2.82), que
-    // es el que realmente determina Costo Directo.
+it('calcula cada insumo de forma directa e independiente (cantidad × precio), sin anclarlo a un total externo aunque el ACU esté desincronizado del presupuesto', () => {
+    // Antes, el reparto proporcional anclaba el monto total de la partida al
+    // precio_unitario guardado en el presupuesto (2.82) en vez del costo_unitario_total
+    // del ACU (2.90), y luego REPARTÍA ese monto fijo entre Oficial y Peón según su peso
+    // — distorsionando el monto individual de cada uno para forzar la reconciliación.
+    // Ahora cada insumo se calcula de forma independiente: cantidad física (metrado ×
+    // cantidad ACU, redondeada a 4 decimales) × precio, redondeado a 2 decimales. El
+    // desfase entre el ACU y el presupuesto ya no contamina el monto de los insumos.
     const delphinRows = [
         { id: 1, partida: '01.01', metrado: 789.81, precio_unitario: 2.82 },
     ] as DelphinRow[];
@@ -242,10 +246,57 @@ it('ancla el reparto al precio_unitario YA GUARDADO en el presupuesto, no al cos
         },
     ] as ACURowSummary[];
 
-    const sumaInsumos = flattenInsumos(acus, delphinRows).reduce((sum, row) => sum + row.parcial, 0);
-    const costoDirectoPartida = Math.round(789.81 * 2.82 * 100) / 100;
+    const rawInsumos = flattenInsumos(acus, delphinRows);
+    const oficial = rawInsumos.find((row) => row.descripcion === 'Oficial');
+    const peon = rawInsumos.find((row) => row.descripcion === 'Peón');
 
-    expect(sumaInsumos).toBeCloseTo(costoDirectoPartida, 2);
+    expect(oficial).toMatchObject(calculateInsumoUsage(789.81, 0.0334, 22.19));
+    expect(peon).toMatchObject(calculateInsumoUsage(789.81, 0.0334, 20.08));
+
+    // Invariante clave: cantidad × precio (redondeado a 2 decimales) es EXACTAMENTE
+    // el monto — ninguna redistribución entre insumos de la misma partida.
+    for (const row of [oficial!, peon!]) {
+        const cantidadPorPrecio = new Decimal(row.cantidad).times(row.precio).toDecimalPlaces(2).toNumber();
+        expect(row.parcial).toBe(cantidadPorPrecio);
+    }
+});
+
+it('el monto de un insumo es exactamente cantidad × precio (caso reportado: Oficial hh a 22.19)', () => {
+    // Bug reportado: 51.2129 (cantidad) × 22.19 (precio) = 1,136.414251 → 1,136.41,
+    // pero el reparto proporcional anterior mostraba 1,136.36 para ese insumo — una
+    // diferencia de 0.05 causada por redistribuir el monto de la partida entre insumos
+    // en vez de calcular cada uno de forma directa.
+    const delphinRows = [
+        { id: 1, partida: '01.01', metrado: 51.2129 },
+    ] as DelphinRow[];
+    const acus = [
+        {
+            id: 51,
+            partida: '01.01',
+            descripcion: 'Partida de referencia',
+            unidad: 'hh',
+            rendimiento: 1,
+            costo_mano_obra: 1136.41,
+            costo_materiales: 0,
+            costo_equipos: 0,
+            costo_subcontratos: 0,
+            costo_subpartidas: 0,
+            costo_unitario_total: 1136.41,
+            mano_de_obra: [
+                { descripcion: 'Oficial', unidad: 'hh', cantidad: 1, precio_unitario: 22.19 },
+            ],
+            materiales: [],
+            equipos: [],
+            subcontratos: [],
+            subpartidas: [],
+        },
+    ] as ACURowSummary[];
+
+    const [oficial] = flattenInsumos(acus, delphinRows);
+
+    expect(oficial.cantidad).toBe(51.2129);
+    expect(oficial.precio).toBe(22.19);
+    expect(oficial.parcial).toBe(1136.41);
 });
 
 it('el precio de referencia consolidado siempre coincide con el precio real del insumo en el ACU, aunque el reparto proporcional distorsione el Monto', () => {
