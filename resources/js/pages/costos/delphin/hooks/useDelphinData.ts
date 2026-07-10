@@ -22,12 +22,18 @@ interface Options {
     calendarSettings: CalendarSettings;
 }
 
-// Redondea con decimal.js a 2 decimales — evita el bug de .toFixed(2) con floats
-// (ej. (1.005).toFixed(2) === '1.00' en vez de '1.01' por representación binaria).
-// Mismo criterio que decimalMul en usePresupuestoAcu.ts, para que ACU, Insumos y
-// Presupuesto redondeen montos económicos de forma consistente.
+// Redondea con decimal.js a 10 decimales (no 2, y no 6) — evita el bug de
+// .toFixed(2) con floats y, sobre todo, evita truncar precio_unitario/parcial
+// antes de sumar o multiplicar por metrado. Con 1 partida el truncado no se
+// nota, pero con miles de partidas el redondeo por-fila se acumula; y con
+// metrados grandes (decenas de miles), incluso un residuo en el 7º decimal de
+// precio_unitario se amplifica a céntimos frente a Insumos Consolidados
+// (verificado con datos reales: metrado=75,500 × error 4.4e-7 = 0.033 de
+// diferencia). Mismo criterio que decimalMul/r2 en usePresupuestoAcu.ts y que
+// recalculateParciales en CostoDatabaseService.php: 10dp internamente, 2dp
+// solo al formatear en pantalla.
 function round2(n: number): number {
-    return new Decimal(n).toDecimalPlaces(2).toNumber();
+    return new Decimal(n).toDecimalPlaces(10).toNumber();
 }
 
 function normalizeForMatch(s: string): string {

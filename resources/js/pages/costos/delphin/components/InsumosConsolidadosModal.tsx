@@ -138,9 +138,12 @@ export function calculateInsumoUsage(
     costoFactor = 1,
 ): { cantidad: number; parcial: number } {
     const cantidad = presupuestoCantidad * acuCantidad;
-    // Redondeo con decimal.js a 2 decimales (igual que decimalMul en usePresupuestoAcu.ts) —
-    // evita arrastrar error de punto flotante en el monto de cada uso antes de consolidar.
-    const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(2).toNumber();
+    // Redondeo con decimal.js a 10 decimales (igual que decimalMul en usePresupuestoAcu.ts,
+    // no a 2 ni a 6) — con miles de usos de insumo, redondear cada uno a 2dp antes de sumar
+    // acumula un error que Costo Directo no arrastra igual; y con metrados grandes, incluso
+    // un residuo en el 7º decimal se amplifica a céntimos. 2dp solo se aplica al formatear
+    // en pantalla (fmt()).
+    const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(10).toNumber();
     return { cantidad, parcial };
 }
 
@@ -249,7 +252,10 @@ export function flattenInsumos(
                     : acuCantidad * precio;
                 const usage = esPorcentaje
                     ? (() => {
-                        const monto = new Decimal(parcialAcu).times(presupuestoCantidad).toDecimalPlaces(2).toNumber();
+                        // 10dp, no 2 ni 6 — mismo motivo que calculateInsumoUsage: evita
+                        // acumular error de redondeo por-fila y su amplificación con
+                        // metrados grandes frente a Costo Directo.
+                        const monto = new Decimal(parcialAcu).times(presupuestoCantidad).toDecimalPlaces(10).toNumber();
                         return { cantidad: monto, parcial: monto };
                     })()
                     : calculateInsumoUsage(

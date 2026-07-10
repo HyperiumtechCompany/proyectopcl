@@ -525,11 +525,16 @@ class InsumoProductoController extends Controller
             }
 
             if (! empty($updateData)) {
-                // Recalcular parcial
+                // Recalcular parcial — 10 decimales (no 4), igual que calculateACU()/
+                // CostoDatabaseService::recalculateAcuFromJson(). recalculateAcus() abajo
+                // suma este campo directo hacia costo_unitario_total/Costo Directo; con
+                // metrados grandes hasta 6dp se queda corto y se amplifica a céntimos
+                // frente a Insumos Consolidados (que recalcula cantidad × precio_unitario
+                // crudos, sin leer "parcial").
                 $cant = (float) $item->cantidad;
                 $prec = (float) ($updateData[$conf['price_column']] ?? $item->{$conf['price_column']});
                 $falc = (float) ($item->factor_desperdicio ?? 1);
-                $parcial = round($cant * $prec * ($tipo === 'materiales' ? $falc : 1), 4);
+                $parcial = round($cant * $prec * ($tipo === 'materiales' ? $falc : 1), 10);
 
                 $updateData['parcial'] = $parcial;
                 $updateData['updated_at'] = now();
@@ -601,13 +606,25 @@ class InsumoProductoController extends Controller
                     ->first();
 
                 if ($acuRes) {
-                    $connection->table('presupuesto_general')
+                    // Match por código normalizado — presupuesto_acus.partida y
+                    // presupuesto_general.partida pueden diferir en padding de ceros
+                    // (ver CostoDatabaseService::normalizePartidaCode()); un WHERE
+                    // exacto puede actualizar 0 filas y dejar precio_unitario stale.
+                    $dbService = app(CostoDatabaseService::class);
+                    $normalizedPartida = $dbService->normalizePartidaCode($partida);
+                    $generalRows = $connection->table('presupuesto_general')
                         ->where('presupuesto_id', $tenantPresupuestoId)
-                        ->where('partida', $partida)
-                        ->update([
-                            'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
-                            'updated_at' => now(),
-                        ]);
+                        ->get(['id', 'partida']);
+                    foreach ($generalRows as $generalRow) {
+                        if ($dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                            $connection->table('presupuesto_general')
+                                ->where('id', $generalRow->id)
+                                ->update([
+                                    'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
+                                    'updated_at' => now(),
+                                ]);
+                        }
+                    }
                 }
             }
             app(CostoDatabaseService::class)->syncCostoDirecto($projectModel->database_name, $tenantPresupuestoId);

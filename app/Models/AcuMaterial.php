@@ -31,10 +31,10 @@ class AcuMaterial extends Model
     protected function casts(): array
     {
         return [
-            'cantidad' => 'decimal:4',
-            'precio_unitario' => 'decimal:4',
+            'cantidad' => 'decimal:6',
+            'precio_unitario' => 'decimal:10',
             'factor_desperdicio' => 'decimal:4',
-            'parcial' => 'decimal:4',
+            'parcial' => 'decimal:10',
         ];
     }
 

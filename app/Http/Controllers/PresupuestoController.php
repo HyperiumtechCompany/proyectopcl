@@ -1204,7 +1204,7 @@ class PresupuestoController extends Controller
             // Parcial is always cantidad × precio for regular items.
             // Herramientas are an exception: their parcial depends on costo_mano_obra
             // which is not yet known here — recalcAcuSubtotals corrects them later.
-            $parcial = round($colQ * $colR, 6);
+            $parcial = round($colQ * $colR, 10);
 
             $component = [
                 'descripcion' => $colE,
@@ -1269,54 +1269,54 @@ class PresupuestoController extends Controller
 
         foreach ($acu['mano_de_obra'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
-            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 10);
         }
         unset($item);
 
         foreach ($acu['materiales'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
             $factor = (float) ($item['factor_desperdicio'] ?? 1) ?: 1.0;
-            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0) * $factor, 10);
         }
         unset($item);
 
         foreach ($acu['subcontratos'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
-            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 10);
         }
         unset($item);
 
         foreach ($acu['subpartidas'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
-            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 6);
+            $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_unitario'] ?? 0), 10);
         }
         unset($item);
 
         foreach ($acu['equipos'] ?? [] as &$item) {
             $item['cantidad'] = $roundCantidad($item['cantidad'] ?? 0);
             if (stripos($item['descripcion'] ?? '', 'HERRAMIENTA') === false) {
-                $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_hora'] ?? 0), 6);
+                $item['parcial'] = round($item['cantidad'] * (float) ($item['precio_hora'] ?? 0), 10);
             }
         }
         unset($item);
 
-        $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 6);
+        $acu['costo_mano_obra'] = round(array_sum(array_column($acu['mano_de_obra'] ?? [], 'parcial')), 10);
 
         // ② Fix herramientas parcial now that costo_mano_obra is known.
         foreach ($acu['equipos'] as &$item) {
             if (stripos($item['descripcion'] ?? '', 'HERRAMIENTA') !== false) {
                 $pct = (float) ($item['cantidad'] ?? 0);
-                $item['parcial'] = round($acu['costo_mano_obra'] * ($pct / 100.0), 6);
+                $item['parcial'] = round($acu['costo_mano_obra'] * ($pct / 100.0), 10);
                 $item['precio_hora'] = $acu['costo_mano_obra'];
             }
         }
         unset($item);
 
         // ③ Remaining subtotals.
-        $acu['costo_materiales'] = round(array_sum(array_column($acu['materiales'] ?? [], 'parcial')), 6);
-        $acu['costo_equipos'] = round(array_sum(array_column($acu['equipos'] ?? [], 'parcial')), 6);
-        $acu['costo_subcontratos'] = round(array_sum(array_column($acu['subcontratos'] ?? [], 'parcial')), 6);
-        $acu['costo_subpartidas'] = round(array_sum(array_column($acu['subpartidas'] ?? [], 'parcial')), 6);
+        $acu['costo_materiales'] = round(array_sum(array_column($acu['materiales'] ?? [], 'parcial')), 10);
+        $acu['costo_equipos'] = round(array_sum(array_column($acu['equipos'] ?? [], 'parcial')), 10);
+        $acu['costo_subcontratos'] = round(array_sum(array_column($acu['subcontratos'] ?? [], 'parcial')), 10);
+        $acu['costo_subpartidas'] = round(array_sum(array_column($acu['subpartidas'] ?? [], 'parcial')), 10);
 
         // ④ Rendimiento inference: if header extraction defaulted to 1.0, infer
         //    from the first crew member that has recursos and cantidad.
@@ -1462,22 +1462,33 @@ class PresupuestoController extends Controller
 
     private function syncAllPrecioUnitarioFromAcus(int $presupuestoId): void
     {
-        $acus = DB::connection('costos_tenant')
-            ->table('presupuesto_acus')
+        $connection = DB::connection('costos_tenant');
+
+        $acus = $connection->table('presupuesto_acus')
             ->where('presupuesto_id', $presupuestoId)
             ->get();
 
+        // Match por código normalizado, no por string exacto — presupuesto_acus.partida
+        // y presupuesto_general.partida pueden diferir en padding de ceros (ver
+        // CostoDatabaseService::normalizePartidaCode()); un WHERE partida = ? exacto
+        // puede actualizar 0 filas y dejar precio_unitario desincronizado en silencio.
+        $generalIdByNormalizedPartida = [];
+        foreach ($connection->table('presupuesto_general')->where('presupuesto_id', $presupuestoId)->get(['id', 'partida']) as $row) {
+            $generalIdByNormalizedPartida[$this->dbService->normalizePartidaCode($row->partida)] = $row->id;
+        }
+
         foreach ($acus as $acu) {
             $costoUnitario = (float) ($acu->costo_unitario_total ?? 0);
+            $generalId = $generalIdByNormalizedPartida[$this->dbService->normalizePartidaCode($acu->partida)] ?? null;
 
-            DB::connection('costos_tenant')
-                ->table('presupuesto_general')
-                ->where('presupuesto_id', $presupuestoId)
-                ->where('partida', $acu->partida)
-                ->update([
-                    'precio_unitario' => $costoUnitario,
-                    'updated_at' => now(),
-                ]);
+            if ($generalId !== null) {
+                $connection->table('presupuesto_general')
+                    ->where('id', $generalId)
+                    ->update([
+                        'precio_unitario' => $costoUnitario,
+                        'updated_at' => now(),
+                    ]);
+            }
         }
     }
 
@@ -1560,7 +1571,7 @@ class PresupuestoController extends Controller
                 $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 6);
+                $componente['parcial'] = round($parcial, 10);
                 $costoManoObra += $componente['parcial'];
             }
             // No rounding at category level — only at component level (round per parcial).
@@ -1575,7 +1586,7 @@ class PresupuestoController extends Controller
                 // Formula: cantidad * precio_unitario * factor_desperdicio
                 $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
-                $componente['parcial'] = round($parcial, 6);
+                $componente['parcial'] = round($parcial, 10);
                 $costoMateriales += $componente['parcial'];
             }
 
@@ -1593,11 +1604,11 @@ class PresupuestoController extends Controller
                     $porcentaje = $componente['cantidad'] ?? 0;
                     $parcial = $precioBase * ($porcentaje / 100);
                     $componente['precio_hora'] = $precioBase;
-                    $componente['parcial'] = round($parcial, 6);
+                    $componente['parcial'] = round($parcial, 10);
                 } else {
                     // Formula: cantidad * precio_hora
                     $parcial = $componente['cantidad'] * $componente['precio_hora'];
-                    $componente['parcial'] = round($parcial, 6);
+                    $componente['parcial'] = round($parcial, 10);
                 }
 
                 $costoEquipos += $componente['parcial'];
@@ -1610,7 +1621,7 @@ class PresupuestoController extends Controller
                 $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 6);
+                $componente['parcial'] = round($parcial, 10);
                 $costoSubcontratos += $componente['parcial'];
             }
 
@@ -1621,7 +1632,7 @@ class PresupuestoController extends Controller
                 $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
                 // Formula: cantidad * precio_unitario
                 $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 6);
+                $componente['parcial'] = round($parcial, 10);
                 $costoSubpartidas += $componente['parcial'];
             }
 
@@ -1730,14 +1741,25 @@ class PresupuestoController extends Controller
             if ($calculatedAcu) {
                 $newUnitPrice = (float) ($calculatedAcu->costo_unitario_total ?? 0);
 
-                DB::connection('costos_tenant')
+                // Match por código normalizado — ver CostoDatabaseService::normalizePartidaCode():
+                // presupuesto_acus.partida y presupuesto_general.partida pueden diferir en
+                // padding de ceros y un WHERE exacto puede no encontrar ninguna fila.
+                $normalizedPartida = $this->dbService->normalizePartidaCode($validated['partida']);
+                $generalRows = DB::connection('costos_tenant')
                     ->table('presupuesto_general')
                     ->where('presupuesto_id', $tenantPresupuestoId)
-                    ->where('partida', $validated['partida'])
-                    ->update([
-                        'precio_unitario' => $newUnitPrice,
-                        'updated_at' => now(),
-                    ]);
+                    ->get(['id', 'partida']);
+                foreach ($generalRows as $generalRow) {
+                    if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                        DB::connection('costos_tenant')
+                            ->table('presupuesto_general')
+                            ->where('id', $generalRow->id)
+                            ->update([
+                                'precio_unitario' => $newUnitPrice,
+                                'updated_at' => now(),
+                            ]);
+                    }
+                }
 
                 // Recalcular el costo directo total del presupuesto
                 $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
@@ -3005,16 +3027,16 @@ class PresupuestoController extends Controller
 
         if (! $schema->hasColumn('presupuesto_acus', 'costo_unitario_total')) {
             $schema->table('presupuesto_acus', function (Blueprint $table) {
-                $table->decimal('costo_unitario_total', 15, 6)
+                $table->decimal('costo_unitario_total', 20, 10)
                     ->storedAs('costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas')
                     ->comment('Calculated: sum of all component costs');
             });
             $this->tenantColumnCache['presupuesto_acus.costo_unitario_total'] = true;
         }
 
-        // Amplía a 6 decimales las columnas de costo/precio/parcial/cantidad (legacy DBs
-        // en 4 o menos) para que precio_unitario deje de aplanarse antes de llegar a
-        // Costo Directo/Insumos Consolidados — ver CostoDatabaseService::widenAcuPrecisionColumns().
+        // Amplía a 10 decimales las columnas de costo/precio/parcial (legacy DBs en 6 o
+        // menos) para que precio_unitario deje de aplanarse antes de llegar a Costo
+        // Directo/Insumos Consolidados — ver CostoDatabaseService::widenAcuPrecisionColumns().
         $this->dbService->widenAcuPrecisionColumns();
 
         // Ensure cod_insumo column exists in all ACU component child tables (legacy DBs)
@@ -3737,16 +3759,24 @@ class PresupuestoController extends Controller
                 'updated_at' => now(),
             ]);
 
-        // Sync with presupuesto_general
+        // Sync with presupuesto_general — match por código normalizado, no por
+        // string exacto (ver CostoDatabaseService::normalizePartidaCode()).
         $acu = $connection->table('presupuesto_acus')->where('id', $acuId)->first();
         if ($acu) {
-            $connection->table('presupuesto_general')
+            $normalizedPartida = $this->dbService->normalizePartidaCode((string) data_get($acu, 'partida'));
+            $generalRows = $connection->table('presupuesto_general')
                 ->where('presupuesto_id', data_get($acu, 'presupuesto_id'))
-                ->where('partida', data_get($acu, 'partida'))
-                ->update([
-                    'precio_unitario' => (float) data_get($acu, 'costo_unitario_total', 0),
-                    'updated_at' => now(),
-                ]);
+                ->get(['id', 'partida']);
+            foreach ($generalRows as $generalRow) {
+                if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                    $connection->table('presupuesto_general')
+                        ->where('id', $generalRow->id)
+                        ->update([
+                            'precio_unitario' => (float) data_get($acu, 'costo_unitario_total', 0),
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
 
             $this->dbService->syncCostoDirecto(DB::connection('costos_tenant')->getDatabaseName(), data_get($acu, 'presupuesto_id'));
         }
