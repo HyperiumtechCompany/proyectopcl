@@ -105,6 +105,16 @@ class CostoDatabaseService
     }
 
     /**
+     * Ensure the presupuesto-related tables exist on a tenant database
+     * (idempotent: delegates to the tenant migration runner, which Laravel
+     * already skips for migrations that were previously applied).
+     */
+    public function createPresupuestoTables(string $databaseName): void
+    {
+        $this->runTenantMigrations($databaseName);
+    }
+
+    /**
      * Rollback tenant-specific migrations on the given database.
      */
     public function rollbackTenantMigrations(string $databaseName): void

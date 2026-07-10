@@ -283,10 +283,11 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                     outlet_rack:       '#ef4444',
                 };
                 const baseColor = isSelected ? '#f59e0b' : (colorMap[dev.type] || '#22c55e');
+                const rotation = dev.rotation ?? 0;
                 return (
                     <g
                         key={dev.id}
-                        transform={`translate(${safeNum(fp.x)}, ${safeNum(fp.y)})`}
+                        transform={`translate(${safeNum(fp.x)}, ${safeNum(fp.y)}) rotate(${safeNum(rotation)})`}
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => { e.stopPropagation(); onSelect(dev.id); }}
                     >

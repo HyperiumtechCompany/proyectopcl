@@ -10,7 +10,7 @@
  *   [10] svg#dialux-overlay        → geometría DIAlux + herramientas
  */
 
-import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import {
     resolveFixtureRenderHeight,
     resolveRoomCeilingHeight,
@@ -32,6 +32,10 @@ import {
     useActiveScene,
     useViewport,
 } from '@/pages/dialux/hooks/useEditorStore';
+import {
+    loadDialuxPlan,
+    storedDialuxPlanToFile,
+} from '@/pages/dialux/hooks/dialuxPlanStorage';
 import {
     clampOpeningOffsetToWallSegment,
     wallLength,
@@ -61,6 +65,7 @@ import { OverlayMeasureArea } from './OverlayMeasureArea';
 import { OverlayPartitions } from './OverlayPartitions';
 import { OverlayPreviews } from './OverlayPreviews';
 import { OverlayRooms } from './OverlayRooms';
+import { OverlayRotateHandle, type RotatableTarget } from './OverlayRotateHandle';
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayWires } from './OverlayWires';
@@ -148,9 +153,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const resultsByRoom = useEditorStore((state) => state.resultsByRoom);
         const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
         const allScenes = useEditorStore((s) => s.project?.scenes) ?? [];
+        const projectId = useEditorStore((s) => s.project?.id ?? null);
         const activeSceneId = useEditorStore((s) => s.activeSceneId);
         const engine = useMlightcadEngine();
-        const { } = useWasmEngine();
+        const { parseDxf } = useWasmEngine();
 
         const wrapperRef = useRef<HTMLDivElement>(null);
         const cadRef = useRef<HTMLDivElement>(null);
@@ -675,10 +681,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     {
                         z: t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
                         fixtureType,
+                        emergencyType: t.emergencyType,
                     },
                     ceilingHeight,
                 );
                 const id = store.addFixture({
+                    // Conserva todos los campos del catálogo (dimensiones, IP/IK,
+                    // catalogSymbol, emergencyType, etc.) — antes se perdían al
+                    // colocar la luminaria, dejándola sin su identidad de catálogo.
+                    ...t,
                     name: t.name ?? `Luminaria ${ambient?.name ?? 'exterior'}`,
                     x: xM,
                     y: yM,
@@ -806,6 +817,57 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 store.updateDoor(id, { wallId, offsetAlongWall }),
         });
 
+        // ── Manija de rotación (luminaria / interruptor / dispositivo único) ────
+        const rotateKind: 'fixture' | 'switch' | 'device' | null = useMemo(() => {
+            if (!scene || ui.activeTool !== 'select') return null;
+            if ((ui.selectedFixtureIds?.length ?? 0) === 1) return 'fixture';
+            if (ui.selectedId && scene.lightSwitches.some((s) => s.id === ui.selectedId)) return 'switch';
+            if (ui.selectedId && (scene.electricalDevices ?? []).some((d) => d.id === ui.selectedId)) return 'device';
+            return null;
+        }, [scene, ui.activeTool, ui.selectedFixtureIds, ui.selectedId]);
+
+        const rotateTarget: RotatableTarget | null = useMemo(() => {
+            if (!scene || !rotateKind) return null;
+            if (rotateKind === 'fixture') {
+                const fx = scene.fixtures.find((f) => f.id === ui.selectedFixtureIds![0]);
+                return fx ? { id: fx.id, x: fx.x, y: fx.y, rotation: fx.rotation ?? 0 } : null;
+            }
+            if (rotateKind === 'switch') {
+                const sw = scene.lightSwitches.find((s) => s.id === ui.selectedId);
+                return sw ? { id: sw.id, x: sw.x, y: sw.y, rotation: sw.rotation ?? 0 } : null;
+            }
+            const dev = (scene.electricalDevices ?? []).find((d) => d.id === ui.selectedId);
+            return dev ? { id: dev.id, x: dev.x, y: dev.y, rotation: dev.rotation ?? 0 } : null;
+        }, [scene, rotateKind, ui.selectedFixtureIds, ui.selectedId]);
+
+        const rotateObjectRadiusPx = useMemo(() => {
+            if (!rotateTarget) return 12;
+            const origin = { x: rotateTarget.x, y: rotateTarget.y };
+            if (rotateKind === 'fixture') {
+                const fx = scene?.fixtures.find((f) => f.id === rotateTarget.id);
+                const half = fx?.dimensions
+                    ? Math.max(fx.dimensions.length ?? 0.3, fx.dimensions.width ?? 0.3) / 2
+                    : 0.15;
+                return Math.max(8, screenDistance(half, 0, origin));
+            }
+            return Math.max(8, screenDistance(0.15, 0, origin));
+        }, [rotateTarget, rotateKind, scene, screenDistance]);
+
+        const handleRotate = useCallback(
+            (id: string, rotationDeg: number) => {
+                if (rotateKind === 'fixture') store.updateFixture(id, { rotation: rotationDeg });
+                else if (rotateKind === 'switch') store.updateLightSwitch(id, { rotation: rotationDeg });
+                else if (rotateKind === 'device') store.updateElectricalDevice(id, { rotation: rotationDeg });
+            },
+            [rotateKind, store],
+        );
+
+        const toLocalPoint = useCallback((clientX: number, clientY: number) => {
+            const rect = wrapperRef.current?.getBoundingClientRect();
+            if (!rect) return { x: clientX, y: clientY };
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }, []);
+
         // ── Ref estable para isDraggingFn — evita que el RAF tenga isDraggingFn
         // en su lista de dependencias (lo que causaría el bucle de re-creación)
         // y elimina el riesgo de TDZ si el compilador reordena declaraciones.
@@ -850,7 +912,19 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         useEffect(() => {
             if (!cadRef.current || initAttemptedRef.current) return;
             initAttemptedRef.current = true;
-            engine.initViewer(cadRef.current).then(() => {
+            engine.initViewer(cadRef.current).then(async () => {
+                const storedPlan = projectId ? await loadDialuxPlan(projectId) : null;
+                if (storedPlan) {
+                    try {
+                        const file = storedDialuxPlanToFile(storedPlan);
+                        const opened = await engine.openFile(file);
+                        if (opened && file.name.toLowerCase().endsWith('.dxf')) {
+                            await parseDxf?.(file, getEffectiveScale(scene?.scaleConfig));
+                        }
+                    } catch (error) {
+                        console.warn('No se pudo restaurar el plano DIAlux local.', error);
+                    }
+                }
                 // Forzar resize + posicionar origen en primer cuadrante
                 setTimeout(() => {
                     window.dispatchEvent(new Event('resize'));
@@ -1200,6 +1274,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             store.setSelectedId(id);
                         }}
                         screenPoint={screenPoint}
+                        screenDistance={screenDistance}
                     />
                     <OverlayElectricalDevices
                         devices={
@@ -1233,6 +1308,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         isClosed={measureAreaFrozen !== null && measureAreaVertices.length === 0}
                         screenPoint={screenPoint}
                         zoom={zoom}
+                    />
+                    <OverlayRotateHandle
+                        target={rotateTarget}
+                        objectRadiusPx={rotateObjectRadiusPx}
+                        screenPoint={screenPoint}
+                        toLocalPoint={toLocalPoint}
+                        onRotate={handleRotate}
                     />
                 </svg>
 

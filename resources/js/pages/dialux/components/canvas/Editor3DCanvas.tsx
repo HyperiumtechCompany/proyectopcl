@@ -130,10 +130,15 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     {
                         z: t.z ?? (ceilingHeight ? ceilingHeight - 0.08 : 2.4),
                         fixtureType,
+                        emergencyType: t.emergencyType,
                     },
                     ceilingHeight,
                 );
                 const id = st.addFixture({
+                    // Conserva todos los campos del catálogo (dimensiones, IP/IK,
+                    // catalogSymbol, emergencyType, etc.) — antes se perdían al
+                    // colocar la luminaria, dejándola sin su identidad de catálogo.
+                    ...t,
                     name: t.name ?? `Luminaria ${ambient?.name ?? 'exterior'}`,
                     x: ambient?.centroid.x ?? pickedX,
                     y: ambient?.centroid.y ?? pickedY,

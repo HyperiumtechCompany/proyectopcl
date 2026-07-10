@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\AguaCalculationUpdated;
 use App\Models\AguaCalculation;
+use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -11,6 +12,8 @@ use Inertia\Response;
 
 class AguaCalculationController extends Controller
 {
+    public function __construct(protected ProjectQuotaService $quotaService) {}
+
     public function index(): Response
     {
         $spreadsheets = AguaCalculation::forUser(Auth::id())
@@ -39,6 +42,8 @@ class AguaCalculationController extends Controller
             'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
+
+        $this->quotaService->assertCanCreate($request->user(), 'agua');
 
         $data = [
             'user_id' => Auth::id(),

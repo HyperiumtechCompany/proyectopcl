@@ -4,11 +4,12 @@ import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { resolveAvatarUrl } from '@/lib/avatar';
 import { type BreadcrumbItem } from '@/types';
-import { type Role, type UserExtended } from '@/types/user';
+import { type Organization, type Role, type UserExtended } from '@/types/user';
 
 type Props = {
     user: UserExtended;
     roles: Role[];
+    organizations: Organization[];
 };
 
 const breadcrumbs = (userId: number): BreadcrumbItem[] => [
@@ -17,7 +18,7 @@ const breadcrumbs = (userId: number): BreadcrumbItem[] => [
     { title: 'Editar Usuario', href: `/users/${userId}/edit` },
 ];
 
-export default function UsersEdit({ user, roles }: Props) {
+export default function UsersEdit({ user, roles, organizations }: Props) {
     const getInitials = useInitials();
 
     return (
@@ -50,7 +51,7 @@ export default function UsersEdit({ user, roles }: Props) {
 
                 {/* Form Card */}
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                    <UserForm user={user} roles={roles} isEdit />
+                    <UserForm user={user} roles={roles} organizations={organizations} isEdit />
                 </div>
             </div>
         </AppLayout>

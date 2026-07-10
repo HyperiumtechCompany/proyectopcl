@@ -1169,8 +1169,13 @@ export const useEditorStore = create<EditorState>()(
         setFixtureTemplate: (t) =>
             set((s) => ({
                 ui: {
+                    // Reemplaza la plantilla por completo (no fusiona con la
+                    // anterior): si no lo hiciéramos, campos como
+                    // emergencyType/catalogSymbol de una luminaria de
+                    // emergencia seguirían "pegados" a la siguiente
+                    // luminaria normal seleccionada del catálogo.
                     ...s.ui,
-                    fixtureTemplate: { ...s.ui.fixtureTemplate, ...t },
+                    fixtureTemplate: t,
                 },
             })),
         setWindowTemplate: (t) =>

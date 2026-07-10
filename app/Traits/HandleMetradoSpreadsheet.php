@@ -144,7 +144,10 @@ trait HandleMetradoSpreadsheet
             }
         }
 
-        $decimalFields = ['elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'total', 'parcial'];
+        $decimalFields = [
+            'elsim', 'largo', 'ancho', 'alto', 'nveces', 'kgm', 'lon', 'area', 'vol', 'kg', 'total', 'parcial',
+            'total_modulos', 'total_exterior', 'total_cisterna', 'total_general',
+        ];
         foreach ($decimalFields as $field) {
             if (! $hasColumn($field)) {
                 continue;

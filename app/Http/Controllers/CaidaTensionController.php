@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\SpreadsheetUpdated;
 use App\Models\CaidaTensionSpreadsheet;
+use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -11,6 +12,8 @@ use Inertia\Response;
 
 class CaidaTensionController extends Controller
 {
+    public function __construct(protected ProjectQuotaService $quotaService) {}
+
     /**
      * Lista de hojas del usuario autenticado.
      */
@@ -45,6 +48,8 @@ class CaidaTensionController extends Controller
             'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
+
+        $this->quotaService->assertCanCreate($request->user(), 'caida_tension');
 
         $spreadsheet = CaidaTensionSpreadsheet::create([
             'user_id' => Auth::id(),

@@ -202,6 +202,7 @@ export const LuzPanel: React.FC<{
         </button>
     );
 
+
     return (
         <>
             <PanelTabs
@@ -349,6 +350,9 @@ export const LuzPanel: React.FC<{
                                     ),
                                 )}
                             </div>
+                            <p className="mt-2 text-[9px] text-gray-600">
+                                El cálculo de longitud de cable está en el botón "Cálculo CT" de la barra superior (selecciona un ambiente primero).
+                            </p>
                 </PanelCard>
             )}
 

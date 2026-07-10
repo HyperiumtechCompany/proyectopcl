@@ -1,9 +1,0 @@
-export { NormativaPanel } from './panels/NormativaPanel';
-export { HerramientasPanel } from './panels/HerramientasPanel';
-export { ConstruccionPanel } from './panels/ConstruccionPanel';
-export { LuzPanel } from './panels/LuzPanel';
-export { MedirPanel } from './panels/MedirPanel';
-export { VistaPanel } from './panels/VistaPanel';
-export { ExportacionPanel } from './panels/ExportacionPanel';
-export { EditarPanel } from './panels/EditarPanel';
-export { ProyectoPanel } from './panels/ProyectoPanel';

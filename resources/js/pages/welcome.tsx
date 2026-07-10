@@ -1,9 +1,11 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { Crown, Zap, Star, Clock, MessageCircle, Check, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Building2, Crown, Zap, Star, Clock, MessageCircle, Check, Eye, EyeOff, LogIn, Users2 } from 'lucide-react';
 import type { FormEventHandler } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { SolicitarPlanModal } from '@/components/welcome/SolicitarPlanModal';
 import { dashboard } from '@/routes';
+import type { LucideIcon } from 'lucide-react';
 
 type LoginForm = {
     email: string;
@@ -11,7 +13,22 @@ type LoginForm = {
     remember: boolean;
 };
 
-const plans = [
+type PlanCard = {
+    id: string;
+    name: string;
+    price: string;
+    period: string;
+    description: string;
+    icon: LucideIcon;
+    color: string;
+    badge: string | null;
+    features: string[];
+    cta: string;
+    ctaStyle: string;
+    ctaHref?: string;
+};
+
+const individualPlans: PlanCard[] = [
     {
         id: 'free',
         name: 'Free',
@@ -88,9 +105,59 @@ const plans = [
     },
 ];
 
+const businessPlans: PlanCard[] = [
+    {
+        id: 'negocios',
+        name: 'Negocios',
+        price: 'Contactar',
+        period: '',
+        description: 'Cuenta de equipo con cupo de proyectos compartido entre tus colaboradores.',
+        icon: Users2,
+        color: 'from-blue-500 to-indigo-600',
+        badge: null,
+        features: [
+            '5 proyectos de costos',
+            '5 proyectos de dialux',
+            '5 proyectos de gestor de proyectos',
+            'Resto de módulos sin límite',
+            'Cupo compartido entre todo el equipo',
+        ],
+        cta: 'Solicitar plan Negocios',
+        ctaStyle: 'border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950/40',
+    },
+    {
+        id: 'empresarial',
+        name: 'Empresarial',
+        price: 'Contactar',
+        period: '',
+        description: 'Para equipos más grandes que necesitan más cupo compartido.',
+        icon: Building2,
+        color: 'from-emerald-500 to-teal-600',
+        badge: 'Más cupo',
+        features: [
+            '10 proyectos de costos',
+            '10 proyectos de dialux',
+            '10 proyectos de gestor de proyectos',
+            'Resto de módulos sin límite',
+            'Cupo compartido entre todo el equipo',
+            'Soporte prioritario 24/7',
+        ],
+        cta: 'Solicitar plan Empresarial',
+        ctaStyle: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 dark:shadow-emerald-950',
+    },
+];
+
 export default function Welcome() {
-    const { auth } = usePage<{ auth: { user: { name: string } | null } }>().props;
+    const { auth, showLogin } = usePage<{
+        auth: { user: { name: string } | null };
+        showLogin?: boolean;
+    }>().props;
     const [showPassword, setShowPassword] = useState(false);
+    const [planTab, setPlanTab] = useState<'individual' | 'empresa'>('individual');
+    const [solicitarPlan, setSolicitarPlan] = useState<{
+        id: 'free' | 'mensual' | 'anual' | 'negocios' | 'empresarial';
+        name: string;
+    } | null>(null);
 
     const { data, setData, post, processing, errors, reset } = useForm<LoginForm>({
         email: '',
@@ -104,6 +171,17 @@ export default function Welcome() {
             onFinish: () => reset('password'),
         });
     };
+
+    useEffect(() => {
+        if (!showLogin) {
+            return;
+        }
+
+        document.getElementById('login')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+        });
+    }, [showLogin]);
 
     return (
         <>
@@ -152,7 +230,7 @@ export default function Welcome() {
                 </nav>
 
                 {/* ── Hero + Login ── */}
-                <section className="mx-auto grid max-full grid-cols-1 gap-12 px-12 py-5 lg:grid-cols-2 lg:items-center">
+                <section className="mx-auto grid max-full grid-cols-1 gap-12 px-12 py-6 lg:grid-cols-2 lg:items-center">
 
                     {/* Left: Hero copy */}
                     <div className="space-y-6">
@@ -258,7 +336,7 @@ export default function Welcome() {
                             </div>
 
                             {/* Submit */}
-                            <button type="submit" disabled={processing} className="flex w-full items-center justify-ce  nter gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-500 disabled:opacity-60">
+                            <button type="submit" disabled={processing} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-500 disabled:opacity-60">
                                 {processing ? (
                                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                                 ) : (
@@ -267,18 +345,13 @@ export default function Welcome() {
                                 {processing ? 'Ingresando…' : 'Ingresar'}
                             </button>
                         </form>
-
-                        {/* Info note */}
-                        <p className="mt-5 text-center text-xs text-white/30">
-                            ¿Sin cuenta? Contacta al administrador de la plataforma.
-                        </p>
                     </div>
                 </section>
 
                 {/* ── Plans ── */}
                 <section id="planes" className="border-t border-white/10 py-5">
                     <div className="mx-auto max-w-full px-12">
-                        <div className="mb-12 text-center">
+                        <div className="mb-8 text-center">
                             <h2 className="text-3xl font-bold tracking-tight">
                                 Planes y precios
                             </h2>
@@ -287,8 +360,33 @@ export default function Welcome() {
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                            {plans.map((plan) => {
+                        {/* Tab toggle */}
+                        <div className="mb-10 flex justify-center">
+                            <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setPlanTab('individual')}
+                                    className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${planTab === 'individual'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'text-white/60 hover:text-white'
+                                    }`}>
+                                    Individual
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPlanTab('empresa')}
+                                    className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${planTab === 'empresa'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'text-white/60 hover:text-white'
+                                    }`}
+                                >
+                                    Empresa
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className={`mx-auto grid grid-cols-1 gap-6 sm:grid-cols-2 ${planTab === 'individual' ? 'lg:grid-cols-4' : 'lg:max-w-2xl lg:grid-cols-2'}`}>
+                            {(planTab === 'individual' ? individualPlans : businessPlans).map((plan) => {
                                 const Icon = plan.icon;
                                 return (
                                     <div
@@ -334,9 +432,13 @@ export default function Welcome() {
                                                     {plan.cta}
                                                 </a>
                                             ) : (
-                                                <a href="#login" className={`block w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${plan.ctaStyle}`}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSolicitarPlan({ id: plan.id as 'free' | 'mensual' | 'anual' | 'negocios' | 'empresarial', name: plan.name })}
+                                                    className={`block w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${plan.ctaStyle}`}
+                                                >
                                                     {plan.cta}
-                                                </a>
+                                                </button>
                                             )}
                                         </div>
                                     </div>
@@ -360,6 +462,14 @@ export default function Welcome() {
                     </div>
                 </footer>
             </div>
+
+            {solicitarPlan && (
+                <SolicitarPlanModal
+                    plan={solicitarPlan.id}
+                    planLabel={solicitarPlan.name}
+                    onClose={() => setSolicitarPlan(null)}
+                />
+            )}
         </>
     );
 }

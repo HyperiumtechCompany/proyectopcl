@@ -85,6 +85,10 @@ class GestorProyectoNodoController extends Controller
         if ($gestorProyecto->user_id !== Auth::id()) {
             abort(403, 'No tienes acceso a este proyecto.');
         }
+
+        if ($gestorProyecto->is_demo && $gestorProyecto->demo_expires_at?->isPast()) {
+            abort(403, 'Tu demo expiró. Actualiza tu plan para seguir accediendo.');
+        }
     }
 
     protected function authorizeNodo(GestorProyecto $gestorProyecto, GestorProyectoNodo $nodo): void

@@ -13,8 +13,11 @@ import {
     Trash2,
     ChevronDown,
     ChevronUp,
+    Ungroup,
+    Calculator,
+    Layers,
 } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
@@ -60,6 +63,13 @@ import {
     getWallPresetFromWall,
     getPeruWallPreset,
 } from '@/pages/dialux/hooks/wallNorms';
+import { CatalogPanel } from './CatalogPanel';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 const CORRIDOR_TYPE_OPTIONS: Array<{ value: CorridorType; label: string }> = [
     { value: 'roof_only', label: 'Solo techo' },
@@ -97,6 +107,12 @@ function LightSwitchProps({
                         value={lightSwitch.mountingHeight}
                         onChange={(val) => onUpdate({ mountingHeight: val })}
                         step={0.05}
+                    />
+                    <EditField
+                        label="Rotación (°)"
+                        value={lightSwitch.rotation ?? 0}
+                        onChange={(val) => onUpdate({ rotation: ((val % 360) + 360) % 360 })}
+                        step={5}
                     />
                 </div>
             </SectionWrapper>
@@ -253,6 +269,12 @@ function ElectricalDeviceProps({
                             { value: 'outlet_ceiling', label: 'Tomacorriente Techo' },
                             { value: 'outlet_rack', label: 'Tomacorriente Rack' },
                         ]}
+                    />
+                    <EditField
+                        label="Rotación (°)"
+                        value={device.rotation ?? 0}
+                        onChange={(val) => onUpdate({ rotation: ((val % 360) + 360) % 360 })}
+                        step={5}
                     />
                     <div className="col-span-2">
                         <label className="mb-1 block text-[10px] font-medium text-gray-700">
@@ -876,6 +898,21 @@ const RoomProps: React.FC<{
                         label="Cant. simetría"
                         value={`${inputs.roundedQuantity}`}
                     />
+                    <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
+                        <span className="text-[10px] text-gray-500">Cumple normativa</span>
+                        {fixturesInRoom.length >= inputs.roundedQuantity ? (
+                            <span className="text-[11px] font-medium text-emerald-400">
+                                ✓ Sí ({fixturesInRoom.length}/{inputs.roundedQuantity})
+                            </span>
+                        ) : (
+                            <span className="text-[11px] font-medium text-red-400">
+                                ✗ Faltan {inputs.roundedQuantity - fixturesInRoom.length}
+                            </span>
+                        )}
+                    </div>
+                    <p className="pt-1 text-[9px] text-gray-600">
+                        Botón "Cálculo CT" disponible en la barra superior (junto a Calcular) cuando este ambiente está seleccionado.
+                    </p>
                 </SectionWrapper>
             )}
 
@@ -1895,6 +1932,8 @@ const FixtureProps: React.FC<{
     count?: number;
 }> = ({ fixture, onUpdate, multiple, count }) => {
     const store = useEditorStore();
+    const [showModelPicker, setShowModelPicker] = useState(false);
+    const targetIds = multiple ? store.ui.selectedFixtureIds : [fixture.id];
     return (
         <SectionWrapper
             icon={<Zap size={12} className="text-amber-400" />}
@@ -1922,6 +1961,14 @@ const FixtureProps: React.FC<{
                 label="Eficiencia"
                 value={`${(fixture.efficiency * 100).toFixed(0)}%`}
             />
+            <EditField
+                label="Potencia (W)"
+                value={fixture.power ?? 0}
+                min={0}
+                max={2000}
+                step={1}
+                onChange={(value) => onUpdate({ power: value })}
+            />
 
             <EditField
                 label="X (m)"
@@ -1946,6 +1993,14 @@ const FixtureProps: React.FC<{
                 max={10}
                 step={0.1}
                 onChange={(value) => onUpdate({ z: value })}
+            />
+            <EditField
+                label="Rotación (°)"
+                value={fixture.rotation ?? 0}
+                min={0}
+                max={360}
+                step={5}
+                onChange={(value) => onUpdate({ rotation: ((value % 360) + 360) % 360 })}
             />
             <SelectField
                 label="Tipo"
@@ -2018,7 +2073,63 @@ const FixtureProps: React.FC<{
                 )}
             </div>
 
+            <button
+                type="button"
+                onClick={() => setShowModelPicker(true)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-purple-700/30 bg-purple-950/40 py-1.5 text-[10px] text-purple-200 transition-colors hover:bg-purple-900/40"
+                title={multiple ? "Cambiar el modelo de todas las luminarias seleccionadas" : "Cambiar el modelo de esta luminaria"}
+            >
+                <Layers size={13} />
+                {multiple ? `Cambiar modelo (${count})` : 'Cambiar modelo'}
+            </button>
+
+            {!multiple && fixture.gridGroupId && (
+                <button
+                    type="button"
+                    onClick={() => onUpdate({ gridGroupId: undefined })}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-sky-700/30 bg-sky-950/40 py-1.5 text-[10px] text-sky-200 transition-colors hover:bg-sky-900/40"
+                    title="Separar esta luminaria de su grupo de grilla para editarla de forma independiente"
+                >
+                    <Ungroup size={13} />
+                    Desagrupar
+                </button>
+            )}
+
+            {multiple && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        const groupId = `group-${Date.now()}`;
+                        store.updateFixtures(targetIds, { gridGroupId: groupId });
+                    }}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-sky-700/30 bg-sky-950/40 py-1.5 text-[10px] text-sky-200 transition-colors hover:bg-sky-900/40"
+                    title="Agrupar estas luminarias para moverlas/editarlas juntas"
+                >
+                    <Grid size={13} />
+                    Agrupar ({count})
+                </button>
+            )}
+
             {!multiple && <PropField label="ID" value={fixture.id.slice(0, 12)} />}
+
+            {showModelPicker && (
+                <Dialog open={showModelPicker} onOpenChange={setShowModelPicker}>
+                    <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>
+                                Cambiar modelo — {multiple ? `${count} luminarias` : fixture.name}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <CatalogPanel
+                            filterCategory="luminaires"
+                            variant="compact-grid"
+                            fixtureItemsPerPage={15}
+                            applyToFixtureIds={targetIds}
+                            onSelect={() => setShowModelPicker(false)}
+                        />
+                    </DialogContent>
+                </Dialog>
+            )}
         </SectionWrapper>
     );
 };

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
-import { useGestorProyectoNodos, type NodoFormValues } from '@/hooks/gestor-proyectos/useGestorProyectoNodos';
+import { useGestorProyectoNodos, type NodoFormValues } from '@/pages/gestor-proyectos/hooks/useGestorProyectoNodos';
 import { AutoMapCanvas } from './AutoMapCanvas';
 import { AutoMapToolbar } from './AutoMapToolbar';
 import { layoutTree } from './layout';

@@ -15,6 +15,7 @@ use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
+use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
 use App\Http\Controllers\EttpController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
@@ -28,6 +29,8 @@ use App\Http\Controllers\MetradoEstructurasController;
 use App\Http\Controllers\MetradoGasController;
 use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradosController;
+use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\PlanRequestController;
 use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
@@ -43,13 +46,19 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::post('/solicitudes', [PlanRequestController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('plan-requests.store');
+
 Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
 // ----------- DIALux (Editor Lumínico 2D/3D)
 Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->group(function () {
-    Route::get('/', [DialuxEditor2DController::class, 'index'])->name('index');
+    Route::get('/', [DialuxProjectController::class, 'index'])->name('index');
+    Route::post('/', [DialuxProjectController::class, 'store'])->name('store');
+
     Route::post('/import-dwg', [DialuxEditor2DController::class, 'importDWG'])->name('import-dwg');
     Route::post('/formal-export', [DialuxEditor2DController::class, 'formalExport'])->name('formal-export');
 
@@ -69,11 +78,20 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
         Route::post('/', [DialuxNormativeConfigController::class, 'store'])->name('store');
         Route::patch('/{dialuxProjectId}/compliance', [DialuxNormativeConfigController::class, 'updateCompliance'])->name('compliance.update');
     });
+
+    // ─── Proyecto DIAlux individual — debe ir al final (wildcard) ───────────
+    Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
+    Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');
+    Route::delete('/{dialuxProject}', [DialuxProjectController::class, 'destroy'])->name('destroy');
 });
 
 // ─── Gestión de Personal / Usuarios ───────────────────────────────────────────
 Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->group(function () {
     Route::resource('users', UserController::class);
+    Route::resource('organizations', OrganizationController::class);
+    Route::get('/solicitudes', [PlanRequestController::class, 'index'])->name('plan-requests.index');
+    Route::post('/solicitudes/{planRequest}/approve', [PlanRequestController::class, 'approve'])->name('plan-requests.approve');
+    Route::post('/solicitudes/{planRequest}/reject', [PlanRequestController::class, 'reject'])->name('plan-requests.reject');
 });
 
 // ─── Caída de Tensión ──────────────────────────────────────────────────────────
@@ -349,7 +367,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         });
 }); // Cierre de costos
 // ─── CRONOGRAMA GANTT (Configuración Final) ──────────────────────────────────
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', SetCostosDatabase::class])->group(function () {
 
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
     Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');

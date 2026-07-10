@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\Organization;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -51,6 +51,7 @@ class UserController extends Controller
     {
         return Inertia::render('users/Create', [
             'roles' => Role::orderBy('name')->get(['id', 'name']),
+            'organizations' => Organization::orderBy('nombre')->get(['id', 'nombre']),
         ]);
     }
 
@@ -66,7 +67,7 @@ class UserController extends Controller
         $data['password'] = Hash::make($data['password']);
 
         // Set plan expiration
-        $data['plan_expires_at'] = $this->resolvePlanExpiration($data['plan']);
+        $data['plan_expires_at'] = User::resolvePlanExpiration($data['plan']);
 
         $roleId = $data['role_id'] ?? null;
         unset($data['role_id'], $data['password_confirmation']);
@@ -98,6 +99,7 @@ class UserController extends Controller
         return Inertia::render('users/Edit', [
             'user' => $user->append(['roles_list']),
             'roles' => Role::orderBy('name')->get(['id', 'name']),
+            'organizations' => Organization::orderBy('nombre')->get(['id', 'nombre']),
         ]);
     }
 
@@ -123,7 +125,7 @@ class UserController extends Controller
 
         // Update plan expiration if plan changed
         if (isset($data['plan']) && $data['plan'] !== $user->plan) {
-            $data['plan_expires_at'] = $this->resolvePlanExpiration($data['plan']);
+            $data['plan_expires_at'] = User::resolvePlanExpiration($data['plan']);
         }
 
         $roleId = $data['role_id'] ?? null;
@@ -160,19 +162,5 @@ class UserController extends Controller
 
         return redirect()->route('users.index')
             ->with('success', 'Usuario eliminado correctamente.');
-    }
-
-    /**
-     * Resolve plan expiration date based on plan type.
-     */
-    private function resolvePlanExpiration(string $plan): ?Carbon
-    {
-        return match ($plan) {
-            'free' => now()->addDays(5),
-            'mensual' => now()->addDays(30),
-            'anual' => now()->addDays(365),
-            'lifetime' => null,
-            default => null,
-        };
     }
 }

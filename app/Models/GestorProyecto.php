@@ -22,6 +22,8 @@ class GestorProyecto extends Model
         'tiempo_estimado_dias',
         'fecha_inicio',
         'fecha_fin',
+        'is_demo',
+        'demo_expires_at',
     ];
 
     protected function casts(): array
@@ -32,6 +34,8 @@ class GestorProyecto extends Model
             'tiempo_estimado_dias' => 'integer',
             'fecha_inicio' => 'date',
             'fecha_fin' => 'date',
+            'is_demo' => 'boolean',
+            'demo_expires_at' => 'datetime',
         ];
     }
 

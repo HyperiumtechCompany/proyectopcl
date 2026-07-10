@@ -398,6 +398,8 @@ export interface Fixture {
     /** SÃƒÂ­mbolo CAD asociado: 'rect_red'|'rect_green'|'rect_white'|'circle_black'|'circle_magenta'|'spot_yellow'|'spot_orange'|'emergency'|'emergency_perm' */
     catalogSymbol?: string;
     emergencyType?: 'none' | 'emergency' | 'permanent';
+    /** Rotación en planta, grados sentido horario (0-360). Default 0. */
+    rotation?: number;
 }
 
 /** Interruptor de luz */
@@ -410,6 +412,8 @@ export interface LightSwitch {
     wallId?: string; // Pared donde estÃƒÂ¡ colocado
     connectedFixtureIds: string[]; // Luminarias controladas
     label?: string; // Etiqueta visible: "S(a)", "Sc(a)", "2S(a)", etc.
+    /** Rotación en planta, grados sentido horario (0-360). Default 0. */
+    rotation?: number;
 }
 
 /** Conductor eléctrico punto a punto */
@@ -489,6 +493,8 @@ export interface ElectricalDevice {
     connectedDeviceIds: string[];
     connectedFixtureIds?: string[];
     connectedSwitchIds?: string[];
+    /** Rotación en planta, grados sentido horario (0-360). Default 0. */
+    rotation?: number;
     properties: ElectricalDeviceProperties;
     wireProps?: Record<string, {
         wireCount: number;

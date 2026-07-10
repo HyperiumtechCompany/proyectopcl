@@ -27,6 +27,7 @@ class UpdateUserRequest extends FormRequest
             'plan' => ['required', Rule::in(['free', 'mensual', 'anual', 'lifetime'])],
             'status' => ['required', Rule::in(['active', 'inactive', 'blocked'])],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
+            'organization_id' => ['nullable', 'integer', 'exists:organizations,id'],
         ];
     }
 

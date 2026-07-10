@@ -205,6 +205,7 @@ export const OverlayFixtures = memo(function OverlayFixtures({
                 const isRound   = shape === 'round';
                 const filterId  = isRound ? 'glow-fix-r' : 'glow-fix-p';
                 const labelY    = safeNum(fp.y + hh + Math.max(10, 10 * zoom));
+                const rotation  = fx.rotation ?? 0;
 
                 return (
                     <g
@@ -212,28 +213,35 @@ export const OverlayFixtures = memo(function OverlayFixtures({
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => { onSelect(fx.id, e.ctrlKey); }}
                     >
-                        {/* Outer glow halo */}
-                        {isRound ? (
-                            <ellipse cx={safeNum(fp.x)} cy={safeNum(fp.y)}
-                                rx={safeNum(hw * 3)} ry={safeNum(hh * 3)}
-                                fill={glowColor} opacity={0.07} style={{ pointerEvents: 'none' }} />
-                        ) : (
-                            <ellipse cx={safeNum(fp.x)} cy={safeNum(fp.y)}
-                                rx={safeNum(hw * 2)} ry={safeNum(hh * 2.5)}
-                                fill={glowColor} opacity={0.06} style={{ pointerEvents: 'none' }} />
-                        )}
+                        {/* Cuerpo + halo rotan juntos alrededor del centro de la luminaria */}
+                        <g transform={`translate(${safeNum(fp.x)}, ${safeNum(fp.y)}) rotate(${safeNum(rotation)})`}>
+                            {/* Área de clic — todo el cuerpo del símbolo usa pointer-events:none
+                                (para no bloquear el rayado del dibujo CAD debajo), así que sin esto
+                                los clics atraviesan la luminaria y seleccionan el recinto. */}
+                            <ellipse cx={0} cy={0}
+                                rx={safeNum(Math.max(hw, MIN_HALF_PX) * 1.4)}
+                                ry={safeNum(Math.max(hh, MIN_HALF_PX) * 1.4)}
+                                fill="transparent" />
+                            {/* Outer glow halo */}
+                            {isRound ? (
+                                <ellipse cx={0} cy={0}
+                                    rx={safeNum(hw * 3)} ry={safeNum(hh * 3)}
+                                    fill={glowColor} opacity={0.07} style={{ pointerEvents: 'none' }} />
+                            ) : (
+                                <ellipse cx={0} cy={0}
+                                    rx={safeNum(hw * 2)} ry={safeNum(hh * 2.5)}
+                                    fill={glowColor} opacity={0.06} style={{ pointerEvents: 'none' }} />
+                            )}
 
-                        {/* Inner glow */}
-                        <ellipse cx={safeNum(fp.x)} cy={safeNum(fp.y)}
-                            rx={safeNum(hw * 1.3)} ry={safeNum(hh * 1.3)}
-                            fill={glowColor} opacity={0.10} style={{ pointerEvents: 'none' }} />
+                            {/* Inner glow */}
+                            <ellipse cx={0} cy={0}
+                                rx={safeNum(hw * 1.3)} ry={safeNum(hh * 1.3)}
+                                fill={glowColor} opacity={0.10} style={{ pointerEvents: 'none' }} />
 
-                        {/* Symbol body — translated to fixture position */}
-                        <g
-                            transform={`translate(${safeNum(fp.x)}, ${safeNum(fp.y)})`}
-                            filter={`url(#${filterId})`}
-                        >
-                            <CadFixtureBody fx={fx} hw={hw} hh={hh} stroke={stroke} isSelected={isSelected} />
+                            {/* Symbol body */}
+                            <g filter={`url(#${filterId})`}>
+                                <CadFixtureBody fx={fx} hw={hw} hh={hh} stroke={stroke} isSelected={isSelected} />
+                            </g>
                         </g>
 
                         {/* Selection ring */}

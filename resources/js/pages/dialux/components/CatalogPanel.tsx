@@ -37,6 +37,14 @@ interface CatalogPanelProps {
     onSelect?: () => void;
     variant?: 'default' | 'compact-grid';
     fixtureItemsPerPage?: number;
+    /**
+     * Cuando se pasa, seleccionar una luminaria del catálogo NO entra en modo
+     * "colocar nueva luminaria": en su lugar aplica el modelo (lúmenes,
+     * potencia, tipo, forma, catalogSymbol, etc.) a estas luminarias ya
+     * existentes, sin tocar su posición. Usado por el selector de "Cambiar
+     * modelo" en Propiedades (una luminaria o un grupo completo).
+     */
+    applyToFixtureIds?: string[];
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -766,6 +774,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     onSelect,
     variant = 'default',
     fixtureItemsPerPage,
+    applyToFixtureIds,
 }) => {
     const store = useEditorStore();
     const { fixtureTemplate, windowTemplate, doorTemplate, corridorTemplate } =
@@ -940,13 +949,18 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     }, [fixturePage, fixturePageCount]);
 
     const setFixture = (item: FixtureCatalogItem) => {
-        store.setFixtureTemplate({
+        const modelFields: Partial<Fixture> = {
             ...item.template,
             name: item.template.name ?? item.label,
             brand: item.template.brand ?? item.brand,
             power: item.template.power ?? item.power,
-        });
-        store.setTool('fixture');
+        };
+        if (applyToFixtureIds?.length) {
+            store.updateFixtures(applyToFixtureIds, modelFields);
+        } else {
+            store.setFixtureTemplate(modelFields);
+            store.setTool('fixture');
+        }
         onSelect?.();
     };
 
@@ -966,7 +980,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         const lumens = product.total_lumens ?? 1000;
         const power = product.power_watts ?? undefined;
 
-        store.setFixtureTemplate({
+        const modelFields: Partial<Fixture> = {
             fixtureType: toFixtureType(product.fixture_type),
             fixtureShape: toFixtureShape(product.fixture_shape),
             lumens,
@@ -987,8 +1001,13 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                 brand_logo_url: product.brand_logo_url ?? null,
             },
             name: product.name,
-        });
-        store.setTool('fixture');
+        };
+        if (applyToFixtureIds?.length) {
+            store.updateFixtures(applyToFixtureIds, modelFields);
+        } else {
+            store.setFixtureTemplate(modelFields);
+            store.setTool('fixture');
+        }
         onSelect?.();
     };
 
@@ -1390,6 +1409,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                             </span>
                                             <span className="text-[8px] leading-none text-gray-600">
                                                 {product.total_lumens ?? '-'}lm
+                                                {product.power_watts ? ` · ${product.power_watts}W` : ''}
                                             </span>
                                         </button>
                                     );
@@ -1423,6 +1443,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                             </span>
                                             <span className="text-[8px] leading-none text-gray-600">
                                                 {item.lumens}lm
+                                                {item.power ? ` · ${item.power}W` : ''}
                                             </span>
                                         </button>
                                     );

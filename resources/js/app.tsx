@@ -3,7 +3,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import { patchWebGLPreserveBuffer } from './dialux-export/assets/patchWebGLPreserveBuffer';
+import { patchWebGLPreserveBuffer } from './pages/dialux/export/assets/patchWebGLPreserveBuffer';
 import { initializeTheme } from './hooks/use-appearance';
 import $ from 'jquery';
 import 'jquery-mousewheel';

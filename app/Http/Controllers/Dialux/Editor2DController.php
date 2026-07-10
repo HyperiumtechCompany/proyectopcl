@@ -7,21 +7,9 @@ use App\Http\Requests\Dialux\FormalExportRequest;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Inertia\Inertia;
 
 class Editor2DController extends Controller
 {
-    /**
-     * Renderiza la página principal del editor DIAlux (2D).
-     * En el futuro, aquí se pasarán los proyectos del usuario desde BD.
-     */
-    public function index()
-    {
-        return Inertia::render('dialux/Index', [
-            'projectId' => null, // Futuro: cargar proyecto desde BD
-        ]);
-    }
-
     /**
      * Importa un archivo DWG y lo procesa.
      * TODO: integrar conversor DWG→SVG o DWG→JSON.

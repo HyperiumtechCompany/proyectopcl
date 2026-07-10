@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { NodoFormValues } from '@/hooks/gestor-proyectos/useGestorProyectoNodos';
+import type { NodoFormValues } from '@/pages/gestor-proyectos/hooks/useGestorProyectoNodos';
 import { NODE_COLORS, NODE_SHAPES, NODE_STATUSES, NODE_TYPES } from './types';
 
 interface NodeFormDialogProps {

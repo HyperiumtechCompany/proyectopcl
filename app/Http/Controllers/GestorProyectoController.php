@@ -6,11 +6,14 @@ use App\Http\Requests\GestorProyectos\StoreGestorProyectoRequest;
 use App\Http\Requests\GestorProyectos\UpdateGestorProyectoRequest;
 use App\Models\GestorProyecto;
 use App\Models\GestorProyectoNodo;
+use App\Services\ProjectQuotaService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class GestorProyectoController extends Controller
 {
+    public function __construct(protected ProjectQuotaService $quotaService) {}
+
     /**
      * Lista de proyectos del gestor pertenecientes al usuario.
      */
@@ -46,9 +49,12 @@ class GestorProyectoController extends Controller
      */
     public function store(StoreGestorProyectoRequest $request)
     {
+        $this->quotaService->assertCanCreate($request->user(), 'gestor_proyectos');
+
         $proyecto = GestorProyecto::create([
             'user_id' => Auth::id(),
             ...$request->validated(),
+            ...$this->quotaService->demoAttributesFor($request->user()),
         ]);
 
         $head = $proyecto->nodos()->create([
@@ -137,6 +143,10 @@ class GestorProyectoController extends Controller
     {
         if ($gestorProyecto->user_id !== Auth::id()) {
             abort(403, 'No tienes acceso a este proyecto.');
+        }
+
+        if ($gestorProyecto->is_demo && $gestorProyecto->demo_expires_at?->isPast()) {
+            abort(403, 'Tu demo expiró. Actualiza tu plan para seguir accediendo.');
         }
     }
 }

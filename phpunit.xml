@@ -25,6 +25,12 @@
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <!-- config/database.php's mysql connection falls back to DB_DATABASE when this
+             is unset; without it, tests that legitimately need the real mysql connection
+             (e.g. CostoDatabaseService provisioning a tenant DB) try to connect to a
+             database literally named ":memory:" and fail. information_schema always
+             exists on any MySQL/MariaDB server, so it's a safe, portable anchor. -->
+        <env name="DB_DATABASE_MYSQL" value="information_schema"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

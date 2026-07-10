@@ -2,7 +2,8 @@
  * EditorLayout.tsx - Layout principal del editor DIAlux
  */
 
-import { Calculator, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import { ArrowLeft, Calculator, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import {
     Dialog,
@@ -19,6 +20,8 @@ import {
     useShow3DView,
 } from '@/pages/dialux/hooks/useEditorStore';
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
+import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
+import { calculateRoomWireSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
 import { MlightcadLayerPanel } from './MlightcadLayerPanel';
@@ -93,6 +96,36 @@ export const EditorLayout = memo(function EditorLayout() {
     const [roomResults, setRoomResults] = useState<RoomResultSummary[]>([]);
     const [resultsModalOpen, setResultsModalOpen] = useState(false);
     const [showFloorPanel, setShowFloorPanel] = useState(false);
+    const [showWireCalc, setShowWireCalc] = useState(false);
+
+    // Resuelve el ambiente relevante para "Cálculo CT" a partir de lo que el
+    // usuario tenga seleccionado: el propio ambiente, una luminaria dentro de
+    // él, o un cable conectado a una de sus luminarias — no solo un clic
+    // directo sobre el polígono del ambiente.
+    const selectedRoom = (() => {
+        if (!activeScene) return null;
+        const direct = activeScene.rooms.find((r) => r.id === selectedId);
+        if (direct) return direct;
+
+        const fixture = activeScene.fixtures.find((f) => f.id === selectedId);
+        if (fixture?.roomId) {
+            const room = activeScene.rooms.find((r) => r.id === fixture.roomId);
+            if (room) return room;
+        }
+
+        const conductor = activeScene.conductors?.find((c) => c.id === selectedId);
+        if (conductor) {
+            const endpointFixture = activeScene.fixtures.find(
+                (f) => f.id === conductor.sourceId || f.id === conductor.targetId,
+            );
+            if (endpointFixture?.roomId) {
+                const room = activeScene.rooms.find((r) => r.id === endpointFixture.roomId);
+                if (room) return room;
+            }
+        }
+
+        return null;
+    })();
     const engine = useLightingEngine();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
     const { exportDxf, isExporting: isExportingDxf } = useDialuxDxfExport();
@@ -300,6 +333,16 @@ export const EditorLayout = memo(function EditorLayout() {
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[#0d0f14] text-gray-200 select-none">
             <header id="dialux-header" className="flex h-11 shrink-0 items-center gap-3 border-b border-gray-800/60 bg-[#161820] px-4">
+                <Link
+                    id="dialux-btn-back-to-list"
+                    href="/dialux"
+                    title="Volver a mis proyectos"
+                    className="flex items-center gap-1.5 rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200"
+                >
+                    <ArrowLeft size={13} />
+                    Proyectos
+                </Link>
+
                 <div className="flex min-w-0 items-center gap-2">
                     <Lightbulb size={16} className="text-amber-400" />
                     <span className="bg-gradient-to-r from-amber-400 to-cyan-400 bg-clip-text text-sm font-bold tracking-wide text-transparent">
@@ -485,6 +528,17 @@ export const EditorLayout = memo(function EditorLayout() {
                         {isCalculating ? 'Calculando...' : 'Calcular'}
                     </button>
 
+                    <button
+                        id="dialux-btn-calculo-ct"
+                        onClick={() => setShowWireCalc(true)}
+                        disabled={!selectedRoom}
+                        className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={selectedRoom ? `Cálculo CT — ${selectedRoom.name}` : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'}
+                    >
+                        <Calculator size={13} />
+                        Cálculo CT
+                    </button>
+
                     <div className="relative">
                         <button
                             id="dialux-btn-export"
@@ -576,6 +630,45 @@ export const EditorLayout = memo(function EditorLayout() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {selectedRoom && activeScene && (
+                <Dialog open={showWireCalc} onOpenChange={setShowWireCalc}>
+                    <DialogContent className="max-w-sm">
+                        <DialogHeader>
+                            <DialogTitle>Cálculo CT — {selectedRoom.name}</DialogTitle>
+                        </DialogHeader>
+                        {(() => {
+                            const roomFixtures = getFixturesForRoom(selectedRoom, activeScene.fixtures);
+                            const summary = calculateRoomWireSummary(activeScene, roomFixtures);
+                            return (
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
+                                        <span className="text-gray-500">Puntos (focos)</span>
+                                        <span className="font-mono font-medium text-gray-200">
+                                            {summary.pointCount}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
+                                        <span className="text-gray-500">Conductores conectados</span>
+                                        <span className="font-mono font-medium text-gray-200">
+                                            {summary.conductorCount}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between pb-1.5">
+                                        <span className="text-gray-500">Longitud total de cable</span>
+                                        <span className="font-mono font-medium text-emerald-400">
+                                            {summary.totalLength.toFixed(2)} m
+                                        </span>
+                                    </div>
+                                    <p className="pt-1 text-[9px] text-gray-600">
+                                        Incluye tramo horizontal (plano) + tramo vertical hacia el interruptor cuando la ruta es pared/techo.
+                                    </p>
+                                </div>
+                            );
+                        })()}
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 });

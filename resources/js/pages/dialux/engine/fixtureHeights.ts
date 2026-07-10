@@ -7,6 +7,8 @@ import type {
 const DEFAULT_CEILING_CLEARANCE = 0.08;
 const PENDANT_CEILING_CLEARANCE = 0.45;
 const MIN_FIXTURE_HEIGHT = 0.2;
+/** Las luminarias de emergencia siempre se montan a esta altura fija, sin importar el techo. */
+const EMERGENCY_MOUNTING_HEIGHT = 2.2;
 
 export function resolveRoomCeilingHeight(room: Room, walls: Wall[]): number {
     const wallHeights = walls
@@ -21,9 +23,13 @@ export function resolveRoomCeilingHeight(room: Room, walls: Wall[]): number {
 }
 
 export function resolveFixtureRenderHeight(
-    fixture: Pick<Fixture, 'z' | 'fixtureType'>,
+    fixture: Pick<Fixture, 'z' | 'fixtureType' | 'emergencyType'>,
     ceilingHeight?: number,
 ): number {
+    if (fixture.emergencyType && fixture.emergencyType !== 'none') {
+        return EMERGENCY_MOUNTING_HEIGHT;
+    }
+
     const requestedHeight = Number.isFinite(fixture.z)
         ? fixture.z
         : ceilingHeight ?? 2.4;

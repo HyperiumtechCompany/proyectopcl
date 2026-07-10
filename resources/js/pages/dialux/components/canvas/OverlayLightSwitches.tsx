@@ -8,7 +8,12 @@ interface Props {
     zoom: number;
     onSelect: (id: string, multi: boolean) => void;
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
+    screenDistance?: (dx: number, dy: number, origin?: { x: number; y: number }) => number;
 }
+
+/** Radio físico real del símbolo de interruptor (metros), igual criterio que OverlayElectricalDevices */
+const PHYS_RADIUS_M = 0.12;
+const MIN_PX = 7;
 
 /** Deriva la etiqueta normativa peruana a partir del tipo y del campo label opcional */
 function getSwitchLabel(sw: LightSwitch): string {
@@ -28,6 +33,7 @@ export const OverlayLightSwitches = memo(function OverlayLightSwitches({
     zoom,
     onSelect,
     screenPoint,
+    screenDistance,
 }: Props) {
     if (!lightSwitches.length) return null;
 
@@ -36,7 +42,12 @@ export const OverlayLightSwitches = memo(function OverlayLightSwitches({
             {lightSwitches.map((sw) => {
                 const fp = screenPoint({ x: sw.x, y: sw.y });
                 const isSelected = selectedId === sw.id;
-                const R = Math.max(7, 10 * zoom);
+                // Tamaño real del símbolo: metros físicos → píxeles de pantalla,
+                // igual criterio que luminarias/dispositivos (mantiene escala al hacer zoom).
+                const R = screenDistance
+                    ? Math.max(MIN_PX, screenDistance(PHYS_RADIUS_M, 0, { x: sw.x, y: sw.y }))
+                    : Math.max(MIN_PX, 10 * zoom);
+                const rotation = sw.rotation ?? 0;
                 const label = getSwitchLabel(sw);
 
                 // Color por tipo de interruptor
@@ -59,28 +70,45 @@ export const OverlayLightSwitches = memo(function OverlayLightSwitches({
                             onSelect(sw.id, e.ctrlKey);
                         }}
                     >
-                        {/* Base circular */}
-                        <circle
-                            cx={safeNum(fp.x)}
-                            cy={safeNum(fp.y)}
-                            r={safeNum(R)}
-                            fill={circleFill}
-                            stroke={circleStroke}
-                            strokeWidth={isSelected ? 2 : 1.5}
-                        />
+                        {/* Cuerpo rota alrededor del centro del interruptor; la etiqueta se mantiene fuera para legibilidad */}
+                        <g transform={`translate(${safeNum(fp.x)}, ${safeNum(fp.y)}) rotate(${safeNum(rotation)})`}>
+                            {/* Base circular */}
+                            <circle
+                                cx={0}
+                                cy={0}
+                                r={safeNum(R)}
+                                fill={circleFill}
+                                stroke={circleStroke}
+                                strokeWidth={isSelected ? 2 : 1.5}
+                            />
 
-                        {/* Línea diagonal superior derecha — símbolo normativo */}
-                        <line
-                            x1={safeNum(fp.x + R * 0.55)}
-                            y1={safeNum(fp.y - R * 0.55)}
-                            x2={safeNum(fp.x + R * 1.6)}
-                            y2={safeNum(fp.y - R * 1.6)}
-                            stroke={circleStroke}
-                            strokeWidth={isSelected ? 1.8 : 1.4}
-                            strokeLinecap="round"
-                        />
+                            {/* Línea diagonal superior derecha — símbolo normativo */}
+                            <line
+                                x1={safeNum(R * 0.55)}
+                                y1={safeNum(-R * 0.55)}
+                                x2={safeNum(R * 1.6)}
+                                y2={safeNum(-R * 1.6)}
+                                stroke={circleStroke}
+                                strokeWidth={isSelected ? 1.8 : 1.4}
+                                strokeLinecap="round"
+                            />
 
-                        {/* Etiqueta normativa junto al símbolo */}
+                            {/* Indicador de selección */}
+                            {isSelected && (
+                                <circle
+                                    cx={0}
+                                    cy={0}
+                                    r={safeNum(R + 4)}
+                                    fill="none"
+                                    stroke="#f59e0b"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="4,3"
+                                    opacity={0.7}
+                                />
+                            )}
+                        </g>
+
+                        {/* Etiqueta normativa — siempre horizontal, no rota con el símbolo */}
                         <text
                             x={safeNum(fp.x + R * 1.7)}
                             y={safeNum(fp.y - R * 1.4)}
@@ -95,20 +123,6 @@ export const OverlayLightSwitches = memo(function OverlayLightSwitches({
                         >
                             {label}
                         </text>
-
-                        {/* Indicador de selección */}
-                        {isSelected && (
-                            <circle
-                                cx={safeNum(fp.x)}
-                                cy={safeNum(fp.y)}
-                                r={safeNum(R + 4)}
-                                fill="none"
-                                stroke="#f59e0b"
-                                strokeWidth={1.5}
-                                strokeDasharray="4,3"
-                                opacity={0.7}
-                            />
-                        )}
                     </g>
                 );
             })}

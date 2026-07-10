@@ -48,6 +48,8 @@ import type {
     Fixture,
     LightSwitch,
     Conductor,
+    ElectricalDevice,
+    ElectricalDeviceType,
     Partition,
     Scene as EditorScene,
     LightingResult,
@@ -75,6 +77,18 @@ interface FixtureBodyOptions {
     diameterTop?: number;
     diameterBottom?: number;
     height?: number;
+}
+
+/**
+ * Convierte grados (planta, sentido horario, 0°=Norte) a radianes para
+ * mesh.rotation.y. El editor 2D usa la misma convención en su SVG
+ * (rotate(deg) sentido horario) y worldToScreen mapea Norte=arriba de
+ * pantalla, por lo que no hace falta invertir el signo aquí — a diferencia
+ * de los ángulos derivados de muros (`Math.atan2(dy,dx)`), que sí lo
+ * necesitan porque miden desde el eje +X en convención matemática CCW.
+ */
+function degToRad(deg: number): number {
+    return (deg * Math.PI) / 180;
 }
 
 function hexToColor3(hex: string): Color3 {
@@ -106,6 +120,9 @@ export class House3DBuilder {
 
     /** Cache de materiales por color de fixture — evita N instancias de StandardMaterial */
     matFixtureCache: Map<string, StandardMaterial> = new Map();
+
+    /** Cache de materiales por color de dispositivo eléctrico */
+    matElecDeviceCache: Map<string, StandardMaterial> = new Map();
 
     /** Cache de materiales para marcadores de escalera (entrada verde / salida amarillo) */
     matStairMarkerCache: Map<string, StandardMaterial> = new Map();
@@ -384,7 +401,17 @@ export class House3DBuilder {
             ),
         );
         (editorScene.lightSwitches || []).forEach((ls) =>
-            this.buildLightSwitch(ls, floorNode, editorScene.fixtures || [], editorScene.walls || [], editorScene.conductors ?? [], editorScene.rooms || []),
+            this.buildLightSwitch(ls, floorNode, editorScene.walls || [], editorScene.rooms || []),
+        );
+        (editorScene.electricalDevices || []).forEach((d) =>
+            this.buildElectricalDevice(d, floorNode, editorScene.walls || [], editorScene.rooms || []),
+        );
+        this.buildConductors(
+            editorScene.conductors ?? [],
+            editorScene.fixtures || [],
+            editorScene.lightSwitches || [],
+            editorScene.electricalDevices || [],
+            floorNode,
         );
         (editorScene.doors || []).forEach((d) =>
             this.buildDoor(d, editorScene.walls || [], floorNode),
@@ -444,15 +471,23 @@ export class House3DBuilder {
     ) {
         if (!result.grid_rows || !result.grid_cols || !result.max_lux) return;
 
-        const width = result.grid_cols * 0.5;
-        const height = result.grid_rows * 0.5;
+        // El grid puede empezar en cualquier punto de la escena (no solo el
+        // origen 0,0): hay que anclar el plano a grid_origin_x/y, si no la
+        // isolux aparece flotando sobre el recinto equivocado cuando el
+        // recinto calculado no está en el origen del mundo.
+        const originX = result.grid_origin_x ?? 0;
+        const originY = result.grid_origin_y ?? 0;
+        const cellW = result.grid_cell_width || 0.5;
+        const cellH = result.grid_cell_height || 0.5;
+        const width = result.grid_cols * cellW;
+        const height = result.grid_rows * cellH;
         const plane = MeshBuilder.CreatePlane(
             'isolux_plane',
             { width, height },
             this.scene,
         );
         plane.rotation.x = Math.PI / 2;
-        plane.position.set(width / 2, 0.015, height / 2);
+        plane.position.set(originX + width / 2, 0.015, originY + height / 2);
 
         const texW = result.grid_cols * 10;
         const texH = result.grid_rows * 10;
@@ -464,8 +499,8 @@ export class House3DBuilder {
         );
         const ctx = texture.getContext();
 
-        const cellW = texW / result.grid_cols;
-        const cellH = texH / result.grid_rows;
+        const texCellW = texW / result.grid_cols;
+        const texCellH = texH / result.grid_rows;
 
         // Limpiar
         ctx.fillStyle = 'rgba(0,0,0,0)';
@@ -477,12 +512,12 @@ export class House3DBuilder {
             const col = i % result.grid_cols;
             const row = Math.floor(i / result.grid_cols);
 
-            // Babylons Plane with DynamicTexture flips Y axis usually, but we draw standard
-            // and babylon UV mappings will map it.
-            // Invert row for Babylon UV matching if needed, but since it's rotation.x = PI/2, let's keep direct.
+            // DynamicTexture con invertY (default) + plane.rotation.x=PI/2
+            // hacen que fila 0 (Y mínimo del mundo) deba dibujarse en la
+            // parte inferior del canvas para terminar en el borde correcto
+            // del plano una vez rotado — ver verificación en House3DBuilder tests.
             ctx.fillStyle = this.colorForIsoluxCell(lux, result.max_lux, mode);
-            // Babylon's dynamic texture maps 0,0 to bottom left, so:
-            ctx.fillRect(col * cellW, texH - (row + 1) * cellH, cellW, cellH);
+            ctx.fillRect(col * texCellW, texH - (row + 1) * texCellH, texCellW, texCellH);
         });
 
         if (mode === 'waves') {
@@ -495,8 +530,8 @@ export class House3DBuilder {
                 values: result.grid_values,
                 levels,
                 pointAt: (row, col) => ({
-                    x: (col + 0.5) * cellW,
-                    y: texH - (row + 0.5) * cellH,
+                    x: (col + 0.5) * texCellW,
+                    y: texH - (row + 0.5) * texCellH,
                 }),
             });
 
@@ -2771,9 +2806,7 @@ export class House3DBuilder {
     buildLightSwitch(
         ls: LightSwitch,
         floorNode: TransformNode,
-        fixtures: Fixture[],
         walls: Wall[] = [],
-        conductors: Conductor[] = [],
         rooms: Room[] = [],
     ) {
         const meshes: Mesh[] = [];
@@ -2846,7 +2879,8 @@ export class House3DBuilder {
         }
 
         if (bestV1 && bestV2) {
-            body.rotation.y = -wallAngle;
+            // Ángulo automático de la pared + rotación manual del usuario (planta, sentido horario)
+            body.rotation.y = -wallAngle + degToRad(ls.rotation ?? 0);
             // Solo aplicamos offset si esta realmente cerca del segmento
             if (minDist < 0.25) { // 0.5m^2 dist sq
                 const offsetDist = (wallThickness / 2) + (depth / 2);
@@ -2876,103 +2910,238 @@ export class House3DBuilder {
         body.parent = floorNode;
         meshes.push(body);
 
-        // ── Puntos de conduit (simulan el cable embutido en pared/techo o piso) ──
-        const dotMat = new StandardMaterial(`mat_wire_dots_${ls.id}`, this.scene);
-        dotMat.diffuseColor = new Color3(0.9, 0.2, 0.2);  // rojo
-        dotMat.specularColor = new Color3(0.1, 0.1, 0.1);
-
-        // Usar Conductor si existe; si no, caer en connectedFixtureIds legacy
-        const conductor = conductors.find((c) => c.switchId === ls.id);
-        const fixtureIds = conductor?.fixtureIds ?? ls.connectedFixtureIds ?? [];
-        const routeType = conductor?.routeType ?? 'wall_ceiling';
-
-        if (fixtureIds.length > 0) {
-            type Node3D = { id: string; x: number; y: number; z: number; isSwitch: boolean };
-            const nodes: Node3D[] = [];
-
-            // Nodo 0: interruptor
-            nodes.push({
-                id: ls.id,
-                x: body.position.x,
-                y: body.position.y,
-                z: body.position.z,
-                isSwitch: true,
-            });
-
-            // Nodos 1…n: luminarias en orden
-            fixtureIds.forEach((fId) => {
-                const fix = fixtures.find((f) => f.id === fId);
-                if (fix) {
-                    nodes.push({
-                        id: fix.id,
-                        x: fix.x,
-                        y: resolveFixtureRenderHeight(fix, 2.4),
-                        z: fix.y,
-                        isSwitch: false,
-                    });
-                }
-            });
-
-            const DOT_R = 0.018;
-            const FLOOR_Y = 0.05; // altura del conduit en piso (5cm S.N.P.T.)
-
-            const makeDot = (name: string, x: number, y: number, z: number) => {
-                const d = MeshBuilder.CreateSphere(name, { diameter: DOT_R * 2, segments: 4 }, this.scene);
-                d.material = dotMat;
-                d.position.set(x, y, z);
-                d.parent = floorNode;
-                meshes.push(d);
-            };
-
-            for (let i = 0; i < nodes.length - 1; i++) {
-                const p1 = nodes[i];
-                const p2 = nodes[i + 1];
-                const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.z - p1.z) ** 2);
-                const hSteps = Math.max(4, Math.floor(dist * 4));
-
-                if (routeType === 'floor') {
-                    // ── Ruta por piso: baja por la pared, va horizontal a nivel de piso, sube ──
-                    if (p1.isSwitch) {
-                        // Bajada desde el interruptor hasta el piso
-                        const vSteps = Math.max(3, Math.floor(p1.y * 4));
-                        for (let s = 0; s <= vSteps; s++) {
-                            const t = s / vSteps;
-                            makeDot(`cdt_fd_${ls.id}_${i}_${s}`, p1.x, p1.y - t * (p1.y - FLOOR_Y), p1.z);
-                        }
-                    }
-                    // Tramo horizontal al nivel del piso (switch o fixture anterior → base del próximo)
-                    for (let s = 1; s <= hSteps; s++) {
-                        const t = s / hSteps;
-                        makeDot(`cdt_fh_${ls.id}_${i}_${s}`, p1.x + t * (p2.x - p1.x), FLOOR_Y, p1.z + t * (p2.z - p1.z));
-                    }
-                    // Subida hasta la luminaria destino
-                    const vUpSteps = Math.max(3, Math.floor(p2.y * 4));
-                    for (let s = 1; s <= vUpSteps; s++) {
-                        const t = s / vUpSteps;
-                        makeDot(`cdt_fu_${ls.id}_${i}_${s}`, p2.x, FLOOR_Y + t * (p2.y - FLOOR_Y), p2.z);
-                    }
-                } else {
-                    // ── Ruta por pared/techo: sube a techo, va horizontal, baja a luminaria ──
-                    if (p1.isSwitch) {
-                        // Subida por la pared desde el interruptor
-                        const vSteps = Math.max(4, Math.floor((p2.y - p1.y) * 4));
-                        for (let s = 0; s <= vSteps; s++) {
-                            const t = s / vSteps;
-                            makeDot(`cdt_wv_${ls.id}_${i}_${s}`, p1.x, p1.y + t * (p2.y - p1.y), p1.z);
-                        }
-                    }
-                    // Tramo horizontal al nivel del techo
-                    for (let s = 1; s <= hSteps; s++) {
-                        const t = s / hSteps;
-                        makeDot(`cdt_wh_${ls.id}_${i}_${s}`, p1.x + t * (p2.x - p1.x), p2.y, p1.z + t * (p2.z - p1.z));
-                    }
-                }
-            }
-        }
-
+        // El conduit/tubería hacia las luminarias se dibuja centralizadamente
+        // en buildConductors() a partir de los Conductor[] reales (o del
+        // fallback legacy connectedFixtureIds), igual que hace OverlayWires
+        // en 2D — evita duplicar la lógica de ruteo piso/techo por cada tipo
+        // de nodo origen.
         this.meshMap.set(ls.id, meshes);
     }
 
+    // ── Dispositivo eléctrico (tablero, medidor, tomacorriente, caja de pase) ──
+    /** Dimensiones físicas aproximadas (ancho, profundidad, alto) en metros por tipo. */
+    static readonly ELECTRICAL_DEVICE_DIMS: Record<ElectricalDeviceType, { w: number; d: number; h: number }> = {
+        meter: { w: 0.3, d: 0.15, h: 0.4 },
+        main_panel: { w: 0.4, d: 0.18, h: 0.5 },
+        sub_panel: { w: 0.35, d: 0.15, h: 0.45 },
+        transfer_switch: { w: 0.35, d: 0.18, h: 0.45 },
+        arrival_panel: { w: 0.35, d: 0.15, h: 0.45 },
+        junction_box: { w: 0.1, d: 0.05, h: 0.1 },
+        earth_pit: { w: 0.15, d: 0.15, h: 0.02 },
+        facp: { w: 0.35, d: 0.12, h: 0.3 },
+        outlet_floor: { w: 0.08, d: 0.03, h: 0.08 },
+        outlet_waterproof: { w: 0.08, d: 0.04, h: 0.08 },
+        outlet_ceiling: { w: 0.08, d: 0.08, h: 0.03 },
+        outlet_rack: { w: 0.1, d: 0.03, h: 0.06 },
+    };
+
+    static readonly ELECTRICAL_DEVICE_COLORS: Record<ElectricalDeviceType, string> = {
+        meter: '#22c55e',
+        main_panel: '#ef4444',
+        sub_panel: '#ef4444',
+        transfer_switch: '#ef4444',
+        arrival_panel: '#ef4444',
+        junction_box: '#22c55e',
+        earth_pit: '#eab308',
+        facp: '#06b6d4',
+        outlet_floor: '#22c55e',
+        outlet_waterproof: '#3b82f6',
+        outlet_ceiling: '#e2e8f0',
+        outlet_rack: '#ef4444',
+    };
+
+    buildElectricalDevice(
+        dev: ElectricalDevice,
+        floorNode: TransformNode,
+        walls: Wall[] = [],
+        rooms: Room[] = [],
+    ) {
+        const dims =
+            House3DBuilder.ELECTRICAL_DEVICE_DIMS[dev.type] ??
+            { w: 0.2, d: 0.1, h: 0.2 };
+        const body = MeshBuilder.CreateBox(
+            `elecdev_${dev.id}`,
+            { width: dims.w, depth: dims.d, height: dims.h },
+            this.scene,
+        );
+
+        const hex = House3DBuilder.ELECTRICAL_DEVICE_COLORS[dev.type] ?? '#22c55e';
+        let mat = this.matElecDeviceCache.get(hex);
+        if (!mat) {
+            mat = new StandardMaterial(`mat_elecdev_${hex}`, this.scene);
+            mat.diffuseColor = hexToColor3(hex);
+            mat.specularColor = new Color3(0.15, 0.15, 0.15);
+            this.matElecDeviceCache.set(hex, mat);
+        }
+        body.material = mat;
+
+        // Orientar contra el muro más cercano (igual criterio que interruptores),
+        // y sumar la rotación manual del usuario encima del ángulo automático.
+        let wallAngle = 0;
+        let wallThickness = 0.15;
+        let minDist = Infinity;
+        let snapped = false;
+
+        const checkVertices = (vertices: { x: number; y: number }[], thickness: number) => {
+            if (vertices.length < 2) return;
+            for (let i = 0; i < vertices.length - 1; i++) {
+                const v1 = vertices[i];
+                const v2 = vertices[i + 1];
+                const px = v2.x - v1.x;
+                const py = v2.y - v1.y;
+                const norm = px * px + py * py;
+                if (norm < 0.00001) continue;
+                let u = ((dev.x - v1.x) * px + (dev.y - v1.y) * py) / norm;
+                u = Math.max(0, Math.min(1, u));
+                const dx = v1.x + u * px - dev.x;
+                const dy = v1.y + u * py - dev.y;
+                const dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    wallAngle = Math.atan2(py, px);
+                    wallThickness = thickness;
+                    snapped = true;
+                }
+            }
+        };
+
+        const wall = walls.find((w) => w.id === dev.wallId);
+        if (wall) {
+            checkVertices(wall.vertices, wall.thickness);
+        } else {
+            walls.forEach((w) => checkVertices(w.vertices, w.thickness));
+            rooms.forEach((r) => checkVertices([...r.vertices, r.vertices[0]], 0.15));
+        }
+
+        body.position.set(dev.x, dev.mountingHeight ?? 1.2, dev.y);
+        if (snapped && minDist < 0.25) {
+            body.rotation.y = -wallAngle + degToRad(dev.rotation ?? 0);
+            const offsetDist = wallThickness / 2 + dims.d / 2;
+            body.position.x = dev.x - Math.sin(wallAngle) * offsetDist;
+            body.position.z = dev.y + Math.cos(wallAngle) * offsetDist;
+        } else {
+            body.rotation.y = degToRad(dev.rotation ?? 0);
+        }
+
+        body.parent = floorNode;
+        this.meshMap.set(dev.id, [body]);
+    }
+
+    // ── Conductores / Tubería (conduit) ─────────────────────────────────────────
+    /**
+     * Dibuja un tubo 3D por cada Conductor real (sourceId/targetId pueden ser
+     * luminaria, interruptor o dispositivo eléctrico), más un fallback legacy
+     * para LightSwitch.connectedFixtureIds sin Conductor asociado — mismo
+     * criterio que OverlayWires.tsx en 2D (legacySwitches).
+     */
+    buildConductors(
+        conductors: Conductor[],
+        fixtures: Fixture[],
+        lightSwitches: LightSwitch[],
+        electricalDevices: ElectricalDevice[],
+        floorNode: TransformNode,
+    ) {
+        const FLOOR_Y = 0.05;
+
+        const resolveNode = (id: string): { x: number; y: number; z: number } | null => {
+            const fx = fixtures.find((f) => f.id === id);
+            if (fx) return { x: fx.x, y: resolveFixtureRenderHeight(fx, 2.4), z: fx.y };
+            const sw = lightSwitches.find((s) => s.id === id);
+            if (sw) return { x: sw.x, y: sw.mountingHeight ?? 1.2, z: sw.y };
+            const dev = electricalDevices.find((d) => d.id === id);
+            if (dev) return { x: dev.x, y: dev.mountingHeight ?? 1.2, z: dev.y };
+            return null;
+        };
+
+        const buildPath = (
+            nodes: Array<{ x: number; y: number; z: number }>,
+            routeType: 'floor' | 'wall_ceiling',
+        ): Vector3[] => {
+            const path: Vector3[] = [new Vector3(nodes[0].x, nodes[0].y, nodes[0].z)];
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const p1 = nodes[i];
+                const p2 = nodes[i + 1];
+                if (routeType === 'floor') {
+                    path.push(new Vector3(p1.x, FLOOR_Y, p1.z));
+                    path.push(new Vector3(p2.x, FLOOR_Y, p2.z));
+                    path.push(new Vector3(p2.x, p2.y, p2.z));
+                } else {
+                    // El tramo debe subir pegado a la pared del nodo bajo
+                    // (interruptor/dispositivo) hasta el techo, y desde ahí
+                    // viajar horizontal a la luminaria — sin importar cuál
+                    // de los dos es sourceId/targetId. Si el doblez se ubica
+                    // en la posición del nodo alto (luminaria) en vez del
+                    // bajo, el tubo corta en diagonal a través del recinto.
+                    const low = p1.y <= p2.y ? p1 : p2;
+                    const high = p1.y <= p2.y ? p2 : p1;
+                    path.push(new Vector3(low.x, high.y, low.z));
+                    path.push(new Vector3(p2.x, p2.y, p2.z));
+                }
+            }
+            return path;
+        };
+
+        const makeTube = (name: string, path: Vector3[], radiusM: number, colorHex: string) => {
+            if (path.length < 2) return;
+            const tube = MeshBuilder.CreateTube(
+                name,
+                { path, radius: Math.max(0.006, radiusM), tessellation: 6, cap: Mesh.CAP_ALL },
+                this.scene,
+            );
+            const mat = new StandardMaterial(`mat_${name}`, this.scene);
+            mat.diffuseColor = hexToColor3(colorHex);
+            mat.specularColor = new Color3(0.1, 0.1, 0.1);
+            tube.material = mat;
+            tube.parent = floorNode;
+            this.meshMap.set(name, [tube]);
+        };
+
+        conductors.forEach((cond) => {
+            const source = resolveNode(cond.sourceId);
+            const target = resolveNode(cond.targetId);
+            if (!source || !target) return;
+
+            const waypoints = (cond.waypoints ?? []).map((w) => {
+                // Los waypoints intermedios viajan a la altura de ruteo (piso o techo);
+                // se resuelven dentro de buildPath usando el nodo siguiente como referencia.
+                return { x: w.x, y: target.y, z: w.y };
+            });
+
+            const nodes = [source, ...waypoints, target];
+            const radiusM = Math.max(0.006, (cond.tubeSize || 20) / 1000 / 2);
+            makeTube(
+                `conduit_${cond.id}`,
+                buildPath(nodes, cond.routeType ?? 'wall_ceiling'),
+                radiusM,
+                '#f97316',
+            );
+        });
+
+        // Fallback legacy: interruptores con connectedFixtureIds pero sin Conductor real.
+        const switchesWithConductor = new Set(
+            conductors.flatMap((c) => [c.sourceId, c.targetId]),
+        );
+        lightSwitches
+            .filter(
+                (sw) =>
+                    !switchesWithConductor.has(sw.id) &&
+                    (sw.connectedFixtureIds?.length ?? 0) > 0,
+            )
+            .forEach((sw) => {
+                const source = resolveNode(sw.id);
+                if (!source) return;
+                sw.connectedFixtureIds.forEach((fId, i) => {
+                    const target = resolveNode(fId);
+                    if (!target) return;
+                    makeTube(
+                        `conduit_legacy_${sw.id}_${i}`,
+                        buildPath([source, target], 'wall_ceiling'),
+                        0.008,
+                        '#94a3b8',
+                    );
+                });
+            });
+    }
 
     // ── Fixture / Luminaria ───────────────────────────────────────────────────
     /**
@@ -3199,8 +3368,9 @@ export class House3DBuilder {
                 isWallMounted = true;
                 // Rotate the fixture so it faces outward from the wall
                 body.rotation.x = Math.PI / 2; // Flat against wall instead of ceiling
-                body.rotation.y = -fixtureWallAngle;
-                
+                // Ángulo automático de la pared + rotación manual del usuario (planta, sentido horario)
+                body.rotation.y = -fixtureWallAngle + degToRad(fixture.rotation ?? 0);
+
                 const offsetDist = (wallThickness / 2);
                 body.position.set(
                     bx - Math.sin(fixtureWallAngle) * offsetDist,
@@ -3209,9 +3379,10 @@ export class House3DBuilder {
                 );
             }
         }
-        
+
         if (!isWallMounted) {
             body.position.set(bx, by, bz);
+            body.rotation.y = degToRad(fixture.rotation ?? 0);
         }
 
         this.shadowGen?.addShadowCaster(body);

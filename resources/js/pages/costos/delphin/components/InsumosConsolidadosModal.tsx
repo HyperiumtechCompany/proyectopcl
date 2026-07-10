@@ -131,16 +131,13 @@ const normalizedPartida = (value: string) =>
         .map((part) => part.padStart(2, '0'))
         .join('.');
 
-const roundCantidad = (value: number) =>
-    new Decimal(value).toDecimalPlaces(4).toNumber();
-
 export function calculateInsumoUsage(
     presupuestoCantidad: number,
     acuCantidad: number,
     precio: number,
     costoFactor = 1,
 ): { cantidad: number; parcial: number } {
-    const cantidad = roundCantidad(presupuestoCantidad * acuCantidad);
+    const cantidad = presupuestoCantidad * acuCantidad;
     // Redondeo con decimal.js a 2 decimales (igual que decimalMul en usePresupuestoAcu.ts) —
     // evita arrastrar error de punto flotante en el monto de cada uso antes de consolidar.
     const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(2).toNumber();
@@ -192,10 +189,6 @@ export function flattenInsumos(
     );
 
     //  2. Construir mapa SOLO con partidas que existen en ACU
-    // El metrado se redondea a 4 decimales aquí — es el primer factor de toda
-    // cantidad física que se deriva más abajo (cantidadFisica = metrado × cantidad
-    // ACU), así que si arrastra ruido de punto flotante, contamina cantidad, monto
-    // y la referencia del insumo por igual.
     const presupuestoCantidadByPartida = new Map<string, number>();
 
     for (const row of delphinRows) {
@@ -205,8 +198,8 @@ export function flattenInsumos(
         //  SOLO procesar partidas que están en los ACU
         if (!partidasACU.has(partida)) continue;
 
-        const metrado = roundCantidad(Number(row.metrado ?? 0));
-        const parcial = roundCantidad(Number(row.parcial ?? 0));
+        const metrado = Number(row.metrado ?? 0);
+        const parcial = Number(row.parcial ?? 0);
 
         if (metrado > 0) {
             presupuestoCantidadByPartida.set(partida, metrado);
@@ -224,11 +217,15 @@ export function flattenInsumos(
     //  3. SOLO tipos que existen en el Excel
     const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos'];
 
+    let procesados = 0;
+
     for (const acu of acuRows) {
         const partidaKey = normalizedPartida(acu.partida);
         const presupuestoCantidad = presupuestoCantidadByPartida.get(partidaKey) ?? 0;
 
         if (presupuestoCantidad === 0) continue;
+
+        procesados++;
 
         for (const { key } of INSUMO_TYPES) {
             if (!tiposValidos.includes(key)) continue;
@@ -240,17 +237,27 @@ export function flattenInsumos(
                 const codigo = String(
                     item.cod_insumo ?? item.codigo ?? '',
                 ).trim();
-                // Cantidad del componente dentro de UNA unidad de ACU, redondeada a 4
-                // decimales — misma convención que calculateAcuLocally (usePresupuestoAcu.ts).
-                const acuCantidad = roundCantidad(Number(item.cantidad ?? 0));
+                const acuCantidad = Number(item.cantidad ?? 0);
                 const precio = itemPrecio(key, item);
                 const unidad = String(item.unidad ?? '').toLowerCase().trim() || '-';
-                // Mismo criterio que isHerramientasRow (AcuPanel.tsx) y recalcAcuSubtotals
-                // (PresupuestoController.php): "Herramientas Manuales" se identifica por
-                // descripción, no por unidad — la unidad guardada no siempre empieza con "%".
-                const esHerramientas = key === 'equipos' && descripcion.toLowerCase().includes('herramienta');
+                const esPorcentaje = unidad.startsWith('%');
 
                 if (acuCantidad === 0 || precio === 0) continue;
+
+                const parcialAcu = esPorcentaje
+                    ? (acuCantidad / 100) * precio
+                    : acuCantidad * precio;
+                const usage = esPorcentaje
+                    ? (() => {
+                        const monto = new Decimal(parcialAcu).times(presupuestoCantidad).toDecimalPlaces(2).toNumber();
+                        return { cantidad: monto, parcial: monto };
+                    })()
+                    : calculateInsumoUsage(
+                        presupuestoCantidad,
+                        acuCantidad,
+                        precio,
+                        itemCostFactor(key, item),
+                    );
 
                 const baseKey = [
                     key,
@@ -259,74 +266,20 @@ export function flattenInsumos(
                     codigo ? normalizeKey(codigo) : '',
                 ].join('|');
 
-                if (esHerramientas) {
-                    // Herramientas es un % del costo de mano de obra, no una cantidad física
-                    // — se calcula directo (metrado × % × precio base), sin reparto.
-                    const montoPorUnidadAcu = new Decimal(acuCantidad)
-                        .div(100)
-                        .times(precio)
-                        .toDecimalPlaces(6)
-                        .toNumber();
-                    const monto = new Decimal(presupuestoCantidad)
-                        .times(montoPorUnidadAcu)
-                        .toDecimalPlaces(2)
-                        .toNumber();
-
-                    if (monto === 0) continue;
-
-                    rows.push({
-                        sourceKey: baseKey,
-                        type: key,
-                        codigo,
-                        descripcion,
-                        unidad,
-                        cantidad: monto,
-                        precio: 0,
-                        precioPonderado: 0,
-                        parcial: monto,
-                        usos: 1,
-                        reference: {
-                            acuId: acu.id,
-                            partida: acu.partida,
-                            acuDescripcion: acu.descripcion,
-                            insumoDescripcion: descripcion,
-                            metrado: presupuestoCantidad,
-                            cantidadAcu: acuCantidad,
-                            cantidadTotal: monto,
-                        },
-                    });
-                    continue;
-                }
-
-                // Cantidad física total del insumo en toda la partida: metrado (4dp) ×
-                // cantidad por unidad de ACU (4dp), redondeada también a 4dp. Este mismo
-                // valor se usa como "Cantidad" en Insumos Consolidados y como "Cant. total"
-                // en Referencias del insumo — nunca se recalcula distinto en cada vista, así
-                // ambas siempre calzan exactamente.
-                const cantidadFisica = roundCantidad(presupuestoCantidad * acuCantidad);
-                if (cantidadFisica === 0) continue;
-
-                // Monto = cantidad física × precio (× factor de desperdicio en materiales),
-                // redondeado a 2 decimales — cálculo directo por componente, sin reparto
-                // proporcional. Así "Cantidad × P. ref." SIEMPRE reconcilia exactamente con
-                // "Monto" para cada insumo, sin distorsión introducida por otros insumos de
-                // la misma partida.
-                const parcial = new Decimal(cantidadFisica)
-                    .times(precio)
-                    .times(itemCostFactor(key, item))
-                    .toDecimalPlaces(2)
-                    .toNumber();
-
                 rows.push({
                     sourceKey: baseKey,
                     type: key,
                     codigo,
                     descripcion,
                     unidad,
-                    cantidad: cantidadFisica,
-                    precio,
-                    precioPonderado: new Decimal(cantidadFisica).times(precio).toNumber(),
-                    parcial,
+                    cantidad: usage.cantidad,
+                    precio: esPorcentaje ? 0 : precio,
+                    // Acumula desde usage.parcial (no cantidad*precio crudo) para que incluya
+                    // el factor de costo (ej. desperdicio de materiales) — así el precio de
+                    // referencia consolidado (parcial/cantidad) siempre reconcilia con "Monto":
+                    // Cantidad × P.REF. = Monto, sin excepciones ocultas por el factor.
+                    precioPonderado: esPorcentaje ? 0 : usage.parcial,
+                    parcial: usage.parcial,
                     usos: 1,
                     reference: {
                         acuId: acu.id,
@@ -335,7 +288,7 @@ export function flattenInsumos(
                         insumoDescripcion: descripcion,
                         metrado: presupuestoCantidad,
                         cantidadAcu: acuCantidad,
-                        cantidadTotal: cantidadFisica,
+                        cantidadTotal: usage.cantidad,
                     },
                 });
             }

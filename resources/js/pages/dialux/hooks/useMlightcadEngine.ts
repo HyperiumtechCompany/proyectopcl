@@ -124,9 +124,62 @@ export function fitCadViewToDrawing(): boolean {
     return false;
 }
 
+let _cssGuardInstalled = false;
+
+/**
+ * @mlightcad/cad-simple-viewer inyecta (vía su AcEdCommandLine interno) una
+ * hoja de estilo global sin scope que incluye `.hidden { display: none !important; }`
+ * y nunca la retira. Esa regla choca con la clase `hidden` de Tailwind (p.ej.
+ * `hidden md:block` del sidebar de la app) y deja cualquier elemento que la use
+ * oculto para siempre, incluso después de salir del editor — hasta un refresh
+ * completo. Se neutraliza la regla ofensora en cuanto aparece, sin tocar el
+ * resto de los estilos del motor (CLI, popups, etc.), que sí se necesitan.
+ */
+function stripThirdPartyHiddenOverride(styleEl: HTMLStyleElement): void {
+    const sheet = styleEl.sheet;
+    if (!sheet) return;
+
+    try {
+        for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+            const rule = sheet.cssRules[i];
+            if (
+                rule instanceof CSSStyleRule &&
+                rule.selectorText === '.hidden' &&
+                rule.style.getPropertyValue('display') === 'none' &&
+                rule.style.getPropertyPriority('display') === 'important'
+            ) {
+                sheet.deleteRule(i);
+            }
+        }
+    } catch {
+        // Hoja de estilo inaccesible (p.ej. cross-origin) — no es la nuestra.
+    }
+}
+
+function installMlightcadCssGuard(): void {
+    if (_cssGuardInstalled || typeof document === 'undefined') return;
+    _cssGuardInstalled = true;
+
+    document
+        .querySelectorAll('style')
+        .forEach((el) => stripThirdPartyHiddenOverride(el as HTMLStyleElement));
+
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            mutation.addedNodes.forEach((node) => {
+                if (node instanceof HTMLStyleElement) {
+                    stripThirdPartyHiddenOverride(node);
+                }
+            });
+        }
+    });
+    observer.observe(document.head, { childList: true });
+}
+
 /** Obtiene o crea la instancia Ãºnica del AcApDocManager */
 function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
     if (!_docManager) {
+        installMlightcadCssGuard();
         cadLog('Creating new instance, container:', container?.id);
         _docManager = AcApDocManager.createInstance({
             webworkerFileUrls: WORKER_URLS,
@@ -137,6 +190,26 @@ function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
         }) as AcApDocManager;
     }
     return _docManager;
+}
+
+async function destroyDocManager(): Promise<void> {
+    const dm = _docManager;
+
+    _docManager = null;
+    _container = null;
+    _initialized = false;
+    _eventListenersAttached = false;
+    useEngineStore.getState().setReady(false);
+    useEngineStore.getState().setCadCommandActive(false);
+    useEngineStore.getState().setDocState(null, null);
+
+    if (!dm) return;
+
+    try {
+        await dm.destroy();
+    } catch (error) {
+        cadWarn('No se pudo destruir el motor CAD anterior:', error);
+    }
 }
 
 async function bootstrapDocument(dm: AcApDocManager): Promise<void> {
@@ -278,6 +351,11 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 cadLog('Already initialized with same container â€” skipping');
                 useEngineStore.getState().setReady(true);
                 return;
+            }
+
+            if (_initialized && _container !== container) {
+                cadLog('Container changed, recreating mlightcad viewer');
+                await destroyDocManager();
             }
 
             cadLog('initViewer, container:', container.id);

@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon, ChartBar } from 'lucide-react';
+import { BookOpen, Building2, CloudCogIcon, Droplet, Folder, Inbox, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon, ChartBar } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -30,6 +30,16 @@ export function AppSidebar() {
                     title: 'Gestión de Personal',
                     href: '/users' as const,
                     icon: Users,
+                },
+                {
+                    title: 'Organizaciones',
+                    href: '/organizations' as const,
+                    icon: Building2,
+                },
+                {
+                    title: 'Solicitudes',
+                    href: '/solicitudes' as const,
+                    icon: Inbox,
                 },
             ]
             : []),

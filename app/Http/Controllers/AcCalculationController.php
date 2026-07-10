@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\AcCalculationUpdated;
 use App\Models\AcCalculation;
+use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -11,6 +12,8 @@ use Inertia\Response;
 
 class AcCalculationController extends Controller
 {
+    public function __construct(protected ProjectQuotaService $quotaService) {}
+
     /**
      * Lista de hojas del usuario autenticado.
      */
@@ -45,6 +48,8 @@ class AcCalculationController extends Controller
             'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
+
+        $this->quotaService->assertCanCreate($request->user(), 'ac');
 
         $spreadsheet = AcCalculation::create([
             'user_id' => Auth::id(),

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import { createScaleConfig, useEditorStore, useScaleConfig} from '@/pages/dialux/hooks/useEditorStore';
 import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
+import { saveDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getEffectiveScale } from './canvas/canvasUtils';
@@ -32,6 +33,8 @@ export const Toolbar: React.FC = () => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isImportLuminairesModalOpen, setIsImportLuminairesModalOpen] = useState(false);
     const projectName = store.project?.name ?? '';
+    const projectId = store.project?.id ?? null;
+    const activeScene = store.activeScene();
     const setProjectName = useCallback(
         (name: string) => {
             if (!store.project) return;
@@ -68,6 +71,13 @@ export const Toolbar: React.FC = () => {
             if (!file) return;
             const ok = await engine.openFile(file);
             if (ok) {
+                if (projectId) {
+                    try {
+                        await saveDialuxPlanFile(projectId, file);
+                    } catch (error) {
+                        console.warn('No se pudo guardar el plano DIAlux local.', error);
+                    }
+                }
                 setPendingFile(file);
                 setScaleConfirmed(false);
                 setTimeout(async () => {
@@ -97,7 +107,7 @@ export const Toolbar: React.FC = () => {
             if (fileInputRef.current) fileInputRef.current.value = '';
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [engine, store],
+        [engine, projectId, store],
     );
 
     const applyScaleConfig = useCallback(
