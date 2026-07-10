@@ -176,11 +176,35 @@ class PresupuestoController extends Controller
 
         $connection = DB::connection('costos_tenant');
         $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Guardia anti-borrado-masivo: un payload vacío nunca debe vaciar una
+        // sub-sección que ya tiene datos guardados. Esto puede ocurrir por una
+        // condición de carrera o un estado de UI corrupto en el frontend (el árbol
+        // de tareas de Delphin quedó truncado antes de armar el payload); sin esta
+        // guardia, el clear+reinsert de abajo borraría silenciosamente cientos de
+        // partidas (y en cascada sus ACUs) de un solo PATCH.
+        if (empty($rows) && $this->hasTenantColumn($tableName, 'presupuesto_id')) {
+            $existingCount = $connection->table($tableName)
+                ->where('presupuesto_id', $tenantPresupuestoId)
+                ->count();
+            if ($existingCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'El envío no contiene filas pero ya existen datos guardados. Operación cancelada para evitar pérdida de datos.',
+                ], 422);
+            }
+        }
+
         $connection->beginTransaction();
 
         try {
-            // Strategy: clear + re-insert (simple for spreadsheet-like data)
-            $connection->table($tableName)->delete();
+            // Strategy: clear + re-insert (simple for spreadsheet-like data).
+            // Scoped por presupuesto_id — nunca un delete() global de la tabla.
+            if ($this->hasTenantColumn($tableName, 'presupuesto_id')) {
+                $connection->table($tableName)->where('presupuesto_id', $tenantPresupuestoId)->delete();
+            } else {
+                $connection->table($tableName)->delete();
+            }
 
             $idMapping = []; // Maps client-side IDs to new database IDs
 
@@ -251,19 +275,26 @@ class PresupuestoController extends Controller
 
             // Eliminar ACUs huérfanos cuya partida ya no existe en presupuesto_general
             if ($subsection === 'general') {
-                $validPartidas = $connection->table('presupuesto_general')
+                // Match por código normalizado, no por string exacto — presupuesto_general.partida
+                // y presupuesto_acus.partida pueden diferir en padding de ceros (mismo criterio que
+                // syncAllPrecioUnitarioFromAcus/calculateACU, ver CostoDatabaseService::normalizePartidaCode()).
+                // Un whereNotIn exacto trataba como huérfano (y borraba en cascada) cualquier ACU
+                // cuyo padding no calzara byte a byte con el presupuesto_general recién reinsertado,
+                // dejando vivo solo el ACU recién re-sincronizado vía calculateACU (que sí escribe el
+                // mismo formato que el payload actual) — el bug reportado de "guarda uno, borra el resto".
+                $validNormalizedPartidas = array_flip(
+                    $connection->table('presupuesto_general')
+                        ->where('presupuesto_id', $tenantPresupuestoId)
+                        ->pluck('partida')
+                        ->map(fn ($p) => $this->dbService->normalizePartidaCode((string) $p))
+                        ->all()
+                );
+
+                $orphanAcuIds = $connection->table('presupuesto_acus')
                     ->where('presupuesto_id', $tenantPresupuestoId)
-                    ->pluck('partida')
-                    ->toArray();
-
-                $orphanQuery = $connection->table('presupuesto_acus')
-                    ->where('presupuesto_id', $tenantPresupuestoId);
-
-                if (! empty($validPartidas)) {
-                    $orphanQuery->whereNotIn('partida', $validPartidas);
-                }
-
-                $orphanAcuIds = $orphanQuery->pluck('id');
+                    ->get(['id', 'partida'])
+                    ->filter(fn ($acu) => ! isset($validNormalizedPartidas[$this->dbService->normalizePartidaCode((string) $acu->partida)]))
+                    ->pluck('id');
 
                 if ($orphanAcuIds->isNotEmpty()) {
                     foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $childTable) {

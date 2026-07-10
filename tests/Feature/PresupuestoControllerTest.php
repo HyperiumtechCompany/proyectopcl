@@ -52,6 +52,12 @@ class PresupuestoControllerTest extends TestCase
         // Create presupuesto tables
         $this->dbService->createPresupuestoTables($this->testDbName);
 
+        // Seed the default presupuesto row — in production this is auto-created by
+        // CostoDatabaseService::createDefaultPresupuesto() when a project is created
+        // (see its docblock). Without it, presupuesto_id is null and any insert into
+        // presupuesto_general/presupuesto_acus trips their FK constraint.
+        $this->dbService->createDefaultPresupuesto($this->testDbName, 'Test Project');
+
         // Enable presupuesto module
         CostoProjectModule::create([
             'costo_project_id' => $this->project->id,
@@ -278,6 +284,50 @@ class PresupuestoControllerTest extends TestCase
         $this->assertCount(1, $rows);
         $expectedParcial = 100.50 * 25.75;
         $this->assertEquals($expectedParcial, (float) $rows[0]['parcial']);
+    }
+
+    public function test_update_general_does_not_delete_acus_with_differently_padded_partida_codes(): void
+    {
+        // Regression test for the reported production bug: saving presupuesto_general
+        // (e.g. from Delphin's saveBudget(), triggered by editing a single ACU) was wiping
+        // out every other ACU whose `partida` string didn't byte-for-byte match the freshly
+        // reinserted presupuesto_general rows — most commonly because of zero-padding
+        // differences ("1.2" vs "01.02"), which are common across the app's various import/
+        // save paths. Only the ACU that had just been re-synced (via calculateACU, which
+        // writes the current padding) survived; every other ACU was deleted in cascade.
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($this->testDbName);
+
+        $response = $this->actingAs($this->user)
+            ->patchJson("/costos/proyectos/{$this->project->id}/presupuesto/general", [
+                'rows' => [
+                    ['partida' => '01.01', 'descripcion' => 'Partida uno', 'unidad' => 'm2', 'metrado' => 10, 'precio_unitario' => 5],
+                    ['partida' => '01.02', 'descripcion' => 'Partida dos', 'unidad' => 'm2', 'metrado' => 20, 'precio_unitario' => 6],
+                    ['partida' => '01.03', 'descripcion' => 'Partida tres', 'unidad' => 'm2', 'metrado' => 30, 'precio_unitario' => 7],
+                ],
+            ]);
+        $response->assertStatus(200);
+
+        // Three ACUs exist, but stored with UNPADDED partida codes ("1.1" instead of "01.01") —
+        // simulating an ACU created through a different import path than presupuesto_general.
+        DB::connection('costos_tenant')->table('presupuesto_acus')->insert([
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.1', 'descripcion' => 'ACU uno', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.2', 'descripcion' => 'ACU dos', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.3', 'descripcion' => 'ACU tres', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        // Re-save presupuesto_general (same rows) — simulates the user editing/saving again.
+        $response = $this->actingAs($this->user)
+            ->patchJson("/costos/proyectos/{$this->project->id}/presupuesto/general", [
+                'rows' => [
+                    ['partida' => '01.01', 'descripcion' => 'Partida uno', 'unidad' => 'm2', 'metrado' => 10, 'precio_unitario' => 5],
+                    ['partida' => '01.02', 'descripcion' => 'Partida dos', 'unidad' => 'm2', 'metrado' => 20, 'precio_unitario' => 6],
+                    ['partida' => '01.03', 'descripcion' => 'Partida tres', 'unidad' => 'm2', 'metrado' => 30, 'precio_unitario' => 7],
+                ],
+            ]);
+        $response->assertStatus(200);
+
+        $acuCount = DB::connection('costos_tenant')->table('presupuesto_acus')->count();
+        $this->assertEquals(3, $acuCount, 'ACUs with a differently-padded partida code must survive a presupuesto_general re-save.');
     }
 
     public function test_update_requires_authentication(): void
