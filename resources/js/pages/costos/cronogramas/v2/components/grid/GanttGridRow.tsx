@@ -91,24 +91,24 @@ const GanttGridRowComponent = function GanttGridRow({
     const depth = Math.max(0, task.nivel - 1);
 
     const rowBg = isSelected
-        ? 'bg-blue-900/30 border-l-2 border-l-blue-500'
+        ? 'bg-blue-100 border-l-2 border-l-blue-500 dark:bg-blue-900/30'
         : task.nivel === 1
-          ? 'bg-slate-800/70 hover:bg-slate-700/40'
-          : 'bg-slate-850 hover:bg-slate-700/30';
+          ? 'bg-slate-200/80 hover:bg-slate-300/70 dark:bg-slate-800/70 dark:hover:bg-slate-700/40'
+          : 'bg-white hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800/70';
 
     const textWeight = isGroup ? 'font-semibold' : 'font-normal';
     const descPaddingLeft = depth * INDENT_PX + EXPAND_W + 2;
 
     return (
         <div
-            className={`flex min-h-10 items-stretch border-b border-slate-700/50 text-xs ${rowBg} ${textWeight}`}
+            className={`flex min-h-10 items-stretch border-b border-slate-300 text-xs dark:border-slate-700/50 ${rowBg} ${textWeight}`}
             style={style}
             onClick={handleRowClick}
             onContextMenu={handleContextMenu}
         >
             {rowIndex !== undefined && (
                 <div
-                    className="shrink-0 border-r border-slate-700/50 bg-slate-900/60 font-mono text-[10px] text-slate-600 flex items-center justify-center select-none"
+                    className="flex shrink-0 items-center justify-center border-r border-slate-300 bg-slate-100 font-mono text-[10px] text-slate-500 select-none dark:border-slate-700/50 dark:bg-slate-900/60 dark:text-slate-600"
                     style={{ width: 32, minWidth: 32, position: 'sticky', left: 0, zIndex: 1 }}
                 >
                     {rowIndex + 1}
@@ -122,7 +122,7 @@ const GanttGridRowComponent = function GanttGridRow({
                     minWidth: col.width,
                 };
                 const cellClass =
-                    'relative shrink-0 border-r border-slate-700/50 last:border-r-0';
+                    'relative shrink-0 border-r border-slate-300 last:border-r-0 dark:border-slate-700/50';
 
                 return (
                     <div key={col.key} className={cellClass} style={cellStyle}>
@@ -134,7 +134,7 @@ const GanttGridRowComponent = function GanttGridRow({
                             >
                                 {isGroup ? (
                                     <button
-                                        className="pointer-events-auto flex h-4 w-4 items-center justify-center text-slate-400 hover:text-slate-200"
+                                        className="pointer-events-auto flex h-4 w-4 items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             onToggleExpand(task.id);

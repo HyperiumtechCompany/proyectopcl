@@ -18,6 +18,7 @@ import { useGanttTimeline } from '../cronogramas/v2/composables/useGanttTimeline
 import { diffWorkingDaysInclusive } from '../cronogramas/v2/types/calendar';
 import type { GanttBarLabel, RowAction } from '../cronogramas/v2/types/cell';
 import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
+import { CHART_HEADER_H } from '../cronogramas/v2/types/timeline';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 import { router } from '@inertiajs/react';
@@ -418,6 +419,29 @@ export default function DelphinView({
             }
         }
     }, [localSaveAcu, delphinRows, commitField]);
+
+    // ── Row alignment (CPM gantt mode): keep table rows pixel-aligned with bars ──
+    // The left grid has its own header stack (search bar + DelphinGridHeader's title
+    // row + optional column-filter row) above its scrollable rows; GanttChart only
+    // renders its own timeline header (CHART_HEADER_H). Both are measured live (not
+    // guessed from Tailwind classes) so the spacer above GanttChart always equals the
+    // exact extra height the grid has, regardless of filter toggles/text wrap/zoom.
+    const searchBarRef = useRef<HTMLDivElement>(null);
+    const [searchBarH, setSearchBarH] = useState(0);
+    const [gridHeaderH, setGridHeaderH] = useState(CHART_HEADER_H);
+    const handleGridHeaderHeight = useCallback((h: number) => setGridHeaderH(h), []);
+
+    useEffect(() => {
+        const el = searchBarRef.current;
+        if (!el) return;
+        const measure = () => setSearchBarH(Math.ceil(el.getBoundingClientRect().height));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const chartHeaderSpacerH = Math.max(0, searchBarH + gridHeaderH - CHART_HEADER_H);
 
     // ── Scroll sync (CPM gantt mode) ──────────────────────────────────────────
     const gridScrollRef = useRef<HTMLDivElement>(null);
@@ -871,7 +895,7 @@ export default function DelphinView({
                             minSize={18}
                             className="flex min-h-0 flex-col overflow-hidden border-r border-slate-300 dark:border-slate-700">
                             {/* Search and filter controls */}
-                            <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-slate-300 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                            <div ref={searchBarRef} className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-slate-300 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                                 <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800/80">
                                     <button
                                         type="button"
@@ -955,6 +979,7 @@ export default function DelphinView({
                             <DelphinGrid
                                 rows={filteredRows}
                                 allRows={delphinRows}
+                                onHeaderHeightChange={handleGridHeaderHeight}
                                 columns={activeColumns}
                                 allColumns={allActiveColumns}
                                 hiddenKeys={activeHiddenKeys}
@@ -998,8 +1023,18 @@ export default function DelphinView({
                                     onAcuChange={handleAcuChange} />
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
+                                <>
+                                {/* Live-measured spacer (searchBarH + gridHeaderH - CHART_HEADER_H)
+                                    so GanttChart's header/rows start at the exact same Y as the
+                                    grid's — computed from real DOM heights, not guessed classes,
+                                    so it stays correct across filter toggles/text wrap/zoom. */}
+                                <div style={{ height: chartHeaderSpacerH }} className="shrink-0" aria-hidden="true" />
+                                {/* Must render the exact same row set/order as DelphinGrid's
+                                   `filteredRows` (search/column filters included) — both sides
+                                   are virtualized by row index at the same ROW_HEIGHT, so any
+                                   mismatch in row count desyncs every bar from its table row. */}
                                 <GanttChart
-                                    visibleTasks={visibleTasks}
+                                    visibleTasks={filteredRows}
                                     groupIds={groupIds}
                                     criticalIds={showCriticalPath ? criticalIds : EMPTY_SET}
                                     selectedRowId={selectedRowId}
@@ -1010,6 +1045,7 @@ export default function DelphinView({
                                     onSelect={selectRow}
                                     onBarCommit={handleBarCommit}
                                     onContinuousZoom={handleContinuousZoom} />
+                                </>
                             )}
 
                         </Panel>

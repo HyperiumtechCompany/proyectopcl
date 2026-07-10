@@ -61,9 +61,13 @@ function normalizeTaskDates(
         ? diffWorkingDaysInclusive(fecha_inicio, fecha_fin, calendarSettings)
         : diffInclusiveDays(fecha_inicio, fecha_fin);
     const storedDuration = Math.max(1, Number(task.duracion_dias) || 0);
-    const duracion_dias = calendarSettings
-        ? storedDuration || durationFromDates || 1
-        : (durationFromDates ?? storedDuration);
+    // La duración siempre se deriva de fecha_inicio/fecha_fin cuando ambas existen
+    // (única fuente de verdad); solo se usa la duración guardada como respaldo
+    // cuando faltan fechas. Antes, con calendarSettings definido (caso normal en
+    // producción), storedDuration siempre ganaba por ser truthy (>=1), ignorando
+    // por completo el rango de fechas real y sobrescribiendo fecha_fin para que
+    // coincidiera con una duración vieja/desactualizada.
+    const duracion_dias = durationFromDates || storedDuration;
 
     if (calendarSettings && fecha_inicio) {
         const start = nextWorkingDate(fecha_inicio, calendarSettings);
@@ -847,6 +851,24 @@ export function useGanttTasks(
         [calendarSettings, schedulingMode],
     );
 
+    // ── Actualizar el costo (presupuesto) de múltiples tareas en bloque ────
+    const batchUpdatePresupuestos = useCallback(
+        (updates: Array<{ id: number; presupuesto: number }>) => {
+            const updateMap = new Map(updates.map((u) => [u.id, u.presupuesto]));
+            setTasks((prev) =>
+                prev.map((t) =>
+                    updateMap.has(t.id) ? { ...t, presupuesto: updateMap.get(t.id)! } : t,
+                ),
+            );
+            setDirtyIds((prev) => {
+                const next = new Set(prev);
+                updates.forEach((u) => next.add(u.id));
+                return next;
+            });
+        },
+        [],
+    );
+
     // ── Actualizar partidas de múltiples tareas en bloque ───────────────────
     const batchUpdatePartidas = useCallback(
         (updates: Array<{ id: number; partida: string }>) => {
@@ -944,5 +966,6 @@ export function useGanttTasks(
         applyBarMove,
         importTasks,
         batchUpdatePartidas,
+        batchUpdatePresupuestos,
     };
 }

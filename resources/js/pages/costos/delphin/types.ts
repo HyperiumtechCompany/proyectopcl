@@ -38,7 +38,9 @@ export const CPM_COLUMNS: ColumnDef[] = [
     { key: 'fecha_inicio',  label: 'Inicio',       type: 'date',         width: 100, align: 'center', editable: true  },
     { key: 'fecha_fin',     label: 'Fin',          type: 'date',         width: 100, align: 'center', editable: true  },
     { key: 'predecesoras',  label: 'Pred.',        type: 'predecesoras', width: 75,  align: 'center', editable: true  },
-    { key: 'presupuesto',   label: 'Costo (S/)',   type: 'number',       width: 110, align: 'right',  editable: true,  decimals: 2 },
+    // readonly: refleja presupuesto_general (metrado × precio_unitario), no un valor propio —
+    // editar el costo debe hacerse desde el modo Presupuesto para no desincronizar ambas tablas.
+    { key: 'presupuesto',   label: 'Costo (S/)',   type: 'readonly',     width: 110, align: 'right',  editable: false, decimals: 2 },
 ];
 
 export type DelphinMode = 'budget' | 'cpm';

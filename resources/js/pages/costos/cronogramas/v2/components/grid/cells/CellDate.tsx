@@ -53,7 +53,7 @@ export function CellDate({
             <input
                 ref={inputRef}
                 type="date"
-                className="h-full w-full border-0 bg-blue-950/60 px-1 text-center text-xs text-white ring-2 ring-blue-400 outline-none ring-inset"
+                className="h-full w-full border-0 bg-blue-50 px-1 text-center text-xs text-slate-900 ring-2 ring-blue-400 outline-none ring-inset dark:bg-blue-950/60 dark:text-white"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commitDraft}
@@ -75,14 +75,14 @@ export function CellDate({
 
     return (
         <div
-            className="flex h-full cursor-pointer items-center justify-center px-1 text-xs text-slate-200 hover:bg-slate-700/40"
+            className="flex h-full cursor-pointer items-center justify-center px-1 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700/40"
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
             {value ? (
                 <span className="font-mono">{formatDisplay(value)}</span>
             ) : (
-                <span className="text-slate-600">–</span>
+                <span className="text-slate-400 dark:text-slate-600">–</span>
             )}
         </div>
     );

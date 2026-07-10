@@ -79,19 +79,27 @@ class CronogramaV2Controller extends Controller
                 $links = [];
                 foreach ($task['predecesoras'] ?? [] as $pred) {
                     $source = (int) ($pred['source'] ?? 0);
-                    if ($source <= 0) continue;
+                    if ($source <= 0) {
+                        continue;
+                    }
                     $links[] = [
                         'source' => $source,
                         'target' => (int) ($pred['target'] ?? $taskId),
-                        'type'   => (string) ($pred['type'] ?? '0'),
-                        'lag'    => (int) ($pred['lag'] ?? 0),
+                        'type' => (string) ($pred['type'] ?? '0'),
+                        'lag' => (int) ($pred['lag'] ?? 0),
                     ];
                 }
 
                 $row = [
                     'presupuesto_id' => $presupuestoId,
                     'item_order' => (int) ($task['item_order'] ?? 0),
-                    'partida' => $this->normalizePartidaCode($task['partida'] ?? ''),
+                    // Se guarda tal cual (sin zero-padding): presupuesto_general.partida
+                    // tampoco se guarda con padding (ver PresupuestoController), y el join
+                    // en fetchTasks() compara cg.partida = pg.partida por igualdad exacta —
+                    // paddear aquí rompía ese match y duplicaba el árbol en Delphin (las
+                    // partidas de presupuesto quedaban como "faltantes" y se sintetizaban
+                    // como una segunda copia del árbol).
+                    'partida' => trim((string) ($task['partida'] ?? '')),
                     'descripcion' => $task['descripcion'] ?? '',
                     'duracion_dias' => (int) ($task['duracion_dias'] ?? 0),
                     'fecha_inicio' => ! empty($task['fecha_inicio']) ? $task['fecha_inicio'] : null,
@@ -182,17 +190,6 @@ class CronogramaV2Controller extends Controller
             'predecesoras' => $predecesoras,
             'presupuesto' => (float) ($row->presupuesto ?? 0),
         ];
-    }
-
-    private function normalizePartidaCode(string $code): string
-    {
-        $str = trim($code);
-        if ($str === '') {
-            return $str;
-        }
-        $parts = explode('.', $str);
-
-        return implode('.', array_map(fn ($p) => str_pad(preg_replace('/[a-zA-Z]+$/', '', trim($p)), 2, '0', STR_PAD_LEFT), $parts));
     }
 
     private function resolvePresupuestoId(): int

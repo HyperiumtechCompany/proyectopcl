@@ -453,6 +453,26 @@ export function useDelphinData({
         });
     }, [ganttState.tasks, budgetMap, ganttState.groupIds]);
 
+    // ── Keep cronograma_general.presupuesto mirrored to the budget total ─────
+    // presupuesto_general.parcial (metrado × precio_unitario, aggregated) and
+    // cronograma_general.presupuesto are two separate DB columns for the "same"
+    // cost. Without this sync, editing the budget never touches task.presupuesto,
+    // so the CPM table's "Costo (S/)" column (and exports, which read
+    // row.presupuesto) drift from the budget's "Total" and the two tables show
+    // duplicated/contradictory numbers for the same partida. This effect is a
+    // no-op once both sides already match (stable after one extra render).
+    useEffect(() => {
+        const updates: Array<{ id: number; presupuesto: number }> = [];
+        for (const row of delphinRows) {
+            const task = ganttState.taskById.get(row.id);
+            if (task && task.presupuesto !== row.parcial) {
+                updates.push({ id: row.id, presupuesto: row.parcial });
+            }
+        }
+        if (updates.length > 0) ganttState.batchUpdatePresupuestos(updates);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [delphinRows]);
+
     // Visible subset re-uses the already-computed hierarchical parcials from delphinRows
     const visibleDelphinRows = useMemo<DelphinRow[]>(() => {
         const parcialById = new Map(delphinRows.map((r) => [r.id, r.parcial]));

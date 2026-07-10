@@ -17,10 +17,10 @@ const ROW_NUM_W = 32;
 
 /** Returns text color class for the description column based on hierarchy level */
 function getDescTextClass(row: DelphinRow, isGroup: boolean): string | undefined {
-    if (!isGroup) return undefined; // leaf → default (text-slate-200)
-    if (row.nivel === 1) return 'text-amber-400';
-    if (row.nivel === 2) return 'text-sky-300';
-    return 'text-violet-300'; // nivel 3+
+    if (!isGroup) return undefined; // leaf → default text from shared cell
+    if (row.nivel === 1) return 'text-amber-700 dark:text-amber-400';
+    if (row.nivel === 2) return 'text-sky-700 dark:text-sky-300';
+    return 'text-violet-700 dark:text-violet-300'; // nivel 3+
 }
 
 interface Props {
@@ -52,6 +52,9 @@ interface Props {
     onColumnFilterChange: (key: string, value: string) => void;
     onClearColumnFilters: () => void;
     showColumnFilters:  boolean;
+    /** Reports the rendered height of the header stack (title row + optional
+     *  filter row) so the sibling Gantt panel can mirror it and keep rows aligned. */
+    onHeaderHeightChange?: (height: number) => void;
 }
 
 interface CtxState { taskId: number; x: number; y: number }
@@ -309,10 +312,21 @@ export function DelphinGrid({
     onColumnFilterChange,
     onClearColumnFilters,
     showColumnFilters,
+    onHeaderHeightChange,
 }: Props) {
     const internalRef       = useRef<HTMLDivElement>(null);
     const resolvedRef       = (scrollRef ?? internalRef) as React.RefObject<HTMLDivElement>;
     const headerContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = headerContainerRef.current;
+        if (!el || !onHeaderHeightChange) return;
+        const measure = () => onHeaderHeightChange(Math.ceil(el.getBoundingClientRect().height));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [onHeaderHeightChange]);
 
     const [ctx, setCtx] = useState<CtxState | null>(null);
 
@@ -438,24 +452,24 @@ export function DelphinGrid({
 
             {/* ── Costo Directo footer (budget mode only) ──────────────────── */}
             {hasParcialCol && (
-                <div className="flex shrink-0 border-t-2 border-amber-600/60 bg-slate-900 text-xs font-bold select-none">
+                <div className="flex shrink-0 border-t-2 border-amber-500/70 bg-slate-100 text-xs font-bold select-none dark:border-amber-600/60 dark:bg-slate-900">
                     {/* Row number gutter footer */}
-                    <div style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }} className="shrink-0 border-r border-slate-700/50" />
+                    <div style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }} className="shrink-0 border-r border-slate-300 dark:border-slate-700/50" />
                     {columns.map((col) => (
                         <div
                             key={col.key}
                             style={{ width: col.width, minWidth: col.width }}
-                            className={`shrink-0 border-r border-slate-700/50 px-2 py-2 last:border-r-0 ${
+                            className={`shrink-0 border-r border-slate-300 px-2 py-2 last:border-r-0 dark:border-slate-700/50 ${
                                 col.align === 'right'  ? 'text-right'  :
                                 col.align === 'center' ? 'text-center' : 'text-left'
                             }`}
                         >
                             {col.key === 'descripcion' ? (
-                                <span className="text-amber-400 uppercase tracking-wide">Costo Directo</span>
+                                <span className="text-amber-700 uppercase tracking-wide dark:text-amber-400">Costo Directo</span>
                             ) : col.key === 'parcial' ? (
-                                <span className="font-mono text-amber-400">{fmtCurrency(costoDirecto)}</span>
+                                <span className="font-mono text-amber-700 dark:text-amber-400">{fmtCurrency(costoDirecto)}</span>
                             ) : col.key === 'item_order' ? null : (
-                                <span className="text-slate-700">—</span>
+                                <span className="text-slate-400 dark:text-slate-700">—</span>
                             )}
                         </div>
                     ))}

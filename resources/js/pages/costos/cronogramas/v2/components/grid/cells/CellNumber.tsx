@@ -58,7 +58,7 @@ export function CellNumber({
                 ref={inputRef}
                 type="text"
                 inputMode="decimal"
-                className={`h-full w-full border-0 bg-blue-950/60 px-2 font-mono text-xs text-white outline-none ring-2 ring-inset ring-blue-400 ${alignClass}`}
+                className={`h-full w-full border-0 bg-blue-50 px-2 font-mono text-xs text-slate-900 outline-none ring-2 ring-inset ring-blue-400 dark:bg-blue-950/60 dark:text-white ${alignClass}`}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 onBlur={commit}
@@ -76,13 +76,13 @@ export function CellNumber({
 
     return (
         <div
-            className={`flex h-full cursor-pointer items-center px-2 font-mono text-xs text-slate-200 hover:bg-slate-700/40 ${
+            className={`flex h-full cursor-pointer items-center px-2 font-mono text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700/40 ${
                 align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'
             }`}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
-            {value ? fmt(value, decimals) : <span className="text-slate-600">–</span>}
+            {value ? fmt(value, decimals) : <span className="text-slate-400 dark:text-slate-600">–</span>}
         </div>
     );
 }

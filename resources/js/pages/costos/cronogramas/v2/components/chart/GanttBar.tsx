@@ -2,12 +2,13 @@ import React from 'react';
 import type { GanttTask } from '../../types/task';
 import type { GanttTimeline } from '../../types/timeline';
 import type { GanttBarLabel } from '../../types/cell';
+import { ROW_HEIGHT } from '../../types/cell';
 import { buildWorkingDateSegments } from '../../types/calendar';
 import { diffInclusiveDays, normalizeGanttDate } from '../../utils/date';
 
 const BAR_PAD_V = 7; // px padding vertical (leaf)
 const GROUP_PAD = 9; // px padding vertical (grupos)
-const ROW_H = 32; // debe coincidir con ROW_HEIGHT de cell.ts
+const ROW_H = ROW_HEIGHT; // debe coincidir con ROW_HEIGHT de cell.ts
 const RESIZE_W = 7; // ancho del handle de redimensión
 
 interface Props {
@@ -75,9 +76,9 @@ const GanttBarComponent = function GanttBar({
 
     if (isGroup) {
         const bracketColor = isCritical
-            ? 'border-red-400 text-red-100'
-            : 'border-slate-300 text-slate-100';
-        const selected = isSelected ? 'ring-1 ring-white/70' : '';
+            ? 'border-red-500 text-red-700 dark:border-red-400 dark:text-red-100'
+            : 'border-slate-700 text-slate-700 dark:border-slate-300 dark:text-slate-100';
+        const selected = isSelected ? 'ring-1 ring-blue-400/70 dark:ring-white/70' : '';
 
         return (
             <div
@@ -104,7 +105,7 @@ const GanttBarComponent = function GanttBar({
                     className={`pointer-events-none absolute top-2 right-0 h-3 border-r-2 ${bracketColor}`}
                 />
                 {w > 54 && barLabelText && (
-                    <span className="pointer-events-none absolute top-0 left-1 max-w-full truncate bg-slate-900/70 px-1 text-[10px] leading-none font-semibold text-slate-100">
+                    <span className="pointer-events-none absolute top-0 left-1 max-w-full truncate bg-white/80 px-1 text-[10px] leading-none font-semibold text-slate-800 dark:bg-slate-900/70 dark:text-slate-100">
                         {barLabelText}
                     </span>
                 )}

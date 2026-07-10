@@ -117,6 +117,7 @@ export function GanttDependencyLines({
     const arrows = useMemo((): Arrow[] => {
         // pred.taskId contiene el item_order (Nº de fila), no el id de BD
         const taskByOrder = new Map(visibleTasks.map((t) => [t.item_order, t]));
+        const taskById = new Map(visibleTasks.map((t) => [t.id, t]));
         const result: Arrow[] = [];
 
         for (const succ of visibleTasks) {
@@ -124,7 +125,8 @@ export function GanttDependencyLines({
 
             for (const pred of succ.predecesoras) {
                 if (pred.taskId === succ.item_order) continue; // auto-loop
-                const predTask = taskByOrder.get(pred.taskId);
+                const predTask =
+                    taskByOrder.get(pred.taskId) ?? taskById.get(pred.taskId);
                 if (!predTask?.fecha_inicio) continue;
 
                 const y1 = getY(predTask.id);
