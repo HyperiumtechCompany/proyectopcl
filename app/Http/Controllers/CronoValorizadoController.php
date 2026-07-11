@@ -69,6 +69,15 @@ class CronoValorizadoController extends Controller
             ->get()
             ->keyBy(fn ($p) => trim($p->partida ?? ''));
 
+        $jerarquiaPresupuesto = DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->whereNull('deleted_at')
+            ->orderBy('item_order')
+            ->get(['partida', 'descripcion'])
+            ->mapWithKeys(fn ($p) => [trim($p->partida ?? '') => $p->descripcion ?? ''])
+            ->filter(fn ($descripcion, $partida) => $partida !== '' && $descripcion !== '');
+
         if ($presupuesto->isEmpty()) {
             return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
                 'project' => (string) $projectId,
@@ -81,6 +90,7 @@ class CronoValorizadoController extends Controller
                 'estaGuardado' => false,
                 'diasPorMes' => [],
                 'modoCalculo' => $modoCalculo,
+                'jerarquiaPresupuesto' => [],
                 'materiales' => [],
                 'materialesResumen' => $this->materialesResumenVacio(),
                 'projectData' => $projectData,
@@ -211,6 +221,7 @@ class CronoValorizadoController extends Controller
             'estaGuardado' => $estaGuardado,
             'diasPorMes' => $diasPorMesProyecto,
             'modoCalculo' => $modoCalculo,
+            'jerarquiaPresupuesto' => $jerarquiaPresupuesto->toArray(),
             'materiales' => $materialesFormateados->toArray(),
             'materialesResumen' => $materialesResumen,
             'projectData' => $projectData,

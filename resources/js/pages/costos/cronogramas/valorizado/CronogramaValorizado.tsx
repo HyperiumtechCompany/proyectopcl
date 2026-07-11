@@ -280,6 +280,7 @@ export default function CronogramaValorizado(props: ValorizadoProps) {
                                         onLimpiar={limpiarDistribucion}
                                         mesPicoKey={mesPicoKey}
                                         diasPorMes={props.diasPorMes}
+                                        jerarquiaPresupuesto={props.jerarquiaPresupuesto}
                                         desviaciones={desviaciones}
                                         totalDesviadas={totalDesviadas}
                                         isPeriodoBloqueado={isPeriodoBloqueado}

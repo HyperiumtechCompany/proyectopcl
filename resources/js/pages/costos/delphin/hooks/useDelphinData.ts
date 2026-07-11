@@ -513,6 +513,19 @@ export function useDelphinData({
         [updateBudgetField, ganttState],
     );
 
+    // ── Eliminar fila (sincroniza también budgetDirty) ────────────────────────
+    // ganttState.deleteTask solo marca dirty el árbol del cronograma (dirtyIds),
+    // pero la fila eliminada también sale de presupuesto_general en el próximo
+    // saveBudget(). Sin esto, borrar en modo "budget" no activa el botón Guardar
+    // (que en ese modo depende de budgetDirty, no de ganttState.isDirty).
+    const deleteTask = useCallback(
+        (id: number) => {
+            ganttState.deleteTask(id);
+            setBudgetDirty(true);
+        },
+        [ganttState.deleteTask],
+    );
+
     // ── Save budget ───────────────────────────────────────────────────────────
     const saveBudget = useCallback(
         async (projectId: number): Promise<boolean> => {
@@ -912,7 +925,7 @@ export function useDelphinData({
         collapseAll: ganttState.collapseAll,
         addTaskAfter: ganttState.addTaskAfter,
         addChildTask: ganttState.addChildTask,
-        deleteTask: ganttState.deleteTask,
+        deleteTask,
         indentTask: ganttState.indentTask,
         outdentTask: ganttState.outdentTask,
         moveTaskUp: ganttState.moveTaskUp,

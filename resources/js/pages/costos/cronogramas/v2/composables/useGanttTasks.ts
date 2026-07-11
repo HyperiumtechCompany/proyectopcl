@@ -637,11 +637,11 @@ export function useGanttTasks(
                     preserveRef.current,
                 );
             });
-            setDirtyIds((prev) => {
-                const s = new Set(prev);
-                s.delete(id);
-                return s;
-            });
+            // Marca el árbol como sucio (igual que el resto de mutadores): antes esta
+            // línea BORRABA el id del set de dirty, así que borrar una fila que nunca
+            // había sido editada dejaba dirtyIds vacío → isDirty=false → el botón
+            // Guardar seguía deshabilitado y la fila "eliminada" reaparecía al recargar.
+            setDirtyIds((prev) => new Set([...prev, id]));
         },
         [calendarSettings],
     );

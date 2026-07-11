@@ -1,4 +1,12 @@
-import { RefreshCw, X, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
+import {
+    ChevronDown,
+    ChevronRight,
+    RefreshCw,
+    X,
+    TrendingUp,
+    AlertTriangle,
+    Lock,
+} from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React, { useState, useRef, useMemo, useCallback } from 'react';
 import type {
@@ -26,6 +34,16 @@ const bgNivel = (n: number, isLeaf: boolean): string => {
     if (n === 2) return 'bg-slate-100 text-slate-800';
     return 'bg-slate-50 text-slate-700';
 };
+
+const parentCodes = (code: string): string[] => {
+    const parts = code.split('.').filter(Boolean);
+    return parts.slice(0, -1).map((_, idx) => parts.slice(0, idx + 1).join('.'));
+};
+
+const emptyDistribucion = (periodos: Periodo[]) =>
+    Object.fromEntries(
+        periodos.map((p) => [p.key, { monto: 0, porcentaje: 0 }]),
+    ) as ItemValorizado['distribucion'];
 
 // TIPOS
 interface FinancieroState {
@@ -244,6 +262,7 @@ interface Props {
     onLimpiar: (itemId: number | string) => void;
     mesPicoKey?: string;
     diasPorMes?: Record<string, number>;
+    jerarquiaPresupuesto?: Record<string, string>;
     desviaciones?: Record<string | number, number>;
     totalDesviadas?: number;
     isPeriodoBloqueado: (item: ItemValorizado, key: string) => boolean;
@@ -273,6 +292,7 @@ const TablaValorizada: React.FC<Props> = ({
     onLimpiar,
     mesPicoKey,
     diasPorMes,
+    jerarquiaPresupuesto = {},
     desviaciones = {},
     totalDesviadas = 0,
     isPeriodoBloqueado,
@@ -305,30 +325,102 @@ const TablaValorizada: React.FC<Props> = ({
         });
     }, []);
 
+    const treeItems = useMemo<ItemValorizado[]>(() => {
+        const byCode = new Map<string, ItemValorizado>();
+
+        items.forEach((item) => {
+            const code = item.item || '';
+            if (!code) return;
+            byCode.set(code, { ...item });
+
+            parentCodes(code).forEach((parentCode) => {
+                if (!byCode.has(parentCode)) {
+                    byCode.set(parentCode, {
+                        parent_id: null,
+                        id: `group:${parentCode}`,
+                        item: parentCode,
+                        descripcion:
+                            jerarquiaPresupuesto[parentCode] ??
+                            `Partida ${parentCode}`,
+                        und: '',
+                        metrado: 0,
+                        precio: 0,
+                        parcial: 0,
+                        is_leaf: false,
+                        distribucion: emptyDistribucion(periodos),
+                    });
+                }
+            });
+        });
+
+        const codes = [...byCode.keys()].sort((a, b) =>
+            a.localeCompare(b, 'es', { numeric: true }),
+        );
+
+        const hasChildren = new Set<string>();
+        codes.forEach((code) => {
+            parentCodes(code).forEach((parentCode) => hasChildren.add(parentCode));
+        });
+
+        const leafItems = items.filter(
+            (item) => item.item && !hasChildren.has(item.item),
+        );
+
+        codes.forEach((code) => {
+            const row = byCode.get(code);
+            if (!row || !hasChildren.has(code)) return;
+
+            const descendants = leafItems.filter((item) =>
+                item.item.startsWith(`${code}.`),
+            );
+            const parcial = descendants.reduce(
+                (acc, item) => acc + (item.parcial ?? 0),
+                0,
+            );
+            const distribucion = emptyDistribucion(periodos);
+
+            descendants.forEach((item) => {
+                periodos.forEach((periodo) => {
+                    const monto = item.distribucion?.[periodo.key]?.monto ?? 0;
+                    distribucion[periodo.key].monto += monto;
+                });
+            });
+
+            periodos.forEach((periodo) => {
+                const monto = distribucion[periodo.key].monto;
+                distribucion[periodo.key] = {
+                    monto: Math.round(monto * 100) / 100,
+                    porcentaje:
+                        parcial > 0 ? (monto / parcial) * 100 : 0,
+                };
+            });
+
+            byCode.set(code, {
+                ...row,
+                parcial,
+                distribucion,
+                is_leaf: false,
+            });
+        });
+
+        return codes
+            .map((code) => byCode.get(code))
+            .filter((item): item is ItemValorizado => Boolean(item));
+    }, [items, periodos, jerarquiaPresupuesto]);
+
     const childCodes = useMemo(() => {
-        const codes = items
-            .map((item) => item.item || '')
-            .filter(Boolean)
-            .sort();
         const result = new Set<string>();
-
-        for (let i = 0; i < codes.length - 1; i++) {
-            const code = codes[i];
-            const nextCode = codes[i + 1];
-            if (
-                nextCode.startsWith(`${code}.`) ||
-                nextCode.startsWith(`${code} `)
-            ) {
-                result.add(code);
-            }
-        }
-
+        treeItems.forEach((item) => {
+            parentCodes(item.item || '').forEach((parentCode) =>
+                result.add(parentCode),
+            );
+        });
         return result;
-    }, [items]);
+    }, [treeItems]);
 
     const visibleItems = useMemo(
         () =>
-            items.filter((item) => {
+            treeItems.filter((item) => {
                 const code = item.item || '';
                 for (const col of collapsed) {
                     if (
@@ -339,7 +431,7 @@ const TablaValorizada: React.FC<Props> = ({
                 }
                 return true;
             }),
-        [items, collapsed],
+        [treeItems, collapsed],
     );
 
     const nCols = 7 + periodos.length + 1;
@@ -528,15 +620,23 @@ const TablaValorizada: React.FC<Props> = ({
                             if (!item) return null;
                             const idx = virtualRow.index;
                             const n = nivel(item.item);
-                            const isLeaf = item.is_leaf;
                             const hasKids = childCodes.has(item.item);
+                            const isLeaf = !hasKids;
                             const isCollapsed = collapsed.has(item.item);
                             const bg = bgNivel(n, isLeaf);
                             const desvio = isLeaf
                                 ? (desviaciones[item.id] ?? 0)
                                 : 0;
                             const tieneDesv = desvio > 0.01;
-                            const totalFila = totalesPorItem[item.id] ?? 0;
+                            const totalFila = isLeaf
+                                ? (totalesPorItem[item.id] ?? 0)
+                                : periodos.reduce(
+                                      (acc, p) =>
+                                          acc +
+                                          (item.distribucion?.[p.key]?.monto ??
+                                              0),
+                                      0,
+                                  );
 
                             return (
                                 <tr
@@ -577,7 +677,11 @@ const TablaValorizada: React.FC<Props> = ({
                                                             : 'Colapsar'
                                                     }
                                                 >
-                                                    {isCollapsed ? '▶' : '▼'}
+                                                    {isCollapsed ? (
+                                                        <ChevronRight className="h-3.5 w-3.5" />
+                                                    ) : (
+                                                        <ChevronDown className="h-3.5 w-3.5" />
+                                                    )}
                                                 </button>
                                             ) : (
                                                 <span className="h-3.5 w-3.5 shrink-0" />
@@ -594,7 +698,7 @@ const TablaValorizada: React.FC<Props> = ({
                                                 {item.item}
                                             </span>
                                             <span
-                                                className={`min-w-0 leading-tight ${n <= 1 ? 'font-bold' : n === 2 ? 'font-semibold' : 'font-normal'} ${item.is_leaf ? 'italic' : ''}`}
+                                                className={`min-w-0 leading-tight ${n <= 1 ? 'font-bold' : n === 2 ? 'font-semibold' : 'font-normal'} ${isLeaf ? 'italic' : ''}`}
                                             >
                                                 {item.descripcion}
                                             </span>

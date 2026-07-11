@@ -80,12 +80,12 @@ const HeaderValorizado: React.FC<Props> = ({
             </div>
 
             {/* VOLVER - En la misma fila que el buscador */}
-            <Link
+            {/* <Link
                 href={`/costos/${project}`}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl shadow-md transition-all whitespace-nowrap"
             >
                 <ArrowLeft className="w-3.5 h-3.5" /> Volver
-            </Link>
+            </Link> */}
         </div>
 
         {/* ── Fila 2: Todos los demás botones (S/. %, Excel, PDF, Desembolso, Guardar, Limpiar) ── */}
