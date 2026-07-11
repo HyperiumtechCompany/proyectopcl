@@ -11,6 +11,7 @@ use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use App\Services\GGFijoDesagregadoService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1612,232 +1613,251 @@ class PresupuestoController extends Controller
             'update_project_prices' => 'nullable|boolean',
         ]);
 
-        DB::connection('costos_tenant')->beginTransaction();
+        // Concurrent calculateACU calls (flushPendingAcus batches up to 8 at once) can
+        // deadlock each other: syncCostoDirecto() below recalculates every ACU/partida in
+        // the whole budget, not just this one, so overlapping transactions touch shared
+        // presupuesto_general/presupuesto_acus rows in a different order and MySQL kills
+        // one as the deadlock victim (SQLSTATE 40001). That's expected/normal under
+        // concurrency — the fix is retrying the transaction, not treating it as fatal.
+        $maxAttempts = 5;
+        $concurrencyDetector = new ConcurrencyErrorDetector;
 
-        try {
-            $rendimiento = $validated['rendimiento'];
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::connection('costos_tenant')->beginTransaction();
 
-            // Calculate mano de obra costs
-            $manoDeObra = $validated['mano_de_obra'] ?? [];
-            $costoManoObra = 0;
-            foreach ($manoDeObra as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
-                // Formula: cantidad * precio_unitario
-                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 10);
-                $costoManoObra += $componente['parcial'];
-            }
-            // No rounding at category level — only at component level (round per parcial).
-            // Summing 6-decimal component parcials without extra rounding keeps
-            // costo_unitario_total = exact sum of parcials, matching the insumos total.
+            try {
+                $rendimiento = $validated['rendimiento'];
 
-            // Calculate materiales costs
-            $materiales = $validated['materiales'] ?? [];
-            $costoMateriales = 0;
-            foreach ($materiales as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
-                // Formula: cantidad * precio_unitario * factor_desperdicio
-                $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
-                $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
-                $componente['parcial'] = round($parcial, 10);
-                $costoMateriales += $componente['parcial'];
-            }
-
-            // Calculate equipos costs
-            $equipos = $validated['equipos'] ?? [];
-            $costoEquipos = 0;
-            foreach ($equipos as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
-                $descripcion = strtolower((string) ($componente['descripcion'] ?? ''));
-                $isHerramientas = str_contains($descripcion, 'herramienta');
-
-                if ($isHerramientas) {
-                    // Herramientas: porcentaje de mano de obra (cantidad = %, e.g. 3 = 3%)
-                    $precioBase = $costoManoObra;
-                    $porcentaje = $componente['cantidad'] ?? 0;
-                    $parcial = $precioBase * ($porcentaje / 100);
-                    $componente['precio_hora'] = $precioBase;
+                // Calculate mano de obra costs
+                $manoDeObra = $validated['mano_de_obra'] ?? [];
+                $costoManoObra = 0;
+                foreach ($manoDeObra as &$componente) {
+                    $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
+                    // Formula: cantidad * precio_unitario
+                    $parcial = $componente['cantidad'] * $componente['precio_unitario'];
                     $componente['parcial'] = round($parcial, 10);
-                } else {
-                    // Formula: cantidad * precio_hora
-                    $parcial = $componente['cantidad'] * $componente['precio_hora'];
+                    $costoManoObra += $componente['parcial'];
+                }
+                // No rounding at category level — only at component level (round per parcial).
+                // Summing 6-decimal component parcials without extra rounding keeps
+                // costo_unitario_total = exact sum of parcials, matching the insumos total.
+
+                // Calculate materiales costs
+                $materiales = $validated['materiales'] ?? [];
+                $costoMateriales = 0;
+                foreach ($materiales as &$componente) {
+                    $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
+                    // Formula: cantidad * precio_unitario * factor_desperdicio
+                    $factorDesperdicio = $componente['factor_desperdicio'] ?? 1.0;
+                    $parcial = $componente['cantidad'] * $componente['precio_unitario'] * $factorDesperdicio;
                     $componente['parcial'] = round($parcial, 10);
+                    $costoMateriales += $componente['parcial'];
                 }
 
-                $costoEquipos += $componente['parcial'];
-            }
+                // Calculate equipos costs
+                $equipos = $validated['equipos'] ?? [];
+                $costoEquipos = 0;
+                foreach ($equipos as &$componente) {
+                    $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
+                    $descripcion = strtolower((string) ($componente['descripcion'] ?? ''));
+                    $isHerramientas = str_contains($descripcion, 'herramienta');
 
-            // Calculate subcontratos costs
-            $subcontratos = $validated['subcontratos'] ?? [];
-            $costoSubcontratos = 0;
-            foreach ($subcontratos as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
-                // Formula: cantidad * precio_unitario
-                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 10);
-                $costoSubcontratos += $componente['parcial'];
-            }
+                    if ($isHerramientas) {
+                        // Herramientas: porcentaje de mano de obra (cantidad = %, e.g. 3 = 3%)
+                        $precioBase = $costoManoObra;
+                        $porcentaje = $componente['cantidad'] ?? 0;
+                        $parcial = $precioBase * ($porcentaje / 100);
+                        $componente['precio_hora'] = $precioBase;
+                        $componente['parcial'] = round($parcial, 10);
+                    } else {
+                        // Formula: cantidad * precio_hora
+                        $parcial = $componente['cantidad'] * $componente['precio_hora'];
+                        $componente['parcial'] = round($parcial, 10);
+                    }
 
-            // Calculate subpartidas costs
-            $subpartidas = $validated['subpartidas'] ?? [];
-            $costoSubpartidas = 0;
-            foreach ($subpartidas as &$componente) {
-                $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
-                // Formula: cantidad * precio_unitario
-                $parcial = $componente['cantidad'] * $componente['precio_unitario'];
-                $componente['parcial'] = round($parcial, 10);
-                $costoSubpartidas += $componente['parcial'];
-            }
+                    $costoEquipos += $componente['parcial'];
+                }
 
-            // ─── Update Master Project Prices if flag is active ────────────
-            if (! empty($validated['update_project_prices'])) {
-                $dbService = app(CostoDatabaseService::class);
-                $dbService->setTenantConnection($project->database_name);
+                // Calculate subcontratos costs
+                $subcontratos = $validated['subcontratos'] ?? [];
+                $costoSubcontratos = 0;
+                foreach ($subcontratos as &$componente) {
+                    $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
+                    // Formula: cantidad * precio_unitario
+                    $parcial = $componente['cantidad'] * $componente['precio_unitario'];
+                    $componente['parcial'] = round($parcial, 10);
+                    $costoSubcontratos += $componente['parcial'];
+                }
 
-                $checkAndUpdatePrice = function ($items, $priceKey) use ($project, $dbService) {
-                    foreach ($items as $item) {
-                        if (! empty($item['insumo_id'])) {
-                            $sentPrice = (float) ($item[$priceKey] ?? 0);
-                            $insumo = DB::connection('costos_tenant')
-                                ->table('insumo_productos')
-                                ->where('id', $item['insumo_id'])
-                                ->first();
+                // Calculate subpartidas costs
+                $subpartidas = $validated['subpartidas'] ?? [];
+                $costoSubpartidas = 0;
+                foreach ($subpartidas as &$componente) {
+                    $componente['cantidad'] = round((float) ($componente['cantidad'] ?? 0), 4);
+                    // Formula: cantidad * precio_unitario
+                    $parcial = $componente['cantidad'] * $componente['precio_unitario'];
+                    $componente['parcial'] = round($parcial, 10);
+                    $costoSubpartidas += $componente['parcial'];
+                }
 
-                            if ($insumo && (float) $insumo->costo_unitario !== $sentPrice) {
-                                // Price changed! Update catalog and propagate
-                                DB::connection('costos_tenant')
+                // ─── Update Master Project Prices if flag is active ────────────
+                if (! empty($validated['update_project_prices'])) {
+                    $dbService = app(CostoDatabaseService::class);
+                    $dbService->setTenantConnection($project->database_name);
+
+                    $checkAndUpdatePrice = function ($items, $priceKey) use ($project, $dbService) {
+                        foreach ($items as $item) {
+                            if (! empty($item['insumo_id'])) {
+                                $sentPrice = (float) ($item[$priceKey] ?? 0);
+                                $insumo = DB::connection('costos_tenant')
                                     ->table('insumo_productos')
-                                    ->where('id', $insumo->id)
-                                    ->update([
-                                        'costo_unitario' => $sentPrice,
-                                        'updated_at' => now(),
-                                    ]);
+                                    ->where('id', $item['insumo_id'])
+                                    ->first();
 
-                                // Update memory object for propagation
-                                $insumo->costo_unitario = $sentPrice;
-                                $dbService->propagateInsumoUpdate($project, $insumo);
+                                if ($insumo && (float) $insumo->costo_unitario !== $sentPrice) {
+                                    // Price changed! Update catalog and propagate
+                                    DB::connection('costos_tenant')
+                                        ->table('insumo_productos')
+                                        ->where('id', $insumo->id)
+                                        ->update([
+                                            'costo_unitario' => $sentPrice,
+                                            'updated_at' => now(),
+                                        ]);
+
+                                    // Update memory object for propagation
+                                    $insumo->costo_unitario = $sentPrice;
+                                    $dbService->propagateInsumoUpdate($project, $insumo);
+                                }
                             }
                         }
+                    };
+
+                    $checkAndUpdatePrice($manoDeObra, 'precio_unitario');
+                    $checkAndUpdatePrice($materiales, 'precio_unitario');
+                    $checkAndUpdatePrice($equipos, 'precio_hora');
+                    $checkAndUpdatePrice($subcontratos, 'precio_unitario');
+                    $checkAndUpdatePrice($subpartidas, 'precio_unitario');
+                }
+                // ──────────────────────────────────────────────────────────────────
+
+                // Prepare data for database
+                $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+                $acuData = [
+                    'presupuesto_id' => $tenantPresupuestoId,
+                    'partida' => $validated['partida'],
+                    'descripcion' => $validated['descripcion'],
+                    'unidad' => $validated['unidad'],
+                    'rendimiento' => $rendimiento,
+                    'mano_de_obra' => ! empty($manoDeObra) ? json_encode($manoDeObra) : null,
+                    'costo_mano_obra' => $costoManoObra,
+                    'materiales' => ! empty($materiales) ? json_encode($materiales) : null,
+                    'costo_materiales' => $costoMateriales,
+                    'equipos' => ! empty($equipos) ? json_encode($equipos) : null,
+                    'costo_equipos' => $costoEquipos,
+                    'subcontratos' => ! empty($subcontratos) ? json_encode($subcontratos) : null,
+                    'costo_subcontratos' => $costoSubcontratos,
+                    'subpartidas' => ! empty($subpartidas) ? json_encode($subpartidas) : null,
+                    'costo_subpartidas' => $costoSubpartidas,
+                    'updated_at' => now(),
+                ];
+
+                // Update or insert ACU
+                if (! empty($validated['id'])) {
+                    // Update existing ACU
+                    DB::connection('costos_tenant')
+                        ->table('presupuesto_acus')
+                        ->where('id', $validated['id'])
+                        ->update($acuData);
+
+                    $acuId = $validated['id'];
+                } else {
+                    // Insert new ACU
+                    $acuData['created_at'] = now();
+                    if ($this->hasTenantColumn('presupuesto_acus', 'item_order')) {
+                        $acuData['item_order'] = 0;
                     }
-                };
 
-                $checkAndUpdatePrice($manoDeObra, 'precio_unitario');
-                $checkAndUpdatePrice($materiales, 'precio_unitario');
-                $checkAndUpdatePrice($equipos, 'precio_hora');
-                $checkAndUpdatePrice($subcontratos, 'precio_unitario');
-                $checkAndUpdatePrice($subpartidas, 'precio_unitario');
-            }
-            // ──────────────────────────────────────────────────────────────────
-
-            // Prepare data for database
-            $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
-            $acuData = [
-                'presupuesto_id' => $tenantPresupuestoId,
-                'partida' => $validated['partida'],
-                'descripcion' => $validated['descripcion'],
-                'unidad' => $validated['unidad'],
-                'rendimiento' => $rendimiento,
-                'mano_de_obra' => ! empty($manoDeObra) ? json_encode($manoDeObra) : null,
-                'costo_mano_obra' => $costoManoObra,
-                'materiales' => ! empty($materiales) ? json_encode($materiales) : null,
-                'costo_materiales' => $costoMateriales,
-                'equipos' => ! empty($equipos) ? json_encode($equipos) : null,
-                'costo_equipos' => $costoEquipos,
-                'subcontratos' => ! empty($subcontratos) ? json_encode($subcontratos) : null,
-                'costo_subcontratos' => $costoSubcontratos,
-                'subpartidas' => ! empty($subpartidas) ? json_encode($subpartidas) : null,
-                'costo_subpartidas' => $costoSubpartidas,
-                'updated_at' => now(),
-            ];
-
-            // Update or insert ACU
-            if (! empty($validated['id'])) {
-                // Update existing ACU
-                DB::connection('costos_tenant')
-                    ->table('presupuesto_acus')
-                    ->where('id', $validated['id'])
-                    ->update($acuData);
-
-                $acuId = $validated['id'];
-            } else {
-                // Insert new ACU
-                $acuData['created_at'] = now();
-                if ($this->hasTenantColumn('presupuesto_acus', 'item_order')) {
-                    $acuData['item_order'] = 0;
+                    $acuId = DB::connection('costos_tenant')
+                        ->table('presupuesto_acus')
+                        ->insertGetId($acuData);
                 }
 
-                $acuId = DB::connection('costos_tenant')
+                // ─── Sincronizar con Tablas Hijas Especializadas ──────────────────
+                // Estas tablas permiten propagación de precios y mejor rendimiento
+                $this->syncAcuComponents($acuId, $manoDeObra, $materiales, $equipos, $subcontratos, $subpartidas);
+
+                // Fetch the complete ACU with calculated total
+                $calculatedAcu = DB::connection('costos_tenant')
                     ->table('presupuesto_acus')
-                    ->insertGetId($acuData);
-            }
+                    ->where('id', $acuId)
+                    ->first();
 
-            // ─── Sincronizar con Tablas Hijas Especializadas ──────────────────
-            // Estas tablas permiten propagación de precios y mejor rendimiento
-            $this->syncAcuComponents($acuId, $manoDeObra, $materiales, $equipos, $subcontratos, $subpartidas);
+                // Decode JSON fields for response
+                $acuArray = (array) $calculatedAcu;
+                $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
+                $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
+                $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
+                $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
+                $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
 
-            // Fetch the complete ACU with calculated total
-            $calculatedAcu = DB::connection('costos_tenant')
-                ->table('presupuesto_acus')
-                ->where('id', $acuId)
-                ->first();
+                // ── Sincronizar con Presupuesto General ───────────────────────────
+                // Buscamos la partida en presupuesto_general para actualizar su precio_unitario
+                if ($calculatedAcu) {
+                    $newUnitPrice = (float) ($calculatedAcu->costo_unitario_total ?? 0);
 
-            // Decode JSON fields for response
-            $acuArray = (array) $calculatedAcu;
-            $acuArray['mano_de_obra'] = $acuArray['mano_de_obra'] ? json_decode($acuArray['mano_de_obra'], true) : [];
-            $acuArray['materiales'] = $acuArray['materiales'] ? json_decode($acuArray['materiales'], true) : [];
-            $acuArray['equipos'] = $acuArray['equipos'] ? json_decode($acuArray['equipos'], true) : [];
-            $acuArray['subcontratos'] = $acuArray['subcontratos'] ? json_decode($acuArray['subcontratos'], true) : [];
-            $acuArray['subpartidas'] = $acuArray['subpartidas'] ? json_decode($acuArray['subpartidas'], true) : [];
-
-            // ── Sincronizar con Presupuesto General ───────────────────────────
-            // Buscamos la partida en presupuesto_general para actualizar su precio_unitario
-            if ($calculatedAcu) {
-                $newUnitPrice = (float) ($calculatedAcu->costo_unitario_total ?? 0);
-
-                // Match por código normalizado — ver CostoDatabaseService::normalizePartidaCode():
-                // presupuesto_acus.partida y presupuesto_general.partida pueden diferir en
-                // padding de ceros y un WHERE exacto puede no encontrar ninguna fila.
-                $normalizedPartida = $this->dbService->normalizePartidaCode($validated['partida']);
-                $generalRows = DB::connection('costos_tenant')
-                    ->table('presupuesto_general')
-                    ->where('presupuesto_id', $tenantPresupuestoId)
-                    ->get(['id', 'partida']);
-                foreach ($generalRows as $generalRow) {
-                    if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
-                        DB::connection('costos_tenant')
-                            ->table('presupuesto_general')
-                            ->where('id', $generalRow->id)
-                            ->update([
-                                'precio_unitario' => $newUnitPrice,
-                                'updated_at' => now(),
-                            ]);
+                    // Match por código normalizado — ver CostoDatabaseService::normalizePartidaCode():
+                    // presupuesto_acus.partida y presupuesto_general.partida pueden diferir en
+                    // padding de ceros y un WHERE exacto puede no encontrar ninguna fila.
+                    $normalizedPartida = $this->dbService->normalizePartidaCode($validated['partida']);
+                    $generalRows = DB::connection('costos_tenant')
+                        ->table('presupuesto_general')
+                        ->where('presupuesto_id', $tenantPresupuestoId)
+                        ->get(['id', 'partida']);
+                    foreach ($generalRows as $generalRow) {
+                        if ($this->dbService->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                            DB::connection('costos_tenant')
+                                ->table('presupuesto_general')
+                                ->where('id', $generalRow->id)
+                                ->update([
+                                    'precio_unitario' => $newUnitPrice,
+                                    'updated_at' => now(),
+                                ]);
+                        }
                     }
+
+                    // Recalcular el costo directo total del presupuesto
+                    $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+                }
+                // ──────────────────────────────────────────────────────────────────
+
+                DB::connection('costos_tenant')->commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'ACU calculado exitosamente',
+                    'acu' => $acuArray,
+                ]);
+            } catch (\Exception $e) {
+                DB::connection('costos_tenant')->rollBack();
+
+                if ($attempt < $maxAttempts && $concurrencyDetector->causedByConcurrencyError($e)) {
+                    usleep(random_int(50_000, 150_000) * $attempt);
+
+                    continue;
                 }
 
-                // Recalcular el costo directo total del presupuesto
-                $this->syncCostoDirecto($project->database_name, $tenantPresupuestoId);
+                Log::error('Error calculating ACU', [
+                    'project' => $project->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'attempt' => $attempt,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al calcular ACU: '.$e->getMessage(),
+                ], 500);
             }
-            // ──────────────────────────────────────────────────────────────────
-
-            DB::connection('costos_tenant')->commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'ACU calculado exitosamente',
-                'acu' => $acuArray,
-            ]);
-        } catch (\Exception $e) {
-            DB::connection('costos_tenant')->rollBack();
-            Log::error('Error calculating ACU', [
-                'project' => $project->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al calcular ACU: '.$e->getMessage(),
-            ], 500);
         }
     }
 
