@@ -3,7 +3,12 @@ import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
 
-const ACU_BATCH_SIZE = 8; // concurrent requests per round — keeps server load manageable
+// Sequential on purpose: calculateACU() recalculates the *entire* budget's ACUs on every
+// save (not just the one being saved), so concurrent requests from the same flush race to
+// update the same presupuesto_general/presupuesto_acus rows and MySQL deadlocks under load
+// (seen in production on a ~800-ACU budget — 5 server-side retries still wasn't enough at
+// batch size 8). Slower but reliable until that recalculation is scoped down.
+const ACU_BATCH_SIZE = 1;
 
 export interface AcuFlushProgress {
     done:    number;
