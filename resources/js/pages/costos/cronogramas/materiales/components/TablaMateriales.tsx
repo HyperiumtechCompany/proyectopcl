@@ -1,6 +1,6 @@
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Filter, X, Package, Tag } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import type { MaterialItem, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
 // TIPOS / PROPS
 interface Props {

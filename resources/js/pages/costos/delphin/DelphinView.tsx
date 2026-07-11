@@ -35,7 +35,7 @@ import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal'
 import { PartidasSinAcuModal } from './components/PartidasSinAcuModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { useDiccionario } from './hooks/useDiccionario';
-import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope } from './types';
+import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope, type ResumenPresupuesto } from './types';
 
 const DESC_EXPANDED_EXTRA = 180;
 
@@ -84,6 +84,7 @@ interface PageProps {
     initialRows: any[];
     initialTasks: GanttTask[];
     projectParams: Record<string, any> | null;
+    resumenPresupuesto: ResumenPresupuesto;
     projectData?: {
         id: number;
         nombre: string;
@@ -103,7 +104,7 @@ interface PageProps {
 export default function DelphinView({
     project, project_id_int, project_name,
     initialRows, initialTasks, projectParams,
-    projectData,
+    projectData, resumenPresupuesto: initialResumenPresupuesto,
 }: PageProps) {
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -111,6 +112,49 @@ export default function DelphinView({
         { title: project_name, href: `/costos/${project}` },
         { title: 'Delphin', href: '#' },
     ];
+
+    // ── Resumen (Costo Directo + Gastos Generales + Utilidad = Total) ─────────
+    const [resumenPresupuesto, setResumenPresupuesto] = useState(initialResumenPresupuesto);
+    const [savingUtilidad, setSavingUtilidad] = useState(false);
+    const [savingGastosGenerales, setSavingGastosGenerales] = useState(false);
+
+    const saveConsolidadoPorcentaje = useCallback(async (
+        field: 'utilidad_porcentaje' | 'gastos_generales_porcentaje',
+        nuevoPorcentaje: number,
+        setSaving: (v: boolean) => void,
+    ) => {
+        if (!Number.isFinite(nuevoPorcentaje) || nuevoPorcentaje < 0) return;
+        setSaving(true);
+        try {
+            const { data } = await axios.patch(
+                `/costos/proyectos/${project_id_int}/presupuesto/consolidado/snapshot`,
+                { [field]: nuevoPorcentaje },
+            );
+            if (data?.success && data?.data) {
+                setResumenPresupuesto({
+                    costoDirecto: Number(data.data.comp_i_costo_directo ?? 0),
+                    gastosGenerales: Number(data.data.comp_ii_gastos_generales ?? 0),
+                    gastosGeneralesPorcentaje: Number(data.data.comp_ii_porcentaje ?? 0),
+                    utilidad: Number(data.data.comp_iii_utilidad ?? 0),
+                    utilidadPorcentaje: Number(data.data.comp_iii_porcentaje ?? 0),
+                    total: Number(data.data.comp_iv_subtotal_sin_igv ?? 0),
+                });
+            }
+        } catch (err) {
+            console.warn(`Error al actualizar ${field}:`, err);
+        } finally {
+            setSaving(false);
+        }
+    }, [project_id_int]);
+
+    const handleUtilidadPorcentajeChange = useCallback(
+        (v: number) => saveConsolidadoPorcentaje('utilidad_porcentaje', v, setSavingUtilidad),
+        [saveConsolidadoPorcentaje],
+    );
+    const handleGastosGeneralesPorcentajeChange = useCallback(
+        (v: number) => saveConsolidadoPorcentaje('gastos_generales_porcentaje', v, setSavingGastosGenerales),
+        [saveConsolidadoPorcentaje],
+    );
 
     // ── Mode & sub-view ───────────────────────────────────────────────────────
     const [mode, setMode] = useState<DelphinMode>(() => {
@@ -869,6 +913,7 @@ export default function DelphinView({
                         acuRows={acuRows}
                         diccionario={diccionario}
                         projectName={project_name}
+                        resumenPresupuesto={resumenPresupuesto}
                         onBack={() => setBudgetView('presupuesto')}
                         onMonomiosChange={(monomios) => {
 
@@ -979,6 +1024,11 @@ export default function DelphinView({
                             <DelphinGrid
                                 rows={filteredRows}
                                 allRows={delphinRows}
+                                resumenPresupuesto={resumenPresupuesto}
+                                onUtilidadPorcentajeChange={handleUtilidadPorcentajeChange}
+                                savingUtilidad={savingUtilidad}
+                                onGastosGeneralesPorcentajeChange={handleGastosGeneralesPorcentajeChange}
+                                savingGastosGenerales={savingGastosGenerales}
                                 onHeaderHeightChange={handleGridHeaderHeight}
                                 columns={activeColumns}
                                 allColumns={allActiveColumns}

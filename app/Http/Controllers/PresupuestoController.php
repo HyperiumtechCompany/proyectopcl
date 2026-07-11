@@ -383,6 +383,7 @@ class PresupuestoController extends Controller
 
         $inputs = [
             'utilidad_porcentaje' => $request->input('utilidad_porcentaje'),
+            'gastos_generales_porcentaje' => $request->input('gastos_generales_porcentaje'),
             'igv_porcentaje' => $request->input('igv_porcentaje'),
             'componente_ii_monto' => $request->input('componente_ii_monto'),
             'componentes_extra' => $request->input('componentes_extra'),
@@ -425,6 +426,12 @@ class PresupuestoController extends Controller
         $utilidadPct = $inputs['utilidad_porcentaje'] ?? ($existing->utilidad_porcentaje ?? ($projectParams->utilidad_porcentaje ?? 5));
         $igvPct = $inputs['igv_porcentaje'] ?? ($existing->igv_porcentaje ?? ($projectParams->igv_porcentaje ?? 18));
         $componenteIIMonto = $inputs['componente_ii_monto'] ?? ($existing->componente_ii_monto ?? 0);
+        // null = usar el desagregado de gg_fijos/gg_variables (comportamiento original);
+        // un valor = Gastos Generales pasa a ser porcentaje × Costo Directo, igual que
+        // Utilidad — para proyectos que aún no cargaron su desagregado y solo quieren
+        // fijar un % directo.
+        $gastosGeneralesPctOverride = $inputs['gastos_generales_porcentaje']
+            ?? ($existing->gastos_generales_porcentaje ?? null);
 
         $extraComponents = $inputs['componentes_extra'] ?? null;
         if ($extraComponents === null) {
@@ -435,8 +442,15 @@ class PresupuestoController extends Controller
             $extraComponents = [];
         }
 
+        // Solo partidas hoja (con metrado): presupuesto_general también guarda el
+        // rollup en las filas de título/grupo (ej. "2 ESTRUCTURAS", "2.1 MOVIMIENTO
+        // DE TIERRAS"), así que un SUM(parcial) sin filtrar cuenta el costo de cada
+        // partida una vez por cada nivel de su árbol (padre + abuelo + ... + raíz),
+        // inflando Costo Directo varias veces. Mismo criterio que ConsolidadoPanel.tsx
+        // (filtra por unidad) y CronoValorizadoController (filtra por metrado > 0).
         $costoDirecto = (float) $connection->table('presupuesto_general')
             ->where('presupuesto_id', $tenantPresupuestoId)
+            ->where('metrado', '>', 0)
             ->sum('parcial');
 
         $ggFijosTotal = (float) $connection->table('gg_fijos')
@@ -466,7 +480,9 @@ class PresupuestoController extends Controller
             ->where('tipo_fila', 'detalle')
             ->sum('sub_total');
 
-        $totalGastosGenerales = $ggFijosTotal + $ggVariablesTotal;
+        $totalGastosGenerales = $gastosGeneralesPctOverride !== null
+            ? $costoDirecto * ((float) $gastosGeneralesPctOverride / 100)
+            : $ggFijosTotal + $ggVariablesTotal;
         $utilidadTotal = $costoDirecto * ($utilidadPct / 100);
         $subTotalPresupuesto = $costoDirecto + $totalGastosGenerales + $utilidadTotal;
         $igvComponenteI = $subTotalPresupuesto * ($igvPct / 100);
@@ -496,6 +512,7 @@ class PresupuestoController extends Controller
             'total_control_concurrente' => round($controlConcurrenteTotal, 4),
 
             'utilidad_porcentaje' => round((float) $utilidadPct, 4),
+            'gastos_generales_porcentaje' => $gastosGeneralesPctOverride !== null ? round((float) $gastosGeneralesPctOverride, 4) : null,
             'igv_porcentaje' => round((float) $igvPct, 4),
             'componente_ii_monto' => round($componenteIIMontoNum, 4),
             'componentes_extra_json' => json_encode($extraComponents),
@@ -1552,6 +1569,7 @@ class PresupuestoController extends Controller
             'mano_de_obra.*.precio_unitario' => 'required|numeric|min:0',
             'mano_de_obra.*.insumo_id' => 'nullable|integer',
             'mano_de_obra.*.cod_insumo' => 'nullable|string|max:50',
+            'mano_de_obra.*.codigo_producto' => 'nullable|string|max:50',
             'mano_de_obra.*.proveedor' => 'nullable|string|max:100',
             'materiales' => 'nullable|array',
             'materiales.*.descripcion' => 'required|string',
@@ -1561,6 +1579,7 @@ class PresupuestoController extends Controller
             'materiales.*.factor_desperdicio' => 'nullable|numeric|min:1',
             'materiales.*.insumo_id' => 'nullable|integer',
             'materiales.*.cod_insumo' => 'nullable|string|max:50',
+            'materiales.*.codigo_producto' => 'nullable|string|max:50',
             'materiales.*.proveedor' => 'nullable|string|max:100',
             'equipos' => 'nullable|array',
             'equipos.*.descripcion' => 'required|string',
@@ -1570,6 +1589,7 @@ class PresupuestoController extends Controller
             'equipos.*.precio_hora' => 'required|numeric|min:0',
             'equipos.*.insumo_id' => 'nullable|integer',
             'equipos.*.cod_insumo' => 'nullable|string|max:50',
+            'equipos.*.codigo_producto' => 'nullable|string|max:50',
             'equipos.*.proveedor' => 'nullable|string|max:100',
             'subcontratos' => 'nullable|array',
             'subcontratos.*.descripcion' => 'required|string',
@@ -1578,6 +1598,7 @@ class PresupuestoController extends Controller
             'subcontratos.*.precio_unitario' => 'required|numeric|min:0',
             'subcontratos.*.insumo_id' => 'nullable|integer',
             'subcontratos.*.cod_insumo' => 'nullable|string|max:50',
+            'subcontratos.*.codigo_producto' => 'nullable|string|max:50',
             'subcontratos.*.proveedor' => 'nullable|string|max:100',
             'subpartidas' => 'nullable|array',
             'subpartidas.*.descripcion' => 'required|string',
@@ -1586,6 +1607,7 @@ class PresupuestoController extends Controller
             'subpartidas.*.precio_unitario' => 'required|numeric|min:0',
             'subpartidas.*.insumo_id' => 'nullable|integer',
             'subpartidas.*.cod_insumo' => 'nullable|string|max:50',
+            'subpartidas.*.codigo_producto' => 'nullable|string|max:50',
             'subpartidas.*.proveedor' => 'nullable|string|max:100',
             'update_project_prices' => 'nullable|boolean',
         ]);
@@ -3885,6 +3907,7 @@ class PresupuestoController extends Controller
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $row['codigo_producto'] ?? null,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
@@ -3902,6 +3925,7 @@ class PresupuestoController extends Controller
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $row['codigo_producto'] ?? null,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
@@ -3919,6 +3943,7 @@ class PresupuestoController extends Controller
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $row['codigo_producto'] ?? null,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
@@ -3936,6 +3961,7 @@ class PresupuestoController extends Controller
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $row['codigo_producto'] ?? null,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],
@@ -3952,6 +3978,7 @@ class PresupuestoController extends Controller
                 'acu_id' => $acuId,
                 'insumo_id' => $row['insumo_id'] ?? null,
                 'cod_insumo' => $row['cod_insumo'] ?? null,
+                'codigo_producto' => $row['codigo_producto'] ?? null,
                 'proveedor' => $row['proveedor'] ?? null,
                 'descripcion' => $row['descripcion'],
                 'unidad' => $row['unidad'],

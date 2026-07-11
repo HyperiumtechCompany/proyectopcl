@@ -116,7 +116,17 @@ export function createAcuComponentFromResource(
 
     return {
         insumo_id: resource.id,
-        cod_insumo: resource.codigo,
+        // El código INEI (2 dígitos, ej. "47") vive en diccionario.codigo, no en
+        // resource.codigo (= insumo_productos.codigo_producto, un código compuesto
+        // como "021060001"). Agrupar por ese código compuesto rompía la Fórmula
+        // Polinómica (cada insumo del catálogo caía en su propia "columna" en vez
+        // de agruparse con el resto de su índice INEI). Con fallback a
+        // resource.codigo cuando el insumo no tiene diccionario asociado.
+        cod_insumo: resource.diccionario?.codigo ?? resource.codigo,
+        // Se conserva el código compuesto del catálogo aparte, para uso futuro
+        // (búsqueda exacta del insumo, re-sincronización de precios, exportaciones)
+        // sin perderlo al resolver el código corto de arriba.
+        codigo_producto: resource.codigo,
         descripcion: resource.descripcion,
         unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? '',
         cantidad,

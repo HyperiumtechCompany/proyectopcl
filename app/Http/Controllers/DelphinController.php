@@ -42,6 +42,7 @@ class DelphinController extends Controller
         $tasks = $this->fetchTasks($presupuestoId);
 
         $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
+        $resumenPresupuesto = $this->resumenPresupuesto($presupuestoId, $projectParams);
 
         $projectData = [
             'nombre' => $costoProject->nombre ?? 'PROYECTO',
@@ -74,7 +75,63 @@ class DelphinController extends Controller
             'initialTasks' => $tasks,
             'projectParams' => $projectParams ? (array) $projectParams : null,
             'projectData' => $projectData,
+            'resumenPresupuesto' => $resumenPresupuesto,
         ]);
+    }
+
+    /**
+     * Costo Directo + Gastos Generales + Utilidad = Total, para las filas de
+     * resumen del Presupuesto en Delphin y para el índice 39 (INE) de la
+     * Fórmula Polinómica. Lee el snapshot ya calculado en gg_consolidado
+     * (Presupuesto → Consolidado) en vez de recalcularlo — ese cálculo ya
+     * existe y persiste ahí; aquí solo se lee, sin reescribirlo, para no
+     * pisar inputs manuales (ej. utilidad_porcentaje) en cada carga de página.
+     * Si el proyecto nunca abrió Consolidado, se hace un cálculo liviano
+     * equivalente (sin persistir) para que el resumen no aparezca vacío.
+     */
+    private function resumenPresupuesto(int $presupuestoId, ?object $projectParams): array
+    {
+        $connection = DB::connection('costos_tenant');
+
+        $snapshot = $connection->table('gg_consolidado')
+            ->where('presupuesto_id', $presupuestoId)
+            ->first();
+
+        if ($snapshot) {
+            return [
+                'costoDirecto' => (float) $snapshot->comp_i_costo_directo,
+                'gastosGenerales' => (float) $snapshot->comp_ii_gastos_generales,
+                'gastosGeneralesPorcentaje' => (float) $snapshot->comp_ii_porcentaje,
+                'utilidad' => (float) $snapshot->comp_iii_utilidad,
+                'utilidadPorcentaje' => (float) $snapshot->comp_iii_porcentaje,
+                'total' => (float) $snapshot->comp_iv_subtotal_sin_igv,
+            ];
+        }
+
+        $costoDirecto = (float) $connection->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->sum('parcial');
+
+        $gastosGenerales = (float) $connection->table('gg_fijos')
+            ->where('presupuesto_id', $presupuestoId)
+            ->where('tipo_fila', 'detalle')
+            ->sum('parcial')
+            + (float) $connection->table('gg_variables')
+                ->where('presupuesto_id', $presupuestoId)
+                ->where('tipo_fila', 'detalle')
+                ->sum('parcial');
+
+        $utilidadPorcentaje = (float) ($projectParams?->utilidad_porcentaje ?? 5);
+        $utilidad = $costoDirecto * ($utilidadPorcentaje / 100);
+
+        return [
+            'costoDirecto' => $costoDirecto,
+            'gastosGenerales' => $gastosGenerales,
+            'gastosGeneralesPorcentaje' => $costoDirecto > 0 ? round(($gastosGenerales / $costoDirecto) * 100, 4) : 0,
+            'utilidad' => $utilidad,
+            'utilidadPorcentaje' => $utilidadPorcentaje,
+            'total' => $costoDirecto + $gastosGenerales + $utilidad,
+        ];
     }
 
     // DELETE /module/delphin/reset?project={id}

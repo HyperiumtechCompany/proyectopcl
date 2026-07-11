@@ -18,6 +18,7 @@ class AcuEquipo extends Model
         'acu_id',
         'insumo_id',
         'cod_insumo',
+        'codigo_producto',
         'proveedor',
         'descripcion',
         'unidad',

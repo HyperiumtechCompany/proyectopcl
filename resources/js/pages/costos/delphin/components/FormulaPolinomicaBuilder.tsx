@@ -1,5 +1,6 @@
 import { AlertTriangle, ChevronDown, ChevronRight, GripVertical, LogOut, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GRUPOS_OFICIALES, GU_CODE } from '../data/ineiIndices';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormulaIndice {
@@ -21,6 +22,9 @@ interface FormulaMonomio {
 const MAX_MONOMIOS = 8;
 const MAX_IDX_PER_MON = 3;   // art. 2: máx 3 índices por monomio
 const MIN_COEF_MON = 0.05;
+// La práctica técnica acepta símbolos multi-letra (MO, ACERO, CEM, AG, MAQ,
+// COMB, HER, TUB, LAD, MAD, CON, GU) además de las letras genéricas A, B, C…
+const MAX_NOMENCLATURA_LEN = 6;
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -43,7 +47,27 @@ function allUsedCodes(list: FormulaMonomio[]): Set<string> {
     return s;
 }
 
-// ── Auto-build: 1 monomio por insumo, sin agrupación automática ───────────────
+// ── Auto-build: agrupa por categoría oficial DS 011-79-VC ─────────────────────
+// (MO, ACERO, CEM, AG, MAQ, COMB, HER, TUB, LAD, MAD, CON — símbolos aceptados
+// por la práctica técnica), con Gastos Generales y Utilidad (GU, código 39)
+// siempre como el último monomio del polinomio. Ningún monomio supera
+// MAX_IDX_PER_MON índices; si el total de monomios supera MAX_MONOMIOS, se
+// fusionan los de menor peso entre sí (mismo límite de 3 índices) hasta encajar.
+function indiceFor(
+    code: string,
+    parentMap: Map<string, number>,
+    codeToDesc: Map<string, string>,
+    total: number,
+): FormulaIndice {
+    const coefC = (parentMap.get(code) ?? 0) / total;
+    return {
+        code,
+        descripcion: codeToDesc.get(code) ?? `Índice ${code}`,
+        coefCalculado: coefC,
+        coefDefinido: parseFloat(coefC.toFixed(3)),
+    };
+}
+
 function buildAutoMonomios(
     parentMap: Map<string, number>,
     sortedCodes: string[],
@@ -52,22 +76,101 @@ function buildAutoMonomios(
     const total = Array.from(parentMap.values()).reduce((s, v) => s + v, 0);
     if (total === 0 || sortedCodes.length === 0) return [];
 
-    return sortedCodes
-        .filter(c => (parentMap.get(c) ?? 0) > 0)
-        .sort((a, b) => (parentMap.get(b) ?? 0) - (parentMap.get(a) ?? 0))
-        .map((c, i) => {
-            const coefC = (parentMap.get(c) ?? 0) / total;
-            return {
-                id: `m-${c}-${i}`,
-                nomenclatura: LETTERS[i] ?? '?',
-                indices: [{
-                    code: c,
-                    descripcion: codeToDesc.get(c) ?? `Índice ${c}`,
-                    coefCalculado: coefC,
-                    coefDefinido: parseFloat(coefC.toFixed(3)),
-                }],
-            };
+    const weightOf = (codes: string[]) => codes.reduce((s, c) => s + (parentMap.get(c) ?? 0), 0);
+    const available = new Set(sortedCodes.filter(c => (parentMap.get(c) ?? 0) > 0));
+    const hasGu = available.has(GU_CODE);
+    const maxNonGu = MAX_MONOMIOS - (hasGu ? 1 : 0);
+
+    type Grupo = { simbolo: string; codes: string[] };
+    type Bloque = { simbolo: string; codes: string[]; weight: number };
+
+    // 1. Un "bloque" candidato por categoría oficial presente en los datos (GU
+    //    se reserva aparte), más uno por cada código suelto sin categoría.
+    const bloques: Bloque[] = [];
+    const categorizados = new Set<string>();
+    for (const g of GRUPOS_OFICIALES) {
+        if (g.codigos.includes(GU_CODE)) continue;
+        const codes = g.codigos.filter(c => available.has(c));
+        if (codes.length === 0) continue;
+        codes.sort((a, b) => (parentMap.get(b) ?? 0) - (parentMap.get(a) ?? 0));
+        codes.forEach(c => categorizados.add(c));
+        bloques.push({ simbolo: g.simbolo, codes, weight: weightOf(codes) });
+    }
+    // Códigos sin categoría oficial se agrupan en UN bloque "V" (compite por
+    // cupo como una categoría más); así "V" nunca se reparte en varios bloques
+    // de una sola pieza cada uno, lo que produciría símbolos "V" duplicados.
+    const sueltos = sortedCodes.filter(c => available.has(c) && c !== GU_CODE && !categorizados.has(c));
+    if (sueltos.length > 0) {
+        sueltos.sort((a, b) => (parentMap.get(b) ?? 0) - (parentMap.get(a) ?? 0));
+        bloques.push({ simbolo: 'V', codes: sueltos, weight: weightOf(sueltos) });
+    }
+    bloques.sort((a, b) => b.weight - a.weight);
+
+    // 2. Se van reservando monomios (ceil(codes/3) cada una) para los bloques de
+    //    mayor peso mientras alcance el cupo de MAX_MONOMIOS; lo que no entra se
+    //    junta en un pool "Varios" repartido en como mucho el cupo restante —
+    //    puede superar 3 índices en el peor caso (muchísimos materiales
+    //    distintos), pero nunca se exceden los MAX_MONOMIOS que exige la norma.
+    // Si de entrada no van a caber todos los bloques, se reserva 1 cupo para el
+    // catch-all "R" ANTES de repartir — si no, la fase "kept" puede agotar el
+    // cupo completo y el catch-all termina sumando un monomio de más.
+    const totalNecesarios = bloques.reduce((s, b) => s + Math.ceil(b.codes.length / MAX_IDX_PER_MON), 0);
+    const grupos: Grupo[] = [];
+    const overflow: string[] = [];
+    let cupo = totalNecesarios > maxNonGu ? Math.max(0, maxNonGu - 1) : maxNonGu;
+    for (const b of bloques) {
+        const necesarios = Math.ceil(b.codes.length / MAX_IDX_PER_MON);
+        if (necesarios <= cupo) {
+            for (let i = 0; i < b.codes.length; i += MAX_IDX_PER_MON) {
+                const chunk = b.codes.slice(i, i + MAX_IDX_PER_MON);
+                grupos.push({ simbolo: i === 0 ? b.simbolo : `${b.simbolo}${i / MAX_IDX_PER_MON + 1}`, codes: chunk });
+            }
+            cupo -= necesarios;
+        } else {
+            overflow.push(...b.codes);
+        }
+    }
+    if (overflow.length > 0) {
+        // "R" (Resto) — distinto de "V" (Varios/sin categoría) para no chocar
+        // símbolos si "V" ya quedó reservado como bloque propio arriba.
+        overflow.sort((a, b) => (parentMap.get(b) ?? 0) - (parentMap.get(a) ?? 0));
+        const chunkSize = cupo > 0 ? Math.max(MAX_IDX_PER_MON, Math.ceil(overflow.length / cupo)) : overflow.length;
+        for (let i = 0; i < overflow.length; i += chunkSize) {
+            const chunk = overflow.slice(i, i + chunkSize);
+            grupos.push({ simbolo: i === 0 ? 'R' : `R${i / chunkSize + 1}`, codes: chunk });
+        }
+    }
+
+    const result: FormulaMonomio[] = grupos
+        .sort((a, b) => weightOf(b.codes) - weightOf(a.codes))
+        .map(g => ({
+            id: `m-${g.simbolo}-${g.codes.join('-')}`,
+            nomenclatura: g.simbolo,
+            indices: g.codes.map(c => indiceFor(c, parentMap, codeToDesc, total)),
+        }));
+
+    // GU (Gastos Generales y Utilidad) siempre al final, símbolo fijo "GU".
+    if (hasGu) {
+        result.push({
+            id: `m-GU-${GU_CODE}`,
+            nomenclatura: 'GU',
+            indices: [indiceFor(GU_CODE, parentMap, codeToDesc, total)],
         });
+    }
+
+    // Residuo de redondeo (cada coeficiente se truncó a 3 decimales): el monomio
+    // de mayor peso lo absorbe para que Σ sea exactamente 1.000, nunca 0.998.
+    if (result.length > 0) {
+        const sumDefined = result.reduce((s, m) => s + sumDef(m), 0);
+        const residuo = Math.round((1 - sumDefined) * 1000) / 1000;
+        if (Math.abs(residuo) >= 0.0005) {
+            const biggest = result.reduce((max, m) => (sumDef(m) > sumDef(max) ? m : max), result[0]);
+            const primary = biggest.indices[0];
+            primary.coefDefinido = Math.round((primary.coefDefinido + residuo) * 1000) / 1000;
+        }
+    }
+
+    return result;
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -212,7 +315,7 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, o
     }, []);
 
     const saveNom = useCallback((mId: string, val: string) => {
-        const nom = val.toUpperCase().slice(0, 2) || '?';
+        const nom = val.toUpperCase().slice(0, MAX_NOMENCLATURA_LEN) || '?';
         setMonomios(prev => prev.map(m => m.id === mId ? { ...m, nomenclatura: nom } : m));
         setEditingNom(null);
     }, []);
@@ -400,8 +503,8 @@ export function FormulaPolinomicaBuilder({ parentMap, codeToDesc, sortedCodes, o
                                         {/* Nomenclatura */}
                                         <td className="p-1 text-center">
                                             {editingNom === mono.id ? (
-                                                <input autoFocus defaultValue={mono.nomenclatura} maxLength={2}
-                                                    className="w-14 rounded border border-sky-500 bg-slate-900 px-1 py-0.5 text-center font-mono text-[11px] font-bold uppercase text-sky-300 outline-none"
+                                                <input autoFocus defaultValue={mono.nomenclatura} maxLength={MAX_NOMENCLATURA_LEN}
+                                                    className="w-16 rounded border border-sky-500 bg-slate-900 px-1 py-0.5 text-center font-mono text-[11px] font-bold uppercase text-sky-300 outline-none"
                                                     onBlur={e => saveNom(mono.id, e.target.value)}
                                                     onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') saveNom(mono.id, (e.target as HTMLInputElement).value); }} />
                                             ) : (

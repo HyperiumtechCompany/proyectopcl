@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle2, Info, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Calendar, CheckCircle2, Info, TrendingUp, Zap } from 'lucide-react';
 import React from 'react';
+import type { ResumenProyecto } from '../types';
 
 interface CurvaSPoint {
     mes:         string;

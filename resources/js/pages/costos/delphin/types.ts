@@ -16,6 +16,18 @@ export interface BudgetFields {
     parcial: number;
 }
 
+// Costo Directo + Gastos Generales + Utilidad = Total (snapshot desde gg_consolidado,
+// ver DelphinController::resumenPresupuesto()). También alimenta el índice 39
+// (Índice general de precios al consumidor) de la Fórmula Polinómica.
+export interface ResumenPresupuesto {
+    costoDirecto: number;
+    gastosGenerales: number;
+    gastosGeneralesPorcentaje: number;
+    utilidad: number;
+    utilidadPorcentaje: number;
+    total: number;
+}
+
 export function defaultBudget(): BudgetFields {
     return { unidad: '', metrado: 0, precio_unitario: 0, parcial: 0 };
 }
