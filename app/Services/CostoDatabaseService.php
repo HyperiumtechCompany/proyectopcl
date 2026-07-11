@@ -70,6 +70,20 @@ class CostoDatabaseService
      */
     public function setTenantConnection(string $databaseName): void
     {
+        // No-op if already pointed at this database. DB::purge()+reconnect() below
+        // tears down the live PDO handle, which silently orphans any in-flight
+        // transaction: callers like calculateACU()/update() call this (directly or
+        // via getDefaultPresupuestoId()/syncCostoDirecto()) *inside* an already-open
+        // costos_tenant transaction on every request (SetCostosDatabase middleware
+        // already set it once). The orphaned connection's uncommitted locks then
+        // block the freshly-reconnected session's writes to the same rows until
+        // innodb_lock_wait_timeout fires — SQLSTATE HY000 1205 "Lock wait timeout
+        // exceeded", surfaced to the user as ACU/cronograma save 500s. Only a real
+        // switch to a different tenant database needs to purge+reconnect.
+        if (config('database.connections.costos_tenant.database') === $databaseName) {
+            return;
+        }
+
         // Ensure the full connection config exists (not just database key)
         $mysqlConfig = config('database.connections.mysql');
         $tenantConfig = array_merge($mysqlConfig, [
