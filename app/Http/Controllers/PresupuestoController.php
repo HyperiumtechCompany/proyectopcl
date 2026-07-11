@@ -3092,7 +3092,11 @@ class PresupuestoController extends Controller
         // Directo/Insumos Consolidados — ver CostoDatabaseService::widenAcuPrecisionColumns().
         $this->dbService->widenAcuPrecisionColumns();
 
-        // Ensure cod_insumo column exists in all ACU component child tables (legacy DBs)
+        // Ensure cod_insumo/codigo_producto/proveedor columns exist in all ACU component
+        // child tables (legacy DBs that predate their respective migrations — see
+        // 2026_06_22_000100/2026_06_22_000200/2026_07_10_000100_*_acu_component_tables).
+        // syncAcuComponents() writes all three unconditionally on every calculateACU call,
+        // so a tenant DB missing any of them 500s with "Unknown column" until patched here.
         $childTables = ['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'];
         foreach ($childTables as $childTable) {
             if ($schema->hasTable($childTable) && ! $schema->hasColumn($childTable, 'cod_insumo')) {
@@ -3100,9 +3104,14 @@ class PresupuestoController extends Controller
                     $table->string('cod_insumo', 50)->nullable()->after('insumo_id');
                 });
             }
+            if ($schema->hasTable($childTable) && ! $schema->hasColumn($childTable, 'codigo_producto')) {
+                $schema->table($childTable, function (Blueprint $table) {
+                    $table->string('codigo_producto', 50)->nullable()->after('cod_insumo');
+                });
+            }
             if ($schema->hasTable($childTable) && ! $schema->hasColumn($childTable, 'proveedor')) {
                 $schema->table($childTable, function (Blueprint $table) {
-                    $table->string('proveedor', 100)->nullable()->after('cod_insumo');
+                    $table->string('proveedor', 100)->nullable()->after('codigo_producto');
                 });
             }
         }

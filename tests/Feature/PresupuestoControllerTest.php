@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CostoDatabaseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PresupuestoControllerTest extends TestCase
@@ -627,6 +628,45 @@ class PresupuestoControllerTest extends TestCase
             ]);
 
         $response->assertStatus(403);
+    }
+
+    public function test_calculate_acu_self_heals_legacy_tenant_missing_codigo_producto_column(): void
+    {
+        // Regression test for a production 500 on ingenieros.tech: tenant DBs provisioned
+        // before the 2026_07_10_000100_add_codigo_producto_to_acu_component_tables migration
+        // are missing `codigo_producto` on the acu_* child tables. syncAcuComponents() writes
+        // that column unconditionally, so calculateACU 500'd with "Unknown column
+        // 'codigo_producto'" until ensureAcuSchema()'s legacy-patch covered it too.
+        $this->dbService->setTenantConnection($this->testDbName);
+        foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $table) {
+            DB::connection('costos_tenant')->statement("ALTER TABLE {$table} DROP COLUMN codigo_producto");
+        }
+
+        $response = $this->actingAs($this->user)
+            ->postJson("/costos/proyectos/{$this->project->id}/presupuesto/acus/calculate", [
+                'partida' => '01.10.01',
+                'descripcion' => 'Test legacy tenant sin codigo_producto',
+                'unidad' => 'm2',
+                'rendimiento' => 1.0,
+                'mano_de_obra' => [
+                    [
+                        'descripcion' => 'Operario',
+                        'unidad' => 'hh',
+                        'cantidad' => 1.0,
+                        'precio_unitario' => 25.50,
+                    ],
+                ],
+                'materiales' => [],
+                'equipos' => [],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertTrue(
+            Schema::connection('costos_tenant')->hasColumn('acu_mano_de_obra', 'codigo_producto'),
+            'ensureAcuSchema() should have re-added the missing codigo_producto column.'
+        );
     }
 
     public function test_calculate_acu_creates_new_acu_with_all_components(): void
