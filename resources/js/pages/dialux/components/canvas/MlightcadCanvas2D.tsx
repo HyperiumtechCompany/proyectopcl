@@ -18,7 +18,6 @@ import {
 import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { shouldEnableOverlayPointerEvents } from '@/pages/dialux/hooks/cadInteraction';
 import {
-    CONDUCTOR_WIRE_OPTIONS,
     ELECTRICAL_DEVICE_DEFAULTS,
     type ElectricalDeviceType,
 } from '@/pages/dialux/hooks/types';
@@ -102,6 +101,7 @@ const CURSOR_MAP: Record<string, string> = {
     'elec-outlet-waterproof': 'cell',
     'elec-outlet-ceiling': 'cell',
     'elec-outlet-rack': 'cell',
+    'elec-water-heater': 'cell',
 };
 
 const DRAWING_TOOLS = new Set([
@@ -133,6 +133,7 @@ const DRAWING_TOOLS = new Set([
     'elec-outlet-waterproof',
     'elec-outlet-ceiling',
     'elec-outlet-rack',
+    'elec-water-heater',
 ]);
 
 const INTERACTIVE_TOOLS = new Set([...DRAWING_TOOLS, 'select']);
@@ -437,8 +438,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     store.addConductor({
                         sourceId,
                         targetId,
-                        wireCount: CONDUCTOR_WIRE_OPTIONS[0].count,
-                        wireLabel: CONDUCTOR_WIRE_OPTIONS[0].value,
+                        wireCount: ui.wireTemplate.wireCount,
+                        wireLabel: ui.wireTemplate.wireLabel,
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',

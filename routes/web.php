@@ -66,8 +66,10 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
     Route::prefix('products')->name('products.')->group(function () {
         Route::get('/', [DialuxProductController::class, 'index'])->name('index');
         Route::post('/import', [DialuxProductController::class, 'import'])->name('import');
+        Route::post('/manual', [DialuxProductController::class, 'storeManual'])->name('store-manual');
         Route::get('/{productId}', [DialuxProductController::class, 'show'])->name('show');
         Route::delete('/{productId}', [DialuxProductController::class, 'destroy'])->name('destroy');
+        Route::patch('/{productId}/share', [DialuxProductController::class, 'share'])->name('share');
         Route::post('/{productId}/assign', [DialuxProductController::class, 'assign'])->name('assign');
         Route::get('/{productId}/source', [DialuxProductController::class, 'downloadSource'])->name('source');
     });

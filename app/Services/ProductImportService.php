@@ -69,6 +69,137 @@ class ProductImportService
         return ['product' => $product, 'warnings' => $warnings];
     }
 
+    /**
+     * Crea una luminaria a partir de datos ingresados manualmente (sin archivo IES/LDT).
+     * Sintetiza una distribución fotométrica simétrica (modelo coseno^n) a partir del
+     * ángulo de apertura (beam angle 50%) publicado en la ficha técnica del fabricante,
+     * para habilitar el cálculo punto-por-punto real en vez del Lambertiano genérico.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function createManual(array $data, ?int $userId): LuminaireProduct
+    {
+        $totalLumens = (float) $data['total_lumens'];
+        $customTable = $data['photometric_table'] ?? null;
+        $hasCustomCurve = is_array($customTable) && count($customTable) >= 3;
+
+        if ($hasCustomCurve) {
+            $photometric = $this->buildManualPhotometricWebFromTable($customTable);
+            $beamAngle50 = $photometric['beam_angle_50'];
+            $beamAngle10 = $photometric['beam_angle_10'];
+        } else {
+            $beamAngle50 = (float) $data['beam_angle_50'];
+            $photometric = $this->buildManualPhotometricWeb($totalLumens, $beamAngle50);
+            $beamAngle10 = null;
+        }
+
+        $record = array_filter([
+            'user_id' => $userId,
+            'name' => $data['name'],
+            'manufacturer' => $data['manufacturer'] ?? null,
+            'catalog_number' => $data['catalog_number'] ?? null,
+            'source_format' => 'manual',
+            'total_lumens' => $totalLumens,
+            'power_watts' => $data['power_watts'] ?? null,
+            'cct' => $data['cct'] ?? null,
+            'cri_ra' => $data['cri_ra'] ?? null,
+            'beam_angle_50' => $beamAngle50,
+            'beam_angle_10' => $beamAngle10,
+            'max_candela' => $photometric['max_candela'],
+            'fixture_type' => $data['fixture_type'] ?? null,
+            'fixture_shape' => $data['fixture_shape'] ?? null,
+            'dimensions' => $data['dimensions'] ?? null,
+            'product_image_path' => $data['product_image_path'] ?? null,
+            'brand_logo_path' => $data['brand_logo_path'] ?? null,
+        ], fn ($value): bool => $value !== null);
+
+        $record['photometric_summary'] = $hasCustomCurve
+            ? [
+                'format_version' => 'manual-custom-curve',
+                'total_lumens' => $totalLumens,
+                'beam_angle_50' => $beamAngle50,
+                'points' => count($customTable),
+            ]
+            : [
+                'format_version' => 'manual-cosine-model',
+                'total_lumens' => $totalLumens,
+                'beam_angle_50' => $beamAngle50,
+            ];
+        $record['photometric_web'] = [
+            'c_angles' => $photometric['c_angles'],
+            'gamma_angles' => $photometric['gamma_angles'],
+            'candela' => $photometric['candela'],
+        ];
+
+        $record = $this->withReportPayload($record, [
+            $hasCustomCurve
+                ? 'Distribución fotométrica ingresada manualmente por el usuario (curva propia punto a punto, simetría rotacional asumida); no proviene de un archivo IES/LDT del fabricante.'
+                : 'Distribución fotométrica sintética (modelo coseno^n) derivada del ángulo de apertura declarado; no proviene de un archivo IES/LDT del fabricante.',
+        ]);
+
+        return LuminaireProduct::query()->create($record);
+    }
+
+    /**
+     * Construye la matriz fotométrica a partir de una curva (gamma, candela) ingresada
+     * a mano por el usuario, asumiendo simetría rotacional (un solo plano C=0).
+     * El ángulo de haz (50%/10%) se calcula de la curva real en vez de declararse.
+     *
+     * @param  array<int, array{gamma: numeric, candela: numeric}>  $table
+     * @return array{c_angles: float[], gamma_angles: float[], candela: float[][], max_candela: float, beam_angle_50: float, beam_angle_10: float}
+     */
+    private function buildManualPhotometricWebFromTable(array $table): array
+    {
+        usort($table, fn (array $a, array $b): int => $a['gamma'] <=> $b['gamma']);
+
+        $gammaAngles = array_map(fn (array $row): float => (float) $row['gamma'], $table);
+        $candelaRow = array_map(fn (array $row): float => (float) $row['candela'], $table);
+        $maxCandela = $candelaRow === [] ? 0.0 : max($candelaRow);
+
+        [$beam50, $beam10] = $this->computeBeamAngles($candelaRow, $gammaAngles, $maxCandela);
+
+        return [
+            'c_angles' => [0.0],
+            'gamma_angles' => $gammaAngles,
+            'candela' => [$candelaRow],
+            'max_candela' => round($maxCandela, 1),
+            'beam_angle_50' => $beam50,
+            'beam_angle_10' => $beam10,
+        ];
+    }
+
+    /**
+     * Sintetiza una curva de candelas axialmente simétrica I(gamma) = I0 * cos(gamma)^n,
+     * resuelta para que I(beamAngle50) = I0/2, con I0 escalado para que el flujo total
+     * integrado sobre el hemisferio coincida con `totalLumens`.
+     *
+     * @return array{c_angles: float[], gamma_angles: float[], candela: float[][], max_candela: float}
+     */
+    private function buildManualPhotometricWeb(float $totalLumens, float $beamAngle50Deg): array
+    {
+        $clampedBeamAngle = min(max($beamAngle50Deg, 1.0), 89.9);
+        $cosBeam = cos(deg2rad($clampedBeamAngle));
+        $n = $cosBeam > 0.0 ? log(0.5) / log($cosBeam) : 1.0;
+        $n = max($n, 0.1);
+
+        // Flujo hemisférico: Φ = 2π·I0/(n+1)  ⇒  I0 = Φ·(n+1)/(2π)
+        $peakCandela = $totalLumens * ($n + 1) / (2 * M_PI);
+
+        $gammaAngles = [];
+        $candelaRow = [];
+        for ($deg = 0; $deg <= 90; $deg += 5) {
+            $gammaAngles[] = (float) $deg;
+            $candelaRow[] = round($peakCandela * (cos(deg2rad($deg)) ** $n), 2);
+        }
+
+        return [
+            'c_angles' => [0.0],
+            'gamma_angles' => $gammaAngles,
+            'candela' => [$candelaRow],
+            'max_candela' => round($peakCandela, 1),
+        ];
+    }
+
     // ─── Almacenamiento ───────────────────────────────────────────────────────
 
     private function storeFile(UploadedFile $file, ?int $userId): string

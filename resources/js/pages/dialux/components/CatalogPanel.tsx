@@ -1,26 +1,27 @@
 import axios from 'axios';
-import {
-    Circle,
-    Square,
-    Maximize2,
-    Minimize2,
-    Columns,
-    ArrowRight,
-    Frame,
-    Upload,
-    LayoutGrid,
-    Shield,
-    Layers,
-    ToggleLeft,
-    Box,
-    ChevronLeft,
-    ChevronRight,
-} from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import { Globe, Share2, Trash2, Upload, Wrench } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CorridorConfig } from '@/pages/dialux/hooks/types';
 import type { Fixture, Window, Door, LightSwitch, JunctionBox } from '@/pages/dialux/hooks/useEditorStore';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import * as productRoutes from '@/routes/dialux/products';
+import {
+    corridorCatalog,
+    doorCatalog,
+    fixtureCatalog,
+    isCorridorMatch,
+    isDoorMatch,
+    isFixtureMatch,
+    isWindowMatch,
+    junctionBoxCatalog,
+    switchCatalog,
+    windowCatalog,
+} from './catalogData';
+import type {
+    FixtureCatalogItem,
+    JunctionBoxCatalogItem,
+    SwitchCatalogItem,
+} from './catalogData';
 
 interface CatalogPanelProps {
     filterCategory?:
@@ -51,22 +52,6 @@ const ITEMS_PER_PAGE = 10;
 
 /* ─── Catálogo de luminarias ─────────────────────────────────────────────── */
 
-interface FixtureCatalogItem {
-    label: string;
-    brand: string;
-    icon: React.ReactNode;
-    lumens: number;
-    power?: number;
-    cct?: string;
-    template: Partial<Fixture>;
-}
-
-interface CorridorCatalogItem {
-    label: string;
-    description: string;
-    icon: React.ReactNode;
-    template: CorridorConfig;
-}
 
 interface ImportedLuminaireProduct {
     id: number;
@@ -82,6 +67,10 @@ interface ImportedLuminaireProduct {
     efficiency: number | null;
     product_image_url?: string | null;
     brand_logo_url?: string | null;
+    /** true si el propio usuario la compartió (is_global en backend) — visible para todos */
+    is_global?: boolean;
+    /** true si el producto pertenece al usuario autenticado (puede compartirla/eliminarla) */
+    is_owner?: boolean;
     report_data?: {
         technical_table?: Array<{ label: string; value: string }>;
         warnings?: string[];
@@ -89,7 +78,10 @@ interface ImportedLuminaireProduct {
     report_assets?: {
         polar_svg?: string | null;
     } | null;
+    dimensions?: { length: number; width: number; height: number } | null;
 }
+
+type PhotometricWeb = NonNullable<Fixture['photometricWeb']>;
 
 const getCsrfToken = (): string =>
     document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
@@ -153,617 +145,6 @@ const toFixtureShape = (
         : 'rectangular';
 };
 
-// ── Símbolo SVG inline del catálogo (miniatura 16×16) ────────────────────────
-const CatalogSymbolIcon: React.FC<{ symbol: string }> = ({ symbol }) => {
-    switch (symbol) {
-        case 'rect_red':
-            return <svg width="16" height="10" viewBox="0 0 16 10"><rect x="1" y="1" width="14" height="8" fill="none" stroke="#ef4444" strokeWidth="1.5" /></svg>;
-        case 'rect_green':
-            return <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#22c55e" strokeWidth="1.5" /></svg>;
-        case 'rect_white':
-            return <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="#e5e7eb" strokeWidth="1.5" /></svg>;
-        case 'circle_black':
-            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#1f2937" stroke="#374151" strokeWidth="1" /></svg>;
-        case 'circle_magenta':
-            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#d946ef" strokeWidth="1.5" /></svg>;
-        case 'spot_yellow':
-            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#eab308" strokeWidth="1.5" /><line x1="7" y1="1" x2="7" y2="13" stroke="#eab308" strokeWidth="0.8" /><line x1="1" y1="7" x2="13" y2="7" stroke="#eab308" strokeWidth="0.8" /></svg>;
-        case 'spot_orange':
-            return <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#f97316" strokeWidth="1.5" /><line x1="7" y1="2" x2="7" y2="12" stroke="#f97316" strokeWidth="0.8" /></svg>;
-        case 'emergency':
-            return <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" fill="none" stroke="#10b981" strokeWidth="1.2" /><line x1="2" y1="2" x2="12" y2="12" stroke="#10b981" strokeWidth="1.2" /><line x1="12" y1="2" x2="2" y2="12" stroke="#10b981" strokeWidth="1.2" /></svg>;
-        case 'emergency_perm':
-            return <svg width="16" height="10" viewBox="0 0 16 10"><rect x="1" y="1" width="14" height="8" fill="none" stroke="#10b981" strokeWidth="1.2" /><text x="8" y="7" textAnchor="middle" fontSize="5" fill="#10b981">S</text></svg>;
-        default:
-            return <Circle size={13} />;
-    }
-};
-
-const fixtureCatalog: FixtureCatalogItem[] = [
-    // ── Paneles LED empotrados ────────────────────────────────────────────────
-    {
-        label: 'Led 54W — 0.60×1.20m empotrado',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="rect_red" />,
-        lumens: 6000,
-        power: 54,
-        cct: '6500K',
-        template: {
-            name: 'Led 54W 0.60×1.20m',
-            fixtureType: 'panel',
-            fixtureShape: 'rectangular',
-            lumens: 6000,
-            power: 54,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 1.2, width: 0.6, height: 0.06 },
-            mountingHeight: 3.5,
-            ip: 'IP20',
-            ik: 'IK02',
-            catalogSymbol: 'rect_red',
-        },
-    },
-    {
-        label: 'Led 36W — 0.60×0.60m empotrado',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="rect_green" />,
-        lumens: 4320,
-        power: 36,
-        cct: '6500K',
-        template: {
-            name: 'Led 36W 0.60×0.60m',
-            fixtureType: 'panel',
-            fixtureShape: 'rectangular',
-            lumens: 4320,
-            power: 36,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 0.6, width: 0.6, height: 0.06 },
-            mountingHeight: 3.5,
-            ip: 'IP20',
-            ik: 'IK02',
-            catalogSymbol: 'rect_green',
-        },
-    },
-    {
-        label: 'Led 26W — 0.20×0.20m empotrado',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="rect_white" />,
-        lumens: 2580,
-        power: 26,
-        cct: '6500K',
-        template: {
-            name: 'Led 26W 0.20×0.20m',
-            fixtureType: 'panel',
-            fixtureShape: 'square',
-            lumens: 2580,
-            power: 26,
-            efficiency: 0.9,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 0.2, width: 0.2, height: 0.05 },
-            mountingHeight: 3.5,
-            ip: 'IP20',
-            ik: 'IK02',
-            catalogSymbol: 'rect_white',
-        },
-    },
-    // ── Downlights ───────────────────────────────────────────────────────────
-    {
-        label: 'Downlight adosada 14W — D=190mm',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="circle_black" />,
-        lumens: 1508,
-        power: 14,
-        cct: '6500K',
-        template: {
-            name: 'Downlight adosada 14W',
-            fixtureType: 'surface',
-            fixtureShape: 'round',
-            lumens: 1508,
-            power: 14,
-            efficiency: 0.88,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 0.19, width: 0.19, height: 0.08 },
-            mountingHeight: 3.5,
-            ip: 'IP20',
-            ik: 'IK02',
-            catalogSymbol: 'circle_black',
-        },
-    },
-    {
-        label: 'Downlight empotrado 21W — D=190mm',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="circle_magenta" />,
-        lumens: 2014,
-        power: 21,
-        cct: '6500K',
-        template: {
-            name: 'Downlight empotrado 21W',
-            fixtureType: 'recessed',
-            fixtureShape: 'round',
-            lumens: 2014,
-            power: 21,
-            efficiency: 0.88,
-            lightColor: '#f0f8ff',
-            dimensions: { length: 0.19, width: 0.19, height: 0.1 },
-            mountingHeight: 3.5,
-            ip: 'IP20',
-            ik: 'IK02',
-            catalogSymbol: 'circle_magenta',
-        },
-    },
-    // ── Reflectores ──────────────────────────────────────────────────────────
-    {
-        label: 'Reflector 330W — 38500lm adosado',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="spot_yellow" />,
-        lumens: 38500,
-        power: 330,
-        cct: '6500K',
-        template: {
-            name: 'Reflector 330W',
-            fixtureType: 'spot',
-            fixtureShape: 'round',
-            lumens: 38500,
-            power: 330,
-            efficiency: 0.9,
-            lightColor: '#fefce8',
-            dimensions: { length: 0.4, width: 0.4, height: 0.2 },
-            mountingHeight: 4.5,
-            ip: 'IP65',
-            ik: 'IK07',
-            catalogSymbol: 'spot_yellow',
-        },
-    },
-    {
-        label: 'Reflector 51W — 6505lm empotrado',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="spot_orange" />,
-        lumens: 6505,
-        power: 51,
-        cct: '6500K',
-        template: {
-            name: 'Reflector 51W',
-            fixtureType: 'recessed',
-            fixtureShape: 'round',
-            lumens: 6505,
-            power: 51,
-            efficiency: 0.88,
-            lightColor: '#fefce8',
-            dimensions: { length: 0.2, width: 0.2, height: 0.15 },
-            mountingHeight: 3.2,
-            ip: 'IP42',
-            ik: 'IK02',
-            catalogSymbol: 'spot_orange',
-        },
-    },
-    // ── Emergencia ───────────────────────────────────────────────────────────
-    {
-        label: 'Emergencia 20W — IP42 IK07',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="emergency" />,
-        lumens: 700,
-        power: 20,
-        cct: '6500K',
-        template: {
-            name: 'Emergencia 20W',
-            fixtureType: 'surface',
-            fixtureShape: 'rectangular',
-            lumens: 700,
-            power: 20,
-            efficiency: 0.85,
-            lightColor: '#d1fae5',
-            dimensions: { length: 0.3, width: 0.12, height: 0.06 },
-            mountingHeight: 3.0,
-            ip: 'IP42',
-            ik: 'IK07',
-            catalogSymbol: 'emergency',
-            emergencyType: 'emergency',
-        },
-    },
-    {
-        label: 'Emergencia permanente — 0.37×0.20m',
-        brand: 'Catálogo',
-        icon: <CatalogSymbolIcon symbol="emergency_perm" />,
-        lumens: 400,
-        power: 8,
-        cct: '6500K',
-        template: {
-            name: 'Emergencia permanente',
-            fixtureType: 'surface',
-            fixtureShape: 'rectangular',
-            lumens: 400,
-            power: 8,
-            efficiency: 0.85,
-            lightColor: '#d1fae5',
-            dimensions: { length: 0.37, width: 0.20, height: 0.06 },
-            mountingHeight: 3.5,
-            ip: 'IP42',
-            ik: 'IK07',
-            catalogSymbol: 'emergency_perm',
-            emergencyType: 'permanent',
-        },
-    },
-];
-
-// ── Catálogo de interruptores ─────────────────────────────────────────────────
-
-interface SwitchCatalogItem {
-    label: string;
-    description: string;
-    icon: React.ReactNode;
-    switchLabel: string;
-    type: LightSwitch['type'];
-}
-
-const switchCatalog: SwitchCatalogItem[] = [
-    {
-        label: 'Interruptor simple',
-        description: 'S(a) — Altura 1.40m',
-        icon: <ToggleLeft size={13} />,
-        switchLabel: 'S(a)',
-        type: 'single',
-    },
-    {
-        label: 'Interruptor conmutador',
-        description: 'Sc(a) — Altura 1.40m',
-        icon: <ToggleLeft size={13} className="text-violet-400" />,
-        switchLabel: 'Sc(a)',
-        type: 'two-way',
-    },
-    {
-        label: 'Interruptor doble bipolar',
-        description: '2S(a) — Altura 1.40m',
-        icon: <ToggleLeft size={13} className="text-sky-400" />,
-        switchLabel: '2S(a)',
-        type: 'double',
-    },
-];
-
-// ── Catálogo de cajas de pase ─────────────────────────────────────────────────
-
-interface JunctionBoxCatalogItem {
-    label: string;
-    description: string;
-    icon: React.ReactNode;
-    size: JunctionBox['size'];
-}
-
-const junctionBoxCatalog: JunctionBoxCatalogItem[] = [
-    {
-        label: 'Caja de pase 100×100×50',
-        description: 'Para empalmes de alumbrado',
-        icon: <Box size={13} />,
-        size: '100x100x50',
-    },
-    {
-        label: 'Caja de pase 100×55×50',
-        description: 'Para tomacorrientes / interruptores',
-        icon: <Box size={13} className="text-sky-400" />,
-        size: '100x55x50',
-    },
-];
-
-/* ─── Catálogo de ventanas ───────────────────────────────────────────────── */
-
-const windowCatalog: {
-    label: string;
-    material: string;
-    icon: React.ReactNode;
-    template: Partial<Window>;
-}[] = [
-    {
-        label: 'Ventana Fija Rectangular',
-        material: 'Aluminio',
-        icon: <Maximize2 size={13} />,
-        template: {
-            windowType: 'fixed',
-            windowShape: 'rectangular',
-            width: 1.2,
-            height: 1.1,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana Batiente',
-        material: 'Aluminio',
-        icon: <ArrowRight size={13} />,
-        template: {
-            windowType: 'casement',
-            windowShape: 'rectangular',
-            width: 1.0,
-            height: 1.5,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana Corrediza',
-        material: 'Aluminio',
-        icon: <Columns size={13} />,
-        template: {
-            windowType: 'sliding',
-            windowShape: 'rectangular',
-            width: 2.0,
-            height: 1.2,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana Corrediza c/Persiana',
-        material: 'PVC',
-        icon: <Columns size={13} />,
-        template: {
-            windowType: 'sliding',
-            windowShape: 'rectangular',
-            width: 1.5,
-            height: 1.2,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana Fija Cuadrada',
-        material: 'Aluminio',
-        icon: <Square size={13} />,
-        template: {
-            windowType: 'fixed',
-            windowShape: 'rectangular',
-            width: 1.0,
-            height: 1.0,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana de Baño',
-        material: 'PVC',
-        icon: <Maximize2 size={13} className="text-violet-400" />,
-        template: {
-            windowType: 'bathroom',
-            windowShape: 'rectangular',
-            width: 0.6,
-            height: 0.4,
-            sillHeight: 1.5,
-        },
-    },
-    {
-        label: 'Ojo de Buey',
-        material: 'Aluminio',
-        icon: <Circle size={13} />,
-        template: {
-            windowType: 'awning',
-            windowShape: 'circular',
-            width: 0.8,
-            height: 0.8,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventana de Arco',
-        material: 'Madera',
-        icon: <Frame size={13} />,
-        template: {
-            windowType: 'casement',
-            windowShape: 'arched',
-            width: 1.0,
-            height: 1.5,
-            sillHeight: 0.9,
-        },
-    },
-    {
-        label: 'Ventanal Panorámico',
-        material: 'Vidrio',
-        icon: <Maximize2 size={13} />,
-        template: {
-            windowType: 'fixed',
-            windowShape: 'rectangular',
-            width: 3.0,
-            height: 2.5,
-            sillHeight: 0.1,
-        },
-    },
-    {
-        label: 'Ventana Oscilante',
-        material: 'PVC',
-        icon: <ArrowRight size={13} />,
-        template: {
-            windowType: 'awning',
-            windowShape: 'rectangular',
-            width: 0.8,
-            height: 0.5,
-            sillHeight: 1.4,
-        },
-    },
-    {
-        label: 'Tragaluz / Claraboya',
-        material: 'Vidrio',
-        icon: <Circle size={13} />,
-        template: {
-            windowType: 'fixed',
-            windowShape: 'circular',
-            width: 1.0,
-            height: 1.0,
-            sillHeight: 0.5,
-        },
-    },
-];
-
-/* ─── Catálogo de puertas ────────────────────────────────────────────────── */
-
-const doorCatalog: {
-    label: string;
-    icon: React.ReactNode;
-    template: Partial<Door>;
-}[] = [
-    {
-        label: 'Vano Abierto (Hueco)',
-        icon: <Maximize2 size={13} />,
-        template: {
-            doorType: 'opening',
-            width: 0.9,
-            height: 2.1,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta Principal',
-        icon: <ArrowRight size={13} />,
-        template: {
-            doorType: 'single',
-            width: 0.9,
-            height: 2.1,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta Doble',
-        icon: <Columns size={13} />,
-        template: {
-            doorType: 'double',
-            width: 1.8,
-            height: 2.1,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta de Baño',
-        icon: <ArrowRight size={13} />,
-        template: {
-            doorType: 'single',
-            width: 0.7,
-            height: 2.0,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta Corredera',
-        icon: <Columns size={13} />,
-        template: {
-            doorType: 'sliding',
-            width: 0.9,
-            height: 2.1,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta Plegable',
-        icon: <Minimize2 size={13} />,
-        template: {
-            doorType: 'folding',
-            width: 0.8,
-            height: 2.0,
-            openingDirection: 'inward',
-        },
-    },
-    {
-        label: 'Puerta de Garaje',
-        icon: <Columns size={13} />,
-        template: {
-            doorType: 'double',
-            width: 2.5,
-            height: 2.4,
-            openingDirection: 'outward',
-        },
-    },
-    {
-        label: 'Puerta Contra Incendios',
-        icon: <Shield size={13} />,
-        template: {
-            doorType: 'single',
-            width: 0.9,
-            height: 2.1,
-            openingDirection: 'outward',
-        },
-    },
-];
-
-const corridorCatalog: CorridorCatalogItem[] = [
-    {
-        label: 'Pasadizo solo techo',
-        description: 'Losa superior / techo reflejado',
-        icon: <Layers size={13} />,
-        template: {
-            type: 'roof_only',
-            slabThickness: 0.2,
-            railingHeight: 1.05,
-        },
-    },
-    {
-        label: 'Pasadizo normal',
-        description: 'Techo y piso transitable',
-        icon: <Layers size={13} />,
-        template: { type: 'normal', slabThickness: 0.2, railingHeight: 1.05 },
-    },
-    {
-        label: 'Pasadizo techo y piso',
-        description: 'Losa completa entre niveles',
-        icon: <LayoutGrid size={13} />,
-        template: {
-            type: 'roof_floor',
-            slabThickness: 0.2,
-            railingHeight: 1.05,
-        },
-    },
-    {
-        label: 'Pasadizo con baranda cemento',
-        description: 'Piso, techo y parapeto sólido',
-        icon: <Shield size={13} />,
-        template: {
-            type: 'concrete_railings',
-            slabThickness: 0.2,
-            railingHeight: 1.05,
-        },
-    },
-    {
-        label: 'Pasadizo con baranda metal',
-        description: 'Piso, techo y barandas metálicas',
-        icon: <Minimize2 size={13} />,
-        template: {
-            type: 'metal_railings',
-            slabThickness: 0.2,
-            railingHeight: 1.05,
-        },
-    },
-    {
-        label: 'Vereda (Piso sin barandas)',
-        description: 'Piso a nivel de suelo, transitable',
-        icon: <Layers size={13} />,
-        template: {
-            type: 'sidewalk',
-            slabThickness: 0.2,
-            railingHeight: 0,
-        },
-    },
-    {
-        label: 'Rampa',
-        description: 'Superficie inclinada',
-        icon: <LayoutGrid size={13} />,
-        template: {
-            type: 'ramp',
-            slabThickness: 0.2,
-            railingHeight: 1.05,
-            rampSlope: 8,
-            rampDirection: 'north',
-        },
-    },
-];
-
-/* ─── Helpers ────────────────────────────────────────────────────────────── */
-
-const isFixtureMatch = (a?: Partial<Fixture>, b?: Partial<Fixture>) => {
-    if (a?.catalogSymbol && b?.catalogSymbol) return a.catalogSymbol === b.catalogSymbol;
-    return a?.fixtureType === b?.fixtureType && a?.fixtureShape === b?.fixtureShape && a?.lumens === b?.lumens;
-};
-
-const isWindowMatch = (a?: Partial<Window>, b?: Partial<Window>) =>
-    a?.windowType === b?.windowType &&
-    a?.windowShape === b?.windowShape &&
-    a?.width === b?.width;
-
-const isDoorMatch = (a?: Partial<Door>, b?: Partial<Door>) =>
-    a?.doorType === b?.doorType && a?.width === b?.width;
-
-const isCorridorMatch = (a?: CorridorConfig, b?: CorridorConfig) =>
-    (a?.type ?? 'roof_only') === (b?.type ?? 'roof_only');
-
 /* ─── Componente principal ───────────────────────────────────────────────── */
 
 export const CatalogPanel: React.FC<CatalogPanelProps> = ({
@@ -787,6 +168,15 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         ImportedLuminaireProduct[]
     >([]);
     const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+    const [sharingProductId, setSharingProductId] = useState<number | null>(
+        null,
+    );
+    const [deletingProductId, setDeletingProductId] = useState<
+        number | null
+    >(null);
+    const photometricWebCache = useRef<Map<number, PhotometricWeb | null>>(
+        new Map(),
+    );
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [productName, setProductName] = useState('');
     const [manufacturerName, setManufacturerName] = useState('');
@@ -795,6 +185,27 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     const [isUploading, setIsUploading] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
     const [importMessage, setImportMessage] = useState<string | null>(null);
+    const [manualMode, setManualMode] = useState(false);
+    const [manualName, setManualName] = useState('');
+    const [manualManufacturer, setManualManufacturer] = useState('');
+    const [manualCatalogNumber, setManualCatalogNumber] = useState('');
+    const [manualTotalLumens, setManualTotalLumens] = useState('');
+    const [manualPowerWatts, setManualPowerWatts] = useState('');
+    const [manualCct, setManualCct] = useState('');
+    const [manualCriRa, setManualCriRa] = useState('');
+    const [manualBeamAngle50, setManualBeamAngle50] = useState('');
+    const [manualUseCustomCurve, setManualUseCustomCurve] = useState(false);
+    const [manualCurvePoints, setManualCurvePoints] = useState<
+        Array<{ gamma: string; candela: string }>
+    >([
+        { gamma: '0', candela: '' },
+        { gamma: '30', candela: '' },
+        { gamma: '60', candela: '' },
+        { gamma: '90', candela: '' },
+    ]);
+    const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+    const [manualError, setManualError] = useState<string | null>(null);
+    const [manualMessage, setManualMessage] = useState<string | null>(null);
     const [fixturePage, setFixturePage] = useState(1);
 
     const showFixtures = filterCategory === 'luminaires' || !filterCategory;
@@ -889,6 +300,81 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         }
     }, []);
 
+    const toggleShare = async (
+        product: ImportedLuminaireProduct,
+        event: React.MouseEvent,
+    ) => {
+        event.stopPropagation();
+        if (sharingProductId !== null) return;
+
+        const nextIsGlobal = !product.is_global;
+        setSharingProductId(product.id);
+
+        try {
+            const response = await axios.patch<{
+                product: ImportedLuminaireProduct;
+            }>(
+                productRoutes.share(product.id).url,
+                { is_global: nextIsGlobal },
+                {
+                    headers: {
+                        Accept: 'application/json',
+                        ...getCsrfHeaders(),
+                    },
+                    withCredentials: true,
+                },
+            );
+
+            setImportedProducts((products) =>
+                products.map((p) =>
+                    p.id === product.id ? { ...p, ...response.data.product } : p,
+                ),
+            );
+        } catch (error) {
+            console.error(
+                '[DIAlux] No se pudo cambiar el estado de compartido',
+                error,
+            );
+        } finally {
+            setSharingProductId(null);
+        }
+    };
+
+    const deleteProduct = async (
+        product: ImportedLuminaireProduct,
+        event: React.MouseEvent,
+    ) => {
+        event.stopPropagation();
+        if (deletingProductId !== null) return;
+        if (
+            !window.confirm(
+                `¿Eliminar "${product.name}" del catálogo? Esta acción no se puede deshacer.`,
+            )
+        ) {
+            return;
+        }
+
+        setDeletingProductId(product.id);
+
+        try {
+            await axios.delete(productRoutes.destroy(product.id).url, {
+                headers: {
+                    Accept: 'application/json',
+                    ...getCsrfHeaders(),
+                },
+                withCredentials: true,
+            });
+
+            setImportedProducts((products) =>
+                products.filter((p) => p.id !== product.id),
+            );
+        } catch (error) {
+            console.error('[DIAlux] No se pudo eliminar la luminaria', error);
+        } finally {
+            setDeletingProductId(null);
+        }
+    };
+
     useEffect(() => {
         if (showFixtures) {
             void loadProducts();
@@ -937,6 +423,12 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         paginatedFixtureStart,
         paginatedFixtureEnd,
     );
+    const visibleImportedProducts = isCompactFixtureGrid
+        ? filteredImportedProducts
+        : paginatedImportedProducts;
+    const visibleFixtures = isCompactFixtureGrid
+        ? filteredFixtures
+        : paginatedFixtures;
 
     useEffect(() => {
         setFixturePage(1);
@@ -976,9 +468,36 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         onSelect?.();
     };
 
-    const setImportedFixture = (product: ImportedLuminaireProduct) => {
+    const fetchPhotometricWeb = async (
+        productId: number,
+    ): Promise<PhotometricWeb | null> => {
+        if (photometricWebCache.current.has(productId)) {
+            return photometricWebCache.current.get(productId) ?? null;
+        }
+
+        try {
+            const response = await axios.get<{
+                product: ImportedLuminaireProduct & {
+                    photometric_web?: PhotometricWeb | null;
+                };
+            }>(productRoutes.show({ productId }).url);
+            const web = response.data.product.photometric_web ?? null;
+            photometricWebCache.current.set(productId, web);
+            return web;
+        } catch (error) {
+            console.error(
+                '[DIAlux] No se pudo cargar la matriz fotométrica del producto',
+                error,
+            );
+            photometricWebCache.current.set(productId, null);
+            return null;
+        }
+    };
+
+    const setImportedFixture = async (product: ImportedLuminaireProduct) => {
         const lumens = product.total_lumens ?? 1000;
         const power = product.power_watts ?? undefined;
+        const photometricWeb = await fetchPhotometricWeb(product.id);
 
         const modelFields: Partial<Fixture> = {
             fixtureType: toFixtureType(product.fixture_type),
@@ -1000,6 +519,8 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                 product_photo_url: product.product_image_url ?? null,
                 brand_logo_url: product.brand_logo_url ?? null,
             },
+            dimensions: product.dimensions ?? undefined,
+            photometricWeb,
             name: product.name,
         };
         if (applyToFixtureIds?.length) {
@@ -1080,6 +601,149 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
             );
         } finally {
             setIsUploading(false);
+        }
+    };
+
+    const submitManualProduct = async (
+        event: React.FormEvent<HTMLFormElement>,
+    ) => {
+        event.preventDefault();
+        setManualError(null);
+        setManualMessage(null);
+
+        const totalLumens = Number.parseFloat(manualTotalLumens);
+        const beamAngle50 = Number.parseFloat(manualBeamAngle50);
+
+        if (!manualName.trim()) {
+            setManualError('El nombre de la luminaria es obligatorio.');
+            return;
+        }
+        if (!Number.isFinite(totalLumens) || totalLumens <= 0) {
+            setManualError('Ingresa el flujo luminoso total (lm).');
+            return;
+        }
+
+        let photometricTable: Array<{ gamma: number; candela: number }> | undefined;
+
+        if (manualUseCustomCurve) {
+            const parsedPoints = manualCurvePoints
+                .map((point) => ({
+                    gamma: Number.parseFloat(point.gamma),
+                    candela: Number.parseFloat(point.candela),
+                }))
+                .filter(
+                    (point) =>
+                        Number.isFinite(point.gamma) &&
+                        Number.isFinite(point.candela),
+                );
+
+            if (parsedPoints.length < 3) {
+                setManualError(
+                    'Ingresa al menos 3 puntos válidos (gamma, candela) de la curva fotométrica.',
+                );
+                return;
+            }
+            if (
+                parsedPoints.some(
+                    (point) =>
+                        point.gamma < 0 ||
+                        point.gamma > 180 ||
+                        point.candela < 0,
+                )
+            ) {
+                setManualError(
+                    'Los ángulos gamma deben estar entre 0-180° y las candelas no pueden ser negativas.',
+                );
+                return;
+            }
+            photometricTable = parsedPoints;
+        } else if (
+            !Number.isFinite(beamAngle50) ||
+            beamAngle50 <= 0 ||
+            beamAngle50 >= 180
+        ) {
+            setManualError(
+                'Ingresa el ángulo de apertura (beam angle 50%) en grados, entre 1 y 179.',
+            );
+            return;
+        }
+
+        setIsSubmittingManual(true);
+
+        try {
+            const response = await axios.post<{
+                product: ImportedLuminaireProduct;
+                message?: string;
+            }>(
+                productRoutes.storeManual.url(),
+                {
+                    name: manualName.trim(),
+                    manufacturer: manualManufacturer.trim() || undefined,
+                    catalog_number: manualCatalogNumber.trim() || undefined,
+                    total_lumens: totalLumens,
+                    power_watts: manualPowerWatts
+                        ? Number.parseFloat(manualPowerWatts)
+                        : undefined,
+                    cct: manualCct.trim() || undefined,
+                    cri_ra: manualCriRa
+                        ? Number.parseFloat(manualCriRa)
+                        : undefined,
+                    beam_angle_50: photometricTable ? undefined : beamAngle50,
+                    photometric_table: photometricTable,
+                },
+                {
+                    headers: {
+                        Accept: 'application/json',
+                        ...getCsrfHeaders(),
+                    },
+                    withCredentials: true,
+                },
+            );
+
+            setImportedProducts((products) => [
+                response.data.product,
+                ...products.filter(
+                    (product) => product.id !== response.data.product.id,
+                ),
+            ]);
+            setManualName('');
+            setManualManufacturer('');
+            setManualCatalogNumber('');
+            setManualTotalLumens('');
+            setManualPowerWatts('');
+            setManualCct('');
+            setManualCriRa('');
+            setManualBeamAngle50('');
+            setManualUseCustomCurve(false);
+            setManualCurvePoints([
+                { gamma: '0', candela: '' },
+                { gamma: '30', candela: '' },
+                { gamma: '60', candela: '' },
+                { gamma: '90', candela: '' },
+            ]);
+            setManualMessage(
+                response.data.message ?? 'Luminaria creada correctamente.',
+            );
+        } catch (error) {
+            const axiosError = error as {
+                response?: {
+                    data?: {
+                        message?: string;
+                        errors?: Record<string, string[]>;
+                    };
+                };
+            };
+            const firstValidationMessage = axiosError.response?.data?.errors
+                ? Object.values(axiosError.response.data.errors).flat()[0]
+                : null;
+
+            setManualError(
+                firstValidationMessage ??
+                    axiosError.response?.data?.message ??
+                    'No se pudo crear la luminaria.',
+            );
+        } finally {
+            setIsSubmittingManual(false);
         }
     };
 
@@ -1221,12 +885,27 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                         </button>
                         <button
                             type="button"
-                            onClick={() => setImportMode((v) => !v)}
+                            onClick={() => {
+                                setImportMode((v) => !v);
+                                setManualMode(false);
+                            }}
                             title="Importar catalogo IES / LDT"
                             className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300`}
                         >
                             <Upload size={9} />
                             IES/LDT
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setManualMode((v) => !v);
+                                setImportMode(false);
+                            }}
+                            title="Crear luminaria propia con datos manuales"
+                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300`}
+                        >
+                            <Wrench size={9} />
+                            Manual
                         </button>
                     </div>
 
@@ -1363,10 +1042,292 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                         </form>
                     )}
 
+                    {manualMode && (
+                        <form
+                            onSubmit={submitManualProduct}
+                            className="mb-1 rounded border border-dashed border-amber-700/40 bg-amber-950/20 p-2"
+                        >
+                            <p className="text-[9px] text-amber-300/80">
+                                Crear luminaria propia (sin archivo IES/LDT)
+                            </p>
+                            <p className="mt-0.5 text-[8px] leading-tight text-gray-500">
+                                Con el flujo luminoso y el ángulo de apertura
+                                (beam angle 50%) del datasheet se calcula una
+                                distribución fotométrica real para el cálculo
+                                punto-por-punto.
+                            </p>
+                            <label className="mt-1.5 flex items-center gap-1.5 text-[8px] text-amber-200/90">
+                                <input
+                                    type="checkbox"
+                                    checked={manualUseCustomCurve}
+                                    onChange={(event) =>
+                                        setManualUseCustomCurve(
+                                            event.target.checked,
+                                        )
+                                    }
+                                    className="accent-amber-500"
+                                />
+                                Tengo la curva fotométrica real del fabricante
+                                (avanzado)
+                            </label>
+                            <div className="mt-1.5 grid grid-cols-1 gap-1">
+                                <input
+                                    type="text"
+                                    value={manualName}
+                                    onChange={(event) =>
+                                        setManualName(event.target.value)
+                                    }
+                                    placeholder="Nombre de la luminaria *"
+                                    className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                />
+                                <div className="grid grid-cols-2 gap-1">
+                                    <input
+                                        type="text"
+                                        value={manualManufacturer}
+                                        onChange={(event) =>
+                                            setManualManufacturer(
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Marca"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={manualCatalogNumber}
+                                        onChange={(event) =>
+                                            setManualCatalogNumber(
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Código catálogo"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={manualTotalLumens}
+                                        onChange={(event) =>
+                                            setManualTotalLumens(
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Flujo luminoso (lm) *"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                    {!manualUseCustomCurve && (
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="179"
+                                            value={manualBeamAngle50}
+                                            onChange={(event) =>
+                                                setManualBeamAngle50(
+                                                    event.target.value,
+                                                )
+                                            }
+                                            placeholder="Ángulo apertura 50% (°) *"
+                                            className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                        />
+                                    )}
+                                </div>
+
+                                {manualUseCustomCurve && (
+                                    <div className="rounded border border-amber-800/40 bg-gray-950/30 p-1.5">
+                                        <p className="mb-1 text-[8px] leading-tight text-gray-500">
+                                            Curva de candelas por ángulo gamma
+                                            (0°=nadir, hacia abajo). Se asume
+                                            simetría rotacional (un solo plano
+                                            C). El ángulo de haz se calcula
+                                            solo — no lo declares arriba.
+                                        </p>
+                                        <div className="flex flex-col gap-1">
+                                            {manualCurvePoints.map(
+                                                (point, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="grid grid-cols-[1fr_1fr_auto] gap-1"
+                                                    >
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="180"
+                                                            value={point.gamma}
+                                                            onChange={(
+                                                                event,
+                                                            ) =>
+                                                                setManualCurvePoints(
+                                                                    (
+                                                                        points,
+                                                                    ) =>
+                                                                        points.map(
+                                                                            (
+                                                                                p,
+                                                                                i,
+                                                                            ) =>
+                                                                                i ===
+                                                                                index
+                                                                                    ? {
+                                                                                          ...p,
+                                                                                          gamma: event
+                                                                                              .target
+                                                                                              .value,
+                                                                                      }
+                                                                                    : p,
+                                                                        ),
+                                                                )
+                                                            }
+                                                            placeholder="Gamma (°)"
+                                                            className="rounded border border-gray-700/70 bg-gray-900/60 px-1.5 py-0.5 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={
+                                                                point.candela
+                                                            }
+                                                            onChange={(
+                                                                event,
+                                                            ) =>
+                                                                setManualCurvePoints(
+                                                                    (
+                                                                        points,
+                                                                    ) =>
+                                                                        points.map(
+                                                                            (
+                                                                                p,
+                                                                                i,
+                                                                            ) =>
+                                                                                i ===
+                                                                                index
+                                                                                    ? {
+                                                                                          ...p,
+                                                                                          candela:
+                                                                                              event
+                                                                                                  .target
+                                                                                                  .value,
+                                                                                      }
+                                                                                    : p,
+                                                                        ),
+                                                                )
+                                                            }
+                                                            placeholder="Candela (cd)"
+                                                            className="rounded border border-gray-700/70 bg-gray-900/60 px-1.5 py-0.5 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setManualCurvePoints(
+                                                                    (
+                                                                        points,
+                                                                    ) =>
+                                                                        points.filter(
+                                                                            (
+                                                                                _,
+                                                                                i,
+                                                                            ) =>
+                                                                                i !==
+                                                                                index,
+                                                                        ),
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                manualCurvePoints.length <=
+                                                                3
+                                                            }
+                                                            title="Quitar punto"
+                                                            className="rounded border border-gray-700/70 px-1.5 text-[9px] text-gray-400 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-30"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setManualCurvePoints(
+                                                    (points) => [
+                                                        ...points,
+                                                        {
+                                                            gamma: '',
+                                                            candela: '',
+                                                        },
+                                                    ],
+                                                )
+                                            }
+                                            className="mt-1 w-full rounded border border-dashed border-gray-700/70 py-0.5 text-[8px] text-gray-400 hover:bg-gray-800"
+                                        >
+                                            + Agregar punto
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-3 gap-1">
+                                    <input
+                                        type="number"
+                                        min="0.1"
+                                        value={manualPowerWatts}
+                                        onChange={(event) =>
+                                            setManualPowerWatts(
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Potencia (W)"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={manualCct}
+                                        onChange={(event) =>
+                                            setManualCct(event.target.value)
+                                        }
+                                        placeholder="CCT (ej. 4000K)"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={manualCriRa}
+                                        onChange={(event) =>
+                                            setManualCriRa(event.target.value)
+                                        }
+                                        placeholder="CRI (Ra)"
+                                        className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded bg-amber-700/70 py-1 text-[9px] text-amber-50 transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={isSubmittingManual}
+                            >
+                                <Wrench size={9} />
+                                {isSubmittingManual
+                                    ? 'Creando...'
+                                    : 'Crear luminaria'}
+                            </button>
+                            {manualError && (
+                                <p className="mt-1 text-[8px] leading-tight text-red-300">
+                                    {manualError}
+                                </p>
+                            )}
+                            {manualMessage && (
+                                <p className="mt-1 text-[8px] leading-tight text-emerald-300">
+                                    {manualMessage}
+                                </p>
+                            )}
+                        </form>
+                    )}
+
                     {isCompactFixtureGrid && (
                         <>
                             <div className="grid min-h-[17.5rem] grid-cols-3 grid-rows-5 gap-1">
-                                {paginatedImportedProducts.map((product) => {
+                                {visibleImportedProducts.map((product) => {
                                     const isActive =
                                         fixtureTemplate.brand ===
                                             (product.manufacturer ??
@@ -1415,7 +1376,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     );
                                 })}
 
-                                {paginatedFixtures.map((item, i) => {
+                                {visibleFixtures.map((item, i) => {
                                     const isActive = isFixtureMatch(
                                         item.template,
                                         fixtureTemplate,
@@ -1450,45 +1411,6 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 })}
                             </div>
 
-                            {totalFixtures > fixturePageSize && (
-                                <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-700/40 pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setFixturePage((page) =>
-                                                Math.max(1, page - 1),
-                                            )
-                                        }
-                                        disabled={fixturePage === 1}
-                                        className="flex h-7 w-8 items-center justify-center rounded border border-gray-700/60 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                        title="Anterior"
-                                    >
-                                        <ChevronLeft size={14} />
-                                    </button>
-                                    <span className="text-[10px] text-gray-500">
-                                        Pagina {fixturePage} de{' '}
-                                        {fixturePageCount}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setFixturePage((page) =>
-                                                Math.min(
-                                                    fixturePageCount,
-                                                    page + 1,
-                                                ),
-                                            )
-                                        }
-                                        disabled={
-                                            fixturePage === fixturePageCount
-                                        }
-                                        className="flex h-7 w-8 items-center justify-center rounded border border-gray-700/60 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                        title="Siguiente"
-                                    >
-                                        <ChevronRight size={14} />
-                                    </button>
-                                </div>
-                            )}
                         </>
                     )}
 
@@ -1561,6 +1483,75 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                                     : ''}
                                             </p>
                                         </div>
+                                        {product.is_owner ? (
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(event) =>
+                                                    toggleShare(product, event)
+                                                }
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault();
+                                                        toggleShare(product, event as unknown as React.MouseEvent);
+                                                    }
+                                                }}
+                                                title={
+                                                    product.is_global
+                                                        ? 'Compartida con todos los usuarios (clic para dejar de compartir)'
+                                                        : 'Compartir con todos los usuarios'
+                                                }
+                                                className={`shrink-0 rounded p-1 transition-colors ${
+                                                    product.is_global
+                                                        ? 'text-sky-400 hover:bg-sky-900/40'
+                                                        : 'text-gray-600 hover:bg-gray-700/60 hover:text-gray-300'
+                                                } ${sharingProductId === product.id ? 'opacity-50' : ''}`}
+                                            >
+                                                {product.is_global ? (
+                                                    <Globe size={12} />
+                                                ) : (
+                                                    <Share2 size={12} />
+                                                )}
+                                            </span>
+                                        ) : (
+                                            product.is_global && (
+                                                <span
+                                                    className="shrink-0 rounded bg-sky-900/40 p-1 text-sky-400"
+                                                    title="Compartida por otro usuario"
+                                                >
+                                                    <Globe size={12} />
+                                                </span>
+                                            )
+                                        )}
+                                        {product.is_owner && (
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(event) =>
+                                                    deleteProduct(
+                                                        product,
+                                                        event,
+                                                    )
+                                                }
+                                                onKeyDown={(event) => {
+                                                    if (
+                                                        event.key ===
+                                                            'Enter' ||
+                                                        event.key === ' '
+                                                    ) {
+                                                        event.preventDefault();
+                                                        deleteProduct(
+                                                            product,
+                                                            event as unknown as React.MouseEvent,
+                                                        );
+                                                    }
+                                                }}
+                                                title="Eliminar esta luminaria"
+                                                className={`shrink-0 rounded p-1 text-gray-600 transition-colors hover:bg-red-900/40 hover:text-red-400 ${deletingProductId === product.id ? 'opacity-50' : ''}`}
+                                            >
+                                                <Trash2 size={12} />
+                                            </span>
+                                        )}
                                         {isActive && (
                                             <span className="shrink-0 rounded bg-emerald-900/50 px-1 py-0.5 text-[8px] text-emerald-400">
                                                 â—

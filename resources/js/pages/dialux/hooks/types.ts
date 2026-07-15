@@ -16,7 +16,8 @@ export type DrawTool =
     | 'elec-transfer' | 'elec-arrival' | 'elec-junction-box'
     | 'elec-earth-pit' | 'elec-facp'
     | 'elec-outlet-floor' | 'elec-outlet-waterproof'
-    | 'elec-outlet-ceiling' | 'elec-outlet-rack';
+    | 'elec-outlet-ceiling' | 'elec-outlet-rack'
+    | 'elec-water-heater';
 
 export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
@@ -198,6 +199,10 @@ export interface Room {
     material?: 'brick' | 'adobe';
     /** Uso normativo del recinto (vivienda / educaciÃƒÂ³n / genÃƒÂ©rico) */
     normativeUse?: 'housing' | 'education' | 'generic';
+    /** Reflectancias de superficies (0-1) para el cálculo dinámico del factor de utilización. Defaults típicos: techo 0.7, pared 0.5, piso 0.2. */
+    ceilingReflectance?: number | null;
+    wallReflectance?: number | null;
+    floorReflectance?: number | null;
 }
 
 /** ConfiguraciÃƒÂ³n normativa del proyecto (sincronizada con backend) */
@@ -387,6 +392,12 @@ export interface Fixture {
     } | null;
     ugrTable?: number[][] | null;
     ugrDiagramValue?: string | null;
+    /** Matriz fotométrica real (IES/LDT) para cálculo punto-por-punto. Si falta, se usa un modelo Lambertiano aproximado. */
+    photometricWeb?: {
+        c_angles: number[];
+        gamma_angles: number[];
+        candela: number[][];
+    } | null;
     polarDiagramAssetId?: string | null;
     productPhotoAssetId?: string | null;
     brandLogoAssetId?: string | null;
@@ -468,7 +479,8 @@ export type ElectricalDeviceType =
     | 'outlet_floor'
     | 'outlet_waterproof'
     | 'outlet_ceiling'
-    | 'outlet_rack';
+    | 'outlet_rack'
+    | 'water_heater_30l';
 
 /** Propiedades tecnicas especificas de cada dispositivo */
 export interface ElectricalDeviceProperties {
@@ -511,7 +523,7 @@ export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
     mountingHeight: number;
     properties: ElectricalDeviceProperties;
 }> = {
-    meter:             { label: 'Medidor',    mountingHeight: 1.20, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
+    meter:             { label: 'Medidor',    mountingHeight: 1.20, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
     main_panel:        { label: 'TG',         mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
     sub_panel:         { label: 'TD-01',      mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
     transfer_switch:   { label: 'ATS',        mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
@@ -523,6 +535,7 @@ export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
     outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    water_heater_30l:  { label: 'TE',         mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxSize: '575x340x340', boxMaterial: 'TERMA 30L' } },
 };
 
 /** Caja de pase independiente (legacy Ã¢â‚¬â€ usar ElectricalDevice type=junction_box) */

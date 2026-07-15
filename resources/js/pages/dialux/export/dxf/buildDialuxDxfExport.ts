@@ -716,6 +716,20 @@ function renderRackOutlet(out: DxfLines, dev: ElectricalDevice): void {
     dxfText(out, 'TEXTO_ELEC', dev.x - 0.045, dev.y - 0.02, 0.055, 'TR');
 }
 
+function renderWaterHeater(out: DxfLines, dev: ElectricalDevice): void {
+    const hw = 0.16;
+    const hh = 0.09;
+    dxfPolyLines(out, 'DISP_ELECTRICOS', [
+        { x: dev.x - hw, y: dev.y - hh },
+        { x: dev.x + hw * 0.45, y: dev.y - hh },
+        { x: dev.x + hw * 0.45, y: dev.y + hh },
+        { x: dev.x - hw, y: dev.y + hh },
+    ], true);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x - hw * 0.9, dev.y - hh * 0.72, dev.x + hw * 0.3, dev.y + hh * 0.72);
+    dxfLine(out, 'DISP_ELECTRICOS', dev.x + hw * 0.3, dev.y - hh * 0.72, dev.x - hw * 0.9, dev.y + hh * 0.72);
+    dxfText(out, 'TEXTO_ELEC', dev.x + hw * 0.6, dev.y - 0.025, 0.07, 'TE');
+}
+
 function renderElectricalDevices(out: DxfLines, devices: ElectricalDevice[]): void {
     const HS = 0.075; // half-size: 15 cm square symbol
     for (const dev of devices) {
@@ -736,6 +750,11 @@ function renderElectricalDevices(out: DxfLines, devices: ElectricalDevice[]): vo
 
         if (dev.type === 'outlet_rack') {
             renderRackOutlet(out, dev);
+            continue;
+        }
+
+        if (dev.type === 'water_heater_30l') {
+            renderWaterHeater(out, dev);
             continue;
         }
 

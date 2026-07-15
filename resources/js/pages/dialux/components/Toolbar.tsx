@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { createScaleConfig, useEditorStore, useScaleConfig} from '@/pages/dialux/hooks/useEditorStore';
 import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
 import { saveDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getEffectiveScale } from './canvas/canvasUtils';
@@ -89,16 +90,27 @@ export const Toolbar: React.FC = () => {
                             await applyScaleConfig(
                                 store.activeScene()!.scaleConfig,
                                 false,
+                                true,
                             );
                         } else {
-                            const suggested = store.detectScaleFromExtents({
-                                min_x: ext.minX,
-                                min_y: ext.minY,
-                                max_x: ext.maxX,
-                                max_y: ext.maxY,
-                            });
+                            const headerUnit = file.name.toLowerCase().endsWith('.dxf')
+                                ? detectDxfUnitFromHeader(await file.text())
+                                : null;
+                            const suggested = headerUnit
+                                ? createScaleConfig(headerUnit.unit, headerUnit.factor, headerUnit.displayUnit)
+                                : store.detectScaleFromExtents({
+                                      min_x: ext.minX,
+                                      min_y: ext.minY,
+                                      max_x: ext.maxX,
+                                      max_y: ext.maxY,
+                                  });
                             setDetectedScale(suggested);
-                            await applyScaleConfig(suggested, true);
+                            // La unidad declarada en el DXF ($INSUNITS) es confiable y se
+                            // confirma sola. La heurística por tamaño de extents NO lo es
+                            // (puede confundir cm con mm) — se aplica para que el plano se
+                            // vea de inmediato, pero queda "sin confirmar" hasta que el
+                            // usuario la revise, la cambie o calibre manualmente.
+                            await applyScaleConfig(suggested, true, headerUnit !== null);
                         }
                     } else setDetectedScale(null);
                     setIsImportModalOpen(true);
@@ -111,11 +123,11 @@ export const Toolbar: React.FC = () => {
     );
 
     const applyScaleConfig = useCallback(
-        async (config: ScaleConfig, rescaleObjects = true) => {
+        async (config: ScaleConfig, rescaleObjects = true, markConfirmed = true) => {
             const prevEffective = getEffectiveScale(scaleConfig);
             store.setScaleConfig(config, rescaleObjects);
             setDetectedScale(config);
-            setScaleConfirmed(true);
+            setScaleConfirmed(markConfirmed);
             if (pendingFile?.name.toLowerCase().endsWith('.dxf')) {
                 await parseDxf?.(pendingFile, getEffectiveScale(config));
             }
@@ -329,6 +341,8 @@ export const Toolbar: React.FC = () => {
                         onSetTool={store.setTool}
                         switchTemplate={store.ui.switchTemplate}
                         onSetSwitchTemplate={store.setSwitchTemplate}
+                        wireTemplate={store.ui.wireTemplate}
+                        onSetWireTemplate={store.setWireTemplate}
                         gridRows={store.ui.fixtureGridRows}
                         gridCols={store.ui.fixtureGridCols}
                         onSetRows={store.setFixtureGridRows}
@@ -416,8 +430,24 @@ export const Toolbar: React.FC = () => {
             )}
 
             {/* ── Import & Scale Modal ── */}
-            <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-                <DialogContent className="border-gray-800 bg-[#161820] text-gray-100 sm:max-w-md">
+            <Dialog
+                open={isImportModalOpen}
+                onOpenChange={(open) => {
+                    // Si la escala no fue confirmada (solo heurística por tamaño,
+                    // no el $INSUNITS del archivo), no dejamos cerrar el modal sin
+                    // que el usuario decida algo — evita planos con dimensiones
+                    // reales incorrectas pasando desapercibidos.
+                    if (!open && detectedScale && !scaleConfirmed) return;
+                    setIsImportModalOpen(open);
+                }}>
+                <DialogContent
+                    className="border-gray-800 bg-[#161820] text-gray-100 sm:max-w-md"
+                    onPointerDownOutside={(e) => {
+                        if (detectedScale && !scaleConfirmed) e.preventDefault();
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (detectedScale && !scaleConfirmed) e.preventDefault();
+                    }}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-cyan-400">
                             <Upload size={20} /> Importar Plano CAD
@@ -430,6 +460,34 @@ export const Toolbar: React.FC = () => {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
+                        {detectedScale && !scaleConfirmed && (
+                            <div className="rounded-lg border border-amber-600/50 bg-amber-950/30 p-3 text-amber-200">
+                                <p className="text-xs font-bold text-amber-400">
+                                    ⚠ Escala sin confirmar
+                                </p>
+                                <p className="mt-1 text-[10px] leading-snug">
+                                    El archivo no declara sus unidades reales
+                                    ($INSUNITS). Estimamos{' '}
+                                    <span className="font-mono">
+                                        {detectedScale.displayUnit}
+                                    </span>{' '}
+                                    por el tamaño del plano, pero podría estar
+                                    equivocado (ej. confundir cm con mm). Confirma
+                                    la unidad correcta o calibra manualmente antes
+                                    de continuar — de lo contrario el plano puede
+                                    no medir lo mismo que en el CAD original.
+                                </p>
+                                <Button
+                                    size="sm"
+                                    className="mt-2 bg-amber-600 text-white hover:bg-amber-500"
+                                    onClick={() =>
+                                        applyScaleConfig(detectedScale)
+                                    }>
+                                    Confirmar {detectedScale.displayUnit}
+                                </Button>
+                            </div>
+                        )}
+
                         <div className="rounded-lg border border-cyan-900/30 bg-cyan-950/20 p-4">
                             <h4 className="mb-2 text-xs font-bold tracking-wider text-cyan-300 uppercase">
                                 Unidades del archivo
@@ -455,27 +513,6 @@ export const Toolbar: React.FC = () => {
                             </select>
                         </div>
 
-                        {detectedScale && !scaleConfirmed && (
-                            <div className="flex items-center justify-between rounded-lg border border-amber-600/30 bg-amber-950/30 p-3 text-amber-200">
-                                <div>
-                                    <p className="text-xs font-bold text-amber-400">
-                                        Auto-detección
-                                    </p>
-                                    <p className="text-[10px]">
-                                        {detectedScale.displayUnit}
-                                    </p>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    className="bg-amber-600 text-white hover:bg-amber-500"
-                                    onClick={() =>
-                                        applyScaleConfig(detectedScale)
-                                    }>
-                                    Confirmar
-                                </Button>
-                            </div>
-                        )}
-
                         <div className="rounded-lg border border-gray-700 bg-gray-800/30 p-4">
                             <h4 className="mb-1 text-xs font-bold tracking-wider text-gray-400 uppercase">
                                 Calibración manual
@@ -489,6 +526,7 @@ export const Toolbar: React.FC = () => {
                                 size="sm"
                                 className="gap-2 bg-gray-700 hover:bg-gray-600"
                                 onClick={() => {
+                                    setScaleConfirmed(true);
                                     store.setTool('calibrate');
                                     setIsImportModalOpen(false);
                                 }}>
@@ -497,7 +535,15 @@ export const Toolbar: React.FC = () => {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button className="bg-cyan-600 font-bold text-white hover:bg-cyan-500" onClick={() => setIsImportModalOpen(false)}>
+                        <Button
+                            className="bg-cyan-600 font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={!!detectedScale && !scaleConfirmed}
+                            title={
+                                detectedScale && !scaleConfirmed
+                                    ? 'Confirma la unidad o inicia una calibración manual primero'
+                                    : undefined
+                            }
+                            onClick={() => setIsImportModalOpen(false)}>
                             Listo
                         </Button>
                     </DialogFooter>

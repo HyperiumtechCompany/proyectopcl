@@ -190,6 +190,107 @@ test('authenticated users can import an extended ldt luminaire product without s
         ->and($product->max_candela)->toBe(711.3);
 });
 
+test('authenticated users can create a luminaire manually with a synthetic photometric distribution', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->postJson(route('dialux.products.store-manual'), [
+            'name' => 'Downlight Manual 15W',
+            'manufacturer' => 'Marca Propia',
+            'total_lumens' => 1500,
+            'power_watts' => 15,
+            'cct' => '4000K',
+            'cri_ra' => 80,
+            'beam_angle_50' => 60,
+            'fixture_type' => 'recessed',
+        ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('product.name', 'Downlight Manual 15W')
+        ->assertJsonPath('product.source_format', 'manual')
+        ->assertJsonPath('product.total_lumens', 1500)
+        ->assertJsonPath('product.beam_angle_50', 60);
+
+    $product = LuminaireProduct::query()->where('user_id', $user->id)->firstOrFail();
+
+    expect($product->photometric_web)->toHaveKeys(['c_angles', 'gamma_angles', 'candela'])
+        ->and(array_map('floatval', $product->photometric_web['gamma_angles']))->toContain(0.0, 60.0, 90.0)
+        ->and($product->max_candela)->toBeGreaterThan(0);
+
+    // A la mitad del ángulo de apertura (gamma=60), la candela debe rondar la mitad del pico (definición de beam angle 50%).
+    $gammaIndex = array_search(60.0, array_map('floatval', $product->photometric_web['gamma_angles']), true);
+    $candelaAtBeamAngle = $product->photometric_web['candela'][0][$gammaIndex];
+    expect($candelaAtBeamAngle / $product->max_candela)->toBeGreaterThan(0.45)
+        ->and($candelaAtBeamAngle / $product->max_candela)->toBeLessThan(0.55);
+});
+
+test('authenticated users can create a luminaire with their own photometric curve, not just the synthetic model', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->postJson(route('dialux.products.store-manual'), [
+            'name' => 'Reflector Asimétrico Propio',
+            'manufacturer' => 'Marca Propia',
+            'total_lumens' => 5000,
+            'power_watts' => 45,
+            // Curva "batwing": candela baja en nadir, pico fuera de eje — el
+            // modelo sintético coseno^n nunca podría representar esta forma.
+            'photometric_table' => [
+                ['gamma' => 0, 'candela' => 200],
+                ['gamma' => 15, 'candela' => 400],
+                ['gamma' => 30, 'candela' => 800],
+                ['gamma' => 45, 'candela' => 1200],
+                ['gamma' => 60, 'candela' => 900],
+                ['gamma' => 75, 'candela' => 300],
+                ['gamma' => 90, 'candela' => 0],
+            ],
+        ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('product.name', 'Reflector Asimétrico Propio')
+        ->assertJsonPath('product.source_format', 'manual')
+        // El ángulo de haz NO se declaró — se calculó de la curva real: el
+        // ángulo más amplio con candela >= 50% del pico (1200 en gamma=45)
+        // es gamma=60 (900/1200 = 75%), no el gamma del propio pico.
+        ->assertJsonPath('product.beam_angle_50', 60)
+        ->assertJsonPath('product.max_candela', 1200);
+
+    $product = LuminaireProduct::query()->where('user_id', $user->id)->firstOrFail();
+
+    expect($product->photometric_summary['format_version'])->toBe('manual-custom-curve')
+        ->and($product->photometric_web['gamma_angles'])->toBe([0, 15, 30, 45, 60, 75, 90])
+        ->and($product->photometric_web['candela'][0])->toBe([200, 400, 800, 1200, 900, 300, 0]);
+});
+
+test('manual photometric curve requires at least 3 points', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('dialux.products.store-manual'), [
+            'name' => 'Curva incompleta',
+            'total_lumens' => 1000,
+            'photometric_table' => [
+                ['gamma' => 0, 'candela' => 100],
+                ['gamma' => 45, 'candela' => 50],
+            ],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['photometric_table']);
+});
+
+test('manual luminaire creation requires beam angle and total lumens', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('dialux.products.store-manual'), [
+            'name' => 'Sin datos fotometricos',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['total_lumens', 'beam_angle_50']);
+});
+
 test('authenticated users can list their imported products', function () {
     $user = User::factory()->create();
 
@@ -276,4 +377,72 @@ test('assigning a product stores a project snapshot', function () {
     expect($snapshot['name'])->toBe('Panel snapshot')
         ->and($snapshot['report_data']['technical_table'][0]['value'])->toBe('Panel snapshot')
         ->and(DB::table('project_products')->value('quantity_used'))->toBe(4);
+});
+
+test('owners can share their luminaire so other users can see and use it', function () {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $owner->id,
+        'name' => 'Panel compartible',
+        'manufacturer' => 'Test Lighting',
+        'source_format' => 'manual',
+        'total_lumens' => 3200,
+        'power_watts' => 32,
+        'fixture_type' => 'panel',
+        'fixture_shape' => 'rectangular',
+    ]);
+
+    // Antes de compartir, otro usuario no puede verlo.
+    $this->actingAs($otherUser)
+        ->getJson(route('dialux.products.show', $product))
+        ->assertNotFound();
+
+    $this->actingAs($owner)
+        ->patchJson(route('dialux.products.share', $product), ['is_global' => true])
+        ->assertSuccessful()
+        ->assertJsonPath('product.is_global', true)
+        ->assertJsonPath('product.is_owner', true);
+
+    expect($product->refresh()->is_global)->toBeTrue();
+
+    // Ahora sí es visible y aparece marcado como no-propio para el otro usuario.
+    $this->actingAs($otherUser)
+        ->getJson(route('dialux.products.show', $product))
+        ->assertSuccessful()
+        ->assertJsonPath('product.is_owner', false);
+
+    $this->actingAs($owner)
+        ->patchJson(route('dialux.products.share', $product), ['is_global' => false])
+        ->assertSuccessful()
+        ->assertJsonPath('product.is_global', false);
+
+    expect($product->refresh()->is_global)->toBeFalse();
+
+    $this->actingAs($otherUser)
+        ->getJson(route('dialux.products.show', $product))
+        ->assertNotFound();
+});
+
+test('a user cannot share a luminaire that belongs to someone else', function () {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $owner->id,
+        'name' => 'Panel ajeno',
+        'manufacturer' => 'Test Lighting',
+        'source_format' => 'manual',
+        'total_lumens' => 3200,
+        'power_watts' => 32,
+        'fixture_type' => 'panel',
+        'fixture_shape' => 'rectangular',
+    ]);
+
+    $this->actingAs($otherUser)
+        ->patchJson(route('dialux.products.share', $product), ['is_global' => true])
+        ->assertNotFound();
+
+    expect($product->refresh()->is_global)->toBeFalse();
 });

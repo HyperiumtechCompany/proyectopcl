@@ -29,6 +29,7 @@ const PHYS: Record<ElectricalDeviceType, { hw: number; hh: number }> = {
     outlet_waterproof: { hw: 0.15, hh: 0.15 },
     outlet_ceiling:    { hw: 0.15, hh: 0.15 },
     outlet_rack:       { hw: 0.15, hh: 0.15 },
+    water_heater_30l:  { hw: 0.20, hh: 0.12 },
 };
 const MIN_PX = 8;
 
@@ -40,14 +41,15 @@ function MeterSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: strin
         <>
             <rect x={-hw} y={-hh} width={hw * 2} height={hh * 2}
                 fill="none" stroke={stroke} strokeWidth={1.8} rx={1} />
+            <rect x={-hw * 0.45} y={-hh * 0.72} width={hw * 0.9} height={hh * 0.32}
+                fill="none" stroke={stroke} strokeWidth={1.1} rx={0.5} />
             <text x={0} y={-hh * 0.2} textAnchor="middle" dominantBaseline="middle"
                 fontSize={fs} fontWeight="bold" fill={stroke} fontFamily="monospace">kWh</text>
             <text x={0} y={hh * 0.5} textAnchor="middle" dominantBaseline="middle"
-                fontSize={fs * 0.85} fill={stroke} fontFamily="monospace">3Ø</text>
+                fontSize={fs * 0.85} fill={stroke} fontFamily="monospace">1O</text>
         </>
     );
 }
-
 function PanelSymbol({ hw, hh, stroke, label }: { hw: number; hh: number; stroke: string; label: string }) {
     const termR = Math.max(2, hh * 0.18);
     const bodyHw = hw - termR * 2.5;
@@ -66,14 +68,33 @@ function PanelSymbol({ hw, hh, stroke, label }: { hw: number; hh: number; stroke
                     fill="none" stroke={stroke} strokeWidth={1.2} />
             ))}
             <rect x={-bodyHw} y={-hh} width={bodyHw * 2} height={hh * 2}
-                fill={stroke} stroke={stroke} strokeWidth={1.5} />
+                fill="none" stroke={stroke} strokeWidth={1.5} />
             <polygon
-                points={`${-bodyHw + 1},${-hh + 1} ${bodyHw - 1},${hh - 1} ${-bodyHw + 1},${hh - 1}`}
-                fill="white" />
+                points={`${-bodyHw},${-hh} ${bodyHw},${-hh} ${bodyHw},${hh}`}
+                fill={stroke}
+                opacity={0.85}
+            />
+            <polygon
+                points={`${-bodyHw},${-hh} ${bodyHw},${hh} ${-bodyHw},${hh}`}
+                fill="none" stroke={stroke} strokeWidth={0.8} />
+            {Array.from({ length: 9 }).map((_, i) => {
+                const x = -bodyHw + (i + 1) * ((bodyHw * 2) / 10);
+                return (
+                    <line
+                        key={i}
+                        x1={x}
+                        y1={-hh}
+                        x2={x}
+                        y2={hh}
+                        stroke="#facc15"
+                        strokeWidth={0.7}
+                        opacity={0.8}
+                    />
+                );
+            })}
         </>
     );
 }
-
 function ATSSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: string }) {
     const fs = Math.max(5, hh * 0.65);
     return (
@@ -90,20 +111,22 @@ function ATSSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: string 
 
 function JunctionBoxSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: string }) {
     const pad = Math.min(3, hw * 0.25);
+    const arm = Math.min(hw, hh) * 0.58;
     return (
         <>
             <rect x={-hw} y={-hh} width={hw * 2} height={hh * 2}
                 fill="none" stroke={stroke} strokeWidth={1.8} />
-            <rect x={-hw + pad} y={-hh + pad} width={(hw - pad) * 2} height={(hh - pad) * 2}
-                fill="none" stroke={stroke} strokeWidth={1} />
-            <line x1={-hw + pad} y1={-hh + pad} x2={hw - pad} y2={hh - pad}
-                stroke={stroke} strokeWidth={1.2} />
-            <line x1={hw - pad} y1={-hh + pad} x2={-hw + pad} y2={hh - pad}
-                stroke={stroke} strokeWidth={1.2} />
+            <line x1={-hw + pad} y1={-hh + pad} x2={-arm} y2={-arm}
+                stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
+            <line x1={hw - pad} y1={-hh + pad} x2={arm} y2={-arm}
+                stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
+            <line x1={hw - pad} y1={hh - pad} x2={arm} y2={arm}
+                stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
+            <line x1={-hw + pad} y1={hh - pad} x2={-arm} y2={arm}
+                stroke={stroke} strokeWidth={1.8} strokeLinecap="round" />
         </>
     );
 }
-
 /**
  * Pozo de Puesta a Tierra (PAT) — yellow circle outline (no fill).
  * Matches CAD legend: simple circle.
@@ -151,9 +174,10 @@ function WallOutletSymbol({
     return (
         <>
             <circle r={r} fill="none" stroke={stroke} strokeWidth={1.5} />
-            <line x1={-r} y1={0} x2={r} y2={0} stroke={stroke} strokeWidth={1.4} />
+            <line x1={-r} y1={-r * 0.12} x2={r * 1.85} y2={-r * 0.12} stroke="#facc15" strokeWidth={1.4} />
+            <line x1={-r} y1={r * 0.18} x2={r * 1.55} y2={r * 0.18} stroke="#facc15" strokeWidth={1.4} />
             <text
-                x={textX}
+                x={textX + r * 0.85}
                 y={2}
                 textAnchor="start"
                 dominantBaseline="middle"
@@ -178,7 +202,7 @@ function WallOutletSymbol({
                         fontFamily="monospace"
                         style={{ userSelect: 'none' }}
                     >
-                        AP
+                        PA
                     </text>
                     <text
                         x={textX}
@@ -198,7 +222,6 @@ function WallOutletSymbol({
         </>
     );
 }
-
 function CeilingOutletSymbol({ r, stroke }: { r: number; stroke: string }) {
     return (
         <>
@@ -245,6 +268,39 @@ function RackOutletSymbol({ r, stroke }: { r: number; stroke: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+function WaterHeaterSymbol({ hw, hh, stroke }: { hw: number; hh: number; stroke: string }) {
+    const fs = Math.max(7, hh * 0.85);
+
+    return (
+        <>
+            <rect
+                x={-hw}
+                y={-hh}
+                width={hw * 1.45}
+                height={hh * 2}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={2.2}
+                rx={1}
+            />
+            <line x1={-hw * 0.9} y1={-hh * 0.72} x2={hw * 0.3} y2={hh * 0.72} stroke={stroke} strokeWidth={2} />
+            <line x1={hw * 0.3} y1={-hh * 0.72} x2={-hw * 0.9} y2={hh * 0.72} stroke={stroke} strokeWidth={2} />
+            <text
+                x={hw * 0.9}
+                y={0}
+                textAnchor="start"
+                dominantBaseline="middle"
+                fontSize={fs}
+                fontWeight="bold"
+                fill={stroke}
+                fontFamily="monospace"
+                style={{ userSelect: 'none' }}
+            >
+                TE
+            </text>
+        </>
+    );
+}
 export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
     devices,
     selectedId,
@@ -281,6 +337,7 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                     outlet_waterproof: '#3b82f6', // blue
                     outlet_ceiling:    '#22c55e',
                     outlet_rack:       '#ef4444',
+                    water_heater_30l:  '#ff00ff',
                 };
                 const baseColor = isSelected ? '#f59e0b' : (colorMap[dev.type] || '#22c55e');
                 const rotation = dev.rotation ?? 0;
@@ -319,6 +376,9 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                         )}
                         {dev.type === 'outlet_rack' && (
                             <RackOutletSymbol r={hw} stroke={baseColor} />
+                        )}
+                        {dev.type === 'water_heater_30l' && (
+                            <WaterHeaterSymbol hw={hw} hh={hh} stroke={baseColor} />
                         )}
 
                         {/* Label below (ocultado por solicitud del usuario por ahora)

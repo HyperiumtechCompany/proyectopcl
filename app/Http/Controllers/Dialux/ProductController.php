@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dialux;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\ImportProductRequest;
+use App\Http\Requests\Dialux\StoreManualProductRequest;
 use App\Models\LuminaireProduct;
 use App\Services\ProductImportService;
 use Illuminate\Http\JsonResponse;
@@ -30,7 +31,7 @@ class ProductController extends Controller
             ->orderBy('manufacturer')
             ->orderBy('name')
             ->get()
-            ->map(fn (LuminaireProduct $p) => $this->formatProduct($p));
+            ->map(fn (LuminaireProduct $p) => $this->formatProduct($p, userId: $userId));
 
         return response()->json([
             'products' => $products,
@@ -63,9 +64,31 @@ class ProductController extends Controller
         $warnings = $result['warnings'];
 
         return response()->json([
-            'product' => $this->formatProduct($product),
+            'product' => $this->formatProduct($product, userId: $userId),
             'warnings' => $warnings,
             'message' => 'Producto importado correctamente.',
+        ], 201);
+    }
+
+    /**
+     * Crea una luminaria propia a partir de datos ingresados manualmente
+     * (sin archivo IES/LDT), sintetizando su distribución fotométrica.
+     */
+    public function storeManual(StoreManualProductRequest $request): JsonResponse
+    {
+        $userId = $request->user()?->id;
+
+        $product = $this->importService->createManual(
+            data: array_merge($request->validated(), [
+                'product_image_path' => $this->storeProductMedia($request->file('product_image'), $userId, 'images'),
+                'brand_logo_path' => $this->storeProductMedia($request->file('brand_logo'), $userId, 'logos'),
+            ]),
+            userId: $userId,
+        );
+
+        return response()->json([
+            'product' => $this->formatProduct($product, userId: $userId),
+            'message' => 'Luminaria creada correctamente.',
         ], 201);
     }
 
@@ -80,7 +103,7 @@ class ProductController extends Controller
             ->findOrFail($productId);
 
         return response()->json([
-            'product' => $this->formatProduct($product, withWeb: true),
+            'product' => $this->formatProduct($product, withWeb: true, userId: $userId),
         ]);
     }
 
@@ -96,6 +119,30 @@ class ProductController extends Controller
         $product->delete();
 
         return response()->json(['message' => 'Producto eliminado.']);
+    }
+
+    /**
+     * Comparte o deja de compartir una luminaria propia con el resto de usuarios.
+     * Solo el dueño del producto puede cambiar su visibilidad.
+     */
+    public function share(Request $request, int $productId): JsonResponse
+    {
+        $request->validate([
+            'is_global' => ['required', 'boolean'],
+        ]);
+
+        $product = LuminaireProduct::query()
+            ->forUser($request->user()->id)
+            ->findOrFail($productId);
+
+        $product->update(['is_global' => $request->boolean('is_global')]);
+
+        return response()->json([
+            'product' => $this->formatProduct($product, userId: $request->user()->id),
+            'message' => $product->is_global
+                ? 'Luminaria compartida con todos los usuarios.'
+                : 'Luminaria dejó de compartirse.',
+        ]);
     }
 
     /**
@@ -154,7 +201,7 @@ class ProductController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function formatProduct(LuminaireProduct $product, bool $withWeb = false): array
+    private function formatProduct(LuminaireProduct $product, bool $withWeb = false, ?int $userId = null): array
     {
         $data = [
             'id' => $product->id,
@@ -179,6 +226,7 @@ class ProductController extends Controller
             'fixture_shape' => $product->fixture_shape,
             'normative_standard' => $product->normative_standard,
             'is_global' => $product->is_global,
+            'is_owner' => $userId !== null && $product->user_id === $userId,
             'efficiency' => $product->efficiency,
             'distribution_type' => $product->distribution_type,
             'photometric_summary' => $product->photometric_summary,

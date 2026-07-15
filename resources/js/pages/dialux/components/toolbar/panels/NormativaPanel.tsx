@@ -38,6 +38,7 @@ import {
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
+import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -90,6 +91,7 @@ interface NormativaPanelProps {
         ugrLimit?: number;
         uniformityTarget?: number;
         colorRenderingRa?: number;
+        roomIds?: string[];
     }) => void;
 }
 
@@ -102,6 +104,17 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
     const [selectedSubId, setSelectedSubId] = useState<string>('5.3');
     const [selectedProfileId, setSelectedProfileId] = useState<string>('5.3.1');
     const [applied, setApplied] = useState(false);
+
+    // Si hay un ambiente/pasadizo seleccionado en el plano, "Aplicar" solo lo
+    // afecta a él — de lo contrario sobrescribe la norma de TODOS los
+    // ambientes del proyecto cada vez que se usa este panel.
+    const selectedId = useEditorStore((s) => s.ui.selectedId);
+    const scene = useEditorStore((s) => s.activeScene());
+    const selectedRoom = scene?.rooms.find(
+        (r) =>
+            r.id === selectedId &&
+            (r.roomType === 'ambient' || r.roomType === 'corridor'),
+    );
 
     const std = ALL_STANDARDS.find((s) => s.key === selectedKey)!;
     const section = std.sections.find((s) => s.id === selectedSectionId);
@@ -145,8 +158,13 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             ugrLimit: profile.UGR ?? undefined,
             uniformityTarget: profile.uniformity ?? undefined,
             colorRenderingRa: profile.Ra,
+            roomIds: selectedRoom ? [selectedRoom.id] : undefined,
         });
-        onDefaultNormativeStandardChange(standard);
+        // Al aplicar solo a un ambiente seleccionado no cambiamos el estándar
+        // por defecto del proyecto (el que se usa para ambientes nuevos).
+        if (!selectedRoom) {
+            onDefaultNormativeStandardChange(standard);
+        }
         setApplied(true);
         setTimeout(() => setApplied(false), 2500);
     };
@@ -330,6 +348,13 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                 </div>
             )} */}
 
+            {selectedRoom && (
+                <div className="rounded-lg border border-blue-800/40 bg-blue-950/20 px-2.5 py-1.5 text-[9.5px] text-blue-300">
+                    Se aplicará solo a <strong>{selectedRoom.name}</strong>. Los
+                    demás ambientes no se tocan.
+                </div>
+            )}
+
             <button
                 type="button"
                 onClick={handleApply}
@@ -344,6 +369,10 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                         <CheckCircle2 size={13} /> Aplicado — dibujo y
                         exportación
                     </>
+                ) : selectedRoom ? (
+                    <>
+                        <Scale size={13} /> Aplicar solo a {selectedRoom.name}
+                    </>
                 ) : (
                     <>
                         <Scale size={13} /> Aplicar a todos los ambientes
@@ -351,8 +380,9 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                 )}
             </button>
             <p className="mt-1 px-1 text-center text-[9px] leading-snug text-gray-600">
-                Afecta importación DXF, exportación PDF y cálculos de
-                cumplimiento.
+                {selectedRoom
+                    ? 'Selecciona otro ambiente en el plano para configurarlo con una norma distinta.'
+                    : 'Sin un ambiente seleccionado en el plano, se sobrescribe la norma de TODOS los ambientes. Selecciona uno primero para configurarlos por separado.'}
             </p>
         </div>
     );

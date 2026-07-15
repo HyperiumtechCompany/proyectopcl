@@ -2,6 +2,7 @@ import {
     calculateExactQuantity,
     calculateLumensRequired,
     calculatePolygonArea,
+    calculateRoomIndex,
     calculateRoundedQuantity,
     determineCoverage,
     estimateUniformity,
@@ -282,6 +283,21 @@ export function getRoomMarginalZone(room: Room): number {
     return Number(Math.min(0.2, Math.max(0.05, minDimension * 0.05)).toFixed(3));
 }
 
+/** Índice del local (k) a partir del bbox del recinto y la altura de montaje sobre el plano de trabajo. */
+function calculateRoomIndexForRoom(room: Room, usefulPlaneHeight: number): number {
+    if (room.vertices.length < 3) {
+        return 0;
+    }
+
+    const xs = room.vertices.map((vertex) => vertex.x);
+    const ys = room.vertices.map((vertex) => vertex.y);
+    const length = Math.max(...xs) - Math.min(...xs);
+    const width = Math.max(...ys) - Math.min(...ys);
+    const mountingHeight = Math.max(0.3, room.height - usefulPlaneHeight);
+
+    return calculateRoomIndex(length, width, mountingHeight);
+}
+
 export function buildRoomLightingInputs(
     room: Room,
     fixtures: Fixture[],
@@ -293,7 +309,15 @@ export function buildRoomLightingInputs(
     const detectedFixtureLumens = getDominantFixtureLumens(fixtures);
     const fixtureLumens =
         detectedFixtureLumens ?? getRoomFallbackFixtureLumens(room);
-    const lumensRequired = calculateLumensRequired(area, illuminanceLux);
+    const roomIndex = calculateRoomIndexForRoom(room, usefulPlaneHeight);
+    const lumensRequired = calculateLumensRequired(area, illuminanceLux, {
+        roomIndex,
+        reflectances: {
+            ceiling: room.ceilingReflectance ?? 0.7,
+            wall: room.wallReflectance ?? 0.5,
+            floor: room.floorReflectance ?? 0.2,
+        },
+    });
     const exactQuantity = calculateExactQuantity(lumensRequired, fixtureLumens);
     const roundedQuantity = calculateRoundedQuantity(exactQuantity);
 

@@ -2933,6 +2933,7 @@ export class House3DBuilder {
         outlet_waterproof: { w: 0.08, d: 0.04, h: 0.08 },
         outlet_ceiling: { w: 0.08, d: 0.08, h: 0.03 },
         outlet_rack: { w: 0.1, d: 0.03, h: 0.06 },
+        water_heater_30l: { w: 0.32, d: 0.16, h: 0.24 },
     };
 
     static readonly ELECTRICAL_DEVICE_COLORS: Record<ElectricalDeviceType, string> = {
@@ -2948,6 +2949,7 @@ export class House3DBuilder {
         outlet_waterproof: '#3b82f6',
         outlet_ceiling: '#e2e8f0',
         outlet_rack: '#ef4444',
+        water_heater_30l: '#ff00ff',
     };
 
     buildElectricalDevice(

@@ -52,18 +52,75 @@ export function calculatePolygonPerimeter(
 }
 
 /**
- * Cálculo de lúmenes requeridos según fórmula: ((area * norma) / 0.8) / 0.99
- * donde:
+ * Índice del local (k) del método de los lúmenes: k = (L·W) / (Hm·(L+W)).
+ * A menor k, más "estrecho/alto" el recinto y menor la fracción de flujo
+ * que llega al plano de trabajo tras las reflexiones en techo/paredes.
+ */
+export function calculateRoomIndex(
+    length: number,
+    width: number,
+    mountingHeight: number,
+): number {
+    if (length <= 0 || width <= 0 || mountingHeight <= 0) {
+        return 0;
+    }
+    return (length * width) / (mountingHeight * (length + width));
+}
+
+/** Reflectancias de referencia (techo 70% / pared 50% / piso 20%) usadas como base de comparación. */
+const REFERENCE_WEIGHTED_REFLECTANCE = 0.5 * 0.7 + 0.3 * 0.5 + 0.2 * 0.2;
+
+/**
+ * Estima el factor de utilización (fracción del flujo emitido que llega al plano de
+ * trabajo) a partir del índice del local y las reflectancias de las superficies.
+ * Es una aproximación de ingeniería (curva de saturación por índice de local, ajustada
+ * por reflectancia media ponderada) para dimensionamiento rápido — no sustituye la
+ * tabla de utilización específica del fabricante de la luminaria si está disponible.
+ */
+export function estimateUtilizationFactor(
+    roomIndex: number,
+    reflectances?: { ceiling: number; wall: number; floor: number },
+): number {
+    if (roomIndex <= 0) {
+        return 0.4;
+    }
+
+    const baseUtilization = roomIndex / (roomIndex + 1.8);
+    const weightedReflectance = reflectances
+        ? 0.5 * reflectances.ceiling + 0.3 * reflectances.wall + 0.2 * reflectances.floor
+        : REFERENCE_WEIGHTED_REFLECTANCE;
+    const reflectanceFactor =
+        0.7 + (0.3 * weightedReflectance) / REFERENCE_WEIGHTED_REFLECTANCE;
+
+    return Number(
+        Math.min(0.9, Math.max(0.15, baseUtilization * reflectanceFactor)).toFixed(3),
+    );
+}
+
+/**
+ * Cálculo de lúmenes requeridos (método de los lúmenes): (area * norma) / Fm / UF
  *   - area: área del recinto en m²
- *   - norma: nivel de iluminación requerido (200, 300, 500 lux)
- *   - 0.8: factor de depreciación
- *   - 0.99: factor de utilización
+ *   - norma: nivel de iluminancia requerido en lux
+ *   - Fm: factor de mantenimiento (depreciación por suciedad/envejecimiento), 0.8 por defecto
+ *   - UF: factor de utilización — dinámico según índice de local y reflectancias si se
+ *     provee `roomIndex`; si no hay geometría de sala disponible (ej. cálculo de pared),
+ *     se mantiene el valor de referencia 0.99 usado históricamente.
  */
 export function calculateLumensRequired(
     areaM2: number,
     normaLux: number,
+    options?: {
+        roomIndex?: number;
+        reflectances?: { ceiling: number; wall: number; floor: number };
+        maintenanceFactor?: number;
+    },
 ): number {
-    return (areaM2 * normaLux) / 0.8 / 0.99;
+    const maintenanceFactor = options?.maintenanceFactor ?? 0.8;
+    const utilizationFactor = options?.roomIndex
+        ? estimateUtilizationFactor(options.roomIndex, options.reflectances)
+        : 0.99;
+
+    return (areaM2 * normaLux) / maintenanceFactor / utilizationFactor;
 }
 
 /**
@@ -160,8 +217,8 @@ export function validateCalculationInputs(
         errors.push('El área debe ser mayor a 0 m²');
     }
 
-    if (![200, 300, 500].includes(normaLux)) {
-        errors.push('La norma debe ser 200, 300 o 500 lux');
+    if (normaLux <= 0) {
+        errors.push('La norma de iluminancia debe ser mayor a 0 lux');
     }
 
     if (fixtureLumens <= 0) {

@@ -106,11 +106,127 @@ function buildGrid(room: Room, spacing: number, wpHeight: number) {
     return { points, rows, cols, minX, minY, cellW, cellH };
 }
 
-function candela(fixture: Fixture, thetaDeg: number): number {
-    const intensity = (fixture.lumens * fixture.efficiency) / MATH_PI;
-    const thetaRad = (thetaDeg * MATH_PI) / 180;
+/** Interpola linealmente `values` (definidos en `points`, ascendentes) en `target`, con clamp en los extremos. */
+function interpolate1D(values: number[], points: number[], target: number): number {
+    if (points.length === 0) {
+        return 0;
+    }
+    if (points.length === 1) {
+        return values[0] ?? 0;
+    }
+    if (target <= points[0]) {
+        return values[0];
+    }
+    if (target >= points[points.length - 1]) {
+        return values[values.length - 1];
+    }
 
-    return intensity * Math.cos(thetaRad);
+    for (let i = 0; i < points.length - 1; i++) {
+        if (target >= points[i] && target <= points[i + 1]) {
+            const span = points[i + 1] - points[i];
+            const t = span > 0 ? (target - points[i]) / span : 0;
+            return values[i] + (values[i + 1] - values[i]) * t;
+        }
+    }
+
+    return values[values.length - 1];
+}
+
+/**
+ * Repliega un azimut arbitrario [0,360) al rango de C-planos disponible en el archivo IES/LDT
+ * (los fabricantes suelen publicar solo un cuarto o una mitad de la solución fotométrica
+ * cuando la luminaria es simétrica).
+ */
+function foldAzimuthToCRange(azimuthDeg: number, maxC: number): number {
+    let a = azimuthDeg % 360;
+    if (a < 0) {
+        a += 360;
+    }
+
+    if (maxC <= 90.01) {
+        a %= 180;
+        if (a > 90) {
+            a = 180 - a;
+        }
+        return Math.min(a, maxC);
+    }
+
+    if (maxC <= 180.01) {
+        if (a > 180) {
+            a = 360 - a;
+        }
+        return Math.min(a, maxC);
+    }
+
+    return a;
+}
+
+/** Candela real interpolada bilinealmente desde la matriz fotométrica (C-plano x gamma). */
+function candelaFromPhotometricWeb(
+    web: NonNullable<Fixture['photometricWeb']>,
+    azimuthDeg: number,
+    gammaDeg: number,
+): number {
+    const { c_angles: cAngles, gamma_angles: gammaAngles, candela: matrix } = web;
+
+    if (
+        !cAngles?.length ||
+        !gammaAngles?.length ||
+        !matrix?.length ||
+        !matrix[0]?.length
+    ) {
+        return 0;
+    }
+
+    const maxC = cAngles[cAngles.length - 1];
+    const foldedC = foldAzimuthToCRange(azimuthDeg, maxC);
+    const clampedGamma = Math.min(
+        Math.max(gammaDeg, gammaAngles[0]),
+        gammaAngles[gammaAngles.length - 1],
+    );
+
+    let loIdx = 0;
+    let hiIdx = cAngles.length - 1;
+    for (let i = 0; i < cAngles.length; i++) {
+        if (cAngles[i] <= foldedC) {
+            loIdx = i;
+        }
+        if (cAngles[i] >= foldedC) {
+            hiIdx = i;
+            break;
+        }
+    }
+    if (hiIdx < loIdx) {
+        hiIdx = loIdx;
+    }
+
+    const loVal = interpolate1D(matrix[loIdx] ?? matrix[0], gammaAngles, clampedGamma);
+    const hiVal = interpolate1D(matrix[hiIdx] ?? matrix[loIdx], gammaAngles, clampedGamma);
+
+    if (hiIdx === loIdx) {
+        return loVal;
+    }
+
+    const span = cAngles[hiIdx] - cAngles[loIdx];
+    const t = span > 0 ? (foldedC - cAngles[loIdx]) / span : 0;
+
+    return loVal + (hiVal - loVal) * t;
+}
+
+/**
+ * Candela en dirección (azimut, gamma) desde el eje del proyector.
+ * Usa la matriz fotométrica real (IES/LDT) cuando está disponible; si no,
+ * cae a un modelo Lambertiano aproximado a partir del flujo total.
+ */
+function candela(fixture: Fixture, gammaDeg: number, azimuthDeg = 0): number {
+    if (fixture.photometricWeb) {
+        return candelaFromPhotometricWeb(fixture.photometricWeb, azimuthDeg, gammaDeg);
+    }
+
+    const intensity = (fixture.lumens * fixture.efficiency) / MATH_PI;
+    const gammaRad = (gammaDeg * MATH_PI) / 180;
+
+    return intensity * Math.cos(gammaRad);
 }
 
 function illuminanceFromFixture(point: GridPoint, fixture: Fixture): number {
@@ -130,9 +246,20 @@ function illuminanceFromFixture(point: GridPoint, fixture: Fixture): number {
         return 0;
     }
 
-    const thetaDeg = (Math.acos(-dz / dist) * 180) / MATH_PI;
+    const gammaDeg = (Math.acos(-dz / dist) * 180) / MATH_PI;
+    const rawAzimuthDeg = (Math.atan2(dy, dx) * 180) / MATH_PI;
+    const azimuthDeg = rawAzimuthDeg - (fixture.rotation ?? 0);
 
-    return (candela(fixture, thetaDeg) * cosIncident) / dist2;
+    return (candela(fixture, gammaDeg, azimuthDeg) * cosIncident) / dist2;
+}
+
+/** Área luminosa real (m²) de la luminaria, para el cálculo de luminancia en UGR. Fallback conservador si no hay dimensiones. */
+function luminousArea(fixture: Fixture): number {
+    const dims = fixture.dimensions;
+    if (dims && dims.length > 0 && dims.width > 0) {
+        return dims.length * dims.width;
+    }
+    return 0.1;
 }
 
 function calculatePointByPoint(
@@ -169,8 +296,17 @@ function calculateUGR(
             continue;
         }
 
-        const area = 0.1;
-        const luminance = candela(fixture, 0) / area;
+        const dist = Math.sqrt(dist2);
+        // Ángulo real fixture→observador (mismo convenio que illuminanceFromFixture),
+        // en vez de asumir nadir fijo: la candela hacia el ojo del observador puede
+        // diferir mucho de la candela nadir en luminarias no lambertianas (asimétricas).
+        const gammaDeg =
+            (Math.acos(Math.min(1, Math.max(-1, dz / dist))) * 180) / MATH_PI;
+        const rawAzimuthDeg = (Math.atan2(-dy, -dx) * 180) / MATH_PI;
+        const azimuthDeg = rawAzimuthDeg - (fixture.rotation ?? 0);
+
+        const area = luminousArea(fixture);
+        const luminance = candela(fixture, gammaDeg, azimuthDeg) / area;
         sum += luminance * luminance * (area / dist2);
     }
 

@@ -52,7 +52,7 @@ const EN_12464_1: NormStandardDef = {
                     Em_work: 300,
                     UGR: 19,
                     Ra: 80,
-                    uniformity: 0.4,
+                    uniformity: 0.6,
                 },
                 {
                     id: '4.2',

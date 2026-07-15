@@ -9,6 +9,52 @@ export interface ParsedDxfPayload {
     max_y?: number;
 }
 
+export interface DetectedDxfUnit {
+    unit: 'mm' | 'cm' | 'm';
+    factor: number;
+    displayUnit: string;
+}
+
+/** Códigos $INSUNITS del estándar DXF que mapean exactamente a las unidades soportadas (mm/cm/m). */
+const INSUNITS_TO_SCALE: Partial<Record<number, DetectedDxfUnit>> = {
+    4: { unit: 'mm', factor: 0.001, displayUnit: 'Milímetros (detectado del DXF: $INSUNITS)' },
+    5: { unit: 'cm', factor: 0.01, displayUnit: 'Centímetros (detectado del DXF: $INSUNITS)' },
+    6: { unit: 'm', factor: 1, displayUnit: 'Metros (detectado del DXF: $INSUNITS)' },
+};
+
+/**
+ * Lee la variable de cabecera $INSUNITS del DXF (unidad de dibujo declarada por el CAD de origen).
+ * Devuelve null si el archivo no la declara o usa una unidad no métrica (ej. pulgadas/pies),
+ * en cuyo caso el heurístico basado en extents debe decidir.
+ */
+export function detectDxfUnitFromHeader(text: string): DetectedDxfUnit | null {
+    const pairs = readPairs(text);
+    let inHeaderSection = false;
+
+    for (let i = 0; i < pairs.length; i += 1) {
+        const pair = pairs[i];
+        const next = pairs[i + 1];
+
+        if (pair.code === 0 && pair.value === 'SECTION' && next?.code === 2) {
+            inHeaderSection = next.value.toUpperCase() === 'HEADER';
+            continue;
+        }
+        if (pair.code === 0 && pair.value === 'ENDSEC') {
+            if (inHeaderSection) break;
+            continue;
+        }
+        if (!inHeaderSection) continue;
+
+        if (pair.code === 9 && pair.value.toUpperCase() === '$INSUNITS') {
+            const valuePair = pairs[i + 1];
+            const code = valuePair ? Number.parseInt(valuePair.value, 10) : NaN;
+            return Number.isFinite(code) ? (INSUNITS_TO_SCALE[code] ?? null) : null;
+        }
+    }
+
+    return null;
+}
+
 type DxfPair = {
     code: number;
     value: string;
