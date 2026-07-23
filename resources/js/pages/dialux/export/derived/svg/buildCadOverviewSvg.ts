@@ -1,6 +1,7 @@
 import type { DialuxExportSnapshot, DialuxVectorAsset } from '../../domain/types';
 import { buildSceneBounds, createTransform } from '../geometry/transforms';
 import { renderDxfEntity } from './renderDxfEntity';
+import { pickSvgPageDimensions, renderNorthArrow } from '../geometry/renderPrimitives';
 
 export function buildCadOverviewSvg(
     snapshot: DialuxExportSnapshot,
@@ -14,23 +15,8 @@ export function buildCadOverviewSvg(
     const boundsHeight = Math.max(1, bounds.maxY - bounds.minY);
     const ratio = boundsWidth / boundsHeight;
     
-    let W = 1200;
-    let H = 780;
-    
-    if (ratio < 0.8) {
-        // Portrait
-        W = 800;
-        H = 1131;
-    } else if (ratio >= 0.8 && ratio <= 1.2) {
-        // Square
-        W = 900;
-        H = 900;
-    } else {
-        // Landscape
-        W = 1200;
-        H = 780;
-    }
-    
+    const { width: W, height: H } = pickSvgPageDimensions(ratio);
+
     // Padding dinámico (6% del menor lado)
     const padding = Math.max(48, Math.min(W, H) * 0.06);
     
@@ -72,14 +58,10 @@ export function buildCadOverviewSvg(
         <text x="${(barX + barLenPx / 2).toFixed(1)}" y="${(barY - 8)}" fill="#334155" font-size="10" font-family="sans-serif" text-anchor="middle">${barMeters} m</text>`;
 
     // North arrow (top-right corner)
-    const naX = W - MARGIN - 24;
-    const naY = MARGIN + 52;
-    const northArrow = `
-        <g transform="translate(${naX},${naY})">
-            <polygon points="0,-20 5,0 0,-4 -5,0" fill="#1e293b"/>
-            <polygon points="0,-4 5,0 0,20 -5,0" fill="#94a3b8"/>
-            <text x="0" y="36" fill="#1e293b" font-size="11" font-family="sans-serif" font-weight="700" text-anchor="middle">N</text>
-        </g>`;
+    const northArrow = renderNorthArrow({
+        x: W - MARGIN - 24,
+        y: MARGIN + 52,
+    });
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
         <rect width="${W}" height="${H}" fill="#ffffff"/>

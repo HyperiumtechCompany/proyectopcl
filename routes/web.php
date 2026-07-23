@@ -13,6 +13,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DelphinController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
+use App\Http\Controllers\Dialux\ElectricalCatalogController as DialuxElectricalCatalogController;
+use App\Http\Controllers\Dialux\ElectricalProjectController as DialuxElectricalProjectController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
@@ -76,12 +78,27 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
 
     // ─── Normativa del Proyecto (config persistente) ─────────────────────────
     Route::prefix('normative-config')->name('normative-config.')->group(function () {
+        Route::get('/requirements', [DialuxNormativeConfigController::class, 'requirements'])->name('requirements');
         Route::get('/{dialuxProjectId}', [DialuxNormativeConfigController::class, 'show'])->name('show');
         Route::post('/', [DialuxNormativeConfigController::class, 'store'])->name('store');
         Route::patch('/{dialuxProjectId}/compliance', [DialuxNormativeConfigController::class, 'updateCompliance'])->name('compliance.update');
     });
 
+    // ─── Módulo Eléctrico (luminarias, tomacorrientes, circuitos, tableros) ──
+    Route::prefix('electrical')->name('electrical.')->group(function () {
+        Route::post('/', [DialuxElectricalProjectController::class, 'store'])->name('store');
+        Route::post('/catalog/outlet-rules', [DialuxElectricalCatalogController::class, 'storeOutletRule'])->name('catalog.outlet-rules.store');
+        Route::delete('/catalog/outlet-rules/{id}', [DialuxElectricalCatalogController::class, 'destroyOutletRule'])->name('catalog.outlet-rules.destroy');
+        Route::post('/catalog/outlet-types', [DialuxElectricalCatalogController::class, 'storeOutletType'])->name('catalog.outlet-types.store');
+        Route::delete('/catalog/outlet-types/{id}', [DialuxElectricalCatalogController::class, 'destroyOutletType'])->name('catalog.outlet-types.destroy');
+        Route::post('/catalog/conductors', [DialuxElectricalCatalogController::class, 'storeConductor'])->name('catalog.conductors.store');
+        Route::delete('/catalog/conductors/{id}', [DialuxElectricalCatalogController::class, 'destroyConductor'])->name('catalog.conductors.destroy');
+        Route::post('/catalog/circuit-defaults', [DialuxElectricalCatalogController::class, 'storeCircuitDefault'])->name('catalog.circuit-defaults.store');
+        Route::get('/{dialuxProjectId}', [DialuxElectricalProjectController::class, 'show'])->name('show');
+    });
+
     // ─── Proyecto DIAlux individual — debe ir al final (wildcard) ───────────
+    Route::get('/{dialuxProject}/electrico', [DialuxElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
     Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
     Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');
     Route::delete('/{dialuxProject}', [DialuxProjectController::class, 'destroy'])->name('destroy');

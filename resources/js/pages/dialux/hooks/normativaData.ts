@@ -1080,3 +1080,70 @@ export const rnePeruRegulations: RawNormativeBranch[] = [
         ],
     },
 ];
+
+// ─── EN 1838:2019 — Alumbrado de emergencia ─────────────────────────────────
+// Dataset estático de respaldo (fallback offline); la fuente única de verdad
+// es la BD (dialux_normative_requirements, standard='en_1838'), cargada en
+// runtime vía ensureStandardDataLoaded('en_1838') — ver normativeRemoteData.ts.
+export const en1838Regulations: RawNormativeBranch[] = [
+    {
+        title: 'Rutas de evacuación',
+        subsections: [
+            {
+                title: 'Eje central de la ruta de evacuación (ancho ≤ 2 m)',
+                label: 'Eje central de la ruta de evacuación',
+                iluminancia_lux: 1,
+                UGR: null,
+                Uo: null,
+                Ra: 40,
+                requisitos_especificos: 'Uniformidad Emax:Emin ≤ 40:1; 50% del nivel en 5 s y 100% en 60 s; autonomía mínima 1 hora',
+            },
+            {
+                title: 'Escaleras en ruta de evacuación (ancho completo)',
+                label: 'Escaleras en ruta de evacuación',
+                iluminancia_lux: 1,
+                UGR: null,
+                Uo: null,
+                Ra: 40,
+                requisitos_especificos: 'Iluminancia mínima en todo el ancho del tramo, no solo en el eje; uniformidad Emax:Emin ≤ 40:1',
+            },
+            {
+                title: 'Puntos de seguridad (alarmas, extintores, primeros auxilios)',
+                label: 'Puntos de seguridad',
+                iluminancia_lux: 5,
+                UGR: null,
+                Uo: null,
+                Ra: 40,
+                requisitos_especificos: 'Iluminancia mínima dentro de un radio de 2 m del equipo, a nivel del suelo',
+            },
+        ],
+    },
+    {
+        title: 'Áreas antipánico (zonas abiertas ≥ 60 m²)',
+        subsections: [
+            {
+                title: 'Núcleo del área (excluyendo banda perimetral de 0.5 m)',
+                label: 'Núcleo del área antipánico',
+                iluminancia_lux: 0.5,
+                UGR: null,
+                Uo: null,
+                Ra: 40,
+                requisitos_especificos: 'Uniformidad Emax:Emin ≤ 40:1; 50% del nivel en 5 s y 100% en 60 s; autonomía mínima 1 hora',
+            },
+        ],
+    },
+    {
+        title: 'Zonas de tareas de alto riesgo',
+        subsections: [
+            {
+                title: 'Zona de tarea de alto riesgo — nivel general',
+                label: 'Zona de tarea de alto riesgo',
+                iluminancia_lux: 15,
+                UGR: null,
+                Uo: 0.1,
+                Ra: 40,
+                requisitos_especificos: 'El mayor entre 10% del nivel normal de la tarea o 15 lx; sin demora — disponible de forma instantánea',
+            },
+        ],
+    },
+];

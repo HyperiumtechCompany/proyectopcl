@@ -1,3 +1,4 @@
+import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
 import { getActivityOptions } from './roomLighting';
 import type { Scene } from './types';
 import type { Fixture, Room, Vertex, Wall } from './types';
@@ -196,17 +197,7 @@ function closedWallPolygon(wall: Wall): Vertex[] | null {
 }
 
 function polygonArea(vertices: Vertex[]) {
-    if (vertices.length < 3) return 0;
-
-    let area = 0;
-
-    for (let i = 0; i < vertices.length; i++) {
-        const j = (i + 1) % vertices.length;
-        area += vertices[i].x * vertices[j].y;
-        area -= vertices[j].x * vertices[i].y;
-    }
-
-    return Math.abs(area / 2);
+    return polygonAreaM2(vertices);
 }
 
 export function pointInPolygon(point: Vertex, vertices: Vertex[]): boolean {

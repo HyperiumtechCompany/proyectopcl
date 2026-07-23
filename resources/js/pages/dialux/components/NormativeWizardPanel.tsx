@@ -36,8 +36,10 @@ import {
     computeOverallStatus,
 } from '@/pages/dialux/hooks/normativeEngine';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
+import { ensureRneDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { useNormativeConfig } from '@/pages/dialux/hooks/useNormativeConfig';
+import type { ProjectNormativeConfig } from '@/pages/dialux/hooks/types';
 import { NormativeCompliancePanel } from './NormativeCompliancePanel';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -281,10 +283,49 @@ function StepNormativeRecommendation({
 
 // ─── Paso 4: Resumen por ambiente ─────────────────────────────────────────────
 
-function StepAmbientSummary({ onSwitchToCompliance }: { onSwitchToCompliance: () => void }) {
+function StepAmbientSummary({
+    onSwitchToCompliance,
+    onSummary,
+}: {
+    onSwitchToCompliance: () => void;
+    onSummary?: (summary: ProjectNormativeConfig['complianceSummary']) => void;
+}) {
     const scene = useEditorStore((s) => s.activeScene());
     const resultsByRoom = useEditorStore((s) => s.resultsByRoom);
     const rooms = scene?.rooms ?? [];
+
+    // Estados por ambiente (misma lógica que el render, memoizada para poder
+    // reportar el resumen al padre y persistirlo en el backend).
+    const statuses = useMemo(() => {
+        return rooms.map((room) => {
+            const result = resultsByRoom[room.id];
+            const normActivity = room.normativeActivity ?? room.normativeSection ?? null;
+            const normLeaf = normActivity && room.normativeStandard
+                ? findBestMatchActivity(room.normativeStandard, normActivity, room.normativeCategory)
+                : null;
+
+            if (result && normLeaf) {
+                return computeOverallStatus(evaluateCompliance(room, result, normLeaf));
+            }
+            return 'needs_review' as ComplianceStatus;
+        });
+    }, [rooms, resultsByRoom]);
+
+    const summaryKey = statuses.join(',');
+
+    useEffect(() => {
+        if (!onSummary || rooms.length === 0) {
+            return;
+        }
+        onSummary({
+            totalRooms: statuses.length,
+            compliantRooms: statuses.filter((s) => s === 'compliant').length,
+            nonCompliantRooms: statuses.filter((s) => s === 'non_compliant').length,
+            warningRooms: statuses.filter((s) => s === 'warning').length,
+            needsReviewRooms: statuses.filter((s) => s === 'needs_review').length,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [summaryKey]);
 
     if (rooms.length === 0) {
         return (
@@ -313,20 +354,9 @@ function StepAmbientSummary({ onSwitchToCompliance }: { onSwitchToCompliance: ()
                 </button>
             </div>
             <div className="space-y-1.5">
-                {rooms.map((room) => {
-                    const result = resultsByRoom[room.id];
+                {rooms.map((room, index) => {
                     const normActivity = room.normativeActivity ?? room.normativeSection ?? null;
-                    const normLeaf = normActivity && room.normativeStandard
-                        ? findBestMatchActivity(room.normativeStandard, normActivity, room.normativeCategory)
-                        : null;
-
-                    let overallStatus: ComplianceStatus = 'needs_review';
-                    if (result && normLeaf) {
-                        const complianceResults = evaluateCompliance(room, result, normLeaf);
-                        overallStatus = computeOverallStatus(complianceResults);
-                    } else if (!result) {
-                        overallStatus = 'needs_review';
-                    }
+                    const overallStatus: ComplianceStatus = statuses[index] ?? 'needs_review';
 
                     return (
                         <div
@@ -365,11 +395,41 @@ export const NormativeWizardPanel: React.FC = () => {
     const [step, setStep] = useState<WizardStep>(1);
     const [showComplianceDetail, setShowComplianceDetail] = useState(false);
 
-    const { config, isSaving, error, saveConfig } = useNormativeConfig();
+    const { config, isSaving, error, saveConfig, loadConfig, saveComplianceSummary } = useNormativeConfig();
 
     const project = useEditorStore((s) => s.project);
     const setDefaultRoomNormativeStandard = useEditorStore((s) => s.setDefaultRoomNormativeStandard);
     const applyDefaultNormativeStandardToRooms = useEditorStore((s) => s.applyDefaultNormativeStandardToRooms);
+
+    // Al abrir el panel: rehidratar la config guardada en el backend (antes
+    // nunca se invocaba y el wizard siempre partía de defaults) y cargar el
+    // catálogo EM.010 completo desde la BD como fuente única de verdad.
+    const loadedProjectRef = React.useRef<string | null>(null);
+    useEffect(() => {
+        void ensureRneDataLoaded();
+
+        if (project && loadedProjectRef.current !== project.id) {
+            loadedProjectRef.current = project.id;
+            void loadConfig(project.id);
+        }
+    }, [project, loadConfig]);
+
+    // Persistencia (debounced) del resumen de cumplimiento calculado en el paso 4.
+    const summaryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleSummary = useCallback(
+        (summary: ProjectNormativeConfig['complianceSummary']) => {
+            if (!project || !config) {
+                return;
+            }
+            if (summaryTimerRef.current) {
+                clearTimeout(summaryTimerRef.current);
+            }
+            summaryTimerRef.current = setTimeout(() => {
+                void saveComplianceSummary(project.id, summary);
+            }, 1500);
+        },
+        [project, config, saveComplianceSummary],
+    );
 
     // Estado local del wizard (se sincroniza al guardar)
     const [selectedCountry, setSelectedCountry] = useState(config?.countryCode ?? 'PE');
@@ -481,6 +541,7 @@ export const NormativeWizardPanel: React.FC = () => {
                 {step === 4 && (
                     <StepAmbientSummary
                         onSwitchToCompliance={() => setShowComplianceDetail(true)}
+                        onSummary={handleSummary}
                     />
                 )}
             </div>

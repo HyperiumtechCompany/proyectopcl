@@ -5,6 +5,14 @@
  * misma lógica del controlador formalExport y guarda el PDF en
  * storage/app/dialux-test.pdf para inspección visual.
  *
+ * LIMITACION CONOCIDA: NO replica el split portrait/landscape + merge con
+ * FPDI que hace Editor2DController::formalExport() desde Fase 10 (fix del
+ * bug de paginas apaisadas que dompdf no rota). Este script genera un solo
+ * PDF con setPaper('a4','portrait'), asi que cualquier pagina landscape
+ * (plano general, listas de ambientes/objetos de calculo) saldra recortada
+ * aqui aunque el endpoint real ya no tenga ese problema. Para verificar el
+ * render real end-to-end, usar un test Pest que pegue al endpoint real.
+ *
  * Uso: php scripts/render_dialux_test_pdf.php
  */
 
@@ -27,9 +35,10 @@ $document = $payload['document'];
 
 $assetsById = collect($document['assets'] ?? [])->keyBy('id');
 $ambientDetailsById = collect($document['ambientDetails'] ?? [])->keyBy('ambientId');
+$levelsBySceneId = collect($document['levels'] ?? [])->keyBy('sceneId');
 $pages = collect($document['pages'] ?? [])
     ->sortBy('pageNumber')
-    ->map(function (array $page) use ($assetsById, $ambientDetailsById): array {
+    ->map(function (array $page) use ($assetsById, $ambientDetailsById, $levelsBySceneId): array {
         $pageAssets = collect($page['assetIds'] ?? [])
             ->map(fn (string $assetId): ?array => $assetsById->get($assetId))
             ->filter()
@@ -43,6 +52,9 @@ $pages = collect($document['pages'] ?? [])
         $page['assets'] = $pageAssets;
         $page['ambientDetail'] = isset($page['ambientId'])
             ? $ambientDetailsById->get($page['ambientId'])
+            : null;
+        $page['levelSummary'] = isset($page['sceneId'])
+            ? $levelsBySceneId->get($page['sceneId'])
             : null;
 
         return $page;
@@ -66,7 +78,7 @@ $pdf = Pdf::loadView('dialux.export.formal-pdf', [
     'coverAsset' => $coverAsset,
     'tocPages' => $tocPages,
     'contentPages' => $contentPages,
-    'tocChunks' => collect($document['toc'] ?? [])->chunk(14)->values()->all(),
+    'tocChunks' => collect($document['toc'] ?? [])->chunk(24)->values()->all(),
 ])
     ->setPaper('a4', 'portrait')
     ->setOptions([

@@ -1,8 +1,9 @@
-import { Grid, Layers, Move, Target, Ungroup, Zap } from 'lucide-react';
+import { Grid, Layers, Move, Target, Trash2, Ungroup, Zap } from 'lucide-react';
 import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -198,6 +199,24 @@ export const FixtureProps: React.FC<{
 
             {!multiple && <PropField label="ID" value={fixture.id.slice(0, 12)} />}
 
+            <button
+                type="button"
+                onClick={() => {
+                    if (multiple) {
+                        store.beginHistoryGesture();
+                        targetIds.forEach((id) => store.requestDelete(id));
+                        store.endHistoryGesture();
+                    } else {
+                        store.requestDelete(fixture.id);
+                    }
+                }}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-red-800/40 bg-red-950/30 py-1.5 text-[10px] text-red-400 transition-colors hover:bg-red-900/40 hover:text-red-300"
+                title={multiple ? `Eliminar las ${count} luminarias seleccionadas` : 'Eliminar esta luminaria'}
+            >
+                <Trash2 size={13} />
+                {multiple ? `Eliminar (${count})` : 'Eliminar'}
+            </button>
+
             {showModelPicker && (
                 <Dialog open={showModelPicker} onOpenChange={setShowModelPicker}>
                     <DialogContent className="max-w-2xl">
@@ -205,6 +224,9 @@ export const FixtureProps: React.FC<{
                             <DialogTitle>
                                 Cambiar modelo — {multiple ? `${count} luminarias` : fixture.name}
                             </DialogTitle>
+                            <DialogDescription>
+                                Elige un modelo del catálogo para aplicarlo a {multiple ? 'las luminarias seleccionadas' : 'esta luminaria'}.
+                            </DialogDescription>
                         </DialogHeader>
                         <CatalogPanel
                             filterCategory="luminaires"

@@ -48,7 +48,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
             <div className="relative mx-4 w-full max-w-2xl rounded-2xl border border-slate-700/60 bg-[#0f1117] shadow-2xl">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">

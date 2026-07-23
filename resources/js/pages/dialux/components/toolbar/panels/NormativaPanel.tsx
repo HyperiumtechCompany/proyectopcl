@@ -35,8 +35,9 @@ import {
     X,
     Zap,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import type {
@@ -81,6 +82,18 @@ const NORM_KEY_TO_STANDARD: Record<NormKey, NormativeStandard> = {
     EN_12464_2: 'en_12464',
     IESNA: 'ies_na',
     NTP_370: 'rne_peru',
+    EN_1838: 'en_1838',
+};
+
+// 'en_12464' es ambiguo (EN_12464_1 o _2) — no hay forma de distinguirlos
+// desde el valor persistido, así que ante ese caso mostramos _2 (el más común).
+const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
+    en_12464: 'EN_12464_2',
+    ies_na: 'IESNA',
+    rne_peru: 'NTP_370',
+    en_1838: 'EN_1838',
+    nfpa101: 'EN_12464_2',
+    ds024: 'EN_12464_2',
 };
 
 interface NormativaPanelProps {
@@ -99,12 +112,6 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
     onDefaultNormativeStandardChange,
     onApplyProfile,
 }) => {
-    const [selectedKey, setSelectedKey] = useState<NormKey>('EN_12464_2');
-    const [selectedSectionId, setSelectedSectionId] = useState<string>('5');
-    const [selectedSubId, setSelectedSubId] = useState<string>('5.3');
-    const [selectedProfileId, setSelectedProfileId] = useState<string>('5.3.1');
-    const [applied, setApplied] = useState(false);
-
     // Si hay un ambiente/pasadizo seleccionado en el plano, "Aplicar" solo lo
     // afecta a él — de lo contrario sobrescribe la norma de TODOS los
     // ambientes del proyecto cada vez que se usa este panel.
@@ -115,6 +122,39 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             r.id === selectedId &&
             (r.roomType === 'ambient' || r.roomType === 'corridor'),
     );
+    const defaultStandard = useEditorStore(
+        (s) => s.defaultRoomNormativeStandard,
+    );
+    const currentStandard = selectedRoom?.normativeStandard ?? defaultStandard;
+
+    // El panel debe reflejar la norma realmente aplicada (persistida por
+    // ambiente o por defecto del proyecto), no un valor fijo — de lo
+    // contrario, al volver a entrar al proyecto parece que la norma
+    // aplicada "cambió sola" aunque los datos guardados sigan correctos.
+    const [selectedKey, setSelectedKey] = useState<NormKey>(
+        () => STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2',
+    );
+    const [selectedSectionId, setSelectedSectionId] = useState<string>('5');
+    const [selectedSubId, setSelectedSubId] = useState<string>('5.3');
+    const [selectedProfileId, setSelectedProfileId] = useState<string>('5.3.1');
+    const [applied, setApplied] = useState(false);
+
+    // Carga los catálogos con fuente única en BD (EM.010 y EN 1838) y fuerza
+    // un re-render cuando reemplazan la transcripción estática.
+    const [, setNormDataVersion] = useState(0);
+    useEffect(() => {
+        void Promise.all([
+            ensureStandardDataLoaded('rne_peru'),
+            ensureStandardDataLoaded('en_1838'),
+        ]).then(() => setNormDataVersion((v) => v + 1));
+    }, []);
+
+    // Al cambiar la selección de ambiente (o al montar), re-sincroniza el
+    // resaltado con la norma realmente guardada para ese ambiente/proyecto.
+    useEffect(() => {
+        setSelectedKey(STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId, currentStandard]);
 
     const std = ALL_STANDARDS.find((s) => s.key === selectedKey)!;
     const section = std.sections.find((s) => s.id === selectedSectionId);
@@ -160,11 +200,9 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
             colorRenderingRa: profile.Ra,
             roomIds: selectedRoom ? [selectedRoom.id] : undefined,
         });
-        // Al aplicar solo a un ambiente seleccionado no cambiamos el estándar
-        // por defecto del proyecto (el que se usa para ambientes nuevos).
-        if (!selectedRoom) {
-            onDefaultNormativeStandardChange(standard);
-        }
+        // Conserva la última norma elegida al cerrar/reabrir el panel. El
+        // alcance de `onApplyProfile` sigue evitando tocar otros ambientes.
+        onDefaultNormativeStandardChange(standard);
         setApplied(true);
         setTimeout(() => setApplied(false), 2500);
     };

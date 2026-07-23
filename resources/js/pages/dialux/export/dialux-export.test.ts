@@ -438,7 +438,7 @@ describe('dialux export pipeline', () => {
         ).toBe(true);
         expect(
             documentModel.pages.filter((page) => page.kind === 'toc'),
-        ).toHaveLength(Math.ceil(documentModel.toc.length / 14));
+        ).toHaveLength(Math.ceil(documentModel.toc.length / 24));
     });
 
     it('creates reusable visual and structured assets', async () => {

@@ -36,6 +36,11 @@ with open(PAYLOAD, encoding="utf-8") as f:
 
 converted = 0
 for asset in payload["document"]["assets"]:
+    # El diagrama polar de producto (enrichProducts.ts) es el UNICO asset
+    # vectorial que la produccion real deja como SVG puro (nunca pasa por
+    # svgToPlanBitmap/svgToBitmapAsset) — se preserva igual aqui.
+    if asset.get("purpose") == "ambient-catalog":
+        continue
     if asset.get("kind") == "vector" and asset.get("svg"):
         try:
             data_url, w, h = svg_to_png_data_url(asset["svg"])

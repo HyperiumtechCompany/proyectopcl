@@ -14,6 +14,29 @@ import type {
     Window as SceneWindow,
 } from '@/pages/dialux/hooks/useEditorStore';
 
+/**
+ * Evaluación explícita de un requisito normativo contra un valor calculado.
+ * Reemplaza los checks booleanos decorativos: toda conformidad debe derivarse
+ * de esta estructura (metric + operator + requiredValue -> status).
+ */
+export interface RequirementEvaluation {
+    metric: string;
+    calculatedValue: number | null;
+    operator: '>=' | '<=' | '>' | '<' | '=';
+    requiredValue: number | null;
+    unit: string;
+    status: 'pass' | 'fail' | 'not-evaluated' | 'stale';
+    source?: string;
+}
+
+/** Procedencia del cálculo fotométrico: qué motor lo produjo y su vigencia. */
+export interface CalculationProvenance {
+    engine: string;
+    engineVersion: string;
+    calculatedAt: string | null;
+    status: 'calculated' | 'stale' | 'imported' | 'not-calculated';
+}
+
 export interface DialuxAmbientMetrics {
     area: number;
     illuminanceLux: number;
@@ -36,6 +59,8 @@ export interface DialuxAmbientMetrics {
     uniformityTarget: number | null;
     ugrLimit: number | null;
     complies: boolean;
+    requirementEvaluations: RequirementEvaluation[];
+    provenance: CalculationProvenance;
 }
 
 export interface DialuxAmbientExport {
@@ -257,7 +282,43 @@ export interface DialuxLuminaireTotals {
     overallEfficiency: number;
 }
 
+/**
+ * Agregado de luminarias y cumplimiento a escala de nivel (Scene). Se calcula
+ * dinámicamente para cada nivel presente en el snapshot — funciona igual con
+ * 1 nivel (solo planta baja) o con N niveles, no asume una cantidad fija.
+ */
+export interface DialuxLevelSummary {
+    sceneId: string;
+    sceneName: string;
+    floorIndex: number;
+    ambientCount: number;
+    calculatedAmbientCount: number;
+    compliantAmbientCount: number;
+    fixtureCount: number;
+    luminaires: DialuxLuminaireListItem[];
+    luminaireTotals: DialuxLuminaireTotals;
+}
+
 export type DialuxAmbientLuminaireItem = DialuxLuminaireListItem;
+
+/** Defaults fotométricos cuando el proyecto no define reflectancias/factor de mantenimiento propios. */
+export const DEFAULT_REFLECTANCE_CEILING = 70;
+export const DEFAULT_REFLECTANCE_WALL = 50;
+export const DEFAULT_REFLECTANCE_FLOOR = 20;
+export const DEFAULT_MAINTENANCE_FACTOR = 0.8;
+
+/**
+ * Campos fotométricos opcionales que un proyecto puede definir a nivel global.
+ * No forman parte del contrato persistido de `Project`; se leen de forma tipada
+ * (en vez de un cast inseguro a `Record<string, unknown>`) y caen a los defaults
+ * de arriba cuando el proyecto no los define.
+ */
+export interface DialuxProjectPhotometricDefaults {
+    maintenanceFactor?: number;
+    reflectionCeiling?: number;
+    reflectionWall?: number;
+    reflectionFloor?: number;
+}
 
 export interface DialuxAmbientDetail {
     ambientId: string;
@@ -300,6 +361,8 @@ export interface DialuxAmbientDetail {
     complianceLabel: string;
     planAssetId: string | null;
     isoluxAssetId: string | null;
+    requirementEvaluations: RequirementEvaluation[];
+    provenance: CalculationProvenance;
     luminaires: DialuxAmbientLuminaireItem[];
     fixturePositions: Array<{
         id: string;
@@ -336,6 +399,7 @@ export type DialuxFormalPageKind =
     | 'room-ambient-list'
     | 'room-luminaires'
     | 'room-calculation-object'
+    | 'level-luminaire-list'
     | 'glossary'
     | 'placeholder';
 
@@ -376,6 +440,7 @@ export type DialuxFormalSectionId =
     | `room-ambient-list:${string}`
     | `room-luminaires:${string}`
     | `room-calculation-object:${string}`
+    | `level-luminaire-list:${string}`
     | 'cad-overview-luminaires';
 
 export interface DialuxTocEntry {
@@ -399,10 +464,35 @@ export interface DialuxDocumentPage {
     notes: string[];
     ambientId?: string | null;
     roomId?: string | null;
+    sceneId?: string | null;
+    sceneName?: string | null;
+    /**
+     * Rango [start, end) sobre la lista completa de luminarias del alcance
+     * de esta página (proyecto o nivel), cuando esa lista se dividió en
+     * varias páginas de continuación. Ausente = mostrar la lista completa.
+     */
+    rowRangeStart?: number | null;
+    rowRangeEnd?: number | null;
 }
+
+/**
+ * Entrada del glosario. Catálogo propio del sistema (no transcrito de
+ * DIALux) — ver `document/glossaryCatalog.ts`. Solo se incluyen en el
+ * documento los términos que el propio informe efectivamente utiliza.
+ */
+export interface GlossaryEntry {
+    letter: string;
+    term: string;
+    definition: string;
+    abbreviation?: string | null;
+}
+
+/** Versión del contrato del documento formal. Laravel rechaza valores no soportados. */
+export const DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION = 1 as const;
 
 export interface DialuxFormalDocument {
     formatVersion: '1.0.0';
+    schemaVersion: typeof DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION;
     title: string;
     subtitle: string;
     fileBaseName: string;
@@ -424,8 +514,10 @@ export interface DialuxFormalDocument {
     toc: DialuxTocEntry[];
     luminaires: DialuxLuminaireListItem[];
     luminaireTotals: DialuxLuminaireTotals;
+    levels: DialuxLevelSummary[];
     ambientDetails: DialuxAmbientDetail[];
     assets: DialuxExportAsset[];
+    glossary: GlossaryEntry[];
 }
 
 export interface DialuxFormalPdfPayload {

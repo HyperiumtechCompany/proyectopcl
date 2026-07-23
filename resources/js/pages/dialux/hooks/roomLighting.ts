@@ -7,21 +7,17 @@ import {
     determineCoverage,
     estimateUniformity,
 } from './lightingCalculations';
-import {
-    en12464Regulations,
-    iesnaRegulations,
-    rnePeruRegulations,
-    type RawNormativeBranch,
-    type RawNormativeLeaf,
-} from './normativaData';
+import type { RawNormativeBranch, RawNormativeLeaf } from './normativaData';
+import { getNormData } from './normativeEngine';
 import type { Fixture, Room } from './types';
 
-export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
+export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru' | 'en_1838' | 'nfpa101' | 'ds024';
 
 export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
     en_12464: 'EN 12464-1 (Europa)',
     ies_na:   'IESNA / IES HB-10 (EE. UU.)',
     rne_peru: 'RNE EM.010 / CNE (Perú)',
+    en_1838:  'EN 1838 - Alumbrado de emergencia (Europa)',
     nfpa101:  'NFPA 101 - Life Safety Code (EE. UU.)',
     ds024:    'DS-024-2016-EM - Minería (Perú)',
 };
@@ -95,14 +91,17 @@ function flattenNormativeTree(branches: RawNormativeBranch[]): NormativeLeafOpti
     );
 }
 
-export const normativeOptionsEN = flattenNormativeTree(en12464Regulations);
-export const normativeOptionsIES = flattenNormativeTree(iesnaRegulations);
-export const normativeOptionsPERU = flattenNormativeTree(rnePeruRegulations);
-
+/**
+ * Se recalcula en cada llamada (no se cachea a nivel de módulo) porque
+ * `getNormData` puede devolver el catálogo sembrado en BD (fuente única de
+ * verdad, cargado en runtime vía ensureStandardDataLoaded) en vez del
+ * dataset estático — cachear aquí habría dejado esta función (y por tanto
+ * los dropdowns de WallProps/RoomProps y findNormativeOption) mostrando
+ * permanentemente la transcripción estática aunque la BD ya hubiera
+ * cargado un catálogo distinto.
+ */
 export function getNormativeOptions(standard: NormativeStandard): NormativeLeafOption[] {
-    if (standard === 'ies_na') return normativeOptionsIES;
-    if (standard === 'rne_peru') return normativeOptionsPERU;
-    return normativeOptionsEN;
+    return flattenNormativeTree(getNormData(standard));
 }
 
 export function getCategoryOptions(standard: NormativeStandard = 'en_12464'): string[] {
@@ -136,7 +135,7 @@ export function getActivityOptions(
     second?: string,
     third?: string,
 ): NormativeLeafOption[] {
-    const hasStandard = first === 'en_12464' || first === 'ies_na' || first === 'rne_peru';
+    const hasStandard = first === 'en_12464' || first === 'ies_na' || first === 'rne_peru' || first === 'en_1838';
     const standard = hasStandard ? (first as NormativeStandard) : 'en_12464';
     const category = hasStandard ? second : first;
     const section = hasStandard ? third : second;
@@ -284,7 +283,7 @@ export function getRoomMarginalZone(room: Room): number {
 }
 
 /** Índice del local (k) a partir del bbox del recinto y la altura de montaje sobre el plano de trabajo. */
-function calculateRoomIndexForRoom(room: Room, usefulPlaneHeight: number): number {
+export function calculateRoomIndexForRoom(room: Room, usefulPlaneHeight: number): number {
     if (room.vertices.length < 3) {
         return 0;
     }

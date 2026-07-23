@@ -126,6 +126,41 @@ export function calculateCenteredOffsetOnWall(
     return calculateCenteredOffset(wallLength(wall), objectWidth);
 }
 
+// ─── Sugerencia de tamaño de grilla según normativa ───────────────────────────
+
+/**
+ * Sugiere filas/columnas que alcancen `requiredCount` luminarias, partiendo de
+ * la grilla actual y creciendo la dimensión que mantenga la forma más cercana
+ * a `aspectRatio` (ancho/alto del ambiente) — así 3×2 insuficiente se convierte
+ * en 3×3 (o 4×2, según la forma del ambiente) en vez de crecer siempre en el
+ * mismo eje.
+ */
+export function suggestFixtureGridSize(
+    currentRows: number,
+    currentColumns: number,
+    requiredCount: number,
+    aspectRatio = 1,
+): { rows: number; columns: number } {
+    let rows = Math.max(1, Math.round(currentRows));
+    let columns = Math.max(1, Math.round(currentColumns));
+    const ratio = aspectRatio > 0 ? aspectRatio : 1;
+    let guard = 0;
+
+    while (rows * columns < requiredCount && guard < 500) {
+        const diffMoreColumns = Math.abs((columns + 1) / rows - ratio);
+        const diffMoreRows = Math.abs(columns / (rows + 1) - ratio);
+
+        if (diffMoreColumns <= diffMoreRows) {
+            columns += 1;
+        } else {
+            rows += 1;
+        }
+        guard += 1;
+    }
+
+    return { rows, columns };
+}
+
 // ─── Generación de fixtures de grilla ────────────────────────────────────────
 
 /**
@@ -148,15 +183,21 @@ export function buildFixtureGridObjects(
     const z       = config.mountingHeight ?? 2.7;
 
     return positions.map((pos, index) => ({
-        name: `Luminaria G${config.rows}×${config.columns} [${index + 1}]`,
+        name: `${tmpl.name ?? `Luminaria G${config.rows}×${config.columns}`} [${index + 1}]`,
         x: pos.x,
         y: pos.y,
         z,
         lumens:       tmpl.lumens      ?? 4000,
+        power:        tmpl.power,
         efficiency:   tmpl.efficiency  ?? 0.8,
         fixtureType:  tmpl.fixtureType ?? 'recessed',
         fixtureShape: tmpl.fixtureShape ?? 'round',
         lightColor:   tmpl.lightColor  ?? '#fff5e1',
+        brand:         tmpl.brand,
+        articleNumber: tmpl.articleNumber,
+        productId:     tmpl.productId,
+        catalogSymbol: tmpl.catalogSymbol,
+        emergencyType: tmpl.emergencyType,
         roomId:       config.roomId,
         gridGroupId:  groupId,
     }));

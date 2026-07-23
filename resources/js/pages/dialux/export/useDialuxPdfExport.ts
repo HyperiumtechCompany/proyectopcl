@@ -343,7 +343,10 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             );
             const response = await axios.post(
                 dialuxRoutes.formalExport.url(),
-                { document: formalDocument },
+                {
+                    document: formalDocument,
+                    dialux_project_id: exportProject.id,
+                },
                 { responseType: 'blob' },
             );
             const blob = new Blob([response.data], { type: 'application/pdf' });

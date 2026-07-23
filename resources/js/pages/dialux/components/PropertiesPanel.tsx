@@ -47,6 +47,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                                         routeType: selectedId.includes('dev-sw') ? 'wall_ceiling' : 'floor',
                                         tubeSize: 20,
                                         conductorType: 'THW-90',
+                                        sectionMm2: 2.5,
                                     }),
                                     ...patch
                                 }

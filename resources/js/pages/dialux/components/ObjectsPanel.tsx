@@ -57,7 +57,7 @@ export const ObjectsPanel: React.FC = () => {
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {/* ── Paredes ───────────────────────────────────────────────── */}
@@ -72,7 +72,7 @@ export const ObjectsPanel: React.FC = () => {
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             <ObjectSection
@@ -113,7 +113,7 @@ export const ObjectsPanel: React.FC = () => {
                 })}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {/* ── Ventanas ──────────────────────────────────────────────── */}
@@ -128,7 +128,7 @@ export const ObjectsPanel: React.FC = () => {
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {/* ── Puertas ───────────────────────────────────────────────── */}
@@ -143,7 +143,7 @@ export const ObjectsPanel: React.FC = () => {
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {/* ── Voladizos ─────────────────────────────────────────────── */}
@@ -172,7 +172,7 @@ export const ObjectsPanel: React.FC = () => {
                 })}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {/* ── Luminarias ────────────────────────────────────────────── */}
@@ -187,7 +187,7 @@ export const ObjectsPanel: React.FC = () => {
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
-                onDelete={(id) => store.removeObject(id)}
+                onDelete={(id) => store.requestDelete(id)}
             />
 
             {totalItems === 0 && (

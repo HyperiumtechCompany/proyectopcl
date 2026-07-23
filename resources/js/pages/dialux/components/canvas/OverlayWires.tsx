@@ -17,6 +17,7 @@ interface Props {
     selectedId?: string | null;
     onSelect?: (id: string) => void;
     activeTool?: string;
+    showLegacyLightingWires?: boolean;
 }
 
 const WIRE_COLOR = '#ef4444';
@@ -142,15 +143,16 @@ export const OverlayWires = memo(function OverlayWires({
     selectedId,
     onSelect,
     activeTool,
+    showLegacyLightingWires = true,
 }: Props) {
     const switchesWithConductors = new Set(
         conductors.flatMap(c => [c.sourceId, c.targetId])
     );
-    const legacySwitches = lightSwitches.filter(
+    const legacySwitches = showLegacyLightingWires ? lightSwitches.filter(
         (sw) =>
             !switchesWithConductors.has(sw.id) &&
             (sw.connectedFixtureIds?.length ?? 0) > 0,
-    );
+    ) : [];
 
     if (conductors.length === 0 && legacySwitches.length === 0) return null;
 

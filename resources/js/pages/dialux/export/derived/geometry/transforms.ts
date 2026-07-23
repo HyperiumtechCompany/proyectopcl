@@ -130,6 +130,15 @@ export function buildSceneBounds(
     );
 }
 
+/**
+ * Límites defensivos de escala (px por metro de mundo). Con los tamaños de
+ * canvas actuales (800-1200px) ningún ambiente real los alcanza — solo
+ * evitan un transform degenerado ante geometría patológica (un ambiente de
+ * kilómetros o de un punto).
+ */
+export const MIN_TRANSFORM_SCALE = 0.5;
+export const MAX_TRANSFORM_SCALE = 5000;
+
 export function createTransform(
     bounds: Bounds,
     width: number,
@@ -140,9 +149,13 @@ export function createTransform(
     const safeHeight = Math.max(bounds.maxY - bounds.minY, 1);
     const drawableWidth = width - padding * 2;
     const drawableHeight = height - padding * 2;
-    const scale = Math.min(
+    const rawScale = Math.min(
         drawableWidth / safeWidth,
         drawableHeight / safeHeight,
+    );
+    const scale = Math.max(
+        MIN_TRANSFORM_SCALE,
+        Math.min(MAX_TRANSFORM_SCALE, rawScale),
     );
     const contentWidth = safeWidth * scale;
     const contentHeight = safeHeight * scale;

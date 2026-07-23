@@ -1,44 +1,17 @@
 import type { DialuxExportSnapshot, DialuxVectorAsset, DialuxBitmapAsset } from '../../domain/types';
 import { buildSceneBounds, createTransform, transformPoint } from '../geometry/transforms';
 import { renderDxfEntity } from './renderDxfEntity';
-import { escapeXml, renderPolyline, renderCadBitmapFill } from '../geometry/renderPrimitives';
+import {
+    buildIsoluxColorLegend,
+    escapeXml,
+    renderCadBitmapFill,
+    renderFixtureSymbol,
+    renderNorthArrow,
+    renderPolyline,
+    renderScaleBar,
+} from '../geometry/renderPrimitives';
+import { colorForLuxMode, waveStrokeColor } from '../geometry/luxColor';
 import { buildContourSegments } from '@/pages/dialux/hooks/isoluxContours';
-
-function hslToHex(h: number, s: number, l: number): string {
-    s /= 100;
-    l /= 100;
-    const a = s * Math.min(l, 1 - l);
-    const f = (n: number): string => {
-        const k = (n + h / 30) % 12;
-        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-        return Math.round(255 * color).toString(16).padStart(2, '0');
-    };
-    return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-function colorForFunctionalLux(lux: number, maxLux: number): string {
-    const ratio = Math.min(1, Math.max(0, lux / Math.max(maxLux, 1)));
-    const hue = 240 - ratio * 200;
-    return hslToHex(hue, 92, 62 - ratio * 28);
-}
-
-function colorForTemperatureLux(lux: number, maxLux: number): string {
-    const ratio = Math.min(1, Math.max(0, lux / Math.max(maxLux, 1)));
-    const hue = 250 - ratio * 220;
-    return hslToHex(hue, 92, 58 - ratio * 22);
-}
-
-function waveStrokeColor(level: number, maxLux: number): string {
-    const ratio = Math.min(1, Math.max(0, level / Math.max(maxLux, 1)));
-    const hue = 220 - ratio * 160;
-    return hslToHex(hue, 90, 28 - ratio * 8);
-}
-
-function waveBackdropColor(lux: number, maxLux: number): string {
-    const ratio = Math.min(1, Math.max(0, lux / Math.max(maxLux, 1)));
-    const hue = 230 - ratio * 185;
-    return hslToHex(hue, 92, 58 - ratio * 28);
-}
 
 export function buildDrawnTerrainSvg(
     snapshot: DialuxExportSnapshot,
@@ -113,17 +86,17 @@ export function buildDrawnTerrainSvg(
         )
         .join('');
 
+    // Mismo símbolo que los planos técnicos por ambiente (renderFixtureSymbol),
+    // en vez de un punto azul genérico — consistencia visual entre plantillas.
     const fixturesMarkup = snapshot.fixtures
-        .map((fixture) => {
-            const p = transformPoint(transform, fixture);
-            const r = Math.max(5, Math.min(12, transform.scale * 0.12));
-            return `<g>
-                <circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${(r * 2).toFixed(2)}" fill="#3b82f6" fill-opacity="0.10"/>
-                <circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${r.toFixed(2)}" fill="#3b82f6" stroke="#1d4ed8" stroke-width="1"/>
-                <line x1="${(p.x - r * 0.7).toFixed(2)}" y1="${p.y.toFixed(2)}" x2="${(p.x + r * 0.7).toFixed(2)}" y2="${p.y.toFixed(2)}" stroke="#ffffff" stroke-width="1.5"/>
-                <line x1="${p.x.toFixed(2)}" y1="${(p.y - r * 0.7).toFixed(2)}" x2="${p.x.toFixed(2)}" y2="${(p.y + r * 0.7).toFixed(2)}" stroke="#ffffff" stroke-width="1.5"/>
-            </g>`;
-        })
+        .map((fixture) =>
+            renderFixtureSymbol(transformPoint(transform, fixture), fixture, {
+                scale: 0.6,
+                accent: '#b45309',
+                fill: '#f59e0b',
+                fillOpacity: 0.22,
+            }),
+        )
         .join('');
 
     const ambientLabelsMarkup = snapshot.ambients
@@ -142,24 +115,22 @@ export function buildDrawnTerrainSvg(
 
     const oneMeterPx = transform.scale;
     const barLenPx = Math.min(oneMeterPx * 5, 160);
-    const barMeters = (barLenPx / oneMeterPx).toFixed(1);
-    const barX = MARGIN + 8;
-    const barY = H - MARGIN - 14;
-    const scaleBarMarkup = `
-        <rect x="${barX}" y="${barY - 6}" width="${barLenPx.toFixed(1)}" height="5" fill="none" stroke="#334155" stroke-width="1"/>
-        <rect x="${barX}" y="${barY - 6}" width="${(barLenPx / 2).toFixed(1)}" height="5" fill="#334155" fill-opacity="0.5"/>
-        <text x="${barX}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif">0</text>
-        <text x="${(barX + barLenPx / 2).toFixed(1)}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif" text-anchor="middle">${(Number(barMeters) / 2).toFixed(1)}</text>
-        <text x="${(barX + barLenPx).toFixed(1)}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif" text-anchor="end">${barMeters} m</text>`;
-
-    const naX = W - MARGIN - 24;
-    const naY = MARGIN + 52;
-    const northArrow = `
-        <g transform="translate(${naX},${naY})">
-            <polygon points="0,-20 5,0 0,-4 -5,0" fill="#1e293b"/>
-            <polygon points="0,-4 5,0 0,20 -5,0" fill="#94a3b8"/>
-            <text x="0" y="36" fill="#1e293b" font-size="11" font-family="sans-serif" font-weight="700" text-anchor="middle">N</text>
-        </g>`;
+    const barMeters = Number((barLenPx / oneMeterPx).toFixed(1));
+    const scaleBarMarkup = renderScaleBar({
+        x: MARGIN + 8,
+        y: H - MARGIN - 14,
+        barLengthPx: barLenPx,
+        labelMeters: barMeters,
+        barHeight: 5,
+        strokeWidth: 1,
+        fillOpacity: 0.5,
+        fontSize: 9,
+        labelYOffset: 6,
+    });
+    const northArrow = renderNorthArrow({
+        x: W - MARGIN - 24,
+        y: MARGIN + 52,
+    });
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
         <rect width="${W}" height="${H}" fill="#ffffff"/>
@@ -217,6 +188,18 @@ export function buildTerrainWithIsoluxSvg(
         ? `<g id="dxf-base" opacity="0.7">${dxfMarkup}</g>`
         : '';
     const cadBgLayer = `${cadBitmapMarkup}${dxfIsoluxBaseLayer}`;
+
+    // Min/max global para la leyenda de color (un solo rango para todo el
+    // terreno, no uno distinto por ambiente).
+    const validResults = snapshot.ambients
+        .map((ambient) => ambient.result)
+        .filter((result): result is NonNullable<typeof result> => result !== null);
+    const terrainMaxLux = Math.max(1, ...validResults.map((result) => result.max_lux));
+    const terrainValidValues = validResults.flatMap((result) =>
+        result.grid_values.filter((v): v is number => v !== null),
+    );
+    const terrainMinLux =
+        terrainValidValues.length > 0 ? Math.max(0, Math.min(...terrainValidValues)) : 0;
 
     const isoluxMarkup = snapshot.ambients.map((ambient) => {
         const result = ambient.result;
@@ -278,11 +261,7 @@ export function buildTerrainWithIsoluxSvg(
             const cellH = Math.max(1, Math.abs(bottomRight.y - topLeft.y));
             const x = Math.min(topLeft.x, bottomRight.x);
             const y = Math.min(topLeft.y, bottomRight.y);
-            const fill = mode === 'temperature'
-                ? colorForTemperatureLux(lux, maxLux)
-                : mode === 'waves'
-                    ? waveBackdropColor(lux, maxLux)
-                    : colorForFunctionalLux(lux, maxLux);
+            const fill = colorForLuxMode(lux, maxLux, mode);
             const opacity = mode === 'waves' ? 0.88 : 0.80;
             return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cellW.toFixed(1)}" height="${cellH.toFixed(1)}" fill="${fill}" fill-opacity="${opacity}" />`;
         }).join('');
@@ -327,24 +306,27 @@ export function buildTerrainWithIsoluxSvg(
 
     const oneMeterPx = transform.scale;
     const barLenPx = Math.min(oneMeterPx * 5, 160);
-    const barMeters = (barLenPx / oneMeterPx).toFixed(1);
-    const barX = MARGIN + 8;
-    const barY = H - MARGIN - 14;
-    const scaleBarMarkup = `
-        <rect x="${barX}" y="${barY - 6}" width="${barLenPx.toFixed(1)}" height="5" fill="none" stroke="#334155" stroke-width="1"/>
-        <rect x="${barX}" y="${barY - 6}" width="${(barLenPx / 2).toFixed(1)}" height="5" fill="#334155" fill-opacity="0.5"/>
-        <text x="${barX}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif">0</text>
-        <text x="${(barX + barLenPx / 2).toFixed(1)}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif" text-anchor="middle">${(Number(barMeters) / 2).toFixed(1)}</text>
-        <text x="${(barX + barLenPx).toFixed(1)}" y="${barY + 6}" fill="#334155" font-size="9" font-family="sans-serif" text-anchor="end">${barMeters} m</text>`;
-
-    const naX = W - MARGIN - 24;
-    const naY = MARGIN + 52;
-    const northArrow = `
-        <g transform="translate(${naX},${naY})">
-            <polygon points="0,-20 5,0 0,-4 -5,0" fill="#1e293b"/>
-            <polygon points="0,-4 5,0 0,20 -5,0" fill="#94a3b8"/>
-            <text x="0" y="36" fill="#1e293b" font-size="11" font-family="sans-serif" font-weight="700" text-anchor="middle">N</text>
-        </g>`;
+    const barMeters = Number((barLenPx / oneMeterPx).toFixed(1));
+    const scaleBarMarkup = renderScaleBar({
+        x: MARGIN + 8,
+        y: H - MARGIN - 14,
+        barLengthPx: barLenPx,
+        labelMeters: barMeters,
+        barHeight: 5,
+        strokeWidth: 1,
+        fillOpacity: 0.5,
+        fontSize: 9,
+        labelYOffset: 6,
+    });
+    const northArrow = renderNorthArrow({
+        x: W - MARGIN - 24,
+        y: MARGIN + 52,
+    });
+    // Leyenda de color: antes ausente en este plano pese a mostrar la misma
+    // grilla de colores que el isolux por ambiente (gap de Fase 3).
+    const legendMarkup = validResults.length > 0
+        ? buildIsoluxColorLegend(terrainMinLux, terrainMaxLux, mode, W, H)
+        : '';
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
         <rect width="${W}" height="${H}" fill="#ffffff"/>
@@ -355,6 +337,7 @@ export function buildTerrainWithIsoluxSvg(
         <g id="room-labels-layer">${roomLabelsMarkup}</g>
         ${scaleBarMarkup}
         ${northArrow}
+        ${legendMarkup}
     </svg>`;
 
     return {

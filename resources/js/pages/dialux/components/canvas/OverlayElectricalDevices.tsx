@@ -26,6 +26,9 @@ const PHYS: Record<ElectricalDeviceType, { hw: number; hh: number }> = {
     earth_pit:         { hw: 0.20, hh: 0.20 },
     facp:              { hw: 0.35, hh: 0.20 },
     outlet_floor:      { hw: 0.15, hh: 0.15 },
+    outlet_initial:    { hw: 0.15, hh: 0.15 },
+    outlet_high_180:   { hw: 0.15, hh: 0.15 },
+    outlet_floor_box:  { hw: 0.15, hh: 0.15 },
     outlet_waterproof: { hw: 0.15, hh: 0.15 },
     outlet_ceiling:    { hw: 0.15, hh: 0.15 },
     outlet_rack:       { hw: 0.15, hh: 0.15 },
@@ -334,6 +337,9 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                     earth_pit:         '#eab308', // yellow circle
                     facp:              '#06b6d4', // cyan
                     outlet_floor:      '#22c55e',
+                    outlet_initial:    '#22c55e',
+                    outlet_high_180:   '#3b82f6',
+                    outlet_floor_box:  '#16a34a',
                     outlet_waterproof: '#3b82f6', // blue
                     outlet_ceiling:    '#22c55e',
                     outlet_rack:       '#ef4444',
@@ -367,6 +373,12 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                         
                         {dev.type === 'outlet_floor' && (
                             <WallOutletSymbol r={hw} stroke={baseColor} />
+                        )}
+                        {(dev.type === 'outlet_initial' || dev.type === 'outlet_high_180') && (
+                            <WallOutletSymbol r={hw} stroke={baseColor} />
+                        )}
+                        {dev.type === 'outlet_floor_box' && (
+                            <RackOutletSymbol r={hw} stroke={baseColor} />
                         )}
                         {dev.type === 'outlet_waterproof' && (
                             <WallOutletSymbol r={hw} stroke={baseColor} waterproof />

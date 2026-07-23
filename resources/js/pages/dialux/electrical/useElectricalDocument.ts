@@ -1,0 +1,292 @@
+/**
+ * useElectricalDocument.ts
+ *
+ * Estado del documento eléctrico + derivados (motor puro) + autosave.
+ * Mismo criterio de guardado que useDialuxProjectSync: fetch JSON debounced
+ * con el token CSRF leído de la cookie (siempre vigente en sesiones largas).
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
+import { computeElectricalDerived } from './engine';
+import type {
+    ElectricalCatalogs,
+    ElectricalDerived,
+    ElectricalDocument,
+    ElectricalFloor,
+    ElectricalRoom,
+} from './engine/types';
+
+const AUTOSAVE_DEBOUNCE_MS = 2500;
+
+export type ElectricalSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+export function newId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function buildEmptyDocument(): ElectricalDocument {
+    const floorId = newId();
+
+    return {
+        version: 1,
+        settings: {
+            voltageV: 220,
+            phases: 1,
+            frequencyHz: 60,
+            powerFactor: 0.9,
+            referenceStandard: 'CNE-Utilización',
+            cableReserveFactor: 1.1,
+            installationCategory: 'residencial',
+        },
+        floors: [{ id: floorId, name: 'Piso 1', level: 1 }],
+        rooms: [],
+        luminaireTypes: [],
+        roomLuminaires: [],
+        roomOutlets: [],
+        circuits: [],
+        panels: [],
+        feeders: [],
+    };
+}
+
+function readXsrfTokenFromCookie(): string {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+// ─── Import de ambientes desde el plano CAD (rooms poligonales) ──────────────
+
+interface CadVertex {
+    x: number;
+    y: number;
+}
+
+interface CadRoom {
+    id: string;
+    name?: string;
+    vertices?: CadVertex[];
+    height?: number;
+    illuminanceLux?: number;
+    normativeActivity?: string;
+}
+
+interface CadScene {
+    id: string;
+    name?: string;
+    floorIndex?: number;
+    rooms?: CadRoom[];
+}
+
+export interface CadProjectData {
+    scenes?: CadScene[];
+}
+
+function polygonArea(vertices: CadVertex[]): number {
+    return polygonAreaM2(vertices);
+}
+
+function polygonPerimeter(vertices: CadVertex[]): number {
+    if (vertices.length < 2) {
+        return 0;
+    }
+    let sum = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const a = vertices[i];
+        const b = vertices[(i + 1) % vertices.length];
+        sum += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    return sum;
+}
+
+function boundingBox(vertices: CadVertex[]): { width: number; height: number } {
+    if (vertices.length === 0) {
+        return { width: 0, height: 0 };
+    }
+    const xs = vertices.map((v) => v.x);
+    const ys = vertices.map((v) => v.y);
+    return {
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+    };
+}
+
+/**
+ * Importa los ambientes del plano CAD que aún no existen en el documento
+ * (por sourceRoomId). Devuelve el documento actualizado y cuántos se importaron.
+ */
+export function importRoomsFromCad(doc: ElectricalDocument, cad: CadProjectData | null): { doc: ElectricalDocument; imported: number } {
+    if (!cad?.scenes?.length) {
+        return { doc, imported: 0 };
+    }
+
+    const existingSourceIds = new Set(doc.rooms.map((r) => r.sourceRoomId).filter(Boolean));
+    const floors = [...doc.floors];
+    const rooms = [...doc.rooms];
+    let imported = 0;
+
+    for (const scene of cad.scenes) {
+        const level = (scene.floorIndex ?? 0) + 1;
+        let floor: ElectricalFloor | undefined = floors.find((f) => f.level === level);
+        if (!floor) {
+            floor = { id: newId(), name: scene.name || `Piso ${level}`, level };
+            floors.push(floor);
+        }
+
+        for (const cadRoom of scene.rooms ?? []) {
+            if (!cadRoom.vertices || cadRoom.vertices.length < 3 || existingSourceIds.has(cadRoom.id)) {
+                continue;
+            }
+
+            const area = polygonArea(cadRoom.vertices);
+            const perimeter = polygonPerimeter(cadRoom.vertices);
+            const box = boundingBox(cadRoom.vertices);
+
+            const room: ElectricalRoom = {
+                id: newId(),
+                floorId: floor.id,
+                name: cadRoom.name || `Ambiente ${rooms.length + 1}`,
+                roomType: 'personalizado',
+                lengthM: Number(box.width.toFixed(2)),
+                widthM: Number(box.height.toFixed(2)),
+                heightM: cadRoom.height ?? 2.7,
+                areaOverrideM2: Number(area.toFixed(2)),
+                perimeterOverrideM: Number(perimeter.toFixed(2)),
+                requiredLux: cadRoom.illuminanceLux ?? 300,
+                utilizationFactor: 0.6,
+                maintenanceFactor: 0.8,
+                observations: cadRoom.normativeActivity ? `Actividad normativa: ${cadRoom.normativeActivity}` : undefined,
+                sourceRoomId: cadRoom.id,
+            };
+
+            rooms.push(room);
+            imported++;
+        }
+    }
+
+    if (imported === 0) {
+        return { doc, imported: 0 };
+    }
+
+    return { doc: { ...doc, floors, rooms }, imported };
+}
+
+// ─── Hook principal ──────────────────────────────────────────────────────────
+
+interface UseElectricalDocumentArgs {
+    dialuxProjectId: string;
+    initialDocument: ElectricalDocument | null;
+    catalogs: ElectricalCatalogs;
+}
+
+export interface ElectricalDocumentApi {
+    doc: ElectricalDocument;
+    derived: ElectricalDerived;
+    saveStatus: ElectricalSaveStatus;
+    /** Mutación inmutable del documento; dispara recompute + autosave. */
+    update: (fn: (doc: ElectricalDocument) => ElectricalDocument) => void;
+    saveNow: () => Promise<void>;
+}
+
+export function useElectricalDocument({ dialuxProjectId, initialDocument, catalogs }: UseElectricalDocumentArgs): ElectricalDocumentApi {
+    const [doc, setDoc] = useState<ElectricalDocument>(() => initialDocument ?? buildEmptyDocument());
+    const [saveStatus, setSaveStatus] = useState<ElectricalSaveStatus>('idle');
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const skipNextSaveRef = useRef(true);
+    const latestDocRef = useRef(doc);
+    latestDocRef.current = doc;
+
+    const derived = useMemo(() => computeElectricalDerived(doc, catalogs), [doc, catalogs]);
+    const derivedRef = useRef(derived);
+    derivedRef.current = derived;
+
+    const persist = useCallback(
+        async (document: ElectricalDocument): Promise<void> => {
+            setSaveStatus('saving');
+            const totals = derivedRef.current.totals;
+
+            try {
+                const response = await fetch('/dialux/electrical', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        dialux_project_id: dialuxProjectId,
+                        reference_standard: document.settings.referenceStandard,
+                        voltage_v: document.settings.voltageV,
+                        phases: document.settings.phases,
+                        frequency_hz: document.settings.frequencyHz,
+                        data: document,
+                        total_rooms: totals.rooms,
+                        total_luminaires: totals.luminaires,
+                        total_outlets: totals.outlets,
+                        total_panels: totals.panels,
+                        installed_power_w: Math.round(totals.installedPowerW * 100) / 100,
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                setSaveStatus('saved');
+            } catch {
+                setSaveStatus('error');
+            }
+        },
+        [dialuxProjectId],
+    );
+
+    useEffect(() => {
+        if (skipNextSaveRef.current) {
+            skipNextSaveRef.current = false;
+            return;
+        }
+
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+
+        timerRef.current = setTimeout(() => {
+            void persist(doc);
+        }, AUTOSAVE_DEBOUNCE_MS);
+
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+        };
+    }, [doc, persist]);
+
+    // Flush final al desmontar para no perder los últimos cambios.
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+                void persist(latestDocRef.current);
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dialuxProjectId]);
+
+    const update = useCallback((fn: (d: ElectricalDocument) => ElectricalDocument) => {
+        setDoc((prev) => fn(prev));
+    }, []);
+
+    const saveNow = useCallback(async () => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        await persist(latestDocRef.current);
+    }, [persist]);
+
+    return { doc, derived, saveStatus, update, saveNow };
+}

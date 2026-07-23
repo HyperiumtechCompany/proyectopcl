@@ -1,4 +1,4 @@
-export type NormKey = 'EN_12464_1' | 'EN_12464_2' | 'IESNA' | 'NTP_370';
+export type NormKey = 'EN_12464_1' | 'EN_12464_2' | 'IESNA' | 'NTP_370' | 'EN_1838';
 
 export interface NormProfile {
     id: string;
@@ -12,13 +12,13 @@ export interface NormProfile {
     notes?: string;
 }
 
-interface NormSubsection {
+export interface NormSubsection {
     id: string;
     label: string;
     profiles: NormProfile[];
 }
 
-interface NormSection {
+export interface NormSection {
     id: string;
     label: string;
     subsections?: NormSubsection[];
@@ -2733,12 +2733,95 @@ const NTP_370: NormStandardDef = {
     ],
 };
 
+// ─── EN 1838:2019 — Alumbrado de emergencia ─────────────────────────────────
+const EN_1838: NormStandardDef = {
+    key: 'EN_1838',
+    label: 'EN 1838',
+    fullName: 'EN 1838:2019 — Aplicaciones de la iluminación, alumbrado de emergencia',
+    region: 'Europa',
+    color: 'text-amber-300',
+    sections: [
+        {
+            id: '1',
+            label: '1 — Rutas de evacuación',
+            profiles: [
+                {
+                    id: '1.1',
+                    application: 'Eje central de la ruta de evacuación (ancho ≤ 2 m)',
+                    Em_work: 1,
+                    Ra: 40,
+                    notes: 'Uniformidad Emax:Emin ≤ 40:1; 50% del nivel en 5 s y 100% en 60 s; autonomía mínima 1 hora',
+                },
+                {
+                    id: '1.2',
+                    application: 'Escaleras en ruta de evacuación (ancho completo)',
+                    Em_work: 1,
+                    Ra: 40,
+                    notes: 'Iluminancia en todo el ancho del tramo, no solo en el eje; uniformidad Emax:Emin ≤ 40:1',
+                },
+                {
+                    id: '1.3',
+                    application: 'Puntos de seguridad (alarmas, extintores, primeros auxilios)',
+                    Em_work: 5,
+                    Ra: 40,
+                    notes: 'Dentro de un radio de 2 m del equipo, a nivel del suelo',
+                },
+            ],
+        },
+        {
+            id: '2',
+            label: '2 — Áreas antipánico (≥ 60 m²)',
+            profiles: [
+                {
+                    id: '2.1',
+                    application: 'Núcleo del área (excluyendo banda perimetral de 0.5 m)',
+                    Em_work: 0.5,
+                    Ra: 40,
+                    notes: 'Uniformidad Emax:Emin ≤ 40:1; 50% del nivel en 5 s y 100% en 60 s; autonomía mínima 1 hora',
+                },
+            ],
+        },
+        {
+            id: '3',
+            label: '3 — Zonas de tareas de alto riesgo',
+            profiles: [
+                {
+                    id: '3.1',
+                    application: 'Zona de tarea de alto riesgo — nivel general',
+                    Em_work: 15,
+                    uniformity: 0.1,
+                    Ra: 40,
+                    notes: 'El mayor entre 10% del nivel normal de la tarea o 15 lx; sin demora — disponible de forma instantánea',
+                },
+            ],
+        },
+    ],
+};
+
 export const ALL_STANDARDS: NormStandardDef[] = [
     EN_12464_1,
     EN_12464_2,
     IESNA_STD,
     NTP_370,
+    EN_1838,
 ];
+
+/**
+ * Reemplaza en runtime las secciones de una norma con el catálogo completo
+ * servido por el backend (tabla dialux_normative_requirements). Así este
+ * panel y el motor normativo comparten una sola fuente de verdad en lugar de
+ * la transcripción manual — ver ensureStandardDataLoaded en
+ * normativeRemoteData.ts.
+ */
+export function setStandardSections(key: NormKey, sections: NormSection[]): void {
+    if (sections.length === 0) {
+        return;
+    }
+    const standard = ALL_STANDARDS.find((s) => s.key === key);
+    if (standard) {
+        standard.sections = sections;
+    }
+}
 
 /** Helper: get Em_surround — if not provided, use 1/3 × Em_work (EN 12464-2 rule) */
 export const getSurround = (p: NormProfile): number =>

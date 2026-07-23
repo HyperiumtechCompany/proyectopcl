@@ -17,15 +17,32 @@ export interface ProjectSlice {
         roomIds?: string[];
     }) => void;
     setProjectNormativeConfig: (config: ProjectNormativeConfig | null) => void;
-    updateComplianceSummary: (summary: ProjectNormativeConfig['complianceSummary']) => void;
+    updateComplianceSummary: (
+        summary: ProjectNormativeConfig['complianceSummary'],
+    ) => void;
 }
 
 export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
-    setProject: (project) => set({ project }),
+    setProject: (project) =>
+        set((state) => ({
+            project,
+            defaultRoomNormativeStandard:
+                project.defaultRoomNormativeStandard ??
+                state.defaultRoomNormativeStandard,
+        })),
     setActiveScene: (sceneId) => set({ activeSceneId: sceneId }),
     setDefaultRoomNormativeStandard: (standard) =>
-        set({ defaultRoomNormativeStandard: standard }),
-    setProjectNormativeConfig: (config) => set({ projectNormativeConfig: config }),
+        set((state) => ({
+            defaultRoomNormativeStandard: standard,
+            project: state.project
+                ? {
+                      ...state.project,
+                      defaultRoomNormativeStandard: standard,
+                  }
+                : null,
+        })),
+    setProjectNormativeConfig: (config) =>
+        set({ projectNormativeConfig: config }),
     updateComplianceSummary: (summary) =>
         set((state) => {
             if (!state.projectNormativeConfig) return state;
@@ -47,12 +64,13 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                 ...state,
                 project: {
                     ...state.project,
+                    defaultRoomNormativeStandard: defaultStandard,
                     scenes: state.project.scenes.map((scene) => ({
                         ...scene,
                         rooms: scene.rooms.map((room) => {
                             if (
-                                (room.normativeStandard ??
-                                    defaultStandard) === defaultStandard
+                                (room.normativeStandard ?? defaultStandard) ===
+                                defaultStandard
                             ) {
                                 return {
                                     ...room,
@@ -84,27 +102,34 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
             const scoped = opts.roomIds !== undefined;
             return {
                 ...state,
-                // Al aplicar a un ambiente puntual no tocamos el estándar por defecto
-                // del proyecto (usado para ambientes nuevos) — solo ese ambiente cambia.
-                ...(scoped ? {} : { defaultRoomNormativeStandard: opts.standard }),
+                // La norma elegida debe sobrevivir al desmontaje del panel y a
+                // la recarga. El alcance solo controla qué ambientes cambian.
+                defaultRoomNormativeStandard: opts.standard,
                 project: {
                     ...state.project,
+                    defaultRoomNormativeStandard: opts.standard,
                     scenes: state.project.scenes.map((scene) => ({
                         ...scene,
                         rooms: scene.rooms.map((room) => {
                             // Recintos (outer shells) and stairs have no lighting — skip them
                             const isAmbiente =
-                                room.roomType === 'ambient' || room.roomType === 'corridor';
+                                room.roomType === 'ambient' ||
+                                room.roomType === 'corridor';
                             if (!isAmbiente) return room;
-                            if (scoped && !opts.roomIds!.includes(room.id)) return room;
+                            if (scoped && !opts.roomIds!.includes(room.id))
+                                return room;
                             return {
                                 ...room,
                                 normativeStandard: opts.standard,
                                 norma: opts.normaLux,
                                 illuminanceLux: opts.normaLux,
                                 ugrLimit: opts.ugrLimit ?? room.ugrLimit,
-                                uniformityTarget: opts.uniformityTarget ?? room.uniformityTarget,
-                                colorRenderingRa: opts.colorRenderingRa ?? room.colorRenderingRa,
+                                uniformityTarget:
+                                    opts.uniformityTarget ??
+                                    room.uniformityTarget,
+                                colorRenderingRa:
+                                    opts.colorRenderingRa ??
+                                    room.colorRenderingRa,
                             };
                         }),
                     })),

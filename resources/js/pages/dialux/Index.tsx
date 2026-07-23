@@ -1,5 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import { Lightbulb, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Lightbulb, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
 import { useState } from 'react';
 import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/app-layout';
@@ -142,6 +142,16 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                                     <div className="mb-2 flex items-start justify-between gap-2">
                                         <h3 className="truncate text-sm font-semibold text-zinc-100">{proyecto.name}</h3>
                                         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.get(`/dialux/${proyecto.id}/electrico`);
+                                                }}
+                                                className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-amber-400"
+                                                aria-label="Módulo eléctrico"
+                                                title="Módulo eléctrico (luminarias, tomacorrientes, tableros)">
+                                                <Zap size={14} />
+                                            </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

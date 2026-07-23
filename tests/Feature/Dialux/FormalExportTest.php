@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Dialux\DialuxProject;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
@@ -7,11 +8,108 @@ beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
 });
 
+/**
+ * Payload minimo valido, usado como base para los tests de validacion de
+ * schemaVersion y de limite de tamano de assets. `dialux_project_id` debe
+ * apuntar a un DialuxProject real (FormalExportRequest lo valida con
+ * exists:dialux_projects,id, y el controller verifica que sea del usuario
+ * autenticado).
+ */
+function minimalValidFormalDocumentPayload(int|string $dialuxProjectId): array
+{
+    return [
+        'dialux_project_id' => $dialuxProjectId,
+        'document' => [
+            'schemaVersion' => 1,
+            'title' => 'Proyecto Demo · Reporte',
+            'subtitle' => 'Planta Baja',
+            'fileBaseName' => 'proyecto-demo-reporte-formal',
+            'generatedAt' => now()->toIso8601String(),
+            'header' => [
+                'title' => 'Proyecto Demo',
+                'subtitle' => 'Planta Baja',
+            ],
+            'footer' => [
+                'left' => 'PCL',
+                'right' => now()->format('Y-m-d'),
+            ],
+            'metadata' => [
+                ['label' => 'Proyecto', 'value' => 'Proyecto Demo'],
+            ],
+            'pages' => [
+                [
+                    'id' => 'page-cover',
+                    'kind' => 'cover',
+                    'sectionId' => 'cover',
+                    'pageNumber' => 1,
+                    'title' => 'Portada',
+                    'subtitle' => 'Planta Baja',
+                    'assetIds' => [],
+                    'notes' => [],
+                ],
+                [
+                    'id' => 'page-content-1',
+                    'kind' => 'toc',
+                    'sectionId' => 'content',
+                    'pageNumber' => 2,
+                    'title' => 'Contenido',
+                    'subtitle' => 'Indice del documento',
+                    'assetIds' => [],
+                    'notes' => [],
+                ],
+                [
+                    'id' => 'page-luminaires',
+                    'kind' => 'luminaire-list',
+                    'sectionId' => 'luminaire-list',
+                    'pageNumber' => 3,
+                    'title' => 'Lista de luminarias',
+                    'subtitle' => '0 items',
+                    'assetIds' => [],
+                    'notes' => [],
+                ],
+            ],
+            'toc' => [
+                [
+                    'sectionId' => 'cover',
+                    'title' => 'Portada',
+                    'subtitle' => null,
+                    'level' => 0,
+                    'pageNumber' => 1,
+                ],
+                [
+                    'sectionId' => 'content',
+                    'title' => 'Contenido',
+                    'subtitle' => null,
+                    'level' => 0,
+                    'pageNumber' => 2,
+                ],
+            ],
+            'luminaires' => [],
+            'levels' => [],
+            'glossary' => [],
+            'ambientDetails' => [],
+            'assets' => [
+                [
+                    'id' => 'formal-cover-svg',
+                    'title' => 'Portada formal 3D',
+                    'purpose' => 'formal-cover',
+                    'kind' => 'vector',
+                    'mimeType' => 'image/svg+xml',
+                    'svg' => '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"></svg>',
+                ],
+            ],
+        ],
+    ];
+}
+
 test('authenticated users can export a formal dialux pdf', function () {
     $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
 
     $payload = [
+        'dialux_project_id' => $project->id,
         'document' => [
+            'schemaVersion' => 1,
             'title' => 'Proyecto Demo · Reporte DIAlux',
             'subtitle' => 'Planta Baja',
             'fileBaseName' => 'proyecto-demo-reporte-formal',
@@ -114,6 +212,8 @@ test('authenticated users can export a formal dialux pdf', function () {
                     'quantity' => 1,
                 ],
             ],
+            'levels' => [],
+            'glossary' => [],
             'ambientDetails' => [],
             'assets' => [
                 [
@@ -148,11 +248,262 @@ test('authenticated users can export a formal dialux pdf', function () {
     expect($response->headers->get('content-disposition'))->toContain('proyecto-demo-reporte-formal.pdf');
 });
 
-test('authenticated users can export a formal dialux pdf with the frontend payload shape', function () {
+test('rejects a payload missing document.schemaVersion', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    unset($payload['document']['schemaVersion']);
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['document.schemaVersion']);
+});
+
+test('rejects a payload with an unsupported document.schemaVersion', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['schemaVersion'] = 999;
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['document.schemaVersion']);
+    expect($response->json()['errors']['document.schemaVersion'][0])
+        ->toContain('no es compatible');
+});
+
+test('accepts the current document.schemaVersion', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+});
+
+test('rejects an asset dataUrl exceeding the configured size limit', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['assets'] = [
+        [
+            'id' => 'oversized-bitmap',
+            'title' => 'Plano de nivel',
+            'purpose' => 'ambient-plan',
+            'kind' => 'bitmap',
+            'mimeType' => 'image/jpeg',
+            'dataUrl' => 'data:image/jpeg;base64,'.str_repeat('A', 20_000_001),
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['document.assets.0.dataUrl']);
+});
+
+test('rejects a payload missing dialux_project_id', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    unset($payload['dialux_project_id']);
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['dialux_project_id']);
+});
+
+test('rejects a payload referencing a project that does not exist', function () {
     $user = User::factory()->create();
 
-    $payload = [
+    $payload = minimalValidFormalDocumentPayload(999_999_999);
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['dialux_project_id']);
+});
+
+test('rejects a payload referencing a project that belongs to another user', function () {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $otherUsersProject = DialuxProject::factory()->for($otherUser)->create();
+
+    $payload = minimalValidFormalDocumentPayload($otherUsersProject->id);
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(403);
+});
+
+test('rejects an unauthenticated request', function () {
+    $project = DialuxProject::factory()->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+
+    $response = $this->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(401);
+});
+
+test('rejects an asset with a malformed dataUrl that is not valid base64 image data', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['assets'] = [
+        [
+            'id' => 'broken-bitmap',
+            'title' => 'Plano de nivel',
+            'purpose' => 'ambient-plan',
+            'kind' => 'bitmap',
+            'mimeType' => 'image/png',
+            'dataUrl' => 'data:image/png;base64,***not-valid-base64***',
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['document.assets.0.dataUrl']);
+});
+
+test('rejects a payload exceeding the maximum allowed number of pages', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['pages'] = collect(range(1, 801))->map(fn (int $i) => [
+        'id' => "page-{$i}",
+        'kind' => 'placeholder',
+        'sectionId' => "section-{$i}",
+        'pageNumber' => $i,
+        'title' => "Pagina {$i}",
+        'subtitle' => null,
+        'assetIds' => [],
+        'notes' => [],
+    ])->all();
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['document.pages']);
+});
+
+test('sanitizes a fileBaseName with path separators instead of crashing', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['fileBaseName'] = '../../etc/passwd\\reporte"raro';
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+    $disposition = (string) $response->headers->get('content-disposition');
+    expect($disposition)->not->toContain('/')
+        ->and($disposition)->not->toContain('\\')
+        ->and($disposition)->toContain('.pdf');
+});
+
+test('escapes html and script tags injected into luminaire names instead of rendering them raw', function () {
+    $malicious = '<script>alert(1)</script>';
+
+    $view = $this->view('dialux.export.formal-pdf', [
         'document' => [
+            'title' => 'Proyecto Demo · Reporte',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-07-22T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'PCL', 'right' => '2026-07-22'],
+            'metadata' => [],
+            'luminaires' => [
+                [
+                    'id' => 'fixture-xss',
+                    'name' => $malicious,
+                    'brand' => $malicious,
+                    'articleNumber' => 'ART-1',
+                    'lumens' => 1000,
+                    'powerWatts' => 10,
+                    'efficiency' => 100,
+                    'quantity' => 1,
+                ],
+            ],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-luminaire-list',
+                'kind' => 'luminaire-list',
+                'sectionId' => 'luminaire-list',
+                'pageNumber' => 1,
+                'title' => 'Lista de luminarias',
+                'subtitle' => null,
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    // El texto aparece escapado (Blade e()), no como una etiqueta ejecutable.
+    $view->assertSee($malicious);
+    $view->assertDontSee($malicious, false);
+});
+
+test('generates a 242-page report within a reasonable time budget', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $extraPages = collect(range(4, 242))->map(fn (int $i) => [
+        'id' => "page-{$i}",
+        'kind' => 'placeholder',
+        'sectionId' => "section-{$i}",
+        'pageNumber' => $i,
+        'title' => "Pagina {$i}",
+        'subtitle' => null,
+        'assetIds' => [],
+        'notes' => [],
+    ])->all();
+    $payload['document']['pages'] = array_merge($payload['document']['pages'], $extraPages);
+
+    expect(count($payload['document']['pages']))->toBe(242);
+
+    $start = microtime(true);
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+    $elapsedSeconds = microtime(true) - $start;
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+    // Medicion real pedida por el plan maestro antes de decidir si hace
+    // falta una cola para informes grandes (Fase 9): con placeholders
+    // (sin assets pesados) debe resolverse comodamente en la request sincrona.
+    expect($elapsedSeconds)->toBeLessThan(60.0);
+});
+
+test('authenticated users can export a formal dialux pdf with the frontend payload shape', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = [
+        'dialux_project_id' => $project->id,
+        'document' => [
+            'schemaVersion' => 1,
             'formatVersion' => '1.0.0',
             'title' => 'Proyecto DIAlux · Reporte DIAlux',
             'subtitle' => 'Planta 1',
@@ -251,6 +602,8 @@ test('authenticated users can export a formal dialux pdf with the frontend paylo
                 ],
             ],
             'luminaires' => [],
+            'levels' => [],
+            'glossary' => [],
             'ambientDetails' => [],
             'assets' => [
                 [
@@ -299,9 +652,12 @@ test('authenticated users can export a formal dialux pdf with the frontend paylo
 
 test('authenticated users can export a formal dialux pdf with legacy ambient detail pages', function () {
     $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
 
     $payload = [
+        'dialux_project_id' => $project->id,
         'document' => [
+            'schemaVersion' => 1,
             'formatVersion' => '1.0.0',
             'title' => 'Proyecto DIAlux · Reporte DIAlux',
             'subtitle' => 'Planta 1',
@@ -432,6 +788,8 @@ test('authenticated users can export a formal dialux pdf with legacy ambient det
                     'quantity' => 2,
                 ],
             ],
+            'levels' => [],
+            'glossary' => [],
             'ambientDetails' => [
                 [
                     'ambientId' => 'room-1::ambient-1',
@@ -651,6 +1009,76 @@ test('formal dialux blade renders the fixed front matter structure', function ()
     $view->assertSee('Contenido');
     $view->assertSee('Resumen del proyecto');
     $view->assertSee('cover-image-wrap', false);
+});
+
+test('formal dialux blade renders the level luminaire list with its own totals, not the project totals', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'MODULO I · Reporte',
+            'subtitle' => '1° Nivel',
+            'generatedAt' => '2026-07-21T10:00:00Z',
+            'header' => ['title' => 'MODULO I', 'subtitle' => '1° Nivel'],
+            'footer' => ['left' => 'PCL', 'right' => '2026-07-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            // Totales del PROYECTO COMPLETO (deben ser distintos a los del nivel,
+            // para verificar que la página de nivel no muestra el total global).
+            'luminaireTotals' => [
+                'totalLumens' => 999999,
+                'totalPowerWatts' => 999999,
+                'overallEfficiency' => 1,
+            ],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-level-luminaires-l0-scene',
+                'kind' => 'level-luminaire-list',
+                'sectionId' => 'level-luminaire-list:l0-scene',
+                'pageNumber' => 1,
+                'title' => 'Lista de luminarias del nivel',
+                'subtitle' => '1° Nivel',
+                'sceneId' => 'l0-scene',
+                'sceneName' => '1° Nivel',
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+                'levelSummary' => [
+                    'sceneId' => 'l0-scene',
+                    'sceneName' => '1° Nivel',
+                    'floorIndex' => 0,
+                    'luminaires' => [
+                        [
+                            'id' => 'fixture-1',
+                            'name' => 'Panel LED 60x60',
+                            'brand' => 'PCL Iluminacion',
+                            'articleNumber' => 'PANEL-40W',
+                            'quantity' => 8,
+                            'powerWatts' => 40,
+                            'lumens' => 4000,
+                            'efficiency' => 100,
+                        ],
+                    ],
+                    'luminaireTotals' => [
+                        'totalLumens' => 32000,
+                        'totalPowerWatts' => 320,
+                        'overallEfficiency' => 100,
+                    ],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('Lista de luminarias', false);
+    $view->assertSee('1° Nivel');
+    $view->assertSee('Panel LED 60x60');
+    // El total mostrado debe ser el del NIVEL (32000 lm / 320 W), no el del proyecto (999999).
+    $view->assertSee('32,000 lm', false);
+    $view->assertSee('320.0 W', false);
+    $view->assertDontSee('999,999');
 });
 
 test('formal dialux blade renders calculated local and calculation object values', function () {
@@ -993,4 +1421,159 @@ test('formal dialux blade renders product sheet report data and polar asset', fu
     $view->assertSee('Downlight Opal');
     $view->assertSee('95.9 lm/W');
     $view->assertSee('CDL polar');
+});
+
+test('formal dialux blade shows a fallback instead of hiding the container when a product has no logo or photo', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-07-22T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'PCL', 'right' => '2026-07-22'],
+            'metadata' => [],
+            'luminaires' => [
+                [
+                    'id' => 'fixture-2',
+                    'name' => 'Panel generico',
+                    'model' => 'panel',
+                    'brand' => null,
+                    'articleNumber' => null,
+                    'lumens' => 3000,
+                    'powerWatts' => 30,
+                    'efficiency' => null,
+                    'cct' => null,
+                    'cri' => null,
+                    'quantity' => 1,
+                    // Sin brandLogoAssetId / productPhotoAssetId / lineDrawingAssetId / polarDiagramAssetId.
+                ],
+            ],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-product-sheet-fixture-2',
+                'kind' => 'product-sheet',
+                'sectionId' => 'product-sheet:fixture-2',
+                'pageNumber' => 1,
+                'title' => 'Ficha de producto: Panel generico',
+                'subtitle' => 'panel',
+                'assetIds' => [],
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('Panel generico');
+    // Antes: el contenedor de logo/foto desaparecía en silencio. Ahora debe
+    // mostrar el mismo fallback que ya usa el diagrama polar.
+    $view->assertSeeInOrder(['Grafico no disponible.', 'Grafico no disponible.', 'Grafico no disponible.']);
+});
+
+test('formal dialux blade only shows luminaire list totals on the first page of a continuation', function () {
+    $luminaires = collect(range(1, 6))->map(fn (int $i) => [
+        'id' => "fixture-{$i}",
+        'name' => "Producto {$i}",
+        'brand' => 'Fabricante',
+        'articleNumber' => "ART-{$i}",
+        'lumens' => 1000 * $i,
+        'powerWatts' => 10 * $i,
+        'efficiency' => 100,
+        'quantity' => 1,
+    ])->all();
+
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-07-22T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'PCL', 'right' => '2026-07-22'],
+            'metadata' => [],
+            'luminaires' => $luminaires,
+            'luminaireTotals' => ['totalLumens' => 21000, 'totalPowerWatts' => 210, 'overallEfficiency' => 100],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-terrain-luminaires-p2',
+                'kind' => 'luminaire-list',
+                'sectionId' => 'cad-overview-luminaires',
+                'pageNumber' => 1,
+                'title' => 'Lista de luminarias',
+                'subtitle' => 'Continuación',
+                'assetIds' => [],
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+                'rowRangeStart' => 3,
+                'rowRangeEnd' => 6,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    // Esta página de continuación muestra las filas 4-6, no las 1-3.
+    $view->assertDontSee('Producto 1');
+    $view->assertSee('Producto 4');
+    $view->assertSee('Producto 6');
+    // Y no repite el total del proyecto completo (21000 lm).
+    $view->assertDontSee('21,000 lm');
+});
+
+test('formal dialux blade renders the glossary grouped by letter and sliced by row range', function () {
+    $glossary = [
+        ['letter' => 'A', 'term' => 'Ambiente', 'definition' => 'Definicion de ambiente.', 'abbreviation' => null],
+        ['letter' => 'P', 'term' => 'Potencia', 'definition' => 'Definicion de potencia.', 'abbreviation' => 'W'],
+        ['letter' => 'U', 'term' => 'UGR', 'definition' => 'Definicion de UGR.', 'abbreviation' => null],
+        ['letter' => 'Z', 'term' => 'Zona marginal', 'definition' => 'Definicion de zona marginal.', 'abbreviation' => null],
+    ];
+
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-07-22T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'PCL', 'right' => '2026-07-22'],
+            'metadata' => [],
+            'luminaires' => [],
+            'glossary' => $glossary,
+        ],
+        'pages' => [
+            [
+                'id' => 'page-glossary',
+                'kind' => 'glossary',
+                'sectionId' => 'glossary',
+                'pageNumber' => 1,
+                'title' => 'Glosario',
+                'subtitle' => '',
+                'assetIds' => [],
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+                'rowRangeStart' => 1,
+                'rowRangeEnd' => 3,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    // Página de continuación: solo filas 2-3 (Potencia, UGR), no Ambiente ni Zona marginal.
+    $view->assertDontSee('Definicion de ambiente.');
+    $view->assertDontSee('Definicion de zona marginal.');
+    $view->assertSee('Definicion de potencia.');
+    $view->assertSee('Definicion de UGR.');
+    // Encabezados de letra de agrupación.
+    $view->assertSeeInOrder(['P', 'Potencia', 'U', 'UGR']);
 });

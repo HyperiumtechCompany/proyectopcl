@@ -72,9 +72,9 @@ export const Toolbar: React.FC = () => {
             if (!file) return;
             const ok = await engine.openFile(file);
             if (ok) {
-                if (projectId) {
+                if (projectId && store.activeSceneId) {
                     try {
-                        await saveDialuxPlanFile(projectId, file);
+                        await saveDialuxPlanFile(projectId, store.activeSceneId, file);
                     } catch (error) {
                         console.warn('No se pudo guardar el plano DIAlux local.', error);
                     }
@@ -145,8 +145,14 @@ export const Toolbar: React.FC = () => {
     );
 
     const handleDeleteSelected = useCallback(() => {
-        const { selectedId } = store.ui;
-        if (selectedId) store.removeObject(selectedId);
+        const { selectedId, selectedFixtureIds } = store.ui;
+        if (selectedFixtureIds.length > 1) {
+            store.beginHistoryGesture();
+            selectedFixtureIds.forEach((id) => store.requestDelete(id));
+            store.endHistoryGesture();
+        } else if (selectedId) {
+            store.requestDelete(selectedId);
+        }
     }, [store]);
 
     const handleResetCalibration = useCallback(() => {

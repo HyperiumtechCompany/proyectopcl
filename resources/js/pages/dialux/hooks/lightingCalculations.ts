@@ -5,26 +5,17 @@
  * Cálculos profesionales para cada recinto/pared/luminaria
  */
 
+import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
 import type { Room, RoomLightingCalculation } from './types';
 
 /**
- * Calcula el área de un polígono usando la fórmula de Shoelace
+ * Calcula el área de un polígono usando la fórmula de Shoelace.
+ * Delegado a la fuente única de geometría (geometry/polygonGeometry).
  */
 export function calculatePolygonArea(
     vertices: { x: number; y: number }[],
 ): number {
-    if (vertices.length < 3) return 0;
-
-    let area = 0;
-    const n = vertices.length;
-
-    for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n;
-        area += vertices[i].x * vertices[j].y;
-        area -= vertices[j].x * vertices[i].y;
-    }
-
-    return Math.abs(area / 2);
+    return polygonAreaM2(vertices);
 }
 
 /**
@@ -71,11 +62,60 @@ export function calculateRoomIndex(
 const REFERENCE_WEIGHTED_REFLECTANCE = 0.5 * 0.7 + 0.3 * 0.5 + 0.2 * 0.2;
 
 /**
+ * Tabla de factor de utilización (UF) por índice de local `k`, para una luminaria
+ * directa de distribución media-ancha (el caso típico de paneles LED/downlights de
+ * la mayoría del catálogo) con reflectancias de referencia 70/50/20. Son los valores
+ * publicados en tablas de UF de manuales de alumbrado (CIBSE/IESNA) para ese tipo de
+ * luminaria — a diferencia de una curva de saturación inventada, esto reproduce los
+ * factores de utilización reales que usa un software certificado (DIALux) a partir
+ * de la fotometría del fabricante, evitando pedir muchas más luminarias de la cuenta.
+ */
+const UF_TABLE: Array<[k: number, uf: number]> = [
+    [0.6, 0.43],
+    [0.8, 0.51],
+    [1.0, 0.57],
+    [1.25, 0.62],
+    [1.5, 0.66],
+    [2.0, 0.71],
+    [2.5, 0.75],
+    [3.0, 0.77],
+    [4.0, 0.8],
+    [5.0, 0.82],
+];
+
+function lookupBaseUtilization(roomIndex: number): number {
+    const [firstK, firstUf] = UF_TABLE[0];
+    if (roomIndex <= firstK) {
+        // Por debajo del rango tabulado, extrapola linealmente hacia un mínimo
+        // razonable en vez de cortar en seco en el primer valor de la tabla.
+        const slope = (UF_TABLE[1][1] - firstUf) / (UF_TABLE[1][0] - firstK);
+        return Math.max(0.2, firstUf + slope * (roomIndex - firstK));
+    }
+
+    const [lastK, lastUf] = UF_TABLE[UF_TABLE.length - 1];
+    if (roomIndex >= lastK) {
+        return Math.min(0.88, lastUf);
+    }
+
+    for (let i = 0; i < UF_TABLE.length - 1; i++) {
+        const [k0, uf0] = UF_TABLE[i];
+        const [k1, uf1] = UF_TABLE[i + 1];
+        if (roomIndex >= k0 && roomIndex <= k1) {
+            const t = (roomIndex - k0) / (k1 - k0);
+            return uf0 + (uf1 - uf0) * t;
+        }
+    }
+
+    return lastUf;
+}
+
+/**
  * Estima el factor de utilización (fracción del flujo emitido que llega al plano de
- * trabajo) a partir del índice del local y las reflectancias de las superficies.
- * Es una aproximación de ingeniería (curva de saturación por índice de local, ajustada
- * por reflectancia media ponderada) para dimensionamiento rápido — no sustituye la
- * tabla de utilización específica del fabricante de la luminaria si está disponible.
+ * trabajo) a partir del índice del local y las reflectancias de las superficies,
+ * interpolando la tabla de UF (`UF_TABLE`) y ajustando por reflectancia media
+ * ponderada. No sustituye la tabla de utilización específica del fabricante de la
+ * luminaria si está disponible (ver `lightingEngineCore.ts` para el cálculo punto a
+ * punto con la fotometría real IES/LDT).
  */
 export function estimateUtilizationFactor(
     roomIndex: number,
@@ -85,12 +125,12 @@ export function estimateUtilizationFactor(
         return 0.4;
     }
 
-    const baseUtilization = roomIndex / (roomIndex + 1.8);
+    const baseUtilization = lookupBaseUtilization(roomIndex);
     const weightedReflectance = reflectances
         ? 0.5 * reflectances.ceiling + 0.3 * reflectances.wall + 0.2 * reflectances.floor
         : REFERENCE_WEIGHTED_REFLECTANCE;
     const reflectanceFactor =
-        0.7 + (0.3 * weightedReflectance) / REFERENCE_WEIGHTED_REFLECTANCE;
+        0.85 + (0.15 * weightedReflectance) / REFERENCE_WEIGHTED_REFLECTANCE;
 
     return Number(
         Math.min(0.9, Math.max(0.15, baseUtilization * reflectanceFactor)).toFixed(3),

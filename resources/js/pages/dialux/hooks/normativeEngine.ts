@@ -16,11 +16,13 @@
  *    Los valores son referencias técnicas fácticas de dominio público.
  *  - RNE EM.010: Reglamento Nacional de Edificaciones - MVCS Perú (D.S. N°006-2014-V).
  *    Norma oficial peruana de carácter público.
- *  - NFPA 101: Life Safety Code - National Fire Protection Association (estructura base).
- *  - DS-024-2016-EM: Reglamento de Seguridad en Minería - MEM Perú (estructura base).
+ *  - EN 1838: Norma Europea de alumbrado de emergencia publicada por CEN/TC 169 (versión 2019).
+ *    Los valores numéricos son parámetros técnicos fácticos de dominio público.
+ *  - NFPA 101: Life Safety Code - National Fire Protection Association (estructura base, sin catálogo cargado aún).
+ *  - DS-024-2016-EM: Reglamento de Seguridad en Minería - MEM Perú (estructura base, sin catálogo cargado aún).
  */
 
-import { en12464Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
+import { en12464Regulations, en1838Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
 import type { RawNormativeLeaf, RawNormativeBranch } from './normativaData';
 import type { NormativeStandard } from './roomLighting';
 import type { LightingResult, Room } from './types';
@@ -112,6 +114,9 @@ const IES_DISCLAIMER =
 const RNE_DISCLAIMER =
     'Valores basados en Norma EM.010 del Reglamento Nacional de Edificaciones (MVCS - D.S. N°006-2014-V). Norma oficial peruana de carácter público.';
 
+const EN_1838_DISCLAIMER =
+    'Valores basados en EN 1838:2019 (Aplicaciones de la iluminación — Alumbrado de emergencia), publicada por CEN/TC 169. Parámetros técnicos fácticos de dominio público. Para información completa consulte la publicación oficial.';
+
 const NFPA_DISCLAIMER =
     'Valores basados en NFPA 101 Life Safety Code (National Fire Protection Association). Para información completa consulte la publicación oficial.';
 
@@ -167,6 +172,22 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         url: 'https://www.gob.pe/mvcs',
         disclaimer: RNE_DISCLAIMER,
     },
+    en_1838: {
+        id: 'en_1838',
+        name: 'EN 1838',
+        fullName: 'Aplicaciones de la iluminación — Alumbrado de emergencia',
+        region: 'europe',
+        country: 'EU',
+        source: 'EN 1838:2019',
+        version: '2019',
+        year: 2019,
+        authority: 'CEN/TC 169',
+        legalStatus: 'mandatory',
+        active: true,
+        notes: 'Norma europea de cumplimiento obligatorio para rutas de evacuación, áreas antipánico y zonas de tarea de alto riesgo. Complementa a EN 12464-1, no la reemplaza.',
+        url: 'https://www.en-standard.eu',
+        disclaimer: EN_1838_DISCLAIMER,
+    },
     nfpa101: {
         id: 'nfpa101',
         name: 'NFPA 101',
@@ -213,7 +234,10 @@ export const NORMATIVE_REGIONS: NormativeRegion[] = [
                 name: 'Perú',
                 flag: '🇵🇪',
                 defaultStandard: 'rne_peru',
-                applicableStandards: ['rne_peru', 'en_12464', 'ds024'],
+                // ds024 no está en esta lista: no tiene catálogo cargado
+                // (getNormData() devolvería vacío) — ofrecerla como norma de
+                // referencia/comparación mostraría una comparación vacía sin aviso.
+                applicableStandards: ['rne_peru', 'en_12464'],
                 priorityOrder: ['rne_peru', 'en_12464', 'ies_na'],
             },
         ],
@@ -227,32 +251,32 @@ export const NORMATIVE_REGIONS: NormativeRegion[] = [
                 name: 'Alemania',
                 flag: '🇩🇪',
                 defaultStandard: 'en_12464',
-                applicableStandards: ['en_12464'],
-                priorityOrder: ['en_12464'],
+                applicableStandards: ['en_12464', 'en_1838'],
+                priorityOrder: ['en_12464', 'en_1838'],
             },
             {
                 code: 'ES',
                 name: 'España',
                 flag: '🇪🇸',
                 defaultStandard: 'en_12464',
-                applicableStandards: ['en_12464'],
-                priorityOrder: ['en_12464'],
+                applicableStandards: ['en_12464', 'en_1838'],
+                priorityOrder: ['en_12464', 'en_1838'],
             },
             {
                 code: 'FR',
                 name: 'Francia',
                 flag: '🇫🇷',
                 defaultStandard: 'en_12464',
-                applicableStandards: ['en_12464'],
-                priorityOrder: ['en_12464'],
+                applicableStandards: ['en_12464', 'en_1838'],
+                priorityOrder: ['en_12464', 'en_1838'],
             },
             {
                 code: 'IT',
                 name: 'Italia',
                 flag: '🇮🇹',
                 defaultStandard: 'en_12464',
-                applicableStandards: ['en_12464'],
-                priorityOrder: ['en_12464'],
+                applicableStandards: ['en_12464', 'en_1838'],
+                priorityOrder: ['en_12464', 'en_1838'],
             },
         ],
     },
@@ -265,8 +289,11 @@ export const NORMATIVE_REGIONS: NormativeRegion[] = [
                 name: 'Estados Unidos',
                 flag: '🇺🇸',
                 defaultStandard: 'ies_na',
-                applicableStandards: ['ies_na', 'nfpa101'],
-                priorityOrder: ['ies_na', 'nfpa101'],
+                // nfpa101 no está en esta lista: no tiene catálogo cargado
+                // (getNormData() devolvería vacío) — ofrecerla como norma de
+                // referencia/comparación mostraría una comparación vacía sin aviso.
+                applicableStandards: ['ies_na'],
+                priorityOrder: ['ies_na'],
             },
             {
                 code: 'CA',
@@ -375,9 +402,24 @@ function flattenNormTree(
 }
 
 /**
+ * Overrides cargados en runtime (p.ej. el catálogo EM.010 completo servido
+ * por el backend desde la BD). Tienen prioridad sobre los datasets estáticos.
+ */
+const normDataOverrides = new Map<NormativeStandard, RawNormativeBranch[]>();
+
+export function setNormDataOverride(standard: NormativeStandard, data: RawNormativeBranch[]): void {
+    normDataOverrides.set(standard, data);
+}
+
+/**
  * Retorna los datos normativos de una norma según su ID.
  */
-function getNormData(standard: NormativeStandard): RawNormativeBranch[] {
+export function getNormData(standard: NormativeStandard): RawNormativeBranch[] {
+    const override = normDataOverrides.get(standard);
+    if (override && override.length > 0) {
+        return override;
+    }
+
     switch (standard) {
         case 'en_12464':
             return en12464Regulations;
@@ -385,6 +427,12 @@ function getNormData(standard: NormativeStandard): RawNormativeBranch[] {
             return iesnaRegulations;
         case 'rne_peru':
             return rnePeruRegulations;
+        case 'en_1838':
+            return en1838Regulations;
+        case 'nfpa101':
+        case 'ds024':
+            // Sin catálogo cargado todavía — ver notas en NORMATIVE_STANDARDS_META.
+            return [];
         default:
             return [];
     }

@@ -93,6 +93,7 @@ describe('calculateWireLengthByWall', () => {
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'Cu LSOH',
+                        sectionMm2: 2.5,
                         waypoints: [],
                     },
                 ],

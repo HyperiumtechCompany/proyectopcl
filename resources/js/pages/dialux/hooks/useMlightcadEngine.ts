@@ -25,8 +25,13 @@ const cadErr = console.error.bind(console, '[mlightcad]');
 
 // â”€â”€â”€ ConfiguraciÃ³n de workers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// dxfParser y dwgParser son workers DISTINTOS: el de DXF parsea texto, el de
+// DWG parsea binario (libredwg). Antes ambos apuntaban al mismo script de
+// DWG, así que el DXF mínimo de bootstrap se parseaba mal (el resultado no
+// traía `tables`) y la etapa de conversión "FONT" fallaba con
+// "Cannot read properties of undefined (reading 'STYLE')".
 const WORKER_URLS = {
-    dxfParser: '/cad-workers/libredwg-parser-worker.js',
+    dxfParser: '/cad-workers/dxf-parser-worker.js',
     dwgParser: '/cad-workers/libredwg-parser-worker.js',
     mtextRender: '/cad-workers/mtext-renderer-worker.js',
 };
@@ -45,6 +50,14 @@ const BLANK_DXF_CONTENT = [
     '0', 'ENDTAB',
     '0', 'TABLE', '2', 'LAYER', '70', '1',
     '0', 'LAYER', '2', '0', '70', '0', '62', '7', '6', 'CONTINUOUS',
+    '0', 'ENDTAB',
+    // Tabla STYLE mínima ("STANDARD"): versiones recientes de
+    // @mlightcad/cad-simple-viewer resuelven las fuentes del documento a
+    // partir de esta tabla al abrirlo; sin ella, la etapa de conversión
+    // "FONT" recibía una tabla de estilos indefinida y lanzaba
+    // "Cannot read properties of undefined (reading 'STYLE')".
+    '0', 'TABLE', '2', 'STYLE', '70', '1',
+    '0', 'STYLE', '2', 'STANDARD', '70', '0', '40', '0.0', '41', '1.0', '50', '0.0', '71', '0', '42', '2.5', '3', 'txt', '4', '',
     '0', 'ENDTAB',
     '0', 'ENDSEC',
     '0', 'SECTION', '2', 'ENTITIES',
@@ -176,6 +189,20 @@ function installMlightcadCssGuard(): void {
     observer.observe(document.head, { childList: true });
 }
 
+/**
+ * `AcApDocManager` concatena literalmente (sin normalizar barras) este valor
+ * con "fonts/" para el font loader (`this._fontLoader.baseUrl = this._baseUrl
+ * + "fonts/"`), y el font loader a su vez pide `baseUrl + "fonts.json"`. Por
+ * eso DEBE terminar en "/" (raíz del repo, NO la carpeta "fonts/"): sin la
+ * barra final da "...@mainfonts/fonts.json" (404); si además le agregamos
+ * "fonts/" nosotros, da "...fonts/fonts/fonts.json" (también 404). El valor
+ * por defecto del paquete además apunta al repo viejo `mlightcad/cad-datafonts`,
+ * renombrado a `mlightcad/cad-data` — sin fuentes, la conversión de la tabla
+ * STYLE falla con "Cannot read properties of undefined (reading 'STYLE')" y
+ * el texto/cotas del plano importado no se dibujan.
+ */
+const FONTS_BASE_URL = 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/';
+
 /** Obtiene o crea la instancia Ãºnica del AcApDocManager */
 function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
     if (!_docManager) {
@@ -187,6 +214,7 @@ function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
             autoResize: true,
             useMainThreadDraw: false,
             notLoadDefaultFonts: false,
+            baseUrl: FONTS_BASE_URL,
         }) as AcApDocManager;
     }
     return _docManager;
@@ -602,9 +630,13 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
                 return;
             }
 
-            const dpr = window.devicePixelRatio || 1;
-            const spPhysical = { x: screenPoint.x * dpr, y: screenPoint.y * dpr };
-            const before = view.screenToWorld(spPhysical);
+            // Contrato de la vista mlightcad: screenToWorld espera píxeles CSS
+            // locales al canvas (la vista mide su tamaño con getBoundingClientRect).
+            // Multiplicar por devicePixelRatio aquí anclaba el zoom a un punto
+            // desplazado en pantallas HiDPI, haciendo que el plano "se deslizara"
+            // bajo el cursor y desalineando el overlay.
+            const spCss = { x: screenPoint.x, y: screenPoint.y };
+            const before = view.screenToWorld(spCss);
             const currentCenter = view.center;
             const nextZoom = Math.min(
                 1000,
@@ -612,7 +644,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
             );
 
             view.flyTo(currentCenter, nextZoom);
-            const after = view.screenToWorld(spPhysical);
+            const after = view.screenToWorld(spCss);
             const nextCenter = {
                 x: currentCenter.x + (before.x - after.x),
                 y: currentCenter.y + (before.y - after.y),

@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             OrganizationSeeder::class,
             UbigeoSeeder::class,
             LuminaireProductSeeder::class,
+            DialuxNormativeRequirementsSeeder::class,
+            DialuxElectricalCatalogSeeder::class,
         ]);
     }
 }

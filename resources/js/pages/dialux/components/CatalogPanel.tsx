@@ -494,10 +494,9 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         }
     };
 
-    const setImportedFixture = async (product: ImportedLuminaireProduct) => {
+    const setImportedFixture = (product: ImportedLuminaireProduct) => {
         const lumens = product.total_lumens ?? 1000;
         const power = product.power_watts ?? undefined;
-        const photometricWeb = await fetchPhotometricWeb(product.id);
 
         const modelFields: Partial<Fixture> = {
             fixtureType: toFixtureType(product.fixture_type),
@@ -520,16 +519,43 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                 brand_logo_url: product.brand_logo_url ?? null,
             },
             dimensions: product.dimensions ?? undefined,
-            photometricWeb,
             name: product.name,
         };
-        if (applyToFixtureIds?.length) {
-            store.updateFixtures(applyToFixtureIds, modelFields);
+
+        // Aplica de inmediato con los datos que ya tenemos (lúmenes, tipo,
+        // forma, etc.) en vez de esperar la red: `photometricWeb` solo hace
+        // falta para el render de distribución fotométrica detallada, no
+        // para elegir el modelo ni para el cálculo de lúmenes de la grilla.
+        // Antes este `await` bloqueaba TODA la actualización visible detrás
+        // de un round-trip HTTP — cualquier lentitud del backend (arranque
+        // en frío de PHP, antivirus, etc.) se sentía como "elegí la
+        // luminaria y no pasó nada" durante ese tiempo entero.
+        const targetIds = applyToFixtureIds?.length ? [...applyToFixtureIds] : null;
+        if (targetIds) {
+            store.updateFixtures(targetIds, modelFields);
         } else {
             store.setFixtureTemplate(modelFields);
             store.setTool('fixture');
         }
         onSelect?.();
+
+        void fetchPhotometricWeb(product.id).then((photometricWeb) => {
+            if (!photometricWeb) return;
+            // Se lee el estado ACTUAL (no el `store` cerrado sobre el render
+            // de este clic) porque para cuando esta promesa resuelve puede
+            // haber pasado un buen rato — usar el snapshot viejo aquí
+            // aplicaría la web fotométrica sobre una plantilla ya obsoleta.
+            const liveUi = useEditorStore.getState().ui;
+            if (targetIds) {
+                store.updateFixtures(targetIds, { photometricWeb });
+            } else if (liveUi.fixtureTemplate.productId === product.id) {
+                // Solo si el usuario no eligió otro producto mientras tanto.
+                store.setFixtureTemplate({
+                    ...liveUi.fixtureTemplate,
+                    photometricWeb,
+                });
+            }
+        });
     };
 
     const submitProductImport = async (

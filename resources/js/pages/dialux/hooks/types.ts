@@ -7,6 +7,8 @@
  *   3. CompilaciÃƒÂ³n mÃƒÂ¡s rÃƒÂ¡pida (menos interdependencias).
  */
 
+import type { NormativeStandard } from './roomLighting';
+
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Herramientas y UI Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export type DrawTool =
@@ -15,11 +17,12 @@ export type DrawTool =
     | 'elec-meter' | 'elec-main-panel' | 'elec-sub-panel'
     | 'elec-transfer' | 'elec-arrival' | 'elec-junction-box'
     | 'elec-earth-pit' | 'elec-facp'
-    | 'elec-outlet-floor' | 'elec-outlet-waterproof'
+    | 'elec-outlet-floor' | 'elec-outlet-initial' | 'elec-outlet-high-180' | 'elec-outlet-floor-box' | 'elec-outlet-waterproof'
     | 'elec-outlet-ceiling' | 'elec-outlet-rack'
     | 'elec-water-heater';
 
-export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'normative';
+export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'legend';
+export type ElectricalLayerGroup = 'cad' | 'fixtures' | 'wires' | 'switches' | 'outlets' | 'panels';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
 export type AngleSnapMode = 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
 
@@ -178,7 +181,7 @@ export interface Room {
     color: string;
     illuminanceLux?: number;
     fixtureLumens?: number;
-    normativeStandard?: 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
+    normativeStandard?: NormativeStandard;
     normativeCategory?: string;
     normativeSection?: string;
     normativeActivity?: string;
@@ -191,6 +194,12 @@ export interface Room {
     marginalZone?: number | null;
     norma?: number;        // Nivel de lux requerido (EN 12464-1)
     fixtureFlux?: number;  // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
+    /** Regla usada para calcular automáticamente los tomacorrientes. */
+    outletUse?: 'aula' | 'comedor' | 'exterior';
+    /** Variante/altura aplicada a los tomacorrientes autogenerados. */
+    outletDeviceType?: ElectricalDeviceType;
+    /** Distancia en metros desde el primer vértice para iniciar la distribución. */
+    outletStartOffset?: number;
     ambientConfigs?: Record<string, AmbientConfig>;
     corridorConfig?: CorridorConfig;
     /** ConfiguraciÃƒÂ³n de escalera (solo cuando roomType === 'stair') */
@@ -211,8 +220,8 @@ export interface ProjectNormativeConfig {
     countryCode: string;                                     // ISO 3166-1 alpha-2
     region: 'europe' | 'americas_usa' | 'americas_peru';
     installationType: string | null;
-    primaryStandard: 'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024';
-    referenceStandards: Array<'en_12464' | 'ies_na' | 'rne_peru' | 'nfpa101' | 'ds024'>;
+    primaryStandard: NormativeStandard;
+    referenceStandards: NormativeStandard[];
     priorityOrder: string[];
     autoDetectEnabled: boolean;
     crossNormComparisonEnabled: boolean;
@@ -438,8 +447,26 @@ export interface Conductor {
     routeType: 'floor' | 'wall_ceiling'; // Empotrado en piso o pared/techo
     tubeSize: number;              // Diámetro de tubería en mm (20mm default)
     conductorType: string;         // Tipo: "Cu LSOH", "N2XOH", etc.
+    /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
+    sectionMm2: number;
     waypoints: Array<{ x: number; y: number }>; // Puntos de ruta opcionales
 }
+
+/**
+ * Secciones de cable estándar (cobre, referencia AWG) para casas, colegios y
+ * zona industrial. La sección real se guarda en mm²; el AWG es solo referencia.
+ */
+export const CONDUCTOR_SECTION_OPTIONS = [
+    { value: 2.5, label: '2.5 mm² (AWG 14)' },
+    { value: 4, label: '4 mm² (AWG 12)' },
+    { value: 6, label: '6 mm² (AWG 10)' },
+    { value: 10, label: '10 mm² (AWG 8)' },
+    { value: 16, label: '16 mm² (AWG 6)' },
+    { value: 25, label: '25 mm² (AWG 4)' },
+    { value: 35, label: '35 mm² (AWG 2)' },
+    { value: 50, label: '50 mm² (AWG 1/0)' },
+    { value: 70, label: '70 mm² (AWG 2/0)' },
+] as const;
 
 export const CONDUCTOR_WIRE_OPTIONS = [
     { value: 'F+N+T', label: 'F+N+T', count: 3 },
@@ -477,6 +504,9 @@ export type ElectricalDeviceType =
     | 'earth_pit'
     | 'facp'
     | 'outlet_floor'
+    | 'outlet_initial'
+    | 'outlet_high_180'
+    | 'outlet_floor_box'
     | 'outlet_waterproof'
     | 'outlet_ceiling'
     | 'outlet_rack'
@@ -502,6 +532,9 @@ export interface ElectricalDevice {
     label: string;
     mountingHeight: number;
     wallId?: string;
+    /** Ambiente propietario cuando se generó mediante una regla. */
+    roomId?: string;
+    generatedBy?: 'outlet-rule';
     connectedDeviceIds: string[];
     connectedFixtureIds?: string[];
     connectedSwitchIds?: string[];
@@ -514,6 +547,8 @@ export interface ElectricalDevice {
         routeType: 'floor' | 'wall_ceiling';
         tubeSize: number;
         conductorType: string;
+        /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
+        sectionMm2: number;
     }>;
 }
 
@@ -532,6 +567,9 @@ export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
     earth_pit:         { label: 'PAT',        mountingHeight: 0.00, properties: {} },
     facp:              { label: 'FACP',       mountingHeight: 1.40, properties: { voltage: '220V', phases: '1O' } },
     outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_initial:    { label: 'TI',         mountingHeight: 1.50, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_high_180:   { label: 'TA',         mountingHeight: 1.80, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_floor_box:  { label: 'TP',         mountingHeight: 0.00, properties: { boxSize: '100x100x55', boxMaterial: 'RECTO' } },
     outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
     outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
@@ -647,6 +685,8 @@ export interface Project {
     name: string;
     created_at: string;
     updated_at: string;
+    /** Última norma aplicada; se persiste con el documento para rehidratar el panel. */
+    defaultRoomNormativeStandard?: NonNullable<Room['normativeStandard']>;
     scenes: Scene[];
 }
 

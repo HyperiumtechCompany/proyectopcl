@@ -1,17 +1,33 @@
-import { Plus, Square, Trash2, Zap } from 'lucide-react';
+import { Layers, PlugZap, Plus, Square, Trash2, Zap } from 'lucide-react';
 import React from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     deriveAmbientSpaces,
     deriveSceneAmbientSpaces,
 } from '@/pages/dialux/hooks/ambientSpaces';
 import {
+    calculateExactQuantity,
     calculatePolygonArea,
     calculatePolygonPerimeter,
+    calculateRoundedQuantity,
 } from '@/pages/dialux/hooks/lightingCalculations';
+import { polygonBBox, suggestFixtureGridSize } from '@/pages/dialux/hooks/fixtureGrid';
+import { distributeOutletsOnPerimeter, OUTLET_RULES, requiredOutletCount, type OutletUse } from '@/pages/dialux/hooks/outletPlacement';
+import { CatalogPanel } from '../CatalogPanel';
+import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import {
     NORMATIVE_LABELS,
     buildRoomLightingInputs,
+    getActivityOptions,
+    getCategoryOptions,
     getFixturesForRoom,
+    getSectionOptions,
 } from '@/pages/dialux/hooks/roomLighting';
 import type {
     CorridorType,
@@ -19,6 +35,7 @@ import type {
     StairFlight,
 } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { ELECTRICAL_DEVICE_DEFAULTS, type ElectricalDeviceType } from '@/pages/dialux/hooks/types';
 import type { Room, Scene } from '@/pages/dialux/hooks/useEditorStore';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
 import {
@@ -49,12 +66,54 @@ export const RoomProps: React.FC<{
     onUpdate: (patch: Partial<Omit<Room, 'id'>>) => void;
 }> = ({ room, scene, parentRoom = null, selectedAmbient = null, onUpdate }) => {
     const store = useEditorStore();
+    // Estado local, independiente del ajuste global de la herramienta
+    // "fixture-grid" del canvas (store.ui.fixtureGridRows/Cols): esa
+    // herramienta y esta grilla de techo generaban confusión al compartir el
+    // mismo número — cambiar uno cambiaba el otro sin que fuera evidente.
+    const [gridRows, setGridRows] = React.useState(store.ui.fixtureGridRows);
+    const [gridCols, setGridCols] = React.useState(store.ui.fixtureGridCols);
+    const [showGridFixturePicker, setShowGridFixturePicker] = React.useState(false);
+    // Elegir un modelo en el picker de esta sección solo debe leer sus lúmenes
+    // para el cálculo de la grilla — no debe dejar la herramienta activa en
+    // "fixture" (eso es lo que hace CatalogPanel.setFixture normalmente, para
+    // el flujo de "colocar una luminaria" del panel Luz de la barra). Sin
+    // restaurar la herramienta previa, tras elegir un modelo aquí el usuario
+    // ya no podía seleccionar luminarias existentes en el canvas (el
+    // hit-testing de selección solo actúa con activeTool === 'select').
+    const toolBeforeGridPickerRef = React.useRef(store.ui.activeTool);
     const isCorridorAmbient = room.roomType === 'corridor';
     const isRecinto = !room.roomType || room.roomType === 'room';
     const isAmbiente = room.roomType === 'ambient' || room.roomType === 'corridor';
     const calculationRoom = selectedAmbient?.room ?? room;
     const area = calculatePolygonArea(calculationRoom.vertices);
     const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
+    const outletUse = room.outletUse ?? 'aula';
+    const outletRule = OUTLET_RULES[outletUse];
+    const requiredOutlets = requiredOutletCount(calculationRoom.vertices, outletUse);
+    const generatedOutlets = (scene?.electricalDevices ?? []).filter(
+        (device) => device.generatedBy === 'outlet-rule' && device.roomId === room.id,
+    );
+    const outletDeviceType = room.outletDeviceType ??
+        (outletUse === 'exterior' ? 'outlet_waterproof' : 'outlet_floor');
+    const regenerateOutlets = () => {
+        const defaults = ELECTRICAL_DEVICE_DEFAULTS[outletDeviceType];
+        const devices = distributeOutletsOnPerimeter(
+            calculationRoom.vertices,
+            requiredOutlets,
+            room.outletStartOffset,
+        ).map((point, index) => ({
+                type: outletDeviceType,
+                x: point.x,
+                y: point.y,
+                label: `${defaults.label}-${String(index + 1).padStart(2, '0')}`,
+                mountingHeight: outletDeviceType === 'outlet_ceiling' ? calculationRoom.height : defaults.mountingHeight,
+                roomId: room.id,
+                generatedBy: 'outlet-rule',
+                connectedDeviceIds: [],
+                properties: { ...defaults.properties },
+            }));
+        store.replaceGeneratedOutletsForRoom(room.id, devices);
+    };
     const fixturesInRoom = selectedAmbient
         ? selectedAmbient.fixtures
         : scene
@@ -73,10 +132,69 @@ export const RoomProps: React.FC<{
         room.normativeStandard ?? store.defaultRoomNormativeStandard;
     const inputs = buildRoomLightingInputs(calculationRoom, fixturesInRoom);
 
+    // La cantidad exigida por normativa depende de los lúmenes de la
+    // luminaria que se va a instalar. `inputs.roundedQuantity` (sección
+    // Iluminación) se basa en las luminarias YA colocadas en el ambiente;
+    // aquí, para la grilla a generar, se recalcula con los lúmenes del tipo
+    // de foco elegido en este selector — si el ambiente aún no tiene
+    // luminarias, antes se usaba un valor fijo de 4000 lm sin relación con
+    // lo que realmente se iba a instalar.
+    const gridFixture = store.ui.fixtureTemplate;
+    const gridFixtureLumens = gridFixture.lumens ?? inputs.fixtureLumens;
+    const gridExactQuantity = calculateExactQuantity(
+        inputs.lumensRequired,
+        gridFixtureLumens,
+    );
+    const gridRoundedQuantity = calculateRoundedQuantity(gridExactQuantity);
+
+    // Sugerencia de grilla: cuántas filas/columnas hacen falta para llegar a
+    // la cantidad exigida (con la luminaria elegida) sin cambiar de forma la
+    // grilla actual más de lo necesario.
+    const gridBBox = polygonBBox(calculationRoom.vertices);
+    const gridAspectRatio = gridBBox.height > 0 ? gridBBox.width / gridBBox.height : 1;
+    const suggestedGrid = suggestFixtureGridSize(
+        gridRows,
+        gridCols,
+        gridRoundedQuantity,
+        gridAspectRatio,
+    );
+    const gridBelowNorm = gridRows * gridCols < gridRoundedQuantity;
+
+    // Sin esto, este panel podía quedarse mostrando la transcripción estática
+    // de normativeData.ts en vez del catálogo sembrado en BD (mismo motivo
+    // que WallProps: fuente única de verdad para los dropdowns Sección/
+    // Subsección/Aplicación de abajo).
+    const [, setNormDataVersion] = React.useState(0);
+    React.useEffect(() => {
+        void ensureStandardDataLoaded(standard).then(() =>
+            setNormDataVersion((v) => v + 1),
+        );
+    }, [standard]);
+
+    const normCategories = getCategoryOptions(standard);
+    const normSections = getSectionOptions(standard, room.normativeCategory);
+    const normActivities = getActivityOptions(
+        standard,
+        room.normativeCategory,
+        room.normativeSection,
+    );
+
     // Sección Construcción — preset del material del recinto
     const roomMaterial = (room.material ?? 'brick') as 'brick' | 'adobe';
     const roomUse = (room.normativeUse ?? 'housing') as 'housing' | 'education' | 'generic';
     const constructionPreset = getPeruWallPreset(roomMaterial, roomUse);
+
+    // Un pasadizo y el recinto que lo contiene son la misma altura física —
+    // dejarla editable por separado permitía que se desincronizaran, lo que
+    // afecta el cálculo de lúmenes (usa la altura para el índice del local).
+    const hasParentRecinto =
+        isCorridorAmbient && !!parentRoom && parentRoom.id !== room.id;
+    const inheritedHeight = hasParentRecinto ? parentRoom!.height : null;
+    React.useEffect(() => {
+        if (inheritedHeight !== null && room.height !== inheritedHeight) {
+            onUpdate({ height: inheritedHeight });
+        }
+    }, [inheritedHeight, room.height, onUpdate]);
 
     const handleCorridorTypeChange = (value: string) => {
         const corridorType = CORRIDOR_TYPE_OPTIONS.find(
@@ -105,14 +223,26 @@ export const RoomProps: React.FC<{
                     value={room.name}
                     onChange={(value) => onUpdate({ name: value })}
                 />
-                <EditField
-                    label={isCorridorAmbient ? 'Alto techo (m)' : 'Alto (m)'}
-                    value={room.height}
-                    min={1}
-                    max={20}
-                    step={0.1}
-                    onChange={(value) => onUpdate({ height: value })}
-                />
+                {/* Orden solicitado: área → longitud (perímetro) → alto,
+                    lo primero que se necesita al revisar un ambiente. */}
+                <PropField label="Área" value={`${area.toFixed(4)} m²`} />
+                <PropField label="Perímetro" value={`${perimeter.toFixed(4)} m`} />
+                {inheritedHeight !== null ? (
+                    <PropField
+                        label="Alto techo (m) — heredado del recinto"
+                        value={`${inheritedHeight.toFixed(2)} m`}
+                        mono={false}
+                    />
+                ) : (
+                    <EditField
+                        label={isCorridorAmbient ? 'Alto techo (m)' : 'Alto (m)'}
+                        value={room.height}
+                        min={1}
+                        max={20}
+                        step={0.1}
+                        onChange={(value) => onUpdate({ height: value })}
+                    />
+                )}
                 {isCorridorAmbient &&
                     parentRoom &&
                     parentRoom.id !== room.id && (
@@ -207,8 +337,6 @@ export const RoomProps: React.FC<{
                     </>
                 )}
                 <PropField label="Vértices" value={`${room.vertices.length}`} />
-                <PropField label="Área" value={`${area.toFixed(4)} m²`} />
-                <PropField label="Perímetro" value={`${perimeter.toFixed(4)} m`} />
                 {isRecinto && (
                     <PropField
                         label="Ambientes"
@@ -261,6 +389,61 @@ export const RoomProps: React.FC<{
             )}
 
             {/* ── Sección Iluminación — solo ambientes y pasadizos ── */}
+            {false && isAmbiente && (
+                <SectionWrapper icon={<PlugZap size={12} className="text-emerald-400" />} label="Tomacorrientes por ambiente">
+                    <SelectField
+                        label="Uso"
+                        value={outletUse}
+                        options={Object.entries(OUTLET_RULES).map(([value, rule]) => ({ value, label: rule.label }))}
+                        onChange={(value) => {
+                            const nextUse = value as OutletUse;
+                            onUpdate({
+                                outletUse: nextUse,
+                                outletDeviceType: nextUse === 'exterior' ? 'outlet_waterproof' : room.outletDeviceType ?? 'outlet_floor',
+                            });
+                        }}
+                    />
+                    <SelectField
+                        label="Tipo / altura"
+                        value={outletDeviceType}
+                        options={[
+                            { value: 'outlet_floor', label: 'Bajo · 0.40 m' },
+                            { value: 'outlet_initial', label: 'Inicial · 1.50 m' },
+                            { value: 'outlet_waterproof', label: 'Exterior · 1.20 m' },
+                            { value: 'outlet_high_180', label: 'Alto · 1.80 m' },
+                            { value: 'outlet_rack', label: 'Comunicaciones · 2.00 m' },
+                            { value: 'outlet_floor_box', label: 'Piso · NPT' },
+                            { value: 'outlet_ceiling', label: 'Techo' },
+                        ]}
+                        onChange={(value) => {
+                            const type = value as ElectricalDeviceType;
+                            const defaults = ELECTRICAL_DEVICE_DEFAULTS[type];
+                            onUpdate({ outletDeviceType: type });
+                            store.updateGeneratedOutletsForRoom(room.id, {
+                                type,
+                                mountingHeight: type === 'outlet_ceiling' ? calculationRoom.height : defaults.mountingHeight,
+                                properties: { ...defaults.properties },
+                            });
+                        }}
+                    />
+                    <EditField label="Inicio en perímetro (m)" value={room.outletStartOffset ?? 0} min={0} max={Math.max(perimeter, 0)} step={0.1} onChange={(value) => onUpdate({ outletStartOffset: value })} />
+                    <PropField label="Medición" value={outletRule.method === 'area' ? `${area.toFixed(2)} m²` : `${perimeter.toFixed(2)} m`} />
+                    <PropField label="Regla" value={outletRule.description} mono={false} />
+                    <PropField label="Cantidad requerida" value={`${requiredOutlets}`} />
+                    <PropField label="Generados" value={`${generatedOutlets.length}`} />
+                    <button type="button" onClick={regenerateOutlets} disabled={requiredOutlets === 0}
+                        className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40">
+                        {generatedOutlets.length > 0 ? 'Regenerar tomacorrientes' : 'Generar tomacorrientes'}
+                    </button>
+                    {generatedOutlets.length > 0 && (
+                        <button type="button" onClick={() => store.removeGeneratedOutletsForRoom(room.id)}
+                            className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20">
+                            <Trash2 size={11} /> Eliminar tomacorrientes del ambiente
+                        </button>
+                    )}
+                </SectionWrapper>
+            )}
+
             {isAmbiente && (
                 <SectionWrapper
                     icon={<Zap size={12} className="text-yellow-400" />}
@@ -271,6 +454,49 @@ export const RoomProps: React.FC<{
                         value={NORMATIVE_LABELS[standard]}
                         mono={false}
                     />
+                    <PropField label="Cable luminarias" value="2.5 mm² · AWG 14" mono={false} />
+                    <SelectField
+                        label="Sección / Área"
+                        value={room.normativeCategory ?? ''}
+                        options={normCategories.map((c) => ({ value: c, label: c }))}
+                        onChange={(val) =>
+                            onUpdate({
+                                normativeCategory: val,
+                                normativeSection: undefined,
+                                normativeActivity: undefined,
+                            })
+                        }
+                    />
+                    {room.normativeCategory && (
+                        <SelectField
+                            label="Subsección"
+                            value={room.normativeSection ?? ''}
+                            options={normSections.map((s) => ({ value: s, label: s }))}
+                            onChange={(val) =>
+                                onUpdate({
+                                    normativeSection: val,
+                                    normativeActivity: undefined,
+                                })
+                            }
+                        />
+                    )}
+                    {room.normativeCategory && (
+                        <SelectField
+                            label="Aplicación"
+                            value={room.normativeActivity ?? ''}
+                            options={normActivities.map((a) => ({
+                                value: a.activity,
+                                label: a.activity,
+                            }))}
+                            onChange={(val) => {
+                                const act = normActivities.find((a) => a.activity === val);
+                                onUpdate({
+                                    normativeActivity: val,
+                                    illuminanceLux: act?.illuminanceLux ?? inputs.illuminanceLux,
+                                });
+                            }}
+                        />
+                    )}
                     <EditField
                         label="Iluminancia (lux)"
                         value={inputs.illuminanceLux}
@@ -346,34 +572,108 @@ export const RoomProps: React.FC<{
                             Generar Grilla de Focos
                         </p>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                        <EditField
-                            label="Filas"
-                            value={store.ui.fixtureGridRows}
-                            min={1}
-                            max={20}
-                            step={1}
-                            onChange={(val) => store.setFixtureGridRows(val)}
-                        />
-                        <EditField
-                            label="Columnas"
-                            value={store.ui.fixtureGridCols}
-                            min={1}
-                            max={20}
-                            step={1}
-                            onChange={(val) => store.setFixtureGridCols(val)}
-                        />
-                    </div>
                     <button
                         type="button"
                         onClick={() => {
+                            toolBeforeGridPickerRef.current = store.ui.activeTool;
+                            setShowGridFixturePicker(true);
+                        }}
+                        className="mt-2 flex w-full items-center gap-2 rounded border border-purple-700/30 bg-purple-950/30 px-2 py-1.5 text-left transition-colors hover:bg-purple-900/30"
+                        title="Elegir el tipo de foco a instalar en esta grilla"
+                    >
+                        <Layers size={12} className="shrink-0 text-purple-300" />
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[10px] text-purple-200">
+                                {gridFixture.name ?? 'Foco genérico'}
+                            </span>
+                            <span className="block text-[9px] leading-none text-gray-500">
+                                {gridFixtureLumens.toLocaleString()} lm
+                            </span>
+                        </span>
+                        <span className="shrink-0 text-[9px] text-purple-400">Cambiar</span>
+                    </button>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                        <EditField
+                            label="Filas"
+                            value={gridRows}
+                            min={1}
+                            max={20}
+                            step={1}
+                            onChange={setGridRows}
+                        />
+                        <EditField
+                            label="Columnas"
+                            value={gridCols}
+                            min={1}
+                            max={20}
+                            step={1}
+                            onChange={setGridCols}
+                        />
+                    </div>
+                    {gridBelowNorm && (
+                        <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
+                            <span className="text-[9px] leading-snug text-amber-400">
+                                {gridRows}×{gridCols} = {gridRows * gridCols}, faltan para
+                                llegar a {gridRoundedQuantity} con "{gridFixture.name ?? 'este foco'}"
+                                ({gridFixtureLumens.toLocaleString()} lm)
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setGridRows(suggestedGrid.rows);
+                                    setGridCols(suggestedGrid.columns);
+                                }}
+                                className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
+                            >
+                                Usar {suggestedGrid.rows}×{suggestedGrid.columns}
+                            </button>
+                        </div>
+                    )}
+                    {showGridFixturePicker && (
+                        <Dialog
+                            open={showGridFixturePicker}
+                            onOpenChange={setShowGridFixturePicker}
+                        >
+                            <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                    <DialogTitle>
+                                        Elegir tipo de foco para la grilla
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        Se usará para calcular cuántas luminarias exige la normativa y para generar la grilla.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <CatalogPanel
+                                    filterCategory="luminaires"
+                                    variant="compact-grid"
+                                    fixtureItemsPerPage={15}
+                                    onSelect={() => {
+                                        store.setTool(toolBeforeGridPickerRef.current);
+                                        setShowGridFixturePicker(false);
+                                    }}
+                                />
+                            </DialogContent>
+                        </Dialog>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            // Reemplaza TODAS las luminarias que ya están físicamente en
+                            // este ambiente (no solo las que el usuario haya seleccionado
+                            // a mano) para que regenerar la grilla nunca deje duplicados
+                            // superpuestos. Todo el reemplazo es una sola transacción de
+                            // historial (un solo Ctrl+Z deshace el cambio completo).
+                            store.beginHistoryGesture();
+                            fixturesInRoom.forEach((f) => store.removeObject(f.id));
+
                             const newIds = store.addFixtureGrid({
                                 roomId: room.id,
-                                rows: store.ui.fixtureGridRows,
-                                columns: store.ui.fixtureGridCols,
+                                rows: gridRows,
+                                columns: gridCols,
                                 fixtureTemplate: store.ui.fixtureTemplate,
                                 ambientVertices: calculationRoom.vertices,
                             });
+                            store.endHistoryGesture();
                             if (newIds.length > 0) {
                                 store.setSelectedId(null);
                                 store.setSelectedFixtureIds(newIds);
@@ -383,9 +683,65 @@ export const RoomProps: React.FC<{
                         }}
                         className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
                     >
-                        Generar en Techo {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
+                        Generar en Techo {gridRows}x{gridCols}
                     </button>
                 </div>
+            )}
+
+            {isAmbiente && (
+                <SectionWrapper icon={<PlugZap size={12} className="text-emerald-400" />} label="Tomacorrientes por ambiente">
+                    <SelectField
+                        label="Uso"
+                        value={outletUse}
+                        options={Object.entries(OUTLET_RULES).map(([value, rule]) => ({ value, label: rule.label }))}
+                        onChange={(value) => {
+                            const nextUse = value as OutletUse;
+                            onUpdate({
+                                outletUse: nextUse,
+                                outletDeviceType: nextUse === 'exterior' ? 'outlet_waterproof' : room.outletDeviceType ?? 'outlet_floor',
+                            });
+                        }}
+                    />
+                    <SelectField
+                        label="Tipo / altura"
+                        value={outletDeviceType}
+                        options={[
+                            { value: 'outlet_floor', label: 'Bajo · 0.40 m' },
+                            { value: 'outlet_initial', label: 'Inicial · 1.50 m' },
+                            { value: 'outlet_waterproof', label: 'Exterior · 1.20 m' },
+                            { value: 'outlet_high_180', label: 'Alto · 1.80 m' },
+                            { value: 'outlet_rack', label: 'Comunicaciones · 2.00 m' },
+                            { value: 'outlet_floor_box', label: 'Piso · NPT' },
+                            { value: 'outlet_ceiling', label: 'Techo' },
+                        ]}
+                        onChange={(value) => {
+                            const type = value as ElectricalDeviceType;
+                            const defaults = ELECTRICAL_DEVICE_DEFAULTS[type];
+                            onUpdate({ outletDeviceType: type });
+                            store.updateGeneratedOutletsForRoom(room.id, {
+                                type,
+                                mountingHeight: type === 'outlet_ceiling' ? calculationRoom.height : defaults.mountingHeight,
+                                properties: { ...defaults.properties },
+                            });
+                        }}
+                    />
+                    <EditField label="Inicio en perímetro (m)" value={room.outletStartOffset ?? 0} min={0} max={Math.max(perimeter, 0)} step={0.1} onChange={(value) => onUpdate({ outletStartOffset: value })} />
+                    <PropField label="Medición" value={outletRule.method === 'area' ? `${area.toFixed(2)} m²` : `${perimeter.toFixed(2)} m`} />
+                    <PropField label="Regla" value={outletRule.description} mono={false} />
+                    <PropField label="Cantidad requerida" value={`${requiredOutlets}`} />
+                    <PropField label="Generados" value={`${generatedOutlets.length}`} />
+                    <PropField label="Cable" value="4 mm² · AWG 12" mono={false} />
+                    <button type="button" onClick={regenerateOutlets} disabled={requiredOutlets === 0}
+                        className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40">
+                        {generatedOutlets.length > 0 ? 'Regenerar tomacorrientes' : 'Generar tomacorrientes'}
+                    </button>
+                    {generatedOutlets.length > 0 && (
+                        <button type="button" onClick={() => store.removeGeneratedOutletsForRoom(room.id)}
+                            className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20">
+                            <Trash2 size={11} /> Eliminar tomacorrientes del ambiente
+                        </button>
+                    )}
+                </SectionWrapper>
             )}
         </div>
     );

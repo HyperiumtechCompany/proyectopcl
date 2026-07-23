@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { EditorLayout } from '@/pages/dialux/components/EditorLayout';
+import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
 import { useDialuxProjectSync } from '@/pages/dialux/hooks/useDialuxProjectSync';
 import {
     createScaleConfig,
@@ -60,15 +61,67 @@ function buildBlankProject(id: string, name: string): Project {
 export default function DialuxShow({ project }: Props) {
     const setProject = useEditorStore((s) => s.setProject);
     const setActiveScene = useEditorStore((s) => s.setActiveScene);
+    const setDefaultRoomNormativeStandard = useEditorStore(
+        (s) => s.setDefaultRoomNormativeStandard,
+    );
+    const resetHistory = useEditorStore((s) => s.resetHistory);
     const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        const initial = project.data ?? buildBlankProject(project.id, project.name);
+        const initial =
+            project.data ?? buildBlankProject(project.id, project.name);
         setProject(initial);
         const firstSceneId = initial.scenes[0]?.id;
         if (firstSceneId) {
             setActiveScene(firstSceneId);
         }
+
+        // Los proyectos nuevos persisten `defaultRoomNormativeStandard`. Para
+        // documentos antiguos inferimos la norma más usada por sus ambientes.
+        type RoomStandard = NonNullable<
+            Project['scenes'][number]['rooms'][number]['normativeStandard']
+        >;
+        const standardCounts = new Map<RoomStandard, number>();
+        for (const scene of initial.scenes) {
+            for (const room of scene.rooms) {
+                if (
+                    (room.roomType === 'ambient' ||
+                        room.roomType === 'corridor') &&
+                    room.normativeStandard
+                ) {
+                    standardCounts.set(
+                        room.normativeStandard,
+                        (standardCounts.get(room.normativeStandard) ?? 0) + 1,
+                    );
+                }
+            }
+        }
+        let mostUsedStandard: RoomStandard | null = null;
+        let mostUsedCount = 0;
+        for (const [standard, count] of standardCounts) {
+            if (count > mostUsedCount) {
+                mostUsedStandard = standard;
+                mostUsedCount = count;
+            }
+        }
+        setDefaultRoomNormativeStandard(
+            initial.defaultRoomNormativeStandard ??
+                mostUsedStandard ??
+                'en_12464',
+        );
+
+        // La carga del proyecto desde BD no es una acción del usuario: el
+        // historial de undo/redo debe empezar vacío, no permitir "deshacer"
+        // de vuelta a un proyecto sin sembrar.
+        resetHistory();
+
+        // Arranca la carga del catálogo BD (fuente única de verdad) apenas se
+        // abre el proyecto, para que los paneles de propiedades (pared,
+        // ambiente) no muestren la transcripción estática desactualizada
+        // mientras el usuario ya está trabajando.
+        void ensureStandardDataLoaded('rne_peru');
+        void ensureStandardDataLoaded('en_1838');
+
         setReady(true);
         // Solo debe re-sembrar si cambia el proyecto que se está viendo.
         // eslint-disable-next-line react-hooks/exhaustive-deps

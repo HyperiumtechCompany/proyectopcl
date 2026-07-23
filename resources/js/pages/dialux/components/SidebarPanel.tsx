@@ -1,7 +1,7 @@
-import { Layers, ScrollText, Settings2 } from 'lucide-react';
+import { Layers, ListTree, Settings2 } from 'lucide-react';
 import React from 'react';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import { NormativeWizardPanel } from './NormativeWizardPanel';
+import { LegendPanel } from './LegendPanel';
 import { ObjectsPanel } from './ObjectsPanel';
 import { PropertiesPanel } from './PropertiesPanel';
 
@@ -12,7 +12,7 @@ export const SidebarPanel: React.FC = () => {
     const tabs = [
         { key: 'objects'    as const, label: 'Objetos',     icon: Layers   },
         { key: 'properties' as const, label: 'Propiedades', icon: Settings2 },
-        { key: 'normative'  as const, label: 'Normativa',   icon: ScrollText },
+        { key: 'legend'     as const, label: 'Leyenda',     icon: ListTree },
     ];
 
     return (
@@ -51,7 +51,7 @@ export const SidebarPanel: React.FC = () => {
             <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2.5 text-xs">
                 {activeTab === 'objects'    && <ObjectsPanel />}
                 {activeTab === 'properties' && <PropertiesPanel />}
-                {activeTab === 'normative'  && <NormativeWizardPanel />}
+                {activeTab === 'legend'     && <LegendPanel />}
             </div>
         </aside>
     );

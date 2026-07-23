@@ -82,7 +82,11 @@ export const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
     if (!open) return null;
 
     return (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+        // Sin backdrop-blur: este overlay va directo sobre el canvas CAD (WebGL,
+        // repintándose en vivo) y el blur del navegador se recalcula cada frame
+        // sobre esa capa, lo que relentiza y pixela el lienzo mientras el modal
+        // está abierto. Un scrim sólido da el mismo contraste sin ese costo.
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70">
             <div className="w-full max-w-md rounded-2xl border border-amber-600/30 bg-slate-900 p-5 shadow-2xl">
 
                 {/* ── Header ─────────────────────────────────────────────────── */}

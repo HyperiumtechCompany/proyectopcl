@@ -37,6 +37,9 @@ export interface SceneObjectsSlice {
     addConductor: (conductor: Omit<Conductor, 'id'>) => string;
     addJunctionBox: (box: Omit<JunctionBox, 'id'>) => string;
     addElectricalDevice: (device: Omit<ElectricalDevice, 'id'>) => string;
+    replaceGeneratedOutletsForRoom: (roomId: string, devices: Array<Omit<ElectricalDevice, 'id'>>) => string[];
+    updateGeneratedOutletsForRoom: (roomId: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
+    removeGeneratedOutletsForRoom: (roomId: string) => void;
 
     updateRoom: (id: string, patch: Partial<Omit<Room, 'id'>>) => void;
     updateWall: (id: string, patch: Partial<Omit<Wall, 'id'>>) => void;
@@ -482,6 +485,56 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         );
         return id;
     },
+
+    replaceGeneratedOutletsForRoom: (roomId, deviceData) => {
+        const ids = deviceData.map(() => uuidv4());
+        set((state) => {
+            if (!state.project || !state.activeSceneId) return state;
+            return mutateScene(state, (scene) => {
+                const removedIds = new Set((scene.electricalDevices ?? [])
+                    .filter((device) => device.generatedBy === 'outlet-rule' && device.roomId === roomId)
+                    .map((device) => device.id));
+                return {
+                    ...scene,
+                    electricalDevices: [
+                        ...(scene.electricalDevices ?? []).filter((device) => !removedIds.has(device.id)),
+                        ...deviceData.map((device, index) => ({ ...device, roomId, generatedBy: 'outlet-rule' as const, id: ids[index] })),
+                    ],
+                    conductors: (scene.conductors ?? []).filter(
+                        (conductor) => !removedIds.has(conductor.sourceId) && !removedIds.has(conductor.targetId),
+                    ),
+                };
+            });
+        });
+        return ids;
+    },
+
+    updateGeneratedOutletsForRoom: (roomId, patch) =>
+        set((state) => !state.project || !state.activeSceneId ? state : mutateScene(state, (scene) => ({
+            ...scene,
+            electricalDevices: (scene.electricalDevices ?? []).map((device) =>
+                device.generatedBy === 'outlet-rule' && device.roomId === roomId
+                    ? { ...device, ...patch, roomId, generatedBy: 'outlet-rule' }
+                    : device,
+            ),
+        }))),
+
+    removeGeneratedOutletsForRoom: (roomId) =>
+        set((state) => {
+            if (!state.project || !state.activeSceneId) return state;
+            return mutateScene(state, (scene) => {
+                const removedIds = new Set((scene.electricalDevices ?? [])
+                    .filter((device) => device.generatedBy === 'outlet-rule' && device.roomId === roomId)
+                    .map((device) => device.id));
+                return {
+                    ...scene,
+                    electricalDevices: (scene.electricalDevices ?? []).filter((device) => !removedIds.has(device.id)),
+                    conductors: (scene.conductors ?? []).filter(
+                        (conductor) => !removedIds.has(conductor.sourceId) && !removedIds.has(conductor.targetId),
+                    ),
+                };
+            });
+        }),
 
     updateElectricalDevice: (id, patch) => {
         set((s) => {

@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { cycleCandidate, hitTestAtPoint } from '@/pages/dialux/selection/hitTest';
 import { getCanopyDraftStart } from './cadInteraction';
 import type {
     AngleSnapMode,
@@ -11,6 +12,8 @@ import type {
     Canopy,
     Room,
     LightSwitch,
+    Conductor,
+    Partition,
     ElectricalDevice,
     ElectricalDeviceType,
 } from './useEditorStore';
@@ -93,6 +96,13 @@ interface InteractionOptions {
     onConnectWire?: (sourceId: string, targetId: string, waypoints?: { x: number; y: number }[]) => void;
     onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
     electricalDevices?: ElectricalDevice[];
+    /** Cables y tabiques: solo participan del hit-testing de selección */
+    conductors?: Conductor[];
+    partitions?: Partition[];
+    /** Notifica el inicio/fin de un arrastre de objeto (para agrupar el historial) */
+    onDragGesture?: (phase: 'start' | 'end') => void;
+    /** Regla compartida con la leyenda para excluir objetos ocultos de la selección. */
+    isObjectSelectable?: (id: string) => boolean;
 }
 
 interface DrawState {
@@ -164,6 +174,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onConnectWire,
         onAddElectricalDevice,
         electricalDevices = [],
+        conductors = [],
+        partitions = [],
+        onDragGesture,
+        isObjectSelectable,
     } = opts;
 
     /**
@@ -583,94 +597,72 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
 
             if (activeTool === 'select') {
-                const fixtureHit = findNearestFixture(cx, cy);
-                if (fixtureHit) {
-                    if (e.ctrlKey) {
-                        onSelectObject(fixtureHit.id, true);
-                    } else {
-                        onSelectObject(fixtureHit.id, false);
-                    }
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = fixtureHit.id;
-                    s.dragObjectType = 'fixture';
+                // Hit-testing determinista: se evalúan TODOS los candidatos bajo
+                // el puntero y gana el mejor rankeado (objeto pequeño antes que
+                // su contenedor). Alt+clic recorre cíclicamente los superpuestos.
+                const scenePt = canvasToScene(cx, cy);
+                const ranked = hitTestAtPoint(
+                    {
+                        fixtures,
+                        lightSwitches,
+                        electricalDevices,
+                        windows,
+                        doors,
+                        conductors,
+                        canopies,
+                        walls,
+                        partitions,
+                        rooms,
+                    },
+                    { x: cx, y: cy },
+                    scenePt,
+                    (sx, sy) => sceneToCanvas(sx, sy),
+                    { isSelectable: (id) => isObjectSelectable?.(id) ?? true },
+                );
+
+                const winner = e.altKey
+                    ? cycleCandidate(ranked, opts.selectedId)
+                    : (ranked[0] ?? null);
+
+                if (!winner) {
+                    onSelectObject(null);
                     return;
                 }
 
-                const switchHit = findNearestLightSwitch(cx, cy);
-                if (switchHit) {
-                    if (e.ctrlKey) {
-                        onSelectObject(switchHit.id, true);
-                    } else {
-                        onSelectObject(switchHit.id, false);
-                    }
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = switchHit.id;
-                    s.dragObjectType = 'switch';
-                    return;
+                if (winner.kind === 'fixture') {
+                    onSelectObject(winner.id, e.ctrlKey);
+                } else {
+                    onSelectObject(winner.id);
                 }
 
-                // Equipos eléctricos (tableros, cajas de pase, medidores, etc.)
-                const elecDeviceHit = findNearestElectricalDevice(cx, cy);
-                if (elecDeviceHit) {
-                    onSelectObject(elecDeviceHit.id);
+                // Solo los tipos con movimiento soportado inician un arrastre;
+                // muros, tabiques y cables se seleccionan sin arrastrarse.
+                const DRAGGABLE: Partial<Record<typeof winner.kind, DrawState['dragObjectType']>> = {
+                    fixture: 'fixture',
+                    switch: 'switch',
+                    'electrical-device': 'electrical-device',
+                    room: 'room',
+                    canopy: 'canopy',
+                    window: 'window',
+                    door: 'door',
+                };
+                const dragType = DRAGGABLE[winner.kind] ?? null;
+                if (dragType) {
                     s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = elecDeviceHit.id;
-                    s.dragObjectType = 'electrical-device';
-                    return;
+                    s.dragStartScene = scenePt;
+                    s.dragObjectId = winner.id;
+                    s.dragObjectType = dragType;
+                    onDragGesture?.('start');
                 }
-
-                const roomHit = findNearestRoom(cx, cy);
-                if (roomHit) {
-                    onSelectObject(roomHit.id);
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = roomHit.id;
-                    s.dragObjectType = 'room';
-                    return;
-                }
-
-                const canopyHit = findNearestCanopy(cx, cy);
-                if (canopyHit) {
-                    onSelectObject(canopyHit.id);
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = canopyHit.id;
-                    s.dragObjectType = 'canopy';
-                    return;
-                }
-
-                const windowHit = findNearestWindow(cx, cy);
-                if (windowHit) {
-                    onSelectObject(windowHit.id);
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = windowHit.id;
-                    s.dragObjectType = 'window';
-                    return;
-                }
-
-                const doorHit = findNearestDoor(cx, cy);
-                if (doorHit) {
-                    onSelectObject(doorHit.id);
-                    s.isDragging = true;
-                    s.dragStartScene = canvasToScene(cx, cy);
-                    s.dragObjectId = doorHit.id;
-                    s.dragObjectType = 'door';
-                    return;
-                }
-
-                onSelectObject(null);
             }
         },
         [
             activeTool, angleSnapMode, canvasToScene, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM,
-            findNearestWall, findNearestFixture, findNearestRoom, findNearestCanopy, findNearestWindow, findNearestDoor, findNearestLightSwitch, findNearestElectricalDevice,
+            findNearestWall, findNearestFixture, findNearestRoom, findNearestLightSwitch, findNearestElectricalDevice,
             onAddFixture, onCalibrationMeasure, onMeasureAreaFinish, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
-            onAddLightSwitch, onAddElectricalDevice, onConnectWire,
-            closeThresholdPx,
+            onAddLightSwitch, onAddElectricalDevice, onConnectWire, onDragGesture,
+            fixtures, lightSwitches, electricalDevices, windows, doors, conductors, canopies, walls, partitions, rooms,
+            opts.selectedId, closeThresholdPx,
         ],
     );
 
@@ -894,7 +886,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool, angleSnapMode, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM, canvasToScene,
             onPanChange, fixtures, rooms, canopies, windows, doors, walls, lightSwitches, electricalDevices,
             onMoveFixture, onMoveFixtures, onMoveRoom, onMoveCanopy, onMoveWindow, onMoveDoor, onMoveLightSwitch, onMoveElectricalDevice,
-            findNearestWall, selectedFixtureIds,
+            findNearestWall, selectedFixtureIds, conductors, partitions, isObjectSelectable,
         ],
     );
 
@@ -933,9 +925,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 s.dragStartScene = null;
                 s.dragObjectId = null;
                 s.dragObjectType = null;
+                onDragGesture?.('end');
             }
         },
-        [activeTool, canvasToScene, resolveSnap, onAddCanopy],
+        [activeTool, canvasToScene, resolveSnap, onAddCanopy, onDragGesture],
     );
 
     const handleDoubleClick = useCallback(() => {

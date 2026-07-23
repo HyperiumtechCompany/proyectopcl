@@ -1,13 +1,22 @@
 const DB_NAME = 'dialux-plan-storage';
 const STORE_NAME = 'plans';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface StoredDialuxPlan {
     projectId: string;
+    sceneId: string;
     fileName: string;
     mimeType: string;
     lastModified: number;
     blob: Blob;
+}
+
+interface StoredDialuxPlanRecord extends StoredDialuxPlan {
+    key: string;
+}
+
+function planKey(projectId: string, sceneId: string): string {
+    return `${projectId}::${sceneId}`;
 }
 
 function openPlanDatabase(): Promise<IDBDatabase> {
@@ -16,9 +25,14 @@ function openPlanDatabase(): Promise<IDBDatabase> {
 
         request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'projectId' });
+            // v1 guardaba un solo plano por proyecto (keyPath 'projectId'):
+            // en un proyecto con varios pisos/escenas, importar el plano de
+            // un piso sobreescribía en silencio el de otro. v2 escala la
+            // clave por proyecto+escena para que cada piso guarde el suyo.
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+                db.deleteObjectStore(STORE_NAME);
             }
+            db.createObjectStore(STORE_NAME, { keyPath: 'key' });
         };
 
         request.onsuccess = () => resolve(request.result);
@@ -26,11 +40,17 @@ function openPlanDatabase(): Promise<IDBDatabase> {
     });
 }
 
-export async function saveDialuxPlanFile(projectId: string, file: File): Promise<void> {
+export async function saveDialuxPlanFile(
+    projectId: string,
+    sceneId: string,
+    file: File,
+): Promise<void> {
     if (typeof indexedDB === 'undefined') return;
 
-    const payload: StoredDialuxPlan = {
+    const payload: StoredDialuxPlanRecord = {
+        key: planKey(projectId, sceneId),
         projectId,
+        sceneId,
         fileName: file.name,
         mimeType: file.type || 'application/octet-stream',
         lastModified: file.lastModified,
@@ -50,16 +70,20 @@ export async function saveDialuxPlanFile(projectId: string, file: File): Promise
     db.close();
 }
 
-export async function loadDialuxPlan(projectId: string): Promise<StoredDialuxPlan | null> {
+export async function loadDialuxPlan(
+    projectId: string,
+    sceneId: string,
+): Promise<StoredDialuxPlan | null> {
     if (typeof indexedDB === 'undefined') return null;
 
     const db = await openPlanDatabase();
     const plan = await new Promise<StoredDialuxPlan | null>((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readonly');
         const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(projectId);
+        const request = store.get(planKey(projectId, sceneId));
 
-        request.onsuccess = () => resolve((request.result as StoredDialuxPlan | undefined) ?? null);
+        request.onsuccess = () =>
+            resolve((request.result as StoredDialuxPlanRecord | undefined) ?? null);
         request.onerror = () => reject(request.error);
     });
     db.close();

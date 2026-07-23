@@ -9,11 +9,16 @@ import {
     type Project,
 } from '@/pages/dialux/hooks/useEditorStore';
 import type {
+    CalculationProvenance,
     DialuxAmbientExport,
     DialuxAmbientMetrics,
     DialuxExportSnapshot,
     DialuxExportVisualConfig,
+    RequirementEvaluation,
 } from '../domain/types';
+
+const LIGHTING_ENGINE_NAME = 'lightingEngineCore';
+const LIGHTING_ENGINE_VERSION = '1.0.0';
 
 export interface DialuxExportSnapshotInput {
     project: Project;
@@ -37,6 +42,95 @@ function sortScenesByFloor(project: Project): Project['scenes'] {
     });
 }
 
+/**
+ * Trazabilidad de origen de los requisitos: la norma/categoría que el usuario
+ * ya asignó al ambiente en el editor (ver [[dialux-normativa-fuente-unica]]),
+ * no un valor inventado en el reporte.
+ */
+function buildRequirementSource(room: {
+    normativeStandard?: string;
+    normativeLabel?: string;
+    normativeCategory?: string;
+}): string | undefined {
+    const label = room.normativeLabel ?? room.normativeCategory;
+
+    if (!room.normativeStandard && !label) {
+        return undefined;
+    }
+
+    return [room.normativeStandard, label].filter(Boolean).join(' · ');
+}
+
+function buildRequirementEvaluations(
+    inputs: { illuminanceLux: number },
+    uniformityTarget: number,
+    ugrLimit: number,
+    result: LightingResult | null,
+    source: string | undefined,
+): RequirementEvaluation[] {
+    if (result === null) {
+        return [
+            {
+                metric: 'illuminance',
+                calculatedValue: null,
+                operator: '>=',
+                requiredValue: inputs.illuminanceLux,
+                unit: 'lx',
+                status: 'not-evaluated',
+                source,
+            },
+            {
+                metric: 'uniformity',
+                calculatedValue: null,
+                operator: '>=',
+                requiredValue: uniformityTarget,
+                unit: 'ratio',
+                status: 'not-evaluated',
+                source,
+            },
+            {
+                metric: 'ugr',
+                calculatedValue: null,
+                operator: '<=',
+                requiredValue: ugrLimit,
+                unit: 'UGR',
+                status: 'not-evaluated',
+                source,
+            },
+        ];
+    }
+
+    return [
+        {
+            metric: 'illuminance',
+            calculatedValue: result.avg_lux,
+            operator: '>=',
+            requiredValue: inputs.illuminanceLux,
+            unit: 'lx',
+            status: result.avg_lux >= inputs.illuminanceLux ? 'pass' : 'fail',
+            source,
+        },
+        {
+            metric: 'uniformity',
+            calculatedValue: result.uniformity,
+            operator: '>=',
+            requiredValue: uniformityTarget,
+            unit: 'ratio',
+            status: result.uniformity >= uniformityTarget ? 'pass' : 'fail',
+            source,
+        },
+        {
+            metric: 'ugr',
+            calculatedValue: result.ugr,
+            operator: '<=',
+            requiredValue: ugrLimit,
+            unit: 'UGR',
+            status: result.ugr <= ugrLimit ? 'pass' : 'fail',
+            source,
+        },
+    ];
+}
+
 function buildAmbientMetrics(
     ambient: DialuxAmbientExport,
     result: LightingResult | null,
@@ -46,11 +140,24 @@ function buildAmbientMetrics(
     const ugrLimit = ambient.room.ugrLimit ?? 22;
     const g2 =
         result && result.max_lux > 0 ? result.min_lux / result.max_lux : null;
+    const requirementEvaluations = buildRequirementEvaluations(
+        inputs,
+        uniformityTarget,
+        ugrLimit,
+        result,
+        buildRequirementSource(ambient.room),
+    );
     const complies =
-        result !== null &&
-        result.avg_lux >= inputs.illuminanceLux &&
-        result.uniformity >= uniformityTarget &&
-        result.ugr <= ugrLimit;
+        requirementEvaluations.length > 0 &&
+        requirementEvaluations.every(
+            (evaluation) => evaluation.status === 'pass',
+        );
+    const provenance: CalculationProvenance = {
+        engine: LIGHTING_ENGINE_NAME,
+        engineVersion: LIGHTING_ENGINE_VERSION,
+        calculatedAt: result !== null ? new Date().toISOString() : null,
+        status: result !== null ? 'calculated' : 'not-calculated',
+    };
 
     return {
         area: inputs.area,
@@ -77,6 +184,8 @@ function buildAmbientMetrics(
         uniformityTarget,
         ugrLimit,
         complies,
+        requirementEvaluations,
+        provenance,
     };
 }
 

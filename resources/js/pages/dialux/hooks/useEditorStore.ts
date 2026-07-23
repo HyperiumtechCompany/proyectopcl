@@ -32,6 +32,7 @@ export type {
     JunctionBox,
     ElectricalDevice,
     ElectricalDeviceType,
+    ElectricalLayerGroup,
     ElectricalDeviceProperties,
     FixtureGridConfig,
     RoomLightingCalculation,
@@ -84,6 +85,7 @@ import type {
     JunctionBox,
     ElectricalDevice,
     ElectricalDeviceType,
+    ElectricalLayerGroup,
     ElectricalDeviceProperties,
     FixtureGridConfig,
     RoomLightingCalculation,
@@ -112,6 +114,8 @@ import { createScaleDxfSlice } from './store/scaleDxfSlice';
 import { createProjectSlice } from './store/projectSlice';
 import { createSceneObjectsSlice } from './store/sceneObjectsSlice';
 import { createUiSlice } from './store/uiSlice';
+import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
+import { createHistorySlice, installHistoryCapture, type HistorySlice } from './store/historySlice';
 
 export { createScaleConfig, normalizeScaleConfig } from './storeHelpers';
 
@@ -153,11 +157,13 @@ interface UIState {
     fixtureGridCols: number;
     /** Cuando true, el canvas 2D y 3D muestran todos los pisos visibles superpuestos */
     showAllFloors: boolean;
+    electricalLayerVisibility: Record<ElectricalLayerGroup, boolean>;
+    hiddenElectricalIds: string[];
 }
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 
-export interface EditorState {
+export interface EditorState extends DeletionSlice, HistorySlice {
     project: Project | null;
     activeSceneId: string | null;
     isCalculating: boolean;
@@ -310,6 +316,8 @@ export const useEditorStore = create<EditorState>()(
         ...createUiSlice(set, get, api),
         ...createProjectSlice(set, get, api),
         ...createSceneObjectsSlice(set, get, api),
+        ...createDeletionSlice(set, get, api),
+        ...createHistorySlice(set, get, api),
         project: null,
         activeSceneId: null,
         isCalculating: false,
@@ -369,6 +377,15 @@ export const useEditorStore = create<EditorState>()(
             fixtureGridRows: 2,
             fixtureGridCols: 2,
             showAllFloors: false,
+            electricalLayerVisibility: {
+                cad: true,
+                fixtures: true,
+                wires: true,
+                switches: true,
+                outlets: true,
+                panels: true,
+            },
+            hiddenElectricalIds: [],
         },
 
         // ── Calc & DXF ────────────────────────────────────────────────────────
@@ -377,6 +394,10 @@ export const useEditorStore = create<EditorState>()(
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
     })),
 );
+
+installHistoryCapture(useEditorStore);
+
+export type { DeletionAnalysis, DeletionChild } from '@/pages/dialux/selection/deletionPolicy';
 
 // ─── Helper privado ───────────────────────────────────────────────────────────
 

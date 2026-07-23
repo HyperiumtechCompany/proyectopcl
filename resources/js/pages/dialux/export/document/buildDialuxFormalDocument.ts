@@ -1,17 +1,45 @@
-import type {
-    DialuxAmbientDetail,
-    DialuxAmbientLuminaireItem,
-    DialuxDocumentPage,
-    DialuxExportAsset,
-    DialuxExportSnapshot,
-    DialuxFormalDocument,
-    DialuxLuminaireListItem,
-    DialuxLuminaireTotals,
-    DialuxStructuredSummaryData,
-    DialuxTocEntry,
+import { polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
+import {
+    DEFAULT_MAINTENANCE_FACTOR,
+    DEFAULT_REFLECTANCE_CEILING,
+    DEFAULT_REFLECTANCE_FLOOR,
+    DEFAULT_REFLECTANCE_WALL,
+    DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION,
+    type DialuxAmbientDetail,
+    type DialuxAmbientLuminaireItem,
+    type DialuxDocumentPage,
+    type DialuxExportAsset,
+    type DialuxExportSnapshot,
+    type DialuxFormalDocument,
+    type DialuxLevelSummary,
+    type DialuxLuminaireListItem,
+    type DialuxLuminaireTotals,
+    type DialuxProjectPhotometricDefaults,
+    type DialuxStructuredSummaryData,
+    type DialuxTocEntry,
+    type GlossaryEntry,
 } from '../domain/types';
+import { selectGlossaryEntries } from './glossaryCatalog';
 
-const TOC_ROWS_PER_PAGE = 14;
+// 14 dejaba media página en blanco en proyectos reales: la altura real de
+// fila del CSS (.toc-row ~6mm, encabezados de sección ~7-11mm) permite bastante
+// más por página en una hoja A4 (~243mm útiles tras título/índice). 24 es un
+// valor conservador frente a esa capacidad real (mezcla de filas simples,
+// filas con subtítulo y encabezados de sección).
+const TOC_ROWS_PER_PAGE = 24;
+
+/**
+ * Filas por página para listas de luminarias (proyecto/nivel). Mismo enfoque
+ * que TOC_ROWS_PER_PAGE: una constante razonable, no una medición real de
+ * alto de fila (no existe esa infraestructura hoy).
+ */
+const LUMINAIRE_ROWS_PER_PAGE = 20;
+
+/** Filas por página para la tabla de objetos de cálculo por recinto. */
+const CALCULATION_OBJECT_ROWS_PER_PAGE = 18;
+
+/** Términos de glosario por página (cada fila ya mantiene término+definición juntos). */
+const GLOSSARY_ROWS_PER_PAGE = 12;
 
 interface PageSeed {
     id: string;
@@ -25,6 +53,25 @@ interface PageSeed {
     sceneId?: string | null;
     sceneName?: string | null;
     roomId?: string | null;
+    rowRangeStart?: number | null;
+    rowRangeEnd?: number | null;
+}
+
+/** Divide `totalRows` en tramos `[start, end)` de a lo sumo `rowsPerPage` filas. */
+function chunkIndices(
+    totalRows: number,
+    rowsPerPage: number,
+): Array<{ start: number; end: number }> {
+    if (totalRows <= 0) {
+        return [{ start: 0, end: 0 }];
+    }
+
+    const chunks: Array<{ start: number; end: number }> = [];
+    for (let start = 0; start < totalRows; start += rowsPerPage) {
+        chunks.push({ start, end: Math.min(start + rowsPerPage, totalRows) });
+    }
+
+    return chunks;
 }
 
 function toFileBaseName(projectName: string): string {
@@ -88,16 +135,7 @@ function polygonPerimeter(vertices: Array<{ x: number; y: number }>): number {
 }
 
 function polygonArea(vertices: Array<{ x: number; y: number }>): number {
-    if (vertices.length < 3) {
-        return 0;
-    }
-
-    const twiceArea = vertices.reduce((sum, vertex, index) => {
-        const next = vertices[(index + 1) % vertices.length]!;
-        return sum + (vertex.x * next.y - next.x * vertex.y);
-    }, 0);
-
-    return Math.abs(twiceArea) / 2;
+    return polygonAreaM2(vertices);
 }
 
 function buildLuminaireList(
@@ -240,11 +278,122 @@ function buildAmbientLuminaireList(
     );
 }
 
+/**
+ * Lista de luminarias consolidada a escala de nivel (varios ambientes de la
+ * misma Scene). Mismo patrón de agrupación que `buildAmbientLuminaireList`,
+ * generalizado a una lista de ambientes en vez de uno solo.
+ */
+function buildLevelLuminaireList(
+    ambients: DialuxExportSnapshot['ambients'],
+): DialuxLuminaireListItem[] {
+    const groupedFixtures = new Map<string, DialuxLuminaireListItem>();
+
+    for (const ambient of ambients) {
+        for (const fixture of ambient.fixtures) {
+            const powerWatts = readFixturePowerWatts(fixture);
+            const baseName = stripCopyCounter(fixture.name);
+            const key = buildProductGroupKey(fixture);
+            const existing = groupedFixtures.get(key);
+
+            if (existing) {
+                existing.quantity += 1;
+                continue;
+            }
+
+            const lumens = fixture.lumens ?? null;
+            const efficiency =
+                lumens !== null && powerWatts !== null && powerWatts > 0
+                    ? Number((lumens / powerWatts).toFixed(1))
+                    : null;
+
+            groupedFixtures.set(key, {
+                id: fixture.id,
+                name: baseName,
+                model:
+                    fixture.fixtureType ?? fixture.fixtureShape ?? 'No definido',
+                brand: fixture.brand ?? null,
+                articleNumber:
+                    fixture.articleNumber ??
+                    fixture.productSourceFormat?.toUpperCase() ??
+                    fixture.fixtureType ??
+                    null,
+                fixtureShape: fixture.fixtureShape ?? null,
+                shape: fixture.fixtureShape ?? null,
+                lumens,
+                powerWatts,
+                efficiency,
+                roomName: ambient.roomName,
+                ambientName: ambient.name,
+                quantity: 1,
+                reportData: fixture.reportData ?? null,
+                reportAssets: fixture.reportAssets ?? null,
+            });
+        }
+    }
+
+    return [...groupedFixtures.values()].sort((left, right) =>
+        left.name.localeCompare(right.name, 'es'),
+    );
+}
+
+/**
+ * Agregados por nivel (Scene): luminarias, totales y conteos de cumplimiento.
+ * Se deriva agrupando `snapshot.ambients` por `sceneId` — funciona igual con
+ * 1 nivel o con N, sin cantidades fijas.
+ */
+function buildLevelSummaries(
+    snapshot: DialuxExportSnapshot,
+): DialuxLevelSummary[] {
+    const sceneOrder: string[] = [];
+    const ambientsByScene = new Map<
+        string,
+        DialuxExportSnapshot['ambients']
+    >();
+
+    for (const ambient of snapshot.ambients) {
+        let ambientsForScene = ambientsByScene.get(ambient.sceneId);
+        if (!ambientsForScene) {
+            ambientsForScene = [];
+            ambientsByScene.set(ambient.sceneId, ambientsForScene);
+            sceneOrder.push(ambient.sceneId);
+        }
+        ambientsForScene.push(ambient);
+    }
+
+    return sceneOrder
+        .map((sceneId): DialuxLevelSummary => {
+            const ambients = ambientsByScene.get(sceneId)!;
+            const luminaires = buildLevelLuminaireList(ambients);
+
+            return {
+                sceneId,
+                sceneName: ambients[0]!.sceneName,
+                floorIndex: ambients[0]!.floorIndex,
+                ambientCount: ambients.length,
+                calculatedAmbientCount: ambients.filter(
+                    (ambient) => ambient.result !== null,
+                ).length,
+                compliantAmbientCount: ambients.filter(
+                    (ambient) => ambient.metrics.complies,
+                ).length,
+                fixtureCount: ambients.reduce(
+                    (sum, ambient) => sum + ambient.fixtures.length,
+                    0,
+                ),
+                luminaires,
+                luminaireTotals: buildLuminaireTotals(luminaires),
+            };
+        })
+        .sort((left, right) => left.floorIndex - right.floorIndex);
+}
+
 function buildAmbientDetails(
     snapshot: DialuxExportSnapshot,
     assets: DialuxExportAsset[],
 ): DialuxAmbientDetail[] {
     const assetIds = new Set(assets.map((asset) => asset.id));
+    const projectPhotometricDefaults: DialuxProjectPhotometricDefaults =
+        snapshot.project as DialuxProjectPhotometricDefaults;
 
     return [...snapshot.ambients]
         .sort((left, right) => {
@@ -340,13 +489,18 @@ function buildAmbientDetails(
                         : Number(ambient.metrics.ugr.toFixed(2)),
                 ugrLimit: ambient.metrics.ugrLimit,
                 interiorHeight: Number(ambient.room.height.toFixed(3)),
-                reflectionCeiling: 70, // DIAlux default usually 70/50/20%
-                reflectionWall: 50,
-                reflectionFloor: 20,
+                reflectionCeiling:
+                    projectPhotometricDefaults.reflectionCeiling ??
+                    DEFAULT_REFLECTANCE_CEILING,
+                reflectionWall:
+                    projectPhotometricDefaults.reflectionWall ??
+                    DEFAULT_REFLECTANCE_WALL,
+                reflectionFloor:
+                    projectPhotometricDefaults.reflectionFloor ??
+                    DEFAULT_REFLECTANCE_FLOOR,
                 maintenanceFactor:
-                    ((snapshot.project as unknown as Record<string, unknown>)[
-                        'maintenanceFactor'
-                    ] as number | undefined) ?? 0.8,
+                    projectPhotometricDefaults.maintenanceFactor ??
+                    DEFAULT_MAINTENANCE_FACTOR,
                 usefulPlaneHeight: Number(
                     ambient.metrics.usefulPlaneHeight.toFixed(3),
                 ),
@@ -369,6 +523,8 @@ function buildAmbientDetails(
                 isoluxAssetId: assetIds.has(isoluxAssetId)
                     ? isoluxAssetId
                     : null,
+                requirementEvaluations: ambient.metrics.requirementEvaluations,
+                provenance: ambient.metrics.provenance,
                 luminaires,
                 fixturePositions: ambient.fixtures.map(
                     (fixture, fixtureIndex) => ({
@@ -492,6 +648,8 @@ function buildTechnicalPageSeeds(
     luminaires: DialuxLuminaireListItem[],
     ambientDetails: DialuxAmbientDetail[],
     assets: DialuxExportAsset[],
+    levelSummaries: DialuxLevelSummary[],
+    glossaryEntries: GlossaryEntry[],
 ): PageSeed[] {
     const seeds: PageSeed[] = [];
 
@@ -561,16 +719,28 @@ function buildTechnicalPageSeeds(
 
     // ── Bloque 2: Luminarias agrupadas por producto + fichas técnicas ──
 
-    // 2a. Lista de luminarias (una fila por producto, con cantidad)
-    seeds.push({
-        id: 'page-terrain-luminaires',
-        kind: 'luminaire-list',
-        sectionId: 'cad-overview-luminaires',
-        title: 'Lista de luminarias',
-        subtitle: 'Terreno 1 - Edificación 1',
-        assetIds: [],
-        notes: [],
-    });
+    // 2a. Lista de luminarias (una fila por producto, con cantidad).
+    // Se divide en varias páginas cuando excede LUMINAIRE_ROWS_PER_PAGE, en
+    // vez de un solo seed con la tabla completa (que el CSS de la página
+    // recortaría en silencio con overflow:hidden).
+    chunkIndices(luminaires.length, LUMINAIRE_ROWS_PER_PAGE).forEach(
+        (range, index) => {
+            seeds.push({
+                id: index === 0 ? 'page-terrain-luminaires' : `page-terrain-luminaires-p${index + 1}`,
+                kind: 'luminaire-list',
+                sectionId: 'cad-overview-luminaires',
+                title: 'Lista de luminarias',
+                subtitle:
+                    index === 0
+                        ? 'Terreno 1 - Edificación 1'
+                        : `Terreno 1 - Edificación 1 (continuación)`,
+                assetIds: [],
+                notes: [],
+                rowRangeStart: range.start,
+                rowRangeEnd: range.end,
+            });
+        },
+    );
 
     // 2b. Fichas de producto (una por producto único, no por instancia)
     luminaires.forEach((lum) => {
@@ -598,10 +768,48 @@ function buildTechnicalPageSeeds(
         const bFloor = ambientDetails.find((d) => d.roomId === b.id)?.floorIndex ?? 0;
         return aFloor - bFloor;
     });
+    const emittedLevelSummaryForScene = new Set<string>();
+
     sortedRooms.forEach((room) => {
         const roomAmbients = ambientDetails.filter((a) => a.roomId === room.id);
         if (roomAmbients.length === 0) return;
         const levelSceneId = roomAmbients[0]?.sceneId ?? null;
+        const levelSceneNameForRoom = roomAmbients[0]?.sceneName ?? null;
+
+        // Lista de luminarias del nivel: una vez por nivel (Scene), antes de
+        // sus locales. Funciona igual con 1 nivel o con N (no asume cantidad fija).
+        if (levelSceneId && !emittedLevelSummaryForScene.has(levelSceneId)) {
+            emittedLevelSummaryForScene.add(levelSceneId);
+            const levelSummary = levelSummaries.find(
+                (level) => level.sceneId === levelSceneId,
+            );
+
+            const levelLuminaireCount = levelSummary?.luminaires.length ?? 0;
+            const levelListSubtitle = levelSummary?.sceneName ?? levelSceneNameForRoom;
+            chunkIndices(levelLuminaireCount, LUMINAIRE_ROWS_PER_PAGE).forEach(
+                (range, index) => {
+                    seeds.push({
+                        id:
+                            index === 0
+                                ? `page-level-luminaires-${levelSceneId}`
+                                : `page-level-luminaires-${levelSceneId}-p${index + 1}`,
+                        kind: 'level-luminaire-list',
+                        sectionId: `level-luminaire-list:${levelSceneId}`,
+                        title: 'Lista de luminarias del nivel',
+                        subtitle:
+                            index === 0
+                                ? levelListSubtitle
+                                : `${levelListSubtitle ?? 'Nivel'} (continuación)`,
+                        assetIds: [],
+                        notes: [],
+                        sceneId: levelSceneId,
+                        sceneName: levelSceneNameForRoom,
+                        rowRangeStart: range.start,
+                        rowRangeEnd: range.end,
+                    });
+                },
+            );
+        }
         const levelSceneName = roomAmbients[0]?.sceneName ?? null;
 
         // Nivel: Lista de locales (bloques por local con Ptotal, área,
@@ -633,19 +841,31 @@ function buildTechnicalPageSeeds(
             roomId: room.id,
         });
 
-        // Nivel: Objetos de cálculo / Escena de luz 1 (todos los locales del nivel)
-        seeds.push({
-            id: `page-room-calculation-objects-${room.id}`,
-            kind: 'calculation-object-list',
-            sectionId: `room-calculation-object:${room.id}`,
-            title: 'Objetos de cálculo / Escena de luz 1',
-            subtitle: room.name,
-            assetIds: [],
-            notes: [],
-            sceneId: levelSceneId,
-            sceneName: levelSceneName,
-            roomId: room.id,
-        });
+        // Nivel: Objetos de cálculo / Escena de luz 1 (todos los locales del
+        // nivel). Se pagina igual que las listas de luminarias (Fase 4): un
+        // recinto con más ambientes que los que caben en una hoja no debe
+        // recortarlos en silencio.
+        chunkIndices(roomAmbients.length, CALCULATION_OBJECT_ROWS_PER_PAGE).forEach(
+            (range, index) => {
+                seeds.push({
+                    id:
+                        index === 0
+                            ? `page-room-calculation-objects-${room.id}`
+                            : `page-room-calculation-objects-${room.id}-p${index + 1}`,
+                    kind: 'calculation-object-list',
+                    sectionId: `room-calculation-object:${room.id}`,
+                    title: 'Objetos de cálculo / Escena de luz 1',
+                    subtitle: index === 0 ? room.name : `${room.name} (continuación)`,
+                    assetIds: [],
+                    notes: [],
+                    sceneId: levelSceneId,
+                    sceneName: levelSceneName,
+                    roomId: room.id,
+                    rowRangeStart: range.start,
+                    rowRangeEnd: range.end,
+                });
+            },
+        );
 
         // Sub-secciones por local (5 páginas fijas por ambiente)
         roomAmbients.forEach((detail) => {
@@ -732,16 +952,23 @@ function buildTechnicalPageSeeds(
         });
     });
 
-    // Glosario
-    seeds.push({
-        id: 'page-glossary',
-        kind: 'glossary',
-        sectionId: 'glossary',
-        title: 'Glosario',
-        subtitle: '',
-        assetIds: [],
-        notes: [],
-    });
+    // Glosario: solo los términos que este informe realmente usa (ver
+    // glossaryCatalog.ts), paginado igual que las demás tablas largas.
+    chunkIndices(glossaryEntries.length, GLOSSARY_ROWS_PER_PAGE).forEach(
+        (range, index) => {
+            seeds.push({
+                id: index === 0 ? 'page-glossary' : `page-glossary-p${index + 1}`,
+                kind: 'glossary',
+                sectionId: 'glossary',
+                title: 'Glosario',
+                subtitle: index === 0 ? '' : 'Continuación',
+                assetIds: [],
+                notes: [],
+                rowRangeStart: range.start,
+                rowRangeEnd: range.end,
+            });
+        },
+    );
 
     return seeds;
 }
@@ -796,7 +1023,7 @@ function buildTocEntries(
             });
             entries.push({
                 sectionId: 'edification-header',
-                title: 'Edificación 1',
+                title: snapshot.project.name,
                 subtitle: null,
                 level: 0,
                 pageNumber: 0,
@@ -824,7 +1051,7 @@ function buildTocEntries(
             currentSceneId = seed.sceneId;
             entries.push({
                 sectionId: `scene-group-label-${seed.sceneId}`,
-                title: 'Edificacion 1',
+                title: snapshot.project.name,
                 subtitle: null,
                 level: 0,
                 pageNumber: 0,
@@ -954,13 +1181,22 @@ export function buildDialuxFormalDocument(
 ): DialuxFormalDocument {
     const luminaires = buildLuminaireList(snapshot);
     const luminaireTotals = buildLuminaireTotals(luminaires);
+    const levelSummaries = buildLevelSummaries(snapshot);
     const ambientDetails = buildAmbientDetails(snapshot, assets);
+    const glossaryEntries = selectGlossaryEntries({
+        hasCct: luminaires.some((lum) => lum.cct != null),
+        hasCri: luminaires.some((lum) => lum.cri != null),
+        hasIsolux: ambientDetails.some((detail) => detail.isoluxAssetId !== null),
+        hasMultipleLevels: levelSummaries.length > 1,
+    });
     const fixedPageSeeds = buildFixedPageSeeds(snapshot, luminaires, assets);
     const technicalPageSeeds = buildTechnicalPageSeeds(
         snapshot,
         luminaires,
         ambientDetails,
         assets,
+        levelSummaries,
+        glossaryEntries,
     );
     const fixedPageCount = fixedPageSeeds.length;
     const toc = generateFormalTocFromSeeds(
@@ -983,6 +1219,10 @@ export function buildDialuxFormalDocument(
             notes: seed.notes,
             ambientId: seed.ambientId ?? null,
             roomId: seed.roomId ?? null,
+            sceneId: seed.sceneId ?? null,
+            sceneName: seed.sceneName ?? null,
+            rowRangeStart: seed.rowRangeStart ?? null,
+            rowRangeEnd: seed.rowRangeEnd ?? null,
         })),
         ...Array.from({ length: tocPageCount }, (_, index) => ({
             id: `page-content-${index + 1}`,
@@ -1013,12 +1253,17 @@ export function buildDialuxFormalDocument(
             notes: seed.notes,
             ambientId: seed.ambientId ?? null,
             roomId: seed.roomId ?? null,
+            sceneId: seed.sceneId ?? null,
+            sceneName: seed.sceneName ?? null,
+            rowRangeStart: seed.rowRangeStart ?? null,
+            rowRangeEnd: seed.rowRangeEnd ?? null,
         });
     });
 
     return {
         formatVersion: '1.0.0',
-        title: `${snapshot.project.name} · Reporte DIAlux`,
+        schemaVersion: DIALUX_FORMAL_DOCUMENT_SCHEMA_VERSION,
+        title: `${snapshot.project.name} · Informe Luminotécnico PCL`,
         subtitle: snapshot.scene.name,
         fileBaseName: `${toFileBaseName(snapshot.project.name || 'dialux')}-reporte-formal`,
         generatedAt: snapshot.exportedAt,
@@ -1031,7 +1276,7 @@ export function buildDialuxFormalDocument(
             subtitle: snapshot.scene.name,
         },
         footer: {
-            left: 'DIAlux Web',
+            left: 'PCL',
             right: snapshot.exportedAt.slice(0, 10),
         },
         metadata: [
@@ -1065,8 +1310,10 @@ export function buildDialuxFormalDocument(
         toc,
         luminaires,
         luminaireTotals,
+        levels: levelSummaries,
         ambientDetails,
         assets,
+        glossary: glossaryEntries,
     };
 }
 

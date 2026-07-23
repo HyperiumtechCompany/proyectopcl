@@ -60,6 +60,10 @@ export const createScaleDxfSlice: EditorSlice<ScaleDxfSlice> = (set) => ({
                         dxfExtents: state.dxfExtents
                             ? rescaleDxfExtents(state.dxfExtents, ratio)
                             : state.dxfExtents,
+                        // La escala cambió: cualquier resultado lumínico calculado
+                        // con la geometría anterior queda obsoleto (Fase 5 del plan).
+                        result: null,
+                        resultsByRoom: {},
                     };
                 }
             }
@@ -75,6 +79,8 @@ export const createScaleDxfSlice: EditorSlice<ScaleDxfSlice> = (set) => ({
             ...mutateScene(state, (s) => rescaleSceneEntities(s, ratio)),
             dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
             dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+            result: null,
+            resultsByRoom: {},
         }));
     },
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => {
@@ -117,6 +123,8 @@ export const createScaleDxfSlice: EditorSlice<ScaleDxfSlice> = (set) => ({
                     ...mutateScene(state, (s) => ({ ...rescaleSceneEntities(s, ratio), scaleConfig: nextScale! })),
                     dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
                     dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+                    result: null,
+                    resultsByRoom: {},
                 };
             }
 
@@ -152,6 +160,8 @@ export const createScaleDxfSlice: EditorSlice<ScaleDxfSlice> = (set) => ({
                     ...mutateScene(state, (s) => ({ ...rescaleSceneEntities(s, ratio), scaleConfig: nextScale! })),
                     dxfEntities: state.dxfEntities ? rescaleDxfEntities(state.dxfEntities, ratio) : state.dxfEntities,
                     dxfExtents: state.dxfExtents ? rescaleDxfExtents(state.dxfExtents, ratio) : state.dxfExtents,
+                    result: null,
+                    resultsByRoom: {},
                 };
             }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dialux;
 
+use App\Concerns\AuthorizesDialuxProject;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\StoreDialuxProjectRequest;
 use App\Http\Requests\Dialux\UpdateDialuxProjectRequest;
@@ -15,6 +16,8 @@ use Inertia\Response;
 
 class ProjectController extends Controller
 {
+    use AuthorizesDialuxProject;
+
     public function __construct(protected ProjectQuotaService $quotaService) {}
 
     /**
@@ -107,19 +110,5 @@ class ProjectController extends Controller
 
         return redirect()->route('dialux.index')
             ->with('success', 'Proyecto eliminado correctamente.');
-    }
-
-    /**
-     * Verifica dueño del proyecto y bloquea demos expiradas.
-     */
-    protected function authorizeProyecto(DialuxProject $dialuxProject): void
-    {
-        if ($dialuxProject->user_id !== Auth::id()) {
-            abort(403, 'No tienes acceso a este proyecto.');
-        }
-
-        if ($dialuxProject->is_demo && $dialuxProject->demo_expires_at?->isPast()) {
-            abort(403, 'Tu demo expiró. Actualiza tu plan para seguir accediendo.');
-        }
     }
 }

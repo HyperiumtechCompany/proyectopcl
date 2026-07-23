@@ -98,5 +98,16 @@ export const ProyectoPanel: React.FC<{
                 del proyecto.
             </p>
         </PanelCard>
+        <PanelCard title="Módulo eléctrico" tone="accent">
+            <p className="mb-1.5 text-[9.5px] leading-snug text-gray-500">
+                Cálculo de luminarias, tomacorrientes, circuitos, tableros por
+                piso, alimentadores y metrados con exportación a Excel.
+            </p>
+            <a
+                href={`${window.location.pathname.replace(/\/+$/, '')}/electrico`}
+                className="inline-flex items-center gap-1.5 rounded border border-amber-600/40 bg-amber-600/15 px-2.5 py-1.5 text-[10px] font-semibold text-amber-300 transition-colors hover:bg-amber-600/25">
+                ⚡ Abrir módulo eléctrico
+            </a>
+        </PanelCard>
     </div>
 );

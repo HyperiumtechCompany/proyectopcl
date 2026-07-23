@@ -4,6 +4,7 @@ import type {
     CorridorConfig,
     Door,
     DrawTool,
+    ElectricalLayerGroup,
     Fixture,
     IsoluxMode,
     JunctionBox,
@@ -12,11 +13,14 @@ import type {
     Window,
 } from '../types';
 import type { EditorSlice } from './sliceTypes';
+import { classifyConductorLayer } from '@/pages/dialux/electrical/electricalLayerVisibility';
 
 export interface UiSlice {
     setTool: (tool: DrawTool) => void;
     setAngleSnapMode: (mode: AngleSnapMode) => void;
     setSidebarTab: (tab: SidebarTab) => void;
+    toggleElectricalLayer: (group: ElectricalLayerGroup) => void;
+    toggleElectricalItemVisibility: (id: string) => void;
     setSelectedId: (id: string | null) => void;
     setSelectedFixtureIds: (ids: string[]) => void;
     toggleFixtureSelection: (id: string) => void;
@@ -41,12 +45,75 @@ export interface UiSlice {
     setFixtureGridCols: (cols: number) => void;
 }
 
+const ELECTRICAL_TOOLS = new Set<DrawTool>([
+    'fixture', 'fixture-grid', 'switch', 'wire',
+    'elec-meter', 'elec-main-panel', 'elec-sub-panel', 'elec-transfer',
+    'elec-arrival', 'elec-junction-box', 'elec-earth-pit', 'elec-facp',
+    'elec-outlet-floor', 'elec-outlet-initial', 'elec-outlet-high-180',
+    'elec-outlet-floor-box', 'elec-outlet-waterproof', 'elec-outlet-ceiling',
+    'elec-outlet-rack', 'elec-water-heater',
+]);
+
 export const createUiSlice: EditorSlice<UiSlice> = (set, get) => ({
-    setTool: (tool) => set((s) => ({ ui: { ...s.ui, activeTool: tool } })),
+    setTool: (tool) => set((s) => ({
+        ui: {
+            ...s.ui,
+            activeTool: tool,
+            sidebarTab: ELECTRICAL_TOOLS.has(tool) ? 'legend' : s.ui.sidebarTab,
+        },
+    })),
     setAngleSnapMode: (mode) =>
         set((s) => ({ ui: { ...s.ui, angleSnapMode: mode } })),
     setSidebarTab: (tab) =>
         set((s) => ({ ui: { ...s.ui, sidebarTab: tab } })),
+    toggleElectricalLayer: (group) =>
+        set((s) => {
+            const nextVisible = !s.ui.electricalLayerVisibility[group];
+            if (nextVisible) {
+                return { ui: { ...s.ui, electricalLayerVisibility: { ...s.ui.electricalLayerVisibility, [group]: true } } };
+            }
+
+            const scene = get().activeScene();
+            const belongsToGroup = (id: string): boolean => {
+                if (!scene) return false;
+                if (group === 'fixtures' && scene.fixtures.some((item) => item.id === id)) return true;
+                if (group === 'switches' && (scene.lightSwitches ?? []).some((item) => item.id === id)) return true;
+                const device = (scene.electricalDevices ?? []).find((item) => item.id === id);
+                if (device) return group === (device.type.startsWith('outlet_') ? 'outlets' : 'panels');
+                const conductor = (scene.conductors ?? []).find((item) => item.id === id);
+                return Boolean(conductor && group === classifyConductorLayer(
+                    conductor,
+                    scene.fixtures,
+                    scene.lightSwitches ?? [],
+                    scene.electricalDevices ?? [],
+                ));
+            };
+
+            return {
+                ui: {
+                    ...s.ui,
+                    electricalLayerVisibility: { ...s.ui.electricalLayerVisibility, [group]: false },
+                    selectedId: s.ui.selectedId && belongsToGroup(s.ui.selectedId) ? null : s.ui.selectedId,
+                    selectedFixtureIds: s.ui.selectedFixtureIds.filter((id) => !belongsToGroup(id)),
+                },
+            };
+        }),
+    toggleElectricalItemVisibility: (id) =>
+        set((s) => {
+            const hiding = !s.ui.hiddenElectricalIds.includes(id);
+            return {
+                ui: {
+                    ...s.ui,
+                    hiddenElectricalIds: hiding
+                        ? [...s.ui.hiddenElectricalIds, id]
+                        : s.ui.hiddenElectricalIds.filter((itemId) => itemId !== id),
+                    selectedId: hiding && s.ui.selectedId === id ? null : s.ui.selectedId,
+                    selectedFixtureIds: hiding
+                        ? s.ui.selectedFixtureIds.filter((itemId) => itemId !== id)
+                        : s.ui.selectedFixtureIds,
+                },
+            };
+        }),
     setSelectedId: (id) =>
         set((s) => {
             // Si seleccionamos otra cosa, limpiamos selectedFixtureIds si id no es fixture

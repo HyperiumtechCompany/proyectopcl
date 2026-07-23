@@ -45,166 +45,25 @@
  */
 
 import type {
-    Canopy,
     Conductor,
-    Door,
-    DxfEntity,
     ElectricalDevice,
     Fixture,
     JunctionBox,
     LightSwitch,
-    Room,
-    Wall,
-    Window as SceneWindow,
 } from '@/pages/dialux/hooks/types';
 import type { DialuxExportSnapshot } from '../domain/types';
-
-// ── Internal types ────────────────────────────────────────────────────────────
-
-type Pt = { x: number; y: number };
-type DxfLines = string[];
-
-// ── Primitive helpers ─────────────────────────────────────────────────────────
-
-/** Format a float for DXF output — no scientific notation, 6 decimal places. */
-function f(v: number): string {
-    return v.toFixed(6);
-}
-
-/** Transliterate common Spanish/Latin characters to plain ASCII for AC1009. */
-function ascii(s: string): string {
-    return s
-        .replace(/[áàäâã]/gi, (m) => (m === m.toUpperCase() ? 'A' : 'a'))
-        .replace(/[éèëê]/gi, (m) => (m === m.toUpperCase() ? 'E' : 'e'))
-        .replace(/[íìïî]/gi, (m) => (m === m.toUpperCase() ? 'I' : 'i'))
-        .replace(/[óòöôõ]/gi, (m) => (m === m.toUpperCase() ? 'O' : 'o'))
-        .replace(/[úùüû]/gi, (m) => (m === m.toUpperCase() ? 'U' : 'u'))
-        .replace(/[ñ]/g, 'n')
-        .replace(/[Ñ]/g, 'N')
-        .replace(/[^\x20-\x7E]/g, '?')
-        .slice(0, 255);
-}
-
-function centroid(pts: Pt[]): Pt {
-    return {
-        x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
-        y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
-    };
-}
-
-/**
- * Walk along a multi-vertex polyline and return the point at `offset` metres
- * from the start, plus the normalised direction vector at that segment.
- */
-function ptAlongPoly(vertices: Pt[], offset: number): { pt: Pt; dir: Pt } {
-    let rem = offset;
-    for (let i = 1; i < vertices.length; i++) {
-        const dx = vertices[i].x - vertices[i - 1].x;
-        const dy = vertices[i].y - vertices[i - 1].y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (rem <= len || i === vertices.length - 1) {
-            const t = len > 0 ? Math.min(rem / len, 1) : 0;
-            return {
-                pt: { x: vertices[i - 1].x + t * dx, y: vertices[i - 1].y + t * dy },
-                dir: { x: len > 0 ? dx / len : 1, y: len > 0 ? dy / len : 0 },
-            };
-        }
-        rem -= len;
-    }
-    const last = vertices[vertices.length - 1];
-    const prev = vertices[vertices.length - 2] ?? vertices[0];
-    const dx = last.x - prev.x;
-    const dy = last.y - prev.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    return {
-        pt: last,
-        dir: len > 0 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 },
-    };
-}
-
-// ── DXF group-code emitter ────────────────────────────────────────────────────
-
-/** Push one group-code / value pair. */
-function p(out: DxfLines, code: number, value: string | number): void {
-    out.push(`${code}\n${value}`);
-}
-
-// ── Entity emitters (AC1009-compatible primitives) ────────────────────────────
-
-function dxfLine(
-    out: DxfLines, layer: string,
-    x1: number, y1: number, x2: number, y2: number,
-): void {
-    p(out, 0, 'LINE');
-    p(out, 8, layer);
-    p(out, 10, f(x1)); p(out, 20, f(y1)); p(out, 30, '0.0');
-    p(out, 11, f(x2)); p(out, 21, f(y2)); p(out, 31, '0.0');
-}
-
-/** Emit a closed or open polygon as individual LINE segments. */
-function dxfPolyLines(out: DxfLines, layer: string, pts: Pt[], closed: boolean): void {
-    if (pts.length < 2) return;
-    for (let i = 0; i < pts.length - 1; i++) {
-        dxfLine(out, layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
-    }
-    if (closed && pts.length >= 3) {
-        const last = pts[pts.length - 1];
-        dxfLine(out, layer, last.x, last.y, pts[0].x, pts[0].y);
-    }
-}
-
-function dxfCircle(out: DxfLines, layer: string, cx: number, cy: number, r: number): void {
-    p(out, 0, 'CIRCLE');
-    p(out, 8, layer);
-    p(out, 10, f(cx)); p(out, 20, f(cy)); p(out, 30, '0.0');
-    p(out, 40, f(r));
-}
-
-/**
- * Filled dot (DXF SOLID entity — a plain CIRCLE can't be filled in AC1009)
- * with an explicit ACI `color`, overriding the layer's default color.
- * Drawn as a small diamond; at marker scale it reads as a solid dot.
- */
-function dxfFilledDot(
-    out: DxfLines, layer: string,
-    cx: number, cy: number, r: number, color: number,
-): void {
-    p(out, 0, 'SOLID');
-    p(out, 8, layer);
-    p(out, 62, color);
-    p(out, 10, f(cx));     p(out, 20, f(cy - r)); p(out, 30, '0.0');
-    p(out, 11, f(cx + r)); p(out, 21, f(cy));     p(out, 31, '0.0');
-    p(out, 12, f(cx - r)); p(out, 22, f(cy));     p(out, 32, '0.0');
-    p(out, 13, f(cx));     p(out, 23, f(cy + r)); p(out, 33, '0.0');
-}
-
-function dxfArc(
-    out: DxfLines, layer: string,
-    cx: number, cy: number, r: number,
-    startDeg: number, endDeg: number,
-): void {
-    p(out, 0, 'ARC');
-    p(out, 8, layer);
-    p(out, 10, f(cx)); p(out, 20, f(cy)); p(out, 30, '0.0');
-    p(out, 40, f(r));
-    p(out, 50, f(startDeg));
-    p(out, 51, f(endDeg));
-}
-
-/** Simple left-aligned TEXT (no alignment codes — maximum R12 compatibility). */
-function dxfText(
-    out: DxfLines, layer: string,
-    x: number, y: number,
-    height: number, content: string,
-): void {
-    const safe = ascii(content);
-    if (!safe) return;
-    p(out, 0, 'TEXT');
-    p(out, 8, layer);
-    p(out, 10, f(x)); p(out, 20, f(y)); p(out, 30, '0.0');
-    p(out, 40, f(height));
-    p(out, 1, safe);
-}
+import { ELECTRICAL_LEGEND_ITEMS, type ElectricalLegendItem } from '../../electrical/electricalLegend';
+import {
+    renderCanopies, renderDoors, renderImportedEntities, renderRooms, renderWalls, renderWindows,
+} from './emitters/architecture';
+import {
+    ascii, dxfArc, dxfCircle, dxfFilledDot, dxfLine, dxfPolyLines, dxfText, f, p,
+} from './emitters/primitives';
+import type { DxfLines, Pt } from './emitters/primitives';
+import {
+    TICK_HALF, TICK_SPACING, computeConductorCurve, conductorCp,
+} from './geometry/conductorCurve';
+import type { ConductorCurve } from './geometry/conductorCurve';
 
 // ── DXF section builders ──────────────────────────────────────────────────────
 
@@ -315,124 +174,6 @@ function insertBaseBlock(out: DxfLines): void {
 
 // ── Domain renderers ──────────────────────────────────────────────────────────
 
-function renderImportedEntities(out: DxfLines, entities: DxfEntity[]): void {
-    for (const ent of entities) {
-        switch (ent.type) {
-            case 'line':
-                dxfLine(out, 'DXF_BASE', ent.x1, ent.y1, ent.x2, ent.y2);
-                break;
-            case 'polyline':
-                dxfPolyLines(out, 'DXF_BASE',
-                    ent.vertices.map(([x, y]) => ({ x, y })), ent.closed);
-                break;
-            case 'polygon':
-                dxfPolyLines(out, 'DXF_BASE',
-                    ent.vertices.map(([x, y]) => ({ x, y })), ent.closed);
-                break;
-            case 'circle':
-                dxfCircle(out, 'DXF_BASE', ent.cx, ent.cy, ent.r);
-                break;
-            case 'arc':
-                dxfArc(out, 'DXF_BASE', ent.cx, ent.cy, ent.r,
-                    ent.start_angle, ent.end_angle);
-                break;
-            case 'text':
-                dxfText(out, 'DXF_BASE', ent.x, ent.y, Math.max(ent.height, 0.05), ent.text);
-                break;
-            case 'rectangle': {
-                const rad = (ent.rotation * Math.PI) / 180;
-                const cos = Math.cos(rad), sin = Math.sin(rad);
-                const { width: w, height: h } = ent;
-                const corners: Pt[] = ([
-                    [0, 0], [w, 0], [w, h], [0, h],
-                ] as [number, number][]).map(([lx, ly]) => ({
-                    x: ent.x + lx * cos - ly * sin,
-                    y: ent.y + lx * sin + ly * cos,
-                }));
-                dxfPolyLines(out, 'DXF_BASE', corners, true);
-                break;
-            }
-            case 'solid':
-                if (ent.vertices.length >= 3) {
-                    dxfPolyLines(out, 'DXF_BASE',
-                        ent.vertices.map(([x, y]) => ({ x, y })), true);
-                }
-                break;
-            case 'spline':
-                if (ent.control_points.length >= 2) {
-                    dxfPolyLines(out, 'DXF_BASE',
-                        ent.control_points.map(([x, y]) => ({ x, y })), ent.closed);
-                }
-                break;
-            default:
-                break; // hatch / ellipse / point – skip
-        }
-    }
-}
-
-function renderRooms(out: DxfLines, rooms: Room[]): void {
-    for (const room of rooms) {
-        if (room.vertices.length < 3) continue;
-        dxfPolyLines(out, 'RECINTOS', room.vertices, true);
-        const c = centroid(room.vertices);
-        dxfText(out, 'TEXTO_RECINTOS', c.x, c.y, 0.15, room.name || 'Recinto');
-    }
-}
-
-function renderWalls(out: DxfLines, walls: Wall[]): void {
-    for (const wall of walls) {
-        if (wall.vertices.length < 2) continue;
-        dxfPolyLines(out, 'PAREDES', wall.vertices, false);
-    }
-}
-
-function renderWindows(
-    out: DxfLines,
-    windows: SceneWindow[],
-    wallMap: Map<string, Wall>,
-): void {
-    for (const win of windows) {
-        const wall = wallMap.get(win.wallId);
-        if (!wall || wall.vertices.length < 2) continue;
-        const { pt: sp, dir } = ptAlongPoly(wall.vertices, win.offsetAlongWall);
-        const ep = { x: sp.x + dir.x * win.width, y: sp.y + dir.y * win.width };
-        // Opening line
-        dxfLine(out, 'VENTANAS', sp.x, sp.y, ep.x, ep.y);
-        // Perpendicular tick marks at each jamb
-        const t = 0.08;
-        dxfLine(out, 'VENTANAS',
-            sp.x - dir.y * t, sp.y + dir.x * t,
-            sp.x + dir.y * t, sp.y - dir.x * t);
-        dxfLine(out, 'VENTANAS',
-            ep.x - dir.y * t, ep.y + dir.x * t,
-            ep.x + dir.y * t, ep.y - dir.x * t);
-    }
-}
-
-function renderDoors(
-    out: DxfLines,
-    doors: Door[],
-    wallMap: Map<string, Wall>,
-): void {
-    for (const door of doors) {
-        const wall = wallMap.get(door.wallId);
-        if (!wall || wall.vertices.length < 2) continue;
-        const { pt: sp, dir } = ptAlongPoly(wall.vertices, door.offsetAlongWall);
-        const ep = { x: sp.x + dir.x * door.width, y: sp.y + dir.y * door.width };
-        // Door leaf
-        dxfLine(out, 'PUERTAS', sp.x, sp.y, ep.x, ep.y);
-        // 90° swing arc from the hinge end (sp)
-        const baseAngleDeg = Math.atan2(dir.y, dir.x) * (180 / Math.PI);
-        dxfArc(out, 'PUERTAS', sp.x, sp.y, door.width, baseAngleDeg, baseAngleDeg + 90);
-    }
-}
-
-function renderCanopies(out: DxfLines, canopies: Canopy[]): void {
-    for (const c of canopies) {
-        dxfLine(out, 'CANOPIES', c.x1, c.y1, c.x2, c.y2);
-    }
-}
-
 function renderFixtures(out: DxfLines, fixtures: Fixture[]): void {
     const R = 0.15;    // symbol radius (15 cm)
     const C = R * 0.65; // cross arm
@@ -460,84 +201,6 @@ function resolvePos(
 }
 
 // ── Conductor curve helpers (mirrors OverlayWires.tsx logic) ─────────────────
-
-/** Half-length (metres) of a wire-count tick mark perpendicular to the wire. */
-const TICK_HALF = 0.12;
-
-/** Spacing (metres) between adjacent tick marks along the wire. */
-const TICK_SPACING = 0.055;
-
-/**
- * Compute the quadratic Bezier control point for a conductor segment.
- * Matches the canvas formula: midpoint + perpendicular * length * 0.18 * curveDir.
- *   curveDir = +1 bows the segment into an arc (floor routes).
- *   curveDir = 0 collapses the control point onto the chord midpoint, so the
- *   segment is exactly straight (wall/ceiling routes — conduit runs the
- *   direct way, it doesn't sweep like floor-embedded conduit does).
- */
-function conductorCp(a: Pt, b: Pt, curveDir: number): Pt {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1e-6) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    return {
-        x: (a.x + b.x) / 2 + (-dy / len) * len * 0.18 * curveDir,
-        y: (a.y + b.y) / 2 + (dx / len) * len * 0.18 * curveDir,
-    };
-}
-
-/** Circumcircle of three points, or `null` when they are (near-)collinear. */
-function circumcircle(p1: Pt, p2: Pt, p3: Pt): { cx: number; cy: number; r: number } | null {
-    const d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
-    if (Math.abs(d) < 1e-9) return null;
-    const p1sq = p1.x * p1.x + p1.y * p1.y;
-    const p2sq = p2.x * p2.x + p2.y * p2.y;
-    const p3sq = p3.x * p3.x + p3.y * p3.y;
-    const cx = (p1sq * (p2.y - p3.y) + p2sq * (p3.y - p1.y) + p3sq * (p1.y - p2.y)) / d;
-    const cy = (p1sq * (p3.x - p2.x) + p2sq * (p1.x - p3.x) + p3sq * (p2.x - p1.x)) / d;
-    return { cx, cy, r: Math.hypot(p1.x - cx, p1.y - cy) };
-}
-
-/** Angle (degrees, 0-360) from `center` to `pt`. */
-function angleDeg(center: { cx: number; cy: number }, pt: Pt): number {
-    const deg = (Math.atan2(pt.y - center.cy, pt.x - center.cx) * 180) / Math.PI;
-    return deg < 0 ? deg + 360 : deg;
-}
-
-/** True if sweeping counter-clockwise from `start` to `end` (degrees) passes through `mid`. */
-function arcSweepContainsAngle(start: number, end: number, mid: number): boolean {
-    const sweep = (end - start + 360) % 360;
-    const rel = (mid - start + 360) % 360;
-    return rel <= sweep + 1e-6;
-}
-
-type ConductorCurve =
-    | { kind: 'line' }
-    | { kind: 'arc'; cx: number; cy: number; r: number; startDeg: number; endDeg: number };
-
-/**
- * Compute the true circular arc through `a`, the curve midpoint (derived from
- * the same control point formula the canvas uses) and `b`. Falls back to
- * `{ kind: 'line' }` for degenerate (near-zero-length) segments.
- */
-function computeConductorCurve(a: Pt, b: Pt, curveDir: number): ConductorCurve {
-    const cp = conductorCp(a, b, curveDir);
-    const mid: Pt = {
-        x: 0.25 * a.x + 0.5 * cp.x + 0.25 * b.x,
-        y: 0.25 * a.y + 0.5 * cp.y + 0.25 * b.y,
-    };
-    const circ = circumcircle(a, mid, b);
-    if (!circ) return { kind: 'line' };
-
-    const angA = angleDeg(circ, a);
-    const angB = angleDeg(circ, b);
-    const angMid = angleDeg(circ, mid);
-    const [startDeg, endDeg] = arcSweepContainsAngle(angA, angB, angMid)
-        ? [angA, angB]
-        : [angB, angA];
-
-    return { kind: 'arc', cx: circ.cx, cy: circ.cy, r: circ.r, startDeg, endDeg };
-}
 
 /** Emit one conductor curve as a single ARC entity, or LINE when it's straight. */
 function emitConductorCurve(
@@ -646,10 +309,15 @@ function renderConductors(
         if (nodes.length < 2) continue;
 
         const isFloor = c.routeType === 'floor';
-        // Floor-embedded conduit sweeps in a gentle arc; wall/ceiling conduit
-        // runs the direct, straight way (curveDir=0 collapses the curve to a
-        // straight chord — see computeConductorCurve).
-        const curveDir = isFloor ? 1 : 0;
+        // Both route types sweep in a gentle arc, curving in opposite
+        // directions. The sign is INVERTED relative to OverlayWires.tsx's
+        // curveDir (floor=+1, wall/ceiling=-1): the canvas computes its
+        // control point in screen space (Y axis pointing down), while this
+        // DXF is in world space (Y axis pointing up) — mirroring the Y axis
+        // reverses which side the curve bows to. Confirmed by comparing the
+        // same level open in DIAlux (bows left) against AutoCAD (was bowing
+        // right before this fix).
+        const curveDir = isFloor ? -1 : 1;
         const layer = 'CABLEADO';
         const midSegIdx = Math.floor((nodes.length - 2) / 2);
 
@@ -687,7 +355,7 @@ function renderWallOutlet(out: DxfLines, dev: ElectricalDevice, waterproof = fal
     const r = 0.075;
     dxfCircle(out, 'DISP_ELECTRICOS', dev.x, dev.y, r);
     dxfLine(out, 'DISP_ELECTRICOS', dev.x - r, dev.y, dev.x + r, dev.y);
-    dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y - 0.025, 0.06, 'T');
+    dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y - 0.025, 0.06, dev.label || 'T');
 
     if (waterproof) {
         dxfText(out, 'TEXTO_ELEC', dev.x + r + 0.025, dev.y + 0.055, 0.04, 'AP');
@@ -713,7 +381,7 @@ function renderRackOutlet(out: DxfLines, dev: ElectricalDevice): void {
         { x: dev.x + hw, y: dev.y + hh },
         { x: dev.x - hw, y: dev.y + hh },
     ], true);
-    dxfText(out, 'TEXTO_ELEC', dev.x - 0.045, dev.y - 0.02, 0.055, 'TR');
+    dxfText(out, 'TEXTO_ELEC', dev.x - 0.045, dev.y - 0.02, 0.055, dev.label || 'TR');
 }
 
 function renderWaterHeater(out: DxfLines, dev: ElectricalDevice): void {
@@ -735,6 +403,16 @@ function renderElectricalDevices(out: DxfLines, devices: ElectricalDevice[]): vo
     for (const dev of devices) {
         if (dev.type === 'outlet_floor') {
             renderWallOutlet(out, dev);
+            continue;
+        }
+
+        if (dev.type === 'outlet_initial' || dev.type === 'outlet_high_180') {
+            renderWallOutlet(out, dev);
+            continue;
+        }
+
+        if (dev.type === 'outlet_floor_box') {
+            renderRackOutlet(out, { ...dev, label: 'TP' });
             continue;
         }
 
@@ -775,6 +453,67 @@ function renderJunctionBoxes(out: DxfLines, jboxes: JunctionBox[]): void {
     }
 }
 
+export function usedElectricalLegendItems(
+    fixtures: Fixture[],
+    switches: LightSwitch[],
+    devices: ElectricalDevice[],
+    conductors: Conductor[],
+): ElectricalLegendItem[] {
+    const codes = new Set<string>();
+    if (fixtures.length > 0) codes.add('⊗');
+    if (fixtures.some((fixture) => fixture.emergencyType && fixture.emergencyType !== 'none')) codes.add('E');
+    const switchCodes: Record<LightSwitch['type'], string> = { single: 'S', double: '2S', triple: '2S', 'two-way': 'Sc' };
+    switches.forEach((item) => codes.add(switchCodes[item.type]));
+    const deviceCodes: Partial<Record<ElectricalDevice['type'], string>> = {
+        outlet_floor: 'T', outlet_waterproof: 'T', outlet_initial: 'TI',
+        outlet_high_180: 'TA', outlet_ceiling: 'TC', outlet_rack: 'TR',
+        outlet_floor_box: 'TP', main_panel: 'TG', sub_panel: 'TD',
+    };
+    devices.forEach((item) => {
+        const code = deviceCodes[item.type];
+        if (code) codes.add(code);
+    });
+    if (conductors.some((item) => item.routeType === 'wall_ceiling')) codes.add('—');
+    if (conductors.some((item) => item.routeType === 'floor')) codes.add('⌒');
+
+    const base = ELECTRICAL_LEGEND_ITEMS.filter((item) => codes.has(item.code));
+    const cableRows: ElectricalLegendItem[] = [...new Map(conductors.map((item) => {
+        const awg = item.sectionMm2 === 2.5 ? 'AWG 14' : item.sectionMm2 === 4 ? 'AWG 12' : '';
+        const key = `${item.conductorType}|${item.sectionMm2}`;
+        return [key, {
+            code: 'C',
+            label: `${item.conductorType} · ${item.sectionMm2} mm²${awg ? ` (${awg})` : ''}`,
+            group: 'Cableado' as const,
+            color: '#ef4444',
+        }];
+    })).values()];
+    return [...base, ...cableRows];
+}
+
+function renderElectricalLegend(out: DxfLines, x: number, topY: number, items: ElectricalLegendItem[]): void {
+    if (items.length === 0) return;
+    const width = 7.2;
+    const rowHeight = 0.42;
+    const titleHeight = 0.58;
+    const height = titleHeight + items.length * rowHeight + 0.18;
+    const bottomY = topY - height;
+
+    dxfPolyLines(out, 'DISP_ELECTRICOS', [
+        { x, y: topY },
+        { x: x + width, y: topY },
+        { x: x + width, y: bottomY },
+        { x, y: bottomY },
+    ], true);
+    dxfLine(out, 'DISP_ELECTRICOS', x, topY - titleHeight, x + width, topY - titleHeight);
+    dxfText(out, 'TEXTO_ELEC', x + 0.18, topY - 0.38, 0.22, 'LEYENDA ELECTRICA');
+
+    items.forEach((item, index) => {
+        const y = topY - titleHeight - (index + 0.7) * rowHeight;
+        dxfText(out, 'TEXTO_ELEC', x + 0.2, y, 0.16, item.cadCode ?? item.code);
+        dxfText(out, 'TEXTO_ELEC', x + 0.95, y, 0.14, item.label);
+    });
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -811,7 +550,9 @@ export function buildDialuxDxfExport(snapshot: DialuxExportSnapshot): string {
     const out: DxfLines = [];
 
     // ── Four mandatory AC1009 sections ────────────────────────────────────────
-    buildHeader(out, minX - PAD, minY - PAD, maxX + PAD, maxY + PAD);
+    const legendX = maxX + 1;
+    const legendTopY = maxY;
+    buildHeader(out, minX - PAD, Math.min(minY - PAD, legendTopY - 8), legendX + 8, maxY + PAD);
     buildTables(out);
 
     // Background plan (imported CAD + architectural elements) → one block.
@@ -836,6 +577,12 @@ export function buildDialuxDxfExport(snapshot: DialuxExportSnapshot): string {
     renderLightSwitches(out, lightSwitches);
     renderElectricalDevices(out, electricalDevices);
     renderJunctionBoxes(out, junctionBoxes);
+    renderElectricalLegend(
+        out,
+        legendX,
+        legendTopY,
+        usedElectricalLegendItems(fixtures, lightSwitches, electricalDevices, conductors),
+    );
 
     p(out, 0, 'ENDSEC');
     p(out, 0, 'EOF');

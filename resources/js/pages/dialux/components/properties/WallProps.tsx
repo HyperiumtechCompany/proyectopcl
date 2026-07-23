@@ -1,24 +1,41 @@
-import { Grid, Minus, Zap } from 'lucide-react';
+import { Grid, Layers, Minus, PlugZap, Trash2, Zap } from 'lucide-react';
 import React from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     deriveAmbientSpaces,
     pointInPolygon,
 } from '@/pages/dialux/hooks/ambientSpaces';
+import type { DerivedAmbientSpace } from '@/pages/dialux/hooks/ambientSpaces';
+import { polygonBBox, suggestFixtureGridSize } from '@/pages/dialux/hooks/fixtureGrid';
 import {
     calculateExactQuantity,
     calculateLumensRequired,
+    calculatePolygonPerimeter,
     calculateRoundedQuantity,
 } from '@/pages/dialux/hooks/lightingCalculations';
+import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
+import { distributeOutletsOnPerimeter, OUTLET_RULES, requiredOutletCount, type OutletUse } from '@/pages/dialux/hooks/outletPlacement';
 import {
     NORMATIVE_LABELS,
+    buildRoomLightingInputs,
+    calculateRoomIndexForRoom,
     getActivityOptions,
     getCategoryOptions,
+    getRoomUsefulPlaneHeight,
     getSectionOptions,
 } from '@/pages/dialux/hooks/roomLighting';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { ELECTRICAL_DEVICE_DEFAULTS, type ElectricalDeviceType } from '@/pages/dialux/hooks/types';
 import type { Room, Scene, Wall } from '@/pages/dialux/hooks/useEditorStore';
 import { getWallPresetFromWall } from '@/pages/dialux/hooks/wallNorms';
+import { CatalogPanel } from '../CatalogPanel';
 import {
     EditField,
     PropField,
@@ -27,13 +44,36 @@ import {
     TextField,
 } from './PropertyFields';
 
+// Temporalmente solo se ofrece la grilla de luminarias de techo.
+const SHOW_WALL_FIXTURE_GRID = false;
+
 const WallInteriorLightingSection: React.FC<{
     wall: Wall;
     scene: Scene | null;
+    ambientMatch: DerivedAmbientSpace | null;
     onUpdate: (patch: Partial<Omit<Wall, 'id'>>) => void;
-}> = ({ wall, scene, onUpdate }) => {
+}> = ({ wall, scene, ambientMatch, onUpdate }) => {
     const store = useEditorStore();
     const standard = store.defaultRoomNormativeStandard as NormativeStandard;
+
+    // Estado local: independiente del ajuste global de la herramienta
+    // "fixture-grid" del canvas y de la grilla de techo del ambiente (que
+    // vive en el mismo panel) — antes las tres compartían store.ui.fixture-
+    // GridRows/Cols, así que cambiar la grilla de techo también cambiaba,
+    // sin avisar, los valores mostrados acá para la grilla de la pared.
+    const [wallGridRows, setWallGridRows] = React.useState(store.ui.fixtureGridRows);
+    const [wallGridCols, setWallGridCols] = React.useState(store.ui.fixtureGridCols);
+
+    // Sin esto, este panel podía quedarse mostrando la transcripción estática
+    // de normativeData.ts en vez del catálogo sembrado en BD (fuente única
+    // de verdad) — el usuario veía categorías/aplicaciones que no coinciden
+    // con la BD, y el lux aplicado a la pared salía del dato desactualizado.
+    const [, setNormDataVersion] = React.useState(0);
+    React.useEffect(() => {
+        void ensureStandardDataLoaded(standard).then(() =>
+            setNormDataVersion((v) => v + 1),
+        );
+    }, [standard]);
 
     const verts = wall.vertices;
     let wallLen = 0;
@@ -46,29 +86,30 @@ const WallInteriorLightingSection: React.FC<{
     const sects = getSectionOptions(standard, wall.normativeCategory);
     const activities = getActivityOptions(standard, wall.normativeCategory, wall.normativeSection);
 
+    const ambientRoom = ambientMatch?.room ?? null;
+
     const lux = wall.illuminanceLux ?? 300;
     const fixLumens = wall.fixtureLumens ?? 4000;
-    const lumensReq = calculateLumensRequired(wallArea, lux);
+    // Mismo factor de utilización que el cálculo de techo del ambiente (índice
+    // del local + reflectancias), en vez de asumir ~99% de aprovechamiento:
+    // sin esto, "Lm requeridos (pared)" salía muy por debajo del cálculo real
+    // del ambiente para la misma normativa, dando una falsa sensación de que
+    // bastan menos luminarias de las que realmente exige la iluminancia objetivo.
+    const roomIndex = ambientRoom
+        ? calculateRoomIndexForRoom(ambientRoom, getRoomUsefulPlaneHeight(ambientRoom))
+        : undefined;
+    const lumensReq = calculateLumensRequired(wallArea, lux, roomIndex
+        ? {
+              roomIndex,
+              reflectances: {
+                  ceiling: ambientRoom!.ceilingReflectance ?? 0.7,
+                  wall: ambientRoom!.wallReflectance ?? 0.5,
+                  floor: ambientRoom!.floorReflectance ?? 0.2,
+              },
+          }
+        : undefined);
     const exactQty = calculateExactQuantity(lumensReq, fixLumens);
     const roundedQty = calculateRoundedQuantity(exactQty);
-
-    const mid = React.useMemo(() =>
-        verts.length >= 2
-            ? { x: (verts[0].x + verts[verts.length - 1].x) / 2, y: (verts[0].y + verts[verts.length - 1].y) / 2 }
-            : verts[0],
-        [verts]);
-
-    const parentAmbient = React.useMemo(() =>
-        scene?.rooms.find(r =>
-            (r.roomType === 'ambient' || r.roomType === 'corridor') &&
-            pointInPolygon(mid, r.vertices),
-        ) ?? null,
-        [scene, mid]);
-
-    const fixturesInArea = React.useMemo(() => {
-        if (!scene || !parentAmbient) return [];
-        return scene.fixtures.filter(f => pointInPolygon({ x: f.x, y: f.y }, parentAmbient.vertices));
-    }, [scene, parentAmbient]);
 
     const wallPolygon = React.useMemo(() => {
         if (verts.length < 2) return null;
@@ -87,6 +128,26 @@ const WallInteriorLightingSection: React.FC<{
         ];
     }, [verts, wall.thickness]);
 
+    // Luminarias adosadas específicamente a esta pared (apliques), no todas
+    // las del ambiente: antes se filtraba contra el polígono completo del
+    // ambiente (lo mismo que "Luminarias en el ambiente"), así que cualquier
+    // luminaria de techo terminaba contando también como "en pared".
+    const fixturesInArea = React.useMemo(() => {
+        if (!scene || !wallPolygon) return [];
+        return scene.fixtures.filter(f => pointInPolygon({ x: f.x, y: f.y }, wallPolygon));
+    }, [scene, wallPolygon]);
+
+    const wallGridBBox = wallPolygon ? polygonBBox(wallPolygon) : null;
+    const wallGridAspectRatio =
+        wallGridBBox && wallGridBBox.height > 0 ? wallGridBBox.width / wallGridBBox.height : 1;
+    const suggestedWallGrid = suggestFixtureGridSize(
+        wallGridRows,
+        wallGridCols,
+        roundedQty,
+        wallGridAspectRatio,
+    );
+    const wallGridBelowNorm = wallGridRows * wallGridCols < roundedQty;
+
     const handleGenerate = () => {
         const fixtureTemplate = {
             ...store.ui.fixtureTemplate,
@@ -95,12 +156,18 @@ const WallInteriorLightingSection: React.FC<{
             ...(wall.fixtureLumens ? { lumens: wall.fixtureLumens } : {}),
         };
         // Generate the grid over the wall's area, and assign it to the parent room if possible.
-        // If the wall is within an ambient, we assign it to that ambient's source room.
-        const parentRoomId = parentAmbient?.id ?? scene?.rooms.find(r => pointInPolygon(mid, r.vertices))?.id ?? null;
+        const parentRoomId = ambientMatch?.sourceRoom.id ?? null;
+
+        // Reemplaza TODAS las luminarias que ya están físicamente adosadas a
+        // esta pared (no solo las que el usuario haya seleccionado a mano)
+        // para que regenerar la grilla nunca deje duplicados superpuestos.
+        store.beginHistoryGesture();
+        fixturesInArea.forEach((f) => store.removeObject(f.id));
 
         const newIds = wallPolygon
-            ? store.addFixtureGrid({ roomId: parentRoomId, rows: store.ui.fixtureGridRows, columns: store.ui.fixtureGridCols, fixtureTemplate, ambientVertices: wallPolygon })
+            ? store.addFixtureGrid({ roomId: parentRoomId, rows: wallGridRows, columns: wallGridCols, fixtureTemplate, ambientVertices: wallPolygon })
             : [];
+        store.endHistoryGesture();
         if (newIds.length > 0) {
             store.setSelectedId(null);
             store.setSelectedFixtureIds(newIds);
@@ -111,11 +178,14 @@ const WallInteriorLightingSection: React.FC<{
         <div className="mt-3 space-y-2.5 border-t border-gray-700/50 pt-3">
             <div className="flex items-center gap-2">
                 <Zap size={12} className="text-yellow-400" />
-                <p className="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">Iluminación</p>
+                <p className="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">Normativa del ambiente</p>
             </div>
+            <p className="text-[9px] leading-snug text-gray-600">
+                Parámetros y verificación normativa del ambiente seleccionado.
+            </p>
 
             <PropField label="Estándar" value={NORMATIVE_LABELS[standard]} mono={false} />
-            <PropField label="Área pared" value={`${wallArea.toFixed(2)} m²`} />
+            <PropField label="Superficie de la pared" value={`${wallArea.toFixed(2)} m²`} />
 
             <SelectField
                 label="Sección / Área"
@@ -147,7 +217,7 @@ const WallInteriorLightingSection: React.FC<{
                 onChange={(val) => onUpdate({ illuminanceLux: val })} />
 
             <div className="flex items-center justify-between">
-                <PropField label="Luminarias" value={`${fixturesInArea.length}`} />
+                <PropField label="Luminarias en pared" value={`${fixturesInArea.length}`} />
                 {fixturesInArea.length > 0 && (
                     <button type="button"
                         onClick={() => { store.setSelectedId(null); store.setSelectedFixtureIds(fixturesInArea.map(f => f.id)); }}
@@ -156,9 +226,9 @@ const WallInteriorLightingSection: React.FC<{
                     </button>
                 )}
             </div>
-            <PropField label="Lm requeridos" value={`${lumensReq.toFixed(0)} lm`} />
-            <PropField label="Cant. óptima" value={exactQty.toFixed(2)} />
-            <PropField label="Cant. simetría" value={`${roundedQty}`} />
+            <PropField label="Lm requeridos (pared)" value={`${lumensReq.toFixed(0)} lm`} />
+            <PropField label="Cant. óptima (pared)" value={exactQty.toFixed(2)} />
+            <PropField label="Cant. simetría (pared)" value={`${roundedQty}`} />
 
             <EditField label="Lm/foco" value={fixLumens} min={100} max={50000} step={100}
                 onChange={(val) => onUpdate({ fixtureLumens: val })} />
@@ -184,26 +254,44 @@ const WallInteriorLightingSection: React.FC<{
                 ]}
                 onChange={(val) => onUpdate({ fixtureShape: val as Wall['fixtureShape'] })} />
 
-            <div className="mt-3 border-t border-gray-700/50 pt-2">
+            {SHOW_WALL_FIXTURE_GRID && <div className="mt-3 border-t border-gray-700/50 pt-2">
                 <div className="flex items-center gap-2 text-emerald-500 mb-2">
                     <Grid size={12} />
                     <p className="text-[10px] font-semibold uppercase">Grilla sobre Pared</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                    <EditField label="Filas" value={store.ui.fixtureGridRows} min={1} max={20} step={1}
-                        onChange={(val) => store.setFixtureGridRows(val)} />
-                    <EditField label="Columnas" value={store.ui.fixtureGridCols} min={1} max={20} step={1}
-                        onChange={(val) => store.setFixtureGridCols(val)} />
+                    <EditField label="Filas" value={wallGridRows} min={1} max={20} step={1}
+                        onChange={setWallGridRows} />
+                    <EditField label="Columnas" value={wallGridCols} min={1} max={20} step={1}
+                        onChange={setWallGridCols} />
                 </div>
+                {wallGridBelowNorm && (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
+                        <span className="text-[9px] leading-snug text-amber-400">
+                            {wallGridRows}×{wallGridCols} = {wallGridRows * wallGridCols}, faltan
+                            para llegar a {roundedQty} (normativa)
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setWallGridRows(suggestedWallGrid.rows);
+                                setWallGridCols(suggestedWallGrid.columns);
+                            }}
+                            className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
+                        >
+                            Usar {suggestedWallGrid.rows}×{suggestedWallGrid.columns}
+                        </button>
+                    </div>
+                )}
                 <button type="button" onClick={handleGenerate}
                     className="mt-2 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors">
                     <Grid size={11} />
-                    Generar en Pared {store.ui.fixtureGridRows}×{store.ui.fixtureGridCols}
+                    Generar en Pared {wallGridRows}×{wallGridCols}
                 </button>
                 <p className="text-[9px] text-gray-500 mt-1 leading-snug">
                     Genera una grilla de focos pegada a la superficie de esta pared (ej. apliques).
                 </p>
-            </div>
+            </div>}
         </div>
     );
 };
@@ -223,6 +311,97 @@ export const WallProps: React.FC<{
                 deriveAmbientSpaces(room, scene.walls, scene.fixtures),
             )
             .find((ambient) => ambient.wallId === wall.id) ?? null;
+
+    // Estado local para la grilla de techo — independiente de la grilla de
+    // pared (más abajo en el mismo panel) y de la herramienta "fixture-grid"
+    // del canvas, que antes compartían store.ui.fixtureGridRows/Cols.
+    const [ceilingGridRows, setCeilingGridRows] = React.useState(store.ui.fixtureGridRows);
+    const [ceilingGridCols, setCeilingGridCols] = React.useState(store.ui.fixtureGridCols);
+    const [showCeilingFixturePicker, setShowCeilingFixturePicker] = React.useState(false);
+    // Ver comentario equivalente en RoomProps.tsx: elegir un modelo aquí solo
+    // debe leer sus lúmenes para el cálculo de la grilla, no dejar la
+    // herramienta activa en "fixture" (efecto secundario de
+    // CatalogPanel.setFixture pensado para el panel Luz de la barra).
+    const toolBeforeCeilingPickerRef = React.useRef(store.ui.activeTool);
+
+    // Sugerencia de grilla de techo: cuántas filas/columnas hacen falta para
+    // llegar a la cantidad mínima que exige la normativa del ambiente. Se
+    // recalcula con los lúmenes del tipo de foco elegido más abajo (no con
+    // los de las luminarias ya colocadas, ni con un valor fijo) para que la
+    // sugerencia refleje la luminaria que realmente se va a instalar.
+    const ceilingInputs = ambientMatch
+        ? buildRoomLightingInputs(ambientMatch.room, ambientMatch.fixtures)
+        : null;
+    const ceilingFixture = store.ui.fixtureTemplate;
+    const ceilingFixtureLumens = ceilingFixture.lumens ?? ceilingInputs?.fixtureLumens ?? 4000;
+    const ceilingRoundedQuantity = ceilingInputs
+        ? calculateRoundedQuantity(
+              calculateExactQuantity(ceilingInputs.lumensRequired, ceilingFixtureLumens),
+          )
+        : 0;
+    const ceilingBBox = ambientMatch ? polygonBBox(ambientMatch.room.vertices) : null;
+    const ceilingAspectRatio =
+        ceilingBBox && ceilingBBox.height > 0 ? ceilingBBox.width / ceilingBBox.height : 1;
+    const suggestedCeilingGrid = ceilingInputs
+        ? suggestFixtureGridSize(
+              ceilingGridRows,
+              ceilingGridCols,
+              ceilingRoundedQuantity,
+              ceilingAspectRatio,
+          )
+        : null;
+    const ceilingGridBelowNorm =
+        !!ceilingInputs && ceilingGridRows * ceilingGridCols < ceilingRoundedQuantity;
+    const outletRoom = ambientMatch?.sourceRoom ?? null;
+    const outletUse = outletRoom?.outletUse ?? 'aula';
+    const outletRule = OUTLET_RULES[outletUse];
+    const outletDeviceType = outletRoom?.outletDeviceType ??
+        (outletUse === 'exterior' ? 'outlet_waterproof' : 'outlet_floor');
+    const requiredOutlets = ambientMatch
+        ? requiredOutletCount(ambientMatch.room.vertices, outletUse)
+        : 0;
+    const generatedOutlets = (scene?.electricalDevices ?? []).filter(
+        (device) => device.generatedBy === 'outlet-rule' && device.roomId === outletRoom?.id,
+    );
+    const regenerateOutlets = () => {
+        if (!ambientMatch || !outletRoom) return;
+        const defaults = ELECTRICAL_DEVICE_DEFAULTS[outletDeviceType];
+        const devices = distributeOutletsOnPerimeter(
+            ambientMatch.room.vertices,
+            requiredOutlets,
+            outletRoom.outletStartOffset,
+        ).map((point, index) => ({
+                type: outletDeviceType,
+                x: point.x,
+                y: point.y,
+                label: `${defaults.label}-${String(index + 1).padStart(2, '0')}`,
+                mountingHeight: outletDeviceType === 'outlet_ceiling'
+                    ? ambientMatch.room.height
+                    : defaults.mountingHeight,
+                roomId: outletRoom.id,
+                generatedBy: 'outlet-rule',
+                connectedDeviceIds: [],
+                properties: { ...defaults.properties },
+            }));
+        store.replaceGeneratedOutletsForRoom(outletRoom.id, devices);
+    };
+
+    // Una pared interior y el recinto que delimita son, físicamente, la
+    // misma altura — dejar el alto editable por separado permitía que se
+    // desincronizaran (afectando el cálculo de lúmenes, que usa la altura
+    // del recinto para el índice del local). Los muros 'cerco'/'exterior'
+    // sin recinto asociado sí pueden tener su propia altura (cercos, muros
+    // libres), así que no se tocan.
+    const inheritedHeight =
+        wall.wallType === 'interior' && ambientMatch
+            ? ambientMatch.sourceRoom.height
+            : null;
+    React.useEffect(() => {
+        if (inheritedHeight !== null && wall.height !== inheritedHeight) {
+            onUpdate({ height: inheritedHeight });
+        }
+    }, [inheritedHeight, wall.height, onUpdate]);
+
     let len = 0;
 
     if (verts.length > 1) {
@@ -271,6 +450,40 @@ export const WallProps: React.FC<{
             icon={<Minus size={12} className="text-slate-400" />}
             label={ambientMatch ? 'Ambiente • Pared' : 'Pared'}
         >
+            {/* Orden solicitado: área (del ambiente que delimita esta pared,
+                si aplica) → longitud → alto, para que lo primero que se vea
+                sea el dato que más importa al revisar el ambiente. */}
+            {ambientMatch && (
+                <PropField
+                    label="Área del ambiente (piso)"
+                    value={`${ambientMatch.area.toFixed(4)} m²`}
+                />
+            )}
+            <PropField label="Longitud" value={`${len.toFixed(4)} m`} />
+            {inheritedHeight !== null ? (
+                <PropField
+                    label="Alto (m) — heredado del recinto"
+                    value={`${inheritedHeight.toFixed(2)} m`}
+                    mono={false}
+                />
+            ) : (
+                <EditField
+                    label="Alto (m)"
+                    value={wall.height}
+                    min={1}
+                    max={20}
+                    step={0.1}
+                    onChange={(value) => onUpdate({ height: value })}
+                />
+            )}
+            <EditField
+                label="Espesor (m)"
+                value={wall.thickness}
+                min={0.05}
+                max={1}
+                step={0.05}
+                onChange={(value) => onUpdate({ thickness: value })}
+            />
             {/* Tipo de muro: solo lectura (se elige en el Toolbar) */}
             <PropField
                 label="Tipo"
@@ -282,27 +495,6 @@ export const WallProps: React.FC<{
                           : 'Interior'
                 }
                 mono={false}
-            />
-            <PropField label="Longitud" value={`${len.toFixed(4)} m`} />
-            <PropField
-                label="Superficie"
-                value={`${(len * wall.height).toFixed(4)} m²`}
-            />
-            <EditField
-                label="Espesor (m)"
-                value={wall.thickness}
-                min={0.05}
-                max={1}
-                step={0.05}
-                onChange={(value) => onUpdate({ thickness: value })}
-            />
-            <EditField
-                label="Alto (m)"
-                value={wall.height}
-                min={1}
-                max={20}
-                step={0.1}
-                onChange={(value) => onUpdate({ height: value })}
             />
             {wall.wallType === 'cerco' && (
                 <EditField
@@ -344,13 +536,9 @@ export const WallProps: React.FC<{
                             updateAmbientConfig({ name: value })
                         }
                     />
-                    <PropField
-                        label="Área ambiente"
-                        value={`${ambientMatch.area.toFixed(4)} m²`}
-                    />
                     <div className="flex items-center justify-between">
                         <PropField
-                            label="Luminarias"
+                            label="Luminarias en el ambiente"
                             value={`${ambientMatch.fixtures.length}`}
                         />
                         {ambientMatch.fixtures.length > 0 && (
@@ -370,41 +558,110 @@ export const WallProps: React.FC<{
                         <div className="flex items-center gap-2 text-emerald-500">
                             <Grid size={12} />
                             <p className="text-[10px] font-semibold uppercase">
-                                Grilla de focos
+                                Grilla de focos (techo)
                             </p>
-                        </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                            <EditField
-                                label="Filas"
-                                value={store.ui.fixtureGridRows}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={(val) =>
-                                    store.setFixtureGridRows(val)
-                                }
-                            />
-                            <EditField
-                                label="Columnas"
-                                value={store.ui.fixtureGridCols}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={(val) =>
-                                    store.setFixtureGridCols(val)
-                                }
-                            />
                         </div>
                         <button
                             type="button"
                             onClick={() => {
+                                toolBeforeCeilingPickerRef.current = store.ui.activeTool;
+                                setShowCeilingFixturePicker(true);
+                            }}
+                            className="mt-2 flex w-full items-center gap-2 rounded border border-purple-700/30 bg-purple-950/30 px-2 py-1.5 text-left transition-colors hover:bg-purple-900/30"
+                            title="Elegir el tipo de foco a instalar en esta grilla"
+                        >
+                            <Layers size={12} className="shrink-0 text-purple-300" />
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[10px] text-purple-200">
+                                    {ceilingFixture.name ?? 'Foco genérico'}
+                                </span>
+                                <span className="block text-[9px] leading-none text-gray-500">
+                                    {ceilingFixtureLumens.toLocaleString()} lm
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-[9px] text-purple-400">Cambiar</span>
+                        </button>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            <EditField
+                                label="Filas"
+                                value={ceilingGridRows}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={setCeilingGridRows}
+                            />
+                            <EditField
+                                label="Columnas"
+                                value={ceilingGridCols}
+                                min={1}
+                                max={10}
+                                step={1}
+                                onChange={setCeilingGridCols}
+                            />
+                        </div>
+                        {ceilingGridBelowNorm && suggestedCeilingGrid && (
+                            <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
+                                <span className="text-[9px] leading-snug text-amber-400">
+                                    {ceilingGridRows}×{ceilingGridCols} ={' '}
+                                    {ceilingGridRows * ceilingGridCols}, faltan
+                                    para llegar a {ceilingRoundedQuantity} con "
+                                    {ceilingFixture.name ?? 'este foco'}" ({ceilingFixtureLumens.toLocaleString()} lm)
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCeilingGridRows(suggestedCeilingGrid.rows);
+                                        setCeilingGridCols(suggestedCeilingGrid.columns);
+                                    }}
+                                    className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
+                                >
+                                    Usar {suggestedCeilingGrid.rows}×{suggestedCeilingGrid.columns}
+                                </button>
+                            </div>
+                        )}
+                        {showCeilingFixturePicker && (
+                            <Dialog
+                                open={showCeilingFixturePicker}
+                                onOpenChange={setShowCeilingFixturePicker}
+                            >
+                                <DialogContent className="max-w-2xl">
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            Elegir tipo de foco para la grilla
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            Se usará para calcular cuántas luminarias exige la normativa y para generar la grilla.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <CatalogPanel
+                                        filterCategory="luminaires"
+                                        variant="compact-grid"
+                                        fixtureItemsPerPage={15}
+                                        onSelect={() => {
+                                            store.setTool(toolBeforeCeilingPickerRef.current);
+                                            setShowCeilingFixturePicker(false);
+                                        }}
+                                    />
+                                </DialogContent>
+                            </Dialog>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // Reemplaza TODAS las luminarias que ya están físicamente
+                                // en este ambiente (no solo las seleccionadas a mano) para
+                                // que regenerar la grilla nunca deje duplicados superpuestos.
+                                store.beginHistoryGesture();
+                                ambientMatch.fixtures.forEach((f) => store.removeObject(f.id));
+
                                 const newIds = store.addFixtureGrid({
                                     roomId: ambientMatch.sourceRoom.id,
-                                    rows: store.ui.fixtureGridRows,
-                                    columns: store.ui.fixtureGridCols,
+                                    rows: ceilingGridRows,
+                                    columns: ceilingGridCols,
                                     fixtureTemplate: store.ui.fixtureTemplate,
                                     ambientVertices: ambientMatch.room.vertices,
                                 });
+                                store.endHistoryGesture();
                                 if (newIds.length > 0) {
                                     store.setSelectedId(null);
                                     store.setSelectedFixtureIds(newIds);
@@ -414,10 +671,92 @@ export const WallProps: React.FC<{
                             }}
                             className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
                         >
-                            Generar en Techo de Ambiente {store.ui.fixtureGridRows}x{store.ui.fixtureGridCols}
+                            Generar en Techo de Ambiente {ceilingGridRows}x{ceilingGridCols}
                         </button>
                         <p className="text-[9px] text-gray-500 mt-1 leading-snug">
                             Genera luminarias en el área de techo delimitada por esta pared.
+                        </p>
+                    </div>
+
+                    <div className="my-2 space-y-2 border-t border-gray-800/80 pt-3">
+                        <div className="flex items-center gap-2 text-emerald-400">
+                            <PlugZap size={12} />
+                            <p className="text-[10px] font-semibold uppercase">Tomacorrientes del ambiente</p>
+                        </div>
+                        <SelectField
+                            label="Uso"
+                            value={outletUse}
+                            options={Object.entries(OUTLET_RULES).map(([value, rule]) => ({ value, label: rule.label }))}
+                            onChange={(value) => {
+                                const nextUse = value as OutletUse;
+                                onUpdateRoom(outletRoom!.id, {
+                                    outletUse: nextUse,
+                                    outletDeviceType: nextUse === 'exterior'
+                                        ? 'outlet_waterproof'
+                                        : outletRoom?.outletDeviceType ?? 'outlet_floor',
+                                });
+                            }}
+                        />
+                        <SelectField
+                            label="Tipo / altura"
+                            value={outletDeviceType}
+                            options={[
+                                { value: 'outlet_floor', label: 'Bajo · 0.40 m' },
+                                { value: 'outlet_initial', label: 'Inicial · 1.50 m' },
+                                { value: 'outlet_waterproof', label: 'Exterior · 1.20 m' },
+                                { value: 'outlet_high_180', label: 'Alto · 1.80 m' },
+                                { value: 'outlet_rack', label: 'Comunicaciones · 2.00 m' },
+                                { value: 'outlet_floor_box', label: 'Piso · NPT' },
+                                { value: 'outlet_ceiling', label: 'Techo' },
+                            ]}
+                            onChange={(value) => {
+                                const type = value as ElectricalDeviceType;
+                                const defaults = ELECTRICAL_DEVICE_DEFAULTS[type];
+                                onUpdateRoom(outletRoom!.id, { outletDeviceType: type });
+                                store.updateGeneratedOutletsForRoom(outletRoom!.id, {
+                                    type,
+                                    mountingHeight: type === 'outlet_ceiling' ? ambientMatch!.room.height : defaults.mountingHeight,
+                                    properties: { ...defaults.properties },
+                                });
+                            }}
+                        />
+                        <EditField
+                            label="Inicio en perímetro (m)"
+                            value={outletRoom?.outletStartOffset ?? 0}
+                            min={0}
+                            max={Math.max(calculatePolygonPerimeter(ambientMatch.room.vertices), 0)}
+                            step={0.1}
+                            onChange={(value) => onUpdateRoom(outletRoom!.id, { outletStartOffset: value })}
+                        />
+                        <PropField
+                            label="Medición"
+                            value={outletRule.method === 'area'
+                                ? `${ambientMatch.area.toFixed(2)} m²`
+                                : `${calculatePolygonPerimeter(ambientMatch.room.vertices).toFixed(2)} m`}
+                        />
+                        <PropField label="Regla" value={outletRule.description} mono={false} />
+                        <PropField label="Cantidad requerida" value={`${requiredOutlets}`} />
+                        <PropField label="Generados" value={`${generatedOutlets.length}`} />
+                        <PropField label="Cable" value="4 mm² · AWG 12" mono={false} />
+                        <button
+                            type="button"
+                            onClick={regenerateOutlets}
+                            disabled={requiredOutlets === 0}
+                            className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            {generatedOutlets.length > 0 ? 'Regenerar tomacorrientes' : 'Generar tomacorrientes'}
+                        </button>
+                        {generatedOutlets.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => store.removeGeneratedOutletsForRoom(outletRoom!.id)}
+                                className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20"
+                            >
+                                <Trash2 size={11} /> Eliminar tomacorrientes del ambiente
+                            </button>
+                        )}
+                        <p className="text-[9px] leading-snug text-gray-500">
+                            Los puntos generados aparecerán sobre el perímetro del ambiente en la vista 2D.
                         </p>
                     </div>
                 </>
@@ -426,6 +765,7 @@ export const WallProps: React.FC<{
                 <WallInteriorLightingSection
                     wall={wall}
                     scene={scene}
+                    ambientMatch={ambientMatch}
                     onUpdate={onUpdate}
                 />
             )}

@@ -3,8 +3,8 @@
  */
 
 import { Link } from '@inertiajs/react';
-import { ArrowLeft, Calculator, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb } from 'lucide-react';
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -12,7 +12,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { useDialuxDxfExport, useDialuxPdfExport } from '@/pages/dialux/export';
+import { useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import {
     createScaleConfig,
@@ -21,9 +21,11 @@ import {
 } from '@/pages/dialux/hooks/useEditorStore';
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
 import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
-import { calculateRoomWireSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { calculatePanelCircuitSummaries, calculateRoomWireSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { DxfExportDialog } from './DxfExportDialog';
 import { MlightcadLayerPanel } from './MlightcadLayerPanel';
 import { ResultsPanel, type RoomResultSummary } from './ResultsPanel';
 import { SidebarPanel } from './SidebarPanel';
@@ -32,6 +34,19 @@ import { Toolbar } from './Toolbar';
 import { WasmBadge } from './WasmBadge';
 
 const DEMO_SCENE_ID = 'scene-default';
+
+function groupByKey<T>(
+    items: T[],
+    keyFor: (item: T) => string,
+): Array<[string, T[]]> {
+    const groups = new Map<string, T[]>();
+    items.forEach((item) => {
+        const key = keyFor(item);
+        groups.set(key, [...(groups.get(key) ?? []), item]);
+    });
+
+    return [...groups.entries()];
+}
 
 const DEMO_PROJECT = {
     id: 'dialux-demo',
@@ -82,12 +97,24 @@ export const EditorLayout = memo(function EditorLayout() {
     const setResult = useEditorStore((s) => s.setResult);
     const setTool = useEditorStore((s) => s.setTool);
     const setSelectedId = useEditorStore((s) => s.setSelectedId);
-    const removeObject = useEditorStore((s) => s.removeObject);
+    const selectedFixtureIds = useEditorStore((s) => s.ui.selectedFixtureIds);
+    const requestDelete = useEditorStore((s) => s.requestDelete);
+    const pendingDeletion = useEditorStore((s) => s.pendingDeletion);
+    const confirmPendingDeletion = useEditorStore((s) => s.confirmPendingDeletion);
+    const cancelPendingDeletion = useEditorStore((s) => s.cancelPendingDeletion);
+    const undo = useEditorStore((s) => s.undo);
+    const redo = useEditorStore((s) => s.redo);
+    const historyCanUndo = useEditorStore((s) => s.historyCanUndo);
+    const historyCanRedo = useEditorStore((s) => s.historyCanRedo);
+    const resetHistory = useEditorStore((s) => s.resetHistory);
+    const beginHistoryGesture = useEditorStore((s) => s.beginHistoryGesture);
+    const endHistoryGesture = useEditorStore((s) => s.endHistoryGesture);
     const toggle3DView = useEditorStore((s) => s.toggle3DView);
     const toggleRoof = useEditorStore((s) => s.toggleRoof);
     const addFloor = useEditorStore((s) => s.addFloor);
     const removeFloor = useEditorStore((s) => s.removeFloor);
     const duplicateFloor = useEditorStore((s) => s.duplicateFloor);
+    const updateFloor = useEditorStore((s) => s.updateFloor);
     const getFloorsSorted = useEditorStore((s) => s.getFloorsSorted);
     const toggleFloorVisibility = useEditorStore((s) => s.toggleFloorVisibility);
     const toggleAllFloors = useEditorStore((s) => s.toggleAllFloors);
@@ -96,7 +123,18 @@ export const EditorLayout = memo(function EditorLayout() {
     const [roomResults, setRoomResults] = useState<RoomResultSummary[]>([]);
     const [resultsModalOpen, setResultsModalOpen] = useState(false);
     const [showFloorPanel, setShowFloorPanel] = useState(false);
+    const [editingFloorName, setEditingFloorName] = useState(false);
+    const [floorNameDraft, setFloorNameDraft] = useState('');
     const [showWireCalc, setShowWireCalc] = useState(false);
+    const panelCircuitSummaries = useMemo(
+        () =>
+            showWireCalc
+                ? (project?.scenes ?? [])
+                      .flatMap((scene) => calculatePanelCircuitSummaries(scene))
+                      .sort((a, b) => a.levelIndex - b.levelIndex)
+                : [],
+        [showWireCalc, project],
+    );
 
     // Resuelve el ambiente relevante para "Cálculo CT" a partir de lo que el
     // usuario tenga seleccionado: el propio ambiente, una luminaria dentro de
@@ -128,7 +166,6 @@ export const EditorLayout = memo(function EditorLayout() {
     })();
     const engine = useLightingEngine();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
-    const { exportDxf, isExporting: isExportingDxf } = useDialuxDxfExport();
 
     const floorsSorted = getFloorsSorted();
 
@@ -160,6 +197,19 @@ export const EditorLayout = memo(function EditorLayout() {
         removeFloor(activeSceneId);
     }, [activeSceneId, floorsSorted.length, removeFloor]);
 
+    const handleStartFloorNameEdit = useCallback(() => {
+        if (!activeScene) return;
+        setFloorNameDraft(activeScene.name);
+        setEditingFloorName(true);
+    }, [activeScene]);
+
+    const handleSaveFloorName = useCallback(() => {
+        const nextName = floorNameDraft.trim();
+        if (!activeSceneId || nextName === '') return;
+        updateFloor(activeSceneId, { name: nextName });
+        setEditingFloorName(false);
+    }, [activeSceneId, floorNameDraft, updateFloor]);
+
     const floorLabel = (f: { floorIndex: number; name: string }) => {
         if (f.floorIndex === 0) return `PB · ${f.name}`;
         if (f.floorIndex > 0) return `P${f.floorIndex} · ${f.name}`;
@@ -177,31 +227,42 @@ export const EditorLayout = memo(function EditorLayout() {
         if (project) return;
         setProject(DEMO_PROJECT);
         setActiveScene(DEMO_SCENE_ID);
-    }, [project, setActiveScene, setProject]);
+        // La carga inicial del proyecto no es una acción del usuario: no debe
+        // quedar en el historial como "un paso deshacible" (Ctrl+Z no debe
+        // poder vaciar el proyecto de vuelta a null).
+        resetHistory();
+    }, [project, setActiveScene, setProject, resetHistory]);
 
     const runCalc = useCallback(async () => {
-        const scene = activeScene;
-        if (!scene || !engine.ready || scene.rooms.length === 0) return;
+        const scenes = project?.scenes ?? [];
+        if (!engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
 
         setCalculating(true);
         try {
-            const ambients = scene.rooms.flatMap((room) =>
-                deriveAmbientSpaces(room, scene.walls, scene.fixtures),
-            );
-            const calculations = await Promise.all(
-                ambients.map(async (ambient) => {
-                    const roomResult = await engine.calculate(
-                        ambient.room,
-                        ambient.fixtures,
-                    );
-                    return {
-                        room: ambient.room,
-                        fixtures: ambient.fixtures,
-                        result: roomResult,
-                        sourceRoomName: ambient.roomName,
-                    };
-                }),
-            );
+            const calculations = (
+                await Promise.all(
+                    scenes.map(async (scene) => {
+                        const ambients = scene.rooms.flatMap((room) =>
+                            deriveAmbientSpaces(room, scene.walls, scene.fixtures),
+                        );
+
+                        return Promise.all(
+                            ambients.map(async (ambient) => ({
+                                room: ambient.room,
+                                fixtures: ambient.fixtures,
+                                result: await engine.calculate(
+                                    ambient.room,
+                                    ambient.fixtures,
+                                ),
+                                sourceRoomName: ambient.roomName,
+                                levelId: scene.id,
+                                levelName: scene.name,
+                                levelIndex: scene.floorIndex ?? 0,
+                            })),
+                        );
+                    }),
+                )
+            ).flat();
 
             setRoomResults(calculations);
             setResultsByRoom(
@@ -224,8 +285,8 @@ export const EditorLayout = memo(function EditorLayout() {
             setCalculating(false);
         }
     }, [
-        activeScene,
         engine,
+        project,
         selectedId,
         setCalculating,
         setResult,
@@ -233,8 +294,9 @@ export const EditorLayout = memo(function EditorLayout() {
     ]);
     /**buttons esportados */
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showDxfExportDialog, setShowDxfExportDialog] = useState(false);
 
-    const isExportDisabled = !project || isExporting || isExportingDxf;
+    const isExportDisabled = !project || isExporting;
 
     useEffect(() => {
         if (!activeScene || activeScene.rooms.length === 0) {
@@ -277,6 +339,24 @@ export const EditorLayout = memo(function EditorLayout() {
                 return;
             }
 
+            if (e.ctrlKey || e.metaKey) {
+                const key = e.key.toLowerCase();
+                if (key === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) redo();
+                    else undo();
+                    return;
+                }
+                if (key === 'y') {
+                    e.preventDefault();
+                    redo();
+                    return;
+                }
+                // No interceptar otras combinaciones Ctrl/Cmd (copiar, pegar,
+                // guardar del navegador, etc.) con los atajos de una sola tecla.
+                return;
+            }
+
             switch (e.key.toLowerCase()) {
                 case 'v':
                     setTool('select');
@@ -314,7 +394,13 @@ export const EditorLayout = memo(function EditorLayout() {
                     break;
                 case 'delete':
                 case 'backspace':
-                    if (selectedId) removeObject(selectedId);
+                    if (selectedFixtureIds.length > 1) {
+                        beginHistoryGesture();
+                        selectedFixtureIds.forEach((id) => requestDelete(id));
+                        endHistoryGesture();
+                    } else if (selectedId) {
+                        requestDelete(selectedId);
+                    }
                     break;
                 case 'enter':
                     runCalc();
@@ -328,7 +414,18 @@ export const EditorLayout = memo(function EditorLayout() {
 
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [removeObject, runCalc, selectedId, setSelectedId, setTool]);
+    }, [
+        beginHistoryGesture,
+        endHistoryGesture,
+        redo,
+        requestDelete,
+        runCalc,
+        selectedFixtureIds,
+        selectedId,
+        setSelectedId,
+        setTool,
+        undo,
+    ]);
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[#0d0f14] text-gray-200 select-none">
@@ -392,7 +489,6 @@ export const EditorLayout = memo(function EditorLayout() {
                         {showFloorPanel && (
                             <div
                                 className="absolute top-full left-0 z-50 mt-1 min-w-52 rounded-lg border border-slate-700/60 bg-[#191c2c] shadow-2xl"
-                                onMouseLeave={() => setShowFloorPanel(false)}
                             >
                                 <div className="border-b border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
                                     Pisos del Proyecto
@@ -450,6 +546,51 @@ export const EditorLayout = memo(function EditorLayout() {
                                         <Eye size={11} />
                                         {showAllFloors ? 'Modo: Todos los pisos' : 'Ver todos los pisos'}
                                     </button>
+                                    {editingFloorName ? (
+                                        <form
+                                            onSubmit={(event) => {
+                                                event.preventDefault();
+                                                handleSaveFloorName();
+                                            }}
+                                            className="flex items-center gap-1 px-1">
+                                            <input
+                                                autoFocus
+                                                value={floorNameDraft}
+                                                onChange={(event) => setFloorNameDraft(event.target.value)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Escape') {
+                                                        setEditingFloorName(false);
+                                                    }
+                                                }}
+                                                aria-label="Nombre del piso"
+                                                className="min-w-0 flex-1 rounded border border-amber-700/60 bg-slate-950 px-2 py-1 text-[10px] text-slate-100 outline-none focus:border-amber-400"
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={floorNameDraft.trim() === ''}
+                                                title="Guardar nombre"
+                                                className="rounded p-1 text-emerald-400 hover:bg-emerald-950/50 disabled:opacity-30">
+                                                <Check size={12} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingFloorName(false)}
+                                                title="Cancelar edición"
+                                                className="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-200">
+                                                <X size={12} />
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={handleStartFloorNameEdit}
+                                            disabled={!activeScene}
+                                            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-slate-100 disabled:opacity-30"
+                                            title="Editar nombre del piso activo">
+                                            <Pencil size={11} />
+                                            Editar nombre
+                                        </button>
+                                    )}
                                     <div className="grid grid-cols-2 gap-1">
                                         <button
                                             onClick={() => { handleAddFloorAbove(); setShowFloorPanel(false); }}
@@ -487,8 +628,26 @@ export const EditorLayout = memo(function EditorLayout() {
                     </div>
                 )}
 
-                <div className="flex-1" />
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={() => undo()}
+                        disabled={!historyCanUndo}
+                        title="Deshacer (Ctrl+Z)"
+                        className="rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                        ↶
+                    </button>
+                    <button
+                        onClick={() => redo()}
+                        disabled={!historyCanRedo}
+                        title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                        className="rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                        ↷
+                    </button>
+                </div>
 
+                <div className="flex-1" />
 
                 <button
                     onClick={toggle3DView}
@@ -531,7 +690,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     <button
                         id="dialux-btn-calculo-ct"
                         onClick={() => setShowWireCalc(true)}
-                        disabled={!selectedRoom}
+                        disabled={!activeScene}
                         className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
                         title={selectedRoom ? `Cálculo CT — ${selectedRoom.name}` : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'}
                     >
@@ -550,9 +709,7 @@ export const EditorLayout = memo(function EditorLayout() {
 
                             {isExporting
                                 ? exportStep || "Exportando PDF..."
-                                : isExportingDxf
-                                    ? "Exportando DXF..."
-                                    : "Exportar"}
+                                : "Exportar"}
 
                             <ChevronDown size={13} />
                         </button>
@@ -575,9 +732,9 @@ export const EditorLayout = memo(function EditorLayout() {
                                     type="button"
                                     onClick={() => {
                                         setShowExportMenu(false);
-                                        exportDxf();
+                                        setShowDxfExportDialog(true);
                                     }}
-                                    disabled={!project || isExportingDxf}
+                                    disabled={!project}
                                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
                                     <FileCode size={13} />
                                     Exportar DXF
@@ -614,6 +771,14 @@ export const EditorLayout = memo(function EditorLayout() {
 
             <StatusBar />
 
+            <DeleteConfirmDialog
+                analysis={pendingDeletion}
+                onCancel={cancelPendingDeletion}
+                onConfirm={confirmPendingDeletion}
+            />
+
+            <DxfExportDialog open={showDxfExportDialog} onOpenChange={setShowDxfExportDialog} />
+
             <Dialog open={resultsModalOpen} onOpenChange={setResultsModalOpen}>
                 <DialogContent className="max-h-[92vh] overflow-hidden border-slate-800 bg-[#090b10] text-slate-100 sm:max-w-7xl">
                     <DialogHeader>
@@ -631,38 +796,189 @@ export const EditorLayout = memo(function EditorLayout() {
                 </DialogContent>
             </Dialog>
 
-            {selectedRoom && activeScene && (
+            {activeScene && (
                 <Dialog open={showWireCalc} onOpenChange={setShowWireCalc}>
-                    <DialogContent className="max-w-sm">
+                    <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-5xl">
                         <DialogHeader>
-                            <DialogTitle>Cálculo CT — {selectedRoom.name}</DialogTitle>
+                            <DialogTitle>Cálculo CT — salidas de tableros</DialogTitle>
+                            <DialogDescription>
+                                Longitud, ambientes atendidos y carga instalada acumulada hasta el final de cada salida.
+                            </DialogDescription>
                         </DialogHeader>
                         {(() => {
-                            const roomFixtures = getFixturesForRoom(selectedRoom, activeScene.fixtures);
-                            const summary = calculateRoomWireSummary(activeScene, roomFixtures);
+                            const circuits = panelCircuitSummaries;
+                            const summary = selectedRoom
+                                ? calculateRoomWireSummary(activeScene, getFixturesForRoom(selectedRoom, activeScene.fixtures))
+                                : null;
                             return (
-                                <div className="space-y-2 text-xs">
-                                    <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
-                                        <span className="text-gray-500">Puntos (focos)</span>
-                                        <span className="font-mono font-medium text-gray-200">
-                                            {summary.pointCount}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
-                                        <span className="text-gray-500">Conductores conectados</span>
-                                        <span className="font-mono font-medium text-gray-200">
-                                            {summary.conductorCount}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between pb-1.5">
-                                        <span className="text-gray-500">Longitud total de cable</span>
-                                        <span className="font-mono font-medium text-emerald-400">
-                                            {summary.totalLength.toFixed(2)} m
-                                        </span>
-                                    </div>
-                                    <p className="pt-1 text-[9px] text-gray-600">
-                                        Incluye tramo horizontal (plano) + tramo vertical hacia el interruptor cuando la ruta es pared/techo.
-                                    </p>
+                                <div className="space-y-4 overflow-auto text-xs">
+                                    {selectedRoom && summary && (
+                                        <div className="grid grid-cols-3 gap-2 rounded border border-slate-800 bg-slate-950/50 p-3">
+                                            <div><p className="text-slate-500">Ambiente seleccionado</p><p className="font-medium text-slate-200">{selectedRoom.name}</p></div>
+                                            <div><p className="text-slate-500">Puntos / conductores</p><p className="font-mono text-slate-200">{summary.pointCount} / {summary.conductorCount}</p></div>
+                                            <div><p className="text-slate-500">Cable asociado</p><p className="font-mono text-emerald-400">{summary.totalLength.toFixed(2)} m</p></div>
+                                        </div>
+                                    )}
+                                    {circuits.length > 0 && groupByKey(
+                                        circuits,
+                                        (circuit) => circuit.levelId,
+                                    ).map(([levelId, levelCircuits]) => (
+                                        <section
+                                            key={levelId}
+                                            className="overflow-hidden rounded border border-slate-800">
+                                            <div className="border-b border-cyan-900/50 bg-cyan-950/30 px-3 py-2">
+                                                <p className="font-semibold text-cyan-200">
+                                                    {levelCircuits[0]?.levelName}
+                                                </p>
+                                                <p className="text-[10px] text-slate-500">
+                                                    {levelCircuits.length} circuito(s) en este piso
+                                                </p>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-[1100px] w-full text-left">
+                                                    <thead className="bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500">
+                                                        <tr>
+                                                            <th className="px-3 py-2">Tablero</th>
+                                                            <th className="px-3 py-2">CT</th>
+                                                            <th className="px-3 py-2">Ambiente / detalle de carga</th>
+                                                            <th className="px-3 py-2">Ambientes por donde pasa</th>
+                                                            <th className="px-3 py-2">Longitud</th>
+                                                            <th className="px-3 py-2">Conductor</th>
+                                                            <th className="px-3 py-2">Caída de tensión</th>
+                                                            <th className="px-3 py-2">Carga instalada</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {groupByKey(
+                                                            levelCircuits,
+                                                            (circuit) => circuit.panelId,
+                                                        ).flatMap(([panelId, panelCircuits]) => {
+                                                            const panelRowSpan = panelCircuits.reduce(
+                                                                (total, circuit) =>
+                                                                    total + Math.max(1, circuit.rooms.length),
+                                                                0,
+                                                            );
+                                                            let panelCellRendered = false;
+
+                                                            return panelCircuits.flatMap((circuit) => {
+                                                                const circuitRooms =
+                                                                    circuit.rooms.length > 0
+                                                                        ? circuit.rooms
+                                                                        : [null];
+                                                                const circuitRowSpan =
+                                                                    circuitRooms.length;
+
+                                                                return circuitRooms.map(
+                                                                    (room, roomIndex) => {
+                                                                        const showCircuitCells =
+                                                                            roomIndex === 0;
+                                                                        const showPanelCell =
+                                                                            !panelCellRendered;
+                                                                        if (showPanelCell) {
+                                                                            panelCellRendered = true;
+                                                                        }
+
+                                                                        return (
+                                                                            <tr
+                                                                                key={`${panelId}-${circuit.rootConductorId}-${room?.roomId ?? 'empty'}`}
+                                                                                className="border-t border-slate-800 align-top text-slate-200">
+                                                                                {showPanelCell && (
+                                                                                    <td
+                                                                                        rowSpan={panelRowSpan}
+                                                                                        className="border-r border-slate-800 px-3 py-2 font-medium">
+                                                                                        {circuit.panelLabel}
+                                                                                    </td>
+                                                                                )}
+                                                                                {showCircuitCells && (
+                                                                                    <td
+                                                                                        rowSpan={circuitRowSpan}
+                                                                                        className="border-r border-slate-800 px-3 py-2 font-mono text-cyan-300">
+                                                                                        {circuit.code}
+                                                                                    </td>
+                                                                                )}
+                                                                                <td className="px-3 py-2">
+                                                                                    <p className="font-medium text-slate-200">
+                                                                                        {room?.roomName ??
+                                                                                            'Sin luminarias'}
+                                                                                    </p>
+                                                                                    <p className="text-[10px] text-slate-500">
+                                                                                        {room?.detail ||
+                                                                                            'Sin potencia definida'}
+                                                                                    </p>
+                                                                                </td>
+                                                                                {showCircuitCells && (
+                                                                                    <>
+                                                                                        <td
+                                                                                            rowSpan={circuitRowSpan}
+                                                                                            className="px-3 py-2 text-slate-400">
+                                                                                            {circuit
+                                                                                                .traversedRoomNames
+                                                                                                .join(' → ') ||
+                                                                                                'Sin ambiente identificado'}
+                                                                                        </td>
+                                                                                        <td
+                                                                                            rowSpan={circuitRowSpan}
+                                                                                            className="px-3 py-2 font-mono text-emerald-400">
+                                                                                            {circuit.lengthM.toFixed(
+                                                                                                2,
+                                                                                            )}{' '}
+                                                                                            m
+                                                                                        </td>
+                                                                                        <td
+                                                                                            rowSpan={circuitRowSpan}
+                                                                                            className="px-3 py-2 font-mono text-slate-300">
+                                                                                            {circuit.sectionMm2.toFixed(
+                                                                                                1,
+                                                                                            )}{' '}
+                                                                                            mm²
+                                                                                        </td>
+                                                                                        <td
+                                                                                            rowSpan={circuitRowSpan}
+                                                                                            className="px-3 py-2">
+                                                                                            <p
+                                                                                                className={`font-mono font-semibold ${
+                                                                                                    circuit.voltageDropOk
+                                                                                                        ? 'text-emerald-400'
+                                                                                                        : 'text-red-400'
+                                                                                                }`}>
+                                                                                                {circuit.voltageDropPct.toFixed(
+                                                                                                    2,
+                                                                                                )}
+                                                                                                %
+                                                                                            </p>
+                                                                                            <p className="text-[10px] text-slate-500">
+                                                                                                Máx.{' '}
+                                                                                                {circuit.maxVoltageDropPct.toFixed(
+                                                                                                    1,
+                                                                                                )}
+                                                                                                % ·{' '}
+                                                                                                {circuit.voltageDropOk
+                                                                                                    ? 'Longitud conforme'
+                                                                                                    : 'Revisar longitud/sección'}
+                                                                                            </p>
+                                                                                        </td>
+                                                                                        <td
+                                                                                            rowSpan={circuitRowSpan}
+                                                                                            className="px-3 py-2 font-mono font-semibold text-amber-300">
+                                                                                            {circuit.installedPowerW.toFixed(
+                                                                                                0,
+                                                                                            )}{' '}
+                                                                                            W
+                                                                                        </td>
+                                                                                    </>
+                                                                                )}
+                                                                            </tr>
+                                                                        );
+                                                                    },
+                                                                );
+                                                            });
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </section>
+                                    ))}
+                                    {circuits.length === 0 && <p className="rounded border border-amber-800/40 bg-amber-950/20 p-3 text-amber-300">No hay salidas conectadas a un tablero general o subtablero.</p>}
                                 </div>
                             );
                         })()}

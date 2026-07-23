@@ -22,6 +22,29 @@ const baseRoom = (
     normativeLabel: 'Previous label',
 });
 
+describe('useEditorStore electrical legend controls', () => {
+    it('opens the legend when an electrical drawing tool is activated', () => {
+        const store = useEditorStore.getState();
+        store.setSidebarTab('objects');
+        store.setTool('wire');
+
+        expect(useEditorStore.getState().ui.sidebarTab).toBe('legend');
+    });
+
+    it('toggles a complete group and an individual element independently', () => {
+        const store = useEditorStore.getState();
+        const wasVisible = store.ui.electricalLayerVisibility.fixtures;
+        store.toggleElectricalLayer('fixtures');
+        store.toggleElectricalItemVisibility('fixture-1');
+
+        expect(useEditorStore.getState().ui.electricalLayerVisibility.fixtures).toBe(!wasVisible);
+        expect(useEditorStore.getState().ui.hiddenElectricalIds).toContain('fixture-1');
+
+        useEditorStore.getState().toggleElectricalItemVisibility('fixture-1');
+        expect(useEditorStore.getState().ui.hiddenElectricalIds).not.toContain('fixture-1');
+    });
+});
+
 const scene = (id: string, rooms: Room[]): Scene => ({
     id,
     name: id,
@@ -111,6 +134,12 @@ describe('useEditorStore normative defaults', () => {
 
         expect(updated1?.illuminanceLux).toBe(150);
         expect(updated1?.normativeStandard).toBe('rne_peru');
+        expect(useEditorStore.getState().defaultRoomNormativeStandard).toBe(
+            'rne_peru',
+        );
+        expect(
+            useEditorStore.getState().project?.defaultRoomNormativeStandard,
+        ).toBe('rne_peru');
         // El segundo ambiente conserva su configuración previa intacta.
         expect(untouched2?.illuminanceLux).toBe(500);
         expect(untouched2?.normativeStandard).toBe('en_12464');

@@ -43,6 +43,7 @@ import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
 
+import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { CalibrationDialog } from '../CalibrationDialog';
 import { CalibrationOverlay } from './CalibrationOverlay';
 import {
@@ -68,6 +69,7 @@ import { OverlayRotateHandle, type RotatableTarget } from './OverlayRotateHandle
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayWires } from './OverlayWires';
+import { classifyConductorLayer, isElectricalItemVisible } from '@/pages/dialux/electrical/electricalLayerVisibility';
 
 // ─── Helpers locales ──────────────────────────────────────────────────────────
 
@@ -98,6 +100,9 @@ const CURSOR_MAP: Record<string, string> = {
     'elec-earth-pit': 'cell',
     'elec-facp': 'cell',
     'elec-outlet-floor': 'cell',
+    'elec-outlet-initial': 'cell',
+    'elec-outlet-high-180': 'cell',
+    'elec-outlet-floor-box': 'cell',
     'elec-outlet-waterproof': 'cell',
     'elec-outlet-ceiling': 'cell',
     'elec-outlet-rack': 'cell',
@@ -130,6 +135,9 @@ const DRAWING_TOOLS = new Set([
     'elec-earth-pit',
     'elec-facp',
     'elec-outlet-floor',
+    'elec-outlet-initial',
+    'elec-outlet-high-180',
+    'elec-outlet-floor-box',
     'elec-outlet-waterproof',
     'elec-outlet-ceiling',
     'elec-outlet-rack',
@@ -234,70 +242,41 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         );
 
         // ── Conversión de coordenadas ──────────────────────────────────────────────
+        // Par único de transformaciones pantalla ↔ mundo (metros). La ruta nativa
+        // usa la cámara del motor CAD (píxeles CSS); el fallback aplica una afín
+        // propia con inversión de Y coherente con el convenio CAD.
+        // `viewTick` fuerza la re-creación cuando la cámara nativa cambia.
+        const transforms = useMemo(
+            () =>
+                createCanvasTransforms(
+                    hasCadView ? cadView : null,
+                    scaleConfig,
+                    {
+                        zoom,
+                        panX,
+                        panY,
+                        pxPerMeter: getCanvasScalePxPerMeter(scaleConfig),
+                    },
+                    size.h,
+                ),
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            [hasCadView, cadView, scaleConfig.factor, scaleConfig.calibrationFactor, zoom, panX, panY, size.h, viewTick],
+        );
+
         const screenPoint = useCallback(
-            (point: { x: number; y: number }) => {
-                const cadPoint = {
-                    x: metersToCad(point.x, scaleConfig),
-                    y: metersToCad(point.y, scaleConfig),
-                };
-                if (hasCadView && cadView?.worldToScreen) {
-                    const s = cadView.worldToScreen(cadPoint);
-                    return { x: safeNum(s?.x), y: safeNum(s?.y) };
-                }
-                const pxPerM = getCanvasScalePxPerMeter(scaleConfig);
-                return {
-                    x: safeNum(point.x) * pxPerM,
-                    y: safeNum(point.y) * pxPerM,
-                };
-            },
-            [hasCadView, cadView, scaleConfig],
+            (point: { x: number; y: number }) => transforms.sceneToScreen(point),
+            [transforms],
         );
 
         const screenDistance = useCallback(
-            (dx: number, dy: number, origin: { x: number; y: number } = { x: 0, y: 0 }) => {
-                if (hasCadView && cadView?.worldToScreen) {
-                    const cadOrigin = {
-                        x: metersToCad(origin.x, scaleConfig),
-                        y: metersToCad(origin.y, scaleConfig),
-                    };
-                    const a = cadView.worldToScreen(cadOrigin);
-                    const b = cadView.worldToScreen({
-                        x: cadOrigin.x + metersToCad(dx, scaleConfig),
-                        y: cadOrigin.y + metersToCad(dy, scaleConfig),
-                    });
-                    if (a && b) {
-                        return Math.hypot(
-                            (safeNum(b.x) - safeNum(a.x)),
-                            (safeNum(b.y) - safeNum(a.y)),
-                        );
-                    }
-                }
-                const scale = getCanvasScalePxPerMeter(scaleConfig);
-                return Math.hypot(dx * scale * zoom, dy * scale * zoom);
-            },
-            [hasCadView, cadView, scaleConfig, zoom],
+            (dx: number, dy: number, origin: { x: number; y: number } = { x: 0, y: 0 }) =>
+                transforms.screenDistance(dx, dy, origin),
+            [transforms],
         );
 
         const worldPoint = useCallback(
-            (px: number, py: number) => {
-                if (hasCadView && cadView?.screenToWorld) {
-                    const w = cadView.screenToWorld({ x: px, y: py });
-                    return {
-                        x: cadToMeters(safeNum(w?.x), scaleConfig),
-                        y: cadToMeters(safeNum(w?.y), scaleConfig),
-                    };
-                }
-                // Fallback cuando el motor CAD no tiene vista inicializada.
-                // Invertir la transformación: px/zoom - pan, luego convertir
-                // píxeles a metros usando el factor de escala efectivo.
-                const pxPerM = getCanvasScalePxPerMeter(scaleConfig);
-                const scaledPxPerM = pxPerM > 0 ? pxPerM : 1;
-                return {
-                    x: (px - panX) / (scaledPxPerM * zoom),
-                    y: (py - panY) / (scaledPxPerM * zoom),
-                };
-            },
-            [hasCadView, cadView, scaleConfig, panX, panY, zoom],
+            (px: number, py: number) => transforms.screenToScene({ x: px, y: py }),
+            [transforms],
         );
 
         /**
@@ -409,6 +388,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             canopies: scene?.canopies ?? [],
             windows: scene?.windows ?? [],
             doors: scene?.doors ?? [],
+            conductors: scene?.conductors ?? [],
+            partitions: scene?.partitions ?? [],
+            isObjectSelectable: (id) => scene
+                ? isElectricalItemVisible(scene, ui.electricalLayerVisibility, ui.hiddenElectricalIds, id)
+                : true,
+            onDragGesture: (phase) => {
+                if (phase === 'start') store.beginHistoryGesture();
+                else store.endHistoryGesture();
+            },
             onMoveFixture: (id, x, y) => store.updateFixture(id, { x, y }),
             onMoveFixtures: (ids, dx, dy) => {
                 const fixtures = scene?.fixtures ?? [];
@@ -443,6 +431,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',
+                        sectionMm2: 2.5,
                         waypoints: waypoints ?? [],
                     });
                 }
@@ -705,7 +694,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     productId: t.productId,
                     productSourceFormat: t.productSourceFormat,
                     lightColor: t.lightColor ?? '#fff5e1',
-                    roomId: ambient?.room.id,
+                    roomId: ambient?.sourceRoom.id,
                 });
                 store.setSelectedId(id);
             },
@@ -748,12 +737,17 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     const base = defaults.label.replace(/-\d+$/, '');
                     label = `${base}-${String(existingOfType.length + 1).padStart(2, '0')}`;
                 }
+                const ambient = scene ? findAmbientSpaceAtPoint(scene, { x, y }) : null;
+                const mountingHeight =
+                    template.type === 'outlet_ceiling' && ambient
+                        ? resolveRoomCeilingHeight(ambient.room, scene?.walls ?? [])
+                        : defaults.mountingHeight;
                 const id = store.addElectricalDevice({
                     type: template.type,
                     x,
                     y,
                     label,
-                    mountingHeight: defaults.mountingHeight,
+                    mountingHeight,
                     wallId,
                     connectedDeviceIds: [],
                     properties: { ...defaults.properties },
@@ -869,6 +863,30 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             return { x: clientX - rect.left, y: clientY - rect.top };
         }, []);
 
+        /**
+         * Selección desde los overlays SVG. En modo 'select' el hit-testing
+         * determinista del mousedown del canvas decide la selección; el onClick
+         * del elemento SVG hijo dispararía DESPUÉS y la sobreescribiría con el
+         * contenedor (ej. clic en luminaria → el polígono del recinto la pisaba).
+         * Por eso en 'select' los overlays no seleccionan.
+         */
+        const overlaySelect = useCallback(
+            (id: string | null) => {
+                if (useEditorStore.getState().ui.activeTool === 'select') return;
+                store.setSelectedId(id);
+            },
+            [store],
+        );
+
+        const overlaySelectFixture = useCallback(
+            (id: string, multi?: boolean) => {
+                if (useEditorStore.getState().ui.activeTool === 'select') return;
+                if (multi) store.toggleFixtureSelection(id);
+                else store.setSelectedId(id);
+            },
+            [store],
+        );
+
         // ── Ref estable para isDraggingFn — evita que el RAF tenga isDraggingFn
         // en su lista de dependencias (lo que causaría el bucle de re-creación)
         // y elimina el riesgo de TDZ si el compilador reordena declaraciones.
@@ -914,7 +932,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             if (!cadRef.current || initAttemptedRef.current) return;
             initAttemptedRef.current = true;
             engine.initViewer(cadRef.current).then(async () => {
-                const storedPlan = projectId ? await loadDialuxPlan(projectId) : null;
+                const storedPlan =
+                    projectId && activeSceneId
+                        ? await loadDialuxPlan(projectId, activeSceneId)
+                        : null;
                 if (storedPlan) {
                     try {
                         const file = storedDialuxPlanToFile(storedPlan);
@@ -1045,7 +1066,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     ref={cadRef}
                     id="cad-engine-container"
                     className="absolute inset-0"
-                    style={{ zIndex: 0, background: '#0d0f14' }}
+                    style={{
+                        zIndex: 0,
+                        background: '#0d0f14',
+                        visibility: ui.electricalLayerVisibility.cad ? 'visible' : 'hidden',
+                    }}
                 />
 
                 {/* Overlay SVG con geometría DIAlux (z=10) */}
@@ -1187,7 +1212,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         canopies={scene?.canopies ?? []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />
@@ -1206,7 +1231,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         rooms={scene?.rooms ?? []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />
@@ -1214,7 +1239,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         walls={scene?.walls ?? []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />
@@ -1223,7 +1248,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         walls={scene?.walls ?? []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                     />
                     <OverlayDoors
@@ -1231,7 +1256,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         walls={scene?.walls ?? []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                     />
                     <OverlayPartitions
@@ -1239,53 +1264,65 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         scaleX={(x) => screenPoint({ x, y: 0 }).x}
                         scaleY={(y) => screenPoint({ x: 0, y }).y}
                         selectedId={ui.selectedId}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         opacity={1}
                     />
                     <OverlayFixtures
-                        fixtures={scene?.fixtures ?? []}
+                        fixtures={ui.electricalLayerVisibility.fixtures
+                            ? (scene?.fixtures ?? []).filter((item) => !ui.hiddenElectricalIds.includes(item.id))
+                            : []}
                         selectedFixtureIds={ui.selectedFixtureIds ?? []}
                         zoom={zoom}
-                        onSelect={(id, multi) => {
-                            if (multi) {
-                                store.toggleFixtureSelection(id);
-                            } else {
-                                store.setSelectedId(id);
-                            }
-                        }}
+                        onSelect={overlaySelectFixture}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />
                     <OverlayWires
-                        conductors={scene?.conductors ?? []}
+                        conductors={(scene?.conductors ?? []).filter((item) => {
+                            if (ui.hiddenElectricalIds.includes(item.id)) return false;
+                            const layer = classifyConductorLayer(
+                                item,
+                                scene?.fixtures ?? [],
+                                scene?.lightSwitches ?? [],
+                                scene?.electricalDevices ?? [],
+                            );
+                            return ui.electricalLayerVisibility[layer];
+                        })}
                         lightSwitches={scene?.lightSwitches ?? []}
                         fixtures={scene?.fixtures ?? []}
                         electricalDevices={scene?.electricalDevices ?? []}
                         zoom={zoom}
                         screenPoint={screenPoint}
                         selectedId={ui.selectedId}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         activeTool={ui.activeTool}
+                        showLegacyLightingWires={ui.electricalLayerVisibility.fixtures}
                     />
                     <OverlayLightSwitches
-                        lightSwitches={scene?.lightSwitches ?? []}
+                        lightSwitches={ui.electricalLayerVisibility.switches
+                            ? (scene?.lightSwitches ?? []).filter((item) => !ui.hiddenElectricalIds.includes(item.id))
+                            : []}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={(id) => {
-                            store.setSelectedId(id);
-                        }}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />
                     <OverlayElectricalDevices
-                        devices={
+                        devices={(
                             tempElectricalDevice
                                 ? [...(scene?.electricalDevices ?? []), { ...tempElectricalDevice, id: 'temp-preview' } as any]
                                 : (scene?.electricalDevices ?? [])
-                        }
+                        ).filter((item) => {
+                            if (ui.hiddenElectricalIds.includes(item.id)) return false;
+                            const isOutlet = item.type.startsWith('outlet_');
+                            return isOutlet
+                                ? ui.electricalLayerVisibility.outlets
+                                : ui.electricalLayerVisibility.panels;
+                        })}
                         selectedId={ui.selectedId}
                         zoom={zoom}
-                        onSelect={store.setSelectedId}
+                        onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
                     />

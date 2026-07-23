@@ -7,37 +7,14 @@
 
 import type { ScaleConfig, Wall } from '@/pages/dialux/hooks/types';
 
-/** 
- * Factor de convesión efectivo: metros por cada unidad CAD.
+/**
+ * Factor de conversión efectivo: metros por cada unidad CAD.
  * Formula: metros_en_escena = valor_cad × effectiveScale
  *
- * El `factor` base depende de la unidad del CAD (0.001 para mm, 0.01 para cm, 1 para m).
- * El `calibrationFactor` ajusta la escala cuando el plano tiene factores no estándar.
- *
- * Ejemplo (caso típico):
- *   El usuario dibuja un cuadrado de área 3.39 m² en AutoCAD.
- *   Al medir un lado en el plano obtiene 1.58 ud CAD.
- *   El lado real del cuadrado es √3.39 ≈ 1.842 m.
- *   Por lo tanto:  effectiveScale = 1.842 / 1.58 ≈ 1.1658 m/ud_CAD
- *   Verificación: (1.58 × 1.1658)² ≈ 3.39 m²  ✓
+ * Fuente única en geometry/coordinateTransform — aquí solo se re-exporta para
+ * mantener compatibilidad con los overlays existentes.
  */
-export function getEffectiveScale(scaleConfig?: ScaleConfig | null): number {
-    if (!scaleConfig) return 1;
-    const factor      = safeNum(scaleConfig.factor      || 1);
-    const calibration = safeNum(scaleConfig.calibrationFactor || 1);
-    return factor * calibration;
-}
-
-/** Convierte una magnitud en unidades CAD a metros de escena */
-export function cadToMeters(cadVal: number, scaleConfig?: ScaleConfig | null): number {
-    return safeNum(cadVal) * getEffectiveScale(scaleConfig);
-}
-
-/** Convierte una magnitud en metros de escena a unidades CAD */
-export function metersToCad(meterVal: number, scaleConfig?: ScaleConfig | null): number {
-    const scale = getEffectiveScale(scaleConfig);
-    return scale > 0 ? safeNum(meterVal) / scale : safeNum(meterVal);
-}
+export { cadToMeters, getEffectiveScale, metersToCad } from '@/pages/dialux/geometry/coordinateTransform';
 
 /**
  * Área de un cuadrado dado su lado (metros).

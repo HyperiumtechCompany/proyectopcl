@@ -4,7 +4,7 @@ import type {
     ElectricalDevice,
     LightSwitch,
 } from '@/pages/dialux/hooks/types';
-import { CONDUCTOR_WIRE_OPTIONS } from '@/pages/dialux/hooks/types';
+import { CONDUCTOR_SECTION_OPTIONS, CONDUCTOR_WIRE_OPTIONS } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { SectionWrapper, EditField, SelectField } from './PropertyFields';
 
@@ -97,7 +97,7 @@ export function ConductorProps({
     return (
         <div className="flex flex-col gap-3">
             <SectionWrapper label="Conductor" icon={<Zap size={15} />}>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col gap-2 text-xs">
                     <SelectField
                         label="N° Conductores"
                         value={conductor.wireLabel ?? ''}
@@ -143,6 +143,12 @@ export function ConductorProps({
                             { value: '25', label: 'Ø25 mm' },
                             { value: '32', label: 'Ø32 mm' },
                         ]}
+                    />
+                    <SelectField
+                        label="Sección cable"
+                        value={String(conductor.sectionMm2 ?? 2.5)}
+                        onChange={(val) => onUpdate({ sectionMm2: parseFloat(val) })}
+                        options={CONDUCTOR_SECTION_OPTIONS.map(({ value, label }) => ({ value: String(value), label }))}
                     />
                 </div>
                 <div className="mt-2 text-[10px] text-gray-500 bg-slate-900/50 p-1.5 rounded">
@@ -192,6 +198,9 @@ export function ElectricalDeviceProps({
                             { value: 'earth_pit', label: 'Pozo a Tierra (PAT)' },
                             { value: 'facp', label: 'Contraincendios (FACP)' },
                             { value: 'outlet_floor', label: 'Tomacorriente Bajo' },
+                            { value: 'outlet_initial', label: 'Tomacorriente Inicial 1.50 m' },
+                            { value: 'outlet_high_180', label: 'Tomacorriente Alto 1.80 m' },
+                            { value: 'outlet_floor_box', label: 'Tomacorriente de Piso NPT' },
                             { value: 'outlet_waterproof', label: 'Tomacorriente Agua' },
                             { value: 'outlet_ceiling', label: 'Tomacorriente Techo' },
                             { value: 'outlet_rack', label: 'Tomacorriente Rack' },
@@ -289,6 +298,7 @@ export function VirtualWireProps({
         routeType: wireId.includes('dev-sw') ? 'wall_ceiling' : 'floor',
         tubeSize: 20,
         conductorType: 'THW-90',
+        sectionMm2: 2.5,
     };
 
     const wireOptions = CONDUCTOR_WIRE_OPTIONS.map(({ value, label }) => ({
@@ -299,7 +309,7 @@ export function VirtualWireProps({
     return (
         <div className="flex flex-col gap-3">
             <SectionWrapper label="Conductor de Tablero/Equipo" icon={<Zap size={15} />}>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col gap-2 text-xs">
                     <SelectField
                         label="N° Conductores"
                         value={props.wireLabel ?? ''}
@@ -344,6 +354,12 @@ export function VirtualWireProps({
                             { value: '25', label: 'Ø25 mm' },
                             { value: '32', label: 'Ø32 mm' },
                         ]}
+                    />
+                    <SelectField
+                        label="Sección cable"
+                        value={String(props.sectionMm2 ?? 2.5)}
+                        onChange={(val) => onUpdate({ ...props, sectionMm2: parseFloat(val) })}
+                        options={CONDUCTOR_SECTION_OPTIONS.map(({ value, label }) => ({ value: String(value), label }))}
                     />
                 </div>
             </SectionWrapper>

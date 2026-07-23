@@ -21,7 +21,39 @@
            aquí: con las dimensiones reales del asset y la caja destino (mm) se
            emiten width/height exactos, centrados con margin auto. Sin caja se
            cae al ancho completo (comportamiento previo). */
-        $renderAsset = static function (?array $asset, ?float $boxWidthMm = null, ?float $boxHeightMm = null, bool $vCenter = false): string {
+        /* Gira un data URL de imagen 90° con GD (no depende del soporte de
+           CSS transform de dompdf, que se probó y no recorta de forma
+           fiable el contenido rotado — ver nota en $renderAsset). Si GD no
+           puede decodificar el formato, devuelve el original sin rotar. */
+        $rotateBitmapDataUrl90 = static function (string $dataUrl): string {
+            if (!preg_match('/^data:image\/(\w+);base64,(.+)$/s', $dataUrl, $m)) {
+                return $dataUrl;
+            }
+            $raw = base64_decode($m[2], true);
+            if ($raw === false) {
+                return $dataUrl;
+            }
+            $image = @imagecreatefromstring($raw);
+            if ($image === false) {
+                return $dataUrl;
+            }
+            $rotated = imagerotate($image, -90, 0);
+            imagedestroy($image);
+            if ($rotated === false) {
+                return $dataUrl;
+            }
+            imagesavealpha($rotated, true);
+            ob_start();
+            imagepng($rotated);
+            $png = ob_get_clean();
+            imagedestroy($rotated);
+            if ($png === false) {
+                return $dataUrl;
+            }
+            return 'data:image/png;base64,' . base64_encode($png);
+        };
+
+        $renderAsset = static function (?array $asset, ?float $boxWidthMm = null, ?float $boxHeightMm = null, bool $vCenter = false, bool $autoRotate = false) use ($rotateBitmapDataUrl90): string {
             if (!$asset) {
                 return '<div class="asset-align"><div class="asset-placeholder"><span>Grafico no disponible.</span></div></div>';
             }
@@ -33,11 +65,38 @@
             $hOffsetStyle = '';
             $svgWidthAttr = '100%';
             $svgHeightAttr = '100%';
+            // Girar solo aplica a bitmaps: el <svg> vectorial rota con GD de
+            // forma trivial vía rasterizado, pero un <g transform="rotate()">
+            // dentro del propio SVG no se comporta de forma fiable en dompdf
+            // (probado: el contenido queda mal recortado). En producción real
+            // estos planos SIEMPRE llegan como bitmap (el navegador los
+            // rasteriza antes de enviarlos — ver svgToPlanBitmap), así que el
+            // caso vectorial es solo un fallback de entornos sin navegador
+            // (tests) donde igualmente no vale la pena girar.
+            $rotate = false;
+            $displayW = null;
+            $displayH = null;
+
             if ($boxWidthMm !== null && $assetWidth > 0 && $assetHeight > 0) {
                 $boxH = $boxHeightMm ?? $boxWidthMm;
-                $fitScale = min($boxWidthMm / $assetWidth, $boxH / $assetHeight);
-                $displayW = round($assetWidth * $fitScale, 2);
-                $displayH = round($assetHeight * $fitScale, 2);
+                $normalScale = min($boxWidthMm / $assetWidth, $boxH / $assetHeight);
+
+                // Girar 90° aprovecha mejor la caja cuando la orientación del
+                // plano (alto vs ancho) no coincide con la de la caja destino
+                // (p. ej. un edificio angosto y alto en una página apaisada):
+                // se compara el resultado con y sin girar y se usa el que
+                // rinda una imagen más grande. Umbral 10% para no girar por
+                // una ganancia marginal que no compense perder la orientación
+                // "natural" del plano.
+                if ($autoRotate && ($asset['kind'] ?? null) === 'bitmap') {
+                    $rotatedScale = min($boxWidthMm / $assetHeight, $boxH / $assetWidth);
+                    $rotate = $rotatedScale > $normalScale * 1.1;
+                }
+
+                $fitScale = $rotate ? min($boxWidthMm / $assetHeight, $boxH / $assetWidth) : $normalScale;
+                // Tras girar 90°, la huella visual intercambia ancho y alto.
+                $displayW = round(($rotate ? $assetHeight : $assetWidth) * $fitScale, 2);
+                $displayH = round(($rotate ? $assetWidth : $assetHeight) * $fitScale, 2);
                 $dimsStyle = "width:{$displayW}mm;height:{$displayH}mm;";
                 $svgWidthAttr = "{$displayW}mm";
                 $svgHeightAttr = "{$displayH}mm";
@@ -60,14 +119,15 @@
                 return '<div class="asset-align" style="display:block;text-align:left;' . $vOffsetStyle . $hOffsetStyle . ($dimsStyle !== '' ? $dimsStyle : 'width:100%;') . '">' . $svg . '</div>';
             }
             if (($asset['kind'] ?? null) === 'bitmap' && !empty($asset['dataUrl'])) {
-                $imgStyle = $dimsStyle !== ''
-                    ? 'display:block;' . $vOffsetStyle . $hOffsetStyle . $dimsStyle
-                    : 'width:100%;height:auto;max-width:100%;display:block;';
                 // text-align:left neutraliza el text-align:center heredado de los
                 // contenedores: dompdf lo aplica también a bloques y duplicaría
                 // el centrado ya calculado en margin-left.
+                $dataUrl = $rotate ? $rotateBitmapDataUrl90($asset['dataUrl']) : $asset['dataUrl'];
+                $imgStyle = $dimsStyle !== ''
+                    ? 'display:block;' . $vOffsetStyle . $hOffsetStyle . $dimsStyle
+                    : 'width:100%;height:auto;max-width:100%;display:block;';
                 return '<div class="asset-align" style="width:100%;text-align:left;"><img src="' .
-                    e($asset['dataUrl']) .
+                    e($dataUrl) .
                     '" alt="' .
                     e($asset['title'] ?? 'Asset') .
                     '" style="' . $imgStyle . '"></div>';
@@ -114,7 +174,7 @@
             return '
         <div class="footer">
             <div class="footer-col-left"><span class="footer-brand">' .
-                e($document['footer']['left'] ?? 'DIAlux Web') .
+                e($document['footer']['left'] ?? 'PCL') .
                 '</span></div>
             <div class="footer-col-center">' .
                 e($renderFooterDate()) .
@@ -127,13 +187,13 @@
         };
 
         /* ── Tabla de luminarias ────────────────────────────────────── */
-        $renderLuminaireTable = static function (array $items, bool $totals = false) use (
+        $renderLuminaireTable = static function (array $items, bool $totals = false, ?array $totalsOverride = null) use (
             $document,
             $formatNumber,
         ): string {
             $totalsBox = '';
-            if ($totals && !empty($document['luminaireTotals'])) {
-                $t = $document['luminaireTotals'];
+            $t = $totalsOverride ?? ($document['luminaireTotals'] ?? []);
+            if ($totals && !empty($t)) {
                 $totalsBox =
                     '
             <div class="luminaire-totals-box">
@@ -436,6 +496,22 @@
                     ? ((float) $detail['totalPowerWatts'] * 8 * 365) / 1000
                     : null;
 
+            // Estado real por métrica (RequirementEvaluation), no un check decorativo fijo.
+            $evaluationsByMetric = collect($detail['requirementEvaluations'] ?? [])
+                ->keyBy('metric');
+            $renderVerificationCell = static function (string $metric) use ($evaluationsByMetric): string {
+                $evaluation = $evaluationsByMetric->get($metric);
+                $status = $evaluation['status'] ?? 'not-evaluated';
+                $label = match ($status) {
+                    'pass' => 'Conforme',
+                    'fail' => 'No conforme',
+                    'stale' => 'Desactualizado',
+                    default => 'No evaluado',
+                };
+
+                return '<span class="verification-status status-' . e($status) . '">' . e($label) . '</span>';
+            };
+
             return '
         <div class="detail-block-title" style="margin-bottom:2mm;">Resultados</div>
         <table class="ambient-results-table">
@@ -458,7 +534,9 @@
                     <td class="result-number">&ge; ' .
                 $formatNumber($detail['targetLux'] ?? null, 0, ' lx') .
                 '</td>
-                    <td class="result-check"><span class="verification-check"></span></td>
+                    <td class="result-check">' .
+                $renderVerificationCell('illuminance') .
+                '</td>
                     <td class="result-number"><span class="calculation-index">' .
                 e($detail['calculationIndex'] ?? '-') .
                 '</span></td>
@@ -471,7 +549,9 @@
                     <td class="result-number">&ge; ' .
                 $formatNumber($detail['uniformityTarget'] ?? null, 2) .
                 '</td>
-                    <td class="result-check"><span class="verification-check"></span></td>
+                    <td class="result-check">' .
+                $renderVerificationCell('uniformity') .
+                '</td>
                     <td class="result-number"><span class="calculation-index">' .
                 e($detail['calculationIndex'] ?? '-') .
                 '</span></td>
@@ -503,7 +583,9 @@
                     <td class="result-number">&le; ' .
                 $formatNumber($detail['ugrLimit'] ?? null, 0) .
                 '</td>
-                    <td class="result-check"><span class="verification-check"></span></td>
+                    <td class="result-check">' .
+                $renderVerificationCell('ugr') .
+                '</td>
                     <td></td>
                 </tr>
                 <tr>
@@ -512,8 +594,8 @@
                     <td class="result-number">' .
                 $formatNumber($consumption, 0, ' kWh/a') .
                 '</td>
-                    <td class="result-number">m&aacute;x. 150 kWh/a</td>
-                    <td class="result-check"><span class="verification-check"></span></td>
+                    <td class="result-number">-</td>
+                    <td class="result-check"></td>
                     <td></td>
                 </tr>
                 <tr>
@@ -643,23 +725,32 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                 (collect($pageAssets)->firstWhere('id', 'formal-cover-svg') ??
                     (collect($pageAssets)->firstWhere('id', 'viewer-capture') ?? collect($pageAssets)->first()));
 
-            // Default landscape pages (tables)
-            $landscapePageKinds = ['ambient-list', 'room-ambient-list', 'calculation-object-list'];
+            // Editor2DController ya precalcula esto (mismo criterio abajo) para
+            // poder repartir las páginas entre el render portrait y el
+            // landscape antes de fusionarlos con FPDI. Si no viene precalculado
+            // (p. ej. tests que renderizan esta vista directamente) se aplica
+            // la misma regla aquí como antes.
+            if (array_key_exists('isLandscape', $page)) {
+                $isLandscapePage = (bool) $page['isLandscape'];
+            } else {
+                // Default landscape pages (tables)
+                $landscapePageKinds = ['ambient-list', 'room-ambient-list', 'calculation-object-list'];
 
-            $isLandscapePage = in_array($page['kind'] ?? '', $landscapePageKinds, true);
+                $isLandscapePage = in_array($page['kind'] ?? '', $landscapePageKinds, true);
 
-            // Dynamically set orientation for plan pages based on asset dimensions
-            if (in_array($page['kind'] ?? '', ['terrain-cad', 'terrain-architectural'], true)) {
-                $mainAsset = collect($pageAssets)->first();
-                if ($mainAsset && isset($mainAsset['width'], $mainAsset['height'])) {
-                    $isLandscapePage = $mainAsset['width'] > $mainAsset['height'];
+                // Dynamically set orientation for plan pages based on asset dimensions
+                if (in_array($page['kind'] ?? '', ['terrain-cad', 'terrain-architectural'], true)) {
+                    $mainAsset = collect($pageAssets)->first();
+                    if ($mainAsset && isset($mainAsset['width'], $mainAsset['height'])) {
+                        $isLandscapePage = $mainAsset['width'] > $mainAsset['height'];
+                    }
                 }
             }
         @endphp
 
         <section
             class="page {{ $page['kind'] === 'cover' ? 'cover-page' : '' }} {{ $isLandscapePage ? 'page-landscape' : '' }}">
-            <div class="watermark">HYPERIUMTECH</div>
+            <div class="watermark">PCL</div>
 
             {{-- ══ PORTADA ══════════════════════════════════════════ --}}
             @if ($page['kind'] === 'cover')
@@ -679,8 +770,8 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
 
                     {{-- Barra superior oscura: marca + etiqueta de documento --}}
                     <div class="cover-top-bar">
-                        <div class="cover-brand">HYPERIUMTECH</div>
-                        <div class="cover-project-tag">Informe Luminot&eacute;cnico &middot; DIAlux Web</div>
+                        <div class="cover-brand">PCL</div>
+                        <div class="cover-project-tag">Informe Luminot&eacute;cnico &middot; PCL</div>
                     </div>
 
                     {{-- Franja de clasificación teal --}}
@@ -825,9 +916,18 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             @endif
                         @endforeach
 
-                        {{-- Lista global de luminarias --}}
+                        {{-- Lista global de luminarias (puede paginarse en continuaciones) --}}
                     @elseif ($page['kind'] === 'luminaire-list')
-                        {!! $renderLuminaireTable($document['luminaires'] ?? [], true) !!}
+                        @php
+                            $luminaireRangeStart = $page['rowRangeStart'] ?? 0;
+                            $luminaireRangeEnd = $page['rowRangeEnd'] ?? count($document['luminaires'] ?? []);
+                            $luminairePageItems = array_slice(
+                                $document['luminaires'] ?? [],
+                                $luminaireRangeStart,
+                                $luminaireRangeEnd - $luminaireRangeStart,
+                            );
+                        @endphp
+                        {!! $renderLuminaireTable($luminairePageItems, $luminaireRangeStart === 0) !!}
 
                         {{-- Ficha de producto individual --}}
                     @elseif ($page['kind'] === 'product-sheet')
@@ -856,16 +956,15 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                 </div>
                                 <div class="row">
                                     <div class="product-sheet-left-col">
-                                        @if ($logoAsset)
-                                            <div class="product-image-container" style="height:18mm;">
-                                                {!! $renderAsset(is_array($logoAsset) ? $logoAsset : null, 70, 15, true) !!}
-                                            </div>
-                                        @endif
-                                        @if ($photoAsset || $lineDrawingAsset)
-                                            <div class="product-image-container">
-                                                {!! $renderAsset(is_array($photoAsset) ? $photoAsset : (is_array($lineDrawingAsset) ? $lineDrawingAsset : null), 70, 46, true) !!}
-                                            </div>
-                                        @endif
+                                        {{-- Logo y foto/dibujo se muestran siempre (con su propio fallback
+                                             "Gráfico no disponible." de $renderAsset) en vez de desaparecer
+                                             en silencio cuando el producto no trae esos assets. --}}
+                                        <div class="product-image-container" style="height:18mm;">
+                                            {!! $renderAsset(is_array($logoAsset) ? $logoAsset : null, 70, 15, true) !!}
+                                        </div>
+                                        <div class="product-image-container">
+                                            {!! $renderAsset(is_array($photoAsset) ? $photoAsset : (is_array($lineDrawingAsset) ? $lineDrawingAsset : null), 70, 46, true) !!}
+                                        </div>
                                         <table class="product-table">
                                             @if (is_array($technicalRows) && count($technicalRows) > 0)
                                                 @foreach ($technicalRows as $row)
@@ -951,7 +1050,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         @endphp
                         @if (is_array($ambientListAsset))
                             <div class="terrain-plan-wrap" style="height:128mm;">
-                                {!! $renderAsset($ambientListAsset, 184, 124, true) !!}
+                                {!! $renderAsset($ambientListAsset, 184, 124, true, true) !!}
                             </div>
                         @endif
                         <table class="luminaire-table ambient-list-table" style="margin-top:3mm; table-layout:fixed;">
@@ -992,7 +1091,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         @endphp
                         @if (is_array($cadAsset))
                             <div class="terrain-full-page">
-                                {!! $isLandscapePage ? $renderAsset($cadAsset, 255, 140, true) : $renderAsset($cadAsset, 188, 226, true) !!}
+                                {!! $isLandscapePage ? $renderAsset($cadAsset, 255, 140, true, true) : $renderAsset($cadAsset, 188, 226, true, true) !!}
                             </div>
                         @else
                             <div class="placeholder-box">Plano CAD no disponible en esta exportación.</div>
@@ -1010,7 +1109,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         @endphp
                         @if (is_array($drawnTerrain))
                             <div class="terrain-full-page">
-                                {!! $isLandscapePage ? $renderAsset($drawnTerrain, 255, 140, true) : $renderAsset($drawnTerrain, 188, 226, true) !!}
+                                {!! $isLandscapePage ? $renderAsset($drawnTerrain, 255, 140, true, true) : $renderAsset($drawnTerrain, 188, 226, true, true) !!}
                             </div>
                         @else
                             <div class="placeholder-box">Plano Arquitectónico no disponible en esta exportación.</div>
@@ -1065,19 +1164,48 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             luz 1</div>
                         {!! $renderCalculationObjectsTable($roomAmbients) !!}
 
-                        {{-- Objetos de cálculo (filtrado por recinto para que quepa en la hoja) --}}
+                        {{-- Objetos de cálculo (filtrado por recinto, paginado si excede una hoja) --}}
                     @elseif ($page['kind'] === 'calculation-object-list')
                         @php
                             $pageRoomId = $page['roomId'] ?? null;
-                            $calcAmbients = $pageRoomId
+                            $calcAmbientsFull = $pageRoomId
                                 ? collect($document['ambientDetails'] ?? [])
                                     ->filter(fn(array $a): bool => ($a['roomId'] ?? null) === $pageRoomId)
                                     ->values()
                                     ->all()
                                 : ($document['ambientDetails'] ?? []);
+                            $calcRangeStart = $page['rowRangeStart'] ?? 0;
+                            $calcRangeEnd = $page['rowRangeEnd'] ?? count($calcAmbientsFull);
+                            $calcAmbients = array_slice(
+                                $calcAmbientsFull,
+                                $calcRangeStart,
+                                $calcRangeEnd - $calcRangeStart,
+                            );
                         @endphp
                         <div class="detail-block-title" style="margin-bottom:2mm;">Planos &uacute;tiles</div>
                         {!! $renderCalculationObjectsTable($calcAmbients) !!}
+
+                        {{-- Lista de luminarias consolidada del nivel (Scene), puede paginarse --}}
+                    @elseif ($page['kind'] === 'level-luminaire-list')
+                        @php
+                            $levelSummary = $page['levelSummary'] ?? null;
+                            $levelLuminairesFull = $levelSummary['luminaires'] ?? [];
+                            $levelRangeStart = $page['rowRangeStart'] ?? 0;
+                            $levelRangeEnd = $page['rowRangeEnd'] ?? count($levelLuminairesFull);
+                            $levelPageItems = array_slice(
+                                $levelLuminairesFull,
+                                $levelRangeStart,
+                                $levelRangeEnd - $levelRangeStart,
+                            );
+                        @endphp
+                        <div class="detail-block-title" style="margin-bottom:2mm;">
+                            Lista de luminarias &mdash; {{ $levelSummary['sceneName'] ?? ($page['sceneName'] ?? 'Nivel') }}
+                        </div>
+                        {!! $renderLuminaireTable(
+                            $levelPageItems,
+                            $levelRangeStart === 0,
+                            $levelSummary['luminaireTotals'] ?? null,
+                        ) !!}
 
                         {{-- Resumen de ambiente --}}
                     @elseif ($page['kind'] === 'ambient-summary' && !empty($page['ambientDetail']))
@@ -1278,44 +1406,33 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
 
                         {{-- Glosario --}}
                     @elseif ($page['kind'] === 'glossary')
+                        @php
+                            $glossaryFull = $document['glossary'] ?? [];
+                            $glossaryRangeStart = $page['rowRangeStart'] ?? 0;
+                            $glossaryRangeEnd = $page['rowRangeEnd'] ?? count($glossaryFull);
+                            $glossaryPageItems = array_slice(
+                                $glossaryFull,
+                                $glossaryRangeStart,
+                                $glossaryRangeEnd - $glossaryRangeStart,
+                            );
+                            $glossaryCurrentLetter = null;
+                        @endphp
+                        @if (empty($glossaryPageItems))
+                            <div class="placeholder-box">Este informe no utiliza términos de glosario.</div>
+                        @endif
                         <table class="glossary-grid">
-                            <tr>
-                                <td class="glossary-term">Em (lx)</td>
-                                <td class="glossary-definition">Iluminancia media mantenida en la superficie de
-                                    referencia (plano útil). Representa el valor promedio de lux calculado sobre toda el
-                                    área, considerando la depreciación de las luminarias.</td>
-                            </tr>
-                            <tr>
-                                <td class="glossary-term">Emin / Emax</td>
-                                <td class="glossary-definition">Iluminancia mínima y máxima calculada respectivamente
-                                    en la grilla del plano de evaluación. Identifica los puntos más oscuros y brillantes
-                                    del local.</td>
-                            </tr>
-                            <tr>
-                                <td class="glossary-term">Uo (Uniformidad)</td>
-                                <td class="glossary-definition">Uniformidad general de iluminancias (Uo = Emin / Em).
-                                    Evalúa si la luz se distribuye de forma pareja o si existen caídas bruscas. La
-                                    normativa exige valores referenciales según perfil del local.</td>
-                            </tr>
-                            <tr>
-                                <td class="glossary-term">UGR</td>
-                                <td class="glossary-definition">Unified Glare Rating. Índice para prever la
-                                    probabilidad de que una instalación de iluminación interior produzca un
-                                    deslumbramiento molesto en la visión de los usuarios (valores menores indican menor
-                                    deslumbramiento).</td>
-                            </tr>
-                            <tr>
-                                <td class="glossary-term">Flujo luminoso (lm)</td>
-                                <td class="glossary-definition">Cantidad total de luz emitida por la luminaria en todas
-                                    las direcciones. Dato base para estimar la cantidad de luminarias necesarias para
-                                    alcanzar el E objetivo.</td>
-                            </tr>
-                            <tr>
-                                <td class="glossary-term">Plano útil</td>
-                                <td class="glossary-definition">Superficie imaginaria sobre la cual se espera tener la
-                                    iluminación requerida para desempeñar una actividad. Generalmente se ajusta entre
-                                    0.75m a 0.85m del suelo.</td>
-                            </tr>
+                            @foreach ($glossaryPageItems as $entry)
+                                @if (($entry['letter'] ?? null) !== $glossaryCurrentLetter)
+                                    @php $glossaryCurrentLetter = $entry['letter'] ?? null; @endphp
+                                    <tr>
+                                        <td colspan="2" class="glossary-letter-heading">{{ $glossaryCurrentLetter }}</td>
+                                    </tr>
+                                @endif
+                                <tr>
+                                    <td class="glossary-term">{{ $entry['term'] }}{{ !empty($entry['abbreviation']) ? ' (' . $entry['abbreviation'] . ')' : '' }}</td>
+                                    <td class="glossary-definition">{{ $entry['definition'] }}</td>
+                                </tr>
+                            @endforeach
                         </table>
 
                         {{-- Fallback para tipos no reconocidos --}}
