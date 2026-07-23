@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import { createScaleConfig, useEditorStore, useScaleConfig} from '@/pages/dialux/hooks/useEditorStore';
 import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
-import { saveDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import {
+    saveDialuxPlanFile,
+    uploadDialuxPlanFile,
+} from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
@@ -75,8 +78,9 @@ export const Toolbar: React.FC = () => {
                 if (projectId && store.activeSceneId) {
                     try {
                         await saveDialuxPlanFile(projectId, store.activeSceneId, file);
+                        await uploadDialuxPlanFile(projectId, store.activeSceneId, file);
                     } catch (error) {
-                        console.warn('No se pudo guardar el plano DIAlux local.', error);
+                        console.warn('No se pudo sincronizar el plano DIAlux.', error);
                     }
                 }
                 setPendingFile(file);

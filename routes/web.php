@@ -16,6 +16,7 @@ use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
 use App\Http\Controllers\Dialux\ElectricalCatalogController as DialuxElectricalCatalogController;
 use App\Http\Controllers\Dialux\ElectricalProjectController as DialuxElectricalProjectController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
+use App\Http\Controllers\Dialux\PlanFileController as DialuxPlanFileController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
 use App\Http\Controllers\EttpController;
@@ -98,6 +99,8 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
     });
 
     // ─── Proyecto DIAlux individual — debe ir al final (wildcard) ───────────
+    Route::post('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'store'])->name('plans.store');
+    Route::get('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'show'])->name('plans.show');
     Route::get('/{dialuxProject}/electrico', [DialuxElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
     Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
     Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');

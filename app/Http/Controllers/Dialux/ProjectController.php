@@ -11,6 +11,7 @@ use App\Services\ProjectQuotaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -106,6 +107,7 @@ class ProjectController extends Controller
     {
         $this->authorizeProyecto($dialuxProject);
 
+        Storage::disk('local')->deleteDirectory("dialux/plans/{$dialuxProject->id}");
         $dialuxProject->delete();
 
         return redirect()->route('dialux.index')

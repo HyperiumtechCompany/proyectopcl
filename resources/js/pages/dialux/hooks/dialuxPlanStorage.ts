@@ -97,3 +97,88 @@ export function storedDialuxPlanToFile(plan: StoredDialuxPlan): File {
         lastModified: plan.lastModified,
     });
 }
+
+function readXsrfTokenFromCookie(): string {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+export async function uploadDialuxPlanFile(
+    projectId: string,
+    sceneId: string,
+    file: File,
+): Promise<void> {
+    const formData = new FormData();
+    formData.append('plan', file);
+
+    const response = await fetch(
+        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`,
+        {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: formData,
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error(`No se pudo guardar el plano en el servidor (HTTP ${response.status}).`);
+    }
+}
+
+export async function loadDialuxPlanFromServer(
+    projectId: string,
+    sceneId: string,
+): Promise<StoredDialuxPlan | null> {
+    const response = await fetch(
+        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`,
+        {
+            headers: {
+                Accept: 'application/octet-stream',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        },
+    );
+
+    if (response.status === 404) return null;
+    if (!response.ok) {
+        throw new Error(`No se pudo descargar el plano (HTTP ${response.status}).`);
+    }
+
+    const blob = await response.blob();
+    const encodedName = response.headers.get('X-Dialux-File-Name');
+
+    return {
+        projectId,
+        sceneId,
+        fileName: encodedName ? decodeURIComponent(encodedName) : `plano-${sceneId}.dxf`,
+        mimeType: blob.type || 'application/octet-stream',
+        lastModified: Date.now(),
+        blob,
+    };
+}
+
+export async function uploadLocalDialuxPlanIfMissing(
+    projectId: string,
+    sceneId: string,
+    plan: StoredDialuxPlan,
+): Promise<void> {
+    const url = `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`;
+    const response = await fetch(url, {
+        method: 'HEAD',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+    });
+
+    if (response.ok) return;
+    if (response.status !== 404) {
+        throw new Error(`No se pudo verificar el plano remoto (HTTP ${response.status}).`);
+    }
+
+    await uploadDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(plan));
+}

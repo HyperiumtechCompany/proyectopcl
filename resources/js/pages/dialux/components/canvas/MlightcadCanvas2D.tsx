@@ -33,7 +33,10 @@ import {
 } from '@/pages/dialux/hooks/useEditorStore';
 import {
     loadDialuxPlan,
+    loadDialuxPlanFromServer,
+    saveDialuxPlanFile,
     storedDialuxPlanToFile,
+    uploadLocalDialuxPlanIfMissing,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import {
     clampOpeningOffsetToWallSegment,
@@ -931,22 +934,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         useEffect(() => {
             if (!cadRef.current || initAttemptedRef.current) return;
             initAttemptedRef.current = true;
-            engine.initViewer(cadRef.current).then(async () => {
-                const storedPlan =
-                    projectId && activeSceneId
-                        ? await loadDialuxPlan(projectId, activeSceneId)
-                        : null;
-                if (storedPlan) {
-                    try {
-                        const file = storedDialuxPlanToFile(storedPlan);
-                        const opened = await engine.openFile(file);
-                        if (opened && file.name.toLowerCase().endsWith('.dxf')) {
-                            await parseDxf?.(file, getEffectiveScale(scene?.scaleConfig));
-                        }
-                    } catch (error) {
-                        console.warn('No se pudo restaurar el plano DIAlux local.', error);
-                    }
-                }
+            engine.initViewer(cadRef.current).then(() => {
                 // Forzar resize + posicionar origen en primer cuadrante
                 setTimeout(() => {
                     window.dispatchEvent(new Event('resize'));
@@ -955,6 +943,68 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 }, 100);
             });
         }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+        const restoredSceneRef = useRef<string | null>(null);
+        useEffect(() => {
+            if (!engine.isReady || !projectId || !activeSceneId) return;
+            const restoreKey = `${projectId}::${activeSceneId}`;
+            if (restoredSceneRef.current === restoreKey) return;
+            restoredSceneRef.current = restoreKey;
+
+            void (async () => {
+                let storedPlan = await loadDialuxPlan(projectId, activeSceneId);
+                if (storedPlan) {
+                    try {
+                        await uploadLocalDialuxPlanIfMissing(
+                            projectId,
+                            activeSceneId,
+                            storedPlan,
+                        );
+                    } catch (error) {
+                        console.warn('No se pudo migrar el plano local al servidor.', error);
+                    }
+                }
+                if (!storedPlan) {
+                    try {
+                        storedPlan = await loadDialuxPlanFromServer(
+                            projectId,
+                            activeSceneId,
+                        );
+                        if (storedPlan) {
+                            await saveDialuxPlanFile(
+                                projectId,
+                                activeSceneId,
+                                storedDialuxPlanToFile(storedPlan),
+                            );
+                        }
+                    } catch (error) {
+                        console.warn('No se pudo descargar el plano DIAlux.', error);
+                    }
+                }
+
+                if (!storedPlan) {
+                    await engine.newDocument();
+                    return;
+                }
+
+                try {
+                    const file = storedDialuxPlanToFile(storedPlan);
+                    const opened = await engine.openFile(file);
+                    if (opened && file.name.toLowerCase().endsWith('.dxf')) {
+                        await parseDxf?.(file, getEffectiveScale(scene?.scaleConfig));
+                    }
+                } catch (error) {
+                    console.warn('No se pudo restaurar el plano DIAlux.', error);
+                }
+            })();
+        }, [
+            activeSceneId,
+            engine,
+            engine.isReady,
+            parseDxf,
+            projectId,
+            scene?.scaleConfig,
+        ]);
 
         // ── Re-activación de la vista 2D (volviendo de 3D) ────────────────────────
         // Cuando el canvas 2D estaba oculto (display:none) mlightcad no actualiza
