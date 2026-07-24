@@ -4,6 +4,7 @@ import {
     deriveSceneAmbientSpaces,
     findAmbientSpaceAtPoint,
 } from './ambientSpaces';
+import { buildRoomLightingInputs } from './roomLighting';
 import type { Room, Scene, Wall } from './types';
 
 const corridorRoom = {
@@ -48,6 +49,54 @@ describe('ambientSpaces', () => {
         expect(ambients[0]?.roomId).toBe('corridor-1');
         expect(ambients[0]?.wallId).toBeUndefined();
         expect(ambients[0]?.area).toBe(12);
+    });
+
+    it('preserves a manually edited lux value when deriving the result ambient', () => {
+        const room = {
+            ...corridorRoom,
+            normativeStandard: 'en_12464',
+            normativeCategory: 'Educacion',
+            normativeActivity: 'Aulas para clases nocturnas',
+            illuminanceLux: 500,
+            norma: 500,
+            ambientConfigs: {
+                'ambient-1': {
+                    name: 'Aula Inicial 1',
+                    normativeStandard: 'en_12464',
+                    normativeCategory: 'Educacion',
+                    activity: 'Aulas para clases nocturnas',
+                    illuminanceLux: 300,
+                },
+            },
+        } satisfies Room;
+
+        const [ambient] = deriveAmbientSpaces(room, [], []);
+        const calculation = buildRoomLightingInputs(ambient!.room, []);
+
+        expect(ambient?.room.illuminanceLux).toBe(300);
+        expect(ambient?.room.norma).toBe(300);
+        expect(ambient?.room.normativeLabel).toContain('educación de adultos');
+        expect(calculation.illuminanceLux).toBe(300);
+        expect(calculation.lumensRequired).toBeGreaterThan(0);
+    });
+
+    it('uses the lux already saved on a wall for legacy derived ambients', () => {
+        const room = {
+            ...corridorRoom,
+            id: 'room-legacy',
+            roomType: 'room',
+            illuminanceLux: 500,
+            norma: 500,
+        } satisfies Room;
+        const wall = {
+            ...closedWallInsideCorridor,
+            illuminanceLux: 300,
+        } satisfies Wall;
+
+        const [ambient] = deriveAmbientSpaces(room, [wall], []);
+
+        expect(ambient?.room.illuminanceLux).toBe(300);
+        expect(buildRoomLightingInputs(ambient!.room, []).illuminanceLux).toBe(300);
     });
 
     it('attaches corridor room type to its containing room as an ambient', () => {

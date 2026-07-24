@@ -217,8 +217,10 @@ export function flattenInsumos(
         return rows;
     }
 
-    //  3. SOLO tipos que existen en el Excel
-    const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos'];
+    //  3. Todas las categorías de un ACU (antes excluía subcontratos/subpartidas,
+    //     dejando esas dos pestañas del modal siempre vacías aunque el ACU sí
+    //     tuviera esos componentes cargados)
+    const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
 
     let procesados = 0;
 

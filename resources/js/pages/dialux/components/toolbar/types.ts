@@ -4,6 +4,7 @@ export type PanelId =
     | 'herramientas'
     | 'construccion'
     | 'luz'
+    | 'tomas'
     | 'medir'
     | 'vista'
     | 'editar'

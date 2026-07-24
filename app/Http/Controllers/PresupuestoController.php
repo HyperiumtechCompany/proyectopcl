@@ -3559,6 +3559,105 @@ class PresupuestoController extends Controller
         $sheet->getColumnDimension('E')->setWidth(15);
         $sheet->getColumnDimension('F')->setWidth(18);
 
+        // ─── PESTAÑA ACUs ───────────────────────────────────────────────────────────
+        $sheetAcus = $spreadsheet->createSheet();
+        $sheetAcus->setTitle('ACUs');
+
+        // Configuración visual de la hoja de ACUs
+        $sheetAcus->getColumnDimension('A')->setWidth(15);
+        $sheetAcus->getColumnDimension('B')->setWidth(50);
+        $sheetAcus->getColumnDimension('C')->setWidth(12);
+        $sheetAcus->getColumnDimension('D')->setWidth(15);
+        $sheetAcus->getColumnDimension('E')->setWidth(15);
+        $sheetAcus->getColumnDimension('F')->setWidth(15);
+        $sheetAcus->getColumnDimension('G')->setWidth(15);
+
+        // Obtener todos los ACUs
+        $acus = DB::connection('costos_tenant')->table('presupuesto_acus')->orderBy('partida')->get();
+
+        $filaAcu = 1;
+
+        foreach ($acus as $acu) {
+            // Título principal de la partida
+            $sheetAcus->mergeCells("A{$filaAcu}:G{$filaAcu}");
+            $sheetAcus->setCellValue("A{$filaAcu}", 'Partida: '.$acu->partida.' - '.$acu->descripcion);
+            $sheetAcus->getStyle("A{$filaAcu}")->getFont()->setBold(true)->setSize(11);
+            $sheetAcus->getStyle("A{$filaAcu}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFD9EAF7');
+            $filaAcu++;
+
+            // Rendimiento y Costo Unitario
+            $sheetAcus->setCellValue("A{$filaAcu}", 'Rendimiento');
+            $sheetAcus->setCellValue("B{$filaAcu}", $acu->unidad.'/DIA   MO. '.number_format($acu->rendimiento, 4).'   EQ. '.number_format($acu->rendimiento, 4));
+
+            $sheetAcus->mergeCells("D{$filaAcu}:E{$filaAcu}");
+            $sheetAcus->setCellValue("D{$filaAcu}", 'Costo unitario directo por : '.$acu->unidad);
+            $sheetAcus->setCellValue("F{$filaAcu}", (float) $acu->costo_unitario_total);
+            $sheetAcus->getStyle("F{$filaAcu}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheetAcus->getStyle("A{$filaAcu}:F{$filaAcu}")->getFont()->setBold(true);
+            $filaAcu++;
+            $filaAcu++; // Espacio
+
+            // Helper para imprimir recursos
+            $imprimirRecursos = function ($titulo, $tabla, $precioCampo) use (&$sheetAcus, &$filaAcu, $acu) {
+                $recursos = DB::connection('costos_tenant')->table($tabla)->where('acu_id', $acu->id)->orderBy('item_order')->get();
+                if ($recursos->isEmpty()) {
+                    return;
+                }
+
+                // Encabezados
+                $sheetAcus->setCellValue("A{$filaAcu}", $titulo);
+                $sheetAcus->setCellValue("B{$filaAcu}", 'Descripción');
+                $sheetAcus->setCellValue("C{$filaAcu}", 'Unidad');
+                $sheetAcus->setCellValue("D{$filaAcu}", 'Cuadrilla');
+                $sheetAcus->setCellValue("E{$filaAcu}", 'Cantidad');
+                $sheetAcus->setCellValue("F{$filaAcu}", 'Precio S/');
+                $sheetAcus->setCellValue("G{$filaAcu}", 'Parcial S/');
+
+                $sheetAcus->getStyle("A{$filaAcu}:G{$filaAcu}")->getFont()->setBold(true)->setColor(new Color(Color::COLOR_WHITE));
+                $sheetAcus->getStyle("A{$filaAcu}:G{$filaAcu}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF1F4E79');
+                $filaAcu++;
+
+                $subtotal = 0;
+                foreach ($recursos as $rec) {
+                    $sheetAcus->setCellValue("B{$filaAcu}", $rec->descripcion);
+                    $sheetAcus->setCellValue("C{$filaAcu}", $rec->unidad ?? '');
+
+                    if (isset($rec->recursos)) {
+                        $sheetAcus->setCellValue("D{$filaAcu}", (float) $rec->recursos);
+                    }
+
+                    $sheetAcus->setCellValue("E{$filaAcu}", (float) $rec->cantidad);
+                    $sheetAcus->setCellValue("F{$filaAcu}", (float) $rec->{$precioCampo});
+                    $sheetAcus->setCellValue("G{$filaAcu}", (float) $rec->parcial);
+
+                    $sheetAcus->getStyle("D{$filaAcu}:E{$filaAcu}")->getNumberFormat()->setFormatCode('#,##0.0000');
+                    $sheetAcus->getStyle("F{$filaAcu}:G{$filaAcu}")->getNumberFormat()->setFormatCode('#,##0.00');
+
+                    $subtotal += $rec->parcial;
+                    $filaAcu++;
+                }
+
+                // Subtotal
+                $sheetAcus->setCellValue("F{$filaAcu}", 'Subtotal:');
+                $sheetAcus->setCellValue("G{$filaAcu}", $subtotal);
+                $sheetAcus->getStyle("F{$filaAcu}:G{$filaAcu}")->getFont()->setBold(true);
+                $sheetAcus->getStyle("G{$filaAcu}")->getNumberFormat()->setFormatCode('#,##0.00');
+                $filaAcu++;
+                $filaAcu++; // Espacio
+            };
+
+            $imprimirRecursos('Mano de Obra', 'acu_mano_de_obra', 'precio_unitario');
+            $imprimirRecursos('Materiales', 'acu_materiales', 'precio_unitario');
+            $imprimirRecursos('Equipos', 'acu_equipos', 'precio_hora');
+            $imprimirRecursos('Subcontratos', 'acu_subcontratos', 'precio_unitario');
+            $imprimirRecursos('Subpartidas', 'acu_subpartidas', 'precio_unitario');
+
+            $filaAcu++; // Espacio extra entre ACUs
+        }
+
+        // Volver a la primera pestaña
+        $spreadsheet->setActiveSheetIndex(0);
+
         // ─── DESCARGAR ──────────────────────────────────────────────────────────────
         $writer = new Xlsx($spreadsheet);
 

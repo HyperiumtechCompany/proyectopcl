@@ -52,9 +52,19 @@ const WallInteriorLightingSection: React.FC<{
     scene: Scene | null;
     ambientMatch: DerivedAmbientSpace | null;
     onUpdate: (patch: Partial<Omit<Wall, 'id'>>) => void;
-}> = ({ wall, scene, ambientMatch, onUpdate }) => {
+    onUpdateAmbient: (
+        patch: Partial<NonNullable<Room['ambientConfigs']>[string]>,
+    ) => void;
+}> = ({ wall, scene, ambientMatch, onUpdate, onUpdateAmbient }) => {
     const store = useEditorStore();
-    const standard = store.defaultRoomNormativeStandard as NormativeStandard;
+    const ambientConfig = ambientMatch?.sourceRoom.ambientConfigs?.[
+        ambientMatch.configKey
+    ];
+    const standard = (
+        ambientConfig?.normativeStandard ??
+        ambientMatch?.sourceRoom.normativeStandard ??
+        store.defaultRoomNormativeStandard
+    ) as NormativeStandard;
 
     // Estado local: independiente del ajuste global de la herramienta
     // "fixture-grid" del canvas y de la grilla de techo del ambiente (que
@@ -82,13 +92,27 @@ const WallInteriorLightingSection: React.FC<{
     }
     const wallArea = wallLen * wall.height;
 
+    const normativeCategory =
+        ambientConfig?.normativeCategory ?? wall.normativeCategory;
+    const normativeSection =
+        ambientConfig?.normativeSection ?? wall.normativeSection;
+    const normativeActivity =
+        ambientConfig?.activity ?? wall.normativeActivity;
     const cats = getCategoryOptions(standard);
-    const sects = getSectionOptions(standard, wall.normativeCategory);
-    const activities = getActivityOptions(standard, wall.normativeCategory, wall.normativeSection);
+    const sects = getSectionOptions(standard, normativeCategory);
+    const activities = getActivityOptions(
+        standard,
+        normativeCategory,
+        normativeSection,
+    );
 
     const ambientRoom = ambientMatch?.room ?? null;
 
-    const lux = wall.illuminanceLux ?? 300;
+    const lux =
+        ambientConfig?.illuminanceLux ??
+        wall.illuminanceLux ??
+        ambientMatch?.room.illuminanceLux ??
+        300;
     const fixLumens = wall.fixtureLumens ?? 4000;
     // Mismo factor de utilización que el cálculo de techo del ambiente (índice
     // del local + reflectancias), en vez de asumir ~99% de aprovechamiento:
@@ -189,32 +213,51 @@ const WallInteriorLightingSection: React.FC<{
 
             <SelectField
                 label="Sección / Área"
-                value={wall.normativeCategory ?? ''}
+                value={normativeCategory ?? ''}
                 options={cats.map(c => ({ value: c, label: c }))}
-                onChange={(val) => onUpdate({ normativeCategory: val, normativeSection: undefined, normativeActivity: undefined })}
+                onChange={(val) => {
+                    onUpdate({ normativeCategory: val, normativeSection: undefined, normativeActivity: undefined });
+                    onUpdateAmbient({
+                        normativeStandard: standard,
+                        normativeCategory: val,
+                        normativeSection: undefined,
+                        activity: undefined,
+                    });
+                }}
             />
-            {wall.normativeCategory && (
+            {normativeCategory && (
                 <SelectField
                     label="Subsección"
-                    value={wall.normativeSection ?? ''}
+                    value={normativeSection ?? ''}
                     options={sects.map(s => ({ value: s, label: s }))}
-                    onChange={(val) => onUpdate({ normativeSection: val, normativeActivity: undefined })}
+                    onChange={(val) => {
+                        onUpdate({ normativeSection: val, normativeActivity: undefined });
+                        onUpdateAmbient({
+                            normativeSection: val,
+                            activity: undefined,
+                        });
+                    }}
                 />
             )}
-            {wall.normativeSection && (
+            {normativeSection && (
                 <SelectField
                     label="Aplicación"
-                    value={wall.normativeActivity ?? ''}
+                    value={normativeActivity ?? ''}
                     options={activities.map(a => ({ value: a.activity, label: a.activity }))}
                     onChange={(val) => {
                         const act = activities.find(a => a.activity === val);
-                        onUpdate({ normativeActivity: val, illuminanceLux: act?.illuminanceLux ?? lux });
+                        const illuminanceLux = act?.illuminanceLux ?? lux;
+                        onUpdate({ normativeActivity: val, illuminanceLux });
+                        onUpdateAmbient({ activity: val, illuminanceLux });
                     }}
                 />
             )}
 
             <EditField label="Iluminancia (lux)" value={lux} min={10} max={2000} step={10}
-                onChange={(val) => onUpdate({ illuminanceLux: val })} />
+                onChange={(val) => {
+                    onUpdate({ illuminanceLux: val });
+                    onUpdateAmbient({ illuminanceLux: val });
+                }} />
 
             <div className="flex items-center justify-between">
                 <PropField label="Luminarias en pared" value={`${fixturesInArea.length}`} />
@@ -767,6 +810,7 @@ export const WallProps: React.FC<{
                     scene={scene}
                     ambientMatch={ambientMatch}
                     onUpdate={onUpdate}
+                    onUpdateAmbient={updateAmbientConfig}
                 />
             )}
         </SectionWrapper>

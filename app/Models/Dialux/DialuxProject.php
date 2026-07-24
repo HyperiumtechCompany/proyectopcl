@@ -38,4 +38,9 @@ class DialuxProject extends Model
     {
         return $this->hasMany(DialuxPlanFile::class);
     }
+
+    public function plans(): HasMany
+    {
+        return $this->hasMany(DialuxPlan::class);
+    }
 }

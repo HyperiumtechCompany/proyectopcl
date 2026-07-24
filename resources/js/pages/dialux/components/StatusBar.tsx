@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { useDialuxSaveStatusStore } from '@/pages/dialux/hooks/useDialuxSaveStatus';
+import { useDialuxPlanSyncStatusStore } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 
 const SAVE_STATUS_LABEL: Record<string, string> = {
     idle: '',
@@ -26,6 +27,7 @@ export const StatusBar = memo(function StatusBar() {
     const roomCount  = useEditorStore(s => s.activeScene()?.rooms.length ?? 0);
     const fixCount   = useEditorStore(s => s.activeScene()?.fixtures.length ?? 0);
     const saveStatus = useDialuxSaveStatusStore(s => s.status);
+    const planSyncFailedCount = useDialuxPlanSyncStatusStore(s => s.failedSceneIds.length);
 
     return (
         <footer
@@ -44,6 +46,14 @@ export const StatusBar = memo(function StatusBar() {
                 </span>
             )}
             <div className="flex-1" />
+            {planSyncFailedCount > 0 && (
+                <span
+                    className="text-red-500"
+                    title="El plano de fondo no llegó al servidor: solo se ve en este navegador. Otra persona que abra el proyecto no lo verá."
+                >
+                    ⚠ Plano sin sincronizar {planSyncFailedCount > 1 ? `(${planSyncFailedCount} pisos)` : ''}
+                </span>
+            )}
             {saveStatus !== 'idle' && (
                 <span className={SAVE_STATUS_COLOR[saveStatus]}>{SAVE_STATUS_LABEL[saveStatus]}</span>
             )}

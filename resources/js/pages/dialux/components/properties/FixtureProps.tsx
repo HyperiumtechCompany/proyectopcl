@@ -74,12 +74,14 @@ export const FixtureProps: React.FC<{
                 onChange={(value) => onUpdate({ y: value })}
             />
             <EditField
-                label="Z (m)"
-                value={fixture.z}
+                label="Altura instalada S.N.P.T. (m)"
+                value={fixture.z ?? fixture.mountingHeight ?? 0}
                 min={0}
                 max={10}
-                step={0.1}
-                onChange={(value) => onUpdate({ z: value })}
+                step={0.05}
+                onChange={(value) =>
+                    onUpdate({ z: value, mountingHeight: value })
+                }
             />
             <EditField
                 label="Rotación (°)"

@@ -18,10 +18,10 @@ export const SidebarPanel: React.FC = () => {
     return (
         <aside
             id="dialux-sidebar-right"
-            className="flex w-52 min-w-0 shrink-0 flex-col overflow-hidden border-l border-gray-800/50 bg-[#13141a] md:w-60 lg:w-72"
+            className="flex w-52 min-w-0 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-slate-50 text-slate-900 dark:border-gray-800/50 dark:bg-[#13141a] dark:text-slate-100 md:w-60 lg:w-72"
         >
             {/* ── Tabs ─────────────────────────────────────────────────── */}
-            <div className="flex shrink-0 items-stretch border-b border-gray-800/50 bg-[#0f1014]">
+            <div className="flex shrink-0 items-stretch border-b border-slate-200 bg-white dark:border-gray-800/50 dark:bg-[#0f1014]">
                 {tabs.map(({ key, label, icon: Icon }) => {
                     const isActive = activeTab === key;
                     return (
@@ -32,15 +32,15 @@ export const SidebarPanel: React.FC = () => {
                             className={[
                                 'relative flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10px] font-medium tracking-wide transition-colors duration-150',
                                 isActive
-                                    ? 'text-blue-400'
-                                    : 'text-gray-600 hover:text-gray-400',
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-slate-500 hover:text-slate-800 dark:text-gray-600 dark:hover:text-gray-400',
                             ].join(' ')}
                         >
                             <Icon size={10} />
                             {label}
                             {/* active indicator */}
                             {isActive && (
-                                <span className="absolute bottom-0 left-0 right-0 h-[1.5px] rounded-t-full bg-blue-500" />
+                                <span className="absolute right-0 bottom-0 left-0 h-[1.5px] rounded-t-full bg-blue-500" />
                             )}
                         </button>
                     );

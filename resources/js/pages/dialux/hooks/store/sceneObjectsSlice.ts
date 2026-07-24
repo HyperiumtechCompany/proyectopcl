@@ -10,6 +10,7 @@ import type {
     Conductor,
     Door,
     ElectricalDevice,
+    ElectricalDeviceProperties,
     ElectricalDeviceType,
     Fixture,
     FixtureGridConfig,
@@ -53,7 +54,11 @@ export interface SceneObjectsSlice {
     updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
     updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
     updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
-    setElectricalDeviceTemplate: (type: ElectricalDeviceType, label?: string) => void;
+    setElectricalDeviceTemplate: (
+        type: ElectricalDeviceType,
+        label?: string,
+        properties?: Partial<ElectricalDeviceProperties>,
+    ) => void;
 
     /** Reposiciona una ventana al centro de su pared */
     centerWindowOnWall: (windowId: string) => void;
@@ -550,8 +555,8 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         });
     },
 
-    setElectricalDeviceTemplate: (type, label) =>
-        set((s) => ({ ui: { ...s.ui, electricalDeviceTemplate: { type, label } } })),
+    setElectricalDeviceTemplate: (type, label, properties) =>
+        set((s) => ({ ui: { ...s.ui, electricalDeviceTemplate: { type, label, properties } } })),
 
     // ── Remover ───────────────────────────────────────────────────────────
     removeObject: (id) => {

@@ -9,7 +9,7 @@ export const SectionWrapper: React.FC<{
     <div className="space-y-2.5">
         <div className="mb-1 flex items-center gap-2">
             {icon}
-            <p className="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">
+            <p className="text-[10px] font-semibold tracking-widest text-slate-600 uppercase dark:text-gray-500">
                 {label}
             </p>
         </div>
@@ -18,31 +18,31 @@ export const SectionWrapper: React.FC<{
 );
 
 export const PropField: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono = true }) => (
-    <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-        <span className="text-[10px] text-gray-500">{label}</span>
-        <span className={`text-right text-[11px] text-gray-200 ${mono ? 'font-mono' : 'font-medium'}`}>
+    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+        <span className="text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
+        <span className={`text-right text-[11px] text-slate-800 dark:text-gray-200 ${mono ? 'font-mono' : 'font-medium'}`}>
             {value}
         </span>
     </div>
 );
 
 export const EditField: React.FC<{ label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void;}> = ({ label, value, min, max, step = 0.1, onChange }) => (
-    <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-        <span className="shrink-0 text-[10px] text-gray-500">{label}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+        <span className="shrink-0 text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
         <input type="number" value={value} min={min} max={max} step={step}
             onChange={(event) => {
                 const nextValue = parseFloat(event.target.value);
                 if (!Number.isNaN(nextValue)) onChange(nextValue);
             }}
-            className="w-20 rounded border border-gray-700/50 bg-gray-800/80 px-1.5 py-0.5 text-right font-mono text-[11px] text-gray-200 focus:border-blue-600/50 focus:outline-none"
+            className="w-20 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"
         />
     </div>
 );
 
 export const TextField: React.FC<{ label: string; value: string; onChange: (value: string) => void;}> = ({ label, value, onChange }) => (
-    <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-        <span className="shrink-0 text-[10px] text-gray-500">{label}</span>
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="w-32 rounded border border-gray-700/50 bg-gray-800/80 px-1.5 py-0.5 text-right text-[11px] text-gray-200 focus:border-blue-600/50 focus:outline-none"/>
+    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+        <span className="shrink-0 text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"/>
     </div>
 );
 
@@ -87,18 +87,18 @@ export const SelectField: React.FC<{
     }, [open]);
 
     return (
-        <div ref={rootRef} className="relative flex w-full min-w-0 items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-            <span className="max-w-[38%] shrink-0 truncate text-[10px] text-gray-500">{label}</span>
+        <div ref={rootRef} className="relative flex w-full min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+            <span className="max-w-[38%] shrink-0 truncate text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex min-w-0 flex-1 items-center justify-between gap-1 overflow-hidden rounded border border-gray-700/50 bg-gray-800/80 px-1.5 py-0.5 text-right text-[11px] text-gray-200 hover:bg-gray-800 focus:border-blue-600/50 focus:outline-none"
+                className="flex min-w-0 flex-1 items-center justify-between gap-1 overflow-hidden rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 hover:bg-slate-100 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:bg-gray-800 dark:focus:border-blue-600/50"
             >
                 <span className={`truncate ${selected ? '' : 'text-gray-500'}`}>{selected?.label ?? placeholder}</span>
                 <ChevronDown size={12} className="shrink-0 text-gray-500" />
             </button>
             {open && (
-                <div className="absolute top-full right-0 left-0 z-30 mt-1 max-h-56 min-w-0 overflow-x-hidden overflow-y-auto rounded border border-gray-700/50 bg-[#1a1d27] py-1 shadow-lg shadow-black/40">
+                <div className="absolute top-full right-0 left-0 z-30 mt-1 max-h-56 min-w-0 overflow-x-hidden overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/15 dark:border-gray-700/50 dark:bg-[#1a1d27] dark:shadow-black/40">
                     {options.map((o) => (
                         <button
                             key={o.value}
@@ -107,8 +107,8 @@ export const SelectField: React.FC<{
                                 onChange(o.value);
                                 setOpen(false);
                             }}
-                            className={`flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left text-[11px] leading-snug break-words whitespace-normal hover:bg-blue-600/20 ${
-                                o.value === value ? 'text-gray-100' : 'text-gray-300'
+                            className={`flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left text-[11px] leading-snug break-words whitespace-normal hover:bg-blue-50 dark:hover:bg-blue-600/20 ${
+                                o.value === value ? 'text-slate-950 dark:text-gray-100' : 'text-slate-700 dark:text-gray-300'
                             }`}
                         >
                             <Check size={11} className={`mt-0.5 shrink-0 ${o.value === value ? 'text-blue-400' : 'invisible'}`} />

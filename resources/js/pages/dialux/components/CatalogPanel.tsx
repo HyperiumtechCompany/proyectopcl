@@ -802,7 +802,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
         showDoors && (!renderArchitectureTabs || architectureTab === 'doors');
 
     return (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2 text-xs">
             {renderArchitectureTabs && (
                 <div className="mb-1 grid grid-cols-3 gap-1 rounded border border-gray-800 bg-gray-950/30 p-1">
                     {[
@@ -892,9 +892,9 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
             )}
             {/* ── Luminarias ── */}
             {showFixtures && (
-                <div className="space-y-0.5">
-                    <div className="mb-1 flex items-center justify-between px-1">
-                        <p className="text-[8px] font-semibold tracking-widest text-amber-500/80 uppercase">
+                <div className="space-y-1.5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+                        <p className="text-xs font-semibold tracking-[0.12em] text-amber-600 uppercase dark:text-amber-400">
                             Luminarias (
                             {filteredImportedProducts.length +
                                 filteredFixtures.length}
@@ -916,7 +916,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 setManualMode(false);
                             }}
                             title="Importar catalogo IES / LDT"
-                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300`}
+                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-amber-400 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-amber-700 dark:hover:text-amber-300`}
                         >
                             <Upload size={9} />
                             IES/LDT
@@ -928,7 +928,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 setImportMode(false);
                             }}
                             title="Crear luminaria propia con datos manuales"
-                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-gray-500 transition-colors hover:bg-gray-700/40 hover:text-gray-300`}
+                            className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-amber-400 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-amber-700 dark:hover:text-amber-300`}
                         >
                             <Wrench size={9} />
                             Manual
@@ -957,7 +957,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                     {importMode && (
                         <form
                             onSubmit={submitProductImport}
-                            className="mb-1 rounded border border-dashed border-amber-700/40 bg-amber-950/20 p-2"
+                            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-100"
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <p className="text-[9px] text-amber-300/80">
@@ -1071,18 +1071,18 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                     {manualMode && (
                         <form
                             onSubmit={submitManualProduct}
-                            className="mb-1 rounded border border-dashed border-amber-700/40 bg-amber-950/20 p-2"
+                            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-100"
                         >
-                            <p className="text-[9px] text-amber-300/80">
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
                                 Crear luminaria propia (sin archivo IES/LDT)
                             </p>
-                            <p className="mt-0.5 text-[8px] leading-tight text-gray-500">
+                            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 dark:text-slate-400">
                                 Con el flujo luminoso y el ángulo de apertura
                                 (beam angle 50%) del datasheet se calcula una
                                 distribución fotométrica real para el cálculo
                                 punto-por-punto.
                             </p>
-                            <label className="mt-1.5 flex items-center gap-1.5 text-[8px] text-amber-200/90">
+                            <label className="mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-white/70 p-2.5 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-slate-950/30 dark:text-amber-200">
                                 <input
                                     type="checkbox"
                                     checked={manualUseCustomCurve}
@@ -1096,7 +1096,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 Tengo la curva fotométrica real del fabricante
                                 (avanzado)
                             </label>
-                            <div className="mt-1.5 grid grid-cols-1 gap-1">
+                            <div className="mt-3 grid grid-cols-1 gap-2">
                                 <input
                                     type="text"
                                     value={manualName}
@@ -1106,7 +1106,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     placeholder="Nombre de la luminaria *"
                                     className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
                                 />
-                                <div className="grid grid-cols-2 gap-1">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                     <input
                                         type="text"
                                         value={manualManufacturer}
@@ -1130,7 +1130,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                         className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-1">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                     <input
                                         type="number"
                                         min="1"
@@ -1329,7 +1329,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                             </div>
                             <button
                                 type="submit"
-                                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded bg-amber-700/70 py-1 text-[9px] text-amber-50 transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={isSubmittingManual}
                             >
                                 <Wrench size={9} />
@@ -1468,10 +1468,10 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                         onClick={() =>
                                             setImportedFixture(product)
                                         }
-                                        className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
+                                        className={`group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                                             isActive
-                                                ? 'bg-emerald-900/30 text-emerald-300 ring-1 ring-emerald-600/30'
-                                                : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                                ? 'border-emerald-400 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
+                                                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/70'
                                         }`}
                                     >
                                         <span
@@ -1483,17 +1483,17 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                                         product.product_image_url
                                                     }
                                                     alt=""
-                                                    className="h-5 w-5 rounded object-cover"
+                                                    className="h-10 w-10 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
                                                 />
                                             ) : (
                                                 <Upload size={13} />
                                             )}
                                         </span>
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate text-[11px] leading-tight">
+                                            <p className="truncate text-xs leading-snug font-semibold">
                                                 {product.name}
                                             </p>
-                                            <p className="text-[9px] leading-none text-gray-600">
+                                            <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
                                                 {product.manufacturer ??
                                                     'Importado'}{' '}
                                                 Â· {product.total_lumens ?? '-'}
@@ -1605,10 +1605,10 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 key={`${item.brand}-${item.label}-${i}`}
                                 type="button"
                                 onClick={() => setFixture(item)}
-                                className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
+                                className={`group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-amber-900/30 text-amber-300 ring-1 ring-amber-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/70'
                                 }`}
                             >
                                 <span
@@ -1617,10 +1617,10 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     {item.icon}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-[11px] leading-tight">
+                                    <p className="truncate text-xs leading-snug font-semibold">
                                         {item.label}
                                     </p>
-                                    <p className="text-[9px] leading-none text-gray-600">
+                                    <p className="mt-1 truncate text-xs leading-snug text-slate-500 dark:text-slate-400">
                                         {item.brand} · {item.lumens}lm
                                         {effLmW ? ` · ${effLmW}lm/W` : ''}
                                         {item.cct ? ` · ${item.cct}` : ''}
@@ -1636,7 +1636,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                     })}
 
                     {!isCompactFixtureGrid && totalFixtures > fixturePageSize && (
-                        <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-700/40 pt-2">
+                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-slate-800">
                             <button
                                 type="button"
                                 onClick={() =>
@@ -1645,11 +1645,11 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     )
                                 }
                                 disabled={fixturePage === 1}
-                                className="rounded border border-gray-700/60 px-2 py-1 text-[10px] text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                             >
                                 Anterior
                             </button>
-                            <span className="text-[10px] text-gray-500">
+                            <span className="text-xs text-slate-500">
                                 Pagina {fixturePage} de {fixturePageCount}
                             </span>
                             <button
@@ -1660,7 +1660,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     )
                                 }
                                 disabled={fixturePage === fixturePageCount}
-                                className="rounded border border-gray-700/60 px-2 py-1 text-[10px] text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                             >
                                 Siguiente
                             </button>

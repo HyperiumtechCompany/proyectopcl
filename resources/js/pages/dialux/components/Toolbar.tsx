@@ -1,4 +1,4 @@
-import { BookOpen, Building2, Eye, FileInput, FilePlus, Hand, Lightbulb, Minus, MousePointer2, RotateCcw, Ruler, Scale, Square, Trash2, Upload, Wrench} from 'lucide-react';
+import { BookOpen, Building2, Eye, FileInput, FilePlus, Hand, Lightbulb, Minus, MousePointer2, Plug, RotateCcw, Ruler, Scale, Square, Trash2, Upload, Wrench} from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
@@ -8,13 +8,17 @@ import {
     saveDialuxPlanFile,
     uploadDialuxPlanFile,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import {
+    markDialuxPlanSyncFailed,
+    markDialuxPlanSyncOk,
+} from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getEffectiveScale } from './canvas/canvasUtils';
 import { ImportLuminairesModal } from './ImportLuminairesModal';
 import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
-import {ConstruccionPanel,EditarPanel,ExportacionPanel,HerramientasPanel,LuzPanel,MedirPanel,NormativaPanel,ProyectoPanel,VistaPanel} from './toolbar/panels';
+import {ConstruccionPanel,EditarPanel,ExportacionPanel,HerramientasPanel,LuzPanel,MedirPanel,NormativaPanel,ProyectoPanel,TomasPanel,VistaPanel} from './toolbar/panels';
 import { GroupBtn, Sep, ToolBtn } from './toolbar/primitives';
 import type { PanelId } from './toolbar/types';
 
@@ -53,6 +57,7 @@ export const Toolbar: React.FC = () => {
     const herramientasRef = useRef<HTMLDivElement>(null);
     const construccionRef = useRef<HTMLDivElement>(null);
     const luzRef = useRef<HTMLDivElement>(null);
+    const tomasRef = useRef<HTMLDivElement>(null);
     const medirRef = useRef<HTMLDivElement>(null);
     const vistaRef = useRef<HTMLDivElement>(null);
     const exportacionRef = useRef<HTMLDivElement>(null);
@@ -60,7 +65,7 @@ export const Toolbar: React.FC = () => {
     const normativaRef = useRef<HTMLDivElement>(null);
     const proyectoRef = useRef<HTMLDivElement>(null);
 
-    const refs = useMemo(() => ({ herramientas: herramientasRef, construccion: construccionRef, luz: luzRef, medir: medirRef, vista: vistaRef, exportacion: exportacionRef, editar: editarRef, normativa: normativaRef, proyecto: proyectoRef}) as const,[],);
+    const refs = useMemo(() => ({ herramientas: herramientasRef, construccion: construccionRef, luz: luzRef, tomas: tomasRef, medir: medirRef, vista: vistaRef, exportacion: exportacionRef, editar: editarRef, normativa: normativaRef, proyecto: proyectoRef}) as const,[],);
 
     const closePanel = useCallback(() => setOpenPanel(null), []);
     const togglePanel = useCallback((id: PanelId) => setOpenPanel((prev) => (prev === id ? null : id)),[],);
@@ -79,8 +84,10 @@ export const Toolbar: React.FC = () => {
                     try {
                         await saveDialuxPlanFile(projectId, store.activeSceneId, file);
                         await uploadDialuxPlanFile(projectId, store.activeSceneId, file);
+                        markDialuxPlanSyncOk(store.activeSceneId);
                     } catch (error) {
                         console.warn('No se pudo sincronizar el plano DIAlux.', error);
+                        markDialuxPlanSyncFailed(store.activeSceneId);
                     }
                 }
                 setPendingFile(file);
@@ -214,7 +221,24 @@ export const Toolbar: React.FC = () => {
                     'fixture-grid',
                     'switch',
                     'wire',
-                ].includes(activeTool) || activeTool.startsWith('elec-'),
+                ].includes(activeTool) ||
+                    (activeTool.startsWith('elec-') &&
+                        !activeTool.startsWith('elec-outlet-') &&
+                        activeTool !== 'elec-water-heater'),
+            },
+            {
+                // Separado de "Luz" a propósito: por norma (CNE-Utilización /
+                // RNE EM.010) alumbrado y tomacorriente van en circuitos y
+                // tuberías distintas, así que también viven en secciones
+                // distintas de la barra de herramientas.
+                id: 'tomas' as PanelId,
+                ref: refs.tomas,
+                icon: <Plug size={15} />,
+                label: 'Tomas',
+                hasActive:
+                    activeTool.startsWith('elec-outlet-') ||
+                    activeTool === 'elec-water-heater',
+                accentColor: 'text-green-400',
             },
             {
                 id: 'medir' as PanelId,
@@ -358,7 +382,17 @@ export const Toolbar: React.FC = () => {
                         onSetRows={store.setFixtureGridRows}
                         onSetCols={store.setFixtureGridCols}
                         onOpenImportModal={() => setIsImportLuminairesModalOpen(true)}
-                        onSetElecDevice={(type, label) => {store.setElectricalDeviceTemplate(type, label);}}
+                        onSetElecDevice={(type, label, properties) => {store.setElectricalDeviceTemplate(type, label, properties);}}
+                    />
+                </FloatingPanelPortal>
+            )}
+
+            {openPanel === 'tomas' && (
+                <FloatingPanelPortal title="Tomacorrientes" icon={<Plug size={13} />} anchorRef={refs.tomas} onClose={closePanel} width="md">
+                    <TomasPanel
+                        activeTool={activeTool}
+                        onSetTool={store.setTool}
+                        onSetElecDevice={(type, label, properties) => {store.setElectricalDeviceTemplate(type, label, properties);}}
                     />
                 </FloatingPanelPortal>
             )}

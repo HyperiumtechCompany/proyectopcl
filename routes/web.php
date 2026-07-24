@@ -16,6 +16,7 @@ use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
 use App\Http\Controllers\Dialux\ElectricalCatalogController as DialuxElectricalCatalogController;
 use App\Http\Controllers\Dialux\ElectricalProjectController as DialuxElectricalProjectController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
+use App\Http\Controllers\Dialux\OutletProductController as DialuxOutletProductController;
 use App\Http\Controllers\Dialux\PlanFileController as DialuxPlanFileController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
@@ -77,6 +78,15 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
         Route::get('/{productId}/source', [DialuxProductController::class, 'downloadSource'])->name('source');
     });
 
+    // ─── Catálogo de tomacorrientes ──────────────────────────────────────────
+    Route::prefix('outlet-products')->name('outlet-products.')->group(function () {
+        Route::get('/', [DialuxOutletProductController::class, 'index'])->name('index');
+        Route::post('/', [DialuxOutletProductController::class, 'store'])->name('store');
+        Route::patch('/{productId}', [DialuxOutletProductController::class, 'update'])->name('update');
+        Route::delete('/{productId}', [DialuxOutletProductController::class, 'destroy'])->name('destroy');
+        Route::patch('/{productId}/share', [DialuxOutletProductController::class, 'share'])->name('share');
+    });
+
     // ─── Normativa del Proyecto (config persistente) ─────────────────────────
     Route::prefix('normative-config')->name('normative-config.')->group(function () {
         Route::get('/requirements', [DialuxNormativeConfigController::class, 'requirements'])->name('requirements');
@@ -100,7 +110,9 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
 
     // ─── Proyecto DIAlux individual — debe ir al final (wildcard) ───────────
     Route::post('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'store'])->name('plans.store');
+    Route::post('/{dialuxProject}/plans/{sceneId}/link', [DialuxPlanFileController::class, 'link'])->name('plans.link');
     Route::get('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'show'])->name('plans.show');
+    Route::delete('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'destroy'])->name('plans.destroy');
     Route::get('/{dialuxProject}/electrico', [DialuxElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
     Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
     Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');

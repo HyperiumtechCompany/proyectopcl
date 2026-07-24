@@ -1,6 +1,22 @@
-import { Square, Zap, Trash2, Minus, AppWindow, Umbrella, DoorOpen } from 'lucide-react';
+import { Square, Zap, Trash2, Minus, AppWindow, Umbrella, DoorOpen, Plug, Cable, ToggleLeft, Boxes } from 'lucide-react';
 import React from 'react';
+import { isOutletDeviceType } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import {
+    EQUIPMENT_DEVICE_ITEMS,
+    OUTLET_DEVICE_ITEMS,
+} from './toolbar/electricalDeviceCatalog';
+
+const DEVICE_LABEL_BY_TYPE = new Map(
+    [...OUTLET_DEVICE_ITEMS, ...EQUIPMENT_DEVICE_ITEMS].map((item) => [item.type, item.label]),
+);
+
+const SWITCH_TYPE_LABELS: Record<string, string> = {
+    single: 'Simple',
+    double: 'Doble',
+    triple: 'Triple',
+    'two-way': 'Conmutado',
+};
 
 /**
  * ObjectsPanel — Lista jerárquica de todos los objetos de la escena
@@ -31,13 +47,36 @@ export const ObjectsPanel: React.FC = () => {
     const corridorAmbients = scene.rooms.filter(
         (room) => room.roomType === 'corridor',
     );
+
+    const electricalDevices = scene.electricalDevices ?? [];
+    const outletDevices = electricalDevices.filter((d) => isOutletDeviceType(d.type));
+    const panelAndEquipmentDevices = electricalDevices.filter((d) => !isOutletDeviceType(d.type));
+    const lightSwitches = scene.lightSwitches ?? [];
+    const conductors = scene.conductors ?? [];
+
+    // Para mostrar a qué dos objetos conecta cada cable (útil para
+    // encontrar cables sueltos/duplicados que están inflando el conteo
+    // de salidas en Cálculo CT).
+    const nodeLabel = (id: string): string => {
+        const fixture = scene.fixtures.find((f) => f.id === id);
+        if (fixture) return fixture.name || 'Luminaria';
+        const sw = lightSwitches.find((s) => s.id === id);
+        if (sw) return sw.label || 'Interruptor';
+        const device = electricalDevices.find((d) => d.id === id);
+        if (device) return device.label || DEVICE_LABEL_BY_TYPE.get(device.type) || 'Equipo';
+        return id.slice(0, 6);
+    };
+
     const totalItems =
         (scene.rooms?.length || 0) +
         (scene.walls?.length || 0) +
         (scene.windows?.length || 0) +
         (scene.doors?.length || 0) +
         (scene.canopies?.length || 0) +
-        (scene.fixtures?.length || 0);
+        (scene.fixtures?.length || 0) +
+        electricalDevices.length +
+        lightSwitches.length +
+        conductors.length;
 
     return (
         <div className="space-y-1">
@@ -175,7 +214,7 @@ export const ObjectsPanel: React.FC = () => {
                 onDelete={(id) => store.requestDelete(id)}
             />
 
-            {/* ── Luminarias ────────────────────────────────────────────── */}
+            {/* ── Luminarias (alumbrado) ───────────────────────────────────── */}
             <ObjectSection
                 label="Luminarias"
                 icon={<Zap size={9} className="text-amber-400" />}
@@ -184,6 +223,66 @@ export const ObjectsPanel: React.FC = () => {
                     label: f.name,
                     sublabel: `${f.lumens}lm`,
                     accent: 'yellow',
+                }))}
+                selectedId={selectedId}
+                onSelect={store.setSelectedId}
+                onDelete={(id) => store.requestDelete(id)}
+            />
+
+            {/* ── Tomacorrientes ────────────────────────────────────────────── */}
+            <ObjectSection
+                label="Tomacorrientes"
+                icon={<Plug size={9} className="text-green-400" />}
+                items={outletDevices.map((d) => ({
+                    id: d.id,
+                    label: d.label || DEVICE_LABEL_BY_TYPE.get(d.type) || 'Toma',
+                    sublabel: `${d.properties?.ratedPowerW ?? 180}W`,
+                    accent: 'green',
+                }))}
+                selectedId={selectedId}
+                onSelect={store.setSelectedId}
+                onDelete={(id) => store.requestDelete(id)}
+            />
+
+            {/* ── Tableros y equipos (TG, TD, medidor, ATS, cajas, PAT, etc.) ── */}
+            <ObjectSection
+                label="Tableros y equipos"
+                icon={<Boxes size={9} className="text-red-400" />}
+                items={panelAndEquipmentDevices.map((d) => ({
+                    id: d.id,
+                    label: d.label || DEVICE_LABEL_BY_TYPE.get(d.type) || d.type,
+                    sublabel: DEVICE_LABEL_BY_TYPE.get(d.type) ?? d.type,
+                    accent: 'red',
+                }))}
+                selectedId={selectedId}
+                onSelect={store.setSelectedId}
+                onDelete={(id) => store.requestDelete(id)}
+            />
+
+            {/* ── Interruptores ─────────────────────────────────────────────── */}
+            <ObjectSection
+                label="Interruptores"
+                icon={<ToggleLeft size={9} className="text-orange-400" />}
+                items={lightSwitches.map((s) => ({
+                    id: s.id,
+                    label: s.label || 'Interruptor',
+                    sublabel: SWITCH_TYPE_LABELS[s.type] ?? s.type,
+                    accent: 'orange',
+                }))}
+                selectedId={selectedId}
+                onSelect={store.setSelectedId}
+                onDelete={(id) => store.requestDelete(id)}
+            />
+
+            {/* ── Cableado (útil para encontrar cables sueltos/duplicados) ──── */}
+            <ObjectSection
+                label="Cableado"
+                icon={<Cable size={9} className="text-teal-400" />}
+                items={conductors.map((c) => ({
+                    id: c.id,
+                    label: `${nodeLabel(c.sourceId)} → ${nodeLabel(c.targetId)}`,
+                    sublabel: `${c.sectionMm2}mm²`,
+                    accent: 'teal',
                 }))}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
@@ -213,7 +312,11 @@ type Accent =
     | 'amber'
     | 'yellow'
     | 'emerald'
-    | 'violet';
+    | 'violet'
+    | 'green'
+    | 'red'
+    | 'orange'
+    | 'teal';
 
 const accentClasses: Record<Accent, { selected: string; dot: string }> = {
     blue:    { selected: 'bg-blue-900/40 text-blue-200',       dot: 'text-blue-400' },
@@ -224,6 +327,10 @@ const accentClasses: Record<Accent, { selected: string; dot: string }> = {
     yellow:  { selected: 'bg-yellow-900/40 text-yellow-200',   dot: 'text-yellow-400' },
     emerald: { selected: 'bg-emerald-900/40 text-emerald-200', dot: 'text-emerald-400' },
     violet:  { selected: 'bg-violet-900/40 text-violet-200',   dot: 'text-violet-400' },
+    green:   { selected: 'bg-green-900/40 text-green-200',     dot: 'text-green-400' },
+    red:     { selected: 'bg-red-900/40 text-red-200',         dot: 'text-red-400' },
+    orange:  { selected: 'bg-orange-900/40 text-orange-200',   dot: 'text-orange-400' },
+    teal:    { selected: 'bg-teal-900/40 text-teal-200',       dot: 'text-teal-400' },
 };
 
 interface ObjectItem {

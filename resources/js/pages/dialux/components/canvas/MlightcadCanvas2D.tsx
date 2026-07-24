@@ -18,7 +18,12 @@ import {
 import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
 import { shouldEnableOverlayPointerEvents } from '@/pages/dialux/hooks/cadInteraction';
 import {
+    connectedCircuitConductorIds,
+    panelBoundaryIds,
+} from '@/pages/dialux/hooks/conductorCircuitGroups';
+import {
     ELECTRICAL_DEVICE_DEFAULTS,
+    isOutletDeviceType,
     type ElectricalDeviceType,
 } from '@/pages/dialux/hooks/types';
 import {
@@ -39,12 +44,17 @@ import {
     uploadLocalDialuxPlanIfMissing,
 } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import {
+    markDialuxPlanSyncFailed,
+    markDialuxPlanSyncOk,
+} from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
+import {
     clampOpeningOffsetToWallSegment,
     wallLength,
 } from '@/pages/dialux/hooks/useInteractionHelpers';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
+import { applyLegacyLinkUpdate, computeLegacyLinkUpdate } from '@/pages/dialux/hooks/wireLegacySync';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { CalibrationDialog } from '../CalibrationDialog';
@@ -162,6 +172,23 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const scene = useActiveScene();
         const { zoom, panX, panY } = useViewport();
         const ui = store.ui;
+        const selectedCircuitConductorIds = useMemo(() => {
+            if (
+                !scene ||
+                !ui.selectedId ||
+                !(scene.conductors ?? []).some(
+                    (conductor) => conductor.id === ui.selectedId,
+                )
+            ) {
+                return [];
+            }
+
+            return connectedCircuitConductorIds(
+                scene.conductors ?? [],
+                ui.selectedId,
+                panelBoundaryIds(scene.electricalDevices),
+            );
+        }, [scene, ui.selectedId]);
         const resultsByRoom = useEditorStore((state) => state.resultsByRoom);
         const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
         const allScenes = useEditorStore((s) => s.project?.scenes) ?? [];
@@ -185,6 +212,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         const [canopyPreview, setCanopyPreview] = useState<{
             start: CanvasPoint;
             end: CanvasPoint;
+        } | null>(null);
+        /** Extremo de cable en arrastre, mientras se reconecta a otro nodo */
+        const [wireReconnectPreview, setWireReconnectPreview] = useState<{
+            conductorId: string;
+            endpoint: 'source' | 'target';
+            point: CanvasPoint;
         } | null>(null);
         const [calibrationLine, setCalibrationLine] = useState<{
             start: CanvasPoint;
@@ -426,6 +459,17 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 if (existingWire) {
                     store.removeObject(existingWire.id);
                 } else {
+                    // CNE-Utilización / RNE EM.010: los tomacorrientes van en
+                    // circuito propio, con calibre mayor (4 mm² / AWG 12) al
+                    // de alumbrado (2.5 mm²) — nunca comparten tubería ni
+                    // circuito. Si cualquiera de los dos extremos es un
+                    // tomacorriente, el cable nuevo parte ya con ese calibre.
+                    const endpointDevices = scene?.electricalDevices ?? [];
+                    const connectsOutlet = [sourceId, targetId].some((id) =>
+                        endpointDevices.some(
+                            (device) => device.id === id && isOutletDeviceType(device.type),
+                        ),
+                    );
                     store.addConductor({
                         sourceId,
                         targetId,
@@ -434,74 +478,65 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',
-                        sectionMm2: 2.5,
+                        sectionMm2: connectsOutlet ? 4 : 2.5,
                         waypoints: waypoints ?? [],
                     });
                 }
-                
-                // --- Legacy mapping for 3D Builder ---
-                const isSwitchSource = scene?.lightSwitches?.some(s => s.id === sourceId);
-                const isFixtureSource = scene?.fixtures?.some(f => f.id === sourceId);
-                const isDeviceSource = scene?.electricalDevices?.some(d => d.id === sourceId);
-                
-                const isSwitchTarget = scene?.lightSwitches?.some(s => s.id === targetId);
-                const isFixtureTarget = scene?.fixtures?.some(f => f.id === targetId);
-                const isDeviceTarget = scene?.electricalDevices?.some(d => d.id === targetId);
 
-                const switchNode = isSwitchSource ? sourceId : (isSwitchTarget ? targetId : null);
-                const fixtureNode = isFixtureSource ? sourceId : (isFixtureTarget ? targetId : null);
-                const deviceNode = isDeviceSource ? sourceId : (isDeviceTarget ? targetId : null);
+                applyLegacyLinkUpdate(
+                    computeLegacyLinkUpdate(
+                        sourceId,
+                        targetId,
+                        {
+                            lightSwitches: scene?.lightSwitches ?? [],
+                            fixtures: scene?.fixtures ?? [],
+                            electricalDevices: scene?.electricalDevices ?? [],
+                        },
+                        !existingWire,
+                    ),
+                    store,
+                );
+            },
+            // Arrastrar el extremo de un cable ya seleccionado hasta otro nodo
+            // (luminaria/interruptor/equipo), para corregir una conexión mal
+            // hecha sin tener que borrar el cable y volver a trazarlo.
+            onReconnectWireEndpoint: (conductorId, endpoint, newNodeId) => {
+                const conductor = scene?.conductors?.find((c) => c.id === conductorId);
+                if (!conductor) return;
 
-                if (switchNode && fixtureNode) {
-                    const sw = scene?.lightSwitches?.find(s => s.id === switchNode);
-                    if (sw) {
-                        const connected = sw.connectedFixtureIds || [];
-                        const alreadyConnected = connected.includes(fixtureNode);
-                        store.updateLightSwitch(switchNode, {
-                            connectedFixtureIds: alreadyConnected
-                                ? connected.filter(id => id !== fixtureNode)
-                                : [...connected, fixtureNode]
-                        });
-                    }
-                }
-                
-                if (deviceNode && fixtureNode) {
-                    const dev = scene?.electricalDevices?.find(d => d.id === deviceNode);
-                    if (dev) {
-                        const connected = dev.connectedFixtureIds || [];
-                        const alreadyConnected = connected.includes(fixtureNode);
-                        store.updateElectricalDevice(deviceNode, {
-                            connectedFixtureIds: alreadyConnected
-                                ? connected.filter(id => id !== fixtureNode)
-                                : [...connected, fixtureNode]
-                        });
-                    }
-                }
-                if (deviceNode && switchNode) {
-                    const dev = scene?.electricalDevices?.find(d => d.id === deviceNode);
-                    if (dev) {
-                        const connected = dev.connectedSwitchIds || [];
-                        const alreadyConnected = connected.includes(switchNode);
-                        store.updateElectricalDevice(deviceNode, {
-                            connectedSwitchIds: alreadyConnected
-                                ? connected.filter(id => id !== switchNode)
-                                : [...connected, switchNode]
-                        });
-                    }
-                }
+                const otherId = endpoint === 'source' ? conductor.targetId : conductor.sourceId;
+                const currentId = endpoint === 'source' ? conductor.sourceId : conductor.targetId;
+                if (newNodeId === otherId || newNodeId === currentId) return; // loop o sin cambios
 
-                if (isDeviceSource && isDeviceTarget) {
-                    const dev = scene?.electricalDevices?.find(d => d.id === sourceId);
-                    if (dev) {
-                        const connected = dev.connectedDeviceIds || [];
-                        const alreadyConnected = connected.includes(targetId);
-                        store.updateElectricalDevice(sourceId, {
-                            connectedDeviceIds: alreadyConnected
-                                ? connected.filter(id => id !== targetId)
-                                : [...connected, targetId]
-                        });
-                    }
-                }
+                const wouldDuplicate = scene?.conductors?.some(
+                    (c) =>
+                        c.id !== conductorId &&
+                        ((c.sourceId === otherId && c.targetId === newNodeId) ||
+                            (c.sourceId === newNodeId && c.targetId === otherId)),
+                );
+                if (wouldDuplicate) return;
+
+                const ctx = {
+                    lightSwitches: scene?.lightSwitches ?? [],
+                    fixtures: scene?.fixtures ?? [],
+                    electricalDevices: scene?.electricalDevices ?? [],
+                };
+
+                // Romper el vínculo legacy de la conexión anterior...
+                applyLegacyLinkUpdate(
+                    computeLegacyLinkUpdate(conductor.sourceId, conductor.targetId, ctx, false),
+                    store,
+                );
+
+                const newSourceId = endpoint === 'source' ? newNodeId : conductor.sourceId;
+                const newTargetId = endpoint === 'target' ? newNodeId : conductor.targetId;
+                store.updateConductor(conductorId, endpoint === 'source' ? { sourceId: newNodeId } : { targetId: newNodeId });
+
+                // ...y crear el de la nueva.
+                applyLegacyLinkUpdate(
+                    computeLegacyLinkUpdate(newSourceId, newTargetId, ctx, true),
+                    store,
+                );
             },
             onAddRoom: (verticesM) => {
                 const isCorridor = ui.activeTool === 'corridor';
@@ -753,7 +788,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     mountingHeight,
                     wallId,
                     connectedDeviceIds: [],
-                    properties: { ...defaults.properties },
+                    properties: { ...defaults.properties, ...template.properties },
                 });
                 store.setSelectedId(id);
             },
@@ -945,9 +980,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
         const restoredSceneRef = useRef<string | null>(null);
+        // Identidad del último plano efectivamente cargado en el motor CAD
+        // (archivo + escala). Cuando dos pisos comparten el mismo plano, saltar
+        // el re-parseo (engine.openFile + parseDxf) es lo que hace que cambiar
+        // de piso sea instantáneo en vez de repetir un parseo DXF completo.
+        const lastLoadedPlanKeyRef = useRef<string | null>(null);
         useEffect(() => {
             if (!engine.isReady || !projectId || !activeSceneId) return;
-            const restoreKey = `${projectId}::${activeSceneId}`;
+            // planReloadTick fuerza a releer el plano aunque el piso activo no
+            // haya cambiado (ej. se reutilizó el plano de otro piso para éste).
+            const restoreKey = `${projectId}::${activeSceneId}::${ui.planReloadTick}`;
             if (restoredSceneRef.current === restoreKey) return;
             restoredSceneRef.current = restoreKey;
 
@@ -960,8 +1002,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             activeSceneId,
                             storedPlan,
                         );
+                        markDialuxPlanSyncOk(activeSceneId);
                     } catch (error) {
                         console.warn('No se pudo migrar el plano local al servidor.', error);
+                        markDialuxPlanSyncFailed(activeSceneId);
                     }
                 }
                 if (!storedPlan) {
@@ -983,7 +1027,17 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 }
 
                 if (!storedPlan) {
+                    lastLoadedPlanKeyRef.current = null;
                     await engine.newDocument();
+                    return;
+                }
+
+                const effectiveScale = getEffectiveScale(scene?.scaleConfig);
+                const planKey = `${projectId}::${storedPlan.fileName}::${storedPlan.blob.size}::${storedPlan.lastModified}::${effectiveScale}`;
+                if (lastLoadedPlanKeyRef.current === planKey) {
+                    // Mismo plano (y misma escala) que ya está abierto en el motor
+                    // — típicamente al volver a un piso que comparte plano con el
+                    // anterior. Evita repetir el parseo DXF completo.
                     return;
                 }
 
@@ -991,10 +1045,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     const file = storedDialuxPlanToFile(storedPlan);
                     const opened = await engine.openFile(file);
                     if (opened && file.name.toLowerCase().endsWith('.dxf')) {
-                        await parseDxf?.(file, getEffectiveScale(scene?.scaleConfig));
+                        await parseDxf?.(file, effectiveScale);
                     }
+                    lastLoadedPlanKeyRef.current = planKey;
                 } catch (error) {
                     console.warn('No se pudo restaurar el plano DIAlux.', error);
+                    lastLoadedPlanKeyRef.current = null;
                 }
             })();
         }, [
@@ -1004,6 +1060,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             parseDxf,
             projectId,
             scene?.scaleConfig,
+            ui.planReloadTick,
         ]);
 
         // ── Re-activación de la vista 2D (volviendo de 3D) ────────────────────────
@@ -1164,10 +1221,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 setCalibrationLine,
                                 setCalibrationSnapPoint,
                                 setTempElectricalDevice,
+                                setWireReconnectPreview,
                             );
                     }}
                     onMouseUp={(e) => {
-                        if (isInteractiveMode) onMouseUp(e, setCanopyPreview);
+                        if (isInteractiveMode) onMouseUp(e, setCanopyPreview, setWireReconnectPreview);
                     }}
                     onDoubleClick={onDoubleClick}
                 >
@@ -1344,9 +1402,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         zoom={zoom}
                         screenPoint={screenPoint}
                         selectedId={ui.selectedId}
+                        selectedConductorIds={selectedCircuitConductorIds}
                         onSelect={overlaySelect}
                         activeTool={ui.activeTool}
                         showLegacyLightingWires={ui.electricalLayerVisibility.fixtures}
+                        reconnectPreview={wireReconnectPreview}
                     />
                     <OverlayLightSwitches
                         lightSwitches={ui.electricalLayerVisibility.switches

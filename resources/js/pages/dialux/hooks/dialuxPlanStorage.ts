@@ -182,3 +182,54 @@ export async function uploadLocalDialuxPlanIfMissing(
 
     await uploadDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(plan));
 }
+
+/**
+ * Vincula el plano de `sourceSceneId` al piso `sceneId` en el servidor sin
+ * duplicar el archivo (varios pisos pueden compartir el mismo plano), y
+ * copia la caché local para que el piso nuevo lo muestre sin ir a red.
+ */
+export async function linkDialuxPlanFile(
+    projectId: string,
+    sceneId: string,
+    sourceSceneId: string,
+): Promise<boolean> {
+    const response = await fetch(
+        `/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}/link`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ source_scene_id: sourceSceneId }),
+        },
+    );
+
+    if (response.status === 404) return false;
+    if (!response.ok) {
+        throw new Error(`No se pudo reutilizar el plano en el servidor (HTTP ${response.status}).`);
+    }
+
+    const localSource = await loadDialuxPlan(projectId, sourceSceneId);
+    if (localSource) {
+        await saveDialuxPlanFile(projectId, sceneId, storedDialuxPlanToFile(localSource));
+    }
+
+    return true;
+}
+
+/** Elimina el vínculo del plano de un piso (ej. al borrarlo). */
+export async function unlinkDialuxPlanFile(projectId: string, sceneId: string): Promise<void> {
+    await fetch(`/dialux/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(sceneId)}`, {
+        method: 'DELETE',
+        headers: {
+            Accept: 'application/json',
+            'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    });
+}

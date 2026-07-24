@@ -45,6 +45,30 @@ const MAX_GRID_AXIS = 120;
 const MIN_REGION_CELLS = 4;
 const EPSILON = 1e-6;
 
+function resolveAmbientIlluminanceLux(
+    room: Room,
+    ambientConfig: NonNullable<Room['ambientConfigs']>[string] | undefined,
+    normativeLux: number | undefined,
+    legacyWallLux?: number,
+): number | undefined {
+    if (ambientConfig?.illuminanceLux !== undefined) {
+        return ambientConfig.illuminanceLux;
+    }
+
+    if (legacyWallLux !== undefined) {
+        return legacyWallLux;
+    }
+
+    // A manually edited value on the room is the current project requirement.
+    // The catalogue value is only used when an individual derived ambient has
+    // selected its own activity or the room has no saved illuminance yet.
+    if (room.illuminanceLux !== undefined) {
+        return room.illuminanceLux;
+    }
+
+    return normativeLux ?? room.illuminanceLux ?? room.norma;
+}
+
 function pointsAlmostEqual(a: Vertex, b: Vertex, tolerance = 0.05) {
     return Math.hypot(a.x - b.x, a.y - b.y) <= tolerance;
 }
@@ -616,19 +640,30 @@ function buildSingleAmbientSpace(
         ambientConfig?.activity ?? room.normativeActivity ?? undefined;
     const activityOption = activity
         ? (getActivityOptions(
-              room.normativeStandard ?? 'en_12464',
-              room.normativeCategory,
-              room.normativeSection,
+              ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+              ambientConfig?.normativeCategory ?? room.normativeCategory,
+              ambientConfig?.normativeSection ?? room.normativeSection,
           ).find((option) => option.activity === activity) ?? null)
         : null;
+    const illuminanceLux = resolveAmbientIlluminanceLux(
+        room,
+        ambientConfig,
+        activityOption?.illuminanceLux,
+    );
     const singleAmbientRoom: Room = {
         ...room,
         id: options?.id ?? `${room.id}::ambient-1`,
         name: ambientConfig?.name?.trim() || room.name,
+        normativeStandard:
+            ambientConfig?.normativeStandard ?? room.normativeStandard,
+        normativeCategory:
+            ambientConfig?.normativeCategory ?? room.normativeCategory,
+        normativeSection:
+            ambientConfig?.normativeSection ?? room.normativeSection,
         normativeActivity: activity,
         normativeLabel: activityOption?.label ?? room.normativeLabel,
-        illuminanceLux: activityOption?.illuminanceLux ?? room.illuminanceLux,
-        norma: activityOption?.illuminanceLux ?? room.norma,
+        illuminanceLux,
+        norma: illuminanceLux,
         ugrLimit: activityOption?.ugr ?? room.ugrLimit,
         uniformityTarget: activityOption?.uniformity ?? room.uniformityTarget,
         colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
@@ -702,11 +737,17 @@ function buildWallDefinedAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  room.normativeStandard ?? 'en_12464',
-                  room.normativeCategory,
-                  room.normativeSection,
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeCategory ?? room.normativeCategory,
+                  ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
             : null;
+        const illuminanceLux = resolveAmbientIlluminanceLux(
+            room,
+            ambientConfig,
+            activityOption?.illuminanceLux,
+            ambient.wall.illuminanceLux,
+        );
         const ambientRoom: Room = {
             ...room,
             id: `${room.id}::ambient-${index + 1}`,
@@ -715,11 +756,16 @@ function buildWallDefinedAmbientSpaces(
                 activity ||
                 `${room.name} - Ambiente ${index + 1}`,
             vertices: ambient.vertices,
+            normativeStandard:
+                ambientConfig?.normativeStandard ?? room.normativeStandard,
+            normativeCategory:
+                ambientConfig?.normativeCategory ?? room.normativeCategory,
+            normativeSection:
+                ambientConfig?.normativeSection ?? room.normativeSection,
             normativeActivity: activity,
             normativeLabel: activityOption?.label ?? room.normativeLabel,
-            illuminanceLux:
-                activityOption?.illuminanceLux ?? room.illuminanceLux,
-            norma: activityOption?.illuminanceLux ?? room.norma,
+            illuminanceLux,
+            norma: illuminanceLux,
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
@@ -782,20 +828,30 @@ export function deriveAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  room.normativeStandard ?? 'en_12464',
-                  room.normativeCategory,
-                  room.normativeSection,
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeCategory ?? room.normativeCategory,
+                  ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
             : null;
+        const illuminanceLux = resolveAmbientIlluminanceLux(
+            room,
+            ambientConfig,
+            activityOption?.illuminanceLux,
+        );
         const singleAmbientRoom: Room = {
             ...room,
             id: `${room.id}::ambient-1`,
             name: ambientConfig?.name?.trim() || room.name,
+            normativeStandard:
+                ambientConfig?.normativeStandard ?? room.normativeStandard,
+            normativeCategory:
+                ambientConfig?.normativeCategory ?? room.normativeCategory,
+            normativeSection:
+                ambientConfig?.normativeSection ?? room.normativeSection,
             normativeActivity: activity,
             normativeLabel: activityOption?.label ?? room.normativeLabel,
-            illuminanceLux:
-                activityOption?.illuminanceLux ?? room.illuminanceLux,
-            norma: activityOption?.illuminanceLux ?? room.norma,
+            illuminanceLux,
+            norma: illuminanceLux,
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
@@ -841,11 +897,16 @@ export function deriveAmbientSpaces(
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
         const activityOption = activity
             ? (getActivityOptions(
-                  room.normativeStandard ?? 'en_12464',
-                  room.normativeCategory,
-                  room.normativeSection,
+                  ambientConfig?.normativeStandard ?? room.normativeStandard ?? 'en_12464',
+                  ambientConfig?.normativeCategory ?? room.normativeCategory,
+                  ambientConfig?.normativeSection ?? room.normativeSection,
               ).find((option) => option.activity === activity) ?? null)
             : null;
+        const illuminanceLux = resolveAmbientIlluminanceLux(
+            room,
+            ambientConfig,
+            activityOption?.illuminanceLux,
+        );
         const ambientRoom: Room = {
             ...room,
             id: `${room.id}::ambient-${index + 1}`,
@@ -854,11 +915,16 @@ export function deriveAmbientSpaces(
                 activity ||
                 `${room.name} - Ambiente ${index + 1}`,
             vertices: region.vertices,
+            normativeStandard:
+                ambientConfig?.normativeStandard ?? room.normativeStandard,
+            normativeCategory:
+                ambientConfig?.normativeCategory ?? room.normativeCategory,
+            normativeSection:
+                ambientConfig?.normativeSection ?? room.normativeSection,
             normativeActivity: activity,
             normativeLabel: activityOption?.label ?? room.normativeLabel,
-            illuminanceLux:
-                activityOption?.illuminanceLux ?? room.illuminanceLux,
-            norma: activityOption?.illuminanceLux ?? room.norma,
+            illuminanceLux,
+            norma: illuminanceLux,
             ugrLimit: activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
                 activityOption?.uniformity ?? room.uniformityTarget,
@@ -949,11 +1015,15 @@ export function deriveSceneAmbientSpaces(scene: Scene): DerivedAmbientSpace[] {
     return ambients;
 }
 
-export function findAmbientSpaceAtPoint(
-    scene: Scene,
+/**
+ * Igual que `findAmbientSpaceAtPoint` pero recibe los ambientes ya derivados
+ * — evita recalcular `deriveSceneAmbientSpaces` (rasterizado por ambiente)
+ * en llamadas repetidas dentro de un mismo escaneo de escena.
+ */
+export function findAmbientSpaceContainingPoint(
+    ambients: DerivedAmbientSpace[],
     point: Vertex,
 ): DerivedAmbientSpace | null {
-    const ambients = deriveSceneAmbientSpaces(scene);
     const containingAmbients = ambients.filter((ambient) => {
         if (pointInPolygon(point, ambient.room.vertices)) return true;
         // Permitir que luminarias/interruptores colocados sobre la pared interna 
@@ -977,4 +1047,11 @@ export function findAmbientSpaceAtPoint(
             (ambient) => ambient.sourceRoom.roomType === 'corridor',
         ) ?? containingAmbients[0]
     );
+}
+
+export function findAmbientSpaceAtPoint(
+    scene: Scene,
+    point: Vertex,
+): DerivedAmbientSpace | null {
+    return findAmbientSpaceContainingPoint(deriveSceneAmbientSpaces(scene), point);
 }

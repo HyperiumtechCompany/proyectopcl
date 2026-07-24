@@ -2,6 +2,7 @@ import { Grid, Link2, ToggleLeft, Upload, Zap } from 'lucide-react';
 import React, { useState } from 'react';
 import type {
     DrawTool,
+    ElectricalDeviceProperties,
     ElectricalDeviceType,
     Conductor,
     LightSwitch,
@@ -17,7 +18,6 @@ import { PanelCard, PanelTabs, PanelToolBtn } from '../primitives';
 import {
     EQUIPMENT_DEVICE_ITEMS,
     type ElectricalDeviceCatalogItem,
-    OUTLET_DEVICE_ITEMS,
 } from '../electricalDeviceCatalog';
 
 type SwitchTemplate = {
@@ -31,7 +31,7 @@ type WireTemplate = {
     wireLabel: NonNullable<Conductor['wireLabel']>;
 };
 
-type InsertSection = 'luminaires' | 'switches' | 'wire' | 'outlets' | 'equipment';
+type InsertSection = 'luminaires' | 'switches' | 'wire' | 'equipment';
 
 const SWITCH_ITEMS: Array<{
     type: LightSwitch['type'];
@@ -56,7 +56,11 @@ export const LuzPanel: React.FC<{
     onSetRows: (n: number) => void;
     onSetCols: (n: number) => void;
     onOpenImportModal?: () => void;
-    onSetElecDevice?: (type: ElectricalDeviceType, label?: string) => void;
+    onSetElecDevice?: (
+        type: ElectricalDeviceType,
+        label?: string,
+        properties?: Partial<ElectricalDeviceProperties>,
+    ) => void;
 }> = ({
     activeTool,
     onSetTool,
@@ -121,7 +125,6 @@ export const LuzPanel: React.FC<{
                     { id: 'luminaires', label: 'Luz' },
                     { id: 'switches', label: 'Inter.' },
                     { id: 'wire', label: 'Cable' },
-                    { id: 'outlets', label: 'Tomas' },
                     { id: 'equipment', label: 'Equipos' },
                 ]}
                 activeTab={activeSection}
@@ -286,14 +289,6 @@ export const LuzPanel: React.FC<{
                             <p className="mt-2 text-[9px] text-gray-600">
                                 El cálculo de longitud de cable está en el botón "Cálculo CT" de la barra superior (selecciona un ambiente primero).
                             </p>
-                </PanelCard>
-            )}
-
-            {activeSection === 'outlets' && (
-                <PanelCard title="Tomacorriente">
-                    <div className="grid grid-cols-2 gap-1">
-                        {OUTLET_DEVICE_ITEMS.map(renderDeviceButton)}
-                    </div>
                 </PanelCard>
             )}
 

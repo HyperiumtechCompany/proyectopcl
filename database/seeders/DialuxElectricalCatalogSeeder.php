@@ -6,6 +6,7 @@ use App\Models\Dialux\DialuxCircuitDefault;
 use App\Models\Dialux\DialuxConductor;
 use App\Models\Dialux\DialuxOutletRule;
 use App\Models\Dialux\DialuxOutletType;
+use App\Models\OutletProduct;
 use Illuminate\Database\Seeder;
 
 class DialuxElectricalCatalogSeeder extends Seeder
@@ -20,6 +21,7 @@ class DialuxElectricalCatalogSeeder extends Seeder
         $this->seedOutletTypes();
         $this->seedConductors();
         $this->seedCircuitDefaults();
+        $this->seedGenericOutletProducts();
 
         $this->command?->info('Catálogos eléctricos DIALux sembrados.');
     }
@@ -140,6 +142,32 @@ class DialuxElectricalCatalogSeeder extends Seeder
                     'installation_category' => $default['installation_category'],
                 ],
                 $default,
+            );
+        }
+    }
+
+    /**
+     * Un tomacorriente genérico global por tipo de montaje, para que el
+     * catálogo de la pestaña "Tomas" del editor no aparezca vacío antes de
+     * que el usuario cree los suyos propios (180 VA, mismo valor que
+     * `seedOutletRules`).
+     */
+    private function seedGenericOutletProducts(): void
+    {
+        $products = [
+            ['device_type' => 'outlet_floor', 'name' => 'Tomacorriente genérico — Bajo'],
+            ['device_type' => 'outlet_initial', 'name' => 'Tomacorriente genérico — Inicial 1.50 m'],
+            ['device_type' => 'outlet_high_180', 'name' => 'Tomacorriente genérico — Alto 1.80 m'],
+            ['device_type' => 'outlet_floor_box', 'name' => 'Tomacorriente genérico — Piso NPT'],
+            ['device_type' => 'outlet_waterproof', 'name' => 'Tomacorriente genérico — Prueba de agua'],
+            ['device_type' => 'outlet_ceiling', 'name' => 'Tomacorriente genérico — Techo'],
+            ['device_type' => 'outlet_rack', 'name' => 'Tomacorriente genérico — Rack'],
+        ];
+
+        foreach ($products as $product) {
+            OutletProduct::query()->updateOrCreate(
+                ['user_id' => null, 'device_type' => $product['device_type']],
+                array_merge($product, ['rated_power_w' => 180, 'is_global' => true]),
             );
         }
     }

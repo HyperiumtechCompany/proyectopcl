@@ -40,7 +40,11 @@ export interface Vertex { x: number; y: number }
 
 export interface AmbientConfig {
     name?: string;
+    normativeStandard?: NormativeStandard;
+    normativeCategory?: string;
+    normativeSection?: string;
     activity?: string;
+    illuminanceLux?: number;
 }
 
 export type CorridorType =
@@ -449,6 +453,24 @@ export interface Conductor {
     conductorType: string;         // Tipo: "Cu LSOH", "N2XOH", etc.
     /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
     sectionMm2: number;
+    /** Parámetros editables del cálculo CT para la salida raíz del circuito. */
+    ct?: {
+        outletPowerW?: number;
+        forcePowerW?: number;
+        powerFactor?: number;
+        demandFactor?: number;
+        system?: 1 | 3;
+        phaseBalance?: 'R' | 'S' | 'T' | 'RST';
+        nominalCableCurrentA?: number;
+        ambientTemperatureC?: number;
+        groupedCircuitCount?: number;
+        groupingFactor?: number;
+        temperatureFactor?: number;
+        itm?: string;
+        dif?: string;
+        voltageDropLimitPct?: number;
+        earthSectionMm2?: number;
+    };
     waypoints: Array<{ x: number; y: number }>; // Puntos de ruta opcionales
 }
 
@@ -466,6 +488,12 @@ export const CONDUCTOR_SECTION_OPTIONS = [
     { value: 35, label: '35 mm² (AWG 2)' },
     { value: 50, label: '50 mm² (AWG 1/0)' },
     { value: 70, label: '70 mm² (AWG 2/0)' },
+    { value: 95, label: '95 mm² (AWG 3/0)' },
+    { value: 120, label: '120 mm² (AWG 4/0)' },
+    { value: 150, label: '150 mm²' },
+    { value: 185, label: '185 mm²' },
+    { value: 240, label: '240 mm²' },
+    { value: 300, label: '300 mm²' },
 ] as const;
 
 export const CONDUCTOR_WIRE_OPTIONS = [
@@ -516,11 +544,36 @@ export type ElectricalDeviceType =
 export interface ElectricalDeviceProperties {
     voltage?: string;
     phases?: string;
+    /** Longitud de referencia asignada al tablero, en metros. */
+    lengthM?: number;
+    designFactor?: number;
+    connectionType?: 'delta' | 'star';
+    workingTemperatureC?: number;
+    copperResistivity?: number;
+    upstreamVoltageDropV?: number;
+    defaultPowerFactor?: number;
+    defaultDemandFactor?: number;
     boxSize?: string;
     boxMaterial?: string;
     circuitCount?: number;
     current?: string;
     breakerType?: string;
+    /** Potencia asignada en vatios (solo dispositivos `outlet_*`), usada en Cálculo CT como PI tomas. */
+    ratedPowerW?: number;
+    /** ID del producto del catálogo de tomacorrientes (`outlet_products`) usado al colocar este dispositivo. */
+    outletProductId?: number;
+    /** Marca del producto de catálogo (tomacorrientes/equipos), informativo. */
+    manufacturer?: string;
+    /** Código/modelo del producto de catálogo, informativo. */
+    catalogNumber?: string;
+}
+
+/** Carga por defecto (VA) de un punto de tomacorriente, igual al usado en el Módulo Eléctrico analítico. */
+export const DEFAULT_OUTLET_POWER_W = 180;
+
+/** true si el tipo de dispositivo es un punto de tomacorriente (cualquier variante de montaje). */
+export function isOutletDeviceType(type: ElectricalDeviceType): boolean {
+    return type.startsWith('outlet_');
 }
 
 /** Dispositivo electrico colocado en el plano 2D */
@@ -559,20 +612,20 @@ export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
     properties: ElectricalDeviceProperties;
 }> = {
     meter:             { label: 'Medidor',    mountingHeight: 1.20, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
-    main_panel:        { label: 'TG',         mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
-    sub_panel:         { label: 'TD-01',      mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
+    main_panel:        { label: 'TG',         mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', lengthM: 0, designFactor: 1.25, connectionType: 'star', workingTemperatureC: 20, copperResistivity: 0.0175, upstreamVoltageDropV: 0, defaultPowerFactor: 0.9, defaultDemandFactor: 1, boxMaterial: 'F.G. Liviano' } },
+    sub_panel:         { label: 'TD-01',      mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', lengthM: 0, designFactor: 1.25, connectionType: 'star', workingTemperatureC: 20, copperResistivity: 0.0175, upstreamVoltageDropV: 6.22, defaultPowerFactor: 0.9, defaultDemandFactor: 1, boxMaterial: 'F.G. Liviano' } },
     transfer_switch:   { label: 'ATS',        mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
     arrival_panel:     { label: 'T.Llegada',  mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
     junction_box:      { label: 'C-01',       mountingHeight: 0.40, properties: { boxSize: '100x100x50', boxMaterial: 'RECTO' } },
     earth_pit:         { label: 'PAT',        mountingHeight: 0.00, properties: {} },
     facp:              { label: 'FACP',       mountingHeight: 1.40, properties: { voltage: '220V', phases: '1O' } },
-    outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_initial:    { label: 'TI',         mountingHeight: 1.50, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_high_180:   { label: 'TA',         mountingHeight: 1.80, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_floor_box:  { label: 'TP',         mountingHeight: 0.00, properties: { boxSize: '100x100x55', boxMaterial: 'RECTO' } },
-    outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
-    outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO' } },
+    outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_initial:    { label: 'TI',         mountingHeight: 1.50, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_high_180:   { label: 'TA',         mountingHeight: 1.80, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_floor_box:  { label: 'TP',         mountingHeight: 0.00, properties: { boxSize: '100x100x55', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
+    outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
     water_heater_30l:  { label: 'TE',         mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxSize: '575x340x340', boxMaterial: 'TERMA 30L' } },
 };
 

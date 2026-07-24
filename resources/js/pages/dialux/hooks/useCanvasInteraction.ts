@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { cycleCandidate, hitTestAtPoint } from '@/pages/dialux/selection/hitTest';
 import { getCanopyDraftStart } from './cadInteraction';
+import { resolveWireNodePosition } from './wireNodePosition';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -94,6 +95,8 @@ interface InteractionOptions {
     onMoveLightSwitch: (id: string, x: number, y: number, wallId?: string) => void;
     onMoveElectricalDevice?: (id: string, x: number, y: number, wallId?: string) => void;
     onConnectWire?: (sourceId: string, targetId: string, waypoints?: { x: number; y: number }[]) => void;
+    /** Reconecta un extremo de un cable ya existente a otro nodo (arrastrar handle) */
+    onReconnectWireEndpoint?: (conductorId: string, endpoint: 'source' | 'target', newNodeId: string) => void;
     onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
     electricalDevices?: ElectricalDevice[];
     /** Cables y tabiques: solo participan del hit-testing de selección */
@@ -125,7 +128,9 @@ interface DrawState {
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
-    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | 'electrical-device' | null;
+    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | 'electrical-device' | 'conductor-endpoint' | null;
+    /** Extremo del conductor que se está arrastrando (solo cuando dragObjectType === 'conductor-endpoint') */
+    dragConductorEndpoint: 'source' | 'target' | null;
 }
 
 function isWallTool(tool: string): boolean {
@@ -172,6 +177,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveLightSwitch,
         onMoveElectricalDevice,
         onConnectWire,
+        onReconnectWireEndpoint,
         onAddElectricalDevice,
         electricalDevices = [],
         conductors = [],
@@ -212,6 +218,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         dragStartScene: null,
         dragObjectId: null,
         dragObjectType: null,
+        dragConductorEndpoint: null,
     });
 
     useEffect(() => {
@@ -266,6 +273,40 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         electricalDevices,
         sceneToCanvas,
     });
+
+    // Candidato de nodo (switch/fixture/device) más cercano al cursor, para
+    // trazar o reconectar cables. Compartido entre la herramienta "wire" y el
+    // arrastre de un handle de extremo de un cable ya seleccionado.
+    type WireNodeCandidate = { kind: 'switch' | 'fixture' | 'device'; id: string; x: number; y: number };
+    const pickWireNodeCandidate = useCallback(
+        (cx: number, cy: number): WireNodeCandidate | null => {
+            const switchHit = findNearestLightSwitch(cx, cy);
+            const fixtureHit = findNearestFixture(cx, cy);
+            const deviceHit = findNearestElectricalDevice(cx, cy);
+
+            const dist2 = (p: { x: number; y: number } | null): number => {
+                if (!p) return Infinity;
+                const s = sceneToCanvas(p.x, p.y);
+                return (s.x - cx) ** 2 + (s.y - cy) ** 2;
+            };
+            const dist2Switch = dist2(switchHit);
+            const dist2Fixture = dist2(fixtureHit);
+            const dist2Device = dist2(deviceHit);
+
+            // El candidato más cercano gana (switch 15px, fixture 18px, device 18px — reducido para no solapar)
+            const SNAP_SW = 15 * 15;
+            const SNAP_FIX = 18 * 18;
+            const SNAP_DEV = 18 * 18;
+
+            const candidates: (WireNodeCandidate & { dist2: number })[] = [];
+            if (switchHit && dist2Switch <= SNAP_SW) candidates.push({ kind: 'switch', id: switchHit.id, x: switchHit.x, y: switchHit.y, dist2: dist2Switch });
+            if (fixtureHit && dist2Fixture <= SNAP_FIX) candidates.push({ kind: 'fixture', id: fixtureHit.id, x: fixtureHit.x, y: fixtureHit.y, dist2: dist2Fixture });
+            if (deviceHit && dist2Device <= SNAP_DEV) candidates.push({ kind: 'device', id: deviceHit.id, x: deviceHit.x, y: deviceHit.y, dist2: dist2Device });
+            candidates.sort((a, b) => a.dist2 - b.dist2);
+            return candidates[0] ?? null;
+        },
+        [findNearestLightSwitch, findNearestFixture, findNearestElectricalDevice, sceneToCanvas],
+    );
 
     // Helper local para determinar el punto previo para ortho snap
     const getPrevPointM = useCallback((tool: string, s: DrawState): CanvasPoint | null => {
@@ -529,34 +570,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
             if (activeTool === 'wire') {
                 const scPt = canvasToScene(cx, cy);
-
-                // ── Recoger todos los candidatos con su distancia real ──────
-                const switchHit  = findNearestLightSwitch(cx, cy);
-                const fixtureHit = findNearestFixture(cx, cy);
-                const deviceHit  = findNearestElectricalDevice(cx, cy);
-
-                // Función helper: distancia px al nodo (ya tenemos sus coords escena)
-                const dist2Switch  = switchHit  ? (() => { const p = sceneToCanvas(switchHit.x,  switchHit.y);  return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
-                const dist2Fixture = fixtureHit ? (() => { const p = sceneToCanvas(fixtureHit.x, fixtureHit.y); return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
-                const dist2Device  = deviceHit  ? (() => { const p = sceneToCanvas(deviceHit.x,  deviceHit.y);  return (p.x-cx)**2+(p.y-cy)**2; })() : Infinity;
-
-                // El candidato más cercano gana (switch 15px, fixture 18px, device 18px — reducido para no solapar)
-                const SNAP_SW  = 15 * 15;
-                const SNAP_FIX = 18 * 18;
-                const SNAP_DEV = 18 * 18;
-
-                const hasSw  = switchHit  && dist2Switch  <= SNAP_SW;
-                const hasFix = fixtureHit && dist2Fixture <= SNAP_FIX;
-                const hasDev = deviceHit  && dist2Device  <= SNAP_DEV;
-
-                // Determinar ganador: el que tenga menor distancia entre los válidos
-                type NodeHit = { kind: 'switch' | 'fixture' | 'device'; id: string; x: number; y: number; dist2: number };
-                const candidates: NodeHit[] = [];
-                if (hasSw)  candidates.push({ kind: 'switch',  id: switchHit!.id,  x: switchHit!.x,  y: switchHit!.y,  dist2: dist2Switch });
-                if (hasFix) candidates.push({ kind: 'fixture', id: fixtureHit!.id, x: fixtureHit!.x, y: fixtureHit!.y, dist2: dist2Fixture });
-                if (hasDev) candidates.push({ kind: 'device',  id: deviceHit!.id,  x: deviceHit!.x,  y: deviceHit!.y,  dist2: dist2Device });
-                candidates.sort((a, b) => a.dist2 - b.dist2);
-                const winner = candidates[0] ?? null;
+                const winner = pickWireNodeCandidate(cx, cy);
 
                 if (winner) {
                     const start = s.wireStartNode;
@@ -597,6 +611,31 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
 
             if (activeTool === 'select') {
+                // Si ya hay un cable seleccionado, un clic cerca de uno de sus
+                // extremos agarra ese handle para reconectarlo a otro nodo en
+                // vez de reseleccionar/arrastrar el objeto completo.
+                if (opts.selectedId) {
+                    const selectedConductor = conductors.find((c) => c.id === opts.selectedId);
+                    if (selectedConductor) {
+                        const nodeCtx = { fixtures, lightSwitches, electricalDevices };
+                        const srcPos = resolveWireNodePosition(selectedConductor.sourceId, nodeCtx);
+                        const tgtPos = resolveWireNodePosition(selectedConductor.targetId, nodeCtx);
+                        const HANDLE_TOL2 = 12 * 12;
+                        const srcCanvas = srcPos ? sceneToCanvas(srcPos.x, srcPos.y) : null;
+                        const tgtCanvas = tgtPos ? sceneToCanvas(tgtPos.x, tgtPos.y) : null;
+                        const dSrc2 = srcCanvas ? (srcCanvas.x - cx) ** 2 + (srcCanvas.y - cy) ** 2 : Infinity;
+                        const dTgt2 = tgtCanvas ? (tgtCanvas.x - cx) ** 2 + (tgtCanvas.y - cy) ** 2 : Infinity;
+                        if (dSrc2 <= HANDLE_TOL2 || dTgt2 <= HANDLE_TOL2) {
+                            s.isDragging = true;
+                            s.dragObjectId = selectedConductor.id;
+                            s.dragObjectType = 'conductor-endpoint';
+                            s.dragConductorEndpoint = dSrc2 <= dTgt2 ? 'source' : 'target';
+                            onDragGesture?.('start');
+                            return;
+                        }
+                    }
+                }
+
                 // Hit-testing determinista: se evalúan TODOS los candidatos bajo
                 // el puntero y gana el mejor rankeado (objeto pequeño antes que
                 // su contenedor). Alt+clic recorre cíclicamente los superpuestos.
@@ -658,7 +697,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         },
         [
             activeTool, angleSnapMode, canvasToScene, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM,
-            findNearestWall, findNearestFixture, findNearestRoom, findNearestLightSwitch, findNearestElectricalDevice,
+            findNearestWall, findNearestFixture, findNearestRoom, findNearestLightSwitch, findNearestElectricalDevice, pickWireNodeCandidate,
             onAddFixture, onCalibrationMeasure, onMeasureAreaFinish, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
             onAddLightSwitch, onAddElectricalDevice, onConnectWire, onDragGesture,
             fixtures, lightSwitches, electricalDevices, windows, doors, conductors, canopies, walls, partitions, rooms,
@@ -682,12 +721,24 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             ) => void,
             setCalibrationSnapPoint: (p: CanvasPoint | null) => void,
             setTempElectricalDevice: (p: { x: number; y: number; type: ElectricalDeviceType; label: string } | null) => void,
+            setWireReconnectPreview?: (
+                p: { conductorId: string; endpoint: 'source' | 'target'; point: CanvasPoint } | null,
+            ) => void,
         ) => {
             const s = stateRef.current;
             const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
             if (isNaN(rect.left) || isNaN(rect.top)) return;
             const rawX = e.clientX - rect.left;
             const rawY = e.clientY - rect.top;
+
+            if (s.isDragging && s.dragObjectType === 'conductor-endpoint' && s.dragObjectId && s.dragConductorEndpoint) {
+                setWireReconnectPreview?.({
+                    conductorId: s.dragObjectId,
+                    endpoint: s.dragConductorEndpoint,
+                    point: canvasToScene(rawX, rawY),
+                });
+                return;
+            }
 
             const activeVerticesCanvas = (
                 (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') ? s.roomVertices : (isWallTool(activeTool) ? s.wallVertices : [])
@@ -899,8 +950,32 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             setCanopyPreview: (
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
+            setWireReconnectPreview?: (
+                p: { conductorId: string; endpoint: 'source' | 'target'; point: CanvasPoint } | null,
+            ) => void,
         ) => {
             const s = stateRef.current;
+
+            if (s.isDragging && s.dragObjectType === 'conductor-endpoint' && s.dragObjectId && s.dragConductorEndpoint) {
+                const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+                if (!isNaN(rect.left) && !isNaN(rect.top)) {
+                    const cx = e.clientX - rect.left;
+                    const cy = e.clientY - rect.top;
+                    const target = pickWireNodeCandidate(cx, cy);
+                    if (target) {
+                        onReconnectWireEndpoint?.(s.dragObjectId, s.dragConductorEndpoint, target.id);
+                    }
+                }
+                setWireReconnectPreview?.(null);
+                s.isDragging = false;
+                s.dragStartScene = null;
+                s.dragObjectId = null;
+                s.dragObjectType = null;
+                s.dragConductorEndpoint = null;
+                onDragGesture?.('end');
+                return;
+            }
+
             if (activeTool === 'canopy' && s.isDrawing && s.wallStart) {
                 const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
                 if (isNaN(rect.left) || isNaN(rect.top)) return;
@@ -925,10 +1000,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 s.dragStartScene = null;
                 s.dragObjectId = null;
                 s.dragObjectType = null;
+                s.dragConductorEndpoint = null;
                 onDragGesture?.('end');
             }
         },
-        [activeTool, canvasToScene, resolveSnap, onAddCanopy, onDragGesture],
+        [activeTool, canvasToScene, resolveSnap, onAddCanopy, onDragGesture, pickWireNodeCandidate, onReconnectWireEndpoint],
     );
 
     const handleDoubleClick = useCallback(() => {

@@ -15,15 +15,24 @@ interface Props {
     zoom: number;
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
     selectedId?: string | null;
+    selectedConductorIds?: string[];
     onSelect?: (id: string) => void;
     activeTool?: string;
     showLegacyLightingWires?: boolean;
+    /** Extremo del conductor seleccionado que se está arrastrando para reconectarlo */
+    reconnectPreview?: {
+        conductorId: string;
+        endpoint: 'source' | 'target';
+        point: { x: number; y: number };
+    } | null;
 }
 
 const WIRE_COLOR = '#ef4444';
 const WIRE_SELECTED = '#facc15';
 const LEGACY_COLOR = '#94a3b8';
 const DEVICE_WIRE_COLOR = '#f97316';
+const HANDLE_COLOR = '#facc15';
+const HANDLE_RADIUS = 5;
 
 /**
  * Draw conductor-count marks at the midpoint of the Bezier curve.
@@ -141,9 +150,11 @@ export const OverlayWires = memo(function OverlayWires({
     zoom,
     screenPoint,
     selectedId,
+    selectedConductorIds = [],
     onSelect,
     activeTool,
     showLegacyLightingWires = true,
+    reconnectPreview = null,
 }: Props) {
     const switchesWithConductors = new Set(
         conductors.flatMap(c => [c.sourceId, c.targetId])
@@ -192,7 +203,9 @@ export const OverlayWires = memo(function OverlayWires({
                 ];
                 if (nodes.length < 2) return null;
 
-                const isSelected = cond.id === selectedId;
+                const isSelected =
+                    cond.id === selectedId ||
+                    selectedConductorIds.includes(cond.id);
                 const isDeviceSource = electricalDevices.some(d => d.id === cond.sourceId);
                 const wireColor = isSelected ? WIRE_SELECTED : (isDeviceSource ? DEVICE_WIRE_COLOR : WIRE_COLOR);
                 const markerId  = isSelected ? 'arrow-cond-sel' : (isDeviceSource ? 'arrow-device' : 'arrow-cond');
@@ -236,6 +249,13 @@ export const OverlayWires = memo(function OverlayWires({
 
                 if (visElems.length === 0) return null;
 
+                // Handles de extremo: solo en el cable exactamente seleccionado
+                // (no en todo el circuito agrupado), para arrastrarlos y
+                // reconectar el cable a otro nodo sin borrarlo y re-trazarlo.
+                const showHandles = interactive && cond.id === selectedId;
+                const isBeingReconnected = reconnectPreview?.conductorId === cond.id;
+                const endpointScreen = { source: nodes[0], target: nodes[nodes.length - 1] };
+
                 return (
                     <g key={cond.id}>
                         {/* Selection glow */}
@@ -267,6 +287,49 @@ export const OverlayWires = memo(function OverlayWires({
                             />
                         ))}
                         {visElems}
+                        {/* Handles de extremo (arrastrables desde el SVG raíz) */}
+                        {showHandles && (
+                            <>
+                                <circle
+                                    cx={safeNum(endpointScreen.source.x)}
+                                    cy={safeNum(endpointScreen.source.y)}
+                                    r={HANDLE_RADIUS}
+                                    fill={HANDLE_COLOR}
+                                    stroke="#1e293b"
+                                    strokeWidth={1.5}
+                                    style={{ cursor: 'grab', pointerEvents: 'none' }}
+                                />
+                                <circle
+                                    cx={safeNum(endpointScreen.target.x)}
+                                    cy={safeNum(endpointScreen.target.y)}
+                                    r={HANDLE_RADIUS}
+                                    fill={HANDLE_COLOR}
+                                    stroke="#1e293b"
+                                    strokeWidth={1.5}
+                                    style={{ cursor: 'grab', pointerEvents: 'none' }}
+                                />
+                            </>
+                        )}
+                        {/* Línea elástica mientras se arrastra un extremo para reconectar */}
+                        {isBeingReconnected && (() => {
+                            const fixedPoint =
+                                reconnectPreview!.endpoint === 'source'
+                                    ? endpointScreen.target
+                                    : endpointScreen.source;
+                            const movingPoint = screenPoint(reconnectPreview!.point);
+                            return (
+                                <line
+                                    x1={safeNum(fixedPoint.x)}
+                                    y1={safeNum(fixedPoint.y)}
+                                    x2={safeNum(movingPoint.x)}
+                                    y2={safeNum(movingPoint.y)}
+                                    stroke={WIRE_SELECTED}
+                                    strokeWidth={2}
+                                    strokeDasharray="4,4"
+                                    style={{ pointerEvents: 'none' }}
+                                />
+                            );
+                        })()}
                     </g>
                 );
             })}

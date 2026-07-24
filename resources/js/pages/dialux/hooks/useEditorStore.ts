@@ -143,7 +143,12 @@ interface UIState {
     wireTemplate: { wireCount: Conductor['wireCount']; wireLabel: NonNullable<Conductor['wireLabel']> };
     junctionBoxTemplate: { size: JunctionBox['size'] };
     /** Template para el dispositivo eléctrico activo (tipo que se insertará al hacer clic) */
-    electricalDeviceTemplate: { type: ElectricalDeviceType; label?: string } | null;
+    electricalDeviceTemplate: {
+        type: ElectricalDeviceType;
+        label?: string;
+        /** Overrides de propiedades (p.ej. potencia, marca) al colocar desde el catálogo. */
+        properties?: Partial<ElectricalDeviceProperties>;
+    } | null;
     /** Tipo de muro que se creará al dibujar con la herramienta 'wall' */
     wallTypeTemplate: 'interior' | 'exterior' | 'cerco';
     /**
@@ -159,6 +164,13 @@ interface UIState {
     showAllFloors: boolean;
     electricalLayerVisibility: Record<ElectricalLayerGroup, boolean>;
     hiddenElectricalIds: string[];
+    /**
+     * Se incrementa cada vez que el plano del piso activo cambia por una vía
+     * que no cambia `activeSceneId` (ej. reutilizar el plano de otro piso
+     * para el piso ya abierto). El canvas 2D lo usa para saber que debe
+     * releer el plano aunque siga en el mismo piso.
+     */
+    planReloadTick: number;
 }
 
 // ─── Estado global ────────────────────────────────────────────────────────────
@@ -236,7 +248,11 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
     updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
     updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
-    setElectricalDeviceTemplate: (type: ElectricalDeviceType, label?: string) => void;
+    setElectricalDeviceTemplate: (
+        type: ElectricalDeviceType,
+        label?: string,
+        properties?: Partial<ElectricalDeviceProperties>,
+    ) => void;
 
     /** Reposiciona una ventana al centro de su pared */
     centerWindowOnWall: (windowId: string) => void;
@@ -277,6 +293,8 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     // ── Calculation & DXF ────────────────────────────────────────────────────
     setCalculating: (val: boolean) => void;
     setResult: (result: LightingResult | null) => void;
+    /** Fuerza al canvas 2D a releer el plano del piso activo (ver planReloadTick) */
+    bumpPlanReloadTick: () => void;
     setResultsByRoom: (results: Record<string, LightingResult>) => void;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -386,12 +404,14 @@ export const useEditorStore = create<EditorState>()(
                 panels: true,
             },
             hiddenElectricalIds: [],
+            planReloadTick: 0,
         },
 
         // ── Calc & DXF ────────────────────────────────────────────────────────
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
+        bumpPlanReloadTick: () => set((s) => ({ ui: { ...s.ui, planReloadTick: s.ui.planReloadTick + 1 } })),
     })),
 );
 

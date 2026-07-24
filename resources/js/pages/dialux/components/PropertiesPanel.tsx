@@ -1,5 +1,9 @@
 import React from 'react';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
+import {
+    connectedCircuitConductorIds,
+    panelBoundaryIds,
+} from '@/pages/dialux/hooks/conductorCircuitGroups';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import {
     ConductorProps,
@@ -95,10 +99,22 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     }
 
     if (conductor) {
+        const circuitConductorIds = connectedCircuitConductorIds(
+            scene?.conductors ?? [],
+            conductor.id,
+            panelBoundaryIds(scene?.electricalDevices),
+        );
         return (
             <ConductorProps
                 conductor={conductor}
-                onUpdate={(patch) => store.updateConductor(conductor.id, patch)}
+                circuitCount={circuitConductorIds.length}
+                onUpdate={(patch) => {
+                    store.beginHistoryGesture();
+                    circuitConductorIds.forEach((id) =>
+                        store.updateConductor(id, patch),
+                    );
+                    store.endHistoryGesture();
+                }}
                 onDelete={() => store.removeObject(conductor.id)}
             />
         );

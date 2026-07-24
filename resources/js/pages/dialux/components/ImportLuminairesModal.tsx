@@ -31,37 +31,38 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex max-h-[min(90vh,720px)] min-h-0 flex-col overflow-hidden border-gray-800 bg-[#161820] p-0 text-gray-100 sm:max-w-2xl">
-                <DialogHeader className="shrink-0 px-6 pt-6">
-                    <DialogTitle className="text-lg font-bold text-cyan-400">
-                        Importar Luminarias
+            <DialogContent className="flex h-[96dvh] w-[calc(100vw-1rem)] max-w-5xl min-h-0 flex-col gap-0 overflow-hidden border-slate-200 bg-white p-0 text-slate-900 dark:border-slate-800 dark:bg-[#11131a] dark:text-slate-100 sm:h-[92dvh] sm:w-[94vw] sm:max-w-5xl">
+                <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 pr-12 text-left dark:border-slate-800 sm:px-6 sm:py-5">
+                    <DialogTitle className="text-base font-semibold tracking-tight text-slate-950 dark:text-white sm:text-lg">
+                        Catálogo y creación de luminarias
                     </DialogTitle>
-                    <DialogDescription className="text-gray-400">
-                        Selecciona una luminaria del catálogo para insertarla en tu proyecto.
+                    <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-500 dark:text-slate-400 sm:text-sm">
+                        Busca un modelo, importa fotometría IES/LDT o crea una
+                        luminaria propia para insertarla en el proyecto.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-6">
+                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-3 sm:p-5">
                     {/* Filtros */}
-                    <div className="shrink-0 space-y-2">
+                    <div className="shrink-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
                         {/* Búsqueda */}
                         <div className="relative">
                             <Search
                                 size={14}
-                                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-600"
+                                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400 dark:text-slate-500"
                             />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Buscar luminaria, código…"
-                                className="h-9 w-full rounded border border-gray-700/60 bg-gray-900/70 pr-3 pl-9 text-sm text-gray-200 placeholder-gray-600 transition-colors outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                                className="h-10 w-full rounded-lg border border-slate-300 bg-white pr-10 pl-9 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-600"
                             />
                             {search && (
                                 <button
                                     type="button"
                                     onClick={() => setSearch('')}
-                                    className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                                    className="absolute top-1/2 right-3 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                                 >
                                     <X size={14} />
                                 </button>
@@ -69,16 +70,16 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                         </div>
 
                         {/* Filtro de marca */}
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
                             {LUMINAIRE_BRANDS.map((b) => (
                                 <button
                                     key={b}
                                     type="button"
                                     onClick={() => setBrand(b)}
-                                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                                    className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                                         brand === b
-                                            ? 'bg-cyan-700/60 text-cyan-100 ring-1 ring-cyan-500/40'
-                                            : 'bg-gray-800/60 text-gray-500 hover:bg-gray-700/60 hover:text-gray-300'
+                                            ? 'border-cyan-500 bg-cyan-50 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-200'
+                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200'
                                     }`}
                                 >
                                     {b}
@@ -88,8 +89,8 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                     </div>
 
                     {/* Catálogo */}
-                    <div className="min-h-0 flex-1 overflow-hidden rounded border border-gray-700/50 bg-gray-900/30 p-2">
-                        <div className="h-full overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950/30 sm:p-3">
+                        <div className="h-full overflow-y-auto pr-1 sm:pr-2">
                             <CatalogPanel
                                 filterCategory="luminaires"
                                 filterBrand={brand !== 'Todas' ? brand : undefined}
@@ -100,10 +101,10 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                     </div>
                 </div>
 
-                <div className="flex shrink-0 justify-end gap-2 px-6 pb-6">
+                <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:px-6">
                     <Button
                         variant="outline"
-                        className="border-gray-700 text-gray-200 hover:bg-gray-800"
+                        className="border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         onClick={() => onOpenChange(false)}
                     >
                         Cerrar

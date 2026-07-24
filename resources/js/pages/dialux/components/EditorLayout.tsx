@@ -5,24 +5,18 @@
 import { Link } from '@inertiajs/react';
 import { ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
-import {
-    createScaleConfig,
-    useEditorStore,
-    useShow3DView,
-} from '@/pages/dialux/hooks/useEditorStore';
+import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
+import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux/hooks/useEditorStore';
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
+import type { Conductor } from '@/pages/dialux/hooks/types';
 import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
-import { calculatePanelCircuitSummaries, calculateRoomWireSummary } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { calculatePanelCircuitSummaries, calculateRoomWireSummary, resolveTreeConformingSections } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
+import { CtPanelOutputsDialog } from './CtPanelOutputsDialog';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { DxfExportDialog } from './DxfExportDialog';
@@ -34,19 +28,6 @@ import { Toolbar } from './Toolbar';
 import { WasmBadge } from './WasmBadge';
 
 const DEMO_SCENE_ID = 'scene-default';
-
-function groupByKey<T>(
-    items: T[],
-    keyFor: (item: T) => string,
-): Array<[string, T[]]> {
-    const groups = new Map<string, T[]>();
-    items.forEach((item) => {
-        const key = keyFor(item);
-        groups.set(key, [...(groups.get(key) ?? []), item]);
-    });
-
-    return [...groups.entries()];
-}
 
 const DEMO_PROJECT = {
     id: 'dialux-demo',
@@ -119,6 +100,7 @@ export const EditorLayout = memo(function EditorLayout() {
     const toggleFloorVisibility = useEditorStore((s) => s.toggleFloorVisibility);
     const toggleAllFloors = useEditorStore((s) => s.toggleAllFloors);
     const showAllFloors = useEditorStore((s) => s.ui.showAllFloors);
+    const bumpPlanReloadTick = useEditorStore((s) => s.bumpPlanReloadTick);
 
     const [roomResults, setRoomResults] = useState<RoomResultSummary[]>([]);
     const [resultsModalOpen, setResultsModalOpen] = useState(false);
@@ -126,16 +108,45 @@ export const EditorLayout = memo(function EditorLayout() {
     const [editingFloorName, setEditingFloorName] = useState(false);
     const [floorNameDraft, setFloorNameDraft] = useState('');
     const [showWireCalc, setShowWireCalc] = useState(false);
-    const panelCircuitSummaries = useMemo(
-        () =>
-            showWireCalc
-                ? (project?.scenes ?? [])
-                      .flatMap((scene) => calculatePanelCircuitSummaries(scene))
-                      .sort((a, b) => a.levelIndex - b.levelIndex)
-                : [],
-        [showWireCalc, project],
-    );
+    const [isReusingFloorPlan, setIsReusingFloorPlan] = useState(false);
+    const [panelCircuitSummaries, setPanelCircuitSummaries] = useState<
+        ReturnType<typeof calculatePanelCircuitSummaries>
+    >([]);
+    const [isCtCalculating, setIsCtCalculating] = useState(false);
+    useEffect(() => {
+        if (!showWireCalc) {
+            setIsCtCalculating(false);
+            return;
+        }
 
+        let cancelled = false;
+        let sceneIndex = 0;
+        const scenes = project?.scenes ?? [];
+        const calculated: ReturnType<typeof calculatePanelCircuitSummaries> = [];
+        setPanelCircuitSummaries([]);
+        setIsCtCalculating(true);
+
+        const calculateNextScene = () => {
+            if (cancelled) return;
+            const scene = scenes[sceneIndex];
+            if (!scene) {
+                calculated.sort((a, b) => a.levelIndex - b.levelIndex);
+                setPanelCircuitSummaries(calculated);
+                setIsCtCalculating(false);
+                return;
+            }
+
+            calculated.push(...calculatePanelCircuitSummaries(scene));
+            sceneIndex += 1;
+            window.requestAnimationFrame(calculateNextScene);
+        };
+
+        const initialFrame = window.requestAnimationFrame(calculateNextScene);
+        return () => {
+            cancelled = true;
+            window.cancelAnimationFrame(initialFrame);
+        };
+    }, [showWireCalc, project]);
     // Resuelve el ambiente relevante para "Cálculo CT" a partir de lo que el
     // usuario tenga seleccionado: el propio ambiente, una luminaria dentro de
     // él, o un cable conectado a una de sus luminarias — no solo un clic
@@ -164,22 +175,154 @@ export const EditorLayout = memo(function EditorLayout() {
 
         return null;
     })();
+    const selectedCtRoomSummary = useMemo(() => {
+        if (!showWireCalc || !activeScene || !selectedRoom) return null;
+        return {
+            name: selectedRoom.name,
+            wire: calculateRoomWireSummary(
+                activeScene,
+                getFixturesForRoom(selectedRoom, activeScene.fixtures),
+            ),
+        };
+    }, [showWireCalc, activeScene, selectedRoom]);
+    const updateCtCircuit = useCallback(
+        (
+            levelId: string,
+            conductorId: string,
+            patch: Partial<NonNullable<Conductor['ct']>>,
+        ) => {
+            if (!project) return;
+            setProject({
+                ...project,
+                scenes: project.scenes.map((scene) =>
+                    scene.id !== levelId
+                        ? scene
+                        : {
+                            ...scene,
+                            conductors: (scene.conductors ?? []).map(
+                                (conductor) =>
+                                    conductor.id === conductorId
+                                        ? {
+                                            ...conductor,
+                                            ct: {
+                                                ...(conductor.ct ?? {}),
+                                                ...patch,
+                                            },
+                                        }
+                                        : conductor,
+                            ),
+                        },
+                ),
+            });
+        },
+        [project, setProject],
+    );
+
+    const updateCtSection = useCallback(
+        (levelId: string, conductorId: string, sectionMm2: number) => {
+            if (!project) return;
+            setProject({
+                ...project,
+                scenes: project.scenes.map((scene) =>
+                    scene.id !== levelId
+                        ? scene
+                        : {
+                            ...scene,
+                            conductors: (scene.conductors ?? []).map(
+                                (conductor) =>
+                                    conductor.id === conductorId
+                                        ? {
+                                            ...conductor,
+                                            sectionMm2,
+                                            // Limpia el amperaje nominal manual para que se
+                                            // recalcule de la tabla de ampacidad con la nueva
+                                            // sección (si el usuario no lo había forzado, ya
+                                            // era undefined y esto es un no-op).
+                                            ct: {
+                                                ...(conductor.ct ?? {}),
+                                                nominalCableCurrentA: undefined,
+                                            },
+                                        }
+                                        : conductor,
+                            ),
+                        },
+                ),
+            });
+        },
+        [project, setProject],
+    );
+
+    // "Verificar y corregir todo el árbol": recorre cada piso (cada uno es
+    // un árbol TG→TD→circuitos independiente) y sube en cascada las
+    // secciones no conformes — a diferencia de `updateCtSection` (una sola
+    // salida), esto puede tocar varios tableros a la vez porque arreglar un
+    // alimentador cambia el ΔV heredado de sus hijos.
+    const applyTreeCompliance = useCallback(() => {
+        if (!project) return;
+        setProject({
+            ...project,
+            scenes: project.scenes.map((scene) => {
+                const fixes = resolveTreeConformingSections(scene);
+                if (fixes.length === 0) return scene;
+                const fixById = new Map(fixes.map((fix) => [fix.conductorId, fix.sectionMm2]));
+                return {
+                    ...scene,
+                    conductors: (scene.conductors ?? []).map((conductor) =>
+                        fixById.has(conductor.id)
+                            ? {
+                                  ...conductor,
+                                  sectionMm2: fixById.get(conductor.id)!,
+                                  ct: {
+                                      ...(conductor.ct ?? {}),
+                                      nominalCableCurrentA: undefined,
+                                  },
+                              }
+                            : conductor,
+                    ),
+                };
+            }),
+        });
+    }, [project, setProject]);
+
     const engine = useLightingEngine();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
 
     const floorsSorted = getFloorsSorted();
 
+    // Los pisos nuevos heredan el plano del piso activo al momento de
+    // crearlos (lo más común: 1er, 2do y 3er piso comparten el mismo
+    // plano). El usuario puede reemplazarlo para un piso puntual (ej. el
+    // 4to piso) subiendo un archivo distinto desde la barra de
+    // herramientas; eso desvincula solo ese piso sin afectar a los demás.
+    const linkInheritedPlan = useCallback(
+        async (newSceneId: string, sourceSceneId: string | null): Promise<void> => {
+            if (!project?.id || !sourceSceneId) return;
+            try {
+                await linkDialuxPlanFile(project.id, newSceneId, sourceSceneId);
+            } catch (error) {
+                console.warn('No se pudo heredar el plano del piso de origen.', error);
+                markDialuxPlanSyncFailed(newSceneId);
+            }
+        },
+        [project?.id],
+    );
+
+    // Se espera a que el vínculo del plano termine antes de cambiar de piso
+    // activo: así el canvas nunca llega a preguntar por el servidor antes
+    // de que exista el vínculo (evitaría un "piso en blanco" momentáneo).
     const handleAddFloorAbove = useCallback(() => {
         const maxIndex = Math.max(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const sourceSceneId = activeSceneId;
         const newId = addFloor(`Piso ${maxIndex + 1}`, maxIndex + 1, 3.0);
-        setActiveScene(newId);
-    }, [addFloor, floorsSorted, setActiveScene]);
+        void linkInheritedPlan(newId, sourceSceneId).finally(() => setActiveScene(newId));
+    }, [activeSceneId, addFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
 
     const handleAddBasement = useCallback(() => {
         const minIndex = Math.min(...floorsSorted.map((f) => f.floorIndex ?? 0), 0);
+        const sourceSceneId = activeSceneId;
         const newId = addFloor(`Sótano ${Math.abs(minIndex - 1)}`, minIndex - 1, 3.0);
-        setActiveScene(newId);
-    }, [addFloor, floorsSorted, setActiveScene]);
+        void linkInheritedPlan(newId, sourceSceneId).finally(() => setActiveScene(newId));
+    }, [activeSceneId, addFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
 
     const handleDuplicateFloor = useCallback(() => {
         if (!activeSceneId || !activeScene) return;
@@ -189,13 +332,38 @@ export const EditorLayout = memo(function EditorLayout() {
             maxIndex + 1,
             `${activeScene.name} (copia)`,
         );
-        setActiveScene(newId);
-    }, [activeSceneId, activeScene, duplicateFloor, floorsSorted, setActiveScene]);
+        void linkInheritedPlan(newId, activeSceneId).finally(() => setActiveScene(newId));
+    }, [activeSceneId, activeScene, duplicateFloor, floorsSorted, linkInheritedPlan, setActiveScene]);
 
     const handleRemoveFloor = useCallback(() => {
         if (!activeSceneId || floorsSorted.length <= 1) return;
-        removeFloor(activeSceneId);
-    }, [activeSceneId, floorsSorted.length, removeFloor]);
+        const removedSceneId = activeSceneId;
+        removeFloor(removedSceneId);
+        if (project?.id) {
+            void unlinkDialuxPlanFile(project.id, removedSceneId);
+        }
+    }, [activeSceneId, floorsSorted.length, project?.id, removeFloor]);
+
+    // Para pisos que ya existían antes de que se agregara la herencia
+    // automática de plano (o si el usuario simplemente cambió de opinión),
+    // esto permite reutilizar el plano de cualquier otro piso del proyecto
+    // en el piso activo, sin volver a subir el archivo.
+    const handleReuseFloorPlan = useCallback(
+        async (sourceSceneId: string) => {
+            if (!activeSceneId || !project?.id || !sourceSceneId) return;
+            setIsReusingFloorPlan(true);
+            try {
+                await linkDialuxPlanFile(project.id, activeSceneId, sourceSceneId);
+                bumpPlanReloadTick();
+            } catch (error) {
+                console.warn('No se pudo reutilizar el plano del piso seleccionado.', error);
+                markDialuxPlanSyncFailed(activeSceneId);
+            } finally {
+                setIsReusingFloorPlan(false);
+            }
+        },
+        [activeSceneId, project?.id, bumpPlanReloadTick],
+    );
 
     const handleStartFloorNameEdit = useCallback(() => {
         if (!activeScene) return;
@@ -591,6 +759,62 @@ export const EditorLayout = memo(function EditorLayout() {
                                             Editar nombre
                                         </button>
                                     )}
+                                    {activeScene && (
+                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-400">
+                                            <span>Altura piso–techo</span>
+                                            <span className="flex items-center gap-1">
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={20}
+                                                    step={0.05}
+                                                    value={activeScene.floorHeight ?? 3}
+                                                    onChange={(event) => {
+                                                        const floorHeight = Number(event.target.value);
+                                                        if (
+                                                            Number.isFinite(floorHeight) &&
+                                                            floorHeight >= 1 &&
+                                                            floorHeight <= 20
+                                                        ) {
+                                                            updateFloor(activeScene.id, {
+                                                                floorHeight,
+                                                            });
+                                                        }
+                                                    }}
+                                                    aria-label="Altura piso a techo"
+                                                    className="w-16 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-right font-mono text-[10px] text-cyan-300 outline-none focus:border-cyan-500"
+                                                />
+                                                <span>m</span>
+                                            </span>
+                                        </label>
+                                    )}
+                                    {activeScene && floorsSorted.length > 1 && (
+                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-400">
+                                            <span>Copiar plano de</span>
+                                            <select
+                                                value=""
+                                                disabled={isReusingFloorPlan}
+                                                onChange={(event) => {
+                                                    const sourceId = event.target.value;
+                                                    if (sourceId) void handleReuseFloorPlan(sourceId);
+                                                    event.target.value = '';
+                                                }}
+                                                aria-label="Copiar plano de otro piso"
+                                                className="min-w-0 max-w-28 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-[10px] text-cyan-300 outline-none focus:border-cyan-500 disabled:opacity-50"
+                                            >
+                                                <option value="">
+                                                    {isReusingFloorPlan ? 'Copiando…' : 'Elegir piso…'}
+                                                </option>
+                                                {floorsSorted
+                                                    .filter((f) => f.id !== activeScene.id)
+                                                    .map((f) => (
+                                                        <option key={f.id} value={f.id}>
+                                                            {floorLabel({ floorIndex: f.floorIndex ?? 0, name: f.name })}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </label>
+                                    )}
                                     <div className="grid grid-cols-2 gap-1">
                                         <button
                                             onClick={() => { handleAddFloorAbove(); setShowFloorPanel(false); }}
@@ -780,211 +1004,35 @@ export const EditorLayout = memo(function EditorLayout() {
             <DxfExportDialog open={showDxfExportDialog} onOpenChange={setShowDxfExportDialog} />
 
             <Dialog open={resultsModalOpen} onOpenChange={setResultsModalOpen}>
-                <DialogContent className="max-h-[92vh] overflow-hidden border-slate-800 bg-[#090b10] text-slate-100 sm:max-w-7xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-semibold text-white">
+                <DialogContent className="flex h-[96dvh] w-[calc(100vw-1rem)] max-w-[1600px] flex-col gap-0 overflow-hidden border-slate-800 bg-[#090b10] p-0 text-slate-100 sm:h-[94dvh] sm:w-[96vw] sm:max-w-[1600px]">
+                    <DialogHeader className="shrink-0 border-b border-slate-800/80 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5">
+                        <DialogTitle className="text-base font-semibold tracking-tight text-white sm:text-lg">
                             Resultados de iluminacion por recinto
                         </DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-400 sm:text-sm">
                             Se captura la luminaria insertada en cada espacio y
                             se resume el calculo en una tabla.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="overflow-hidden">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
                         <ResultsPanel rooms={roomResults} />
                     </div>
                 </DialogContent>
             </Dialog>
 
             {activeScene && (
-                <Dialog open={showWireCalc} onOpenChange={setShowWireCalc}>
-                    <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-5xl">
-                        <DialogHeader>
-                            <DialogTitle>Cálculo CT — salidas de tableros</DialogTitle>
-                            <DialogDescription>
-                                Longitud, ambientes atendidos y carga instalada acumulada hasta el final de cada salida.
-                            </DialogDescription>
-                        </DialogHeader>
-                        {(() => {
-                            const circuits = panelCircuitSummaries;
-                            const summary = selectedRoom
-                                ? calculateRoomWireSummary(activeScene, getFixturesForRoom(selectedRoom, activeScene.fixtures))
-                                : null;
-                            return (
-                                <div className="space-y-4 overflow-auto text-xs">
-                                    {selectedRoom && summary && (
-                                        <div className="grid grid-cols-3 gap-2 rounded border border-slate-800 bg-slate-950/50 p-3">
-                                            <div><p className="text-slate-500">Ambiente seleccionado</p><p className="font-medium text-slate-200">{selectedRoom.name}</p></div>
-                                            <div><p className="text-slate-500">Puntos / conductores</p><p className="font-mono text-slate-200">{summary.pointCount} / {summary.conductorCount}</p></div>
-                                            <div><p className="text-slate-500">Cable asociado</p><p className="font-mono text-emerald-400">{summary.totalLength.toFixed(2)} m</p></div>
-                                        </div>
-                                    )}
-                                    {circuits.length > 0 && groupByKey(
-                                        circuits,
-                                        (circuit) => circuit.levelId,
-                                    ).map(([levelId, levelCircuits]) => (
-                                        <section
-                                            key={levelId}
-                                            className="overflow-hidden rounded border border-slate-800">
-                                            <div className="border-b border-cyan-900/50 bg-cyan-950/30 px-3 py-2">
-                                                <p className="font-semibold text-cyan-200">
-                                                    {levelCircuits[0]?.levelName}
-                                                </p>
-                                                <p className="text-[10px] text-slate-500">
-                                                    {levelCircuits.length} circuito(s) en este piso
-                                                </p>
-                                            </div>
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-[1100px] w-full text-left">
-                                                    <thead className="bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500">
-                                                        <tr>
-                                                            <th className="px-3 py-2">Tablero</th>
-                                                            <th className="px-3 py-2">CT</th>
-                                                            <th className="px-3 py-2">Ambiente / detalle de carga</th>
-                                                            <th className="px-3 py-2">Ambientes por donde pasa</th>
-                                                            <th className="px-3 py-2">Longitud</th>
-                                                            <th className="px-3 py-2">Conductor</th>
-                                                            <th className="px-3 py-2">Caída de tensión</th>
-                                                            <th className="px-3 py-2">Carga instalada</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {groupByKey(
-                                                            levelCircuits,
-                                                            (circuit) => circuit.panelId,
-                                                        ).flatMap(([panelId, panelCircuits]) => {
-                                                            const panelRowSpan = panelCircuits.reduce(
-                                                                (total, circuit) =>
-                                                                    total + Math.max(1, circuit.rooms.length),
-                                                                0,
-                                                            );
-                                                            let panelCellRendered = false;
-
-                                                            return panelCircuits.flatMap((circuit) => {
-                                                                const circuitRooms =
-                                                                    circuit.rooms.length > 0
-                                                                        ? circuit.rooms
-                                                                        : [null];
-                                                                const circuitRowSpan =
-                                                                    circuitRooms.length;
-
-                                                                return circuitRooms.map(
-                                                                    (room, roomIndex) => {
-                                                                        const showCircuitCells =
-                                                                            roomIndex === 0;
-                                                                        const showPanelCell =
-                                                                            !panelCellRendered;
-                                                                        if (showPanelCell) {
-                                                                            panelCellRendered = true;
-                                                                        }
-
-                                                                        return (
-                                                                            <tr
-                                                                                key={`${panelId}-${circuit.rootConductorId}-${room?.roomId ?? 'empty'}`}
-                                                                                className="border-t border-slate-800 align-top text-slate-200">
-                                                                                {showPanelCell && (
-                                                                                    <td
-                                                                                        rowSpan={panelRowSpan}
-                                                                                        className="border-r border-slate-800 px-3 py-2 font-medium">
-                                                                                        {circuit.panelLabel}
-                                                                                    </td>
-                                                                                )}
-                                                                                {showCircuitCells && (
-                                                                                    <td
-                                                                                        rowSpan={circuitRowSpan}
-                                                                                        className="border-r border-slate-800 px-3 py-2 font-mono text-cyan-300">
-                                                                                        {circuit.code}
-                                                                                    </td>
-                                                                                )}
-                                                                                <td className="px-3 py-2">
-                                                                                    <p className="font-medium text-slate-200">
-                                                                                        {room?.roomName ??
-                                                                                            'Sin luminarias'}
-                                                                                    </p>
-                                                                                    <p className="text-[10px] text-slate-500">
-                                                                                        {room?.detail ||
-                                                                                            'Sin potencia definida'}
-                                                                                    </p>
-                                                                                </td>
-                                                                                {showCircuitCells && (
-                                                                                    <>
-                                                                                        <td
-                                                                                            rowSpan={circuitRowSpan}
-                                                                                            className="px-3 py-2 text-slate-400">
-                                                                                            {circuit
-                                                                                                .traversedRoomNames
-                                                                                                .join(' → ') ||
-                                                                                                'Sin ambiente identificado'}
-                                                                                        </td>
-                                                                                        <td
-                                                                                            rowSpan={circuitRowSpan}
-                                                                                            className="px-3 py-2 font-mono text-emerald-400">
-                                                                                            {circuit.lengthM.toFixed(
-                                                                                                2,
-                                                                                            )}{' '}
-                                                                                            m
-                                                                                        </td>
-                                                                                        <td
-                                                                                            rowSpan={circuitRowSpan}
-                                                                                            className="px-3 py-2 font-mono text-slate-300">
-                                                                                            {circuit.sectionMm2.toFixed(
-                                                                                                1,
-                                                                                            )}{' '}
-                                                                                            mm²
-                                                                                        </td>
-                                                                                        <td
-                                                                                            rowSpan={circuitRowSpan}
-                                                                                            className="px-3 py-2">
-                                                                                            <p
-                                                                                                className={`font-mono font-semibold ${
-                                                                                                    circuit.voltageDropOk
-                                                                                                        ? 'text-emerald-400'
-                                                                                                        : 'text-red-400'
-                                                                                                }`}>
-                                                                                                {circuit.voltageDropPct.toFixed(
-                                                                                                    2,
-                                                                                                )}
-                                                                                                %
-                                                                                            </p>
-                                                                                            <p className="text-[10px] text-slate-500">
-                                                                                                Máx.{' '}
-                                                                                                {circuit.maxVoltageDropPct.toFixed(
-                                                                                                    1,
-                                                                                                )}
-                                                                                                % ·{' '}
-                                                                                                {circuit.voltageDropOk
-                                                                                                    ? 'Longitud conforme'
-                                                                                                    : 'Revisar longitud/sección'}
-                                                                                            </p>
-                                                                                        </td>
-                                                                                        <td
-                                                                                            rowSpan={circuitRowSpan}
-                                                                                            className="px-3 py-2 font-mono font-semibold text-amber-300">
-                                                                                            {circuit.installedPowerW.toFixed(
-                                                                                                0,
-                                                                                            )}{' '}
-                                                                                            W
-                                                                                        </td>
-                                                                                    </>
-                                                                                )}
-                                                                            </tr>
-                                                                        );
-                                                                    },
-                                                                );
-                                                            });
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </section>
-                                    ))}
-                                    {circuits.length === 0 && <p className="rounded border border-amber-800/40 bg-amber-950/20 p-3 text-amber-300">No hay salidas conectadas a un tablero general o subtablero.</p>}
-                                </div>
-                            );
-                        })()}
-                    </DialogContent>
-                </Dialog>
+                <CtPanelOutputsDialog
+                    open={showWireCalc}
+                    onOpenChange={setShowWireCalc}
+                    circuits={panelCircuitSummaries}
+                    loading={isCtCalculating}
+                    onUpdateCircuit={updateCtCircuit}
+                    onFixSection={updateCtSection}
+                    onFixTree={applyTreeCompliance}
+                    selectedRoom={selectedCtRoomSummary}
+                />
             )}
+
         </div>
     );
 });

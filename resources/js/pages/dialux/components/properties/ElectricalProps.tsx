@@ -4,9 +4,18 @@ import type {
     ElectricalDevice,
     LightSwitch,
 } from '@/pages/dialux/hooks/types';
-import { CONDUCTOR_SECTION_OPTIONS, CONDUCTOR_WIRE_OPTIONS } from '@/pages/dialux/hooks/types';
+import {
+    CONDUCTOR_SECTION_OPTIONS,
+    CONDUCTOR_WIRE_OPTIONS,
+    DEFAULT_OUTLET_POWER_W,
+    ELECTRICAL_DEVICE_DEFAULTS,
+    isOutletDeviceType,
+} from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { SectionWrapper, EditField, SelectField } from './PropertyFields';
+
+const connectionRowClass =
+    'flex items-center justify-between rounded border border-slate-200 bg-white p-1 text-[10px] text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:shadow-none';
 
 export function LightSwitchProps({
     lightSwitch,
@@ -18,7 +27,7 @@ export function LightSwitchProps({
     return (
         <div className="flex flex-col gap-3">
             <SectionWrapper label="Interruptor" icon={<Zap size={15} />}>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col gap-2 text-xs">
                     <SelectField
                         label="Tipo"
                         value={lightSwitch.type}
@@ -30,9 +39,11 @@ export function LightSwitchProps({
                         ]}
                     />
                     <EditField
-                        label="Altura (m)"
-                        value={lightSwitch.mountingHeight}
+                        label="Altura instalada S.N.P.T. (m)"
+                        value={lightSwitch.mountingHeight ?? 1.4}
                         onChange={(val) => onUpdate({ mountingHeight: val })}
+                        min={0}
+                        max={10}
                         step={0.05}
                     />
                     <EditField
@@ -47,7 +58,7 @@ export function LightSwitchProps({
                 <SectionWrapper label="Conexiones" icon={<Zap size={15} />}>
                     <div className="flex flex-col gap-1">
                         {lightSwitch.connectedFixtureIds.map(fid => (
-                            <div key={fid} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                            <div key={fid} className={connectionRowClass}>
                                 <span>Luminaria {fid.slice(0,4)}...</span>
                                 <button
                                     onClick={() => onUpdate({
@@ -69,10 +80,12 @@ export function LightSwitchProps({
 
 export function ConductorProps({
     conductor,
+    circuitCount = 1,
     onUpdate,
     onDelete,
 }: {
     conductor: Conductor;
+    circuitCount?: number;
     onUpdate: (patch: Partial<Omit<Conductor, 'id'>>) => void;
     onDelete: () => void;
 }) {
@@ -96,7 +109,20 @@ export function ConductorProps({
 
     return (
         <div className="flex flex-col gap-3">
-            <SectionWrapper label="Conductor" icon={<Zap size={15} />}>
+            <SectionWrapper
+                label={
+                    circuitCount > 1
+                        ? `Circuito seleccionado · ${circuitCount} tramos`
+                        : 'Conductor'
+                }
+                icon={<Zap size={15} />}
+            >
+                {circuitCount > 1 && (
+                    <p className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1.5 text-[10px] leading-relaxed text-cyan-700 dark:text-cyan-300">
+                        Los cambios de conductores, ruta, tubo, tipo y sección se
+                        aplicarán a toda esta línea.
+                    </p>
+                )}
                 <div className="flex flex-col gap-2 text-xs">
                     <SelectField
                         label="N° Conductores"
@@ -151,13 +177,13 @@ export function ConductorProps({
                         options={CONDUCTOR_SECTION_OPTIONS.map(({ value, label }) => ({ value: String(value), label }))}
                     />
                 </div>
-                <div className="mt-2 text-[10px] text-gray-500 bg-slate-900/50 p-1.5 rounded">
+                <div className="mt-2 rounded bg-slate-100 p-1.5 text-[10px] text-slate-600 dark:bg-slate-900/50 dark:text-gray-500">
                     <p className="flex justify-between items-center mb-1">
-                        <span className="font-semibold text-gray-400">Origen:</span>
+                        <span className="font-semibold text-slate-500 dark:text-gray-400">Origen:</span>
                         <span className="truncate max-w-[120px]">{getNodeLabel(sourceNode)}</span>
                     </p>
                     <p className="flex justify-between items-center">
-                        <span className="font-semibold text-gray-400">Destino:</span>
+                        <span className="font-semibold text-slate-500 dark:text-gray-400">Destino:</span>
                         <span className="truncate max-w-[120px]">{getNodeLabel(targetNode)}</span>
                     </p>
                 </div>
@@ -180,14 +206,20 @@ export function ElectricalDeviceProps({
     device: ElectricalDevice;
     onUpdate: (patch: Partial<ElectricalDevice>) => void;
 }) {
+    const isPanel = device.type === 'main_panel' || device.type === 'sub_panel';
+    const isOutlet = isOutletDeviceType(device.type);
+
     return (
         <div className="flex flex-col gap-3">
             <SectionWrapper label={`Equipo: ${device.type}`} icon={<Zap size={15} />}>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex flex-col gap-2 text-xs">
                     <SelectField
                         label="Tipo"
                         value={device.type}
-                        onChange={(val) => onUpdate({ type: val as any })}
+                        onChange={(val) => {
+                            const type = val as ElectricalDevice['type'];
+                            onUpdate({ type });
+                        }}
                         options={[
                             { value: 'meter', label: 'Medidor' },
                             { value: 'main_panel', label: 'Tablero General (TG)' },
@@ -208,13 +240,132 @@ export function ElectricalDeviceProps({
                         ]}
                     />
                     <EditField
+                        label="Altura instalada S.N.P.T. (m)"
+                        value={
+                            device.mountingHeight ??
+                            ELECTRICAL_DEVICE_DEFAULTS[device.type].mountingHeight
+                        }
+                        onChange={(val) => onUpdate({ mountingHeight: val })}
+                        min={0}
+                        max={10}
+                        step={0.05}
+                    />
+                    {isPanel && (
+                        <>
+                            <EditField
+                                label="Voltaje de operación (V)"
+                                value={Number.parseFloat(device.properties?.voltage ?? '') || (device.type === 'main_panel' ? 380 : 220)}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, voltage: `${Math.max(1, val)}V` } })
+                                }
+                                min={1}
+                                step={1}
+                            />
+                            <SelectField
+                                label="Sistema"
+                                value={device.properties?.phases?.startsWith('3') ? '3' : '1'}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, phases: val === '3' ? '3O' : '1O' } })
+                                }
+                                options={[
+                                    { value: '1', label: '1 — Monofásico' },
+                                    { value: '3', label: '3 — Trifásico' },
+                                ]}
+                            />
+                            <SelectField
+                                label="Conexión"
+                                value={device.properties?.connectionType ?? 'star'}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, connectionType: val as 'delta' | 'star' } })
+                                }
+                                options={[
+                                    { value: 'star', label: 'Estrella' },
+                                    { value: 'delta', label: 'Delta' },
+                                ]}
+                            />
+                            <EditField
+                                label="Factor de diseño (fdis)"
+                                value={device.properties?.designFactor ?? 1.25}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, designFactor: Math.max(0, val) } })
+                                }
+                                min={0}
+                                step={0.01}
+                            />
+                            <EditField
+                                label="Temperatura de trabajo (°C)"
+                                value={device.properties?.workingTemperatureC ?? 20}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, workingTemperatureC: val } })
+                                }
+                                step={1}
+                            />
+                            <EditField
+                                label="ρCuT (Ω·mm²/m)"
+                                value={device.properties?.copperResistivity ?? 0.0175}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, copperResistivity: Math.max(0, val) } })
+                                }
+                                min={0}
+                                step={0.0001}
+                            />
+                            <EditField
+                                label="ΔV acumulada aguas arriba (V)"
+                                value={device.properties?.upstreamVoltageDropV ?? (device.type === 'sub_panel' ? 6.22 : 0)}
+                                onChange={(val) =>
+                                    onUpdate({ properties: { ...device.properties, upstreamVoltageDropV: Math.max(0, val) } })
+                                }
+                                min={0}
+                                step={0.01}
+                            />
+                            <div>
+                                <EditField
+                                    label="Longitud del alimentador que llega aquí (m)"
+                                    value={device.properties?.lengthM ?? 0}
+                                    onChange={(val) =>
+                                        onUpdate({
+                                            properties: {
+                                                ...device.properties,
+                                                lengthM: Math.max(0, val),
+                                            },
+                                        })
+                                    }
+                                    min={0}
+                                    step={0.1}
+                                />
+                                <p className="mt-1 text-[10px] leading-relaxed text-slate-500 dark:text-gray-400">
+                                    Reemplaza, solo en Cálculo CT, la longitud trazada en el plano
+                                    para el cable que alimenta este tablero desde su tablero padre
+                                    (útil si el cable real va más largo por ducto/subterráneo). 0 =
+                                    usar la longitud trazada.
+                                </p>
+                            </div>
+                        </>
+                    )}
+                    {isOutlet && (
+                        <EditField
+                            label="Potencia asignada (W)"
+                            value={device.properties?.ratedPowerW ?? DEFAULT_OUTLET_POWER_W}
+                            onChange={(val) =>
+                                onUpdate({
+                                    properties: {
+                                        ...device.properties,
+                                        ratedPowerW: Math.max(0, val),
+                                    },
+                                })
+                            }
+                            min={0}
+                            step={10}
+                        />
+                    )}
+                    <EditField
                         label="Rotación (°)"
                         value={device.rotation ?? 0}
                         onChange={(val) => onUpdate({ rotation: ((val % 360) + 360) % 360 })}
                         step={5}
                     />
-                    <div className="col-span-2">
-                        <label className="mb-1 block text-[10px] font-medium text-gray-700">
+                    <div>
+                        <label className="mb-1 block text-[10px] font-medium text-slate-600 dark:text-gray-400">
                             Etiqueta (Opcional)
                         </label>
                         <input
@@ -222,7 +373,7 @@ export function ElectricalDeviceProps({
                             value={device.label ?? ''}
                             onChange={(e) => onUpdate({ label: e.target.value })}
                             placeholder="Ej. TD-1"
-                            className="w-full rounded border px-2 py-1 text-xs"
+                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100 dark:placeholder:text-slate-600"
                         />
                     </div>
                 </div>
@@ -234,10 +385,10 @@ export function ElectricalDeviceProps({
                     {/* Luminarias */}
                     {(device.connectedFixtureIds?.length ?? 0) > 0 && (
                         <div>
-                            <p className="text-[10px] font-medium text-gray-500">Luminarias (Salidas)</p>
+                            <p className="text-[10px] font-medium text-slate-500 dark:text-gray-500">Luminarias (Salidas)</p>
                             <div className="flex flex-col gap-1 mt-1">
                                 {device.connectedFixtureIds!.map(id => (
-                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                    <div key={id} className={connectionRowClass}>
                                         <span>Luminaria {id.slice(0,4)}...</span>
                                         <button onClick={() => onUpdate({ connectedFixtureIds: device.connectedFixtureIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
                                     </div>
@@ -248,10 +399,10 @@ export function ElectricalDeviceProps({
                     {/* Interruptores */}
                     {(device.connectedSwitchIds?.length ?? 0) > 0 && (
                         <div>
-                            <p className="text-[10px] font-medium text-gray-500">Interruptores</p>
+                            <p className="text-[10px] font-medium text-slate-500 dark:text-gray-500">Interruptores</p>
                             <div className="flex flex-col gap-1 mt-1">
                                 {device.connectedSwitchIds!.map(id => (
-                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                    <div key={id} className={connectionRowClass}>
                                         <span>Interruptor {id.slice(0,4)}...</span>
                                         <button onClick={() => onUpdate({ connectedSwitchIds: device.connectedSwitchIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
                                     </div>
@@ -262,10 +413,10 @@ export function ElectricalDeviceProps({
                     {/* Dispositivos */}
                     {(device.connectedDeviceIds?.length ?? 0) > 0 && (
                         <div>
-                            <p className="text-[10px] font-medium text-gray-500">Otros Equipos / Tableros</p>
+                            <p className="text-[10px] font-medium text-slate-500 dark:text-gray-500">Otros Equipos / Tableros</p>
                             <div className="flex flex-col gap-1 mt-1">
                                 {device.connectedDeviceIds!.map(id => (
-                                    <div key={id} className="flex items-center justify-between text-[10px] bg-slate-50 p-1 rounded border">
+                                    <div key={id} className={connectionRowClass}>
                                         <span>Equipo {id.slice(0,4)}...</span>
                                         <button onClick={() => onUpdate({ connectedDeviceIds: device.connectedDeviceIds!.filter(x => x !== id) })} className="text-red-500 px-1"><Trash2 size={12} /></button>
                                     </div>
@@ -274,7 +425,7 @@ export function ElectricalDeviceProps({
                         </div>
                     )}
                     {(device.connectedFixtureIds?.length ?? 0) === 0 && (device.connectedSwitchIds?.length ?? 0) === 0 && (device.connectedDeviceIds?.length ?? 0) === 0 && (
-                        <p className="text-[10px] text-gray-400 italic">No hay conexiones a este equipo. Usa la herramienta U (Wire) para conectar.</p>
+                        <p className="text-[10px] text-slate-500 italic dark:text-gray-400">No hay conexiones a este equipo. Usa la herramienta U (Wire) para conectar.</p>
                     )}
                 </div>
             </SectionWrapper>

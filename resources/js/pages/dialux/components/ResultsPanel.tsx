@@ -152,177 +152,109 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
     ).length;
 
     return (
-        <div className="space-y-4">
-            <div className="space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                    <Layers3 size={15} className="text-cyan-300" />
-                    Resultados por nivel
-                </div>
-                <div
-                    role="tablist"
-                    aria-label="Niveles del proyecto"
-                    className="flex gap-2 overflow-x-auto pb-1">
+        <div className="space-y-5 text-xs">
+            <section
+                className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/60 sm:p-4"
+                aria-label="Filtros de resultados">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                    <label className="space-y-1.5">
+                        <span className="flex items-center gap-2 font-medium text-slate-600 dark:text-slate-300">
+                            <Layers3 size={14} className="text-cyan-500 dark:text-cyan-300" />
+                            Piso
+                        </span>
+                        <select
+                            value={activeLevelId}
+                            onChange={(event) => {
+                                setSelectedLevelId(event.target.value);
+                                setSelectedRoomName('all');
+                            }}
+                            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                            <option value="all">Todos los pisos</option>
+                            {levels.map((level) => (
+                                <option key={level.id} value={level.id}>
+                                    {level.name} ({rows.filter((row) => row.levelId === level.id).length})
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="space-y-1.5">
+                        <span className="flex items-center gap-2 font-medium text-slate-600 dark:text-slate-300">
+                            <Building2 size={14} className="text-amber-500 dark:text-amber-300" />
+                            Recinto
+                        </span>
+                        <select
+                            value={activeRoomName}
+                            onChange={(event) => setSelectedRoomName(event.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                            <option value="all">Todos los recintos</option>
+                            {roomNames.map((roomName) => (
+                                <option key={roomName} value={roomName}>
+                                    {roomName}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
                     <button
                         type="button"
-                        role="tab"
-                        aria-selected={activeLevelId === 'all'}
                         onClick={() => {
                             setSelectedLevelId('all');
                             setSelectedRoomName('all');
                         }}
-                        className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                            activeLevelId === 'all'
-                                ? 'border-cyan-500/60 bg-cyan-950/60 text-cyan-200'
-                                : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                        }`}>
-                        Todos los pisos
+                        disabled={activeLevelId === 'all' && activeRoomName === 'all'}
+                        className="h-10 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        Limpiar
                     </button>
-                    {levels.map((level) => (
-                        <button
-                            key={level.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeLevelId === level.id}
-                            onClick={() => {
-                                setSelectedLevelId(level.id);
-                                setSelectedRoomName('all');
-                            }}
-                            className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs transition ${
-                                activeLevelId === level.id
-                                    ? 'border-cyan-500/60 bg-cyan-950/60 text-cyan-200'
-                                    : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                            }`}>
-                            <span className="block font-semibold">{level.name}</span>
-                            <span className="text-[10px] opacity-70">
-                                {rows.filter((row) => row.levelId === level.id).length}{' '}
-                                ambiente(s)
-                            </span>
-                        </button>
-                    ))}
                 </div>
+            </section>
 
-                <div
-                    role="tablist"
-                    aria-label="Recintos del nivel seleccionado"
-                    className="flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 p-2">
-                    <Building2 size={14} className="ml-1 shrink-0 text-amber-300" />
-                    {['all', ...roomNames].map((roomName) => {
-                        const isAll = roomName === 'all';
-                        return (
-                            <button
-                                key={roomName}
-                                type="button"
-                                role="tab"
-                                aria-selected={activeRoomName === roomName}
-                                onClick={() => setSelectedRoomName(roomName)}
-                                className={`shrink-0 rounded-md px-3 py-1.5 text-xs transition ${
-                                    activeRoomName === roomName
-                                        ? 'bg-slate-700 text-white'
-                                        : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
-                                }`}>
-                                {isAll ? 'Todos los recintos' : roomName}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {activeLevelId === 'all' && levels.length > 1 && (
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {levels.map((level) => {
-                        const rowsForLevel = filteredRows.filter(
-                            (row) => row.levelId === level.id,
-                        );
-                        const compliantForLevel = rowsForLevel.filter(
-                            (row) =>
-                                row.avgLux >= row.illuminanceLux &&
-                                row.uniformity >= 0.4,
-                        ).length;
-
-                        return (
-                            <button
-                                key={level.id}
-                                type="button"
-                                onClick={() => {
-                                    setSelectedLevelId(level.id);
-                                    setSelectedRoomName('all');
-                                }}
-                                className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-left transition hover:border-cyan-800/70 hover:bg-cyan-950/20">
-                                <p className="font-semibold text-white">{level.name}</p>
-                                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                                    <span>Ambientes: {rowsForLevel.length}</span>
-                                    <span>
-                                        Luminarias:{' '}
-                                        {rowsForLevel.reduce(
-                                            (sum, row) => sum + row.fixtureCount,
-                                            0,
-                                        )}
-                                    </span>
-                                    <span>
-                                        Lux prom.:{' '}
-                                        {(
-                                            rowsForLevel.reduce(
-                                                (sum, row) => sum + row.avgLux,
-                                                0,
-                                            ) / rowsForLevel.length
-                                        ).toFixed(0)}
-                                    </span>
-                                    <span className="text-emerald-300">
-                                        Cumplen: {compliantForLevel}/{rowsForLevel.length}
-                                    </span>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
-            <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+            <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Indicadores generales">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
                         Ambientes
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-white">
+                    <p className="mt-2 text-xl font-semibold tabular-nums text-white sm:text-2xl">
                         {filteredRows.length}
                     </p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
                         Luminarias
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-amber-300">
+                    <p className="mt-2 text-xl font-semibold tabular-nums text-amber-300 sm:text-2xl">
                         {filteredRows.reduce((sum, row) => sum + row.fixtureCount, 0)}
                     </p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
                         Lux Promedio
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-cyan-300">
+                    <p className="mt-2 text-xl font-semibold tabular-nums text-cyan-300 sm:text-2xl">
                         {(
                             filteredRows.reduce((sum, row) => sum + row.avgLux, 0) /
                             filteredRows.length
                         ).toFixed(0)}
                     </p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
                         Cumplen
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-emerald-300">
+                    <p className="mt-2 text-xl font-semibold tabular-nums text-emerald-300 sm:text-2xl">
                         {compliantRooms}/{filteredRows.length}
                     </p>
                 </div>
-            </div>
+            </section>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 shadow-2xl">
-                <div className="flex items-center gap-2 border-b border-slate-800 px-5 py-4">
-                    <TableProperties size={16} className="text-cyan-300" />
-                    <div>
+            <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70 shadow-2xl">
+                <div className="flex items-start gap-3 border-b border-slate-800 px-4 py-3 sm:px-5 sm:py-4">
+                    <TableProperties size={17} className="mt-0.5 shrink-0 text-cyan-300" />
+                    <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-white">
                             Resultado por ambiente
                         </h3>
-                        <p className="text-xs text-slate-400">
+                        <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-slate-400">
                             El calculo de luminarias y el isolux se resuelven con
                             el area del ambiente derivado, mientras que la normativa
                             aplicada proviene del recinto.
@@ -330,24 +262,24 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                     </div>
                 </div>
 
-                <div className="max-h-[65vh] overflow-auto">
-                    <table className="min-w-full text-left text-xs">
+                <div className="max-h-[58vh] overflow-auto overscroll-contain">
+                    <table className="w-full min-w-[1280px] table-fixed text-left text-xs">
                         <thead className="sticky top-0 bg-slate-950/95 text-center backdrop-blur">
-                            <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                <th className="px-2 py-2">Ambiente</th>
-                                <th className="px-2 py-2">Area</th>
-                                <th className="px-2 py-2">Aplicación</th>
-                                <th className="px-2 py-2">Norma</th>
-                                <th className="px-2 py-2">Luminarias</th>
-                                <th className="px-2 py-2">Lm/Foco</th>
-                                <th className="px-2 py-2">Lm Req.</th>
-                                <th className="px-2 py-2">Cant.</th>
-                                <th className="px-2 py-2">E avg</th>
-                                <th className="px-2 py-2">E min</th>
-                                <th className="px-2 py-2">E max</th>
-                                <th className="px-2 py-2">Uo</th>
-                                <th className="px-2 py-2">UGR</th>
-                                <th className="px-2 py-2">Estado</th>
+                            <tr className="border-b border-slate-800 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                                <th className="w-56 px-3 py-3">Ambiente</th>
+                                <th className="w-20 px-2 py-3">Área</th>
+                                <th className="w-28 px-2 py-3">Aplicación</th>
+                                <th className="w-20 px-2 py-3">Norma</th>
+                                <th className="w-20 px-2 py-3">Luminarias</th>
+                                <th className="w-24 px-2 py-3">Lm/Foco</th>
+                                <th className="w-24 px-2 py-3">Lm Req.</th>
+                                <th className="w-24 px-2 py-3">Cantidad</th>
+                                <th className="w-16 px-2 py-3">E avg</th>
+                                <th className="w-16 px-2 py-3">E min</th>
+                                <th className="w-16 px-2 py-3">E max</th>
+                                <th className="w-16 px-2 py-3">Uo</th>
+                                <th className="w-16 px-2 py-3">UGR</th>
+                                <th className="w-48 px-3 py-3">Estado</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -375,18 +307,18 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                                                 </td>
                                             </tr>
                                         )}
-                                        <tr className="border-b border-slate-900/80 text-center text-slate-200">
-                                        <td className="px-4 py-4">
-                                            <div className="flex min-w-[190px] items-start gap-2">
+                                        <tr className="border-b border-slate-800/70 text-center text-xs text-slate-200 transition-colors hover:bg-slate-900/60">
+                                        <td className="px-3 py-3">
+                                            <div className="flex items-start gap-2 text-left">
                                                 <Lightbulb
                                                     size={15}
                                                     className="mt-0.5 text-amber-300"
                                                 />
-                                                <div>
-                                                    <p className="font-semibold text-white">
+                                                <div className="min-w-0">
+                                                    <p className="leading-snug font-semibold text-white">
                                                         {row.roomName}
                                                     </p>
-                                                    <p className="text-xs text-slate-500">
+                                                    <p className="mt-0.5 leading-snug text-slate-500">
                                                          {row.sourceRoomName
                                                             ? `${row.levelName} · Recinto: ${row.sourceRoomName}`
                                                             : row.normativeLabel ??
@@ -395,19 +327,19 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.area.toFixed(2)} m²
                                         </td>
-                                        <td className="px-4 py-4 text-xs">
+                                        <td className="px-2 py-3">
                                             {row.activityName ?? '-'}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.illuminanceLux} lux
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.fixtureCount}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             <div>
                                                 {row.fixtureLumens.toLocaleString('es-PE')}
                                             </div>
@@ -417,51 +349,51 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                                                     : 'Respaldo'}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.lumensRequired.toFixed(0)}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             <div>{row.fixtureCount} inst.</div>
                                             <div className="text-slate-500">
                                                 {row.exactQuantity.toFixed(2)} calc. /{' '}
                                                 {row.roundedQuantity} red.
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.avgLux.toFixed(0)}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.minLux.toFixed(0)}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.maxLux.toFixed(0)}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.uniformity.toFixed(3)}
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-2 py-3 font-mono tabular-nums">
                                             {row.ugr.toFixed(1)}
                                         </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
+                                        <td className="px-3 py-3">
+                                            <div className="flex items-center justify-center gap-2">
                                                 {statusIcon(
                                                     luxOk && uniformityOk && ugrOk,
                                                     warn,
                                                 )}
                                                 <span
-                                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
                                                         coverageStyles[row.coverage]
                                                     }`}>
                                                     {coverageLabels[row.coverage]}
                                                 </span>
                                             </div>
                                             {row.fixtureCount < row.roundedQuantity && (
-                                                <p className="mt-2 text-xs font-semibold text-amber-400">
+                                                <p className="mt-1.5 leading-snug font-semibold text-amber-400">
                                                     Faltan {row.roundedQuantity - row.fixtureCount}{' '}
                                                     luminaria(s) según normativa
                                                 </p>
                                             )}
-                                            <p className="mt-2 text-xs text-slate-500">
+                                            <p className="mt-1.5 leading-snug text-slate-500">
                                                 {luxOk ? 'Lux OK' : 'Lux bajo'} ·{' '}
                                                 {uniformityOk ? 'Uo OK' : 'Uo bajo'} ·{' '}
                                                 {ugrOk ? 'UGR OK' : 'UGR alto'}
@@ -474,7 +406,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </section>
         </div>
     );
 };
