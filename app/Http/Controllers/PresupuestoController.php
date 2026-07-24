@@ -4117,4 +4117,54 @@ class PresupuestoController extends Controller
             ]);
         }
     }
+
+    /**
+     * Export all ACUs and their components for the frontend Delphin export
+     */
+    public function exportAcusData(CostoProject $project)
+    {
+        // El parámetro debe llamarse $project (no $costoProject): la ruta define
+        // el wildcard como {project} y el binding implícito de Laravel resuelve
+        // por nombre de parámetro, no por posición — con un nombre distinto,
+        // Laravel no lo enlaza al modelo de la ruta y termina inyectando un
+        // CostoProject vacío (id/database_name null), rompiendo en silencio la
+        // conexión tenant que SetCostosDatabase ya había fijado correctamente.
+        $this->dbService->setTenantConnection($project->database_name);
+        $connection = DB::connection('costos_tenant');
+        // presupuesto_acus.presupuesto_id referencia presupuestos.id DENTRO del
+        // tenant (casi siempre 1, autoincrement propio de esa BD), no el id del
+        // proyecto en la BD central — usar $project->id aquí devolvía 0 ACUs
+        // para cualquier proyecto cuyo id central no fuera 1.
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($project->database_name);
+
+        // Fetch all acus for this project
+        $acus = $connection->table('presupuesto_acus')
+            ->where('presupuesto_id', $tenantPresupuestoId)
+            ->orderBy('item_order', 'asc')
+            ->get();
+
+        $acuIds = $acus->pluck('id')->toArray();
+
+        // Fetch all components for these acus
+        $mano_de_obra = $connection->table('acu_mano_de_obra')->whereIn('acu_id', $acuIds)->orderBy('item_order')->get()->groupBy('acu_id');
+        $materiales = $connection->table('acu_materiales')->whereIn('acu_id', $acuIds)->orderBy('item_order')->get()->groupBy('acu_id');
+        $equipos = $connection->table('acu_equipos')->whereIn('acu_id', $acuIds)->orderBy('item_order')->get()->groupBy('acu_id');
+        $subcontratos = $connection->table('acu_subcontratos')->whereIn('acu_id', $acuIds)->orderBy('item_order')->get()->groupBy('acu_id');
+        $subpartidas = $connection->table('acu_subpartidas')->whereIn('acu_id', $acuIds)->orderBy('item_order')->get()->groupBy('acu_id');
+
+        $result = $acus->map(function ($acu) use ($mano_de_obra, $materiales, $equipos, $subcontratos, $subpartidas) {
+            $acu->mano_de_obra = $mano_de_obra->get($acu->id, []);
+            $acu->materiales = $materiales->get($acu->id, []);
+            $acu->equipos = $equipos->get($acu->id, []);
+            $acu->subcontratos = $subcontratos->get($acu->id, []);
+            $acu->subpartidas = $subpartidas->get($acu->id, []);
+
+            return $acu;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
 }
