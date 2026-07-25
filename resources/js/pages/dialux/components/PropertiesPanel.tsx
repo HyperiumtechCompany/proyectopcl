@@ -108,6 +108,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
             <ConductorProps
                 conductor={conductor}
                 circuitCount={circuitConductorIds.length}
+                circuitConductorIds={circuitConductorIds}
                 onUpdate={(patch) => {
                     store.beginHistoryGesture();
                     circuitConductorIds.forEach((id) =>

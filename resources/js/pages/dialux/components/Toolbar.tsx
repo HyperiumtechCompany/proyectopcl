@@ -393,6 +393,8 @@ export const Toolbar: React.FC = () => {
                         activeTool={activeTool}
                         onSetTool={store.setTool}
                         onSetElecDevice={(type, label, properties) => {store.setElectricalDeviceTemplate(type, label, properties);}}
+                        wireTemplate={store.ui.wireTemplate}
+                        onSetWireTemplate={store.setWireTemplate}
                     />
                 </FloatingPanelPortal>
             )}

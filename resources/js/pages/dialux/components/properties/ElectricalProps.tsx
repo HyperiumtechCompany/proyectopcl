@@ -12,6 +12,7 @@ import {
     isOutletDeviceType,
 } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { calculateConductorLength } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { SectionWrapper, EditField, SelectField } from './PropertyFields';
 
 const connectionRowClass =
@@ -81,11 +82,13 @@ export function LightSwitchProps({
 export function ConductorProps({
     conductor,
     circuitCount = 1,
+    circuitConductorIds,
     onUpdate,
     onDelete,
 }: {
     conductor: Conductor;
     circuitCount?: number;
+    circuitConductorIds?: string[];
     onUpdate: (patch: Partial<Omit<Conductor, 'id'>>) => void;
     onDelete: () => void;
 }) {
@@ -99,6 +102,14 @@ export function ConductorProps({
     const scene = store.activeScene();
     const sourceNode = scene?.lightSwitches.find(s => s.id === conductor.sourceId) || scene?.fixtures.find(f => f.id === conductor.sourceId) || scene?.electricalDevices?.find(d => d.id === conductor.sourceId);
     const targetNode = scene?.lightSwitches.find(s => s.id === conductor.targetId) || scene?.fixtures.find(f => f.id === conductor.targetId) || scene?.electricalDevices?.find(d => d.id === conductor.targetId);
+
+    const lengthM = scene
+        ? (circuitConductorIds ?? [conductor.id]).reduce((sum, id) => {
+              const item = id === conductor.id ? conductor : scene.conductors?.find((c) => c.id === id);
+              if (!item) return sum;
+              return sum + (calculateConductorLength(scene, item)?.totalLengthM ?? 0);
+          }, 0)
+        : null;
 
     const getNodeLabel = (node: any) => {
         if (!node) return 'Desconocido';
@@ -182,9 +193,15 @@ export function ConductorProps({
                         <span className="font-semibold text-slate-500 dark:text-gray-400">Origen:</span>
                         <span className="truncate max-w-[120px]">{getNodeLabel(sourceNode)}</span>
                     </p>
-                    <p className="flex justify-between items-center">
+                    <p className="flex justify-between items-center mb-1">
                         <span className="font-semibold text-slate-500 dark:text-gray-400">Destino:</span>
                         <span className="truncate max-w-[120px]">{getNodeLabel(targetNode)}</span>
+                    </p>
+                    <p className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-500 dark:text-gray-400">
+                            {circuitCount > 1 ? 'Longitud total:' : 'Longitud:'}
+                        </span>
+                        <span>{lengthM !== null ? `${lengthM.toFixed(2)} m` : '—'}</span>
                     </p>
                 </div>
             </SectionWrapper>

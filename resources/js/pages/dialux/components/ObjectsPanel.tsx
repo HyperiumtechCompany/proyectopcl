@@ -2,6 +2,7 @@ import { Square, Zap, Trash2, Minus, AppWindow, Umbrella, DoorOpen, Plug, Cable,
 import React from 'react';
 import { isOutletDeviceType } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { calculateConductorLength } from '@/pages/dialux/hooks/wireLengthCalculations';
 import {
     EQUIPMENT_DEVICE_ITEMS,
     OUTLET_DEVICE_ITEMS,
@@ -278,12 +279,15 @@ export const ObjectsPanel: React.FC = () => {
             <ObjectSection
                 label="Cableado"
                 icon={<Cable size={9} className="text-teal-400" />}
-                items={conductors.map((c) => ({
-                    id: c.id,
-                    label: `${nodeLabel(c.sourceId)} → ${nodeLabel(c.targetId)}`,
-                    sublabel: `${c.sectionMm2}mm²`,
-                    accent: 'teal',
-                }))}
+                items={conductors.map((c) => {
+                    const lengthM = calculateConductorLength(scene, c)?.totalLengthM;
+                    return {
+                        id: c.id,
+                        label: `${nodeLabel(c.sourceId)} → ${nodeLabel(c.targetId)}`,
+                        sublabel: `${c.sectionMm2}mm² · ${lengthM !== undefined ? `${lengthM.toFixed(2)}m` : '—'}`,
+                        accent: 'teal' as const,
+                    };
+                })}
                 selectedId={selectedId}
                 onSelect={store.setSelectedId}
                 onDelete={(id) => store.requestDelete(id)}

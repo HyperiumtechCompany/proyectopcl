@@ -108,6 +108,34 @@ function conductorLengthComponents(
     };
 }
 
+export interface ConductorLength {
+    horizontalLengthM: number;
+    verticalLengthM: number;
+    totalLengthM: number;
+}
+
+/**
+ * Longitud de un conductor individual (tramo origen→waypoints→destino, más
+ * el tramo vertical según altura de montaje) — mismo criterio geométrico que
+ * usa `calculatePanelCircuitSummaries` para el Cálculo CT, expuesto acá para
+ * mostrar la longitud de un cable puntual en el panel de propiedades.
+ * Devuelve `null` si el origen o el destino ya no existen en la escena.
+ */
+export function calculateConductorLength(
+    scene: Scene,
+    conductor: Conductor,
+): ConductorLength | null {
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+
+    const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
+    const target = resolveNode(conductor.targetId, fixtures, switches, devices);
+    if (!source || !target) return null;
+
+    return conductorLengthComponents(scene, conductor, source, target);
+}
+
 function roomHeightAt(scene: Scene, point: Vertex): number {
     const room = scene.rooms.find(
         (item) => item.vertices.length >= 3 && pointInPolygon(point, item.vertices),
