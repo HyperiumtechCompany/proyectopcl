@@ -379,6 +379,8 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
             voltageDropPct: selection.voltageDropPct,
             voltageDropV: (selection.voltageDropPct / 100) * voltageV,
             maxVoltageDropPct: defaults.max_voltage_drop_pct,
+            // Se completa más abajo, tras calcular la cascada de alimentadores.
+            cumulativeVoltageDropPct: 0,
             status,
             warnings,
         };
@@ -498,6 +500,8 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
             mainBreakerA: breaker.amps,
             childPanelIds: (childrenByParent.get(panel.id) ?? []).map((p) => p.id),
             depth: depthOf(panel),
+            // Se completa más abajo, tras calcular la cascada de alimentadores.
+            cumulativeVoltageDropPct: 0,
             warnings,
         };
     });
@@ -568,10 +572,84 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
             conductorLabel: conductorLabel(selection.conductor),
             breakerA: breaker.amps,
             voltageDropPct: selection.voltageDropPct,
+            // Se completa más abajo, tras calcular la cascada de alimentadores.
+            cumulativeVoltageDropPct: 0,
             status,
             warnings,
         };
     });
+
+    // ── Caída de tensión acumulada (cascada tablero → tablero) ──────────────
+    //
+    // `voltageDropPct` de cada circuito/alimentador es SOLO su propio tramo.
+    // Un circuito puede cumplir su límite local y, aun así, recibir una caída
+    // real mucho mayor si arrastra la de los tableros aguas arriba (tablero
+    // general → tablero de piso → tablero de distribución → circuito). Sin
+    // esta acumulación, el sistema no puede detectar ese caso — ver
+    // planes/plan_agentes_skills_revision_normativa_dialux.md, hallazgo de
+    // Fase 3. `maxTotalVoltageDropPct` (ElectricalSettings) sigue sin un
+    // valor normativo confirmado: por eso esta sección SOLO agrega un
+    // `warning`/`status: 'error'` cuando el proyecto configura ese límite
+    // explícitamente; si no está configurado, el campo numérico se expone
+    // igual (es un hecho físico), pero nunca se marca como incumplimiento
+    // sin una fuente normativa detrás.
+    const feederByEdge = new Map<string, FeederResult>();
+    for (const feederDoc of doc.feeders) {
+        const feederResult = feeders.find((f) => f.feederId === feederDoc.id);
+        if (feederResult) {
+            feederByEdge.set(`${feederDoc.fromPanelId}->${feederDoc.toPanelId}`, feederResult);
+        }
+    }
+
+    const cumulativeDropCache = new Map<string, number>();
+    function cumulativeDropAtPanel(panelId: string): number {
+        const cached = cumulativeDropCache.get(panelId);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        let total = 0;
+        const visited = new Set<string>([panelId]);
+        let current = panelsById.get(panelId);
+
+        while (current && current.parentPanelId != null) {
+            const parent = panelsById.get(current.parentPanelId);
+            if (!parent || visited.has(parent.id)) {
+                // Ciclo o tablero padre inexistente: ya se advirtió en
+                // `panelWarnings`; no seguir acumulando más allá de este punto.
+                break;
+            }
+            visited.add(parent.id);
+            const edgeFeeder = feederByEdge.get(`${parent.id}->${current.id}`);
+            if (edgeFeeder) {
+                total += edgeFeeder.voltageDropPct;
+            }
+            current = parent;
+        }
+
+        cumulativeDropCache.set(panelId, total);
+        return total;
+    }
+
+    for (const panelResult of panels) {
+        panelResult.cumulativeVoltageDropPct = cumulativeDropAtPanel(panelResult.panelId);
+    }
+    for (const feederResult of feeders) {
+        const feederDoc = doc.feeders.find((f) => f.id === feederResult.feederId);
+        feederResult.cumulativeVoltageDropPct = feederDoc ? cumulativeDropAtPanel(feederDoc.toPanelId) : feederResult.voltageDropPct;
+    }
+
+    const maxTotalVoltageDropPct = doc.settings.maxTotalVoltageDropPct;
+    for (const circuitResult of circuits) {
+        circuitResult.cumulativeVoltageDropPct = cumulativeDropAtPanel(circuitResult.panelId) + circuitResult.voltageDropPct;
+
+        if (isPositive(maxTotalVoltageDropPct) && circuitResult.cumulativeVoltageDropPct > maxTotalVoltageDropPct) {
+            circuitResult.warnings.push(
+                `La caída de tensión acumulada desde el tablero raíz (${circuitResult.cumulativeVoltageDropPct.toFixed(2)}%) supera el límite total configurado (${maxTotalVoltageDropPct}%).`,
+            );
+            circuitResult.status = 'error';
+        }
+    }
 
     // ── Metrados (take-off) ─────────────────────────────────────────────────
     const takeoff: TakeoffItem[] = [];

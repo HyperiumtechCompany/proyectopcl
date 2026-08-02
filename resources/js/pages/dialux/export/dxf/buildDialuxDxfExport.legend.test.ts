@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Conductor, ElectricalDevice } from '@/pages/dialux/hooks/types';
 import { usedElectricalLegendItems } from './buildDialuxDxfExport';
 
+/**
+ * `buildDialuxDxfExport.ts` ya no es el exportador activo en producción (ver
+ * el aviso al inicio de ese archivo); este test cubre `usedElectricalLegendItems`
+ * como referencia histórica, no el flujo real de leyenda (ese vive en
+ * `builders/buildLightingLegendRows.test.ts` / `buildOutletLegendRows.test.ts`).
+ */
 describe('DXF electrical legend', () => {
     it('incluye solo los símbolos usados y el espesor/calibre del cable', () => {
         const outlet = {

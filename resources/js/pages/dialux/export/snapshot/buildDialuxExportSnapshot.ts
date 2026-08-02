@@ -61,6 +61,23 @@ function buildRequirementSource(room: {
     return [room.normativeStandard, label].filter(Boolean).join(' · ');
 }
 
+/**
+ * Decide `pass`/`fail` solo cuando existe una fuente normativa citada
+ * (`source`). Sin fuente, el ambiente no tiene `normativeStandard` ni
+ * `normativeLabel`/`normativeCategory` asignados (ver `buildRequirementSource`),
+ * así que el valor comparado no está vinculado a ninguna norma real — afirmar
+ * "cumple"/"no cumple" en ese caso presentaría un juicio normativo sin
+ * respaldo (hallazgo de Fase 6, planes/plan_agentes_skills_revision_normativa_dialux.md).
+ * `not-evaluated` en este caso significa "sin norma configurada", no "sin
+ * cálculo" — el valor calculado se sigue mostrando para no ocultar el dato.
+ */
+function evaluateRequirementStatus(passes: boolean, source: string | undefined): RequirementEvaluation['status'] {
+    if (!source) {
+        return 'not-evaluated';
+    }
+    return passes ? 'pass' : 'fail';
+}
+
 function buildRequirementEvaluations(
     inputs: { illuminanceLux: number },
     uniformityTarget: number,
@@ -107,7 +124,7 @@ function buildRequirementEvaluations(
             operator: '>=',
             requiredValue: inputs.illuminanceLux,
             unit: 'lx',
-            status: result.avg_lux >= inputs.illuminanceLux ? 'pass' : 'fail',
+            status: evaluateRequirementStatus(result.avg_lux >= inputs.illuminanceLux, source),
             source,
         },
         {
@@ -116,7 +133,7 @@ function buildRequirementEvaluations(
             operator: '>=',
             requiredValue: uniformityTarget,
             unit: 'ratio',
-            status: result.uniformity >= uniformityTarget ? 'pass' : 'fail',
+            status: evaluateRequirementStatus(result.uniformity >= uniformityTarget, source),
             source,
         },
         {
@@ -125,7 +142,7 @@ function buildRequirementEvaluations(
             operator: '<=',
             requiredValue: ugrLimit,
             unit: 'UGR',
-            status: result.ugr <= ugrLimit ? 'pass' : 'fail',
+            status: evaluateRequirementStatus(result.ugr <= ugrLimit, source),
             source,
         },
     ];

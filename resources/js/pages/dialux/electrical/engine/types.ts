@@ -92,6 +92,17 @@ export interface ElectricalSettings {
     cableReserveFactor: number; // p.ej. 1.10 (RN metrados)
     /** Determina qué fila de CircuitDefaults (RN-05) aplica por tipo de circuito. */
     installationCategory: InstallationCategory;
+    /**
+     * Límite normativo de caída de tensión TOTAL acumulada desde el tablero
+     * raíz hasta el punto más alejado (suma de todos los tramos en cascada,
+     * no un tramo individual). `null`/`undefined` = sin límite configurado:
+     * `cumulativeVoltageDropPct` se calcula igual (es un hecho físico, no un
+     * juicio normativo), pero ningún resultado se marca como error por esta
+     * razón mientras no exista un valor confirmado. Ver
+     * `.claude/skills/normativa-dialux/references/normativa.md` — este valor
+     * sigue `pending-confirmation` en todo el proyecto.
+     */
+    maxTotalVoltageDropPct?: number | null;
 }
 
 export interface ElectricalFloor {
@@ -310,6 +321,15 @@ export interface CircuitResult {
     voltageDropPct: number;
     voltageDropV: number;
     maxVoltageDropPct: number;
+    /**
+     * Caída de tensión TOTAL acumulada desde el tablero raíz hasta el punto
+     * final de este circuito: suma de la caída de cada alimentador aguas
+     * arriba (tablero general → ... → tablero de este circuito) más la
+     * caída propia del circuito. A diferencia de `voltageDropPct` (solo el
+     * tramo final), este valor es el que un instalador mediría con un
+     * voltímetro en el punto de uso. Ver nota de `ElectricalSettings.maxTotalVoltageDropPct`.
+     */
+    cumulativeVoltageDropPct: number;
     status: 'ok' | 'advertencia' | 'error';
     warnings: string[];
 }
@@ -325,6 +345,8 @@ export interface PanelResult {
     mainBreakerA: number;
     childPanelIds: string[];
     depth: number; // nivel en el árbol (0 = tablero general)
+    /** Caída de tensión acumulada en la barra de este tablero (0 en el tablero raíz). */
+    cumulativeVoltageDropPct: number;
     warnings: string[];
 }
 
@@ -340,6 +362,8 @@ export interface FeederResult {
     conductorLabel: string;
     breakerA: number;
     voltageDropPct: number;
+    /** Caída de tensión acumulada en el extremo receptor de este alimentador (incluye este tramo). */
+    cumulativeVoltageDropPct: number;
     status: 'ok' | 'advertencia' | 'error';
     warnings: string[];
 }

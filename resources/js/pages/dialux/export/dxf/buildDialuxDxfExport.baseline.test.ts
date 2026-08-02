@@ -13,6 +13,11 @@ import {
  * Space, sin marco/cajetín/multinivel) antes de introducir el modelo de
  * láminas. Si alguno de estos asserts se rompe durante el refactor de fases
  * posteriores, es una señal de regresión, no de que el test esté "desactualizado".
+ *
+ * `buildDialuxDxfExport` ya NO es el exportador activo en producción (ver el
+ * aviso al inicio de `buildDialuxDxfExport.ts`); este test se conserva como
+ * referencia histórica de la línea base pre-refactor, no como cobertura del
+ * flujo real de exportación (ese vive en `builders/buildDxfMultiSheetDocument.test.ts`).
  */
 
 const VISUAL_CONFIG = {

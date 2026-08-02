@@ -1,4 +1,27 @@
 /**
+ * ⚠️ LEGACY — NO ES EL EXPORTADOR ACTIVO. No enganchado a ningún flujo de
+ * producción (verificado: `buildDialuxDxfExport(` no aparece en ningún
+ * componente/hook fuera de sus propios tests). Se conserva únicamente como
+ * baseline histórico del refactor multi-lámina/multi-nivel — de ahí el
+ * nombre de sus tests, `buildDialuxDxfExport.baseline.test.ts` — y varios
+ * módulos del pipeline activo fueron extraídos literalmente de este archivo
+ * (ver comentarios de origen en geometry/conductorCurve.ts,
+ * geometry/polylineGeometry.ts, emitters/primitives.ts,
+ * emitters/architecture.ts, domain/constants.ts).
+ *
+ * El pipeline que SÍ está en producción (usado por
+ * `export/useDialuxDxfExport.ts`) es:
+ *
+ *   builders/buildDxfDrawingPackage.ts
+ *     → builders/buildDxfLevelPackage.ts       (uno por nivel)
+ *     → builders/classifyDxfLevelEntities.ts   (alumbrado/tomacorrientes/compartido)
+ *     → builders/buildDisciplineEntities.ts
+ *     → builders/buildDxfMultiSheetDocument.ts (láminas con marco/cajetín/leyenda)
+ *
+ * Si necesitas corregir o extender la exportación DXF, hazlo en ese
+ * pipeline, no aquí. No borrar este archivo sin revisar antes si sus tests
+ * de baseline siguen siendo necesarios como referencia de regresión.
+ *
  * buildDialuxDxfExport.ts
  *
  * Generates a DXF file in AC1009 (AutoCAD R12) format — the most universally

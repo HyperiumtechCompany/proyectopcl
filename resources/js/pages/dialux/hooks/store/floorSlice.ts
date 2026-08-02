@@ -105,13 +105,64 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
             const source = state.project.scenes.find((s) => s.id === sourceSceneId);
             if (!source) return state;
 
-            /** Mapeo old ID → new ID para reasignar referencias cruzadas */
+            /**
+             * Mapeo old ID → new ID para reasignar referencias cruzadas.
+             *
+             * Se puebla en una primera pasada con el ID propio de CADA entidad
+             * de la escena (recintos, muros, aberturas, luminarias,
+             * interruptores, dispositivos eléctricos, conductores, cajas y
+             * tabiques) ANTES de reconstruir ninguna referencia cruzada. Esto
+             * evita bugs de orden: un conductor puede apuntar a un interruptor
+             * o dispositivo declarado más adelante en su propio arreglo, y un
+             * dispositivo eléctrico puede referenciar a otro dispositivo
+             * (`connectedDeviceIds`) sin garantía de orden. Remapear en dos
+             * pasadas (generar todos los IDs nuevos primero, resolver
+             * referencias después) hace que el resultado no dependa del orden
+             * de declaración.
+             */
             const idMap = new Map<string, string>();
-            const remapId = (oldId: string): string => {
+            const registerId = (oldId: string): void => {
                 if (!idMap.has(oldId)) idMap.set(oldId, uuidv4());
+            };
+            const remapId = (oldId: string): string => {
+                registerId(oldId);
                 return idMap.get(oldId)!;
             };
+            /** Referencia simple (wallId, sourceId, connectedFixtureIds, etc.) */
+            const remapRef = <T extends string | undefined>(id: T): T =>
+                (id === undefined ? undefined : (idMap.get(id) ?? id)) as T;
+            const remapRefList = (ids: string[] | undefined): string[] | undefined =>
+                ids?.map((id) => idMap.get(id) ?? id);
+            /**
+             * `roomId` puede ser un ID simple de recinto o un ID compuesto de
+             * ambiente (`hooks/ambientSpaces.ts`: `${room.id}::ambient-N`, o
+             * `${room.id}::${corridor.id}::ambient-N`). Se remapea cada
+             * segmento del compuesto por separado; los segmentos que no son
+             * IDs de entidad (ej. "ambient-1") no están en `idMap` y se
+             * conservan tal cual.
+             */
+            const remapRoomRef = (roomId: string): string =>
+                roomId
+                    .split('::')
+                    .map((segment) => idMap.get(segment) ?? segment)
+                    .join('::');
 
+            // Primera pasada: registrar un ID nuevo para cada entidad, sin
+            // tocar todavía ninguna referencia cruzada.
+            for (const r of source.rooms) registerId(r.id);
+            for (const w of source.walls) registerId(w.id);
+            for (const win of source.windows) registerId(win.id);
+            for (const d of source.doors) registerId(d.id);
+            for (const c of source.canopies) registerId(c.id);
+            for (const f of source.fixtures) registerId(f.id);
+            for (const s of source.lightSwitches ?? []) registerId(s.id);
+            for (const d of source.electricalDevices ?? []) registerId(d.id);
+            for (const c of source.conductors ?? []) registerId(c.id);
+            for (const j of source.junctionBoxes ?? []) registerId(j.id);
+            for (const p of source.partitions ?? []) registerId(p.id);
+
+            // Segunda pasada: clonar cada entidad con su ID nuevo y todas sus
+            // referencias cruzadas ya resueltas contra el mapeo completo.
             const cloned: Scene = {
                 ...source,
                 id: newId,
@@ -123,19 +174,42 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
                 windows: source.windows.map((win) => ({
                     ...win,
                     id: remapId(win.id),
-                    wallId: idMap.get(win.wallId) ?? win.wallId,
+                    wallId: remapRef(win.wallId),
                 })),
                 doors: source.doors.map((d) => ({
                     ...d,
                     id: remapId(d.id),
-                    wallId: idMap.get(d.wallId) ?? d.wallId,
+                    wallId: remapRef(d.wallId),
                 })),
                 canopies: source.canopies.map((c) => ({ ...c, id: remapId(c.id) })),
                 fixtures: source.fixtures.map((f) => ({
                     ...f,
                     id: remapId(f.id),
-                    roomId: f.roomId ? (idMap.get(f.roomId) ?? f.roomId) : f.roomId,
+                    roomId: f.roomId ? remapRoomRef(f.roomId) : f.roomId,
+                    wallId: remapRef(f.wallId),
                 })),
+                lightSwitches: (source.lightSwitches ?? []).map((s) => ({
+                    ...s,
+                    id: remapId(s.id),
+                    wallId: remapRef(s.wallId),
+                    connectedFixtureIds: remapRefList(s.connectedFixtureIds) ?? [],
+                })),
+                electricalDevices: (source.electricalDevices ?? []).map((d) => ({
+                    ...d,
+                    id: remapId(d.id),
+                    wallId: remapRef(d.wallId),
+                    roomId: d.roomId ? remapRoomRef(d.roomId) : d.roomId,
+                    connectedDeviceIds: remapRefList(d.connectedDeviceIds) ?? [],
+                    connectedFixtureIds: remapRefList(d.connectedFixtureIds),
+                    connectedSwitchIds: remapRefList(d.connectedSwitchIds),
+                })),
+                conductors: (source.conductors ?? []).map((c) => ({
+                    ...c,
+                    id: remapId(c.id),
+                    sourceId: remapRef(c.sourceId),
+                    targetId: remapRef(c.targetId),
+                })),
+                junctionBoxes: (source.junctionBoxes ?? []).map((j) => ({ ...j, id: remapId(j.id) })),
                 partitions: (source.partitions ?? []).map((p) => ({ ...p, id: remapId(p.id) })),
                 visible: source.visible ?? true,
             };
