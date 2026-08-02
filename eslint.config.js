@@ -75,6 +75,7 @@ export default [
             'resources/js/pages/dialux/hooks/lightingEngineCore.ts',
             'resources/js/pages/dialux/hooks/roomLighting.ts',
             'resources/js/pages/dialux/hooks/lightingCalculations.ts',
+            'resources/js/pages/dialux/domain/calculation/**/*.ts',
             'resources/js/pages/dialux/electrical/engine/**/*.ts',
             'resources/js/pages/dialux/geometry/**/*.ts',
             'resources/js/pages/dialux/selection/**/*.ts',

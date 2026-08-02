@@ -1,5 +1,5 @@
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
-import { calculateLightingResult } from '@/pages/dialux/hooks/lightingEngineCore';
+import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
 import {
     normalizeScaleConfig,
@@ -18,7 +18,6 @@ import type {
 } from '../domain/types';
 
 const LIGHTING_ENGINE_NAME = 'lightingEngineCore';
-const LIGHTING_ENGINE_VERSION = '1.0.0';
 
 export interface DialuxExportSnapshotInput {
     project: Project;
