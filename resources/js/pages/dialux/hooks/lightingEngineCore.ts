@@ -1,6 +1,17 @@
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
 import type { Fixture, LightingResult, Room } from './useEditorStore';
 
+/**
+ * Identificador de motor para trazabilidad (planes/plan_maestro_dialux_web_motor_arquitectura_validacion.md,
+ * Fase 0). Este es el ÚNICO motor que calcula avg/min/max/uniformity/UGR punto a punto para
+ * un ambiente — alimenta editor (`useLightingEngine.ts`), snapshot de export
+ * (`export/snapshot/buildDialuxExportSnapshot.ts`) y PDF (`export/useDialuxPdfExport.ts`).
+ * Alcance real: luz directa únicamente, sin oclusión ni interreflexión, malla fija
+ * (`GRID_SPACING`), UGR desde un observador simplificado (centro del bbox del ambiente).
+ * No incrementar este valor sin actualizar también los goldens en `hooks/__fixtures__/`.
+ */
+export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';
+
 const GRID_SPACING = 0.5;
 const MATH_PI = Math.PI;
 
