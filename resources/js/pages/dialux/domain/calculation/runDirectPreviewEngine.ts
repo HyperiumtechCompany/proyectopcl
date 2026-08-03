@@ -92,7 +92,9 @@ export async function runDirectPreviewEngine(
             objectId: object.id,
             objectName: object.name,
             levelId: object.levelId,
-            result: calculateLightingResult(room, fixtures),
+            // Fase 5: `meshPolicy.gridSpacingM` era metadata sin efecto real
+            // hasta ahora — `calculateLightingResult` ya lo acepta.
+            result: calculateLightingResult(room, fixtures, config.meshPolicy.gridSpacingM),
         };
     });
 

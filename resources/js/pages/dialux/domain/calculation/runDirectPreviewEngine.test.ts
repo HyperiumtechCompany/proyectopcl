@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildModuloIProjectFixture } from '@/pages/dialux/export/__fixtures__/moduloIFixture';
 import { buildFase0MediumAmbients } from '@/pages/dialux/hooks/__fixtures__/fase0MediumFixture';
 import { buildFase0SmallFixtures, buildFase0SmallRoom } from '@/pages/dialux/hooks/__fixtures__/fase0SmallFixture';
-import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
+import { calculateLightingResult, GRID_SPACING, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import type { Project, Scene } from '@/pages/dialux/hooks/types';
 import { buildCalculationSnapshot } from './buildCalculationSnapshot';
 import { runDirectPreviewEngine } from './runDirectPreviewEngine';
+import { DEFAULT_DIRECT_PREVIEW_CONFIG } from './types';
 
 function buildSmallProject(): Project {
     const room = buildFase0SmallRoom();
@@ -105,6 +106,28 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
         expect(run.surfaces).toHaveLength(24);
         expect(run.durationMs).toBeGreaterThanOrEqual(0);
         expect(run.warnings).toEqual([]);
+    });
+
+    it('Fase 5: config.meshPolicy.gridSpacingM cambia la resolución real de la malla, no solo metadata', async () => {
+        const snapshot = buildCalculationSnapshot(buildSmallProject());
+
+        const withDefaultSpacing = await runDirectPreviewEngine(snapshot);
+        const coarser = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            meshPolicy: { gridSpacingM: GRID_SPACING * 2 },
+        });
+
+        const defaultGrid = withDefaultSpacing.surfaces[0]!.result;
+        const coarserGrid = coarser.surfaces[0]!.result;
+
+        // Recinto 6x4 m: con spacing=0.5 hay 12x8 celdas; con spacing=1.0, 6x4.
+        expect(defaultGrid.grid_cols).toBe(12);
+        expect(defaultGrid.grid_rows).toBe(8);
+        expect(coarserGrid.grid_cols).toBe(6);
+        expect(coarserGrid.grid_rows).toBe(4);
+        // Menos puntos de muestreo cambia el resultado agregado (no es un
+        // simple passthrough de metadata sin efecto).
+        expect(coarserGrid.avg_lux).not.toBeCloseTo(defaultGrid.avg_lux, 6);
     });
 
     it('agrega un warning cuando un objeto de cálculo no tiene luminarias asociadas', async () => {
