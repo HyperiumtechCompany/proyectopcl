@@ -1,3 +1,4 @@
+import { pointInPolygon } from '@/pages/dialux/geometry/polygonGeometry';
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
 import type { Fixture, LightingResult, Room } from './useEditorStore';
 
@@ -13,12 +14,29 @@ export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';
 export const GRID_SPACING = 0.5;
 const MATH_PI = Math.PI;
 
+interface Vector3 {
+    x: number;
+    y: number;
+    z: number;
+}
+
+/**
+ * Normal de la superficie receptora en este punto (Fase 4: "el mismo solver
+ * calcula cualquier superficie mediante punto, normal y contexto").
+ * `buildGrid` hoy siempre usa `HORIZONTAL_UP_NORMAL` — con (0,0,1) el
+ * cálculo es idéntico a la fórmula anterior (`-dz/dist`), verificado contra
+ * los goldens de Fase 0. Superficies verticales/inclinadas quedan fuera de
+ * este ciclo (requieren poblar una normal distinta aguas arriba).
+ */
 interface GridPoint {
     x: number;
     y: number;
     z: number;
+    normal: Vector3;
     active: boolean;
 }
+
+const HORIZONTAL_UP_NORMAL: Vector3 = { x: 0, y: 0, z: 1 };
 
 function roomBBox(room: Room) {
     if (room.vertices.length === 0) {
@@ -54,31 +72,6 @@ function roomBBox(room: Room) {
     };
 }
 
-function pointInPolygon(
-    px: number,
-    py: number,
-    vertices: Array<{ x: number; y: number }>,
-): boolean {
-    let inside = false;
-    let j = vertices.length - 1;
-
-    for (let i = 0; i < vertices.length; i++) {
-        const vi = vertices[i];
-        const vj = vertices[j];
-
-        if (
-            vi.y > py !== vj.y > py &&
-            px < ((vj.x - vi.x) * (py - vi.y)) / (vj.y - vi.y) + vi.x
-        ) {
-            inside = !inside;
-        }
-
-        j = i;
-    }
-
-    return inside;
-}
-
 function buildGrid(room: Room, spacing: number, wpHeight: number) {
     const { minX, minY, width, length } = roomBBox(room);
 
@@ -106,9 +99,9 @@ function buildGrid(room: Room, spacing: number, wpHeight: number) {
             const py = minY + (row + 0.5) * cellH;
             const active =
                 room.vertices.length < 3 ||
-                pointInPolygon(px, py, room.vertices);
+                pointInPolygon({ x: px, y: py }, room.vertices);
 
-            points.push({ x: px, y: py, z: wpHeight, active });
+            points.push({ x: px, y: py, z: wpHeight, normal: HORIZONTAL_UP_NORMAL, active });
         }
     }
 
@@ -249,7 +242,15 @@ function illuminanceFromFixture(point: GridPoint, fixture: Fixture): number {
     }
 
     const dist = Math.sqrt(dist2);
-    const cosIncident = Math.max(0, -dz / dist);
+    // Coseno de incidencia (Lambert): producto punto entre la dirección
+    // unitaria punto→luminaria y la normal de la superficie receptora. Con
+    // `point.normal = (0,0,1)` (único caso que produce `buildGrid` hoy) esto
+    // es exactamente `-dz/dist`, igual que la fórmula anterior — ver
+    // comentario de `GridPoint.normal`.
+    const cosIncident = Math.max(
+        0,
+        (-dx / dist) * point.normal.x + (-dy / dist) * point.normal.y + (-dz / dist) * point.normal.z,
+    );
 
     if (cosIncident <= 0) {
         return 0;
