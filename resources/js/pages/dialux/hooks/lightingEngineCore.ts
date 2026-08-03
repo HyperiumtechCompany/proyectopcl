@@ -1,3 +1,5 @@
+import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
+import { isSegmentOccluded } from '@/pages/dialux/domain/geometry/segmentOcclusion';
 import { pointInPolygon } from '@/pages/dialux/geometry/polygonGeometry';
 import { candela } from './photometricInterpolation';
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
@@ -109,13 +111,21 @@ function buildGrid(room: Room, spacing: number, wpHeight: number) {
     return { points, rows, cols, minX, minY, cellW, cellH };
 }
 
-function illuminanceFromFixture(point: GridPoint, fixture: Fixture): number {
+function illuminanceFromFixture(point: GridPoint, fixture: Fixture, obstacles: OcclusionBox[]): number {
     const dx = point.x - fixture.x;
     const dy = point.y - fixture.y;
     const dz = point.z - fixture.z;
     const dist2 = dx * dx + dy * dy + dz * dz;
 
     if (dist2 < 1e-6) {
+        return 0;
+    }
+
+    // Fase 6: oclusión — sin línea de vista directa, la luminaria no aporta
+    // nada a este punto. `obstacles` viene vacío por defecto (ver
+    // `calculateLightingResult`), así que este chequeo no tiene costo ni
+    // efecto para ningún llamador que no pase obstáculos explícitamente.
+    if (obstacles.length > 0 && isSegmentOccluded(point, { x: fixture.x, y: fixture.y, z: fixture.z }, obstacles)) {
         return 0;
     }
 
@@ -153,12 +163,13 @@ function luminousArea(fixture: Fixture): number {
 function calculatePointByPoint(
     points: GridPoint[],
     fixtures: Fixture[],
+    obstacles: OcclusionBox[],
 ): Array<number | null> {
     return points.map((point) =>
         point.active
             ? fixtures.reduce(
                   (sum, fixture) =>
-                      sum + illuminanceFromFixture(point, fixture),
+                      sum + illuminanceFromFixture(point, fixture, obstacles),
                   0,
               )
             : null,
@@ -171,6 +182,7 @@ function calculateUGR(
     fixtures: Fixture[],
     lb: number,
     wpHeight: number,
+    obstacles: OcclusionBox[],
 ): number {
     let sum = 0;
 
@@ -181,6 +193,14 @@ function calculateUGR(
         const dist2 = dx * dx + dy * dy + dz * dz;
 
         if (dist2 < 0.01) {
+            continue;
+        }
+
+        // Una luminaria oculta al observador tampoco puede deslumbrarlo.
+        if (
+            obstacles.length > 0 &&
+            isSegmentOccluded({ x: cx, y: cy, z: wpHeight }, { x: fixture.x, y: fixture.y, z: fixture.z }, obstacles)
+        ) {
             continue;
         }
 
@@ -217,6 +237,18 @@ export function calculateLightingResult(
      * era metadata sin efecto real sobre el cálculo.
      */
     spacingM: number = GRID_SPACING,
+    /**
+     * Cajas opacas para el test de visibilidad punto↔luminaria (Fase 6:
+     * "Visibilidad, oclusión y sombras"). Default `[]` — sin obstáculos,
+     * ningún punto se ocluye nunca y el resultado es idéntico al de antes de
+     * esta fase para todo llamador que no los pase explícitamente (mismo
+     * patrón no disruptivo que `spacingM` en Fase 5). Se generan con
+     * `buildWallOcclusionBoxes`/`buildPartitionOcclusionBoxes`
+     * (`domain/geometry/occlusionBoxes.ts`) a partir de `Wall`/`Window`/
+     * `Door`/`Partition` — `runDirectPreviewEngine` las puebla solo cuando
+     * `CalculationConfig.occlusion === true`.
+     */
+    obstacles: OcclusionBox[] = [],
 ): LightingResult {
     const bbox = roomBBox(room);
     const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
@@ -226,7 +258,7 @@ export function calculateLightingResult(
         z: fixture.z > 0 ? fixture.z : room.height - 0.1,
     }));
     const grid = buildGrid(room, spacingM > 0 ? spacingM : GRID_SPACING, usefulPlaneHeight);
-    const values = calculatePointByPoint(grid.points, enriched);
+    const values = calculatePointByPoint(grid.points, enriched, obstacles);
     const activeValues = values.filter(
         (value): value is number => value !== null,
     );
@@ -272,7 +304,7 @@ export function calculateLightingResult(
     const avg = sum / activeValues.length;
     const uniformity = avg > 0 ? min / avg : 0;
     const lb = avg / MATH_PI;
-    const ugr = calculateUGR(bbox.cx, bbox.cy, enriched, lb, usefulPlaneHeight);
+    const ugr = calculateUGR(bbox.cx, bbox.cy, enriched, lb, usefulPlaneHeight, obstacles);
 
     return {
         avg_lux: avg,

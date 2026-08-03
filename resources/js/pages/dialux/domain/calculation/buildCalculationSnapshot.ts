@@ -1,3 +1,4 @@
+import { buildPartitionOcclusionBoxes, buildWallOcclusionBoxes } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import type { Fixture, Project, Room } from '@/pages/dialux/hooks/types';
 import {
@@ -6,6 +7,7 @@ import {
     type CalculationLuminaire,
     type CalculationMaterial,
     type CalculationObject,
+    type CalculationObstacle,
     type CalculationSnapshot,
     type LightingSceneState,
     type LuminaireState,
@@ -31,6 +33,7 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
     const luminaires: CalculationLuminaire[] = [];
     const scenes: LightingSceneState[] = [];
     const calculationObjects: CalculationObject[] = [];
+    const obstacles: CalculationObstacle[] = [];
 
     for (const scene of project.scenes) {
         levels.push({
@@ -66,6 +69,14 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
             name: 'Escena por defecto',
             luminaireStates,
         });
+
+        const sceneBoxes = [
+            ...buildWallOcclusionBoxes(scene.walls, scene.windows, scene.doors),
+            ...buildPartitionOcclusionBoxes(scene.partitions, scene.doors),
+        ];
+        for (const box of sceneBoxes) {
+            obstacles.push({ ...box, levelId: scene.id });
+        }
     }
 
     return {
@@ -77,6 +88,7 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
         luminaires,
         scenes,
         calculationObjects,
+        obstacles,
     };
 }
 

@@ -1,3 +1,4 @@
+import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { GRID_SPACING } from '@/pages/dialux/hooks/lightingEngineCore';
 import type { LightingResult, Room, Vertex } from '@/pages/dialux/hooks/types';
 
@@ -73,6 +74,18 @@ export interface CalculationObject {
     luminaireIds: string[];
 }
 
+/**
+ * Caja opaca para el solver de oclusión (Fase 6, §11). Igual forma que
+ * `OcclusionBox` (`domain/geometry/occlusionBoxes.ts`) más `levelId` — el
+ * snapshot agrega obstáculos de todos los niveles en una sola lista plana
+ * (mismo patrón que `luminaires`), así que `runDirectPreviewEngine` filtra
+ * por `levelId` antes de pasarlos al motor, para no ocluir un ambiente con
+ * muros de otro nivel.
+ */
+export interface CalculationObstacle extends OcclusionBox {
+    levelId: string;
+}
+
 export interface LuminaireState {
     luminaireId: string;
     on: boolean;
@@ -112,6 +125,8 @@ export interface CalculationSnapshot {
     luminaires: CalculationLuminaire[];
     scenes: LightingSceneState[];
     calculationObjects: CalculationObject[];
+    /** Cajas opacas para oclusión (Fase 6). Vacío para proyectos sin muros/particiones derivables o para snapshots de fases anteriores a Fase 6. */
+    obstacles: CalculationObstacle[];
 }
 
 // ── Configuración y ejecución ────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import type { Fixture, Room } from '@/pages/dialux/hooks/types';
 import { hashCalculationSnapshot } from './hashSnapshot';
@@ -6,11 +7,26 @@ import {
     type CalculationConfig,
     type CalculationLuminaire,
     type CalculationObject,
+    type CalculationObstacle,
     type CalculationRun,
     type CalculationSnapshot,
     type CalculationWarning,
     type SurfaceCalculationResult,
 } from './types';
+
+/** Agrupa obstáculos por nivel — un ambiente solo debe ocluirse con muros/particiones de SU MISMO nivel (Fase 6: "dos niveles superpuestos" no debe filtrar entre sí). */
+function groupObstaclesByLevel(obstacles: CalculationObstacle[]): Map<string, OcclusionBox[]> {
+    const byLevel = new Map<string, OcclusionBox[]>();
+    for (const obstacle of obstacles) {
+        const list = byLevel.get(obstacle.levelId);
+        if (list) {
+            list.push(obstacle);
+        } else {
+            byLevel.set(obstacle.levelId, [obstacle]);
+        }
+    }
+    return byLevel;
+}
 
 /**
  * Adapta un `CalculationObject`/`CalculationLuminaire` (dominio puro, Fase 1)
@@ -72,6 +88,13 @@ export async function runDirectPreviewEngine(
     const start = performance.now();
     const warnings: CalculationWarning[] = [];
     const luminairesById = new Map(snapshot.luminaires.map((luminaire) => [luminaire.id, luminaire]));
+    // Fase 6: `config.occlusion` era metadata sin efecto hasta ahora (Fase 0,
+    // brecha §3.3). Solo se computan obstáculos cuando el modo lo pide — con
+    // `occlusion: false` (default) el comportamiento es idéntico al de antes
+    // de esta fase, sin ningún costo adicional.
+    const obstaclesByLevel = config.occlusion
+        ? groupObstaclesByLevel(snapshot.obstacles)
+        : new Map<string, OcclusionBox[]>();
 
     const surfaces: SurfaceCalculationResult[] = snapshot.calculationObjects.map((object) => {
         const room = toEngineRoom(object);
@@ -94,7 +117,12 @@ export async function runDirectPreviewEngine(
             levelId: object.levelId,
             // Fase 5: `meshPolicy.gridSpacingM` era metadata sin efecto real
             // hasta ahora — `calculateLightingResult` ya lo acepta.
-            result: calculateLightingResult(room, fixtures, config.meshPolicy.gridSpacingM),
+            result: calculateLightingResult(
+                room,
+                fixtures,
+                config.meshPolicy.gridSpacingM,
+                obstaclesByLevel.get(object.levelId) ?? [],
+            ),
         };
     });
 

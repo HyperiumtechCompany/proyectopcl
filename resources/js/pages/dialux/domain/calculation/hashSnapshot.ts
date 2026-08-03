@@ -30,14 +30,17 @@ export async function hashCalculationSnapshot(snapshot: CalculationSnapshot): Pr
         luminaires: snapshot.luminaires,
         scenes: snapshot.scenes,
         calculationObjects: snapshot.calculationObjects,
+        obstacles: snapshot.obstacles,
     };
     return sha256Hex(canonicalStringify(hashable));
 }
 
 /**
- * Hash SOLO de geometría (niveles + forma/altura de los objetos de cálculo),
- * sin luminarias ni materiales — permite invalidar overlays puramente
- * geométricos (3D) sin recalcular fotometría (ADR 0002, punto 5).
+ * Hash SOLO de geometría (niveles + forma/altura de los objetos de cálculo +
+ * obstáculos de oclusión — Fase 6), sin luminarias ni materiales — permite
+ * invalidar overlays puramente geométricos (3D) sin recalcular fotometría
+ * (ADR 0002, punto 5). Los obstáculos entran aquí porque mover un muro
+ * cambia la geometría 3D igual que mover un recinto.
  */
 export async function hashCalculationGeometry(snapshot: CalculationSnapshot): Promise<string> {
     const geometryOnly = {
@@ -49,6 +52,7 @@ export async function hashCalculationGeometry(snapshot: CalculationSnapshot): Pr
             height: object.height,
             roomType: object.roomType,
         })),
+        obstacles: snapshot.obstacles,
     };
     return sha256Hex(canonicalStringify(geometryOnly));
 }
