@@ -124,9 +124,60 @@ cada uno. Descomponer esto en los hooks que propone el plan
 - `npm run build`: OK.
 - Verificación en navegador: no realizada (mismo motivo que el paso 1).
 
-## 3-6. Pendientes
+## 3. `RoomProps.tsx` — hecho (2026-08-02)
 
-`RoomProps.tsx`, `House3DBuilder.ts`, exportadores PDF/DXF y normativa — no
-iniciados. Antes de retomar el resto de `MlightcadCanvas2D.tsx` (más allá de
-esta extracción conservadora), se recomienda escribir el test caracterizador
-descrito arriba.
+**1015 → 150 líneas** (−85%). A diferencia de `MlightcadCanvas2D.tsx`, este
+es un panel de formulario/propiedades sin RAF ni motor CAD — mismo perfil de
+riesgo que `CatalogPanel.tsx` (paso 1), así que se hizo extracción completa,
+no conservadora.
+
+Extraído a `resources/js/pages/dialux/components/properties/room/`:
+
+| Archivo | Líneas | Contenido |
+|---|---:|---|
+| `RoomGeometrySection.tsx` | 146 | Nombre, área, perímetro, alto (o heredado), campos de pasadizo, conteo de ambientes |
+| `StairConfigPanel.tsx` | 276 | Configuración de escalera (ya era un sub-componente separado; solo se movió a su propio archivo) |
+| `RoomConstructionSection.tsx` | 47 | Material/tipo de edificación — solo recinto exterior |
+| `RoomLightingSection.tsx` | 123 | Sección/subsección/aplicación normativa, iluminancia, cumplimiento |
+| `RoomFixtureGridSection.tsx` | 156 | Grilla de luminarias — con su propio estado local (filas/columnas/picker), antes vivía en el padre |
+| `RoomOutletsSection.tsx` | 127 | Tomacorrientes por ambiente |
+
+`RoomProps.tsx` (150 líneas) ahora solo calcula los datos compartidos entre
+secciones (`calculationRoom`, `area`, `perimeter`, `inputs`, listas
+normativas) y compone las 5 secciones condicionalmente según
+`isRecinto`/`isAmbiente`.
+
+### Hallazgo: bloque de código muerto eliminado
+
+El original tenía DOS bloques casi idénticos de "Tomacorrientes por
+ambiente" — uno activo y uno envuelto en `{false && isAmbiente && (...)}`
+(nunca se renderizaba, guardia literalmente `false`). Se eliminó el bloque
+muerto al extraer `RoomOutletsSection.tsx` — cero riesgo comportamental
+(la condición `false` garantiza que nunca produjo output), y de paso
+elimina 2 de los errores de tipo preexistentes que arrastraba ese bloque
+sin usar (`updateGeneratedOutletsForRoom`/`removeGeneratedOutletsForRoom`
+sobre `EditorState`). Ver §9.1 de `fase0_inventario_dialux.md` para el
+conteo original de esta deuda de tipos.
+
+`RoomProps.tsx` se retiró de `fileSizeBudget.allowlist.json` (ya no supera
+el umbral de 400 líneas).
+
+### Verificación de este paso
+
+- `vitest run`: 506/506.
+- `tsc --noEmit`: **123 errores preexistentes (2 menos que el baseline de
+  125)** — la reducción es el efecto esperado de eliminar el bloque muerto,
+  no una corrección deliberada de tipos.
+- ESLint: limpio tras un fix trivial de `import/order`.
+- `npm run build`: OK.
+- Verificación en navegador: no realizada (mismo motivo que los pasos 1-2 —
+  sin chromium-cli/Playwright en este entorno). Este panel es de menor
+  riesgo que el canvas (sin RAF/efectos de sincronización), pero de todos
+  modos requiere confirmación visual antes de un merge.
+
+## 4-6. Pendientes
+
+`House3DBuilder.ts`, exportadores PDF/DXF y normativa — no iniciados. Antes
+de retomar el resto de `MlightcadCanvas2D.tsx` (más allá de la extracción
+conservadora del paso 2), se recomienda escribir el test caracterizador
+descrito en esa sección.

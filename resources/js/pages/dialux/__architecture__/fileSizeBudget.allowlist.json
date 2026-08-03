@@ -15,7 +15,6 @@
     "components/canvas/OverlayRooms.tsx",
     "components/catalogData.tsx",
     "components/properties/ElectricalProps.tsx",
-    "components/properties/RoomProps.tsx",
     "components/properties/WallProps.tsx",
     "components/toolbar/normativeData.ts",
     "components/toolbar/panels/NormativaPanel.tsx",
