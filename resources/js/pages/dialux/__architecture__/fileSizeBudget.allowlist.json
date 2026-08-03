@@ -17,7 +17,6 @@
     "components/properties/ElectricalProps.tsx",
     "components/properties/WallProps.tsx",
     "components/toolbar/normativeData.ts",
-    "components/toolbar/panels/NormativaPanel.tsx",
     "electrical/components/CatalogTab.tsx",
     "electrical/engine/compute.test.ts",
     "electrical/engine/compute.ts",

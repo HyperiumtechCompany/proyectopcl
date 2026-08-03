@@ -296,6 +296,102 @@ que el archivo sea byte-idéntico al original en esa línea.
 - No requiere verificación en navegador: es generación de datos/documento,
   no UI — la cobertura de tests existente es la verificación real.
 
-## 6. Pendiente
+## 6. Normativa — hecho (2026-08-02); alcance acotado a `NormativaPanel.tsx`
 
-Normativa — no iniciada.
+**Investigación previa** (5 componentes de UI de normativa inventariados):
+`NormativaPanel.tsx` (429), `NormativeWizardPanel.tsx` (585),
+`NormativeCompliancePanel.tsx` (323), `NormativeComparisonModal.tsx` (183),
+`electrical/components/NormativePicker.tsx` (133). Ningún componente importa
+los dos catálogos normativos duplicados (`hooks/normativaData.ts` y
+`components/toolbar/normativeData.ts`) a la vez — cada rama usa solo uno,
+así que tocar la UI de normativa es seguro respecto a no tocar esa
+duplicación (unificarla sigue siendo trabajo de Fase 7.4, no de esta fase).
+
+**Hallazgo (confirmado con el usuario antes de actuar)**: `NormativeWizardPanel.tsx`
+no tiene ningún consumidor en el código. Investigación de git confirmó que
+esto NO es una desconexión reciente — el archivo se creó completo (524
+líneas) en su primer commit (`334a263`, "Actualizaciones de Dialux
+escaleras y espacios") y **nunca**, en ningún commit posterior, se le
+agregó una referencia desde `EditorLayout.tsx` ni `Toolbar.tsx`. Es una
+funcionalidad terminada (wizard de 4 pasos, sincroniza con backend vía
+`useNormativeConfig`) a la que aparentemente nunca se le agregó el punto de
+entrada en la UI — no código muerto abandonado, sino una decisión de
+producto pendiente que no corresponde resolver en este refactor.
+**Decisión (confirmada con el usuario)**: no tocar `NormativeWizardPanel.tsx`
+ni sus dependientes (`NormativeCompliancePanel.tsx`,
+`NormativeComparisonModal.tsx`) — quedan exactamente igual. Alcance de este
+paso acotado a `NormativaPanel.tsx`, el único de los 5 con consumidor real
+(`Toolbar.tsx` vía `components/toolbar/panels.tsx`).
+
+### `NormativaPanel.tsx`: **429 → 218 líneas** (−49%), sin extraer sub-componentes
+
+A diferencia de los pasos 1/3/5, aquí no hizo falta partir el componente en
+archivos nuevos: al leerlo completo se encontró que ~130 de las 429 líneas
+eran **JSX ya comentado** (dos bloques enteros deshabilitados: el selector
+de sección/subsección/aplicación, y la tarjeta de "perfil activo" con sus
+métricas), más un comentario de sección huérfano al final
+(`/*── Herramientas CAD Panel ──*/`) sin nada después. Investigación
+confirmó que este archivo alguna vez contuvo también un panel de
+herramientas CAD (sus iconos de dibujo — `PenTool`, `Ruler`, `Spline`,
+`RotateCcw`/`RotateCw`, etc. — seguían importados) que se movió a otro
+archivo en algún refactor anterior sin limpiar los restos.
+
+Se eliminó, en este orden:
+1. Los dos bloques de JSX comentado (cero riesgo: un comentario no tiene
+   efecto en runtime, verificado que ESLint ya marcaba como "no usadas"
+   exactamente las mismas 57 variables/imports antes Y después de esta
+   eliminación — es decir, esas variables SOLO se referenciaban dentro del
+   código ya deshabilitado, nunca en código real).
+2. El comentario de sección huérfano al final del archivo.
+3. Los 57 imports/funciones confirmados sin uso real (30 iconos de
+   `lucide-react` del extinto panel CAD, `Button`, tipos de store no
+   usados, `CatalogPanel`, constantes de catálogo de ventanas/luminarias,
+   `getBackground`/`getSurround`, los 4 componentes de `panelControls.tsx`,
+   5 de los 6 imports de `primitives.tsx` — solo `PanelCard` sigue en uso—,
+   y la función `handleSectionChange`, que quedó sin llamador al borrar el
+   `<select>` que la invocaba).
+
+El resultado (218 líneas) ya queda bajo el presupuesto de 250 líneas de
+componente sin necesitar descomposición en archivos adicionales — la
+"complejidad" que hacía ver este archivo como monolito era en su mayoría
+deuda de limpieza, no lógica real. Se retiró de
+`fileSizeBudget.allowlist.json`.
+
+### Verificación de este paso
+
+- `vitest run`: 506/506 (sin test dedicado — componente de UI sin suite
+  propia, igual que los otros pasos de UI de esta fase).
+- `tsc --noEmit`: sin cambio (123).
+- ESLint: pasó de 58 errores a 1 (el mismo `react-hooks/set-state-in-effect`
+  preexistente de siempre, no tocado — cambiar ese patrón es cambio de
+  comportamiento, fuera de alcance).
+- `npm run build`: OK.
+- Verificación en navegador: no realizada (sin chromium-cli/Playwright en
+  este entorno) — el cambio es eliminación de código comprobadamente muerto
+  (comentado o sin ninguna referencia activa), por lo que el riesgo de
+  regresión visual es mínimo, pero la confirmación real queda pendiente
+  para el equipo.
+
+---
+
+## Cierre de la Fase 2
+
+Los 6 pasos del orden de extracción del plan quedaron atendidos, con
+alcance ajustado según el riesgo real encontrado en cada archivo (no
+mecánicamente idéntico en los 6): 3 extracciones completas
+(`CatalogPanel.tsx`, `RoomProps.tsx`, `buildDialuxFormalDocument.ts`), 1
+extracción conservadora limitada a piezas sin estado (`MlightcadCanvas2D.tsx`),
+1 caso donde se decidió NO descomponer y en su lugar corregir un hallazgo
+real (`House3DBuilder.ts`, fugas de memoria), y 1 caso de limpieza de
+código muerto sin necesidad de descomposición (`NormativaPanel.tsx`).
+
+Pendientes explícitos que quedan fuera de la Fase 2, a criterio del equipo:
+- Verificación visual en navegador de los 4 cambios de UI (pasos 1, 2, 3, 6)
+  — sin chromium-cli/Playwright disponibles en este entorno.
+- Test caracterizador para `MlightcadCanvas2D.tsx` antes de continuar su
+  descomposición más allá de lo conservador.
+- Resolver el acoplamiento legacy de `Conductor` en `House3DBuilder.ts`
+  (documentado en `wireLegacySync.ts`) antes de retomar su descomposición.
+- Unificación de los dos catálogos normativos duplicados — Fase 7.4, no Fase 2.
+- Decisión de producto sobre `NormativeWizardPanel.tsx` (¿cablearlo, o
+  eliminarlo si ya no aplica?) — no es una decisión técnica de este refactor.
