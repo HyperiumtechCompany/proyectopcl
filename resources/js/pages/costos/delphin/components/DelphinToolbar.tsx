@@ -95,6 +95,7 @@ interface Props {
     isGanttSaving: boolean;
     onSaveBudget: () => void;
     onSaveGantt: () => void;
+    onNavigateValorizado?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
     onExport?: () => void;
     project: string;
 }
@@ -344,7 +345,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
     onOpenSettings, onImport, onImportExcel, onOpenInsumos, onExport,
     isParentSelected, onFormulaView,
     incompatiblesCount, onOpenCompatibilidad,
-    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, project
+    budgetDirty, isSavingBudget, ganttDirty, isGanttSaving, onSaveBudget, onSaveGantt, onNavigateValorizado, project
 }: Props) {
     const isFormulaBudgetView = mode === 'budget' && budgetView === 'formula_polinomica';
     const noSel = selectedRowId === null || isFormulaBudgetView;
@@ -433,6 +434,7 @@ export const DelphinToolbar = React.memo(function DelphinToolbar({
                             {/* Botón Valorizado */}
                             <a
                                 href={`/module/crono_valorizado?project=${project}`}
+                                onClick={onNavigateValorizado}
                                 className="flex shrink-0 items-center gap-1 rounded bg-blue-600 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-blue-500 transition-colors"
                                 title="Ir al Cronograma Valorizado"
                             >

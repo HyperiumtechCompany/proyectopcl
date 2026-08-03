@@ -12,7 +12,7 @@ interface Props {
 export function GanttChartHeader({ timeline }: Props) {
     return (
         <div
-            className="border-b border-slate-600 bg-slate-800 select-none"
+            className="border-b border-slate-300 bg-slate-100 select-none dark:border-slate-600 dark:bg-slate-800"
             style={{
                 height: CHART_HEADER_TOP_H + CHART_HEADER_BOTTOM_H,
                 minWidth: timeline.totalWidth,
@@ -20,13 +20,13 @@ export function GanttChartHeader({ timeline }: Props) {
         >
             {/* ── Fila 1: Meses ─────────────────────────────────────────── */}
             <div
-                className="flex border-b border-slate-700"
+                className="flex border-b border-slate-300 dark:border-slate-700"
                 style={{ height: CHART_HEADER_TOP_H }}
             >
                 {timeline.topCols.map((col, i) => (
                     <div
                         key={i}
-                        className="shrink-0 overflow-hidden border-r border-slate-700 px-1 text-center text-[10px] leading-[24px] font-semibold tracking-wider text-slate-300 last:border-r-0"
+                        className="shrink-0 overflow-hidden border-r border-slate-300 px-1 text-center text-[10px] leading-[24px] font-semibold tracking-wider text-slate-700 last:border-r-0 dark:border-slate-700 dark:text-slate-300"
                         style={{ width: col.width }}
                         title={col.label}
                     >
@@ -40,12 +40,12 @@ export function GanttChartHeader({ timeline }: Props) {
                 {timeline.bottomCols.map((col, i) => (
                     <div
                         key={i}
-                        className={`shrink-0 overflow-hidden border-r border-slate-700/50 text-center text-[9px] leading-[22px] last:border-r-0 ${
+                        className={`shrink-0 overflow-hidden border-r border-slate-300 text-center text-[9px] leading-[22px] last:border-r-0 dark:border-slate-700/50 ${
                             col.isHoliday
-                                ? 'bg-amber-950/60 text-amber-300'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
                                 : col.isNonWorking
-                                  ? 'bg-slate-800/60 text-slate-600'
-                                  : 'text-slate-400'
+                                  ? 'bg-slate-200/70 text-slate-500 dark:bg-slate-800/60 dark:text-slate-600'
+                                  : 'text-slate-600 dark:text-slate-400'
                         }`}
                         style={{ width: col.width }}
                         title={col.holidayName ?? col.date}

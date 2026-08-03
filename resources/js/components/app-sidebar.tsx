@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, CloudCogIcon, Droplet, Folder, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon } from 'lucide-react';
+import { BookOpen, Building2, CloudCogIcon, Droplet, Folder, Inbox, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon, ChartBar } from 'lucide-react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -30,6 +30,16 @@ export function AppSidebar() {
                     title: 'Gestión de Personal',
                     href: '/users' as const,
                     icon: Users,
+                },
+                {
+                    title: 'Organizaciones',
+                    href: '/organizations' as const,
+                    icon: Building2,
+                },
+                {
+                    title: 'Solicitudes',
+                    href: '/solicitudes' as const,
+                    icon: Inbox,
                 },
             ]
             : []),
@@ -74,6 +84,14 @@ export function AppSidebar() {
         },
     ];
 
+    const gestorProyectos: NavItem[] = [
+        {
+            title: 'Gestor Proyectos',
+            href: '/gestor-proyectos',
+            icon: ChartBar,
+        },
+    ];
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -98,6 +116,28 @@ export function AppSidebar() {
                     </SidebarGroupLabel>
                     <SidebarMenu>
                         {metradosNavItems.map((item) => (
+                            <SidebarMenuItem key={item.title}>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={isCurrentUrl(item.href)}
+                                    tooltip={{ children: item.title }}>
+                                    <Link href={item.href} prefetch>
+                                        {item.icon && <item.icon />}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        ))}
+                    </SidebarMenu>
+                </SidebarGroup>
+
+                {/* Gestion de proyectos */}
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel asChild>
+                        <Link href="/gestor-proyectos" prefetch>Gestor Proyectos</Link>
+                    </SidebarGroupLabel>
+                    <SidebarMenu>
+                        {gestorProyectos.map((item) => (
                             <SidebarMenuItem key={item.title}>
                                 <SidebarMenuButton
                                     asChild

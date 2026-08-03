@@ -12,9 +12,13 @@ export function AppShell({ children, variant = 'header' }: Props) {
 
     if (variant === 'header') {
         return (
-            <div className="flex min-h-screen w-full flex-col">{children}</div>
+            <div className="flex min-h-screen w-full flex-col overflow-hidden">{children}</div>
         );
     }
 
-    return <SidebarProvider defaultOpen={isOpen}>{children}</SidebarProvider>;
+    return (
+        <SidebarProvider defaultOpen={isOpen}>
+            <div className="flex min-h-screen w-full overflow-hidden">{children}</div>
+        </SidebarProvider>
+    );
 }

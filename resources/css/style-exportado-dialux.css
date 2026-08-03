@@ -169,6 +169,8 @@ body {
     font-size: 17px;
     font-weight: bold;
     color: #0f172a;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .section-subtitle {
@@ -177,6 +179,8 @@ body {
     border-left: 3px solid #0d9488;
     color: #64748b;
     font-size: 10px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .meta-grid,
@@ -362,6 +366,8 @@ table th.number {
     font-size: 18px;
     font-weight: bold;
     line-height: 1.12;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .cover-subtitle {
@@ -1015,13 +1021,29 @@ table th.number {
     word-break: break-word;
 }
 
-.verification-check {
+/*
+ * Estado de verificación normativa por métrica (ver RequirementEvaluation en
+ * el modelo de datos). No debe depender solo del color: cada estado también
+ * lleva su propia etiqueta de texto ("Conforme" / "No conforme" / "No evaluado").
+ */
+.verification-status {
     display: inline-block;
-    width: 4mm;
-    height: 2.2mm;
-    border-left: 1.4px solid #22c55e;
-    border-bottom: 1.4px solid #22c55e;
-    transform: rotate(-45deg);
+    font-weight: 600;
+    font-size: 8px;
+    white-space: normal;
+}
+
+.verification-status.status-pass {
+    color: #15803d;
+}
+
+.verification-status.status-fail {
+    color: #b91c1c;
+}
+
+.verification-status.status-not-evaluated,
+.verification-status.status-stale {
+    color: #64748b;
 }
 
 .ambient-note {
@@ -1271,6 +1293,16 @@ table th.number {
     vertical-align: top;
     line-height: 1.4;
     font-size: 9.5px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.glossary-letter-heading {
+    font-size: 12px;
+    font-weight: bold;
+    color: #0f172a;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 1mm;
 }
 
 /* ── Ambient summary image + 2-col layout ───────────────────────────── */

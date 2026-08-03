@@ -170,8 +170,12 @@ export type RendimientoModo = 'dia' | 'hora' | 'global';
 export interface ACUComponenteRow {
     id?: number;
     insumo_id?: number | null;
+    // Código INEI corto (diccionario.codigo, ej. "47") — usado por la Fórmula Polinómica.
     cod_insumo?: string | null;
     codigo?: string | null;
+    // Código compuesto completo del catálogo (insumo_productos.codigo_producto, ej.
+    // "021060001"), conservado aparte de cod_insumo para referencia futura.
+    codigo_producto?: string | null;
     proveedor?: string | null;
     descripcion: string;
     unidad?: string | null;

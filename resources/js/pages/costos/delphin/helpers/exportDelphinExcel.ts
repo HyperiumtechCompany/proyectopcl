@@ -2,8 +2,22 @@
 
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
+
+// presupuesto_general.partida se guarda sin padding ("4.1.1.1") pero
+// presupuesto_acus.partida sí lleva padding de 2 dígitos por segmento
+// ("04.01.01.01") — mismo criterio que normalizePartidaCode() en
+// CostoDatabaseService.php y normalizedPartida() en InsumosConsolidadosModal.tsx.
+// Comparar los strings tal cual nunca coincide y descarta todos los ACUs.
+function normalizedPartida(value: string): string {
+    return value
+        .split('.')
+        .filter(Boolean)
+        .map((part) => part.padStart(2, '0'))
+        .join('.');
+}
 
 // ─── ESPECIALIDADES ─────────────────────────────────────────────────────────────
 
@@ -711,6 +725,141 @@ async function buildFormulaPolinomicaSheet(
     ws.views = [{}];
 }
 
+async function buildAcusSheet(
+    ws: ExcelJS.Worksheet,
+    acusData: any[],
+    filteredRows: DelphinRow[],
+    proyecto: any,
+    projectName: string,
+    workbook: ExcelJS.Workbook
+) {
+    const totalColumnas = 9;
+    ws.getColumn(1).width = 5;
+    ws.getColumn(2).width = 8;   // Ind.
+    ws.getColumn(3).width = 11;  // Cod. Elect.
+    ws.getColumn(4).width = 45;  // Descripción
+    ws.getColumn(5).width = 10;  // Unidad
+    ws.getColumn(6).width = 12;  // Recursos
+    ws.getColumn(7).width = 12;  // Cantidad
+    ws.getColumn(8).width = 13;  // Precio
+    ws.getColumn(9).width = 15;  // Parcial
+
+    let filaActual = await buildHeader(workbook, ws, projectName, proyecto, totalColumnas, 'ANÁLISIS DE PRECIOS UNITARIOS');
+
+    const filteredPartidas = new Set(filteredRows.map(r => normalizedPartida(String(r.partida ?? ''))));
+    // presupuesto_acus.partida guarda el código con padding ("04.01.01.01"); se
+    // muestra con el mismo formato que la hoja "Presupuesto General" (sin
+    // padding, "4.1.1.1") para que ambas hojas coincidan visualmente.
+    const partidaDisplayByNormalized = new Map(
+        filteredRows.map(r => [normalizedPartida(String(r.partida ?? '')), String(r.partida ?? '')]),
+    );
+
+    for (const acu of acusData) {
+        const partidaNorm = normalizedPartida(String(acu.partida ?? ''));
+        if (filteredRows.length > 0 && !filteredPartidas.has(partidaNorm)) continue;
+        const partidaDisplay = partidaDisplayByNormalized.get(partidaNorm) ?? acu.partida;
+
+        ws.mergeCells(filaActual, 3, filaActual, 6);
+        ws.mergeCells(filaActual, 7, filaActual, 8);
+        ws.getCell(filaActual, 2).value = `Partida: ${partidaDisplay}`;
+        ws.getCell(filaActual, 3).value = acu.descripcion;
+        ws.getCell(filaActual, 7).value = `Rendimiento: ${Number(acu.rendimiento ?? 0).toFixed(2)} ${acu.unidad ?? ''}/Día`;
+        ws.getCell(filaActual, 9).value = `Costo unitario por ${acu.unidad ?? ''}: ${Number(acu.costo_unitario_total).toFixed(2)}`;
+
+        for (let c = 2; c <= 9; c++) {
+            const cell = ws.getCell(filaActual, c);
+            font(cell, C.titulo0Fg, true, 10);
+            fill(cell, C.titulo0Bg);
+            border(cell);
+            if (c === 9) cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            else cell.alignment = { vertical: 'middle' };
+        }
+        ws.getRow(filaActual).height = 20;
+        filaActual++;
+
+        const drawSection = (title: string, data: any[]) => {
+            if (!data || data.length === 0) return;
+
+            ws.mergeCells(filaActual, 2, filaActual, 9);
+            ws.getCell(filaActual, 2).value = title;
+            font(ws.getCell(filaActual, 2), C.titulo1Fg, true, 9);
+            fill(ws.getCell(filaActual, 2), C.titulo1Bg);
+            for (let c = 2; c <= 9; c++) border(ws.getCell(filaActual, c));
+            ws.getRow(filaActual).height = 18;
+            filaActual++;
+
+            ['Ind.', 'Cod. Elect.', 'Descripción', 'Unidad', 'Cuadrilla', 'Cantidad', 'Precio', 'Parcial'].forEach((h, i) => {
+                const cell = ws.getCell(filaActual, i + 2);
+                cell.value = h;
+                font(cell, C.ganttHdFg, true, 9);
+                fill(cell, C.ganttHdBg);
+                border(cell);
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+            ws.getRow(filaActual).height = 18;
+            filaActual++;
+
+            let subtotal = 0;
+            data.forEach((row: any) => {
+                // "Ind." y "Cod. Elect." muestran el mismo código INEI (cod_insumo) —
+                // así lo confirmó el usuario a partir del reporte de referencia S10.
+                const codInsumo = row.cod_insumo ?? row.codigo ?? '';
+                ws.getCell(filaActual, 2).value = codInsumo;
+                ws.getCell(filaActual, 3).value = codInsumo;
+                ws.getCell(filaActual, 4).value = row.descripcion;
+                ws.getCell(filaActual, 5).value = row.unidad;
+                ws.getCell(filaActual, 6).value = row.recursos ? Number(row.recursos) : '';
+                ws.getCell(filaActual, 7).value = Number(row.cantidad);
+                ws.getCell(filaActual, 8).value = Number(row.precio_unitario || row.precio_hora || 0);
+                ws.getCell(filaActual, 9).value = Number(row.parcial);
+
+                for (let c = 2; c <= 9; c++) {
+                    const cell = ws.getCell(filaActual, c);
+                    font(cell, C.leafFg, false, 9);
+                    border(cell);
+                    if (c === 2 || c === 3) {
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    } else if (c >= 6) {
+                        cell.numFmt = '#,##0.00';
+                        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                    } else {
+                        cell.alignment = { vertical: 'middle' };
+                    }
+                }
+                subtotal += Number(row.parcial);
+                ws.getRow(filaActual).height = 16;
+                filaActual++;
+            });
+
+            ws.mergeCells(filaActual, 2, filaActual, 8);
+            ws.getCell(filaActual, 2).value = `Costo de ${title}`;
+            ws.getCell(filaActual, 9).value = subtotal;
+            for (let c = 2; c <= 9; c++) {
+                const cell = ws.getCell(filaActual, c);
+                font(cell, C.leafFg, true, 9);
+                border(cell);
+                if (c === 9) {
+                    cell.numFmt = '#,##0.00';
+                    cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                } else if (c === 2) {
+                    cell.alignment = { horizontal: 'right', vertical: 'middle' };
+                }
+            }
+            ws.getRow(filaActual).height = 18;
+            filaActual++;
+        };
+
+        drawSection('Mano de Obra', acu.mano_de_obra);
+        drawSection('Materiales', acu.materiales);
+        drawSection('Equipos', acu.equipos);
+        drawSection('Subcontratos', acu.subcontratos);
+        drawSection('Subpartidas', acu.subpartidas);
+
+        filaActual += 2;
+    }
+}
+
+
 export async function exportDelphinExcel(
     content: DelphinExportContent,
     rows: DelphinRow[],
@@ -731,6 +880,16 @@ export async function exportDelphinExcel(
     if (content === 'budget_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Presupuesto General');
         await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);
+        
+        try {
+            const res = await axios.get(`/costos/proyectos/${proyecto.id}/presupuesto/acus/export-data`);
+            if (res.data?.success && res.data.data) {
+                const wsAcus = wb.addWorksheet('ACUs');
+                await buildAcusSheet(wsAcus, res.data.data, filteredRows, proyecto, projectName, wb);
+            }
+        } catch (e) {
+            console.error("Error fetching ACUs", e);
+        }
     }
     if (content === 'gantt_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Cronograma General');
@@ -859,7 +1018,7 @@ export async function exportInsumosConsolidadosExcel(
                 font(cell, C.leafFg, false, 10);
                 border(cell);
                 if (i === 3) {
-                    cell.numFmt = '#,##0.0000';
+                    cell.numFmt = '#,##0.000';
                     cell.alignment = { horizontal: 'right', vertical: 'middle' };
                 } else if (i === 4 || i === 5) {
                     cell.numFmt = '#,##0.00';
@@ -924,7 +1083,7 @@ export async function exportInsumosConsolidadosExcel(
             colMaxLen[0] = Math.max(colMaxLen[0], String(row.codigo || '-').length);
             colMaxLen[1] = Math.max(colMaxLen[1], String(row.descripcion || '').length);
             colMaxLen[2] = Math.max(colMaxLen[2], String(row.unidad || '').length);
-            colMaxLen[3] = Math.max(colMaxLen[3], row.cantidad.toLocaleString('es-PE', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).length);
+            colMaxLen[3] = Math.max(colMaxLen[3], row.cantidad.toLocaleString('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).length);
             colMaxLen[4] = Math.max(colMaxLen[4], row.precio.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
             colMaxLen[5] = Math.max(colMaxLen[5], row.parcial.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length);
             colMaxLen[6] = Math.max(colMaxLen[6], String(row.usos).length);
@@ -952,5 +1111,4 @@ export async function exportInsumosConsolidadosExcel(
         `${safeName}.xlsx`,
     );
 }
-
 

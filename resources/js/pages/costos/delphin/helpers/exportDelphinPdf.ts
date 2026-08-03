@@ -1,8 +1,22 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
+import axios from 'axios';
 import type { DelphinRow } from '../types';
 import type { DelphinExportContent } from './exportDelphin';
+
+// presupuesto_general.partida se guarda sin padding ("4.1.1.1") pero
+// presupuesto_acus.partida sí lleva padding de 2 dígitos por segmento
+// ("04.01.01.01") — mismo criterio que normalizePartidaCode() en
+// CostoDatabaseService.php y normalizedPartida() en InsumosConsolidadosModal.tsx.
+// Comparar los strings tal cual nunca coincide y descarta todos los ACUs.
+function normalizedPartida(value: string): string {
+    return value
+        .split('.')
+        .filter(Boolean)
+        .map((part) => part.padStart(2, '0'))
+        .join('.');
+}
 
 // ── Colores RGB para jsPDF ────────────────────────────────────────────────────
 type RGB = [number, number, number];
@@ -417,6 +431,116 @@ async function buildFormulaPolinomicaBlock(
     return (doc as any).lastAutoTable.finalY + 4;
 }
 
+// ── ACUs ───────────────────────────────────────────────────────────────
+async function buildAcusPdf(doc: jsPDF, acusData: any[], filteredRows: DelphinRow[], projectName: string, proyecto: any) {
+    let startY = await addPageHeader(doc, projectName, 'ANÁLISIS DE PRECIOS UNITARIOS', proyecto);
+    const filteredPartidas = new Set(filteredRows.map(r => normalizedPartida(String(r.partida ?? ''))));
+    // presupuesto_acus.partida guarda el código con padding ("04.01.01.01"); se
+    // muestra con el mismo formato que la hoja/tabla "Presupuesto General" (sin
+    // padding, "4.1.1.1") para que ambas coincidan visualmente.
+    const partidaDisplayByNormalized = new Map(
+        filteredRows.map(r => [normalizedPartida(String(r.partida ?? '')), String(r.partida ?? '')]),
+    );
+
+    for (const acu of acusData) {
+        const partidaNorm = normalizedPartida(String(acu.partida ?? ''));
+        if (filteredRows.length > 0 && !filteredPartidas.has(partidaNorm)) continue;
+        const partidaDisplay = partidaDisplayByNormalized.get(partidaNorm) ?? acu.partida;
+
+        // Add a new page for each ACU if it's too close to the bottom (optional, but good for neatness)
+        if (startY > doc.internal.pageSize.getHeight() - 40) {
+            doc.addPage('a4', 'landscape');
+            startY = await addPageHeader(doc, projectName, 'ANÁLISIS DE PRECIOS UNITARIOS', proyecto);
+        }
+
+        // Header for ACU
+        autoTable(doc, {
+            startY,
+            margin: { left: 10, right: 10 },
+            theme: 'grid',
+            head: [],
+            body: [
+                [
+                    { content: `Partida: ${partidaDisplay}`, colSpan: 1, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
+                    { content: acu.descripcion, colSpan: 2, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
+                    { content: `Rendimiento: ${Number(acu.rendimiento ?? 0).toFixed(2)} ${acu.unidad ?? ''}/Día`, colSpan: 2, styles: { fontStyle: 'bold', fillColor: C.nivel1!, textColor: C.fgLight! } },
+                    { content: `Costo unitario por ${acu.unidad ?? ''}: ${Number(acu.costo_unitario_total).toFixed(2)}`, colSpan: 1, styles: { fontStyle: 'bold', halign: 'right', fillColor: C.nivel1!, textColor: C.fgLight! } },
+                ]
+            ],
+            styles: { fontSize: 8, font: 'helvetica' },
+        });
+
+        startY = (doc as any).lastAutoTable.finalY + 2;
+
+        const drawSection = (title: string, data: any[]) => {
+            if (!data || data.length === 0) return;
+
+            // Group header
+            autoTable(doc, {
+                startY,
+                margin: { left: 10, right: 10 },
+                theme: 'grid',
+                head: [[{ content: title, colSpan: 8, styles: { fillColor: C.nivel2!, textColor: C.fgLight!, fontStyle: 'bold' } }]],
+                body: [],
+                styles: { fontSize: 8, font: 'helvetica' },
+            });
+            startY = (doc as any).lastAutoTable.finalY;
+
+            let subtotal = 0;
+            const sectionBody = data.map((row: any) => {
+                subtotal += Number(row.parcial);
+                // "Ind." y "Cod. Elect." muestran el mismo código INEI (cod_insumo) —
+                // así lo confirmó el usuario a partir del reporte de referencia S10.
+                const codInsumo = row.cod_insumo ?? row.codigo ?? '';
+                return [
+                    codInsumo,
+                    codInsumo,
+                    row.descripcion,
+                    row.unidad,
+                    row.recursos ? Number(row.recursos) : '',
+                    Number(row.cantidad),
+                    Number(row.precio_unitario || row.precio_hora || 0),
+                    Number(row.parcial),
+                ];
+            });
+
+            sectionBody.push([
+                { content: `Costo de ${title}`, colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: fmtNum(subtotal), styles: { fontStyle: 'bold' } }
+            ]);
+
+            autoTable(doc, {
+                startY,
+                margin: { left: 10, right: 10 },
+                theme: 'grid',
+                head: [['Ind.', 'Cod. Elect.', 'Descripción', 'Unidad', 'Cuadrilla', 'Cantidad', 'Precio', 'Parcial']],
+                body: sectionBody,
+                styles: { fontSize: 7, font: 'helvetica' },
+                headStyles: { fillColor: C.ganttHd!, textColor: C.fgLight!, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { cellWidth: 12, halign: 'center' },
+                    1: { cellWidth: 16, halign: 'center' },
+                    2: { cellWidth: 'auto' },
+                    3: { cellWidth: 15, halign: 'center' },
+                    4: { cellWidth: 15, halign: 'right' },
+                    5: { cellWidth: 20, halign: 'right' },
+                    6: { cellWidth: 20, halign: 'right' },
+                    7: { cellWidth: 25, halign: 'right' },
+                },
+            });
+            startY = (doc as any).lastAutoTable.finalY + 2;
+        };
+
+        drawSection('Mano de Obra', acu.mano_de_obra);
+        drawSection('Materiales', acu.materiales);
+        drawSection('Equipos', acu.equipos);
+        drawSection('Subcontratos', acu.subcontratos);
+        drawSection('Subpartidas', acu.subpartidas);
+
+        startY += 5;
+    }
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 export async function exportDelphinPdf(
     content: DelphinExportContent,
@@ -447,6 +571,16 @@ export async function exportDelphinPdf(
 
     if (content === 'budget_only' || content === 'budget_gantt') {
         await buildPresupuestoPdf(doc, filteredRows, projectName, projectData);
+
+        try {
+            const res = await axios.get(`/costos/proyectos/${projectData.id}/presupuesto/acus/export-data`);
+            if (res.data?.success && res.data.data) {
+                doc.addPage('a4', 'landscape');
+                await buildAcusPdf(doc, res.data.data, filteredRows, projectName, projectData);
+            }
+        } catch (e) {
+            console.error("Error fetching ACUs", e);
+        }
     }
 
     if (content === 'budget_gantt') {

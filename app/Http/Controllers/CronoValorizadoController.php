@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class CronoValorizadoController extends Controller
 {
@@ -21,307 +25,276 @@ class CronoValorizadoController extends Controller
 
     const MODO_30_DIAS = '30dias';     // Bloques exactos de 30 días (Regla de Inicialización)
 
+    public function __construct(private readonly CostoDatabaseService $dbService) {}
+
     // ─────────────────────────────────────────────────────────────────────────
-    // INDEX — Cruza Gantt + presupuesto_general para calcular el valorizado
+    // INDEX — Cruza Cronograma General + presupuesto_general para calcular el valorizado
     // ─────────────────────────────────────────────────────────────────────────
-public function index(Request $request)
-{
-    $projectId = (int) $request->query('project');
-    $modoCalculo = $request->query('modo', self::MODO_CALENDARIO);
+    public function index(Request $request)
+    {
+        $projectId = (int) $request->query('project');
+        $modoCalculo = $request->query('modo', self::MODO_CALENDARIO);
 
-    if (! $projectId) {
-        abort(404, 'ID de proyecto no recibido');
-    }
+        if (! $projectId) {
+            abort(404, 'ID de proyecto no recibido');
+        }
 
-    $costoProject = CostoProject::findOrFail($projectId);
-    app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
-    $presupuestoId = $this->resolvePresupuestoId();
+        $costoProject = CostoProject::findOrFail($projectId);
+        $this->dbService->setTenantConnection($costoProject->database_name);
+        $presupuestoId = $this->resolvePresupuestoId();
 
-    // ✅ projectData
-    $projectData = [
-        'nombre' => $costoProject->nombre ?? 'PROYECTO',
-        'codigo_cui' => $costoProject->codigo_cui ?? '-',
-        'codigo_local' => $costoProject->codigo_local ?? '-',
-        'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
-        'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
-        'propietario' => $costoProject->unidad_ejecutora ?? '-',
-        'modulo' => 'GENERAL',
-        'plantilla_logo_izq' => $costoProject->plantilla_logo_izq 
-            ? Storage::url($costoProject->plantilla_logo_izq) 
-            : null,
-        'plantilla_logo_der' => $costoProject->plantilla_logo_der 
-            ? Storage::url($costoProject->plantilla_logo_der) 
-            : null,
-    ];
+        $projectData = [
+            'nombre' => $costoProject->nombre ?? 'PROYECTO',
+            'codigo_cui' => $costoProject->codigo_cui ?? '-',
+            'codigo_local' => $costoProject->codigo_local ?? '-',
+            'codigos_modulares' => $costoProject->codigos_modulares ?? '-',
+            'unidad_ejecutora' => $costoProject->unidad_ejecutora ?? '-',
+            'propietario' => $costoProject->unidad_ejecutora ?? '-',
+            'modulo' => 'GENERAL',
+            'plantilla_logo_izq' => $costoProject->plantilla_logo_izq
+                ? Storage::url($costoProject->plantilla_logo_izq)
+                : null,
+            'plantilla_logo_der' => $costoProject->plantilla_logo_der
+                ? Storage::url($costoProject->plantilla_logo_der)
+                : null,
+        ];
 
-    // ✅ Variables por defecto
-    $materialesFormateados = collect([]);
-    $materialesResumen = [
-        'total_materiales' => 0,
-        'presupuesto_total' => 0,
-        'duracion_meses' => 0,
-        'total_partidas' => 0,
-        'mes_pico' => null,
-        'mes_pico_key' => null,
-        'monto_mes_pico' => 0,
-    ];
-    
-    $allItems = [];
-    $periodos = [];
-    $totalPresupuesto = 0;
-    $resumen = $this->resumenVacio();
-    $estaGuardado = false;
-    $diasPorMesProyecto = [];
+        // ── 1. Leer presupuesto_general (TODAS las partidas con metrado > 0) ──
+        $presupuesto = DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->whereNull('deleted_at')
+            ->where('metrado', '>', 0)
+            ->orderBy('item_order')
+            ->get()
+            ->keyBy(fn ($p) => trim($p->partida ?? ''));
 
-    // ── 1. Leer presupuesto_general (TODAS las partidas con metrado > 0) ──
-    $presupuesto = DB::connection('costos_tenant')
-        ->table('presupuesto_general')
-        ->where('presupuesto_id', $presupuestoId)
-        ->whereNull('deleted_at')
-        ->where('metrado', '>', 0)
-        ->orderBy('item_order')
-        ->get()
-        ->keyBy(fn ($p) => trim($p->partida ?? ''));
+        $jerarquiaPresupuesto = DB::connection('costos_tenant')
+            ->table('presupuesto_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->whereNull('deleted_at')
+            ->orderBy('item_order')
+            ->get(['partida', 'descripcion'])
+            ->mapWithKeys(fn ($p) => [trim($p->partida ?? '') => $p->descripcion ?? ''])
+            ->filter(fn ($descripcion, $partida) => $partida !== '' && $descripcion !== '');
 
-    // ✅ Si no hay partidas con metrado, mostrar mensaje
-    if ($presupuesto->isEmpty()) {
+        if ($presupuesto->isEmpty()) {
+            return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
+                'project' => (string) $projectId,
+                'projectName' => $costoProject->nombre,
+                'items' => [],
+                'periodos' => [],
+                'totalPresupuesto' => 0,
+                'resumen' => $this->resumenVacio(),
+                'sinGantt' => false,
+                'estaGuardado' => false,
+                'diasPorMes' => [],
+                'modoCalculo' => $modoCalculo,
+                'jerarquiaPresupuesto' => [],
+                'materiales' => [],
+                'materialesResumen' => $this->materialesResumenVacio(),
+                'projectData' => $projectData,
+            ]);
+        }
+
+        // ── 2. Fechas reales del Cronograma General (no las del proyecto) ──────
+        // El rango de meses del valorizado debe salir de lo que el usuario
+        // programó en Cronograma General (fecha_inicio/fecha_fin por partida),
+        // no de costo_projects.fecha_inicio/fecha_fin — esas son las fechas
+        // "marco" del proyecto y casi siempre cubren un rango mucho más largo
+        // que la duración real programada (ver nota en el chat: 60 días
+        // programados mostraban 7 meses porque antes se usaba el rango del
+        // proyecto completo).
+        $cronoPorPartida = $this->resolveCronoPorPartida($presupuestoId);
+        $fechasProgramadas = $cronoPorPartida->filter(
+            fn ($c) => ! empty($c->fecha_inicio) && ! empty($c->fecha_fin)
+        );
+
+        if ($fechasProgramadas->isNotEmpty()) {
+            $inicio = Carbon::parse($fechasProgramadas->min('fecha_inicio'))->startOfMonth();
+            $fin = Carbon::parse($fechasProgramadas->max('fecha_fin'))->endOfMonth();
+        } else {
+            $inicio = $costoProject->fecha_inicio
+                ? Carbon::parse($costoProject->fecha_inicio)->startOfMonth()
+                : now()->startOfMonth();
+            $fin = $costoProject->fecha_fin
+                ? Carbon::parse($costoProject->fecha_fin)->endOfMonth()
+                : $inicio->copy()->addMonths(5);
+        }
+
+        $periodos = $modoCalculo === self::MODO_30_DIAS
+            ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
+            : $this->generarPeriodosCalendario($inicio, $fin);
+
+        $this->validarLimitePeriodos($periodos);
+        $clavesPeriodos = array_column($periodos, 'key');
+
+        // ── 3. Días por mes ──
+        $diasPorMesProyecto = $this->calcularDiasPorMes(
+            $inicio->toDateString(),
+            $fin->toDateString(),
+            $clavesPeriodos
+        );
+
+        // ── 4. Leer valorizado guardado (edición manual / redistribución previa) ──
+        $valorizadoGuardado = DB::connection('costos_tenant')
+            ->table('cronograma_valorizado')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get()
+            ->keyBy(fn ($v) => trim($v->partida ?? ''));
+
+        $estaGuardado = $valorizadoGuardado->isNotEmpty();
+
+        // ── 5. Construir la lista de items desde presupuesto_general ───────
+        $allItems = [];
+        $totalPresupuesto = 0.0;
+
+        foreach ($presupuesto as $pItem) {
+            $partida = trim($pItem->partida ?? '');
+            $parcial = (float) ($pItem->parcial ?? 0);
+            $metrado = (float) ($pItem->metrado ?? 0);
+            $precio = (float) ($pItem->precio_unitario ?? 0);
+
+            $crono = $cronoPorPartida->get($partida);
+            $fechaInicioItem = $crono->fecha_inicio ?? null;
+            $fechaFinItem = $crono->fecha_fin ?? null;
+
+            $valRow = $valorizadoGuardado->get($partida);
+            if ($valRow) {
+                // El usuario ya guardó/editó manualmente esta distribución — se respeta.
+                $distribucion = $this->normalizarDistribucionMensual(
+                    json_decode($valRow->distribucion_mensual, true) ?? [],
+                    $periodos,
+                    $parcial
+                );
+            } elseif ($fechaInicioItem && $fechaFinItem && $parcial > 0) {
+                // Prorrateo real según las fechas de ESTA partida en Cronograma General.
+                $distribucion = $this->distribuir(
+                    $parcial, $fechaInicioItem, $fechaFinItem,
+                    $clavesPeriodos, $periodos, $modoCalculo
+                );
+            } else {
+                // Partida sin programar aún — reparto uniforme como respaldo.
+                $distribucion = $this->distribucionUniforme($parcial, $periodos);
+            }
+
+            $allItems[] = [
+                'id' => (string) $pItem->id,
+                'item' => $partida,
+                'descripcion' => $pItem->descripcion ?? '',
+                'und' => $pItem->unidad ?? '',
+                'metrado' => $metrado,
+                'precio' => $precio,
+                'parcial' => $parcial,
+                'is_leaf' => true,
+                'distribucion' => $distribucion,
+                'parent_id' => '0',
+                'start_date' => $fechaInicioItem,
+                'end_date' => $fechaFinItem,
+            ];
+
+            $totalPresupuesto += $parcial;
+        }
+
+        $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
+
+        // ── 6. Materiales / mano de obra / equipos / subcontratos / subpartidas ──
+        // desde los ACUs, distribuidos por las mismas fechas de Cronograma General.
+        try {
+            [$materialesFormateados, $materialesResumen] = $this->construirMaterialesDesdeAcus(
+                $presupuestoId, $presupuesto, $cronoPorPartida, $periodos, $clavesPeriodos, $modoCalculo
+            );
+        } catch (\Throwable $e) {
+            Log::error('Error generando materiales desde ACU: '.$e->getMessage());
+            $materialesFormateados = collect([]);
+            $materialesResumen = $this->materialesResumenVacio(count($periodos));
+        }
+
         return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
             'project' => (string) $projectId,
             'projectName' => $costoProject->nombre,
-            'items' => [],
-            'periodos' => [],
-            'totalPresupuesto' => 0,
-            'resumen' => $this->resumenVacio(),
+            'items' => $allItems,
+            'periodos' => $periodos,
+            'totalPresupuesto' => $totalPresupuesto,
+            'resumen' => $resumen,
             'sinGantt' => false,
-            'estaGuardado' => false,
-            'diasPorMes' => [],
+            'estaGuardado' => $estaGuardado,
+            'diasPorMes' => $diasPorMesProyecto,
             'modoCalculo' => $modoCalculo,
-            'materiales' => [],
+            'jerarquiaPresupuesto' => $jerarquiaPresupuesto->toArray(),
+            'materiales' => $materialesFormateados->toArray(),
             'materialesResumen' => $materialesResumen,
             'projectData' => $projectData,
         ]);
     }
 
-    // ── 2. Generar periodos basados en fechas del proyecto ──
-    $inicio = $costoProject->fecha_inicio 
-        ? Carbon::parse($costoProject->fecha_inicio)->startOfMonth() 
-        : now()->startOfMonth();
-    $fin = $costoProject->fecha_fin 
-        ? Carbon::parse($costoProject->fecha_fin)->endOfMonth() 
-        : $inicio->copy()->addMonths(5);
+    // ─────────────────────────────────────────────────────────────────────────
+    // STORE — Guarda la distribución mensual editada/redistribuida por el usuario
+    // ─────────────────────────────────────────────────────────────────────────
+    public function store(Request $request): JsonResponse
+    {
+        $request->validate([
+            'project_id' => 'required',
+            'items' => 'required|array',
+        ]);
 
-    $periodos = $modoCalculo === self::MODO_30_DIAS
-        ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
-        : $this->generarPeriodosCalendario($inicio, $fin);
-    
-    $this->validarLimitePeriodos($periodos);
-    $clavesPeriodos = array_column($periodos, 'key');
+        try {
+            $costoProject = CostoProject::findOrFail($request->input('project_id'));
+            $this->dbService->setTenantConnection($costoProject->database_name);
+            $presupuestoId = $this->resolvePresupuestoId();
 
-    // ── 3. Días por mes ──
-    $diasPorMesProyecto = $this->calcularDiasPorMes(
-        $inicio->toDateString(),
-        $fin->toDateString(),
-        $clavesPeriodos
-    );
+            DB::connection('costos_tenant')->beginTransaction();
 
-    // ── 4. Leer valorizado guardado ──────────────────────────────────────
-    $valorizadoGuardado = DB::connection('costos_tenant')
-        ->table('cronograma_valorizado')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get()
-        ->keyBy(fn ($v) => trim($v->partida ?? ''));
+            DB::connection('costos_tenant')
+                ->table('cronograma_valorizado')
+                ->where('presupuesto_id', $presupuestoId)
+                ->delete();
 
-    $estaGuardado = $valorizadoGuardado->isNotEmpty();
-
-    // ── 5. Construir árbol de items desde presupuesto_general ──────────
-    foreach ($presupuesto as $pItem) {
-        $partida = trim($pItem->partida ?? '');
-        $parcial = (float) ($pItem->parcial ?? 0);
-        $metrado = (float) ($pItem->metrado ?? 0);
-        $precio = (float) ($pItem->precio_unitario ?? 0);
-        
-        $isLeaf = true;
-        
-        // Distribución uniforme entre periodos
-        $distribucion = [];
-        $countPeriodos = count($periodos);
-        foreach ($periodos as $periodo) {
-            $key = $periodo['key'];
-            $distribucion[$key] = [
-                'monto' => $parcial > 0 ? round($parcial / $countPeriodos, 2) : 0,
-                'porcentaje' => $parcial > 0 ? round((($parcial / $countPeriodos) / $parcial) * 100, 6) : 0,
-            ];
-        }
-        
-        $allItems[] = [
-            'id' => (string) $pItem->id,
-            'item' => $partida,
-            'descripcion' => $pItem->descripcion ?? '',
-            'und' => $pItem->unidad ?? '',
-            'metrado' => $metrado,
-            'precio' => $precio,
-            'parcial' => $parcial,
-            'is_leaf' => $isLeaf,
-            'distribucion' => $distribucion,
-            'parent_id' => '0',
-            'start_date' => $costoProject->fecha_inicio,
-            'end_date' => $costoProject->fecha_fin,
-        ];
-        
-        $totalPresupuesto += $parcial;
-    }
-
-    $resumen = $this->calcularResumen($allItems, $periodos, $totalPresupuesto);
-
-    // ── 6. Generar materiales desde ACUs ──────────────────────────────────
-    try {
-        $acus = DB::connection('costos_tenant')
-            ->table('presupuesto_acus')
-            ->where('presupuesto_id', $presupuestoId)
-            ->whereNotNull('materiales')
-            ->where('materiales', '!=', 'null')
-            ->where('materiales', '!=', '')
-            ->get();
-
-        $materialesConsolidados = [];
-        $acumuladoMensual = [];
-        $presupuestoTotalMateriales = 0;
-
-        foreach ($periodos as $periodo) {
-            $acumuladoMensual[$periodo['key']] = 0;
-        }
-
-        foreach ($acus as $acu) {
-            $material = json_decode($acu->materiales, true);
-
-            if (is_array($material) && !isset($material[0]) && !empty($material)) {
-                $material = [$material];
-            }
-            if (!is_array($material) || empty($material)) continue;
-
-            $partida = trim($acu->partida);
-            $presupuestoItem = $presupuesto->get($partida);
-            $metrado = $presupuestoItem ? (float)($presupuestoItem->metrado ?? 0) : 0;
-            if ($metrado <= 0) continue;
-
-            foreach ($material as $item) {
-                $unidad      = $item['unidad'] ?? '';
-                $cantidad    = (float)($item['cantidad'] ?? 0);
-                $parcial     = (float)($item['parcial'] ?? 0);
-                $precio      = $cantidad > 0 ? $parcial / $cantidad : 0;
-                $descripcion = $item['descripcion'] ?? 'Sin descripción';
-                $insumoId    = $item['insumo_id'] ?? $item['codigo'] ?? null;
-
-                if ($cantidad <= 0 || $precio <= 0) continue;
-
-                $cantidadTotal = $cantidad * $metrado;
-                $costoTotal    = $cantidadTotal * $precio;
-                if ($cantidadTotal <= 0) continue;
-
-                $clave = $insumoId ? (string)$insumoId : ($descripcion . '|' . $unidad);
-
-                if (!isset($materialesConsolidados[$clave])) {
-                    $tipo = $this->determinarTipo($insumoId ? (string)$insumoId : $descripcion);
-
-                    $distInicial = [];
-                    foreach ($periodos as $periodo) {
-                        $distInicial[$periodo['key']] = ['cantidad' => 0, 'monto' => 0];
-                    }
-
-                    $materialesConsolidados[$clave] = [
-                        'descripcion'    => $descripcion,
-                        'unidad'         => $unidad,
-                        'tipo'           => $tipo,
-                        'precio'         => round($precio, 2),
-                        'cantidad_total' => 0,
-                        'costo_total'    => 0,
-                        'distribucion'   => $distInicial,
-                    ];
+            $insertData = [];
+            foreach ($request->input('items') as $index => $item) {
+                $partida = trim((string) ($item['item'] ?? ''));
+                if ($partida === '') {
+                    continue;
                 }
 
-                $meses = count($periodos);
-                $materialesConsolidados[$clave]['cantidad_total'] += $cantidadTotal;
-                $materialesConsolidados[$clave]['costo_total']    += $costoTotal;
+                $parentIdRaw = $item['parent_id'] ?? null;
+                $parentId = (is_numeric($parentIdRaw) && (int) $parentIdRaw > 0)
+                    ? (int) $parentIdRaw
+                    : null;
 
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $materialesConsolidados[$clave]['distribucion'][$key]['cantidad'] += 
-                        round($cantidadTotal / $meses, 4);
-                    $materialesConsolidados[$clave]['distribucion'][$key]['monto'] += 
-                        round($costoTotal / $meses, 2);
-                    $acumuladoMensual[$key] += $costoTotal / $meses;
-                }
-
-                $presupuestoTotalMateriales += $costoTotal;
+                $insertData[] = [
+                    'presupuesto_id' => $presupuestoId,
+                    'item_order' => $index + 1,
+                    'partida' => $partida,
+                    'descripcion' => $item['descripcion'] ?? '',
+                    'presupuesto_total' => (float) ($item['parcial'] ?? 0),
+                    'distribucion_mensual' => json_encode($item['distribucion'] ?? []),
+                    'parent_id' => $parentId,
+                    'nivel' => substr_count($partida, '.') + 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
             }
-        }
 
-        $materialesFormateados = collect(array_values($materialesConsolidados))
-            ->map(function ($m) {
-                $m['cantidad_total'] = round($m['cantidad_total'], 4);
-                $m['costo_total']    = round($m['costo_total'], 2);
-                return $m;
-            });
-
-        $totalMateriales = $materialesFormateados->count();
-
-        $mesPicoKey = '';
-        $mesPicoMonto = 0;
-        foreach ($acumuladoMensual as $key => $monto) {
-            if ($monto > $mesPicoMonto) {
-                $mesPicoMonto = $monto;
-                $mesPicoKey = $key;
+            foreach (array_chunk($insertData, 500) as $chunk) {
+                DB::connection('costos_tenant')->table('cronograma_valorizado')->insert($chunk);
             }
-        }
-        $mesPicoLabel = '';
-        foreach ($periodos as $p) {
-            if ($p['key'] === $mesPicoKey) {
-                $mesPicoLabel = $p['labelCal'] ?? $p['label'];
-                break;
-            }
-        }
 
-        $materialesResumen = [
-            'total_materiales' => $totalMateriales,
-            'presupuesto_total' => round($presupuestoTotalMateriales, 2),
-            'duracion_meses' => count($periodos),
-            'total_partidas' => $totalMateriales,
-            'mes_pico' => $mesPicoLabel,
-            'mes_pico_key' => $mesPicoKey,
-            'monto_mes_pico' => round($mesPicoMonto, 2),
-        ];
+            DB::connection('costos_tenant')->commit();
 
-    } catch (\Exception $e) {
-        \Log::error('Error generando materiales desde ACU: ' . $e->getMessage());
-        $materialesFormateados = collect([]);
-        $materialesResumen = [
-            'total_materiales' => 0,
-            'presupuesto_total' => 0,
-            'duracion_meses' => count($periodos ?? []),
-            'total_partidas' => 0,
-            'mes_pico' => null,
-            'mes_pico_key' => null,
-            'monto_mes_pico' => 0,
-        ];
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Cronograma valorizado guardado correctamente.',
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('costos_tenant')->rollBack();
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al guardar: '.$e->getMessage(),
+            ], 500);
+        }
     }
-
-    // ── 7. FINALMENTE el return ──────────────────────────────────────────
-    return Inertia::render('costos/cronogramas/valorizado/CronogramaValorizado', [
-        'project' => (string) $projectId,
-        'projectName' => $costoProject->nombre,
-        'items' => $allItems,
-        'periodos' => $periodos,
-        'totalPresupuesto' => $totalPresupuesto,
-        'resumen' => $resumen,
-        'sinGantt' => false,
-        'estaGuardado' => $estaGuardado,
-        'diasPorMes' => $diasPorMesProyecto,
-        'modoCalculo' => $modoCalculo,
-        'materiales' => $materialesFormateados->toArray(),
-        'materialesResumen' => $materialesResumen,
-        'projectData' => $projectData,
-    ]);
-}
 
     // ─────────────────────────────────────────────────────────────────────────
     // DESTROY — Elimina el valorizado guardado
@@ -334,7 +307,7 @@ public function index(Request $request)
         }
 
         $costoProject = CostoProject::findOrFail($projectId);
-        app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
+        $this->dbService->setTenantConnection($costoProject->database_name);
         $presupuestoId = $this->resolvePresupuestoId();
 
         $deleted = DB::connection('costos_tenant')
@@ -348,60 +321,6 @@ public function index(Request $request)
         ]);
     }
 
-    private function generarPeriodosDesdeFechas(?string $minFecha, ?string $maxFecha, string $modo): array
-    {
-        $inicio = $minFecha ? Carbon::parse($minFecha)->startOfMonth() : now()->startOfMonth();
-        $fin = $maxFecha ? Carbon::parse($maxFecha)->endOfMonth() : $inicio->copy()->addMonths(5);
-
-        if ($modo === self::MODO_30_DIAS) {
-            return $this->generarPeriodos30Dias(
-                $minFecha ?? now()->toDateString(),
-                $maxFecha ?? now()->addMonths(5)->toDateString()
-            );
-        }
-
-        return $this->generarPeriodosCalendario($inicio, $fin);
-    }
-
-    private function generarPeriodosVigentes(int $presupuestoId, string $modo): array
-    {
-        $fechas = DB::connection('costos_tenant')
-            ->table('cronograma_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->whereNotNull('fecha_inicio')
-            ->whereNotNull('fecha_fin')
-            ->selectRaw('MIN(fecha_inicio) as min_fecha, MAX(fecha_fin) as max_fecha')
-            ->first();
-
-        return $this->generarPeriodosDesdeFechas($fechas?->min_fecha, $fechas?->max_fecha, $modo);
-    }
-
-    private function validarLimitePeriodos(array $periodos): void
-    {
-        if (count($periodos) > self::MAX_PERIODOS) {
-            abort(422, 'El cronograma valorizado admite como máximo '.self::MAX_PERIODOS.' periodos.');
-        }
-    }
-
-    private function normalizarDistribucionMensual(array $distribucion, array $periodos, float $parcial): array
-    {
-        $normalizada = [];
-
-        foreach ($periodos as $periodo) {
-            $key = $periodo['key'];
-            $monto = round((float) ($distribucion[$key]['monto'] ?? 0), 2);
-
-            $normalizada[$key] = [
-                'monto' => $monto,
-                'porcentaje' => $parcial > 0
-                    ? round(($monto / $parcial) * 100, 6)
-                    : 0.0,
-            ];
-        }
-
-        return $normalizada;
-    }
-
     // =========================================================================
     // GENERADORES DE PERÍODOS
     // =========================================================================
@@ -409,32 +328,31 @@ public function index(Request $request)
     /**
      * REGLA DE EJECUCIÓN: Cortes al último día de cada mes calendario.
      */
-  private function generarPeriodosCalendario($inicio, $fin): array
-{
-    //  Convertir a Carbon si es CarbonImmutable
-    if ($inicio instanceof \Carbon\CarbonImmutable) {
-        $inicio = Carbon::createFromImmutable($inicio);
-    }
-    if ($fin instanceof \Carbon\CarbonImmutable) {
-        $fin = Carbon::createFromImmutable($fin);
-    }
-    
-    $periodos = [];
-    $mesNum = 1;
-    $cursor = $inicio->copy()->startOfMonth();
+    private function generarPeriodosCalendario($inicio, $fin): array
+    {
+        if ($inicio instanceof CarbonImmutable) {
+            $inicio = Carbon::createFromImmutable($inicio);
+        }
+        if ($fin instanceof CarbonImmutable) {
+            $fin = Carbon::createFromImmutable($fin);
+        }
 
-    while ($cursor->lte($fin)) {
-        $periodos[] = [
-            'label' => "MES {$mesNum}",
-            'labelCal' => ucfirst($cursor->translatedFormat('M Y')),
-            'key' => $cursor->format('Y-m'),
-        ];
-        $cursor->addMonth();
-        $mesNum++;
-    }
+        $periodos = [];
+        $mesNum = 1;
+        $cursor = $inicio->copy()->startOfMonth();
 
-    return $periodos;
-}
+        while ($cursor->lte($fin)) {
+            $periodos[] = [
+                'label' => "MES {$mesNum}",
+                'labelCal' => ucfirst($cursor->translatedFormat('M Y')),
+                'key' => $cursor->format('Y-m'),
+            ];
+            $cursor->addMonth();
+            $mesNum++;
+        }
+
+        return $periodos;
+    }
 
     /**
      * REGLA DE INICIALIZACIÓN: Bloques exactos de 30 días.
@@ -464,6 +382,21 @@ public function index(Request $request)
     // DISTRIBUCIÓN DE COSTOS
     // =========================================================================
 
+    private function distribucionUniforme(float $parcial, array $periodos): array
+    {
+        $countPeriodos = count($periodos);
+        $distribucion = [];
+
+        foreach ($periodos as $periodo) {
+            $distribucion[$periodo['key']] = [
+                'monto' => $parcial > 0 && $countPeriodos > 0 ? round($parcial / $countPeriodos, 2) : 0.0,
+                'porcentaje' => $parcial > 0 && $countPeriodos > 0 ? round((1 / $countPeriodos) * 100, 6) : 0.0,
+            ];
+        }
+
+        return $distribucion;
+    }
+
     /**
      * REGLA DE EJECUCIÓN (Prorrateo MS Project / Delfín):
      * Distribuye proporcional a días reales por mes calendario.
@@ -484,7 +417,6 @@ public function index(Request $request)
         $inicio = Carbon::parse($startDate);
         $fin = Carbon::parse($endDate);
 
-        // Tarea de un solo día
         if ($inicio->eq($fin)) {
             $key = $inicio->format('Y-m');
             if (isset($distribucion[$key])) {
@@ -494,7 +426,6 @@ public function index(Request $request)
             return $distribucion;
         }
 
-        // Contar días por mes calendario
         $diasPorMes = [];
         $cursor = $inicio->copy();
         while ($cursor->lte($fin)) {
@@ -522,7 +453,6 @@ public function index(Request $request)
             $ultimaKey = $key;
         }
 
-        // ── Precisión Delfín ──
         if ($ultimaKey !== null) {
             $residuo = round($parcial - $sumaAsignada, 2);
             $distribucion[$ultimaKey]['monto'] = round($distribucion[$ultimaKey]['monto'] + $residuo, 2);
@@ -560,11 +490,11 @@ public function index(Request $request)
             $pInicio = Carbon::parse($p['key']);
             $pFin = $pInicio->copy()->addDays(29);
 
-            $solape_inicio = $inicio->gt($pInicio) ? $inicio : $pInicio;
-            $solape_fin = $fin->lt($pFin) ? $fin : $pFin;
+            $solapeInicio = $inicio->gt($pInicio) ? $inicio : $pInicio;
+            $solapeFin = $fin->lt($pFin) ? $fin : $pFin;
 
-            if ($solape_inicio->lte($solape_fin)) {
-                $diasPorPeriodo[$p['key']] = $solape_inicio->diffInDays($solape_fin) + 1;
+            if ($solapeInicio->lte($solapeFin)) {
+                $diasPorPeriodo[$p['key']] = $solapeInicio->diffInDays($solapeFin) + 1;
             }
         }
 
@@ -615,198 +545,218 @@ public function index(Request $request)
         return $this->distribuirPorDiasCalendario($parcial, $startDate, $endDate, $clavesPeriodos);
     }
 
-    // =========================================================================
-    // CONSTRUCCIÓN DEL ÁRBOL DE ÍTEMS
-    // =========================================================================
+    private function normalizarDistribucionMensual(array $distribucion, array $periodos, float $parcial): array
+    {
+        $normalizada = [];
 
-    private function construirArbolDesdeCrono(
-        $filas,
-        $tasks,
-        $valorizadoGuardado,
-        array $clavesPeriodos,
-        array $periodos,
-        string $modo
-    ): array {
-        $parentIds = $tasks->pluck('parent')->filter(fn ($p) => $p !== '0')->unique()->values()->toArray();
-        $leafTasks = $tasks->filter(fn ($t) => ! in_array($t['id'], $parentIds));
+        foreach ($periodos as $periodo) {
+            $key = $periodo['key'];
+            $monto = round((float) ($distribucion[$key]['monto'] ?? 0), 2);
 
-        $leafData = [];
-        $totalPresupuesto = 0.0;
-
-        foreach ($leafTasks as $id => $task) {
-            $parcial = (float) ($task['cost'] ?? 0);
-            $valRow = $valorizadoGuardado->get($task['item']);
-
-            if ($valRow) {
-                $distribucion = $this->normalizarDistribucionMensual(
-                    json_decode($valRow->distribucion_mensual, true) ?? [],
-                    $periodos,
-                    $parcial
-                );
-            } elseif (! empty($task['start_date']) && ! empty($task['end_date']) && $parcial > 0) {
-                $distribucion = $this->distribuir(
-                    $parcial, $task['start_date'], $task['end_date'],
-                    $clavesPeriodos, $periodos, $modo
-                );
-            } else {
-                $distribucion = array_fill_keys($clavesPeriodos, ['monto' => 0.0, 'porcentaje' => 0.0]);
-            }
-
-            $leafData[$id] = [
-                'parcial' => $parcial,
-                'distribucion' => $distribucion,
-            ];
-            $totalPresupuesto += $parcial;
-        }
-
-        $sortedTasks = $filas->sortBy('item_order');
-        $itemsMap = [];
-
-        foreach ($sortedTasks as $row) {
-            $id = (string) $row->gantt_id;
-            $parentId = $row->parent_id ? (string) $row->parent_id : '0';
-
-            if (isset($leafData[$id])) {
-                $parcial = $leafData[$id]['parcial'];
-                $distribucion = $leafData[$id]['distribucion'];
-                $isLeaf = true;
-            } else {
-                $parcial = 0.0;
-                $distribucion = array_fill_keys($clavesPeriodos, ['monto' => 0.0, 'porcentaje' => 0.0]);
-                $isLeaf = false;
-            }
-
-            $task = $tasks->get($id) ?? [];
-
-            $itemsMap[$id] = [
-                'id' => $id,
-                'item' => $row->partida,
-                'descripcion' => $row->descripcion,
-                'und' => $row->unidad ?? '',
-                'metrado' => 0.0,
-                'precio' => 0.0,
-                'parcial' => $parcial,
-                'is_leaf' => $isLeaf,
-                'distribucion' => $distribucion,
-                'parent_id' => $parentId,
-                'start_date' => $task['start_date'] ?? null,
-                'end_date' => $task['end_date'] ?? null,
+            $normalizada[$key] = [
+                'monto' => $monto,
+                'porcentaje' => $parcial > 0
+                    ? round(($monto / $parcial) * 100, 6)
+                    : 0.0,
             ];
         }
 
-        $reversed = array_reverse($itemsMap, true);
-        foreach ($reversed as $id => $item) {
-            $parentId = $item['parent_id'];
-            if ($parentId !== '0' && isset($itemsMap[$parentId])) {
-                $itemsMap[$parentId]['parcial'] += $item['parcial'];
-                foreach ($clavesPeriodos as $key) {
-                    $itemsMap[$parentId]['distribucion'][$key]['monto'] +=
-                        $item['distribucion'][$key]['monto'] ?? 0;
-                }
-            }
-        }
-
-        foreach ($itemsMap as &$item) {
-            if (! $item['is_leaf']) {
-                foreach ($clavesPeriodos as $key) {
-                    $item['distribucion'][$key]['porcentaje'] = $item['parcial'] > 0
-                        ? round(($item['distribucion'][$key]['monto'] / $item['parcial']) * 100, 6)
-                        : 0.0;
-                }
-            }
-        }
-
-        $allItems = [];
-        foreach ($sortedTasks as $row) {
-            $id = (string) $row->gantt_id;
-            if (isset($itemsMap[$id])) {
-                $allItems[] = $itemsMap[$id];
-            }
-        }
-
-        return [$allItems, $totalPresupuesto];
+        return $normalizada;
     }
 
-    private function construirArbolDesdePresupuesto(
-        $filas,
-        $tasks,
-        $presupuesto,
-        $valorizadoGuardado,
-        array $clavesPeriodos,
+    // =========================================================================
+    // MATERIALES / MANO DE OBRA / EQUIPOS / SUBCONTRATOS / SUBPARTIDAS
+    // =========================================================================
+
+    /**
+     * Consolida los 5 tipos de recursos de los ACUs (acu_mano_de_obra,
+     * acu_materiales, acu_equipos, acu_subcontratos, acu_subpartidas),
+     * multiplicados por el metrado de su partida, y distribuidos en el
+     * tiempo con las mismas fechas de Cronograma General que usa el
+     * valorizado (o reparto uniforme si la partida no está programada).
+     *
+     * Las tablas de recursos no tienen columna `partida` propia — cuelgan de
+     * `presupuesto_acus` via `acu_id`, y `presupuesto_acus.partida` puede
+     * traer distinto padding de ceros que presupuesto_general.partida (ver
+     * CostoDatabaseService::normalizePartidaCode()), así que el cruce con
+     * presupuesto/cronograma se hace por código normalizado, no por igualdad
+     * exacta de string.
+     *
+     * @return array{0: Collection, 1: array}
+     */
+    private function construirMaterialesDesdeAcus(
+        int $presupuestoId,
+        Collection $presupuesto,
+        Collection $cronoPorPartida,
         array $periodos,
+        array $clavesPeriodos,
         string $modo
     ): array {
-        $sortedFilas = $filas->sortBy('item_order');
-        $allItems = [];
-        $totalPresupuesto = 0.0;
+        $presupuestoPorCodigoNormalizado = $presupuesto->mapWithKeys(
+            fn ($p, $partida) => [$this->dbService->normalizePartidaCode($partida) => $p]
+        );
+        $cronoPorCodigoNormalizado = $cronoPorPartida->mapWithKeys(
+            fn ($c, $partida) => [$this->dbService->normalizePartidaCode($partida) => $c]
+        );
 
-        foreach ($sortedFilas as $row) {
-            $id = (string) $row->gantt_id;
-            $partida = trim($row->partida ?? '');
-            $task = $tasks->get($id) ?? [];
+        $tablasPorTipo = [
+            'mano_de_obra' => 'acu_mano_de_obra',
+            'materiales' => 'acu_materiales',
+            'equipos' => 'acu_equipos',
+            'subcontratos' => 'acu_subcontratos',
+            'subpartidas' => 'acu_subpartidas',
+        ];
 
-            $pItem = $presupuesto->get($partida);
+        $consolidados = [];
+        $acumuladoMensual = array_fill_keys($clavesPeriodos, 0.0);
+        $presupuestoTotal = 0.0;
 
-            // 🔥 REGLA BIDIRECCIONAL: El último en editar define el costo
-            $costoGeneral = (float) ($task['cost'] ?? 0);
-            $costoPresupuesto = $pItem ? (float) ($pItem->parcial ?? 0) : 0;
+        foreach ($tablasPorTipo as $tipo => $tabla) {
+            $rows = DB::connection('costos_tenant')
+                ->table($tabla.' as r')
+                ->join('presupuesto_acus as pa', 'pa.id', '=', 'r.acu_id')
+                ->where('pa.presupuesto_id', $presupuestoId)
+                ->select('r.*', 'pa.partida as partida')
+                ->get();
 
-            $fechaGeneral = $task['updated_at'] ?? $row->updated_at ?? '1970-01-01';
-            $fechaPresupuesto = $pItem->updated_at ?? '1970-01-01';
+            foreach ($rows as $item) {
+                $codigoNormalizado = $this->dbService->normalizePartidaCode(trim($item->partida ?? ''));
+                $presupuestoItem = $presupuestoPorCodigoNormalizado->get($codigoNormalizado);
+                $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0.0;
+                if ($metrado <= 0) {
+                    continue;
+                }
 
-            $fechaGeneralCarbon = Carbon::parse($fechaGeneral);
-            $fechaPresupuestoCarbon = Carbon::parse($fechaPresupuesto);
+                $unidad = $item->unidad ?? '';
+                $cantidad = (float) ($item->cantidad ?? 0);
+                $precio = (float) ($item->precio_unitario ?? $item->precio_hora ?? 0);
+                $factor = (float) ($item->factor_desperdicio ?? 1);
+                $descripcion = $item->descripcion ?? 'Sin descripción';
 
-            if ($fechaGeneralCarbon->gt($fechaPresupuestoCarbon)) {
-                $parcial = $costoGeneral;  // Gana el general
-            } else {
-                $parcial = $costoPresupuesto;  // Gana el presupuesto
+                if ($cantidad <= 0 || $precio <= 0) {
+                    continue;
+                }
+
+                $cantidadTotal = $cantidad * $factor * $metrado;
+                $costoTotal = $cantidadTotal * $precio;
+                if ($cantidadTotal <= 0) {
+                    continue;
+                }
+
+                $crono = $cronoPorCodigoNormalizado->get($codigoNormalizado);
+                $distribucionMonto = ($crono && $crono->fecha_inicio && $crono->fecha_fin)
+                    ? $this->distribuir($costoTotal, $crono->fecha_inicio, $crono->fecha_fin, $clavesPeriodos, $periodos, $modo)
+                    : null;
+
+                $clave = $tipo.'|'.$descripcion.'|'.$unidad;
+                if (! isset($consolidados[$clave])) {
+                    $distInicial = [];
+                    foreach ($periodos as $periodo) {
+                        $distInicial[$periodo['key']] = ['cantidad' => 0.0, 'monto' => 0.0];
+                    }
+                    $consolidados[$clave] = [
+                        'partida_origen' => trim($item->partida ?? ''),
+                        'descripcion_partida' => '',
+                        'descripcion' => $descripcion,
+                        'unidad' => $unidad,
+                        'tipo' => $tipo,
+                        'precio' => round($precio, 2),
+                        'cantidad_total' => 0.0,
+                        'costo_total' => 0.0,
+                        'distribucion' => $distInicial,
+                    ];
+                }
+
+                $consolidados[$clave]['cantidad_total'] += $cantidadTotal;
+                $consolidados[$clave]['costo_total'] += $costoTotal;
+
+                foreach ($periodos as $periodo) {
+                    $key = $periodo['key'];
+                    if ($distribucionMonto !== null) {
+                        $montoMes = $distribucionMonto[$key]['monto'] ?? 0.0;
+                    } else {
+                        $montoMes = count($periodos) > 0 ? $costoTotal / count($periodos) : 0.0;
+                    }
+                    $cantidadMes = $costoTotal > 0 ? $cantidadTotal * ($montoMes / $costoTotal) : 0.0;
+
+                    $consolidados[$clave]['distribucion'][$key]['cantidad'] += round($cantidadMes, 4);
+                    $consolidados[$clave]['distribucion'][$key]['monto'] += round($montoMes, 2);
+                    $acumuladoMensual[$key] += $montoMes;
+                }
+
+                $presupuestoTotal += $costoTotal;
             }
-
-            $isLeaf = $pItem ? (bool) ($pItem->is_leaf ?? true) : false;
-
-            $valRow = $valorizadoGuardado->get($partida);
-            if ($valRow) {
-                $distribucion = $this->normalizarDistribucionMensual(
-                    json_decode($valRow->distribucion_mensual, true) ?? [],
-                    $periodos,
-                    $parcial
-                );
-            } elseif ($isLeaf && ! empty($task['start_date']) && ! empty($task['end_date']) && $parcial > 0) {
-                $distribucion = $this->distribuir(
-                    $parcial, $task['start_date'], $task['end_date'],
-                    $clavesPeriodos, $periodos, $modo
-                );
-            } else {
-                $distribucion = array_fill_keys($clavesPeriodos, ['monto' => 0.0, 'porcentaje' => 0.0]);
-            }
-
-            if ($isLeaf) {
-                $totalPresupuesto += $parcial;
-            }
-
-            $allItems[] = [
-                'id' => $id,
-                'item' => $partida,
-                'descripcion' => $row->descripcion ?? ($pItem->descripcion ?? ''),
-                'und' => $pItem ? ($pItem->unidad ?? '') : ($task['unidad'] ?? ''),
-                'metrado' => $pItem ? (float) ($pItem->metrado ?? 0) : 0.0,
-                'precio' => $pItem ? (float) ($pItem->precio_unitario ?? 0) : 0.0,
-                'parcial' => $parcial,
-                'is_leaf' => $isLeaf,
-                'distribucion' => $distribucion,
-                'parent_id' => $row->parent_id ? (string) $row->parent_id : '0',
-                'start_date' => $task['start_date'] ?? null,
-                'end_date' => $task['end_date'] ?? null,
-            ];
         }
 
-        return [$allItems, $totalPresupuesto];
+        $materialesFormateados = collect(array_values($consolidados))
+            ->map(function ($m) {
+                $m['cantidad_total'] = round($m['cantidad_total'], 4);
+                $m['costo_total'] = round($m['costo_total'], 2);
+
+                return $m;
+            });
+
+        $mesPicoKey = '';
+        $mesPicoMonto = 0.0;
+        foreach ($acumuladoMensual as $key => $monto) {
+            if ($monto > $mesPicoMonto) {
+                $mesPicoMonto = $monto;
+                $mesPicoKey = $key;
+            }
+        }
+        $mesPicoLabel = '';
+        foreach ($periodos as $p) {
+            if ($p['key'] === $mesPicoKey) {
+                $mesPicoLabel = $p['labelCal'] ?? $p['label'];
+                break;
+            }
+        }
+
+        $resumen = [
+            'total_materiales' => $materialesFormateados->count(),
+            'presupuesto_total' => round($presupuestoTotal, 2),
+            'duracion_meses' => count($periodos),
+            'total_partidas' => $materialesFormateados->count(),
+            'mes_pico' => $mesPicoLabel,
+            'mes_pico_key' => $mesPicoKey,
+            'monto_mes_pico' => round($mesPicoMonto, 2),
+        ];
+
+        return [$materialesFormateados, $resumen];
+    }
+
+    private function materialesResumenVacio(int $duracionMeses = 0): array
+    {
+        return [
+            'total_materiales' => 0,
+            'presupuesto_total' => 0,
+            'duracion_meses' => $duracionMeses,
+            'total_partidas' => 0,
+            'mes_pico' => null,
+            'mes_pico_key' => null,
+            'monto_mes_pico' => 0,
+        ];
     }
 
     // =========================================================================
     // HELPERS PRIVADOS
     // =========================================================================
+
+    private function resolveCronoPorPartida(int $presupuestoId): Collection
+    {
+        return DB::connection('costos_tenant')
+            ->table('cronograma_general')
+            ->where('presupuesto_id', $presupuestoId)
+            ->get(['partida', 'fecha_inicio', 'fecha_fin'])
+            ->keyBy(fn ($r) => trim($r->partida ?? ''));
+    }
+
+    private function validarLimitePeriodos(array $periodos): void
+    {
+        if (count($periodos) > self::MAX_PERIODOS) {
+            abort(422, 'El cronograma valorizado admite como máximo '.self::MAX_PERIODOS.' periodos.');
+        }
+    }
 
     private function calcularDiasPorMes(string $startDate, string $endDate, array $clavesPeriodos): array
     {
@@ -883,193 +833,6 @@ public function index(Request $request)
         ];
     }
 
-    // =========================================================================
-    // ENRIQUECER CON DATOS DE PRESUPUESTO GENERAL
-    // =========================================================================
-
-    /**
-     * Sobreescribe metrado, precio_unitario y unidad desde presupuesto_general.
-     * Estos datos son la fuente de verdad para el presupuesto.
-     */
-    private function enriquecerConPresupuesto($items, $presupuesto)
-    {
-        if ($presupuesto->isEmpty()) {
-            return $items;
-        }
-
-        $presupuestoMap = [];
-        foreach ($presupuesto as $pItem) {
-            $partida = trim($pItem->partida ?? '');
-            if ($partida !== '') {
-                $presupuestoMap[$partida] = $pItem;
-            }
-        }
-
-        foreach ($items as &$item) {
-            $partida = trim($item['item'] ?? '');
-            $presupuestoData = $presupuestoMap[$partida] ?? null;
-
-            if ($presupuestoData) {
-                $item['metrado'] = (float) ($presupuestoData->metrado ?? 0);
-                $item['precio'] = (float) ($presupuestoData->precio_unitario ?? 0);
-                $item['und'] = $presupuestoData->unidad ?? $item['und'] ?? '';
-
-                if (! empty($presupuestoData->descripcion)) {
-                    $item['descripcion'] = $presupuestoData->descripcion;
-                }
-
-                // Recalcular parcial si viene vacío
-                if ($item['parcial'] == 0 && $item['metrado'] > 0 && $item['precio'] > 0) {
-                    $item['parcial'] = round($item['metrado'] * $item['precio'], 2);
-                }
-            }
-        }
-
-        return $items;
-    }
-
-    // =========================================================================
-    // 🔥 NUEVOS MÉTODOS PARA SINCRONIZACIÓN BIDIRECCIONAL
-    // =========================================================================
-
-    /**
-     * 🔄 Sincronización bidireccional entre presupuesto_general y cronograma_general
-     *
-     * Principio: El último en editar (comparando updated_at) es la fuente de verdad.
-     * Si cronograma_general.costo cambió, actualizamos presupuesto_general.precio_unitario
-     * Si presupuesto_general.parcial cambió, actualizamos cronograma_general.costo
-     */
-    private function sincronizarCostoPartida(
-        int $presupuestoId,
-        string $partida,
-        float $costoGeneral,
-        float $costoPresupuesto,
-        string $fechaGeneralUpdated,
-        string $fechaPresupuestoUpdated
-    ): void {
-        $fechaGeneral = Carbon::parse($fechaGeneralUpdated);
-        $fechaPresupuesto = Carbon::parse($fechaPresupuestoUpdated);
-
-        // Comparar quién fue el último en editar (con tolerancia de 1 segundo)
-        if ($fechaGeneral->gt($fechaPresupuesto)) {
-            // El usuario editó cronograma_general.costo → actualizamos presupuesto_general
-            $presupuestoRow = DB::connection('costos_tenant')
-                ->table('presupuesto_general')
-                ->where('presupuesto_id', $presupuestoId)
-                ->where('partida', $partida)
-                ->whereNull('deleted_at')
-                ->first();
-
-            if ($presupuestoRow && $presupuestoRow->metrado > 0) {
-                $nuevoPrecio = $costoGeneral / $presupuestoRow->metrado;
-                DB::connection('costos_tenant')
-                    ->table('presupuesto_general')
-                    ->where('id', $presupuestoRow->id)
-                    ->update([
-                        'precio_unitario' => round($nuevoPrecio, 4),
-                        //'parcial' => $costoGeneral,
-                        'updated_at' => now(),
-                    ]);
-            }
-        } elseif ($fechaPresupuesto->gt($fechaGeneral)) {
-            // El usuario editó presupuesto_general → actualizamos cronograma_general.costo
-            DB::connection('costos_tenant')
-                ->table('cronograma_general')
-                ->where('presupuesto_id', $presupuestoId)
-                ->where('partida', $partida)
-                ->update([
-                    'avance' => 0, // Opcional, o mantener avance
-                    'updated_at' => now(),
-                ]);
-        }
-        // Si son iguales o diferencia menor a 1 segundo, no hacer nada (están sincronizados)
-    }
-
-    /**
-     * 🔥 Recalcula la distribución mensual de todas las partidas
-     * usando las fechas desde cronograma_general y los costos actualizados
-     */
-    private function recalcularDistribuciones(array $items, int $presupuestoId): array
-    {
-        return $items;
-
-        // Obtener las fechas de inicio/fin desde cronograma_general
-        $tareas = DB::connection('costos_tenant')
-            ->table('cronograma_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->get()
-            ->keyBy('partida');
-
-        // Generar periodos nuevamente para tener las claves correctas
-        $fechas = $tareas->filter(fn ($t) => ! empty($t->fecha_inicio) && ! empty($t->fecha_fin));
-        $minFecha = $fechas->min(fn ($t) => $t->fecha_inicio);
-        $maxFecha = $fechas->max(fn ($t) => $t->fecha_fin);
-
-        $inicio = $minFecha ? Carbon::parse($minFecha)->startOfMonth() : now()->startOfMonth();
-        $fin = $maxFecha ? Carbon::parse($maxFecha)->endOfMonth() : $inicio->copy()->addMonths(5);
-
-        $periodos = $this->generarPeriodosCalendario($inicio, $fin);
-        $clavesPeriodos = array_column($periodos, 'key');
-
-        foreach ($items as &$item) {
-            $partida = $item['item'];
-            $tarea = $tareas->get($partida);
-
-            if ($tarea && ! empty($tarea->fecha_inicio) && ! empty($tarea->fecha_fin)) {
-                $costoReal = (float) ($item['parcial'] ?? 0);
-
-                if ($costoReal > 0) {
-                    // Recalcular distribución con el costo actualizado
-                    $nuevaDistribucion = $this->distribuirPorDiasCalendario(
-                        $costoReal,
-                        $tarea->fecha_inicio,
-                        $tarea->fecha_fin,
-                        $clavesPeriodos
-                    );
-
-                    // Preservar la estructura original de distribución
-                    foreach ($clavesPeriodos as $key) {
-                        if (isset($nuevaDistribucion[$key])) {
-                            $item['distribucion'][$key] = $nuevaDistribucion[$key];
-                        }
-                    }
-                }
-            }
-        }
-
-        return $items;
-    }
-
-    private function loadGanttRows(int $presupuestoId)
-    {
-        $records = DB::connection('costos_tenant')
-            ->table('cronograma_general')
-            ->where('presupuesto_id', $presupuestoId)
-            ->orderBy('item_order')
-            ->get();
-
-        return $records->map(function ($row, int $index) {
-            return (object) [
-                'gantt_id' => (string) ($row->id),
-                'partida' => trim((string) ($row->partida ?? '')),
-                'descripcion' => $row->descripcion ?? '',
-                'unidad' => '', // Se enriquece luego
-                'parent_id' => $row->parent_id ? (string) $row->parent_id : null,
-                'fecha_inicio' => $row->fecha_inicio,
-                'fecha_fin' => $row->fecha_fin,
-                'duracion_dias' => (int) ($row->duracion_dias ?? 0),
-                'costo' => 0.0, // Se enriquece luego
-                'item_order' => $row->item_order ?? ($index + 1),
-                'updated_at' => $row->updated_at ?? now(),
-            ];
-        });
-    }
-
-    private function normalizeDate(?string $date): ?string
-    {
-        return $date ? Carbon::parse($date)->toDateString() : null;
-    }
-
     private function resolvePresupuestoId(): int
     {
         $id = DB::connection('costos_tenant')
@@ -1084,297 +847,4 @@ public function index(Request $request)
 
         return (int) $id;
     }
-    /**
- * Obtiene los datos de materiales para el cronograma de materiales
- * Este método es llamado desde el frontend cuando se cambia a la vista de materiales
- */
-public function getMaterialesData(Request $request)
-{
-    $projectId = (int) $request->query('project');
-    
-    if (! $projectId) {
-        return response()->json(['error' => 'ID de proyecto no recibido'], 422);
-    }
-    
-    $costoProject = CostoProject::findOrFail($projectId);
-    app(CostoDatabaseService::class)->setTenantConnection($costoProject->database_name);
-    
-    $presupuestoId = $this->resolvePresupuestoId();
-    
-    // ✅ Obtener ACUs desde las tablas específicas
-    // 1. Mano de obra
-    $manoDeObra = DB::connection('costos_tenant')
-        ->table('acu_mano_de_obra')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get();
-    
-    // 2. Materiales
-    $materialesACU = DB::connection('costos_tenant')
-        ->table('acu_materiales')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get();
-    
-    // 3. Equipos
-    $equipos = DB::connection('costos_tenant')
-        ->table('acu_equipos')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get();
-    
-    // 4. Subcontratos
-    $subcontratos = DB::connection('costos_tenant')
-        ->table('acu_subcontratos')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get();
-    
-    // 5. Subpartidas
-    $subpartidas = DB::connection('costos_tenant')
-        ->table('acu_subpartidas')
-        ->where('presupuesto_id', $presupuestoId)
-        ->get();
-    
-    // ✅ Obtener presupuesto para metrados
-    $presupuesto = DB::connection('costos_tenant')
-        ->table('presupuesto_general')
-        ->where('presupuesto_id', $presupuestoId)
-        ->whereNull('deleted_at')
-        ->get()
-        ->keyBy(fn ($p) => trim($p->partida ?? ''));
-    
-    // ✅ Obtener periodos
-    $modoCalculo = $request->query('modo', self::MODO_CALENDARIO);
-    
-    // Usar fechas del proyecto
-    $costoProject = CostoProject::findOrFail($projectId);
-    $inicio = $costoProject->fecha_inicio 
-        ? Carbon::parse($costoProject->fecha_inicio)->startOfMonth() 
-        : now()->startOfMonth();
-    $fin = $costoProject->fecha_fin 
-        ? Carbon::parse($costoProject->fecha_fin)->endOfMonth() 
-        : $inicio->copy()->addMonths(5);
-    
-    $periodos = $modoCalculo === self::MODO_30_DIAS
-        ? $this->generarPeriodos30Dias($inicio->toDateString(), $fin->toDateString())
-        : $this->generarPeriodosCalendario($inicio, $fin);
-    
-    // ✅ Función para procesar cada tipo de ACU
-    $procesarACU = function($item, $tipo, $partida, $metrado) use ($periodos) {
-        $unidad = $item->unidad ?? '';
-        $cantidad = (float) ($item->cantidad ?? 0);
-        $precio = (float) ($item->precio_unitario ?? $item->precio_hora ?? 0);
-        $factor = (float) ($item->factor_desperdicio ?? 1);
-        $descripcion = $item->descripcion ?? 'Sin descripción';
-        
-        if ($cantidad <= 0 || $precio <= 0) return null;
-        
-        $cantidadTotal = $cantidad * $factor * $metrado;
-        $costoTotal = $cantidadTotal * $precio;
-        
-        if ($cantidadTotal <= 0) return null;
-        
-        $meses = count($periodos);
-        $cantidadPorMes = $meses > 0 ? $cantidadTotal / $meses : 0;
-        $costoPorMes = $cantidadPorMes * $precio;
-        
-        $distribucion = [];
-        foreach ($periodos as $periodo) {
-            $key = $periodo['key'];
-            $distribucion[$key] = [
-                'cantidad' => round($cantidadPorMes, 4),
-                'monto' => round($costoPorMes, 2),
-            ];
-        }
-        
-        return [
-            'partida' => $partida,
-            'descripcion' => $descripcion,
-            'unidad' => $unidad,
-            'tipo' => $tipo,
-            'precio' => round($precio, 2),
-            'cantidad_total' => round($cantidadTotal, 4),
-            'costo_total' => round($costoTotal, 2),
-            'distribucion' => $distribucion,
-        ];
-    };
-    
-    // ✅ Consolidar todos los materiales
-    $materialesConsolidados = [];
-    $acumuladoMensual = [];
-    $presupuestoTotal = 0;
-    
-    foreach ($periodos as $periodo) {
-        $acumuladoMensual[$periodo['key']] = 0;
-    }
-    
-    // Procesar Mano de Obra
-    foreach ($manoDeObra as $item) {
-        $partida = trim($item->partida ?? '');
-        $presupuestoItem = $presupuesto->get($partida);
-        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
-        if ($metrado <= 0) continue;
-        
-        $result = $procesarACU($item, 'mano_de_obra', $partida, $metrado);
-        if ($result) {
-            $clave = $result['descripcion'] . '|' . $result['unidad'];
-            if (!isset($materialesConsolidados[$clave])) {
-                $materialesConsolidados[$clave] = $result;
-            } else {
-                $existing = &$materialesConsolidados[$clave];
-                $existing['cantidad_total'] += $result['cantidad_total'];
-                $existing['costo_total'] += $result['costo_total'];
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
-                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
-                }
-            }
-            $presupuestoTotal += $result['costo_total'];
-        }
-    }
-    
-    // Procesar Materiales ACU
-    foreach ($materialesACU as $item) {
-        $partida = trim($item->partida ?? '');
-        $presupuestoItem = $presupuesto->get($partida);
-        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
-        if ($metrado <= 0) continue;
-        
-        $result = $procesarACU($item, 'materiales', $partida, $metrado);
-        if ($result) {
-            $clave = $result['descripcion'] . '|' . $result['unidad'];
-            if (!isset($materialesConsolidados[$clave])) {
-                $materialesConsolidados[$clave] = $result;
-            } else {
-                $existing = &$materialesConsolidados[$clave];
-                $existing['cantidad_total'] += $result['cantidad_total'];
-                $existing['costo_total'] += $result['costo_total'];
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
-                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
-                }
-            }
-            $presupuestoTotal += $result['costo_total'];
-        }
-    }
-    
-    // Procesar Equipos
-    foreach ($equipos as $item) {
-        $partida = trim($item->partida ?? '');
-        $presupuestoItem = $presupuesto->get($partida);
-        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
-        if ($metrado <= 0) continue;
-        
-        $result = $procesarACU($item, 'equipos', $partida, $metrado);
-        if ($result) {
-            $clave = $result['descripcion'] . '|' . $result['unidad'];
-            if (!isset($materialesConsolidados[$clave])) {
-                $materialesConsolidados[$clave] = $result;
-            } else {
-                $existing = &$materialesConsolidados[$clave];
-                $existing['cantidad_total'] += $result['cantidad_total'];
-                $existing['costo_total'] += $result['costo_total'];
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
-                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
-                }
-            }
-            $presupuestoTotal += $result['costo_total'];
-        }
-    }
-    
-    // Procesar Subcontratos
-    foreach ($subcontratos as $item) {
-        $partida = trim($item->partida ?? '');
-        $presupuestoItem = $presupuesto->get($partida);
-        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
-        if ($metrado <= 0) continue;
-        
-        $result = $procesarACU($item, 'subcontratos', $partida, $metrado);
-        if ($result) {
-            $clave = $result['descripcion'] . '|' . $result['unidad'];
-            if (!isset($materialesConsolidados[$clave])) {
-                $materialesConsolidados[$clave] = $result;
-            } else {
-                $existing = &$materialesConsolidados[$clave];
-                $existing['cantidad_total'] += $result['cantidad_total'];
-                $existing['costo_total'] += $result['costo_total'];
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
-                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
-                }
-            }
-            $presupuestoTotal += $result['costo_total'];
-        }
-    }
-    
-    // Procesar Subpartidas
-    foreach ($subpartidas as $item) {
-        $partida = trim($item->partida ?? '');
-        $presupuestoItem = $presupuesto->get($partida);
-        $metrado = $presupuestoItem ? (float) ($presupuestoItem->metrado ?? 0) : 0;
-        if ($metrado <= 0) continue;
-        
-        $result = $procesarACU($item, 'subpartidas', $partida, $metrado);
-        if ($result) {
-            $clave = $result['descripcion'] . '|' . $result['unidad'];
-            if (!isset($materialesConsolidados[$clave])) {
-                $materialesConsolidados[$clave] = $result;
-            } else {
-                $existing = &$materialesConsolidados[$clave];
-                $existing['cantidad_total'] += $result['cantidad_total'];
-                $existing['costo_total'] += $result['costo_total'];
-                foreach ($periodos as $periodo) {
-                    $key = $periodo['key'];
-                    $existing['distribucion'][$key]['cantidad'] += $result['distribucion'][$key]['cantidad'];
-                    $existing['distribucion'][$key]['monto'] += $result['distribucion'][$key]['monto'];
-                }
-            }
-            $presupuestoTotal += $result['costo_total'];
-        }
-    }
-    
-    $materialesFormateados = collect(array_values($materialesConsolidados))
-        ->map(function ($m) {
-            $m['cantidad_total'] = round($m['cantidad_total'], 4);
-            $m['costo_total']    = round($m['costo_total'], 2);
-            return $m;
-        });
-    
-    $totalMateriales = $materialesFormateados->count();
-    
-    // Calcular mes pico
-    $mesPicoKey = '';
-    $mesPicoMonto = 0;
-    foreach ($acumuladoMensual as $key => $monto) {
-        if ($monto > $mesPicoMonto) {
-            $mesPicoMonto = $monto;
-            $mesPicoKey = $key;
-        }
-    }
-    $mesPicoLabel = '';
-    foreach ($periodos as $p) {
-        if ($p['key'] === $mesPicoKey) {
-            $mesPicoLabel = $p['labelCal'] ?? $p['label'];
-            break;
-        }
-    }
-    
-    return response()->json([
-        'materiales' => $materialesFormateados,
-        'periodos' => $periodos,
-        'resumen' => [
-            'total_materiales' => $totalMateriales,
-            'presupuesto_total' => round($presupuestoTotal, 2),
-            'duracion_meses' => count($periodos),
-            'mes_pico' => $mesPicoLabel,
-            'mes_pico_key' => $mesPicoKey,
-            'monto_mes_pico' => round($mesPicoMonto, 2),
-            'total_partidas' => $totalMateriales,
-        ],
-        'estaGuardado' => $materialesFormateados->isNotEmpty(),
-        'sinGantt' => false,
-    ]);
-}
 }

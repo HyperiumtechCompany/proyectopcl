@@ -1,0 +1,82 @@
+{
+  "requisitos_minimos_iluminacion": {
+    "1": {
+      "categoria": "RUTAS DE EVACUACIÓN",
+      "areas": [
+        {
+          "area": "Eje central de la ruta de evacuación (ancho reconocido ≤ 2 m)",
+          "Em_lux": 1,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": 40,
+          "requisitos": [
+            "Iluminancia mínima 1 lx a lo largo del eje central, medida a nivel del suelo",
+            "Uniformidad Emax:Emin ≤ 40:1 sobre el eje central",
+            "Rutas de más de 2 m de ancho: tratar como varias bandas de 2 m, o como área antipánico",
+            "Sin demora ≥ 50% del nivel en 5 s y 100% en 60 s (luminarias no permanentes)",
+            "Autonomía mínima 1 hora (verificar exigencia local; algunas normativas piden 3 horas)"
+          ]
+        },
+        {
+          "area": "Escaleras en ruta de evacuación (ancho completo del tramo)",
+          "Em_lux": 1,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": 40,
+          "requisitos": [
+            "Cada tramo de escalera debe recibir luz de forma que los peldaños queden claramente identificables",
+            "Iluminancia mínima 1 lx en todo el ancho del tramo, no solo en el eje",
+            "Uniformidad Emax:Emin ≤ 40:1"
+          ]
+        },
+        {
+          "area": "Puntos de seguridad — señales, pulsadores de alarma, equipo contraincendios, primeros auxilios",
+          "Em_lux": 5,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": 40,
+          "requisitos": [
+            "Iluminancia mínima 5 lx a nivel del suelo, dentro de un radio de 2 m del equipo",
+            "Aplica a equipos que no estén ya dentro de una ruta de evacuación iluminada"
+          ]
+        }
+      ]
+    },
+    "2": {
+      "categoria": "ÁREAS ANTIPÁNICO (ZONAS ABIERTAS ≥ 60 m²)",
+      "areas": [
+        {
+          "area": "Núcleo del área (excluyendo banda perimetral de 0.5 m)",
+          "Em_lux": 0.5,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": 40,
+          "requisitos": [
+            "Iluminancia mínima 0.5 lx en el núcleo del área, a nivel del suelo",
+            "Uniformidad Emax:Emin ≤ 40:1",
+            "Sin demora ≥ 50% del nivel en 5 s y 100% en 60 s (luminarias no permanentes)",
+            "Autonomía mínima 1 hora (verificar exigencia local)"
+          ]
+        }
+      ]
+    },
+    "3": {
+      "categoria": "ZONAS DE TAREAS DE ALTO RIESGO",
+      "areas": [
+        {
+          "area": "Zona de tarea de alto riesgo — nivel general",
+          "Em_lux": 15,
+          "UGRL": null,
+          "Uo": 0.10,
+          "Ra": 40,
+          "requisitos": [
+            "Iluminancia mínima: el mayor entre 10% del nivel normal de la tarea o 15 lx",
+            "Uniformidad mínima Emin/Eprom = 0.10",
+            "Sin demora — nivel completo disponible de forma instantánea (sin tiempo de respuesta)",
+            "Autonomía: hasta que el proceso o máquina quede en condición segura"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -22,12 +22,18 @@ interface Options {
     calendarSettings: CalendarSettings;
 }
 
-// Redondea con decimal.js a 2 decimales — evita el bug de .toFixed(2) con floats
-// (ej. (1.005).toFixed(2) === '1.00' en vez de '1.01' por representación binaria).
-// Mismo criterio que decimalMul en usePresupuestoAcu.ts, para que ACU, Insumos y
-// Presupuesto redondeen montos económicos de forma consistente.
+// Redondea con decimal.js a 10 decimales (no 2, y no 6) — evita el bug de
+// .toFixed(2) con floats y, sobre todo, evita truncar precio_unitario/parcial
+// antes de sumar o multiplicar por metrado. Con 1 partida el truncado no se
+// nota, pero con miles de partidas el redondeo por-fila se acumula; y con
+// metrados grandes (decenas de miles), incluso un residuo en el 7º decimal de
+// precio_unitario se amplifica a céntimos frente a Insumos Consolidados
+// (verificado con datos reales: metrado=75,500 × error 4.4e-7 = 0.033 de
+// diferencia). Mismo criterio que decimalMul/r2 en usePresupuestoAcu.ts y que
+// recalculateParciales en CostoDatabaseService.php: 10dp internamente, 2dp
+// solo al formatear en pantalla.
 function round2(n: number): number {
-    return new Decimal(n).toDecimalPlaces(2).toNumber();
+    return new Decimal(n).toDecimalPlaces(10).toNumber();
 }
 
 function normalizeForMatch(s: string): string {
@@ -232,18 +238,91 @@ function synthesizeTasksFromRows(rows: any[]): GanttTask[] {
     });
 }
 
+// Synthesizes GanttTask skeletons for presupuesto_general rows that have no
+// counterpart in cronograma_general (partial cronograma — common after an MS
+// Project import, which usually has far fewer rows than the costing partidas).
+// Uses negative temp IDs so they can never collide with real cronograma_general
+// row ids; parent_id resolves against the combined (existing + synthesized) tree
+// so they slot correctly under their real parent partida.
+function synthesizeMissingBudgetTasks(
+    missingRows: any[],
+    existingTasks: GanttTask[],
+): GanttTask[] {
+    const partidaToId = new Map<string, number>(
+        existingTasks.map((t) => [t.partida, t.id]),
+    );
+    let nextId =
+        Math.min(
+            0,
+            ...existingTasks.map((t) => t.id),
+            ...missingRows.map((r: any) => Number(r.id) || 0),
+        ) - 1;
+
+    const idByPartida = new Map<string, number>();
+    for (const row of missingRows) {
+        idByPartida.set(String(row.partida ?? ''), nextId--);
+    }
+
+    return missingRows.map((row: any) => {
+        const partida = String(row.partida ?? '');
+        const nivelFromPartida = partida !== '' ? partida.split('.').length : 1;
+        const nivel = Number(row.nivel ?? 0) || nivelFromPartida;
+        let parentId: number | null = null;
+        if (partida.includes('.')) {
+            const parts = partida.split('.');
+            parts.pop();
+            const parentCode = parts.join('.');
+            parentId =
+                partidaToId.get(parentCode) ?? idByPartida.get(parentCode) ?? null;
+        }
+        return {
+            id: idByPartida.get(partida)!,
+            parent_id: parentId,
+            nivel,
+            item_order: Number(row.item_order ?? 0),
+            partida,
+            descripcion: String(row.descripcion ?? ''),
+            duracion_dias: 0,
+            fecha_inicio: null,
+            fecha_fin: null,
+            avance: 0,
+            predecesoras: [],
+            presupuesto: Number(row.parcial ?? 0),
+        } as GanttTask;
+    });
+}
+
 export function useDelphinData({
     initialTasks,
     initialRows,
     schedulingMode,
     calendarSettings,
 }: Options) {
-    // If cronograma is empty but presupuesto has rows, build synthetic tasks so
-    // the budget panel is visible. CPM data will be blank until the user fills it.
-    const effectiveTasks: GanttTask[] =
-        initialTasks.length > 0 || initialRows.length === 0
-            ? initialTasks
-            : synthesizeTasksFromRows(initialRows);
+    // Union of cronograma_general (initialTasks) and presupuesto_general (initialRows) —
+    // NEVER pick one or the other, since ganttState.tasks (built from this) is the exact
+    // payload saveBudget() PATCHes back to the server, and the backend does a
+    // delete-scoped-by-presupuesto + reinsert-only-what-was-sent. Dropping any partida
+    // here silently deletes it (and its ACU, via cascade) on the next save — this was the
+    // root cause of "guardo un ACU y borra el resto de partidas/ACUs" on update.
+    const effectiveTasks: GanttTask[] = (() => {
+        if (initialTasks.length === 0) {
+            return initialRows.length === 0
+                ? initialTasks
+                : synthesizeTasksFromRows(initialRows);
+        }
+        if (initialRows.length === 0) return initialTasks;
+
+        const existingPartidas = new Set(initialTasks.map((t) => t.partida));
+        const missingRows = initialRows.filter(
+            (r) => !existingPartidas.has(String(r.partida ?? '')),
+        );
+        if (missingRows.length === 0) return initialTasks;
+
+        return [
+            ...initialTasks,
+            ...synthesizeMissingBudgetTasks(missingRows, initialTasks),
+        ];
+    })();
 
     // ── Budget state keyed by gantt task ID ────────────────────────────────────
     const [budgetMap, setBudgetMap] = useState<Map<number, BudgetFields>>(
@@ -367,13 +446,32 @@ export function useDelphinData({
         }
 
         return raw.map((row) => {
-            const computed =
-                Math.round((parcialMap.get(row.id) ?? row.parcial) * 100) / 100;
+            const computed = round2(parcialMap.get(row.id) ?? row.parcial);
             return computed === row.parcial
                 ? row
                 : { ...row, parcial: computed };
         });
     }, [ganttState.tasks, budgetMap, ganttState.groupIds]);
+
+    // ── Keep cronograma_general.presupuesto mirrored to the budget total ─────
+    // presupuesto_general.parcial (metrado × precio_unitario, aggregated) and
+    // cronograma_general.presupuesto are two separate DB columns for the "same"
+    // cost. Without this sync, editing the budget never touches task.presupuesto,
+    // so the CPM table's "Costo (S/)" column (and exports, which read
+    // row.presupuesto) drift from the budget's "Total" and the two tables show
+    // duplicated/contradictory numbers for the same partida. This effect is a
+    // no-op once both sides already match (stable after one extra render).
+    useEffect(() => {
+        const updates: Array<{ id: number; presupuesto: number }> = [];
+        for (const row of delphinRows) {
+            const task = ganttState.taskById.get(row.id);
+            if (task && task.presupuesto !== row.parcial) {
+                updates.push({ id: row.id, presupuesto: row.parcial });
+            }
+        }
+        if (updates.length > 0) ganttState.batchUpdatePresupuestos(updates);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [delphinRows]);
 
     // Visible subset re-uses the already-computed hierarchical parcials from delphinRows
     const visibleDelphinRows = useMemo<DelphinRow[]>(() => {
@@ -413,6 +511,19 @@ export function useDelphinData({
             }
         },
         [updateBudgetField, ganttState],
+    );
+
+    // ── Eliminar fila (sincroniza también budgetDirty) ────────────────────────
+    // ganttState.deleteTask solo marca dirty el árbol del cronograma (dirtyIds),
+    // pero la fila eliminada también sale de presupuesto_general en el próximo
+    // saveBudget(). Sin esto, borrar en modo "budget" no activa el botón Guardar
+    // (que en ese modo depende de budgetDirty, no de ganttState.isDirty).
+    const deleteTask = useCallback(
+        (id: number) => {
+            ganttState.deleteTask(id);
+            setBudgetDirty(true);
+        },
+        [ganttState.deleteTask],
     );
 
     // ── Save budget ───────────────────────────────────────────────────────────
@@ -745,9 +856,50 @@ export function useDelphinData({
                 const desc = normalizeForMatch(t.descripcion);
                 if (desc && !pending.has(desc)) pending.set(desc, b);
             }
-
             pendingBudgetRef.current = pending;
-            ganttState.importTasks(newTasks);
+
+            // Keep existing partidas that have no counterpart in the imported MSP file
+            // instead of replacing the whole tree with just the schedule's tasks — MSP
+            // schedules typically group by phase/work package, with far fewer rows than
+            // the costing partidas. Dropping them here would wipe them (and their ACUs,
+            // via the backend's orphan-cleanup) on the next saveBudget().
+            const importedPartidas = new Set(newTasks.map((t) => t.partida));
+            const importedDescs = new Set(
+                newTasks.map((t) => normalizeForMatch(t.descripcion)),
+            );
+            const unmatchedExisting = existingTasks.filter(
+                (t) =>
+                    !importedPartidas.has(t.partida) &&
+                    !importedDescs.has(normalizeForMatch(t.descripcion)),
+            );
+
+            if (unmatchedExisting.length === 0) {
+                ganttState.importTasks(newTasks);
+                return;
+            }
+
+            // recomputeHierarchy builds the tree strictly from parent_id links; a kept
+            // row whose original parent WAS matched (and thus replaced by a newTasks
+            // node with a different id) would point to an id that no longer exists in
+            // the tree, making the traversal silently drop it. Re-resolve parent_id by
+            // partida against the combined set so every kept row re-attaches correctly.
+            const combinedPartidaToId = new Map<string, number>();
+            newTasks.forEach((t) => combinedPartidaToId.set(t.partida, t.id));
+            unmatchedExisting.forEach((t) =>
+                combinedPartidaToId.set(t.partida, t.id),
+            );
+            const reparented = unmatchedExisting.map((t) => {
+                if (!t.partida.includes('.')) return { ...t, parent_id: null };
+                const parts = t.partida.split('.');
+                parts.pop();
+                const parentCode = parts.join('.');
+                return {
+                    ...t,
+                    parent_id: combinedPartidaToId.get(parentCode) ?? null,
+                };
+            });
+
+            ganttState.importTasks([...newTasks, ...reparented]);
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [ganttState.importTasks],
@@ -773,7 +925,7 @@ export function useDelphinData({
         collapseAll: ganttState.collapseAll,
         addTaskAfter: ganttState.addTaskAfter,
         addChildTask: ganttState.addChildTask,
-        deleteTask: ganttState.deleteTask,
+        deleteTask,
         indentTask: ganttState.indentTask,
         outdentTask: ganttState.outdentTask,
         moveTaskUp: ganttState.moveTaskUp,

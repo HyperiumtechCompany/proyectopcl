@@ -110,13 +110,13 @@ export function CellPredecesoras({
                 <div
                     ref={cellRef}
                     className={`flex h-full w-full items-center overflow-hidden ring-1 ring-inset ${
-                        hasError ? 'bg-red-950/20 ring-red-500' : 'bg-slate-800 ring-blue-500'
+                        hasError ? 'bg-red-50 ring-red-500 dark:bg-red-950/20' : 'bg-white ring-blue-500 dark:bg-slate-800'
                     }`}
                 >
                     <input
                         ref={inputRef}
                         className={`h-full min-w-0 flex-1 bg-transparent px-1 font-mono text-xs outline-none ${
-                            hasError ? 'text-red-300' : 'text-white'
+                            hasError ? 'text-red-700 dark:text-red-300' : 'text-slate-900 dark:text-white'
                         }`}
                         value={localValue}
                         placeholder="ej: 2FC"
@@ -138,7 +138,7 @@ export function CellPredecesoras({
                         type="button"
                         tabIndex={-1}
                         title="Buscar predecesor (árbol)"
-                        className="flex h-full w-6 shrink-0 items-center justify-center border-l border-slate-600 bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white"
+                        className="flex h-full w-6 shrink-0 items-center justify-center border-l border-slate-300 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-white"
                         onMouseDown={(e) => {
                             // preventDefault evita que el input haga blur antes de que abramos el picker
                             e.preventDefault();
@@ -172,14 +172,14 @@ export function CellPredecesoras({
         <>
             <div
                 ref={cellRef}
-                className="flex h-full w-full cursor-pointer select-none items-center justify-center overflow-hidden px-1 hover:bg-slate-700/40"
+                className="flex h-full w-full cursor-pointer select-none items-center justify-center overflow-hidden px-1 hover:bg-slate-100 dark:hover:bg-slate-700/40"
                 onClick={handleClick}
                 onDoubleClick={handleDblClick}
                 title={display ? `Predecesores: ${display} · Doble clic para editar` : 'Doble clic para agregar predecesor'}
             >
                 {display
                     ? <span className="truncate font-mono text-xs text-sky-400">{display}</span>
-                    : <span className="text-xs text-slate-600">–</span>
+                    : <span className="text-xs text-slate-400 dark:text-slate-600">–</span>
                 }
             </div>
 

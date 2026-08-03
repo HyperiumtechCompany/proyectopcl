@@ -21,9 +21,9 @@ class StoreNormativeConfigRequest extends FormRequest
             'country_code' => ['required', 'string', 'size:2'],
             'region' => ['required', 'string', 'in:europe,americas_usa,americas_peru'],
             'installation_type' => ['nullable', 'string', 'max:100'],
-            'primary_standard' => ['required', 'string', 'in:en_12464,ies_na,rne_peru,nfpa101,ds024'],
+            'primary_standard' => ['required', 'string', 'in:en_12464,ies_na,rne_peru,en_1838,nfpa101,ds024'],
             'reference_standards' => ['nullable', 'array'],
-            'reference_standards.*' => ['string', 'in:en_12464,ies_na,rne_peru,nfpa101,ds024'],
+            'reference_standards.*' => ['string', 'in:en_12464,ies_na,rne_peru,en_1838,nfpa101,ds024'],
             'priority_order' => ['nullable', 'array'],
             'priority_order.*' => ['string'],
             'auto_detect_enabled' => ['boolean'],
@@ -48,8 +48,8 @@ class StoreNormativeConfigRequest extends FormRequest
         return [
             'country_code.size' => 'El código de país debe ser de 2 caracteres (ISO 3166-1 alpha-2).',
             'region.in' => 'La región debe ser: europe, americas_usa o americas_peru.',
-            'primary_standard.in' => 'La norma primaria debe ser: en_12464, ies_na, rne_peru, nfpa101 o ds024.',
-            'reference_standards.*.in' => 'Cada norma de referencia debe ser: en_12464, ies_na, rne_peru, nfpa101 o ds024.',
+            'primary_standard.in' => 'La norma primaria debe ser: en_12464, ies_na, rne_peru, en_1838, nfpa101 o ds024.',
+            'reference_standards.*.in' => 'Cada norma de referencia debe ser: en_12464, ies_na, rne_peru, en_1838, nfpa101 o ds024.',
         ];
     }
 }

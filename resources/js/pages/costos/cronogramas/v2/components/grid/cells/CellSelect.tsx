@@ -33,7 +33,7 @@ export function CellSelect({ value, options = DEFAULT_UNITS, onCommit, onClick }
     return (
         <div className="flex h-full w-full items-center px-1" onClick={onClick}>
             <select
-                className="h-6 w-full cursor-pointer rounded border border-slate-700 bg-slate-800 text-center text-[11px] text-slate-200 outline-none hover:border-slate-500 focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+                className="h-6 w-full cursor-pointer rounded border border-slate-300 bg-white text-center text-[11px] text-slate-800 outline-none hover:border-slate-500 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 value={value}
                 onChange={(e) => onCommit(e.target.value)}
             >

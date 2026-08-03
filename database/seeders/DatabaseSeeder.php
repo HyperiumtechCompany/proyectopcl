@@ -15,8 +15,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolesAndPermissionsSeeder::class,
             UsersSeeder::class,
+            OrganizationSeeder::class,
             UbigeoSeeder::class,
             LuminaireProductSeeder::class,
+            DialuxNormativeRequirementsSeeder::class,
+            DialuxElectricalCatalogSeeder::class,
         ]);
     }
 }

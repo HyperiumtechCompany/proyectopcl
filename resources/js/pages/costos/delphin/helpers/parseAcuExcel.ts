@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import * as XLSX from 'xlsx';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -88,6 +89,10 @@ function cellNum(ws: XLSX.WorkSheet, r: number, c: number): number {
     if (!cell || cell.v == null) return 0;
     const n = parseFloat(String(cell.v).replace(',', '.'));
     return isNaN(n) ? 0 : n;
+}
+
+function roundCantidad(n: number): number {
+    return new Decimal(n).toDecimalPlaces(4).toNumber();
 }
 
 function rowTexts(ws: XLSX.WorkSheet, r: number, maxC: number): string[] {
@@ -365,7 +370,7 @@ export function parseAcuExcel(file: File): Promise<ParseAcuResult> {
                             : '';
                         const unidad   = cm ? cellStr(ws, r, cm.unidad)   : (texts.find((t) => UNIT_SET.has(t.toLowerCase())) ?? '');
                         const recursos = cm && cm.recursos >= 0 ? cellNum(ws, r, cm.recursos) : 0;
-                        const cantidad = cm ? cellNum(ws, r, cm.cantidad) : 0;
+                        const cantidad = cm ? roundCantidad(cellNum(ws, r, cm.cantidad)) : 0;
                         const precio   = cm ? cellNum(ws, r, cm.precio)   : 0;
 
                         if (!desc) continue;

@@ -64,6 +64,7 @@ export interface ValorizadoProps {
     estaGuardado?:    boolean;
     diasPorMes?:      Record<string, number>;
     modoCalculo?:     ModoCalculo;
+    jerarquiaPresupuesto?: Record<string, string>;
     projectData?: any;
      materiales?: any[];           // Datos de materiales
     materialesResumen?: any;  

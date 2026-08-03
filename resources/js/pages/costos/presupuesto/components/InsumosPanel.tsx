@@ -130,7 +130,7 @@ export function InsumosPanel({ projectId }: InsumosPanelProps) {
             cols.push(
                 columnHelper.accessor('cantidad', {
                     header: 'Cantidad',
-                    cell: info => <span className="text-amber-400/90 font-mono">{new Intl.NumberFormat('es-PE', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(info.getValue() ?? 0)}</span>,
+                    cell: info => <span className="text-amber-400/90 font-mono">{new Intl.NumberFormat('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(info.getValue() ?? 0)}</span>,
                     enableSorting: true,
                     size: 100,
                 })

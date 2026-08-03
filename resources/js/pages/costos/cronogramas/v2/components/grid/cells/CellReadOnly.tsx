@@ -21,12 +21,12 @@ export function CellReadOnly({ value, align = 'left', className = '', decimals }
 
     const display =
         decimals !== undefined && typeof value === 'number'
-            ? (value === 0 ? <span className="text-slate-600">–</span> : fmtNum(value, decimals))
+            ? (value === 0 ? <span className="text-slate-400 dark:text-slate-600">–</span> : fmtNum(value, decimals))
             : (value ?? '');
 
     return (
         <div
-            className={`flex h-full items-center px-2 font-mono text-xs text-slate-300 select-none ${alignClass} ${className}`}
+            className={`flex h-full items-center px-2 font-mono text-xs text-slate-700 select-none dark:text-slate-300 ${alignClass} ${className}`}
             title={String(value ?? '')}
         >
             {display}

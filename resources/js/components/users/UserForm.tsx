@@ -3,11 +3,12 @@ import { Eye, EyeOff, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useInitials } from '@/hooks/use-initials';
 import { resolveAvatarUrl } from '@/lib/avatar';
-import { type Role, type UserExtended, type UserPlan, type UserStatus } from '@/types/user';
+import { type Organization, type Role, type UserExtended, type UserPlan, type UserStatus } from '@/types/user';
 
 type UserFormProps = {
     user?: UserExtended;
     roles: Role[];
+    organizations: Organization[];
     isEdit?: boolean;
 };
 
@@ -22,6 +23,7 @@ type UserFormData = {
     plan: UserPlan;
     status: UserStatus;
     role_id: string;
+    organization_id: string;
     avatar: File | null;
     _method?: 'put' | '';
     [key: string]: string | File | null | undefined;
@@ -40,7 +42,7 @@ const statusOptions: { value: UserStatus; label: string }[] = [
     { value: 'blocked', label: 'Bloqueado' },
 ];
 
-export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
+export function UserForm({ user, roles, organizations, isEdit = false }: UserFormProps) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const getInitials = useInitials();
@@ -60,6 +62,7 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
         plan: user?.plan ?? 'free',
         status: user?.status ?? 'active',
         role_id: user?.roles?.[0]?.id?.toString() ?? '',
+        organization_id: user?.organization_id?.toString() ?? '',
         avatar: null,
         _method: '',
     });
@@ -298,6 +301,32 @@ export function UserForm({ user, roles, isEdit = false }: UserFormProps) {
                         ))}
                     </select>
                 </div>
+            </div>
+
+            {/* Organización */}
+            <div>
+                <label className={labelClass}>Organización</label>
+                <select
+                    value={data.organization_id}
+                    onChange={(e) => setData('organization_id', e.target.value)}
+                    className={inputClass('organization_id')}
+                >
+                    <option value="">Sin organización</option>
+                    {organizations.map((o) => (
+                        <option key={o.id} value={o.id}>
+                            {o.nombre} ({o.plan})
+                        </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                    Si el usuario pertenece a una cuenta de equipo, su cupo de proyectos se
+                    comparte con el resto de la organización.
+                </p>
+                {errors.organization_id && (
+                    <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                        {errors.organization_id}
+                    </p>
+                )}
             </div>
 
             {/* Status */}

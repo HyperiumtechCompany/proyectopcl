@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SpattPararrayoSpreadsheet;
+use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -10,6 +11,8 @@ use Inertia\Response;
 
 class SpattPararrayoSpreadsheetController extends Controller
 {
+    public function __construct(protected ProjectQuotaService $quotaService) {}
+
     /**
      * Lista de hojas del usuario autenticado.
      */
@@ -44,6 +47,8 @@ class SpattPararrayoSpreadsheetController extends Controller
             'name' => 'required|string|max:255',
             'project_name' => 'nullable|string|max:255',
         ]);
+
+        $this->quotaService->assertCanCreate($request->user(), 'pararrayos');
 
         $spreadsheet = SpattPararrayoSpreadsheet::create([
             'user_id' => Auth::id(),

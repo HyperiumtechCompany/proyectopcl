@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CostoDatabaseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PresupuestoControllerTest extends TestCase
@@ -51,6 +52,12 @@ class PresupuestoControllerTest extends TestCase
 
         // Create presupuesto tables
         $this->dbService->createPresupuestoTables($this->testDbName);
+
+        // Seed the default presupuesto row — in production this is auto-created by
+        // CostoDatabaseService::createDefaultPresupuesto() when a project is created
+        // (see its docblock). Without it, presupuesto_id is null and any insert into
+        // presupuesto_general/presupuesto_acus trips their FK constraint.
+        $this->dbService->createDefaultPresupuesto($this->testDbName, 'Test Project');
 
         // Enable presupuesto module
         CostoProjectModule::create([
@@ -278,6 +285,50 @@ class PresupuestoControllerTest extends TestCase
         $this->assertCount(1, $rows);
         $expectedParcial = 100.50 * 25.75;
         $this->assertEquals($expectedParcial, (float) $rows[0]['parcial']);
+    }
+
+    public function test_update_general_does_not_delete_acus_with_differently_padded_partida_codes(): void
+    {
+        // Regression test for the reported production bug: saving presupuesto_general
+        // (e.g. from Delphin's saveBudget(), triggered by editing a single ACU) was wiping
+        // out every other ACU whose `partida` string didn't byte-for-byte match the freshly
+        // reinserted presupuesto_general rows — most commonly because of zero-padding
+        // differences ("1.2" vs "01.02"), which are common across the app's various import/
+        // save paths. Only the ACU that had just been re-synced (via calculateACU, which
+        // writes the current padding) survived; every other ACU was deleted in cascade.
+        $tenantPresupuestoId = $this->dbService->getDefaultPresupuestoId($this->testDbName);
+
+        $response = $this->actingAs($this->user)
+            ->patchJson("/costos/proyectos/{$this->project->id}/presupuesto/general", [
+                'rows' => [
+                    ['partida' => '01.01', 'descripcion' => 'Partida uno', 'unidad' => 'm2', 'metrado' => 10, 'precio_unitario' => 5],
+                    ['partida' => '01.02', 'descripcion' => 'Partida dos', 'unidad' => 'm2', 'metrado' => 20, 'precio_unitario' => 6],
+                    ['partida' => '01.03', 'descripcion' => 'Partida tres', 'unidad' => 'm2', 'metrado' => 30, 'precio_unitario' => 7],
+                ],
+            ]);
+        $response->assertStatus(200);
+
+        // Three ACUs exist, but stored with UNPADDED partida codes ("1.1" instead of "01.01") —
+        // simulating an ACU created through a different import path than presupuesto_general.
+        DB::connection('costos_tenant')->table('presupuesto_acus')->insert([
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.1', 'descripcion' => 'ACU uno', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.2', 'descripcion' => 'ACU dos', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['presupuesto_id' => $tenantPresupuestoId, 'partida' => '1.3', 'descripcion' => 'ACU tres', 'unidad' => 'm2', 'rendimiento' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        // Re-save presupuesto_general (same rows) — simulates the user editing/saving again.
+        $response = $this->actingAs($this->user)
+            ->patchJson("/costos/proyectos/{$this->project->id}/presupuesto/general", [
+                'rows' => [
+                    ['partida' => '01.01', 'descripcion' => 'Partida uno', 'unidad' => 'm2', 'metrado' => 10, 'precio_unitario' => 5],
+                    ['partida' => '01.02', 'descripcion' => 'Partida dos', 'unidad' => 'm2', 'metrado' => 20, 'precio_unitario' => 6],
+                    ['partida' => '01.03', 'descripcion' => 'Partida tres', 'unidad' => 'm2', 'metrado' => 30, 'precio_unitario' => 7],
+                ],
+            ]);
+        $response->assertStatus(200);
+
+        $acuCount = DB::connection('costos_tenant')->table('presupuesto_acus')->count();
+        $this->assertEquals(3, $acuCount, 'ACUs with a differently-padded partida code must survive a presupuesto_general re-save.');
     }
 
     public function test_update_requires_authentication(): void
@@ -577,6 +628,45 @@ class PresupuestoControllerTest extends TestCase
             ]);
 
         $response->assertStatus(403);
+    }
+
+    public function test_calculate_acu_self_heals_legacy_tenant_missing_codigo_producto_column(): void
+    {
+        // Regression test for a production 500 on ingenieros.tech: tenant DBs provisioned
+        // before the 2026_07_10_000100_add_codigo_producto_to_acu_component_tables migration
+        // are missing `codigo_producto` on the acu_* child tables. syncAcuComponents() writes
+        // that column unconditionally, so calculateACU 500'd with "Unknown column
+        // 'codigo_producto'" until ensureAcuSchema()'s legacy-patch covered it too.
+        $this->dbService->setTenantConnection($this->testDbName);
+        foreach (['acu_mano_de_obra', 'acu_materiales', 'acu_equipos', 'acu_subcontratos', 'acu_subpartidas'] as $table) {
+            DB::connection('costos_tenant')->statement("ALTER TABLE {$table} DROP COLUMN codigo_producto");
+        }
+
+        $response = $this->actingAs($this->user)
+            ->postJson("/costos/proyectos/{$this->project->id}/presupuesto/acus/calculate", [
+                'partida' => '01.10.01',
+                'descripcion' => 'Test legacy tenant sin codigo_producto',
+                'unidad' => 'm2',
+                'rendimiento' => 1.0,
+                'mano_de_obra' => [
+                    [
+                        'descripcion' => 'Operario',
+                        'unidad' => 'hh',
+                        'cantidad' => 1.0,
+                        'precio_unitario' => 25.50,
+                    ],
+                ],
+                'materiales' => [],
+                'equipos' => [],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertTrue(
+            Schema::connection('costos_tenant')->hasColumn('acu_mano_de_obra', 'codigo_producto'),
+            'ensureAcuSchema() should have re-added the missing codigo_producto column.'
+        );
     }
 
     public function test_calculate_acu_creates_new_acu_with_all_components(): void

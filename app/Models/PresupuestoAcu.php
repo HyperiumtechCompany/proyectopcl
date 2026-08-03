@@ -42,12 +42,12 @@ class PresupuestoAcu extends Model
             'subcontratos' => 'json',
             'subpartidas' => 'json',
             'rendimiento' => 'decimal:4',
-            'costo_mano_obra' => 'decimal:4',
-            'costo_materiales' => 'decimal:4',
-            'costo_equipos' => 'decimal:4',
-            'costo_subcontratos' => 'decimal:4',
-            'costo_subpartidas' => 'decimal:4',
-            'costo_unitario_total' => 'decimal:4',
+            'costo_mano_obra' => 'decimal:10',
+            'costo_materiales' => 'decimal:10',
+            'costo_equipos' => 'decimal:10',
+            'costo_subcontratos' => 'decimal:10',
+            'costo_subpartidas' => 'decimal:10',
+            'costo_unitario_total' => 'decimal:10',
         ];
     }
 

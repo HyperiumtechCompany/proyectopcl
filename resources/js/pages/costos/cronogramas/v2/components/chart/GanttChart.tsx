@@ -169,7 +169,7 @@ export function GanttChart({
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
             {/* Cabecera tiempo — fija verticalmente, sincroniza scroll horizontal */}
             <div ref={headerScrollRef} className="shrink-0 overflow-hidden">
                 <GanttChartHeader timeline={timeline} />
@@ -197,8 +197,8 @@ export function GanttChart({
                             key={i}
                             className={`pointer-events-none absolute inset-y-0 ${
                                 col.isHoliday
-                                    ? 'bg-amber-900/20'
-                                    : 'bg-slate-800/30'
+                                    ? 'bg-amber-100/70 dark:bg-amber-900/20'
+                                    : 'bg-slate-200/70 dark:bg-slate-800/30'
                             }`}
                             style={{ left: col.x, width: col.width }}
                             title={col.holidayName ?? col.date}
@@ -209,7 +209,7 @@ export function GanttChart({
                 {timeline.bottomCols.map((col, i) => (
                     <div
                         key={`vl-${i}`}
-                        className="pointer-events-none absolute inset-y-0 w-px bg-slate-700/20"
+                        className="pointer-events-none absolute inset-y-0 w-px bg-slate-400/40 dark:bg-slate-700/20"
                         style={{ left: col.x + col.width - 1 }}
                     />
                 ))}
@@ -278,8 +278,8 @@ export function GanttChart({
                     return (
                         <div
                             key={task.id}
-                            className={`absolute left-0 border-b border-slate-700/30 ${
-                                isSelected ? 'bg-blue-900/15' : ''
+                            className={`absolute left-0 border-b border-slate-300 dark:border-slate-700/30 ${
+                                isSelected ? 'bg-blue-100/70 dark:bg-blue-900/15' : ''
                             }`}
                             style={{
                                 top: vRow.start,

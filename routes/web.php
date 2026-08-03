@@ -13,9 +13,16 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DelphinController;
 use App\Http\Controllers\DesagueCalculationController;
 use App\Http\Controllers\Dialux\Editor2DController as DialuxEditor2DController;
+use App\Http\Controllers\Dialux\ElectricalCatalogController as DialuxElectricalCatalogController;
+use App\Http\Controllers\Dialux\ElectricalProjectController as DialuxElectricalProjectController;
 use App\Http\Controllers\Dialux\NormativeConfigController as DialuxNormativeConfigController;
+use App\Http\Controllers\Dialux\OutletProductController as DialuxOutletProductController;
+use App\Http\Controllers\Dialux\PlanFileController as DialuxPlanFileController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
+use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
 use App\Http\Controllers\EttpController;
+use App\Http\Controllers\GestorProyectoController;
+use App\Http\Controllers\GestorProyectoNodoController;
 use App\Http\Controllers\InsumoProductoController;
 use App\Http\Controllers\MetradoArquitecturaController;
 use App\Http\Controllers\MetradoComunicacionesController;
@@ -26,6 +33,8 @@ use App\Http\Controllers\MetradoEstructurasController;
 use App\Http\Controllers\MetradoGasController;
 use App\Http\Controllers\MetradoSanitariasController;
 use App\Http\Controllers\MetradosController;
+use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\PlanRequestController;
 use App\Http\Controllers\PresupuestoController;
 use App\Http\Controllers\SpattPararrayoSpreadsheetController;
 use App\Http\Controllers\UbigeoController;
@@ -41,13 +50,19 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::post('/solicitudes', [PlanRequestController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('plan-requests.store');
+
 Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
 // ----------- DIALux (Editor Lumínico 2D/3D)
 Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->group(function () {
-    Route::get('/', [DialuxEditor2DController::class, 'index'])->name('index');
+    Route::get('/', [DialuxProjectController::class, 'index'])->name('index');
+    Route::post('/', [DialuxProjectController::class, 'store'])->name('store');
+
     Route::post('/import-dwg', [DialuxEditor2DController::class, 'importDWG'])->name('import-dwg');
     Route::post('/formal-export', [DialuxEditor2DController::class, 'formalExport'])->name('formal-export');
 
@@ -55,23 +70,62 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
     Route::prefix('products')->name('products.')->group(function () {
         Route::get('/', [DialuxProductController::class, 'index'])->name('index');
         Route::post('/import', [DialuxProductController::class, 'import'])->name('import');
+        Route::post('/manual', [DialuxProductController::class, 'storeManual'])->name('store-manual');
         Route::get('/{productId}', [DialuxProductController::class, 'show'])->name('show');
         Route::delete('/{productId}', [DialuxProductController::class, 'destroy'])->name('destroy');
+        Route::patch('/{productId}/share', [DialuxProductController::class, 'share'])->name('share');
         Route::post('/{productId}/assign', [DialuxProductController::class, 'assign'])->name('assign');
         Route::get('/{productId}/source', [DialuxProductController::class, 'downloadSource'])->name('source');
     });
 
+    // ─── Catálogo de tomacorrientes ──────────────────────────────────────────
+    Route::prefix('outlet-products')->name('outlet-products.')->group(function () {
+        Route::get('/', [DialuxOutletProductController::class, 'index'])->name('index');
+        Route::post('/', [DialuxOutletProductController::class, 'store'])->name('store');
+        Route::patch('/{productId}', [DialuxOutletProductController::class, 'update'])->name('update');
+        Route::delete('/{productId}', [DialuxOutletProductController::class, 'destroy'])->name('destroy');
+        Route::patch('/{productId}/share', [DialuxOutletProductController::class, 'share'])->name('share');
+    });
+
     // ─── Normativa del Proyecto (config persistente) ─────────────────────────
     Route::prefix('normative-config')->name('normative-config.')->group(function () {
+        Route::get('/requirements', [DialuxNormativeConfigController::class, 'requirements'])->name('requirements');
         Route::get('/{dialuxProjectId}', [DialuxNormativeConfigController::class, 'show'])->name('show');
         Route::post('/', [DialuxNormativeConfigController::class, 'store'])->name('store');
         Route::patch('/{dialuxProjectId}/compliance', [DialuxNormativeConfigController::class, 'updateCompliance'])->name('compliance.update');
     });
+
+    // ─── Módulo Eléctrico (luminarias, tomacorrientes, circuitos, tableros) ──
+    Route::prefix('electrical')->name('electrical.')->group(function () {
+        Route::post('/', [DialuxElectricalProjectController::class, 'store'])->name('store');
+        Route::post('/catalog/outlet-rules', [DialuxElectricalCatalogController::class, 'storeOutletRule'])->name('catalog.outlet-rules.store');
+        Route::delete('/catalog/outlet-rules/{id}', [DialuxElectricalCatalogController::class, 'destroyOutletRule'])->name('catalog.outlet-rules.destroy');
+        Route::post('/catalog/outlet-types', [DialuxElectricalCatalogController::class, 'storeOutletType'])->name('catalog.outlet-types.store');
+        Route::delete('/catalog/outlet-types/{id}', [DialuxElectricalCatalogController::class, 'destroyOutletType'])->name('catalog.outlet-types.destroy');
+        Route::post('/catalog/conductors', [DialuxElectricalCatalogController::class, 'storeConductor'])->name('catalog.conductors.store');
+        Route::delete('/catalog/conductors/{id}', [DialuxElectricalCatalogController::class, 'destroyConductor'])->name('catalog.conductors.destroy');
+        Route::post('/catalog/circuit-defaults', [DialuxElectricalCatalogController::class, 'storeCircuitDefault'])->name('catalog.circuit-defaults.store');
+        Route::get('/{dialuxProjectId}', [DialuxElectricalProjectController::class, 'show'])->name('show');
+    });
+
+    // ─── Proyecto DIAlux individual — debe ir al final (wildcard) ───────────
+    Route::post('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'store'])->name('plans.store');
+    Route::post('/{dialuxProject}/plans/{sceneId}/link', [DialuxPlanFileController::class, 'link'])->name('plans.link');
+    Route::get('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'show'])->name('plans.show');
+    Route::delete('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'destroy'])->name('plans.destroy');
+    Route::get('/{dialuxProject}/electrico', [DialuxElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
+    Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
+    Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');
+    Route::delete('/{dialuxProject}', [DialuxProjectController::class, 'destroy'])->name('destroy');
 });
 
 // ─── Gestión de Personal / Usuarios ───────────────────────────────────────────
 Route::middleware(['auth', 'verified', 'role:root|gerencia|administracion'])->group(function () {
     Route::resource('users', UserController::class);
+    Route::resource('organizations', OrganizationController::class);
+    Route::get('/solicitudes', [PlanRequestController::class, 'index'])->name('plan-requests.index');
+    Route::post('/solicitudes/{planRequest}/approve', [PlanRequestController::class, 'approve'])->name('plan-requests.approve');
+    Route::post('/solicitudes/{planRequest}/reject', [PlanRequestController::class, 'reject'])->name('plan-requests.reject');
 });
 
 // ─── Caída de Tensión ──────────────────────────────────────────────────────────
@@ -168,6 +222,19 @@ Route::middleware(['auth', 'verified'])->prefix('spatt-pararrayos')->name('spatt
     Route::patch('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'update'])->name('update');
     Route::delete('/{spattPararrayo}', [SpattPararrayoSpreadsheetController::class, 'destroy'])->name('destroy');
     Route::post('/{spattPararrayo}/enable-collab', [SpattPararrayoSpreadsheetController::class, 'enableCollaboration'])->name('enable-collab');
+});
+
+// ─── Gestor de Proyectos ───────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('gestor-proyectos')->name('gestor-proyectos.')->group(function () {
+    Route::get('/', [GestorProyectoController::class, 'index'])->name('index');
+    Route::post('/', [GestorProyectoController::class, 'store'])->name('store');
+    Route::get('/{gestorProyecto}', [GestorProyectoController::class, 'show'])->name('show');
+    Route::patch('/{gestorProyecto}', [GestorProyectoController::class, 'update'])->name('update');
+    Route::delete('/{gestorProyecto}', [GestorProyectoController::class, 'destroy'])->name('destroy');
+
+    Route::post('/{gestorProyecto}/nodos', [GestorProyectoNodoController::class, 'store'])->name('nodos.store');
+    Route::patch('/{gestorProyecto}/nodos/{nodo}', [GestorProyectoNodoController::class, 'update'])->name('nodos.update');
+    Route::delete('/{gestorProyecto}/nodos/{nodo}', [GestorProyectoNodoController::class, 'destroy'])->name('nodos.destroy');
 });
 
 // ─── Proyectos de Costos ─────────────────────────────────────────────────────
@@ -281,6 +348,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
             Route::get('/presupuesto/export', [PresupuestoController::class, 'export'])->name('proyectos.presupuesto.export');
             Route::get('/presupuesto/export/excel', [PresupuestoController::class, 'exportExcel'])->name('proyectos.presupuesto.export.excel');
             Route::get('/presupuesto/export/pdf', [PresupuestoController::class, 'exportPdf'])->name('proyectos.presupuesto.export.pdf');
+            Route::get('/presupuesto/acus/export-data', [PresupuestoController::class, 'exportAcusData'])->name('proyectos.presupuesto.acus.export-data');
 
             // ─── Consolidado Snapshot (cache de totales) ───
             Route::get('/presupuesto/consolidado/snapshot', [PresupuestoController::class, 'getConsolidadoSnapshot'])->name('proyectos.presupuesto.consolidado.snapshot.show');
@@ -334,7 +402,7 @@ Route::middleware(['auth', 'verified'])->prefix('costos')->name('costos.')->grou
         });
 }); // Cierre de costos
 // ─── CRONOGRAMA GANTT (Configuración Final) ──────────────────────────────────
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', SetCostosDatabase::class])->group(function () {
 
     Route::get('/module/crono_general', [CronogramaController::class, 'index'])->name('proyectos.cronograma.index');
     Route::get('/module/crono_materiales', [CronoMaterialesController::class, 'index'])->name('proyectos.cronograma.materiales');

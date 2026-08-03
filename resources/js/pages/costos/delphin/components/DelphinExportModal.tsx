@@ -22,8 +22,8 @@ const CONTENT_OPTIONS: {
             key: 'budget_only',
             icon: <BarChart2 size={20} />,
             title: 'Solo Presupuesto',
-            desc: 'Partidas, unidades, metrados y precios unitarios.',
-            sheets: ['Presupuesto General'],
+            desc: 'Partidas, unidades, metrados y precios unitarios con sus ACUs.',
+            sheets: ['Presupuesto General', 'ACUs'],
         },
         {
             key: 'formula_polinomica' as DelphinExportContent,
@@ -36,8 +36,8 @@ const CONTENT_OPTIONS: {
             key: 'budget_gantt',
             icon: <Layers size={20} />,
             title: 'Presupuesto + Cronograma',
-            desc: 'Ambas vistas en un único archivo.',
-            sheets: ['Presupuesto General', 'Cronograma General'],
+            desc: 'Ambas vistas en un único archivo, incluyendo ACUs.',
+            sheets: ['Presupuesto General', 'ACUs', 'Cronograma General'],
         },
         {
             key: 'gantt_only',

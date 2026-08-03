@@ -78,14 +78,14 @@ export function CellText({
     if (isEditing) {
         return (
             <div
-                className="flex h-full w-full items-center bg-blue-950/60 ring-2 ring-inset ring-blue-400"
+                className="flex h-full w-full items-center bg-blue-50 ring-2 ring-inset ring-blue-400 dark:bg-blue-950/60"
                 style={padStyle}
             >
                 {prefix && (
                     isEditingPrefix ? (
                         <input
                             ref={prefixInputRef}
-                            className="shrink-0 w-14 border-0 bg-blue-900/60 pl-2 pr-1 text-xs text-amber-300 outline-none ring-1 ring-amber-400/60 rounded"
+                            className="w-14 shrink-0 rounded border-0 bg-blue-100 pr-1 pl-2 text-xs text-amber-700 outline-none ring-1 ring-amber-400/60 dark:bg-blue-900/60 dark:text-amber-300"
                             value={prefixDraft}
                             onChange={e => setPrefixDraft(e.target.value)}
                             onBlur={commitPrefixEdit}
@@ -98,7 +98,7 @@ export function CellText({
                         />
                     ) : (
                         <span
-                            className={`shrink-0 pl-2 pr-1 text-xs select-none ${prefixEditable ? 'cursor-text text-amber-300/80 hover:text-amber-300 underline decoration-dotted' : 'text-slate-400/70'}`}
+                            className={`shrink-0 pl-2 pr-1 text-xs select-none ${prefixEditable ? 'cursor-text text-amber-700 hover:text-amber-800 underline decoration-dotted dark:text-amber-300/80 dark:hover:text-amber-300' : 'text-slate-500 dark:text-slate-400/70'}`}
                             title={prefixEditable ? 'Doble clic para editar numeración' : undefined}
                             onClick={prefixEditable ? e => e.stopPropagation() : undefined}
                             onDoubleClick={e => { e.stopPropagation(); startPrefixEdit(); }}
@@ -109,7 +109,7 @@ export function CellText({
                 )}
                 <input
                     ref={inputRef}
-                    className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-xs text-white outline-none"
+                    className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-xs text-slate-900 outline-none dark:text-white"
                     style={prefix ? undefined : { paddingLeft: '8px' }}
                     value={draft}
                     placeholder={placeholder}
@@ -130,7 +130,7 @@ export function CellText({
 
     return (
         <div
-            className={`flex h-full cursor-pointer overflow-hidden px-2 text-xs ${textColorClass ?? 'text-slate-200'} hover:bg-slate-700/40
+            className={`flex h-full cursor-pointer overflow-hidden px-2 text-xs ${textColorClass ?? 'text-slate-700 dark:text-slate-200'} hover:bg-slate-100 dark:hover:bg-slate-700/40
                 ${wrap ? 'items-start py-1.5' : 'items-center'}`}
             style={padStyle}
             title={prefix ? `${prefix} ${value}` : value}
@@ -141,7 +141,7 @@ export function CellText({
                 isEditingPrefix ? (
                     <input
                         ref={prefixInputRef}
-                        className="shrink-0 mr-1.5 w-14 border-0 bg-slate-700 text-xs text-amber-300 outline-none ring-1 ring-amber-400/60 rounded px-1"
+                        className="mr-1.5 w-14 shrink-0 rounded border-0 bg-white px-1 text-xs text-amber-700 outline-none ring-1 ring-amber-400/60 dark:bg-slate-700 dark:text-amber-300"
                         value={prefixDraft}
                         onChange={e => setPrefixDraft(e.target.value)}
                         onBlur={commitPrefixEdit}
@@ -154,7 +154,7 @@ export function CellText({
                     />
                 ) : (
                     <span
-                        className={`mr-1.5 shrink-0 text-slate-400/70 ${prefixEditable ? 'cursor-text hover:text-amber-300 hover:underline hover:decoration-dotted' : ''}`}
+                        className={`mr-1.5 shrink-0 text-slate-500 dark:text-slate-400/70 ${prefixEditable ? 'cursor-text hover:text-amber-700 hover:underline hover:decoration-dotted dark:hover:text-amber-300' : ''}`}
                         title={prefixEditable ? 'Doble clic para editar numeración' : undefined}
                         onClick={prefixEditable ? e => e.stopPropagation() : undefined}
                         onDoubleClick={e => { e.stopPropagation(); startPrefixEdit(); }}
@@ -175,11 +175,11 @@ export function CellText({
                         wordBreak: 'break-word',
                     }}
                 >
-                    {value || <span className="text-slate-500">{placeholder}</span>}
+                    {value || <span className="text-slate-400 dark:text-slate-500">{placeholder}</span>}
                 </span>
             ) : (
                 <span className="truncate">
-                    {value || <span className="text-slate-500">{placeholder}</span>}
+                    {value || <span className="text-slate-400 dark:text-slate-500">{placeholder}</span>}
                 </span>
             )}
         </div>

@@ -76,6 +76,15 @@ class ImportAcusFromExcel extends Command
             }
         }
 
+        // Los componentes se insertan con la cantidad/parcial tal cual vienen del Excel
+        // (columnas Q/S), que pueden traer más decimales de los debidos o un parcial que
+        // no corresponde exactamente a cantidad × precio. recalculateACUCategories() es la
+        // misma rutina que usa el resto del sistema para sanear ACUs: redondea cantidad a
+        // 4 decimales, recalcula parcial = cantidad × precio (con manejo especial de
+        // Herramientas Manuales) y recompone costo_mano_obra/materiales/equipos/
+        // subcontratos/subpartidas como suma de esos parciales corregidos.
+        $this->dbService->recalculateACUCategories(DB::connection('costos_tenant'), $tenantPresupuestoId);
+
         $this->syncAllPrecioUnitario($tenantPresupuestoId);
         $this->syncCostoDirecto($project);
 

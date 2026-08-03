@@ -138,9 +138,12 @@ export function calculateInsumoUsage(
     costoFactor = 1,
 ): { cantidad: number; parcial: number } {
     const cantidad = presupuestoCantidad * acuCantidad;
-    // Redondeo con decimal.js a 2 decimales (igual que decimalMul en usePresupuestoAcu.ts) —
-    // evita arrastrar error de punto flotante en el monto de cada uso antes de consolidar.
-    const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(2).toNumber();
+    // Redondeo con decimal.js a 10 decimales (igual que decimalMul en usePresupuestoAcu.ts,
+    // no a 2 ni a 6) — con miles de usos de insumo, redondear cada uno a 2dp antes de sumar
+    // acumula un error que Costo Directo no arrastra igual; y con metrados grandes, incluso
+    // un residuo en el 7º decimal se amplifica a céntimos. 2dp solo se aplica al formatear
+    // en pantalla (fmt()).
+    const parcial = new Decimal(cantidad).times(precio).times(costoFactor).toDecimalPlaces(10).toNumber();
     return { cantidad, parcial };
 }
 
@@ -190,13 +193,6 @@ export function flattenInsumos(
 
     //  2. Construir mapa SOLO con partidas que existen en ACU
     const presupuestoCantidadByPartida = new Map<string, number>();
-    // precio_unitario REAL ya guardado en la fila del presupuesto — es la misma
-    // fuente que usa Costo Directo. Se usa como ancla del reparto (en vez del
-    // costo_unitario_total del objeto ACU) porque el ACU puede recalcularse
-    // localmente (rendimiento, horas/día al seleccionar la partida) sin que ese
-    // nuevo precio se haya reenviado todavía al presupuesto — anclar aquí evita
-    // que ese desfase rompa la reconciliación con Costo Directo.
-    const presupuestoPrecioByPartida = new Map<string, number>();
 
     for (const row of delphinRows) {
         const partida = normalizedPartida(String(row.partida ?? ''));
@@ -213,11 +209,6 @@ export function flattenInsumos(
         } else if (parcial > 0 && !presupuestoCantidadByPartida.has(partida)) {
             presupuestoCantidadByPartida.set(partida, parcial);
         }
-
-        const precioUnitario = Number(row.precio_unitario ?? 0);
-        if (precioUnitario > 0) {
-            presupuestoPrecioByPartida.set(partida, precioUnitario);
-        }
     }
 
 
@@ -226,8 +217,12 @@ export function flattenInsumos(
         return rows;
     }
 
-    //  3. SOLO tipos que existen en el Excel
-    const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos'];
+    //  3. Todas las categorías de un ACU (antes excluía subcontratos/subpartidas,
+    //     dejando esas dos pestañas del modal siempre vacías aunque el ACU sí
+    //     tuviera esos componentes cargados)
+    const tiposValidos: InsumoType[] = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'];
+
+    let procesados = 0;
 
     for (const acu of acuRows) {
         const partidaKey = normalizedPartida(acu.partida);
@@ -235,51 +230,7 @@ export function flattenInsumos(
 
         if (presupuestoCantidad === 0) continue;
 
-        // Reparto proporcional: en vez de recalcular cada componente de forma
-        // independiente (metrado × cantidad × precio), se reparte el monto YA FIJO
-        // de esta partida entre sus componentes según el peso real de cada uno
-        // dentro del ACU. Garantiza que la suma de Insumos Consolidados SIEMPRE
-        // reconcilie con Costo Directo — dos sumas independientes con redondeo en
-        // cascada nunca coinciden exactamente, pero una partición de un monto
-        // fijo, sí.
-        const baseAcuTotal = new Decimal(acu.costo_mano_obra ?? 0)
-            .plus(acu.costo_materiales ?? 0)
-            .plus(acu.costo_equipos ?? 0)
-            .toDecimalPlaces(2)
-            .toNumber();
-
-        if (baseAcuTotal === 0) continue;
-
-        // Ancla al precio_unitario REAL ya guardado en el presupuesto (misma
-        // fuente que Costo Directo), no al costo_unitario_total del objeto ACU
-        // — éste puede haberse recalculado localmente (rendimiento, horas/día al
-        // seleccionar la partida) sin haberse reenviado todavía al presupuesto.
-        // Se resta la porción de subcontratos/subpartidas (no rastreada aquí,
-        // igual que antes) según la proporción que reporta el ACU, para no
-        // inflar mano de obra/materiales/equipos con un costo que no es suyo.
-        const costoUnitarioAcu = Number(
-            acu.costo_unitario_total ??
-                baseAcuTotal + Number(acu.costo_subcontratos ?? 0) + Number(acu.costo_subpartidas ?? 0),
-        );
-        const precioUnitarioReal = presupuestoPrecioByPartida.get(partidaKey) ?? costoUnitarioAcu;
-        const trackedShare = costoUnitarioAcu > 0 ? Math.min(1, Math.max(0, baseAcuTotal / costoUnitarioAcu)) : 1;
-
-        const partidaBaseParcial = new Decimal(presupuestoCantidad)
-            .times(precioUnitarioReal)
-            .times(trackedShare)
-            .toDecimalPlaces(2)
-            .toNumber();
-
-        const pending: Array<{
-            key: InsumoType;
-            descripcion: string;
-            codigo: string;
-            unidad: string;
-            acuCantidad: number;
-            precio: number;
-            esHerramientas: boolean;
-            itemParcialEnAcu: number;
-        }> = [];
+        procesados++;
 
         for (const { key } of INSUMO_TYPES) {
             if (!tiposValidos.includes(key)) continue;
@@ -294,74 +245,62 @@ export function flattenInsumos(
                 const acuCantidad = Number(item.cantidad ?? 0);
                 const precio = itemPrecio(key, item);
                 const unidad = String(item.unidad ?? '').toLowerCase().trim() || '-';
-                // Mismo criterio que isHerramientasRow (AcuPanel.tsx) y recalcAcuSubtotals
-                // (PresupuestoController.php): "Herramientas Manuales" se identifica por
-                // descripción, no por unidad — la unidad guardada no siempre empieza con "%".
-                const esHerramientas = key === 'equipos' && descripcion.toLowerCase().includes('herramienta');
+                const esPorcentaje = unidad.startsWith('%');
 
                 if (acuCantidad === 0 || precio === 0) continue;
 
-                const parcialAcu = esHerramientas
+                const parcialAcu = esPorcentaje
                     ? (acuCantidad / 100) * precio
                     : acuCantidad * precio;
-                // Parcial propio del componente dentro del ACU (mismo criterio que
-                // decimalMul/calculateAcuLocally) — es la base para el peso proporcional.
-                const itemParcialEnAcu = esHerramientas
-                    ? new Decimal(parcialAcu).toDecimalPlaces(2).toNumber()
-                    : new Decimal(acuCantidad).times(precio).times(itemCostFactor(key, item)).toDecimalPlaces(2).toNumber();
+                const usage = esPorcentaje
+                    ? (() => {
+                        // 10dp, no 2 ni 6 — mismo motivo que calculateInsumoUsage: evita
+                        // acumular error de redondeo por-fila y su amplificación con
+                        // metrados grandes frente a Costo Directo.
+                        const monto = new Decimal(parcialAcu).times(presupuestoCantidad).toDecimalPlaces(10).toNumber();
+                        return { cantidad: monto, parcial: monto };
+                    })()
+                    : calculateInsumoUsage(
+                        presupuestoCantidad,
+                        acuCantidad,
+                        precio,
+                        itemCostFactor(key, item),
+                    );
 
-                pending.push({ key, descripcion, codigo, unidad, acuCantidad, precio, esHerramientas, itemParcialEnAcu });
+                const baseKey = [
+                    key,
+                    normalizeKey(descripcion),
+                    normalizeKey(unidad),
+                    codigo ? normalizeKey(codigo) : '',
+                ].join('|');
+
+                rows.push({
+                    sourceKey: baseKey,
+                    type: key,
+                    codigo,
+                    descripcion,
+                    unidad,
+                    cantidad: usage.cantidad,
+                    precio: esPorcentaje ? 0 : precio,
+                    // Acumula desde usage.parcial (no cantidad*precio crudo) para que incluya
+                    // el factor de costo (ej. desperdicio de materiales) — así el precio de
+                    // referencia consolidado (parcial/cantidad) siempre reconcilia con "Monto":
+                    // Cantidad × P.REF. = Monto, sin excepciones ocultas por el factor.
+                    precioPonderado: esPorcentaje ? 0 : usage.parcial,
+                    parcial: usage.parcial,
+                    usos: 1,
+                    reference: {
+                        acuId: acu.id,
+                        partida: acu.partida,
+                        acuDescripcion: acu.descripcion,
+                        insumoDescripcion: descripcion,
+                        metrado: presupuestoCantidad,
+                        cantidadAcu: acuCantidad,
+                        cantidadTotal: usage.cantidad,
+                    },
+                });
             }
         }
-
-        if (pending.length === 0) continue;
-
-        // Reparte el monto fijo entre los componentes; el ÚLTIMO recibe el residuo
-        // exacto (partidaBaseParcial − acumulado) en vez de su parte redondeada,
-        // así la suma total nunca queda unos centavos corta o pasada.
-        let acumulado = new Decimal(0);
-        pending.forEach((p, idx) => {
-            const isLast = idx === pending.length - 1;
-            const peso = p.itemParcialEnAcu / baseAcuTotal;
-            const monto = isLast
-                ? new Decimal(partidaBaseParcial).minus(acumulado).toDecimalPlaces(2).toNumber()
-                : new Decimal(peso).times(partidaBaseParcial).toDecimalPlaces(2).toNumber();
-            acumulado = acumulado.plus(monto);
-
-            const cantidadFisica = p.esHerramientas ? monto : presupuestoCantidad * p.acuCantidad;
-
-            const baseKey = [
-                p.key,
-                normalizeKey(p.descripcion),
-                normalizeKey(p.unidad),
-                p.codigo ? normalizeKey(p.codigo) : '',
-            ].join('|');
-
-            rows.push({
-                sourceKey: baseKey,
-                type: p.key,
-                codigo: p.codigo,
-                descripcion: p.descripcion,
-                unidad: p.unidad,
-                cantidad: cantidadFisica,
-                precio: p.esHerramientas ? 0 : p.precio,
-                // Acumula desde el monto repartido (no cantidad*precio crudo) para que
-                // el precio de referencia consolidado (parcial/cantidad) siempre
-                // reconcilie con "Monto": Cantidad × P.REF. = Monto, sin excepciones.
-                precioPonderado: p.esHerramientas ? 0 : monto,
-                parcial: monto,
-                usos: 1,
-                reference: {
-                    acuId: acu.id,
-                    partida: acu.partida,
-                    acuDescripcion: acu.descripcion,
-                    insumoDescripcion: p.descripcion,
-                    metrado: presupuestoCantidad,
-                    cantidadAcu: p.acuCantidad,
-                    cantidadTotal: cantidadFisica,
-                },
-            });
-        });
     }
 
 

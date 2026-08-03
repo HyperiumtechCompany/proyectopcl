@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Upload, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -480,6 +481,8 @@ function StepAcus({
 
 // ─── ACU payload builder ──────────────────────────────────────────────────────
 
+const roundCantidad = (value: number) => new Decimal(value).toDecimalPlaces(4).toNumber();
+
 function buildAcuPayload(acu: ParsedAcu, partida: string) {
     return {
         id:                   null,
@@ -490,7 +493,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         mano_de_obra:         acu.mano_de_obra.map((c) => ({
             descripcion:    c.descripcion,
             unidad:         c.unidad || 'hh',
-            cantidad:       c.cantidad,
+            cantidad:       roundCantidad(c.cantidad),
             recursos:       c.recursos,
             precio_unitario: c.precio_unitario,
             insumo_id:      null,
@@ -500,7 +503,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         materiales:           acu.materiales.map((c) => ({
             descripcion:        c.descripcion,
             unidad:             c.unidad || 'und',
-            cantidad:           c.cantidad,
+            cantidad:           roundCantidad(c.cantidad),
             precio_unitario:    c.precio_unitario,
             factor_desperdicio: c.factor_desperdicio ?? 1,
             insumo_id:          null,
@@ -510,7 +513,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         equipos:              acu.equipos.map((c) => ({
             descripcion: c.descripcion,
             unidad:      c.unidad || 'hm',
-            cantidad:    c.cantidad,
+            cantidad:    roundCantidad(c.cantidad),
             recursos:    c.recursos,
             precio_hora: c.precio_hora,
             insumo_id:   null,
@@ -520,7 +523,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         subcontratos:         acu.subcontratos.map((c) => ({
             descripcion:     c.descripcion,
             unidad:          c.unidad || 'glb',
-            cantidad:        c.cantidad,
+            cantidad:        roundCantidad(c.cantidad),
             precio_unitario: c.precio_unitario,
             insumo_id:       null,
             cod_insumo:      c.codigo || null,
@@ -529,7 +532,7 @@ function buildAcuPayload(acu: ParsedAcu, partida: string) {
         subpartidas:          acu.subpartidas.map((c) => ({
             descripcion:     c.descripcion,
             unidad:          c.unidad || 'und',
-            cantidad:        c.cantidad,
+            cantidad:        roundCantidad(c.cantidad),
             precio_unitario: c.precio_unitario,
             insumo_id:       null,
             cod_insumo:      c.codigo || null,

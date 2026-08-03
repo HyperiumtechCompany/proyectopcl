@@ -2,10 +2,11 @@ import { Head } from '@inertiajs/react';
 import { UserForm } from '@/components/users/UserForm';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { type Role } from '@/types/user';
+import { type Organization, type Role } from '@/types/user';
 
 type Props = {
     roles: Role[];
+    organizations: Organization[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -14,7 +15,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Nuevo Usuario', href: '/users/create' },
 ];
 
-export default function UsersCreate({ roles }: Props) {
+export default function UsersCreate({ roles, organizations }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Nuevo Usuario" />
@@ -30,7 +31,7 @@ export default function UsersCreate({ roles }: Props) {
 
                 {/* Form Card */}
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                    <UserForm roles={roles} />
+                    <UserForm roles={roles} organizations={organizations} />
                 </div>
             </div>
         </AppLayout>

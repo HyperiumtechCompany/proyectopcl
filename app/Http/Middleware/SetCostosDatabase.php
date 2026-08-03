@@ -6,6 +6,7 @@ use App\Models\CostoProject;
 use App\Services\CostoDatabaseService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetCostosDatabase
@@ -33,6 +34,16 @@ class SetCostosDatabase
 
         if (! $project instanceof CostoProject) {
             $project = CostoProject::findOrFail($project);
+        }
+
+        // Verificar dueño del proyecto — sin esto, cualquier usuario autenticado
+        // que conozca/adivine el ID puede leer y modificar datos de otro proyecto.
+        if ($project->user_id !== Auth::id()) {
+            abort(403, 'No tienes acceso a este proyecto.');
+        }
+
+        if ($project->is_demo && $project->demo_expires_at?->isPast()) {
+            abort(403, 'Tu demo expiró. Actualiza tu plan para seguir accediendo.');
         }
 
         // Verify the database exists

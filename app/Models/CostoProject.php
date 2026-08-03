@@ -32,6 +32,8 @@ class CostoProject extends Model
         'plantilla_logo_der',
         'portada_logo_center',
         'plantilla_firma',
+        'is_demo',
+        'demo_expires_at',
     ];
 
     protected function casts(): array
@@ -40,6 +42,8 @@ class CostoProject extends Model
             'codigos_modulares' => 'array',
             'fecha_inicio' => 'date',
             'fecha_fin' => 'date',
+            'is_demo' => 'boolean',
+            'demo_expires_at' => 'datetime',
         ];
     }
 

@@ -6,6 +6,7 @@ use App\Models\CostoProject;
 use App\Models\CostoProjectModule;
 use App\Models\Ubigeo;
 use App\Services\CostoDatabaseService;
+use App\Services\ProjectQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,7 @@ class CostoProjectController extends Controller
 {
     public function __construct(
         protected CostoDatabaseService $dbService,
+        protected ProjectQuotaService $quotaService,
     ) {}
 
     /**
@@ -87,6 +89,8 @@ class CostoProjectController extends Controller
             'plantilla_firma' => 'nullable|image|max:2048',
         ]);
 
+        $this->quotaService->assertCanCreate($request->user(), 'costos');
+
         $dbName = CostoProject::generateDatabaseName(Auth::id());
         $project = null;
         $cantidadModulos = $validated['sanitarias_cantidad_modulos'] ?? 1;
@@ -95,6 +99,7 @@ class CostoProjectController extends Controller
 
             // 1️⃣ Crear registro en BD principal
             $project = CostoProject::create([
+                ...$this->quotaService->demoAttributesFor($request->user()),
                 'user_id' => Auth::id(),
                 'nombre' => $validated['nombre'],
                 'uei' => $validated['uei'] ?? null,

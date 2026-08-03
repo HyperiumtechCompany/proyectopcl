@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -30,6 +32,7 @@ class User extends Authenticatable
         'plan',
         'plan_expires_at',
         'status',
+        'organization_id',
     ];
 
     /**
@@ -101,6 +104,25 @@ class User extends Authenticatable
                 ? 'Hasta '.$this->plan_expires_at->format('d/m/Y')
                 : 'Sin fecha',
             default => 'Desconocido',
+        };
+    }
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * Resolve the plan expiration date for a given plan type.
+     */
+    public static function resolvePlanExpiration(string $plan): ?CarbonInterface
+    {
+        return match ($plan) {
+            'free' => now()->addDays(5),
+            'mensual' => now()->addDays(30),
+            'anual' => now()->addDays(365),
+            'lifetime' => null,
+            default => null,
         };
     }
 

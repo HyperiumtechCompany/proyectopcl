@@ -1,0 +1,1049 @@
+import { circuitCurrent } from '../electrical/engine/formulas';
+import { deriveSceneAmbientSpaces, findAmbientSpaceContainingPoint, pointInPolygon } from './ambientSpaces';
+import { CONDUCTOR_SECTION_OPTIONS, DEFAULT_OUTLET_POWER_W, isOutletDeviceType } from './types';
+import type {
+    Conductor,
+    ElectricalDevice,
+    Fixture,
+    LightSwitch,
+    Scene,
+    Vertex,
+} from './types';
+
+const DEFAULT_ROOM_HEIGHT = 2.7;
+const DEFAULT_SWITCH_HEIGHT = 1.4;
+
+type WireNode =
+    | (Fixture & { nodeType: 'fixture' })
+    | (LightSwitch & { nodeType: 'switch' })
+    | (ElectricalDevice & { nodeType: 'device' });
+
+export interface WireLengthWallRow {
+    wallId: string | null;
+    wallLabel: string;
+    conductorCount: number;
+    switchLabels: string[];
+    horizontalLength: number;
+    verticalAllowance: number;
+    totalLength: number;
+}
+
+function distance(a: Vertex, b: Vertex): number {
+    return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function resolveNode(
+    id: string,
+    fixtures: Fixture[],
+    switches: LightSwitch[],
+    devices: ElectricalDevice[],
+): WireNode | null {
+    const fixture = fixtures.find((item) => item.id === id);
+    if (fixture) return { ...fixture, nodeType: 'fixture' };
+
+    const lightSwitch = switches.find((item) => item.id === id);
+    if (lightSwitch) return { ...lightSwitch, nodeType: 'switch' };
+
+    const device = devices.find((item) => item.id === id);
+    if (device) return { ...device, nodeType: 'device' };
+
+    return null;
+}
+
+function conductorPlanLength(
+    conductor: Conductor,
+    source: Vertex,
+    target: Vertex,
+): number {
+    const points = [source, ...(conductor.waypoints ?? []), target];
+
+    return points.reduce((total, point, index) => {
+        if (index === 0) return total;
+        return total + distance(points[index - 1], point);
+    }, 0);
+}
+
+function nodeMountingHeight(node: WireNode): number {
+    if (node.nodeType === 'fixture') {
+        return Math.max(0, node.z ?? node.mountingHeight ?? 0);
+    }
+
+    return Math.max(0, node.mountingHeight ?? 0);
+}
+
+function nodeVerticalAllowance(
+    scene: Scene,
+    node: WireNode,
+    routeType: Conductor['routeType'],
+): number {
+    const mountingHeight = nodeMountingHeight(node);
+    const isPanel =
+        node.nodeType === 'device' &&
+        (node.type === 'main_panel' || node.type === 'sub_panel');
+
+    if (routeType === 'wall_ceiling' || isPanel) {
+        return Math.max(0, roomHeightAt(scene, node) - mountingHeight);
+    }
+
+    return mountingHeight;
+}
+
+function conductorLengthComponents(
+    scene: Scene,
+    conductor: Conductor,
+    source: WireNode,
+    target: WireNode,
+): { horizontalLengthM: number; verticalLengthM: number; totalLengthM: number } {
+    const horizontalLengthM = conductorPlanLength(conductor, source, target);
+    const verticalLengthM = [source, target].reduce(
+        (total, node) =>
+            total + nodeVerticalAllowance(scene, node, conductor.routeType),
+        0,
+    );
+
+    return {
+        horizontalLengthM,
+        verticalLengthM,
+        totalLengthM: horizontalLengthM + verticalLengthM,
+    };
+}
+
+export interface ConductorLength {
+    horizontalLengthM: number;
+    verticalLengthM: number;
+    totalLengthM: number;
+}
+
+/**
+ * Longitud de un conductor individual (tramo origen→waypoints→destino, más
+ * el tramo vertical según altura de montaje) — mismo criterio geométrico que
+ * usa `calculatePanelCircuitSummaries` para el Cálculo CT, expuesto acá para
+ * mostrar la longitud de un cable puntual en el panel de propiedades.
+ * Devuelve `null` si el origen o el destino ya no existen en la escena.
+ */
+export function calculateConductorLength(
+    scene: Scene,
+    conductor: Conductor,
+): ConductorLength | null {
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+
+    const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
+    const target = resolveNode(conductor.targetId, fixtures, switches, devices);
+    if (!source || !target) return null;
+
+    return conductorLengthComponents(scene, conductor, source, target);
+}
+
+function roomHeightAt(scene: Scene, point: Vertex): number {
+    const room = scene.rooms.find(
+        (item) => item.vertices.length >= 3 && pointInPolygon(point, item.vertices),
+    );
+
+    return room?.height ?? scene.floorHeight ?? DEFAULT_ROOM_HEIGHT;
+}
+
+function switchLabel(lightSwitch: LightSwitch): string {
+    return lightSwitch.label || lightSwitch.type;
+}
+
+function wallLabel(scene: Scene, wallId: string | null): string {
+    if (!wallId) return 'Sin pared';
+
+    const wallIndex = scene.walls.findIndex((wall) => wall.id === wallId);
+    return wallIndex >= 0 ? `Pared ${wallIndex + 1}` : 'Pared no encontrada';
+}
+
+function switchVerticalDrop(scene: Scene, lightSwitch: LightSwitch): number {
+    const roomHeight = roomHeightAt(scene, lightSwitch);
+    const mountingHeight = lightSwitch.mountingHeight ?? DEFAULT_SWITCH_HEIGHT;
+
+    return Math.max(0, roomHeight - mountingHeight);
+}
+
+export function calculateWireLengthByWall(scene: Scene): WireLengthWallRow[] {
+    const groups = new Map<string, WireLengthWallRow>();
+    const switches = scene.lightSwitches ?? [];
+    const conductors = scene.conductors ?? [];
+    const fixtures = scene.fixtures ?? [];
+    const devices = scene.electricalDevices ?? [];
+
+    for (const conductor of conductors) {
+        const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
+        const target = resolveNode(conductor.targetId, fixtures, switches, devices);
+        if (!source || !target) continue;
+
+        const sourceSwitch = source.nodeType === 'switch' ? source : null;
+        const targetSwitch = target.nodeType === 'switch' ? target : null;
+        const primarySwitch = targetSwitch ?? sourceSwitch;
+        const wallId = primarySwitch?.wallId ?? null;
+        const key = wallId ?? '__no_wall__';
+
+        const existing = groups.get(key) ?? {
+            wallId,
+            wallLabel: wallLabel(scene, wallId),
+            conductorCount: 0,
+            switchLabels: [],
+            horizontalLength: 0,
+            verticalAllowance: 0,
+            totalLength: 0,
+        };
+
+        const horizontalLength = conductorPlanLength(conductor, source, target);
+        const switchEndpoints = [sourceSwitch, targetSwitch].filter(
+            (item): item is LightSwitch & { nodeType: 'switch' } => Boolean(item),
+        );
+        const verticalAllowance =
+            conductor.routeType === 'wall_ceiling'
+                ? switchEndpoints.reduce(
+                      (total, lightSwitch) =>
+                          total + switchVerticalDrop(scene, lightSwitch),
+                      0,
+                  )
+                : 0;
+
+        existing.conductorCount += 1;
+        existing.horizontalLength += horizontalLength;
+        existing.verticalAllowance += verticalAllowance;
+        existing.totalLength += horizontalLength + verticalAllowance;
+
+        for (const lightSwitch of switchEndpoints) {
+            const label = switchLabel(lightSwitch);
+            if (!existing.switchLabels.includes(label)) {
+                existing.switchLabels.push(label);
+            }
+        }
+
+        groups.set(key, existing);
+    }
+
+    return [...groups.values()].sort((a, b) => b.totalLength - a.totalLength);
+}
+
+export interface RoomWireSummary {
+    /** Focos ("puntos") que pertenecen a este recinto (Fixture.roomId). */
+    pointCount: number;
+    conductorCount: number;
+    totalLength: number;
+}
+
+/**
+ * Resumen de cableado para un conjunto de focos ("puntos") ya resueltos por
+ * el llamador (p.ej. getFixturesForRoom, que entiende ambientes/pasadizos) —
+ * suma la longitud (plano + tramo vertical hacia el interruptor) de los
+ * conductores que llegan a esos focos.
+ */
+export function calculateRoomWireSummary(
+    scene: Scene,
+    roomFixtures: Fixture[],
+): RoomWireSummary {
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+    const roomFixtureIds = new Set(roomFixtures.map((f) => f.id));
+
+    const conductors = (scene.conductors ?? []).filter(
+        (c) => roomFixtureIds.has(c.sourceId) || roomFixtureIds.has(c.targetId),
+    );
+
+    let totalLength = 0;
+    for (const conductor of conductors) {
+        const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
+        const target = resolveNode(conductor.targetId, fixtures, switches, devices);
+        if (!source || !target) continue;
+
+        const horizontalLength = conductorPlanLength(conductor, source, target);
+        const switchEndpoints = [source, target].filter(
+            (item): item is LightSwitch & { nodeType: 'switch' } =>
+                item.nodeType === 'switch',
+        );
+        const verticalAllowance =
+            conductor.routeType === 'wall_ceiling'
+                ? switchEndpoints.reduce(
+                      (total, lightSwitch) => total + switchVerticalDrop(scene, lightSwitch),
+                      0,
+                  )
+                : 0;
+
+        totalLength += horizontalLength + verticalAllowance;
+    }
+
+    return {
+        pointCount: roomFixtureIds.size,
+        conductorCount: conductors.length,
+        totalLength,
+    };
+}
+
+export interface PanelCircuitRoomLoad {
+    roomId: string;
+    roomName: string;
+    fixtureCount: number;
+    outletCount: number;
+    /** Alumbrado + tomacorrientes de este ambiente. */
+    installedPowerW: number;
+    lightingPowerW: number;
+    outletPowerW: number;
+    /** Texto legible que distingue alumbrado de tomacorriente, p.ej. "6×26 W alumbrado + 2×180 W tomacorriente". */
+    detail: string;
+}
+
+export interface PanelCircuitSummary {
+    levelId: string;
+    levelName: string;
+    levelIndex: number;
+    panelId: string;
+    panelLabel: string;
+    panelType: 'main_panel' | 'sub_panel';
+    panelLengthM: number;
+    connectionType: 'delta' | 'star';
+    designFactor: number;
+    copperResistivity: number;
+    code: string;
+    rootConductorId: string;
+    conductorCount: number;
+    horizontalLengthM: number;
+    verticalLengthM: number;
+    lengthM: number;
+    /** true si `lengthM` viene de la "Longitud del tablero" declarada del hijo, no del trazo del plano. */
+    lengthOverridden: boolean;
+    installedPowerW: number;
+    lightingPowerW: number;
+    outletPowerW: number;
+    forcePowerW: number;
+    /**
+     * Clasificación de la salida según CNE-Utilización / RNE EM.010:
+     * `lighting`/`outlet` = derivación final de un solo tipo (correcto);
+     * `feeder` = alimenta a otro tablero, agrega ambos tipos aguas abajo
+     * (normal, no es violación); `mixed` = derivación final que llega a la
+     * vez a una luminaria y a un tomacorriente (violación: deben separarse
+     * en circuitos y tuberías distintas); `unclassified` = sin cargas.
+     */
+    circuitLoadType: 'lighting' | 'outlet' | 'feeder' | 'mixed' | 'unclassified';
+    /** true cuando `circuitLoadType === 'mixed'`: alumbrado y tomacorriente comparten la misma salida. */
+    normativeViolation: boolean;
+    installedPowerKw: number;
+    demandFactor: number;
+    maximumDemandKw: number;
+    powerFactor: number;
+    rooms: PanelCircuitRoomLoad[];
+    traversedRoomNames: string[];
+    /** Tableros alimentados directamente por esta salida. */
+    fedPanelLabels: string[];
+    sectionMm2: number;
+    voltageV: number;
+    phases: 1 | 3;
+    currentA: number;
+    theoreticalDesignCurrentA: number;
+    phaseBalance: 'R' | 'S' | 'T' | 'RST';
+    phaseCurrentR: number;
+    phaseCurrentS: number;
+    phaseCurrentT: number;
+    nominalCableCurrentA: number;
+    ambientTemperatureC: number;
+    groupedCircuitCount: number;
+    groupingFactor: number;
+    temperatureFactor: number;
+    admissibleCableCurrentA: number;
+    capacityConforms: boolean;
+    itm: string;
+    dif: string;
+    conductorType: string;
+    tubeDiameterMm: number;
+    earthSectionMm2: number;
+    upstreamVoltageDropV: number;
+    voltageDropV: number;
+    voltageDropPct: number;
+    maxVoltageDropPct: number;
+    voltageDropOk: boolean;
+}
+
+/**
+ * Forma intermedia de un circuito antes de resolver la caída de tensión
+ * (ver "Pasada 2" en `calculatePanelCircuitSummaries`): todo lo demás ya
+ * está calculado, pero `voltageDropV`/`voltageDropPct`/`voltageDropOk`/
+ * `upstreamVoltageDropV` dependen de conocer el árbol completo de tableros
+ * primero, así que se guarda el aporte propio del tramo (`circuitOwnDropV`)
+ * para sumarlo recién cuando se sepa el ΔV heredado del padre.
+ */
+type PartialPanelCircuit = Omit<
+    PanelCircuitSummary,
+    'upstreamVoltageDropV' | 'voltageDropV' | 'voltageDropPct' | 'voltageDropOk'
+> & { circuitOwnDropV: number };
+
+const PANEL_TYPES = new Set(['main_panel', 'sub_panel']);
+const DEFAULT_VOLTAGE = 220;
+const DEFAULT_POWER_FACTOR = 0.9;
+const DEFAULT_MAX_VOLTAGE_DROP_PCT = 2.5;
+
+const DEFAULT_CABLE_CAPACITY_A: Array<[number, number]> = [
+    [2.5, 24], [4, 31], [6, 39], [10, 54], [16, 68], [25, 89],
+    [35, 110], [50, 138], [70, 165], [95, 198], [120, 225],
+    [150, 264], [185, 303], [240, 351], [300, 391],
+];
+
+function defaultNominalCableCurrent(sectionMm2: number): number {
+    return DEFAULT_CABLE_CAPACITY_A.find(
+        ([section]) => section >= sectionMm2,
+    )?.[1] ?? 0;
+}
+
+function numericProperty(value: string | undefined, fallback: number): number {
+    const parsed = Number.parseFloat(value?.replace(',', '.') ?? '');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function phasesProperty(value: string | undefined): 1 | 3 {
+    return value?.trim().startsWith('3') ? 3 : 1;
+}
+
+function ambientNamesAlongConductor(
+    conductor: Conductor,
+    source: WireNode,
+    target: WireNode,
+    ambients: ReturnType<typeof deriveSceneAmbientSpaces>,
+): string[] {
+    const names = new Set<string>();
+    const points = [source, ...(conductor.waypoints ?? []), target];
+
+    for (let index = 1; index < points.length; index += 1) {
+        const start = points[index - 1];
+        const end = points[index];
+        const segmentLength = distance(start, end);
+        const sampleCount = Math.max(1, Math.ceil(segmentLength / 0.25));
+
+        for (let sample = 0; sample <= sampleCount; sample += 1) {
+            const ratio = sample / sampleCount;
+            const point = {
+                x: start.x + (end.x - start.x) * ratio,
+                y: start.y + (end.y - start.y) * ratio,
+            };
+            const ambient = ambients.find((item) =>
+                pointInPolygon(point, item.room.vertices),
+            );
+            if (ambient) names.add(ambient.name);
+        }
+    }
+
+    return [...names];
+}
+
+/** Resume cada salida física de tablero siguiendo la red de conductores hasta sus cargas finales. */
+export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummary[] {
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+    const conductors = scene.conductors ?? [];
+    // TG primero, TD después: cuando el mismo conductor físico toca dos
+    // tableros (el alimentador TG→TD), el tablero procesado primero se
+    // queda como dueño de esa salida (ver claimedConductorIds más abajo).
+    // Sin este orden, el TD también la contaba como "su propia salida"
+    // hacia el TG (la relación invertida), generando una fila fantasma con
+    // 0 A / 0 m que aparecía como "Cumple" o "No cumple" sin significar nada.
+    const panels = devices
+        .filter((device) => PANEL_TYPES.has(device.type))
+        .sort((a, b) => (a.type === 'main_panel' ? 0 : 1) - (b.type === 'main_panel' ? 0 : 1));
+    const panelIds = new Set(panels.map((panel) => panel.id));
+    const nodeById = new Map<string, WireNode>();
+    const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+    const outletById = new Map(
+        devices.filter((device) => isOutletDeviceType(device.type)).map((device) => [device.id, device]),
+    );
+    const roomById = new Map(scene.rooms.map((room) => [room.id, room]));
+    const derivedAmbients = deriveSceneAmbientSpaces(scene);
+    const derivedAmbientById = new Map<string, ReturnType<typeof deriveSceneAmbientSpaces>[number]>();
+    derivedAmbients.forEach((ambient) => {
+        derivedAmbientById.set(ambient.id, ambient);
+        derivedAmbientById.set(ambient.room.id, ambient);
+    });
+    const conductorsByNode = new Map<string, Conductor[]>();
+    fixtures.forEach((fixture) => nodeById.set(fixture.id, { ...fixture, nodeType: 'fixture' }));
+    switches.forEach((lightSwitch) => nodeById.set(lightSwitch.id, { ...lightSwitch, nodeType: 'switch' }));
+    devices.forEach((device) => nodeById.set(device.id, { ...device, nodeType: 'device' }));
+    conductors.forEach((conductor) => {
+        conductorsByNode.set(conductor.sourceId, [...(conductorsByNode.get(conductor.sourceId) ?? []), conductor]);
+        conductorsByNode.set(conductor.targetId, [...(conductorsByNode.get(conductor.targetId) ?? []), conductor]);
+    });
+
+    const collectDownstreamLoads = (
+        panelId: string,
+        excludedConductorIds: ReadonlySet<string>,
+    ): { fixtureIds: Set<string>; outletIds: Set<string> } => {
+        const reachedFixtures = new Set<string>();
+        const reachedOutlets = new Set<string>();
+        const visitedConductors = new Set(excludedConductorIds);
+        const pendingNodes = [panelId];
+        const visitedNodes = new Set<string>();
+
+        while (pendingNodes.length > 0) {
+            const nodeId = pendingNodes.shift()!;
+            if (visitedNodes.has(nodeId)) continue;
+            visitedNodes.add(nodeId);
+
+            for (const conductor of conductorsByNode.get(nodeId) ?? []) {
+                if (visitedConductors.has(conductor.id)) continue;
+                visitedConductors.add(conductor.id);
+                const nextNodeId =
+                    conductor.sourceId === nodeId
+                        ? conductor.targetId
+                        : conductor.sourceId;
+                if (fixtureById.has(nextNodeId)) reachedFixtures.add(nextNodeId);
+                if (outletById.has(nextNodeId)) reachedOutlets.add(nextNodeId);
+                pendingNodes.push(nextNodeId);
+            }
+        }
+
+        return { fixtureIds: reachedFixtures, outletIds: reachedOutlets };
+    };
+
+    // Conductores ya atribuidos a un tablero (como salida propia o como
+    // tramo intermedio de su recorrido). Un tablero aguas abajo no puede
+    // reclamar como "su propia salida" un conductor que ya forma parte del
+    // recorrido de un tablero aguas arriba.
+    const claimedConductorIds = new Set<string>();
+
+    // Relación padre→hijo del árbol de tableros: se llena mientras se
+    // recorren las salidas (abajo) cada vez que una salida alimenta a un
+    // único tablero hijo. Se usa después para encadenar la caída de
+    // tensión (sección "Pasada 2").
+    const feederLinks: Array<{ parentPanelId: string; rootConductorId: string; childPanelId: string }> = [];
+
+    const partialCircuits = panels.flatMap((panel) => {
+        const exits = (conductorsByNode.get(panel.id) ?? []).filter(
+            (conductor) => !claimedConductorIds.has(conductor.id),
+        );
+
+        return exits.map((root, index) => {
+            const visitedConductors = new Set<string>();
+            const reachedFixtures = new Set<string>();
+            const reachedOutlets = new Set<string>();
+            const reachedPanelIds = new Set<string>();
+            const traversedRoomNames = new Set<string>();
+            const queue: Array<{ conductor: Conductor; fromNodeId: string }> = [{ conductor: root, fromNodeId: panel.id }];
+            let horizontalLengthM = 0;
+            let verticalLengthM = 0;
+
+            while (queue.length > 0) {
+                const current = queue.shift()!;
+                if (visitedConductors.has(current.conductor.id)) continue;
+                visitedConductors.add(current.conductor.id);
+
+                const source = nodeById.get(current.conductor.sourceId);
+                const target = nodeById.get(current.conductor.targetId);
+                if (!source || !target) continue;
+                const lengths = conductorLengthComponents(
+                    scene,
+                    current.conductor,
+                    source,
+                    target,
+                );
+                horizontalLengthM += lengths.horizontalLengthM;
+                verticalLengthM += lengths.verticalLengthM;
+                ambientNamesAlongConductor(
+                    current.conductor,
+                    source,
+                    target,
+                    derivedAmbients,
+                ).forEach((name) => traversedRoomNames.add(name));
+
+                const nextNodeId = current.conductor.sourceId === current.fromNodeId
+                    ? current.conductor.targetId
+                    : current.conductor.sourceId;
+                if (fixtureById.has(nextNodeId)) reachedFixtures.add(nextNodeId);
+                if (outletById.has(nextNodeId)) reachedOutlets.add(nextNodeId);
+                if (panelIds.has(nextNodeId)) {
+                    if (nextNodeId !== panel.id) reachedPanelIds.add(nextNodeId);
+                    continue;
+                }
+
+                for (const candidate of conductorsByNode.get(nextNodeId) ?? []) {
+                    if (visitedConductors.has(candidate.id)) continue;
+                    if (candidate.sourceId === nextNodeId || candidate.targetId === nextNodeId) {
+                        queue.push({ conductor: candidate, fromNodeId: nextNodeId });
+                    }
+                }
+            }
+
+            // Reclama todo el tramo recorrido por esta salida para que
+            // ningún otro tablero de la cadena (aguas abajo) lo vuelva a
+            // contar como si fuera propio.
+            visitedConductors.forEach((id) => claimedConductorIds.add(id));
+
+            reachedPanelIds.forEach((downstreamPanelId) => {
+                const downstream = collectDownstreamLoads(downstreamPanelId, visitedConductors);
+                downstream.fixtureIds.forEach((fixtureId) => reachedFixtures.add(fixtureId));
+                downstream.outletIds.forEach((outletId) => reachedOutlets.add(outletId));
+            });
+
+            // Si esta salida alimenta a un único tablero hijo y ese tablero
+            // declaró su propia "Longitud del tablero" (el cable real que se
+            // va a instalar — a veces más largo que el trazo del plano por
+            // ductos, subterráneo, etc.), esa longitud reemplaza la medida
+            // en el CAD para el cálculo de ΔV de esta fila.
+            let lengthOverridden = false;
+            if (reachedPanelIds.size === 1) {
+                const [downstreamPanelId] = reachedPanelIds;
+                const downstreamPanel = devices.find((device) => device.id === downstreamPanelId);
+                const declaredLengthM = downstreamPanel?.properties?.lengthM ?? 0;
+                if (declaredLengthM > 0) {
+                    horizontalLengthM = declaredLengthM;
+                    verticalLengthM = 0;
+                    lengthOverridden = true;
+                }
+            }
+
+            // Ubica el ambiente que contiene un punto (luminaria o
+            // tomacorriente) con el mismo criterio: roomId explícito primero,
+            // luego el ambiente derivado (rasterizado, ya calculado una sola
+            // vez para toda la escena arriba), y por último el polígono
+            // crudo del Room.
+            const roomIdFor = (point: Vertex, explicitRoomId?: string): string => {
+                const explicitRoom = explicitRoomId ? roomById.get(explicitRoomId) : undefined;
+                const containingAmbient =
+                    (explicitRoomId ? derivedAmbientById.get(explicitRoomId) : undefined) ??
+                    findAmbientSpaceContainingPoint(derivedAmbients, point);
+                const containingRoom = explicitRoom
+                    ?? containingAmbient?.room
+                    ?? scene.rooms.find((room) => pointInPolygon(point, room.vertices));
+                return containingAmbient?.room.id ?? containingRoom?.id ?? '__sin_ambiente__';
+            };
+
+            const loadsByRoom = new Map<string, { fixtures: Fixture[]; outlets: ElectricalDevice[] }>();
+            for (const fixtureId of reachedFixtures) {
+                const fixture = fixtureById.get(fixtureId);
+                if (!fixture) continue;
+                const roomId = roomIdFor(fixture, fixture.roomId);
+                const entry = loadsByRoom.get(roomId) ?? { fixtures: [], outlets: [] };
+                entry.fixtures.push(fixture);
+                loadsByRoom.set(roomId, entry);
+            }
+            for (const outletId of reachedOutlets) {
+                const outlet = outletById.get(outletId);
+                if (!outlet) continue;
+                const roomId = roomIdFor(outlet, outlet.roomId);
+                const entry = loadsByRoom.get(roomId) ?? { fixtures: [], outlets: [] };
+                entry.outlets.push(outlet);
+                loadsByRoom.set(roomId, entry);
+            }
+
+            const rooms = [...loadsByRoom.entries()].map(([roomId, { fixtures: roomFixtures, outlets: roomOutlets }]) => {
+                const lightingGroups = new Map<number, number>();
+                roomFixtures.forEach((fixture) => {
+                    const power = Math.max(0, fixture.power ?? 0);
+                    lightingGroups.set(power, (lightingGroups.get(power) ?? 0) + 1);
+                });
+                const outletGroups = new Map<number, number>();
+                roomOutlets.forEach((outlet) => {
+                    const power = Math.max(0, outlet.properties?.ratedPowerW ?? DEFAULT_OUTLET_POWER_W);
+                    outletGroups.set(power, (outletGroups.get(power) ?? 0) + 1);
+                });
+                const lightingPowerW = roomFixtures.reduce((sum, fixture) => sum + Math.max(0, fixture.power ?? 0), 0);
+                const outletPowerW = roomOutlets.reduce(
+                    (sum, outlet) => sum + Math.max(0, outlet.properties?.ratedPowerW ?? DEFAULT_OUTLET_POWER_W),
+                    0,
+                );
+                const lightingDetail = [...lightingGroups.entries()]
+                    .map(([power, count]) => `${count}×${power} W alumbrado`)
+                    .join(' + ');
+                const outletDetail = [...outletGroups.entries()]
+                    .map(([power, count]) => `${count}×${power} W tomacorriente`)
+                    .join(' + ');
+                return {
+                    roomId,
+                    roomName:
+                        derivedAmbientById.get(roomId)?.name
+                        ?? roomById.get(roomId)?.name
+                        ?? 'Sin ambiente asignado',
+                    fixtureCount: roomFixtures.length,
+                    outletCount: roomOutlets.length,
+                    installedPowerW: lightingPowerW + outletPowerW,
+                    lightingPowerW,
+                    outletPowerW,
+                    detail: [lightingDetail, outletDetail].filter(Boolean).join(' + '),
+                };
+            });
+
+            const voltageV = numericProperty(panel.properties?.voltage, DEFAULT_VOLTAGE);
+            const phases = root.ct?.system ?? phasesProperty(panel.properties?.phases);
+            const sectionMm2 = Math.max(0, root.sectionMm2 ?? 0);
+            const lengthM = horizontalLengthM + verticalLengthM;
+            const lightingPowerW = rooms.reduce((sum, room) => sum + room.lightingPowerW, 0);
+            // PI tomas = suma automática de los tomacorrientes realmente
+            // cableados a esta salida + cualquier ajuste manual que ya
+            // existiera desde el diálogo CT (compatibilidad con proyectos
+            // guardados antes de que los tomacorrientes se contaran solos).
+            const autoOutletPowerW = rooms.reduce((sum, room) => sum + room.outletPowerW, 0);
+            const outletPowerW = autoOutletPowerW + Math.max(0, root.ct?.outletPowerW ?? 0);
+            const forcePowerW = Math.max(0, root.ct?.forcePowerW ?? 0);
+
+            // Clasificación normativa (CNE-Utilización / RNE EM.010): un
+            // alimentador hacia otro tablero SÍ agrega alumbrado +
+            // tomacorrientes (es la suma de todo lo que hay aguas abajo, y
+            // eso es normal). Una salida final que NO alimenta a otro
+            // tablero pero llega a la vez a una luminaria y a un
+            // tomacorriente SÍ es una violación: deben ir en circuitos y
+            // tuberías separados, nunca compartidos.
+            const isFeederCircuit = reachedPanelIds.size > 0;
+            const hasLightingLoad = reachedFixtures.size > 0;
+            const hasOutletLoad = reachedOutlets.size > 0;
+            const circuitLoadType: PanelCircuitSummary['circuitLoadType'] = isFeederCircuit
+                ? 'feeder'
+                : hasLightingLoad && hasOutletLoad
+                    ? 'mixed'
+                    : hasOutletLoad
+                        ? 'outlet'
+                        : hasLightingLoad
+                            ? 'lighting'
+                            : 'unclassified';
+            const normativeViolation = circuitLoadType === 'mixed';
+            if (circuitLoadType === 'feeder' && reachedPanelIds.size === 1) {
+                feederLinks.push({
+                    parentPanelId: panel.id,
+                    rootConductorId: root.id,
+                    childPanelId: [...reachedPanelIds][0],
+                });
+            }
+            const totalInstalledPowerW =
+                lightingPowerW + outletPowerW + forcePowerW;
+            const installedPowerKw = totalInstalledPowerW / 1000;
+            const demandFactor = Math.max(
+                0,
+                root.ct?.demandFactor ??
+                    panel.properties?.defaultDemandFactor ??
+                    1,
+            );
+            const maximumDemandKw = installedPowerKw * demandFactor;
+            const powerFactor = Math.min(
+                1,
+                Math.max(
+                    0.01,
+                    root.ct?.powerFactor ??
+                        panel.properties?.defaultPowerFactor ??
+                        DEFAULT_POWER_FACTOR,
+                ),
+            );
+            const designFactor = Math.max(
+                0,
+                panel.properties?.designFactor ?? 1.25,
+            );
+            const currentA = circuitCurrent(
+                maximumDemandKw * 1000,
+                voltageV,
+                phases,
+                powerFactor,
+            );
+            const theoreticalDesignCurrentA = currentA * designFactor;
+            const phaseBalance =
+                phases === 3 ? 'RST' : (root.ct?.phaseBalance ?? 'R');
+            const phaseCurrentR =
+                phaseBalance === 'R' || phaseBalance === 'RST' ? currentA : 0;
+            const phaseCurrentS =
+                phaseBalance === 'S' || phaseBalance === 'RST' ? currentA : 0;
+            const phaseCurrentT =
+                phaseBalance === 'T' || phaseBalance === 'RST' ? currentA : 0;
+            const maximumPhaseCurrent = Math.max(
+                phaseCurrentR,
+                phaseCurrentS,
+                phaseCurrentT,
+            );
+            const nominalCableCurrentA = Math.max(
+                0,
+                root.ct?.nominalCableCurrentA ??
+                    defaultNominalCableCurrent(sectionMm2),
+            );
+            const groupingFactor = Math.max(
+                0,
+                root.ct?.groupingFactor ?? 1,
+            );
+            const temperatureFactor = Math.max(
+                0,
+                root.ct?.temperatureFactor ?? 1,
+            );
+            const admissibleCableCurrentA =
+                nominalCableCurrentA * groupingFactor * temperatureFactor;
+            const copperResistivity = Math.max(
+                0,
+                panel.properties?.copperResistivity ?? 0.0175,
+            );
+            // Aporte propio de ESTE tramo a la caída de tensión (todavía sin
+            // sumar lo que ya cayó aguas arriba — eso se resuelve en la
+            // "Pasada 2", después de conocer el árbol completo de tableros,
+            // para poder encadenar padre→hijo en vez de leer un número fijo).
+            const circuitOwnDropV =
+                sectionMm2 > 0
+                    ? (phases === 1 ? 2 : Math.sqrt(3)) *
+                      maximumPhaseCurrent *
+                      copperResistivity *
+                      lengthM *
+                      powerFactor /
+                      sectionMm2
+                    : Number.POSITIVE_INFINITY;
+            const maxVoltageDropPct =
+                root.ct?.voltageDropLimitPct ??
+                (reachedPanelIds.size > 0
+                    ? DEFAULT_MAX_VOLTAGE_DROP_PCT
+                    : 4);
+
+            return {
+                levelId: scene.id,
+                levelName: scene.name,
+                levelIndex: scene.floorIndex ?? 0,
+                panelId: panel.id,
+                panelLabel: panel.label || (panel.type === 'main_panel' ? 'TG' : 'TD'),
+                panelType: panel.type as 'main_panel' | 'sub_panel',
+                panelLengthM: Math.max(0, panel.properties?.lengthM ?? 0),
+                connectionType:
+                    panel.properties?.connectionType ?? 'star',
+                designFactor,
+                copperResistivity,
+                code: `C-${index + 1}`,
+                rootConductorId: root.id,
+                conductorCount: visitedConductors.size,
+                horizontalLengthM,
+                verticalLengthM,
+                lengthM,
+                lengthOverridden,
+                installedPowerW: totalInstalledPowerW,
+                lightingPowerW,
+                outletPowerW,
+                forcePowerW,
+                circuitLoadType,
+                normativeViolation,
+                installedPowerKw,
+                demandFactor,
+                maximumDemandKw,
+                powerFactor,
+                rooms,
+                traversedRoomNames: [...traversedRoomNames],
+                fedPanelLabels: [...reachedPanelIds].map((panelId) => {
+                    const downstreamPanel = devices.find(
+                        (device) => device.id === panelId,
+                    );
+                    return downstreamPanel?.label || 'TD';
+                }),
+                sectionMm2,
+                voltageV,
+                phases,
+                currentA,
+                theoreticalDesignCurrentA,
+                phaseBalance,
+                phaseCurrentR,
+                phaseCurrentS,
+                phaseCurrentT,
+                nominalCableCurrentA,
+                ambientTemperatureC:
+                    root.ct?.ambientTemperatureC ??
+                    panel.properties?.workingTemperatureC ??
+                    20,
+                groupedCircuitCount: Math.max(
+                    1,
+                    root.ct?.groupedCircuitCount ?? 1,
+                ),
+                groupingFactor,
+                temperatureFactor,
+                admissibleCableCurrentA,
+                capacityConforms:
+                    admissibleCableCurrentA > maximumPhaseCurrent,
+                itm:
+                    root.ct?.itm ??
+                    (outletPowerW > 0 ? '1x20 A' : '1x16 A'),
+                dif: root.ct?.dif ?? '2x25 A',
+                conductorType: root.conductorType,
+                tubeDiameterMm: root.tubeSize,
+                earthSectionMm2:
+                    root.ct?.earthSectionMm2 ?? sectionMm2,
+                maxVoltageDropPct,
+                circuitOwnDropV,
+            };
+        });
+    });
+
+    // Descarta salidas degeneradas: longitud 0, sin carga (ni propia ni
+    // manualmente cargada desde el diálogo CT) y sin alimentar a otro
+    // tablero. Normalmente son cables mal conectados (origen y destino en
+    // el mismo punto) que, al llevar 0 A, "cumplen" trivialmente y solo
+    // agregan ruido a la tabla. Un circuito en obra (p.ej. hacia un
+    // interruptor aún sin luminarias) sí tiene longitud real y se conserva.
+    const aliveCircuits = partialCircuits.filter(
+        (circuit) =>
+            circuit.lengthM > 0 ||
+            circuit.installedPowerW > 0 ||
+            circuit.fedPanelLabels.length > 0,
+    );
+
+    // ─── Pasada 2: encadena la caída de tensión padre→hijo ─────────────────
+    //
+    // Arma el árbol de tableros a partir de `feederLinks` (una salida que
+    // alimenta a un único tablero hijo = ese hijo tiene padre) y recorre los
+    // tableros en orden topológico (padres antes que hijos). El "baseline"
+    // de un tablero con padre es el ΔV YA resuelto de la salida específica
+    // del padre que lo alimenta (que a su vez ya sumó el baseline del
+    // abuelo); un tablero sin padre en el grafo (TG raíz, o un TD usado
+    // suelto sin TG) sigue usando su propiedad manual `upstreamVoltageDropV`
+    // — igual que antes de este cambio, para no romper proyectos existentes.
+    const parentOf = new Map<string, { parentPanelId: string; rootConductorId: string }>();
+    feederLinks.forEach((link) => {
+        if (!parentOf.has(link.childPanelId)) {
+            parentOf.set(link.childPanelId, {
+                parentPanelId: link.parentPanelId,
+                rootConductorId: link.rootConductorId,
+            });
+        }
+    });
+
+    const topologicalOrder: string[] = [];
+    const orderedIds = new Set<string>();
+    const resolvingIds = new Set<string>(); // guarda contra ciclos en datos mal formados
+
+    const visitPanelOrder = (panelId: string): void => {
+        if (orderedIds.has(panelId) || resolvingIds.has(panelId)) return;
+        resolvingIds.add(panelId);
+        const parent = parentOf.get(panelId);
+        if (parent) visitPanelOrder(parent.parentPanelId);
+        resolvingIds.delete(panelId);
+        orderedIds.add(panelId);
+        topologicalOrder.push(panelId);
+    };
+    panels.forEach((panel) => visitPanelOrder(panel.id));
+
+    const resolvedDropByConductorId = new Map<string, number>();
+    const circuitsByPanelId = new Map<string, PartialPanelCircuit[]>();
+    aliveCircuits.forEach((circuit) => {
+        circuitsByPanelId.set(circuit.panelId, [...(circuitsByPanelId.get(circuit.panelId) ?? []), circuit]);
+    });
+
+    return topologicalOrder.flatMap((panelId) => {
+        const panel = panels.find((item) => item.id === panelId);
+        const parent = parentOf.get(panelId);
+        const baselineV = parent
+            ? (resolvedDropByConductorId.get(parent.rootConductorId) ?? 0)
+            : Math.max(
+                  0,
+                  panel?.properties?.upstreamVoltageDropV ??
+                      (panel?.type === 'sub_panel' ? 6.22 : 0),
+              );
+
+        return (circuitsByPanelId.get(panelId) ?? []).map((circuit) => {
+            const voltageDropV = circuit.circuitOwnDropV + baselineV;
+            const voltageDropPct =
+                (voltageDropV / (circuit.phases === 1 ? 220 : circuit.voltageV)) * 100;
+            resolvedDropByConductorId.set(circuit.rootConductorId, voltageDropV);
+
+            const { circuitOwnDropV: _circuitOwnDropV, ...rest } = circuit;
+            return {
+                ...rest,
+                upstreamVoltageDropV: baselineV,
+                voltageDropV,
+                voltageDropPct,
+                voltageDropOk: voltageDropPct < circuit.maxVoltageDropPct,
+            };
+        });
+    });
+}
+
+/**
+ * Busca, entre los calibres estándar (`CONDUCTOR_SECTION_OPTIONS`), el
+ * primero que sea mayor o igual al actual y que haga cumplir a la vez la
+ * capacidad admisible y la caída de tensión (misma fórmula que
+ * `calculatePanelCircuitSummaries`). Solo aumenta sección, nunca la reduce.
+ * Si ningún calibre disponible alcanza a cumplir, devuelve el mayor
+ * disponible (mejor esfuerzo).
+ */
+export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): number {
+    const maxPhaseCurrent = Math.max(
+        circuit.phaseCurrentR,
+        circuit.phaseCurrentS,
+        circuit.phaseCurrentT,
+    );
+    const candidates = CONDUCTOR_SECTION_OPTIONS
+        .map((option) => option.value as number)
+        .filter((section) => section >= circuit.sectionMm2)
+        .sort((a, b) => a - b);
+
+    for (const section of candidates) {
+        const nominalCableCurrentA = defaultNominalCableCurrent(section);
+        const admissibleCableCurrentA =
+            nominalCableCurrentA * circuit.groupingFactor * circuit.temperatureFactor;
+        const circuitVoltageDropV =
+            ((circuit.phases === 1 ? 2 : Math.sqrt(3)) *
+                maxPhaseCurrent *
+                circuit.copperResistivity *
+                circuit.lengthM *
+                circuit.powerFactor) /
+            section;
+        const voltageDropV = circuitVoltageDropV + circuit.upstreamVoltageDropV;
+        const voltageDropPct =
+            (voltageDropV / (circuit.phases === 1 ? 220 : circuit.voltageV)) * 100;
+
+        if (admissibleCableCurrentA > maxPhaseCurrent && voltageDropPct < circuit.maxVoltageDropPct) {
+            return section;
+        }
+    }
+
+    return candidates.at(-1) ?? circuit.sectionMm2;
+}
+
+/**
+ * Recorre TODO el árbol de tableros de una escena (piso) y sube la sección
+ * de cada salida no conforme (caída de tensión o capacidad), en orden
+ * padre→hijo, hasta que todo cumpla o ya no haya calibre disponible que
+ * ayude. Como `calculatePanelCircuitSummaries` encadena la caída de tensión
+ * (padre→hijo — ver "Pasada 2"), aumentar la sección de un alimentador
+ * (p.ej. TG→TD) puede hacer que sus hijos pasen a cumplir sin tocarlos: por
+ * eso este ajuste se hace en un solo bucle sobre TODA la escena, no
+ * tablero por tablero.
+ *
+ * No toca salidas con `normativeViolation` (mezcla alumbrado/tomacorriente
+ * en el mismo circuito) — eso no se arregla cambiando la sección, hay que
+ * separar el cableado en el plano.
+ */
+export function resolveTreeConformingSections(
+    scene: Scene,
+): Array<{ conductorId: string; sectionMm2: number }> {
+    const originalConductors = scene.conductors ?? [];
+    // conductorId -> sección ya subida en esta corrida (solo se guardan los
+    // que realmente cambiaron, para devolver un parche mínimo al llamador).
+    const workingSections = new Map<string, number>();
+    // Salidas para las que ya no hay calibre disponible que las haga
+    // cumplir del todo: se dejan de reintentar para no colgar el bucle,
+    // pero no detienen la corrección del resto del árbol.
+    const exhausted = new Set<string>();
+    const MAX_ITERATIONS = 200;
+
+    const buildWorkingScene = (): Scene => ({
+        ...scene,
+        conductors: originalConductors.map((conductor) =>
+            workingSections.has(conductor.id)
+                ? {
+                      ...conductor,
+                      sectionMm2: workingSections.get(conductor.id)!,
+                      ct: { ...(conductor.ct ?? {}), nominalCableCurrentA: undefined },
+                  }
+                : conductor,
+        ),
+    });
+
+    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+        const circuits = calculatePanelCircuitSummaries(buildWorkingScene());
+        const violator = circuits.find(
+            (circuit) =>
+                !circuit.normativeViolation &&
+                !exhausted.has(circuit.rootConductorId) &&
+                (!circuit.voltageDropOk || !circuit.capacityConforms),
+        );
+        if (!violator) break;
+
+        const nextSection = resolveConformingSectionMm2(violator);
+        if (nextSection <= violator.sectionMm2) {
+            exhausted.add(violator.rootConductorId);
+            continue;
+        }
+        workingSections.set(violator.rootConductorId, nextSection);
+    }
+
+    return [...workingSections.entries()].map(([conductorId, sectionMm2]) => ({
+        conductorId,
+        sectionMm2,
+    }));
+}

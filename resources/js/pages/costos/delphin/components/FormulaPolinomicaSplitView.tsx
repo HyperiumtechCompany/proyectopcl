@@ -3,12 +3,34 @@ import { ArrowLeft, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { DicEntry } from '../hooks/useDiccionario';
-import type { DelphinRow } from '../types';
+import type { DelphinRow, ResumenPresupuesto } from '../types';
+import {
+    GU_CODE,
+    INEI_NOMBRES,
+    isPersonalEspecializado,
+    MANO_DE_OBRA_ESPECIALIZADA_CODE,
+    resolveIneiNombre,
+} from '../data/ineiIndices';
 import { FormulaPolinomicaBuilder } from './FormulaPolinomicaBuilder';
+
+// INE 39: Gastos Generales + Utilidad no pertenecen a ningún insumo de ACU —
+// se inyectan como una fila/columna sintética aparte, con el código y nombre
+// oficial DS 011-79-VC, para que también puedan entrar a un monomio de la
+// fórmula (tal como cualquier otro índice INEI).
+const INDICE_INE_CODE = GU_CODE;
+const INDICE_INE_LABEL = INEI_NOMBRES[GU_CODE];
 
 // ── Insumo tipo ───────────────────────────────────────────────────────────────
 const INSUMO_TIPOS = ['mano_de_obra', 'materiales', 'equipos', 'subcontratos', 'subpartidas'] as const;
 type InsumoTipo = typeof INSUMO_TIPOS[number];
+
+const TIPO_LABEL: Record<InsumoTipo, string> = {
+    mano_de_obra: 'Mano de Obra',
+    materiales: 'Materiales',
+    equipos: 'Equipos',
+    subcontratos: 'Subcontratos',
+    subpartidas: 'Subpartidas',
+};
 
 // ── Column widths (px) ────────────────────────────────────────────────────────
 const C_IDX = 44;    
@@ -83,39 +105,29 @@ interface MatrixResult {
 }
 
 /**
- * Resolve the clean diccionario name for an ACU component.
- * Tries exact → prefix-of-first-word match within the same INEI code entries.
+ * Resolve the diccionario name for an ACU component, exact match only.
+ * A single INEI code (e.g. "47") groups many distinct items (Peón, Oficial,
+ * Capataz…), so a prefix/fuzzy match against an arbitrary entry in that group
+ * used to produce wrong labels (e.g. a retroexcavador's raw brand/spec name
+ * "fuzzy-matched" against an unrelated generic entry). Only an exact
+ * normalized match is trustworthy; anything else is left unresolved so the
+ * caller can fall back to the (always-correct) resource tipo instead of a
+ * misleading guess.
  */
-function resolveCleanName(
+function resolveDiccionarioName(
     rawDesc: string,
     code: string,
     dicByCode: Map<string, string[]>,
-): string {
+): string | null {
     const entries = dicByCode.get(code);
-    if (!entries?.length) return rawDesc;
+    if (!entries?.length) return null;
 
     const normRaw = normalize(rawDesc);
-    const firstWord = normRaw.split(' ')[0];
-
-    // 1. Exact normalized match
     for (const e of entries) {
         if (normalize(e) === normRaw) return e;
     }
 
-    // 2. Prefix match: dicEntry (normalized) starts with the raw's first word,
- 
-    if (firstWord.length >= 3) {
-        for (const e of entries) {
-            const ne = normalize(e);
-            const fe = ne.split(' ')[0];
-            if (ne.startsWith(firstWord) || firstWord.startsWith(fe) || fe.startsWith(firstWord)) {
-                return e;
-            }
-        }
-    }
-
-    // 3. Fallback — return the raw description unchanged
-    return rawDesc;
+    return null;
 }
 
 function buildMatrix(
@@ -138,7 +150,15 @@ function buildMatrix(
         }
     }
 
-    const codeToDesc = new Map<string, string>();
+    // Per INEI code: which tipos (mano_de_obra/materiales/…) contribute to it,
+    // and which distinct diccionario names were exactly matched. A code almost
+    // always groups several differently-named items (e.g. "47" = Peón +
+    // Oficial + Capataz…), so there is rarely a single canonical diccionario
+    // name for the whole column — the resource tipo is the only label that's
+    // always correct; the diccionario name is only trustworthy as a column
+    // label when every item under that code resolves to the exact same entry.
+    const codeToTipos = new Map<string, Set<InsumoTipo>>();
+    const codeToResolvedNames = new Map<string, Set<string>>();
     const leafValues = new Map<number, Map<string, number>>();
 
     for (const row of subtree) {
@@ -160,20 +180,57 @@ function buildMatrix(
                 if (!rawCod) continue;
                 // Normalize to 2-digit INEI code: "2" → "02", "39" stays "39"
                 const n = parseInt(rawCod, 10);
-                const codigo = !isNaN(n) ? String(n).padStart(2, '0') : rawCod;
+                let codigo = !isNaN(n) ? String(n).padStart(2, '0') : rawCod;
+                // 47-1: personal técnico de alta especialización (topógrafos,
+                // especialistas) se factura bajo el mismo código 47 que el resto
+                // de la cuadrilla — se separa por palabra clave en la descripción
+                // para no diluir el índice de mano de obra estándar.
+                if (tipo === 'mano_de_obra' && codigo === '47' && isPersonalEspecializado(String(comp.descripcion ?? ''))) {
+                    codigo = MANO_DE_OBRA_ESPECIALIZADA_CODE;
+                }
                 const amount = metrado * compParcial(tipo, comp);
                 if (amount <= 0) continue;
                 rowMap.set(codigo, (rowMap.get(codigo) ?? 0) + amount);
-                // Store first clean name for each INEI code using diccionario lookup
-                if (comp.descripcion && !codeToDesc.get(codigo)) {
-                    codeToDesc.set(
-                        codigo,
-                        resolveCleanName(String(comp.descripcion).trim(), codigo, dicByCode),
-                    );
+
+                if (!codeToTipos.has(codigo)) codeToTipos.set(codigo, new Set());
+                codeToTipos.get(codigo)!.add(tipo);
+
+                if (comp.descripcion) {
+                    const resolved = resolveDiccionarioName(String(comp.descripcion).trim(), codigo, dicByCode);
+                    if (resolved) {
+                        if (!codeToResolvedNames.has(codigo)) codeToResolvedNames.set(codigo, new Set());
+                        codeToResolvedNames.get(codigo)!.add(resolved);
+                    }
                 }
             }
         }
         if (rowMap.size > 0) leafValues.set(row.id, rowMap);
+    }
+
+    // Final label per code, in priority order:
+    // 1. Nombre oficial DS 011-79-VC (catálogo INEI_NOMBRES) — siempre que el
+    //    código esté en el catálogo, es la fuente más confiable posible.
+    // 2. El nombre de diccionario, solo cuando TODOS los ítems bajo ese código
+    //    coinciden exactamente en el mismo nombre (códigos no catalogados,
+    //    específicos de un solo material).
+    // 3. El tipo de recurso (siempre correcto, aunque genérico) — ej. "47"
+    //    agrupa Peón/Oficial/Capataz/etc. → "Mano de Obra".
+    const codeToDesc = new Map<string, string>();
+    for (const codigo of new Set([...codeToTipos.keys(), ...codeToResolvedNames.keys()])) {
+        const oficial = resolveIneiNombre(codigo);
+        if (oficial) {
+            codeToDesc.set(codigo, oficial);
+            continue;
+        }
+        const resolvedNames = codeToResolvedNames.get(codigo);
+        if (resolvedNames && resolvedNames.size === 1) {
+            codeToDesc.set(codigo, [...resolvedNames][0]);
+            continue;
+        }
+        const tipos = codeToTipos.get(codigo);
+        if (tipos && tipos.size > 0) {
+            codeToDesc.set(codigo, [...tipos].map((t) => TIPO_LABEL[t]).join(' / '));
+        }
     }
 
     // Roll up parent values bottom-up
@@ -214,13 +271,14 @@ interface Props {
     acuRows: ACURowSummary[];
     diccionario: DicEntry[];
     projectName: string;
+    resumenPresupuesto?: ResumenPresupuesto;
     onBack: () => void;
     onExportFormula?: (formulaData: any) => void;
     onMonomiosChange?: (monomios: any[]) => void;
 }
 
-export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName, onBack,
-    onExportFormula, onMonomiosChange }: Props) {
+export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName,
+    resumenPresupuesto, onBack, onExportFormula, onMonomiosChange }: Props) {
 
     // Subtree en pre-order
     const subtree = useMemo(() => subtreePreorder(rows, parentId), [rows, parentId]);
@@ -248,11 +306,40 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
         return m;
     }, [diccionario]);
 
+    // Gastos Generales + Utilidad (proyecto completo, desde gg_consolidado) — no
+    // están atados a ninguna partida, así que no participan del recorrido normal
+    // del árbol; se inyectan aparte como índice 39.
+    const ggUtilidad = resumenPresupuesto
+        ? resumenPresupuesto.gastosGenerales + resumenPresupuesto.utilidad
+        : 0;
+
     // Mapa de insumos INEI por fila
-    const { matrix, sortedCodes, codeToDesc } = useMemo(
-        () => buildMatrix(subtree, acuRows, parentIdSet, dicByCode),
-        [subtree, acuRows, parentIdSet, dicByCode],
-    );
+    const { matrix, sortedCodes, codeToDesc } = useMemo(() => {
+        const base = buildMatrix(subtree, acuRows, parentIdSet, dicByCode);
+        if (ggUtilidad <= 0) return base;
+
+        const matrix = new Map(base.matrix);
+        const parentEntry = new Map(matrix.get(parentId) ?? new Map<string, number>());
+        parentEntry.set(INDICE_INE_CODE, (parentEntry.get(INDICE_INE_CODE) ?? 0) + ggUtilidad);
+        matrix.set(parentId, parentEntry);
+
+        const sortedCodes = base.sortedCodes.includes(INDICE_INE_CODE)
+            ? base.sortedCodes
+            : [...base.sortedCodes, INDICE_INE_CODE].sort((a, b) => {
+                  const na = parseInt(a, 10), nb = parseInt(b, 10);
+                  if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                  if (!isNaN(na)) return -1;
+                  if (!isNaN(nb)) return 1;
+                  return a.localeCompare(b, 'es');
+              });
+
+        // Nombre oficial del índice 39, aun si diccionario ya usa ese código
+        // para otros insumos (semilla de datos ambigua) — este siempre gana.
+        const codeToDesc = new Map(base.codeToDesc);
+        codeToDesc.set(INDICE_INE_CODE, INDICE_INE_LABEL);
+
+        return { matrix, sortedCodes, codeToDesc };
+    }, [subtree, acuRows, parentIdSet, dicByCode, ggUtilidad, parentId]);
 
     // ── Expand / Collapse ─────────────────────────────────────────────────────
     const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
@@ -664,6 +751,49 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                                         </tr>
                                     );
                                 })}
+
+                                {/* Fila sintética: Gastos Generales + Utilidad → índice 39 (INE) */}
+                                {ggUtilidad > 0 && (
+                                    <tr>
+                                        <td
+                                            style={{ position: 'sticky', left: 0, width: C_IDX, backgroundColor: BG_PARENT, zIndex: 10 }}
+                                            className="border-b border-r border-slate-800 p-1"
+                                        />
+                                        <td
+                                            style={{ position: 'sticky', left: L_DESC, width: C_DESC, maxWidth: C_DESC, backgroundColor: BG_PARENT, zIndex: 10 }}
+                                            className="border-b border-r border-slate-800 py-1.5 pr-2"
+                                        >
+                                            <div className="flex items-baseline gap-1.5 overflow-hidden">
+                                                <span className="shrink-0 font-mono text-[9px] text-slate-500">{INDICE_INE_CODE}</span>
+                                                <span className="truncate leading-snug font-semibold text-amber-400">{INDICE_INE_LABEL}</span>
+                                            </div>
+                                        </td>
+                                        <td style={{ position: 'sticky', left: L_UND, width: C_UND, backgroundColor: BG_PARENT, zIndex: 10 }}
+                                            className="border-b border-r border-slate-800 p-1.5 text-center text-[10px] text-slate-400" />
+                                        <td style={{ position: 'sticky', left: L_CANT, width: C_CANT, backgroundColor: BG_PARENT, zIndex: 10 }}
+                                            className="border-b border-r border-slate-800 p-1.5 text-right font-mono text-[10px] text-slate-300" />
+                                        <td
+                                            style={{ position: 'sticky', left: L_TOT, width: C_TOT, backgroundColor: BG_PARENT, zIndex: 10 }}
+                                            className="border-b border-r border-slate-800 p-1.5 text-right font-mono text-[10px] font-semibold text-slate-100"
+                                        >
+                                            {fmtS(ggUtilidad)}
+                                        </td>
+                                        {sortedCodes.map((code) => {
+                                            const val = code === INDICE_INE_CODE ? ggUtilidad : 0;
+                                            return (
+                                                <td
+                                                    key={code}
+                                                    style={{ width: C_INS }}
+                                                    className={`border-b border-r border-slate-800/50 p-1.5 text-right font-mono text-[10px] ${
+                                                        val > 0 ? 'font-semibold text-slate-100' : 'text-transparent select-none'
+                                                    }`}
+                                                >
+                                                    {val > 0 ? fmtS(val) : '·'}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                )}
                             </tbody>
 
                             {/* ─ TFOOT ─────────────────────────────────────── */}

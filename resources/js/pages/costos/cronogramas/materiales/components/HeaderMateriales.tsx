@@ -96,10 +96,10 @@ const HeaderMateriales: React.FC<Props> = ({
                     )}
 
                     {/* Volver */}
-                    <Link href={`/costos/${project}`} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black rounded-xl transition-all shadow-md">
+                    {/* <Link href={`/costos/${project}`} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black rounded-xl transition-all shadow-md">
                         <ArrowLeft className="w-3.5 h-3.5" />
                         Volver
-                    </Link>
+                    </Link> */}
                 </div>
             </div>
 

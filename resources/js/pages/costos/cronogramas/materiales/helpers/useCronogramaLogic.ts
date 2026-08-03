@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import type { Material, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
+import type { MaterialItem, Periodo, ViewMode, SortField, SortDir, FiltroState } from '../types';
 
 
 export const useCronogramaLogic = (materiales: MaterialItem[], periodos: Periodo[]) => {

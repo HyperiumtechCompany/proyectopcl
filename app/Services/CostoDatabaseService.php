@@ -70,6 +70,20 @@ class CostoDatabaseService
      */
     public function setTenantConnection(string $databaseName): void
     {
+        // No-op if already pointed at this database. DB::purge()+reconnect() below
+        // tears down the live PDO handle, which silently orphans any in-flight
+        // transaction: callers like calculateACU()/update() call this (directly or
+        // via getDefaultPresupuestoId()/syncCostoDirecto()) *inside* an already-open
+        // costos_tenant transaction on every request (SetCostosDatabase middleware
+        // already set it once). The orphaned connection's uncommitted locks then
+        // block the freshly-reconnected session's writes to the same rows until
+        // innodb_lock_wait_timeout fires — SQLSTATE HY000 1205 "Lock wait timeout
+        // exceeded", surfaced to the user as ACU/cronograma save 500s. Only a real
+        // switch to a different tenant database needs to purge+reconnect.
+        if (config('database.connections.costos_tenant.database') === $databaseName) {
+            return;
+        }
+
         // Ensure the full connection config exists (not just database key)
         $mysqlConfig = config('database.connections.mysql');
         $tenantConfig = array_merge($mysqlConfig, [
@@ -102,6 +116,16 @@ class CostoDatabaseService
         Log::info("CostoDatabaseService: Ran tenant migrations on [{$databaseName}]", [
             'output' => Artisan::output(),
         ]);
+    }
+
+    /**
+     * Ensure the presupuesto-related tables exist on a tenant database
+     * (idempotent: delegates to the tenant migration runner, which Laravel
+     * already skips for migrations that were previously applied).
+     */
+    public function createPresupuestoTables(string $databaseName): void
+    {
+        $this->runTenantMigrations($databaseName);
     }
 
     /**
@@ -330,11 +354,11 @@ class CostoDatabaseService
         if ($col && stripos((string) $col->EXTRA, 'GENERATED') !== false) {
             $connection->statement('ALTER TABLE presupuesto_general DROP COLUMN parcial');
             $connection->statement(
-                'ALTER TABLE presupuesto_general ADD COLUMN parcial DECIMAL(15,6) NOT NULL DEFAULT 0 AFTER precio_unitario'
+                'ALTER TABLE presupuesto_general ADD COLUMN parcial DECIMAL(20,10) NOT NULL DEFAULT 0 AFTER precio_unitario'
             );
             // Repoblar parcial para filas hoja con datos ya existentes
             $connection->statement(
-                'UPDATE presupuesto_general SET parcial = ROUND(metrado * precio_unitario, 6) WHERE metrado > 0 OR precio_unitario > 0'
+                'UPDATE presupuesto_general SET parcial = ROUND(metrado * precio_unitario, 10) WHERE metrado > 0 OR precio_unitario > 0'
             );
 
             Log::info('CostoDatabaseService: converted presupuesto_general.parcial from GENERATED to regular column', ['db' => $dbName]);
@@ -342,14 +366,18 @@ class CostoDatabaseService
     }
 
     /**
-     * Amplía una columna DECIMAL a 6 decimales si aún no lo está. Antes varias de
-     * estas columnas truncaban a 4 (o 2, a nivel de cálculo) decimales, lo que
-     * aplanaba el precio_unitario sincronizado desde el ACU (ej. 1.48 en vez de
-     * 1.479333) y hacía que Costo Directo divergiera de Insumos Consolidados.
-     * Consulta information_schema primero para no re-ejecutar el ALTER (costoso
-     * en tablas grandes) cuando la columna ya tiene la precisión objetivo.
+     * Amplía una columna DECIMAL a 10 decimales si aún no lo está. 6 decimales
+     * ya aplanaba precio_unitario/costo_unitario_total lo suficiente como para
+     * que, al multiplicarse por metrados grandes (decenas de miles), el error
+     * de redondeo del séptimo decimal se amplificara a varios céntimos —
+     * verificado con datos reales (metrado=75,500.52 × error 0.00000044 =
+     * 0.033 de diferencia entre Costo Directo e Insumos Consolidados). 10
+     * decimales dejan ese error muy por debajo de un céntimo incluso para
+     * metrados de cientos de millones. Consulta information_schema primero
+     * para no re-ejecutar el ALTER (costoso en tablas grandes) cuando la
+     * columna ya tiene la precisión objetivo.
      */
-    private function widenColumnScale(string $table, string $column, int $scale = 6, int $precision = 15): void
+    private function widenColumnScale(string $table, string $column, int $scale = 10, int $precision = 20): void
     {
         $connection = DB::connection('costos_tenant');
         $dbName = $connection->getDatabaseName();
@@ -411,10 +439,10 @@ class CostoDatabaseService
                 [$dbName]
             );
 
-            if (! $col || (int) $col->scale < 6) {
+            if (! $col || (int) $col->scale < 10) {
                 try {
                     $connection->statement(
-                        'ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(15,6) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED'
+                        'ALTER TABLE presupuesto_acus MODIFY COLUMN costo_unitario_total DECIMAL(20,10) GENERATED ALWAYS AS (costo_mano_obra + costo_materiales + costo_equipos + costo_subcontratos + costo_subpartidas) STORED'
                     );
                 } catch (\Throwable $e) {
                     Log::warning('No se pudo actualizar la fórmula de costo_unitario_total', [
@@ -528,6 +556,31 @@ class CostoDatabaseService
     }
 
     /**
+     * Normaliza un código de partida rellenando cada segmento a 2 dígitos
+     * (ej. "2.3.7.1.3" → "02.03.07.01.03"). presupuesto_acus.partida y
+     * presupuesto_general.partida pueden guardar el mismo código WBS con
+     * distinto padding (uno importado con ceros, el otro sin ellos) — un
+     * WHERE partida = ? exacto entre ambas tablas puede no encontrar NINGUNA
+     * fila y dejar precio_unitario desincronizado en silencio. Debe coincidir
+     * con normalizedPartida() en InsumosConsolidadosModal.tsx.
+     */
+    public function normalizePartidaCode(string $value): string
+    {
+        $parts = array_filter(explode('.', $value), fn ($p) => $p !== '');
+
+        return implode('.', array_map(fn ($p) => str_pad($p, 2, '0', STR_PAD_LEFT), $parts));
+    }
+
+    private function roundAcuCantidad(mixed $cantidad): float
+    {
+        // 4 decimales — mismo criterio que calculateACU() (PresupuestoController) y
+        // roundCantidad() en AcuPanel.tsx/usePresupuestoAcu.ts. Antes truncaba a 3,
+        // más agresivo que el resto del sistema, en cada auto-reparación (cada carga
+        // de Delphin vía syncCostoDirecto).
+        return round((float) ($cantidad ?? 0), 4);
+    }
+
+    /**
      * Recalcula los costos por categoría de un ACU a partir de sus componentes JSON —
      * la MISMA fuente que lee el frontend (AcuPanel, Insumos Consolidados vía
      * presupuesto_acus.mano_de_obra/materiales/...). Las tablas relacionales
@@ -536,17 +589,27 @@ class CostoDatabaseService
      * JSON reintroducía la misma divergencia que se quiere eliminar.
      *
      * ACUs guardados antes de la corrección de precisión tienen su parcial de ítem
-     * aplanado a 2 decimales (ej. 1.48 en vez de 1.479333) — este método lo recalcula
-     * a 6 decimales y solo reescribe el JSON/columnas si el valor realmente cambió.
+     * aplanado a 2 o 6 decimales (ej. 1.48 o 6.907501 en vez de 6.9075005600) — este
+     * método lo recalcula a 10 decimales y solo reescribe el JSON/columnas si el
+     * valor realmente cambió. La sincronización de precio_unitario hacia
+     * presupuesto_general (al final del método) corre siempre, incluso si nada
+     * cambió aquí, porque el match es por código de partida normalizado y una
+     * corrida anterior pudo haber corregido costo_unitario_total sin lograr
+     * propagarlo (ver normalizePartidaCode()).
      */
-    private function recalculateAcuFromJson($connection, object $acu, int $tenantPresupuestoId): void
+    private function recalculateAcuFromJson($connection, object $acu, int $tenantPresupuestoId, array $generalIdByNormalizedPartida = []): void
     {
         $manoDeObra = $this->decodeAcuComponentField($acu->mano_de_obra ?? null);
         $costoManoObra = 0.0;
         $manoDeObraChanged = false;
         foreach ($manoDeObra as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
-            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $manoDeObraChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 10);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                 $item['parcial'] = $parcial;
                 $manoDeObraChanged = true;
             }
@@ -558,9 +621,14 @@ class CostoDatabaseService
         $costoMateriales = 0.0;
         $materialesChanged = false;
         foreach ($materiales as &$item) {
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $materialesChanged = true;
+            }
             $factor = (float) ($item['factor_desperdicio'] ?? 1) ?: 1.0;
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0) * $factor, 6);
-            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0) * $factor, 10);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                 $item['parcial'] = $parcial;
                 $materialesChanged = true;
             }
@@ -573,17 +641,22 @@ class CostoDatabaseService
         $equiposChanged = false;
         foreach ($equipos as &$item) {
             $isHerramientas = stripos((string) ($item['descripcion'] ?? ''), 'herramienta') !== false;
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $equiposChanged = true;
+            }
 
             if ($isHerramientas) {
-                $parcial = round($costoManoObra * ((float) ($item['cantidad'] ?? 0) / 100.0), 6);
-                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001 || abs($costoManoObra - (float) ($item['precio_hora'] ?? 0)) > 0.0000001) {
+                $parcial = round($costoManoObra * ($cantidad / 100.0), 10);
+                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001 || abs($costoManoObra - (float) ($item['precio_hora'] ?? 0)) > 0.0000000001) {
                     $item['parcial'] = $parcial;
                     $item['precio_hora'] = $costoManoObra;
                     $equiposChanged = true;
                 }
             } else {
-                $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_hora'] ?? 0), 6);
-                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+                $parcial = round($cantidad * (float) ($item['precio_hora'] ?? 0), 10);
+                if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                     $item['parcial'] = $parcial;
                     $equiposChanged = true;
                 }
@@ -596,8 +669,13 @@ class CostoDatabaseService
         $costoSubcontratos = 0.0;
         $subcontratosChanged = false;
         foreach ($subcontratos as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
-            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $subcontratosChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 10);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                 $item['parcial'] = $parcial;
                 $subcontratosChanged = true;
             }
@@ -609,8 +687,13 @@ class CostoDatabaseService
         $costoSubpartidas = 0.0;
         $subpartidasChanged = false;
         foreach ($subpartidas as &$item) {
-            $parcial = round((float) ($item['cantidad'] ?? 0) * (float) ($item['precio_unitario'] ?? 0), 6);
-            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000001) {
+            $cantidad = $this->roundAcuCantidad($item['cantidad'] ?? 0);
+            if (abs($cantidad - (float) ($item['cantidad'] ?? 0)) > 0.0000001) {
+                $item['cantidad'] = $cantidad;
+                $subpartidasChanged = true;
+            }
+            $parcial = round($cantidad * (float) ($item['precio_unitario'] ?? 0), 10);
+            if (abs($parcial - (float) ($item['parcial'] ?? 0)) > 0.0000000001) {
                 $item['parcial'] = $parcial;
                 $subpartidasChanged = true;
             }
@@ -618,50 +701,64 @@ class CostoDatabaseService
         }
         unset($item);
 
-        $categoryChanged = abs($costoManoObra - (float) $acu->costo_mano_obra) > 0.000001
-            || abs($costoMateriales - (float) $acu->costo_materiales) > 0.000001
-            || abs($costoEquipos - (float) $acu->costo_equipos) > 0.000001
-            || abs($costoSubcontratos - (float) $acu->costo_subcontratos) > 0.000001
-            || abs($costoSubpartidas - (float) $acu->costo_subpartidas) > 0.000001;
+        // Umbral ajustado a 10dp (antes 1e-6 con 6dp): con metrados grandes, una
+        // mejora de precisión de unas pocas 1e-7 ya vale la pena persistir, o el
+        // auto-heal la descarta como "sin cambios" y el precio_unitario stale
+        // sigue amplificándose en Costo Directo.
+        $categoryChanged = abs($costoManoObra - (float) $acu->costo_mano_obra) > 0.0000000001
+            || abs($costoMateriales - (float) $acu->costo_materiales) > 0.0000000001
+            || abs($costoEquipos - (float) $acu->costo_equipos) > 0.0000000001
+            || abs($costoSubcontratos - (float) $acu->costo_subcontratos) > 0.0000000001
+            || abs($costoSubpartidas - (float) $acu->costo_subpartidas) > 0.0000000001;
 
-        if (! $categoryChanged && ! $manoDeObraChanged && ! $materialesChanged && ! $equiposChanged && ! $subcontratosChanged && ! $subpartidasChanged) {
-            return;
+        if ($categoryChanged || $manoDeObraChanged || $materialesChanged || $equiposChanged || $subcontratosChanged || $subpartidasChanged) {
+            $update = [
+                'costo_mano_obra' => $costoManoObra,
+                'costo_materiales' => $costoMateriales,
+                'costo_equipos' => $costoEquipos,
+                'costo_subcontratos' => $costoSubcontratos,
+                'costo_subpartidas' => $costoSubpartidas,
+                'updated_at' => now(),
+            ];
+            if ($manoDeObraChanged) {
+                $update['mano_de_obra'] = json_encode($manoDeObra);
+            }
+            if ($materialesChanged) {
+                $update['materiales'] = json_encode($materiales);
+            }
+            if ($equiposChanged) {
+                $update['equipos'] = json_encode($equipos);
+            }
+            if ($subcontratosChanged) {
+                $update['subcontratos'] = json_encode($subcontratos);
+            }
+            if ($subpartidasChanged) {
+                $update['subpartidas'] = json_encode($subpartidas);
+            }
+
+            $connection->table('presupuesto_acus')->where('id', $acu->id)->update($update);
         }
 
-        $update = [
-            'costo_mano_obra' => $costoManoObra,
-            'costo_materiales' => $costoMateriales,
-            'costo_equipos' => $costoEquipos,
-            'costo_subcontratos' => $costoSubcontratos,
-            'costo_subpartidas' => $costoSubpartidas,
-            'updated_at' => now(),
-        ];
-        if ($manoDeObraChanged) {
-            $update['mano_de_obra'] = json_encode($manoDeObra);
-        }
-        if ($materialesChanged) {
-            $update['materiales'] = json_encode($materiales);
-        }
-        if ($equiposChanged) {
-            $update['equipos'] = json_encode($equipos);
-        }
-        if ($subcontratosChanged) {
-            $update['subcontratos'] = json_encode($subcontratos);
-        }
-        if ($subpartidasChanged) {
-            $update['subpartidas'] = json_encode($subpartidas);
-        }
-
-        $connection->table('presupuesto_acus')->where('id', $acu->id)->update($update);
-
-        // Refresh costo_unitario_total (it may be a GENERATED column; re-read it)
+        // Sincroniza precio_unitario SIEMPRE, no solo cuando este ACU cambió en esta
+        // corrida: si una corrida anterior ya corrigió costo_unitario_total pero el
+        // match con presupuesto_general falló (código con distinto padding de ceros),
+        // el guard de "sin cambios" de arriba nunca vuelve a intentar propagarlo — el
+        // valor stale queda atascado para siempre en Costo Directo.
         $fresh = $connection->table('presupuesto_acus')->where('id', $acu->id)->first();
         $newTotal = (float) ($fresh->costo_unitario_total ?? ($costoManoObra + $costoMateriales + $costoEquipos + $costoSubcontratos + $costoSubpartidas));
 
-        $connection->table('presupuesto_general')
-            ->where('presupuesto_id', $tenantPresupuestoId)
-            ->where('partida', $acu->partida)
-            ->update(['precio_unitario' => $newTotal, 'updated_at' => now()]);
+        // Match por código normalizado, no por string exacto: presupuesto_acus.partida
+        // y presupuesto_general.partida pueden diferir en padding de ceros (ver
+        // normalizePartidaCode()) — un WHERE partida = ? exacto aquí puede actualizar
+        // 0 filas y dejar precio_unitario/Costo Directo con el valor viejo para
+        // siempre, sin que ningún error lo delate.
+        $generalId = $generalIdByNormalizedPartida[$this->normalizePartidaCode($acu->partida)] ?? null;
+        if ($generalId !== null) {
+            $connection->table('presupuesto_general')
+                ->where('id', $generalId)
+                ->where('precio_unitario', '!=', $newTotal)
+                ->update(['precio_unitario' => $newTotal, 'updated_at' => now()]);
+        }
     }
 
     /**
@@ -674,14 +771,19 @@ class CostoDatabaseService
             ->where('presupuesto_id', $tenantPresupuestoId)
             ->get();
 
+        $generalIdByNormalizedPartida = [];
+        foreach ($connection->table('presupuesto_general')->where('presupuesto_id', $tenantPresupuestoId)->get(['id', 'partida']) as $row) {
+            $generalIdByNormalizedPartida[$this->normalizePartidaCode($row->partida)] = $row->id;
+        }
+
         foreach ($acus as $acu) {
-            $this->recalculateAcuFromJson($connection, $acu, $tenantPresupuestoId);
+            $this->recalculateAcuFromJson($connection, $acu, $tenantPresupuestoId, $generalIdByNormalizedPartida);
         }
     }
 
     /**
      * Recalcula los parciales de las filas padre (títulos/subtítulos) de presupuesto_general.
-     * Las partidas (hojas): parcial = round(metrado × precio_unitario, 6).
+     * Las partidas (hojas): parcial = round(metrado × precio_unitario, 10).
      * Los títulos/subtítulos (padres): parcial = suma de parciales de sus hijos directos.
      */
     public function recalculateParciales($connection, int $tenantPresupuestoId): void
@@ -705,10 +807,14 @@ class CostoDatabaseService
         $parciales = [];
         foreach ($rows as $row) {
             if (! in_array($row->partida, $parentCodes)) {
-                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 6);
+                $newParcial = round((float) $row->metrado * (float) $row->precio_unitario, 10);
                 $parciales[$row->partida] = $newParcial;
 
-                if (abs($newParcial - (float) ($row->parcial ?? 0)) > 0.00001) {
+                // Umbral ajustado a la nueva precisión (10dp, antes 1e-5 con 6dp): con
+                // metrados grandes, un error de solo 1e-6 en precio_unitario ya se
+                // amplifica a céntimos — un umbral más laxo dejaría esa corrección sin
+                // aplicar en tenants existentes.
+                if (abs($newParcial - (float) ($row->parcial ?? 0)) > 0.0000000001) {
                     $connection->table('presupuesto_general')
                         ->where('id', $row->id)
                         ->update(['parcial' => $newParcial, 'updated_at' => now()]);
@@ -730,11 +836,11 @@ class CostoDatabaseService
                     }
                 }
 
-                $parciales[$row->partida] = round($sum, 6);
+                $parciales[$row->partida] = round($sum, 10);
                 $connection->table('presupuesto_general')
                     ->where('id', $row->id)
                     ->update([
-                        'parcial' => round($sum, 6),
+                        'parcial' => round($sum, 10),
                         'updated_at' => now(),
                     ]);
             }
@@ -774,11 +880,15 @@ class CostoDatabaseService
                     foreach ($affected as $row) {
                         $affectedAcuIds[] = $row->acu_id;
 
-                        // Recalcular parcial del item
+                        // Recalcular parcial del item — 10 decimales (no 2), igual que
+                        // calculateACU()/recalculateAcuFromJson(): con metrados grandes,
+                        // hasta 6dp en costo_mano_obra/etc. se amplifica a céntimos frente
+                        // a Insumos Consolidados (este último recalcula desde cantidad ×
+                        // precio_unitario crudos, sin pasar por este campo "parcial").
                         $cant = (float) $row->cantidad;
                         $prec = (float) $insumo->costo_unitario;
                         $falc = (float) ($row->factor_desperdicio ?? 1);
-                        $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 2);
+                        $parcial = round($cant * $prec * ($table === 'acu_materiales' ? $falc : 1), 10);
 
                         $connection->table($table)
                             ->where('id', $row->id)
@@ -844,13 +954,24 @@ class CostoDatabaseService
                         ->first();
 
                     if ($acuRes) {
-                        $connection->table('presupuesto_general')
+                        // Match por código normalizado — presupuesto_acus.partida y
+                        // presupuesto_general.partida pueden diferir en padding de ceros
+                        // (ver normalizePartidaCode()); un WHERE exacto puede actualizar
+                        // 0 filas y dejar precio_unitario desincronizado en silencio.
+                        $normalizedPartida = $this->normalizePartidaCode($partida);
+                        $generalRows = $connection->table('presupuesto_general')
                             ->where('presupuesto_id', $tenantPresupuestoId)
-                            ->where('partida', $partida)
-                            ->update([
-                                'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
-                                'updated_at' => now(),
-                            ]);
+                            ->get(['id', 'partida']);
+                        foreach ($generalRows as $generalRow) {
+                            if ($this->normalizePartidaCode($generalRow->partida) === $normalizedPartida) {
+                                $connection->table('presupuesto_general')
+                                    ->where('id', $generalRow->id)
+                                    ->update([
+                                        'precio_unitario' => (float) ($acuRes->costo_unitario_total ?? 0),
+                                        'updated_at' => now(),
+                                    ]);
+                            }
+                        }
                     }
                 }
 

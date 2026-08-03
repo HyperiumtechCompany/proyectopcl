@@ -18,6 +18,7 @@ import { useGanttTimeline } from '../cronogramas/v2/composables/useGanttTimeline
 import { diffWorkingDaysInclusive } from '../cronogramas/v2/types/calendar';
 import type { GanttBarLabel, RowAction } from '../cronogramas/v2/types/cell';
 import type { GanttTask, SchedulingMode } from '../cronogramas/v2/types/task';
+import { CHART_HEADER_H } from '../cronogramas/v2/types/timeline';
 import type { ZoomLevel } from '../cronogramas/v2/types/timeline';
 import { parseMSProjectXML } from '../cronogramas/v2/utils/importMSProject';
 import { router } from '@inertiajs/react';
@@ -34,7 +35,7 @@ import { InsumosConsolidadosModal } from './components/InsumosConsolidadosModal'
 import { PartidasSinAcuModal } from './components/PartidasSinAcuModal';
 import { useDelphinData } from './hooks/useDelphinData';
 import { useDiccionario } from './hooks/useDiccionario';
-import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope } from './types';
+import { BUDGET_COLUMNS, CPM_COLUMNS, type DelphinBudgetView, type DelphinMode, type DelphinSubView, type InsumosScope, type ResumenPresupuesto } from './types';
 
 const DESC_EXPANDED_EXTRA = 180;
 
@@ -72,8 +73,36 @@ function getIconForPartida(partida: string): string {
     };
     return icons[num] ?? '📄';
 }
+// IDs of a task and all its descendants (tasks is nivel-ordered, same convention as useGanttTasks.deleteTask).
+function subtreeIds(id: number, tasks: GanttTask[]): Set<number> {
+    const idx = tasks.findIndex((t) => t.id === id);
+    if (idx === -1) return new Set([id]);
+    const ids = new Set<number>([id]);
+    for (let i = idx + 1; i < tasks.length && tasks[i].nivel > tasks[idx].nivel; i++) {
+        ids.add(tasks[i].id);
+    }
+    return ids;
+}
+
+// True when some task OUTSIDE the deleted subtree lists one of its ids as predecessor —
+// deleting it would silently break that dependency link in the cronograma.
+function isUsedAsPredecessorElsewhere(id: number, tasks: GanttTask[]): boolean {
+    const toDelete = subtreeIds(id, tasks);
+    return tasks.some(
+        (t) =>
+            !toDelete.has(t.id) &&
+            (t.predecesoras ?? []).some((p) => toDelete.has(p.taskId)),
+    );
+}
+
 function modeKey(pid: string) { return `pcl:delphin:${pid}:mode`; }
 function schedulingKey(pid: string) { return `pcl:gantt:v2:${pid}:scheduling-mode`; }
+
+const swalDark = {
+    background: '#1e293b',
+    color: '#e2e8f0',
+    confirmButtonColor: '#0ea5e9',
+} as const;
 
 
 interface PageProps {
@@ -83,6 +112,7 @@ interface PageProps {
     initialRows: any[];
     initialTasks: GanttTask[];
     projectParams: Record<string, any> | null;
+    resumenPresupuesto: ResumenPresupuesto;
     projectData?: {
         id: number;
         nombre: string;
@@ -102,7 +132,7 @@ interface PageProps {
 export default function DelphinView({
     project, project_id_int, project_name,
     initialRows, initialTasks, projectParams,
-    projectData,
+    projectData, resumenPresupuesto: initialResumenPresupuesto,
 }: PageProps) {
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -110,6 +140,49 @@ export default function DelphinView({
         { title: project_name, href: `/costos/${project}` },
         { title: 'Delphin', href: '#' },
     ];
+
+    // ── Resumen (Costo Directo + Gastos Generales + Utilidad = Total) ─────────
+    const [resumenPresupuesto, setResumenPresupuesto] = useState(initialResumenPresupuesto);
+    const [savingUtilidad, setSavingUtilidad] = useState(false);
+    const [savingGastosGenerales, setSavingGastosGenerales] = useState(false);
+
+    const saveConsolidadoPorcentaje = useCallback(async (
+        field: 'utilidad_porcentaje' | 'gastos_generales_porcentaje',
+        nuevoPorcentaje: number,
+        setSaving: (v: boolean) => void,
+    ) => {
+        if (!Number.isFinite(nuevoPorcentaje) || nuevoPorcentaje < 0) return;
+        setSaving(true);
+        try {
+            const { data } = await axios.patch(
+                `/costos/proyectos/${project_id_int}/presupuesto/consolidado/snapshot`,
+                { [field]: nuevoPorcentaje },
+            );
+            if (data?.success && data?.data) {
+                setResumenPresupuesto({
+                    costoDirecto: Number(data.data.comp_i_costo_directo ?? 0),
+                    gastosGenerales: Number(data.data.comp_ii_gastos_generales ?? 0),
+                    gastosGeneralesPorcentaje: Number(data.data.comp_ii_porcentaje ?? 0),
+                    utilidad: Number(data.data.comp_iii_utilidad ?? 0),
+                    utilidadPorcentaje: Number(data.data.comp_iii_porcentaje ?? 0),
+                    total: Number(data.data.comp_iv_subtotal_sin_igv ?? 0),
+                });
+            }
+        } catch (err) {
+            console.warn(`Error al actualizar ${field}:`, err);
+        } finally {
+            setSaving(false);
+        }
+    }, [project_id_int]);
+
+    const handleUtilidadPorcentajeChange = useCallback(
+        (v: number) => saveConsolidadoPorcentaje('utilidad_porcentaje', v, setSavingUtilidad),
+        [saveConsolidadoPorcentaje],
+    );
+    const handleGastosGeneralesPorcentajeChange = useCallback(
+        (v: number) => saveConsolidadoPorcentaje('gastos_generales_porcentaje', v, setSavingGastosGenerales),
+        [saveConsolidadoPorcentaje],
+    );
 
     // ── Mode & sub-view ───────────────────────────────────────────────────────
     const [mode, setMode] = useState<DelphinMode>(() => {
@@ -206,6 +279,29 @@ export default function DelphinView({
         saveTasks, applyBarMove, importTasks, importDelphinRows, importCronogramaTasks,
         renameRootPartida,
     } = useDelphinData({ initialTasks, initialRows, schedulingMode, calendarSettings });
+
+    // Elimina una fila (y su rama); si la partida está vinculada como predecesora
+    // de otra tarea del cronograma, pide confirmación antes de borrar — de lo
+    // contrario se elimina directamente, sin pasos extra.
+    const confirmDeleteTask = useCallback(
+        async (id: number) => {
+            if (isUsedAsPredecessorElsewhere(id, tasks)) {
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: '¿Eliminar de todos modos?',
+                    text: 'Esta partida está vinculada como predecesora de otras tareas del cronograma. Si la eliminas, esos vínculos se perderán.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar',
+                    ...swalDark,
+                    confirmButtonColor: '#dc2626',
+                });
+                if (!result.isConfirmed) return;
+            }
+            deleteTask(id);
+        },
+        [deleteTask, tasks],
+    );
 
     const handleRenameRootPartida = useCallback(
         (taskId: number, newPartida: string) => {
@@ -306,7 +402,7 @@ export default function DelphinView({
         visibleTasks: visibleDelphinRows as GanttTask[],
         selectedRowId, editState,
         selectRow, startEdit, stopEdit, cancelEdit,
-        addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
+        addTaskAfter, addChildTask, deleteTask: confirmDeleteTask, indentTask, outdentTask,
         onPendingSelect: setPendingSelect,
     });
 
@@ -419,6 +515,29 @@ export default function DelphinView({
         }
     }, [localSaveAcu, delphinRows, commitField]);
 
+    // ── Row alignment (CPM gantt mode): keep table rows pixel-aligned with bars ──
+    // The left grid has its own header stack (search bar + DelphinGridHeader's title
+    // row + optional column-filter row) above its scrollable rows; GanttChart only
+    // renders its own timeline header (CHART_HEADER_H). Both are measured live (not
+    // guessed from Tailwind classes) so the spacer above GanttChart always equals the
+    // exact extra height the grid has, regardless of filter toggles/text wrap/zoom.
+    const searchBarRef = useRef<HTMLDivElement>(null);
+    const [searchBarH, setSearchBarH] = useState(0);
+    const [gridHeaderH, setGridHeaderH] = useState(CHART_HEADER_H);
+    const handleGridHeaderHeight = useCallback((h: number) => setGridHeaderH(h), []);
+
+    useEffect(() => {
+        const el = searchBarRef.current;
+        if (!el) return;
+        const measure = () => setSearchBarH(Math.ceil(el.getBoundingClientRect().height));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const chartHeaderSpacerH = Math.max(0, searchBarH + gridHeaderH - CHART_HEADER_H);
+
     // ── Scroll sync (CPM gantt mode) ──────────────────────────────────────────
     const gridScrollRef = useRef<HTMLDivElement>(null);
     const chartScrollRef = useRef<HTMLDivElement>(null);
@@ -478,7 +597,7 @@ export default function DelphinView({
         switch (action) {
             case 'addAfter': setPendingSelect(addTaskAfter(taskId)); break;
             case 'addChild': setPendingSelect(addChildTask(taskId)); break;
-            case 'delete': deleteTask(taskId); break;
+            case 'delete': void confirmDeleteTask(taskId); break;
             case 'indent': indentTask(taskId); break;
             case 'outdent': outdentTask(taskId); break;
             case 'moveUp': moveTaskUp(taskId); break;
@@ -513,17 +632,11 @@ export default function DelphinView({
                 break;
             }
         }
-    }, [addTaskAfter, addChildTask, deleteTask, indentTask, outdentTask,
+    }, [addTaskAfter, addChildTask, confirmDeleteTask, indentTask, outdentTask,
         moveTaskUp, moveTaskDown, duplicateTask, toggleExpand, setPendingSelect,
         delphinRows, acuRows, setDelphinClipboard]);
 
     // ── Save functions ────────────────────────────────────────────────────────
-    const swalDark = {
-        background: '#1e293b',
-        color: '#e2e8f0',
-        confirmButtonColor: '#0ea5e9',
-    } as const;
-
     const saveSwalHtml = (statusText: string) => `
         <p id="dsave-status" style="font-size:13px;color:#94a3b8;margin:0 0 12px">${statusText}</p>
         <div style="background:#334155;border-radius:4px;height:6px;overflow:hidden;margin-bottom:16px">
@@ -533,8 +646,15 @@ export default function DelphinView({
             Cancelar
         </button>`;
 
+    // Guarda presupuesto_general Y cronograma_general juntos, aunque estemos en la
+    // pestaña "Presupuesto". Las dos tablas comparten la misma fila fusionada (ver
+    // comentario "Union of cronograma_general..." en useDelphinData): si solo se
+    // guarda presupuesto_general, una partida eliminada/agregada/reordenada desde
+    // esta pestaña sigue viva en cronograma_general y "resucita" (sin datos de
+    // presupuesto, con guiones) la próxima vez que se recarga la página.
     const handleSaveBudget = useCallback(async () => {
         const ac = new AbortController();
+        let ganttOk = false;
         let budgetOk = false;
         let acuOk = false;
 
@@ -556,7 +676,8 @@ export default function DelphinView({
                 }, { once: true });
 
                 try {
-                    [budgetOk, acuOk] = await Promise.all([
+                    [ganttOk, budgetOk, acuOk] = await Promise.all([
+                        saveTasks(project),
                         saveBudget(project_id_int),
                         flushPendingAcus((p) => {
                             const s = document.getElementById('dsave-status');
@@ -575,13 +696,14 @@ export default function DelphinView({
             await Swal.fire({ icon: 'warning', title: 'Guardado cancelado', text: 'Las partidas fueron guardadas. Los ACUs pendientes se guardarán en el próximo guardado.', ...swalDark });
             return;
         }
-        if (budgetOk && acuOk) {
+        if (ganttOk && budgetOk && acuOk) {
             setAcuRefetchVersion((v) => v + 1);
             void Swal.fire({ icon: 'success', title: 'Presupuesto guardado', timer: 2000, showConfirmButton: false, ...swalDark });
         } else {
-            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: 'Ocurrió un error. Intente nuevamente.', ...swalDark });
+            const errMsg = !ganttOk ? 'Error al guardar el cronograma.' : !budgetOk ? 'Error al guardar las partidas.' : 'Error al guardar los ACUs.';
+            await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
-    }, [saveBudget, project_id_int, flushPendingAcus]);
+    }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
 
     const handleSaveGantt = useCallback(async () => {
         const ac = new AbortController();
@@ -635,6 +757,37 @@ export default function DelphinView({
             await Swal.fire({ icon: 'error', title: 'Error al guardar', text: errMsg, ...swalDark });
         }
     }, [saveTasks, project, saveBudget, project_id_int, flushPendingAcus]);
+
+    // ── Alertar antes de ir a Valorizado si hay cambios sin guardar ──────────
+    const handleNavigateValorizado = useCallback(
+        async (e: React.MouseEvent<HTMLAnchorElement>) => {
+            e.preventDefault();
+            const href = e.currentTarget.href;
+            const dirty = budgetDirty || ganttDirty || acuDirty;
+            if (!dirty) {
+                window.location.href = href;
+                return;
+            }
+            const result = await Swal.fire({
+                icon: 'question',
+                title: 'Hay cambios sin guardar',
+                text: 'Guarda antes de ir al Cronograma Valorizado o los cambios se perderán.',
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonText: 'Guardar y continuar',
+                denyButtonText: 'Salir sin guardar',
+                cancelButtonText: 'Cancelar',
+                ...swalDark,
+            });
+            if (result.isConfirmed) {
+                await (mode === 'budget' ? handleSaveBudget() : handleSaveGantt());
+                window.location.href = href;
+            } else if (result.isDenied) {
+                window.location.href = href;
+            }
+        },
+        [budgetDirty, ganttDirty, acuDirty, mode, handleSaveBudget, handleSaveGantt],
+    );
 
     // ── Reset total (vaciar presupuesto) ────────────────────────────────────
     const handleResetAll = useCallback(async () => {
@@ -758,7 +911,7 @@ export default function DelphinView({
     // ── Toolbar handlers (memoized so DelphinToolbar's React.memo is effective) ──
     const handleAddRow = useCallback(() => setPendingSelect(addTaskAfter(selectedRowId)), [addTaskAfter, selectedRowId]);
     const handleAddChild = useCallback(() => { if (selectedRowId !== null) setPendingSelect(addChildTask(selectedRowId)); }, [addChildTask, selectedRowId]);
-    const handleDeleteRowClick = useCallback(() => { if (selectedRowId !== null) deleteTask(selectedRowId); }, [deleteTask, selectedRowId]);
+    const handleDeleteRowClick = useCallback(() => { if (selectedRowId !== null) void confirmDeleteTask(selectedRowId); }, [confirmDeleteTask, selectedRowId]);
     const handleResetAllClick = useCallback(() => void handleResetAll(), [handleResetAll]);
     const handleIndentClick = useCallback(() => { if (selectedRowId !== null) indentTask(selectedRowId); }, [indentTask, selectedRowId]);
     const handleOutdentClick = useCallback(() => { if (selectedRowId !== null) outdentTask(selectedRowId); }, [outdentTask, selectedRowId]);
@@ -832,6 +985,7 @@ export default function DelphinView({
                     isGanttSaving={ganttIsSaving || isSavingBudget}
                     onSaveBudget={handleSaveBudgetClick}
                     onSaveGantt={handleSaveGanttClick}
+                    onNavigateValorizado={handleNavigateValorizado}
                     onExport={handleOpenExportClick}
                     project={project}
                 />
@@ -845,6 +999,7 @@ export default function DelphinView({
                         acuRows={acuRows}
                         diccionario={diccionario}
                         projectName={project_name}
+                        resumenPresupuesto={resumenPresupuesto}
                         onBack={() => setBudgetView('presupuesto')}
                         onMonomiosChange={(monomios) => {
 
@@ -871,7 +1026,7 @@ export default function DelphinView({
                             minSize={18}
                             className="flex min-h-0 flex-col overflow-hidden border-r border-slate-300 dark:border-slate-700">
                             {/* Search and filter controls */}
-                            <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-slate-300 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                            <div ref={searchBarRef} className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-slate-300 bg-white px-2.5 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                                 <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800/80">
                                     <button
                                         type="button"
@@ -955,6 +1110,12 @@ export default function DelphinView({
                             <DelphinGrid
                                 rows={filteredRows}
                                 allRows={delphinRows}
+                                resumenPresupuesto={resumenPresupuesto}
+                                onUtilidadPorcentajeChange={handleUtilidadPorcentajeChange}
+                                savingUtilidad={savingUtilidad}
+                                onGastosGeneralesPorcentajeChange={handleGastosGeneralesPorcentajeChange}
+                                savingGastosGenerales={savingGastosGenerales}
+                                onHeaderHeightChange={handleGridHeaderHeight}
                                 columns={activeColumns}
                                 allColumns={allActiveColumns}
                                 hiddenKeys={activeHiddenKeys}
@@ -998,8 +1159,18 @@ export default function DelphinView({
                                     onAcuChange={handleAcuChange} />
                             ) : (
                                 /* CPM gantt mode: ONLY the Gantt chart bars (no grid here!) */
+                                <>
+                                {/* Live-measured spacer (searchBarH + gridHeaderH - CHART_HEADER_H)
+                                    so GanttChart's header/rows start at the exact same Y as the
+                                    grid's — computed from real DOM heights, not guessed classes,
+                                    so it stays correct across filter toggles/text wrap/zoom. */}
+                                <div style={{ height: chartHeaderSpacerH }} className="shrink-0" aria-hidden="true" />
+                                {/* Must render the exact same row set/order as DelphinGrid's
+                                   `filteredRows` (search/column filters included) — both sides
+                                   are virtualized by row index at the same ROW_HEIGHT, so any
+                                   mismatch in row count desyncs every bar from its table row. */}
                                 <GanttChart
-                                    visibleTasks={visibleTasks}
+                                    visibleTasks={filteredRows}
                                     groupIds={groupIds}
                                     criticalIds={showCriticalPath ? criticalIds : EMPTY_SET}
                                     selectedRowId={selectedRowId}
@@ -1010,6 +1181,7 @@ export default function DelphinView({
                                     onSelect={selectRow}
                                     onBarCommit={handleBarCommit}
                                     onContinuousZoom={handleContinuousZoom} />
+                                </>
                             )}
 
                         </Panel>

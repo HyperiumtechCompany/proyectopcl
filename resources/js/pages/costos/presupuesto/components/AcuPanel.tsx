@@ -32,15 +32,8 @@ const fmt = (n: number | undefined | null, d = 2) =>
         maximumFractionDigits: d,
     });
 
-const fmtCantidad = (n: number | undefined | null) => {
-    const value = Number(n ?? 0);
-    const rounded = Math.round(value);
-    const isInt = Math.abs(value - rounded) < 1e-9;
-    return value.toLocaleString('es-PE', {
-        minimumFractionDigits: isInt ? 0 : 4,
-        maximumFractionDigits: isInt ? 0 : 4,
-    });
-};
+const fmtCantidad = (n: number | undefined | null) =>
+    fmt(new Decimal(n ?? 0).toDecimalPlaces(4).toNumber(), 4);
 
 const UNIT_LABELS: Record<string, string> = {
     'm2': 'm²',
@@ -77,11 +70,13 @@ const isHerramientasRow = (item: ACUComponenteRow) =>
 
 // Redondeo a 4 decimales para valores de "cantidad" ingresados manualmente
 // (materiales, subcontratos, subpartidas, % de herramientas).
-const round4 = (n: number) => new Decimal(n).toDecimalPlaces(4).toNumber();
+const roundCantidad = (n: number) => new Decimal(n).toDecimalPlaces(4).toNumber();
 
-// Cantidad calculada (mano de obra/equipos vía recursos/rendimiento) mantiene
-// precisión completa: cantidad = (8 / rendimiento) * recursos, sin redondeo
-// intermedio — el parcial final se redondea a 2 decimales en decimalMul.
+// Redondeo a 2 decimales para precios (precio_unitario / precio_hora).
+const roundPrecio = (n: number) => new Decimal(n).toDecimalPlaces(2).toNumber();
+
+// Cantidad calculada (mano de obra/equipos via recursos/rendimiento) usa
+// 4 decimales para mantener el mismo criterio que Delphin al importar.
 const computeCantidadFromRecursosBase = (
     recursos: number,
     perDay: boolean,
@@ -90,9 +85,9 @@ const computeCantidadFromRecursosBase = (
 ) => {
     const safeRend = rendimiento || 1;
     if (perDay) {
-        return (recursos * hoursPerDay) / safeRend;
+        return roundCantidad((recursos * hoursPerDay) / safeRend);
     }
-    return recursos / safeRend;
+    return roundCantidad(recursos / safeRend);
 };
 
 const computeRecursosFromCantidadBase = (
@@ -117,16 +112,27 @@ export function createAcuComponentFromResource(
     recursos?: number,
 ): ACUComponenteRow {
     const isEquipment = targetType === 'equipos';
+    const precio = roundPrecio(resource.precio);
 
     return {
         insumo_id: resource.id,
-        cod_insumo: resource.codigo,
+        // El código INEI (2 dígitos, ej. "47") vive en diccionario.codigo, no en
+        // resource.codigo (= insumo_productos.codigo_producto, un código compuesto
+        // como "021060001"). Agrupar por ese código compuesto rompía la Fórmula
+        // Polinómica (cada insumo del catálogo caía en su propia "columna" en vez
+        // de agruparse con el resto de su índice INEI). Con fallback a
+        // resource.codigo cuando el insumo no tiene diccionario asociado.
+        cod_insumo: resource.diccionario?.codigo ?? resource.codigo,
+        // Se conserva el código compuesto del catálogo aparte, para uso futuro
+        // (búsqueda exacta del insumo, re-sincronización de precios, exportaciones)
+        // sin perderlo al resolver el código corto de arriba.
+        codigo_producto: resource.codigo,
         descripcion: resource.descripcion,
         unidad: resource.unidad?.abreviatura_unidad ?? resource.unidad?.descripcion_singular ?? '',
         cantidad,
         recursos,
-        precio_unitario: isEquipment ? 0 : resource.precio,
-        precio_hora: isEquipment ? resource.precio : 0,
+        precio_unitario: isEquipment ? 0 : precio,
+        precio_hora: isEquipment ? precio : 0,
         factor_desperdicio: targetType === 'materiales' ? 1.05 : 1,
     };
 }
@@ -807,6 +813,7 @@ function EditableAcuCell({
 }) {
     const [val, setVal] = useState(value?.toString() || '');
     const [isEditing, setIsEditing] = useState(false);
+    const numericValue = Number(value ?? 0);
 
     useEffect(() => {
         setVal(value?.toString() || '');
@@ -816,7 +823,7 @@ function EditableAcuCell({
         return (
             <input
                 autoFocus
-                className={`w-full min-w-[50px] rounded border border-sky-500 bg-slate-800 px-1 text-right font-mono text-xs text-white outline-none ${className}`}
+            className={`w-full min-w-[50px] rounded border border-sky-500 bg-white px-1 text-right font-mono text-xs text-slate-900 outline-none dark:bg-slate-800 dark:text-white ${className}`}
                 value={val}
                 onChange={(e) => setVal(e.target.value)}
                 onFocus={(e) => e.target.select()}
@@ -845,13 +852,13 @@ function EditableAcuCell({
 
     return (
         <div
-            className={`-mx-1 min-w-[20px] cursor-text rounded px-1 transition-colors hover:bg-slate-700/80 ${className}`}
+            className={`-mx-1 min-w-[20px] cursor-text rounded px-1 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700/80 ${className}`}
             onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
             }}
         >
-            {value >= 0 ? fmt(value, decimals) : '-'}
+            {numericValue >= 0 ? fmt(numericValue, decimals) : '-'}
         </div>
     );
 }
@@ -876,7 +883,7 @@ function EditableTextCell({
         return (
             <input
                 autoFocus
-                className={`w-full min-w-[80px] rounded border border-sky-500 bg-slate-800 px-1 text-left text-xs text-white outline-none ${className || ''}`}
+                className={`w-full min-w-[80px] rounded border border-sky-500 bg-white px-1 text-left text-xs text-slate-900 outline-none dark:bg-slate-800 dark:text-white ${className || ''}`}
                 value={val}
                 onChange={(e) => setVal(e.target.value)}
                 onFocus={(e) => e.target.select()}
@@ -914,7 +921,7 @@ function EditableTextCell({
     return (
         <button
             type="button"
-            className={`w-full text-left text-slate-200 hover:text-sky-300 ${className || ''}`}
+            className={`w-full text-left text-slate-700 hover:text-sky-600 dark:text-slate-200 dark:hover:text-sky-300 ${className || ''}`}
             onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
@@ -985,18 +992,18 @@ function AcuSection({
     const isCrewType = type === 'mano_de_obra' || type === 'equipos';
 
     return (
-        <div className="border-b border-slate-700">
+        <div className="border-b border-slate-300 dark:border-slate-700">
             <div
-                className="hover:bg-slate-750 flex cursor-pointer items-center gap-2 bg-slate-800/80 px-3 py-1.5 select-none"
+                className="flex cursor-pointer items-center gap-2 bg-slate-100 px-3 py-1.5 select-none hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700"
                 onClick={() => setExpanded((e) => !e)}
             >
                 {expanded ? (
-                    <ChevronDown size={13} className="text-slate-400" />
+                    <ChevronDown size={13} className="text-slate-500 dark:text-slate-400" />
                 ) : (
-                    <ChevronRight size={13} className="text-slate-400" />
+                    <ChevronRight size={13} className="text-slate-500 dark:text-slate-400" />
                 )}
                 <Icon size={13} className={color} />
-                <span className="text-xs font-semibold tracking-wide text-slate-200">
+                <span className="text-xs font-semibold tracking-wide text-slate-800 dark:text-slate-200">
                     {label}
                 </span>
                 <span className={`ml-auto text-xs font-bold ${color}`}>
@@ -1033,12 +1040,12 @@ function AcuSection({
                             return (
                                 <tr
                                     key={`${type}-${idx}`}
-                                    className="group border-b border-slate-700/50 hover:bg-slate-700/40"
+                                    className="group border-b border-slate-200 hover:bg-slate-100 dark:border-slate-700/50 dark:hover:bg-slate-700/40"
                                 >
-                                    <td className="w-28 py-1 pr-2 pl-2 font-mono text-[10px] text-slate-500">
+                                    <td className="w-28 py-1 pr-2 pl-2 font-mono text-[10px] text-slate-500 dark:text-slate-500">
                                         <div className="flex items-center gap-1">
                                             <button
-                                                className="shrink-0 rounded p-0.5 text-slate-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                                                className="shrink-0 rounded p-0.5 text-slate-400 opacity-0 transition-all hover:text-red-500 group-hover:opacity-100 dark:text-slate-600 dark:hover:text-red-400"
                                                 title="Eliminar recurso"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -1052,7 +1059,7 @@ function AcuSection({
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="min-w-0 px-2 py-1 text-slate-200">
+                                    <td className="min-w-0 px-2 py-1 text-slate-800 dark:text-slate-200">
                                         <EditableTextCell
                                             value={item.descripcion || ''}
                                             onUpdate={(v) =>
@@ -1070,7 +1077,7 @@ function AcuSection({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="w-12 px-2 py-1 text-center text-slate-400">
+                                    <td className="w-12 px-2 py-1 text-center text-slate-600 dark:text-slate-400">
                                         <EditableTextCell
                                             value={item.unidad || ''}
                                             onUpdate={(v) =>
@@ -1084,7 +1091,7 @@ function AcuSection({
                                             className="text-center"
                                         />
                                     </td>
-                                    <td className="w-16 px-2 py-1 text-right text-slate-300">
+                                    <td className="w-16 px-2 py-1 text-right text-slate-700 dark:text-slate-300">
                                         {isCrewType && !isHerramientas ? (
                                             <EditableAcuCell
                                                 value={recursosValue}
@@ -1101,9 +1108,9 @@ function AcuSection({
                                             '-'
                                         )}
                                     </td>
-                                    <td className="w-16 px-2 py-1 text-right text-slate-300">
+                                    <td className="w-16 px-2 py-1 text-right text-slate-700 dark:text-slate-300">
                                         {isCrewType && !isHerramientas ? (
-                                            <span className="font-mono text-xs text-slate-200">
+                                            <span className="font-mono text-xs text-slate-800 dark:text-slate-200">
                                                 {fmtCantidad(cantidadDisplay)}
                                             </span>
                                         ) : (
@@ -1121,7 +1128,7 @@ function AcuSection({
                                             />
                                         )}
                                     </td>
-                                    <td className="w-14 px-2 py-1 text-right text-slate-300">
+                                    <td className="w-14 px-2 py-1 text-right text-slate-700 dark:text-slate-300">
                                         {type === 'materiales' ? (
                                             <EditableAcuCell
                                                 value={
@@ -1140,9 +1147,9 @@ function AcuSection({
                                             '-'
                                         )}
                                     </td>
-                                    <td className="w-20 px-2 py-1 text-right text-slate-300">
+                                    <td className="w-20 px-2 py-1 text-right text-slate-700 dark:text-slate-300">
                                         {isHerramientas ? (
-                                            <span className="font-mono text-xs text-slate-200">
+                                            <span className="font-mono text-xs text-slate-800 dark:text-slate-200">
                                                 {fmt(manoObraTotal || 0, 2)}
                                             </span>
                                         ) : (
@@ -1167,7 +1174,7 @@ function AcuSection({
                                             />
                                         )}
                                     </td>
-                                    <td className="w-20 px-2 py-1 pr-3 text-right font-semibold text-slate-100">
+                                    <td className="w-20 px-2 py-1 pr-3 text-right font-semibold text-slate-900 dark:text-slate-100">
                                         {fmt(item.parcial, 2)}
                                     </td>
                                 </tr>
@@ -1186,7 +1193,7 @@ function AcuSection({
                         <tr>
                             <td
                                 colSpan={8}
-                                className="border-t border-slate-700/50 bg-slate-900/50 px-8 py-1.5"
+                                className="border-t border-slate-200 bg-slate-50 px-8 py-1.5 dark:border-slate-700/50 dark:bg-slate-900/50"
                             >
                                 <button
                                     className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-sky-500 uppercase transition-colors hover:text-sky-300"
@@ -1445,11 +1452,13 @@ export const AcuPanel = React.memo(function AcuPanel({
             } else if (isHerramientas && field === 'cantidad') {
                 arr[index] = {
                     ...currentItem,
-                    cantidad: round4(Number(value) || 0),
+                    cantidad: roundCantidad(Number(value) || 0),
                     precio_hora: prev.costo_mano_obra || 0,
                 };
             } else if (field === 'cantidad') {
-                arr[index] = { ...currentItem, cantidad: round4(Number(value) || 0) };
+                arr[index] = { ...currentItem, cantidad: roundCantidad(Number(value) || 0) };
+            } else if (field === 'precio_unitario' || field === 'precio_hora') {
+                arr[index] = { ...currentItem, [field]: roundPrecio(Number(value) || 0) };
             } else {
                 arr[index] = { ...currentItem, [field]: value };
             }
@@ -1552,7 +1561,7 @@ export const AcuPanel = React.memo(function AcuPanel({
 
     if (acuLoading) {
         return (
-            <div className="bg-slate-850 flex h-full flex-col items-center justify-center gap-3 text-slate-500">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50 text-slate-500 dark:bg-slate-950">
                 <p className="text-sm">Cargando ACU...</p>
             </div>
         );
@@ -1560,12 +1569,12 @@ export const AcuPanel = React.memo(function AcuPanel({
 
     if (!localAcu) {
         return (
-            <div className="bg-slate-850 flex h-full flex-col items-center justify-center gap-3 text-slate-500">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50 text-slate-500 dark:bg-slate-950">
                 <Calculator size={40} className="opacity-30" />
                 <p className="text-sm">
                     Seleccione una partida para ver el ACU
                 </p>
-                <p className="text-xs text-slate-600 max-w-xs text-center">
+                <p className="max-w-xs text-center text-xs text-slate-500 dark:text-slate-600">
                     (Asegúrese de que la partida tenga una <strong>unidad asignada</strong> en el presupuesto general)
                 </p>
             </div>
@@ -1575,17 +1584,17 @@ export const AcuPanel = React.memo(function AcuPanel({
     const grandTotal = localAcu.costo_unitario_total || 0;
 
     return (
-        <div className="bg-slate-850 flex h-full flex-col">
+        <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             {/* Header */}
-            <div className="border-b border-slate-700 bg-slate-800 px-4 py-2.5">
+            <div className="border-b border-slate-300 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800">
                 <div className="flex items-start justify-between">
                     <div>
                         <p className="text-[10px] tracking-widest text-slate-500 uppercase">
                             Análisis de Costo Unitario
                         </p>
-                        <p className="mt-0.5 text-xs text-slate-400">
+                        <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
                             <span className="text-slate-500">Presupuesto:</span>{' '}
-                            <span className="font-medium text-sky-400">
+                            <span className="font-medium text-sky-600 dark:text-sky-400">
                                 PROYECTO
                             </span>
                         </p>
@@ -1593,14 +1602,14 @@ export const AcuPanel = React.memo(function AcuPanel({
                     <div className="text-right">
                         <p className="text-[10px] text-slate-500">
                             Hecho por:{' '}
-                            <span className="text-slate-300">
+                            <span className="text-slate-700 dark:text-slate-300">
                                 Administrador
                             </span>
                         </p>
                         {selectedCell && (
                             <p className="mt-0.5 text-[10px] text-slate-500">
                                 Fila:{' '}
-                                <span className="text-slate-300">
+                                <span className="text-slate-700 dark:text-slate-300">
                                     {selectedCell.row}
                                 </span>
                             </p>
@@ -1609,11 +1618,11 @@ export const AcuPanel = React.memo(function AcuPanel({
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-slate-500">
-                        <span className="font-mono font-semibold text-sky-400">
+                        <span className="font-mono font-semibold text-sky-600 dark:text-sky-400">
                             {localAcu.partida}
                         </span>
                         {' — '}
-                        <span className="text-slate-200">
+                        <span className="text-slate-900 dark:text-slate-200">
                             {localAcu.descripcion}
                         </span>
                     </span>
@@ -1621,8 +1630,8 @@ export const AcuPanel = React.memo(function AcuPanel({
             </div>
 
             {/* Rendimiento bar */}
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-700 bg-slate-800/50 px-3 py-2">
-                <span className="text-xs text-slate-400">Rendimiento:</span>
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-300 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+                <span className="text-xs text-slate-600 dark:text-slate-400">Rendimiento:</span>
                 <div className="flex items-center gap-1">
                     <input
                         type="number"
@@ -1637,22 +1646,22 @@ export const AcuPanel = React.memo(function AcuPanel({
                                 Number((e.target as HTMLInputElement).value),
                             )
                         }
-                        className="w-20 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
+                        className="w-20 rounded border border-slate-300 bg-white px-2 py-0.5 text-right text-xs text-slate-800 focus:border-sky-500 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
                     />
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
                         {displayUnit(localAcu.unidad || 'Und.')}
                     </span>
                 </div>
-                <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-600">
+                <div className="flex items-center gap-1 overflow-hidden rounded border border-slate-300 dark:border-slate-600">
                     <button
                         onClick={() => handleTogglePerDay(true)}
-                        className={`px-2 py-0.5 text-xs transition-colors ${perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`px-2 py-0.5 text-xs transition-colors ${perDay ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'}`}
                     >
                         Por día
                     </button>
                     <button
                         onClick={() => handleTogglePerDay(false)}
-                        className={`px-2 py-0.5 text-xs transition-colors ${!perDay ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`px-2 py-0.5 text-xs transition-colors ${!perDay ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'}`}
                     >
                         Hora
                     </button>
@@ -1667,17 +1676,17 @@ export const AcuPanel = React.memo(function AcuPanel({
                     onBlur={(e) =>
                         handleHoursPerDayChange(Number(e.target.value))
                     }
-                    className="w-12 rounded border border-slate-600 bg-slate-700 px-2 py-0.5 text-right text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
+                    className="w-12 rounded border border-slate-300 bg-white px-2 py-0.5 text-right text-xs text-slate-800 focus:border-sky-500 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
                 />
-                <div className="ml-auto flex items-center gap-2 rounded border border-slate-600 bg-slate-700/50 px-2 py-1">
+                <div className="ml-auto flex items-center gap-2 rounded border border-slate-300 bg-white px-2 py-1 dark:border-slate-600 dark:bg-slate-700/50">
                     <input
                         type="checkbox"
                         id="update-global-prices"
                         checked={updateProjectPrices}
                         onChange={(e) => setUpdateProjectPrices(e.target.checked)}
-                        className="h-3 w-3 rounded border-slate-500 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-slate-800"
+                        className="h-3 w-3 rounded border-slate-400 bg-white text-sky-500 focus:ring-sky-500 dark:border-slate-500 dark:bg-slate-800 dark:focus:ring-offset-slate-800"
                     />
-                    <label htmlFor="update-global-prices" className="cursor-pointer select-none text-[10px] text-slate-300">
+                    <label htmlFor="update-global-prices" className="cursor-pointer select-none text-[10px] text-slate-700 dark:text-slate-300">
                         Actualizar precio en todo el proyecto
                     </label>
                 </div>
@@ -1685,15 +1694,15 @@ export const AcuPanel = React.memo(function AcuPanel({
 
             <div className="flex-1 overflow-hidden">
                 <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-slate-700/80 bg-slate-800/30 px-3 py-2">
-                        <span className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
+                    <div className="flex items-center justify-between border-b border-slate-300 bg-slate-100 px-3 py-2 dark:border-slate-700/80 dark:bg-slate-800/30">
+                        <span className="text-xs font-semibold tracking-widest text-slate-500 uppercase dark:text-slate-400">
                             Detalle de Recursos
                         </span>
                         <span className="text-[10px] text-slate-500">
                             Modo: {perDay ? 'Por dia' : 'Por hora'}
                         </span>
                     </div>
-                    <table className="w-full table-fixed border-b border-slate-700 bg-slate-800/30 text-[10px] font-medium tracking-wider text-slate-500 uppercase">
+                    <table className="w-full table-fixed border-b border-slate-300 bg-slate-100 text-[10px] font-medium tracking-wider text-slate-500 uppercase dark:border-slate-700 dark:bg-slate-800/30">
                         <thead>
                             <tr>
                                 <th className="w-28 px-3 py-1.5 text-left">
@@ -1724,7 +1733,7 @@ export const AcuPanel = React.memo(function AcuPanel({
                         </thead>
                     </table>
 
-                    <div className="scrollbar-thin flex-1 overflow-y-auto border-l border-slate-700 bg-slate-900">
+                    <div className="scrollbar-thin flex-1 overflow-y-auto border-l border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
                         <AcuSection
                             type="mano_de_obra"
                             items={localAcu.mano_de_obra || []}
@@ -1788,8 +1797,8 @@ export const AcuPanel = React.memo(function AcuPanel({
                     </div>
                 </div>
             </div>
-            <div className="flex shrink-0 items-center justify-between border-t-2 border-sky-600/50 bg-slate-800 px-4 py-2.5">
-                <span className="text-sm font-bold tracking-wide text-slate-300">
+            <div className="flex shrink-0 items-center justify-between border-t-2 border-sky-500/60 bg-white px-4 py-2.5 dark:border-sky-600/50 dark:bg-slate-800">
+                <span className="text-sm font-bold tracking-wide text-slate-700 dark:text-slate-300">
                     TOTAL ACU.
                 </span>
                 <div className="flex items-center gap-3">

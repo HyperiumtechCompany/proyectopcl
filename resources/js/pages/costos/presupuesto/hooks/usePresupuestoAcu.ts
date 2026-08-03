@@ -3,7 +3,12 @@ import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ACUComponenteRow, ACURowSummary, PresupuestoSubsection } from '@/types/presupuestos';
 
-const ACU_BATCH_SIZE = 8; // concurrent requests per round — keeps server load manageable
+// Sequential on purpose: calculateACU() recalculates the *entire* budget's ACUs on every
+// save (not just the one being saved), so concurrent requests from the same flush race to
+// update the same presupuesto_general/presupuesto_acus rows and MySQL deadlocks under load
+// (seen in production on a ~800-ACU budget — 5 server-side retries still wasn't enough at
+// batch size 8). Slower but reliable until that recalculation is scoped down.
+const ACU_BATCH_SIZE = 1;
 
 export interface AcuFlushProgress {
     done:    number;
@@ -13,58 +18,81 @@ export interface AcuFlushProgress {
 }
 
 // Mirrors the PHP calculateACU logic — keeps visual preview consistent with DB result.
-// Rounds to 6dp (not 2) so the preview matches the DB's internal precision: rounding
-// each item's parcial to 2dp before summing was what made Costo Directo (metrado ×
-// precio_unitario, both flattened to 2dp) diverge from Insumos Consolidados (which
-// carried full precision) — see PresupuestoController::calculateAcu for the backend twin.
-function r2(n: number): number { return new Decimal(n).toDecimalPlaces(6).toNumber(); }
+// Rounds to 10dp (not 2, and not 6) so the preview matches the DB's internal precision:
+// rounding each item's parcial to 2dp before summing was what made Costo Directo (metrado ×
+// precio_unitario) diverge from Insumos Consolidados; 6dp fixed that at small scale, but with
+// metrados in the tens of thousands a 7th-decimal rounding error in precio_unitario still
+// amplifies to visible centimos (verified: metrado=75,500 × error 4.4e-7 = 0.033 gap) — see
+// PresupuestoController::calculateAcu for the backend twin.
+function r2(n: number): number { return new Decimal(n).toDecimalPlaces(10).toNumber(); }
 
-// Multiplies operands with Decimal.js precision and rounds the result to 6dp.
+function roundCantidad(n: number): number { return new Decimal(n).toDecimalPlaces(4).toNumber(); }
+
+function roundPrecio(n: number): number { return new Decimal(n).toDecimalPlaces(2).toNumber(); }
+
+// Multiplies operands with Decimal.js precision and rounds the result to 10dp.
 // Avoids float errors like 0.57 * 31.50 = 17.954999... rounding to 17.95 instead of 17.96.
 function decimalMul(...factors: number[]): number {
     return factors
         .reduce((acc, f) => acc.times(new Decimal(f)), new Decimal(1))
-        .toDecimalPlaces(6)
+        .toDecimalPlaces(10)
         .toNumber();
 }
 
 export function calculateAcuLocally(acuData: Record<string, any>) {
-    const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => ({
-        ...item,
-        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
-    }));
+    const manoDeObra = (acuData.mano_de_obra as any[] || []).map((item: any) => {
+        const cantidad = roundCantidad(Number(item.cantidad ?? 0));
+        return {
+            ...item,
+            cantidad,
+            parcial: decimalMul(cantidad, Number(item.precio_unitario ?? 0)),
+        };
+    });
     const costoManoObra = r2(manoDeObra.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
-    const materiales = (acuData.materiales as any[] || []).map((item: any) => ({
-        ...item,
-        parcial: decimalMul(
-            Number(item.cantidad ?? 0),
-            Number(item.precio_unitario ?? 0),
-            Math.max(1, Number(item.factor_desperdicio ?? 1))
-        ),
-    }));
+    const materiales = (acuData.materiales as any[] || []).map((item: any) => {
+        const cantidad = roundCantidad(Number(item.cantidad ?? 0));
+        return {
+            ...item,
+            cantidad,
+            parcial: decimalMul(
+                cantidad,
+                Number(item.precio_unitario ?? 0),
+                Math.max(1, Number(item.factor_desperdicio ?? 1))
+            ),
+        };
+    });
     const costoMateriales = r2(materiales.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
     const equipos = (acuData.equipos as any[] || []).map((item: any) => {
+        const cantidad = roundCantidad(Number(item.cantidad ?? 0));
         const isHerramientas = String(item.descripcion ?? '').toLowerCase().includes('herramienta');
         if (isHerramientas) {
-            const parcial = decimalMul(costoManoObra, Number(item.cantidad ?? 0) / 100);
-            return { ...item, precio_hora: costoManoObra, parcial };
+            const parcial = decimalMul(costoManoObra, cantidad / 100);
+            return { ...item, cantidad, precio_hora: costoManoObra, parcial };
         }
-        return { ...item, parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_hora ?? 0)) };
+        return { ...item, cantidad, parcial: decimalMul(cantidad, Number(item.precio_hora ?? 0)) };
     });
     const costoEquipos = r2(equipos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
-    const subcontratos = (acuData.subcontratos as any[] || []).map((item: any) => ({
-        ...item,
-        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
-    }));
+    const subcontratos = (acuData.subcontratos as any[] || []).map((item: any) => {
+        const cantidad = roundCantidad(Number(item.cantidad ?? 0));
+        return {
+            ...item,
+            cantidad,
+            parcial: decimalMul(cantidad, Number(item.precio_unitario ?? 0)),
+        };
+    });
     const costoSubcontratos = r2(subcontratos.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
-    const subpartidas = (acuData.subpartidas as any[] || []).map((item: any) => ({
-        ...item,
-        parcial: decimalMul(Number(item.cantidad ?? 0), Number(item.precio_unitario ?? 0)),
-    }));
+    const subpartidas = (acuData.subpartidas as any[] || []).map((item: any) => {
+        const cantidad = roundCantidad(Number(item.cantidad ?? 0));
+        return {
+            ...item,
+            cantidad,
+            parcial: decimalMul(cantidad, Number(item.precio_unitario ?? 0)),
+        };
+    });
     const costoSubpartidas = r2(subpartidas.reduce((s: number, i: any) => s + (i.parcial ?? 0), 0));
 
     return {
@@ -305,7 +333,7 @@ export function usePresupuestoAcu({
             proveedor: (item.proveedor as string | null | undefined) || null,
             descripcion: String(item.descripcion ?? '').trim(),
             unidad: String(item.unidad ?? '').trim() || 'und',
-            cantidad: normalizeNumber(item.cantidad, 0),
+            cantidad: roundCantidad(normalizeNumber(item.cantidad, 0)),
         };
 
         if (type === 'mano_de_obra' || type === 'equipos') {
@@ -313,15 +341,15 @@ export function usePresupuestoAcu({
         }
 
         if (type === 'materiales' || type === 'subcontratos' || type === 'subpartidas') {
-            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
         }
 
         if (type === 'mano_de_obra') {
-            normalized.precio_unitario = normalizeNumber(item.precio_unitario, 0);
+            normalized.precio_unitario = roundPrecio(normalizeNumber(item.precio_unitario, 0));
         }
 
         if (type === 'equipos') {
-            normalized.precio_hora = normalizeNumber(item.precio_hora, 0);
+            normalized.precio_hora = roundPrecio(normalizeNumber(item.precio_hora, 0));
         }
 
         if (type === 'materiales') {

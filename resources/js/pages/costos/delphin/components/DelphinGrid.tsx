@@ -8,7 +8,7 @@ import type { ColumnDef, EditState, RowAction } from '../../cronogramas/v2/types
 import type { GanttTask } from '../../cronogramas/v2/types/task';
 import { GanttGridRow } from '../../cronogramas/v2/components/grid/GanttGridRow';
 import { GridContextMenu } from '../../cronogramas/v2/components/grid/GridContextMenu';
-import type { DelphinRow } from '../types';
+import type { DelphinRow, ResumenPresupuesto } from '../types';
 
 const fmtCurrency = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,10 +17,112 @@ const ROW_NUM_W = 32;
 
 /** Returns text color class for the description column based on hierarchy level */
 function getDescTextClass(row: DelphinRow, isGroup: boolean): string | undefined {
-    if (!isGroup) return undefined; // leaf → default (text-slate-200)
-    if (row.nivel === 1) return 'text-amber-400';
-    if (row.nivel === 2) return 'text-sky-300';
-    return 'text-violet-300'; // nivel 3+
+    if (!isGroup) return undefined; // leaf → default text from shared cell
+    if (row.nivel === 1) return 'text-amber-700 dark:text-amber-400';
+    if (row.nivel === 2) return 'text-sky-700 dark:text-sky-300';
+    return 'text-violet-700 dark:text-violet-300'; // nivel 3+
+}
+
+/** One row of the Costo Directo / Gastos Generales / Utilidad / Total footer.
+ *  When `onPercentageChange` is given, the Cantidad column (otherwise unused
+ *  on this footer) becomes a clickable, editable "%" input — persisted via
+ *  gg_consolidado. Without it, the percentage is shown read-only there. */
+function SummaryRow({
+    columns,
+    labelPrefix,
+    percentage,
+    amount,
+    emphasize = false,
+    onPercentageChange,
+    saving = false,
+}: {
+    columns: ColumnDef[];
+    labelPrefix: string;
+    percentage?: number;
+    amount: number;
+    emphasize?: boolean;
+    onPercentageChange?: (value: number) => void;
+    saving?: boolean;
+}) {
+    const colorClass = emphasize
+        ? 'text-emerald-700 dark:text-emerald-400'
+        : 'text-amber-700 dark:text-amber-400';
+
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(String(percentage ?? 0));
+
+    useEffect(() => {
+        if (!editing) setDraft(String(percentage ?? 0));
+    }, [percentage, editing]);
+
+    const commit = () => {
+        setEditing(false);
+        const parsed = Number(draft);
+        if (onPercentageChange && Number.isFinite(parsed) && parsed >= 0 && parsed !== percentage) {
+            onPercentageChange(parsed);
+        }
+    };
+
+    return (
+        <div
+            className={`flex shrink-0 border-t bg-slate-100 text-xs font-bold select-none dark:bg-slate-900 ${
+                emphasize
+                    ? 'border-t-2 border-emerald-500/70 dark:border-emerald-600/60'
+                    : 'border-slate-300 dark:border-slate-700/50'
+            }`}
+        >
+            <div style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }} className="shrink-0 border-r border-slate-300 dark:border-slate-700/50" />
+            {columns.map((col) => (
+                <div
+                    key={col.key}
+                    style={{ width: col.width, minWidth: col.width }}
+                    className={`shrink-0 border-r border-slate-300 px-2 py-2 last:border-r-0 dark:border-slate-700/50 ${
+                        col.align === 'right'  ? 'text-right'  :
+                        col.align === 'center' ? 'text-center' : 'text-left'
+                    }`}
+                >
+                    {col.key === 'descripcion' ? (
+                        <span className={`uppercase tracking-wide ${colorClass}`}>{labelPrefix}</span>
+                    ) : col.key === 'metrado' && percentage !== undefined ? (
+                        onPercentageChange ? (
+                            editing ? (
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    autoFocus
+                                    className="w-full rounded border border-slate-400 bg-white px-1 py-0.5 text-right font-mono text-[11px] font-normal text-slate-800 outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                    value={draft}
+                                    onChange={(e) => setDraft(e.target.value)}
+                                    onBlur={commit}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') commit();
+                                        if (e.key === 'Escape') { setDraft(String(percentage ?? 0)); setEditing(false); }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className={`font-mono underline decoration-dotted underline-offset-2 hover:text-emerald-500 ${colorClass}`}
+                                    title={`Editar porcentaje de ${labelPrefix.toLowerCase()}`}
+                                    onClick={() => setEditing(true)}
+                                >
+                                    {percentage.toFixed(2)}%{saving ? '…' : ''}
+                                </button>
+                            )
+                        ) : (
+                            <span className={`font-mono ${colorClass}`}>{percentage.toFixed(2)}%</span>
+                        )
+                    ) : col.key === 'parcial' ? (
+                        <span className={`font-mono ${colorClass}`}>{fmtCurrency(amount)}</span>
+                    ) : col.key === 'item_order' ? null : (
+                        <span className="text-slate-400 dark:text-slate-700">—</span>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
 }
 
 interface Props {
@@ -52,6 +154,17 @@ interface Props {
     onColumnFilterChange: (key: string, value: string) => void;
     onClearColumnFilters: () => void;
     showColumnFilters:  boolean;
+    /** Reports the rendered height of the header stack (title row + optional
+     *  filter row) so the sibling Gantt panel can mirror it and keep rows aligned. */
+    onHeaderHeightChange?: (height: number) => void;
+    /** Gastos Generales / Utilidad / Total, para las filas de resumen bajo Costo Directo. */
+    resumenPresupuesto?: ResumenPresupuesto;
+    /** Persiste el nuevo % de utilidad (PATCH consolidado/snapshot) cuando se edita en el resumen. */
+    onUtilidadPorcentajeChange?: (value: number) => void;
+    savingUtilidad?: boolean;
+    /** Igual que onUtilidadPorcentajeChange, para el % de Gastos Generales. */
+    onGastosGeneralesPorcentajeChange?: (value: number) => void;
+    savingGastosGenerales?: boolean;
 }
 
 interface CtxState { taskId: number; x: number; y: number }
@@ -309,10 +422,26 @@ export function DelphinGrid({
     onColumnFilterChange,
     onClearColumnFilters,
     showColumnFilters,
+    onHeaderHeightChange,
+    resumenPresupuesto,
+    onUtilidadPorcentajeChange,
+    savingUtilidad,
+    onGastosGeneralesPorcentajeChange,
+    savingGastosGenerales,
 }: Props) {
     const internalRef       = useRef<HTMLDivElement>(null);
     const resolvedRef       = (scrollRef ?? internalRef) as React.RefObject<HTMLDivElement>;
     const headerContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = headerContainerRef.current;
+        if (!el || !onHeaderHeightChange) return;
+        const measure = () => onHeaderHeightChange(Math.ceil(el.getBoundingClientRect().height));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [onHeaderHeightChange]);
 
     const [ctx, setCtx] = useState<CtxState | null>(null);
 
@@ -436,30 +565,37 @@ export function DelphinGrid({
                 )}
             </div>
 
-            {/* ── Costo Directo footer (budget mode only) ──────────────────── */}
+            {/* ── Resumen footer: Costo Directo + Gastos Generales + Utilidad = Total ── */}
             {hasParcialCol && (
-                <div className="flex shrink-0 border-t-2 border-amber-600/60 bg-slate-900 text-xs font-bold select-none">
-                    {/* Row number gutter footer */}
-                    <div style={{ width: ROW_NUM_W, minWidth: ROW_NUM_W }} className="shrink-0 border-r border-slate-700/50" />
-                    {columns.map((col) => (
-                        <div
-                            key={col.key}
-                            style={{ width: col.width, minWidth: col.width }}
-                            className={`shrink-0 border-r border-slate-700/50 px-2 py-2 last:border-r-0 ${
-                                col.align === 'right'  ? 'text-right'  :
-                                col.align === 'center' ? 'text-center' : 'text-left'
-                            }`}
-                        >
-                            {col.key === 'descripcion' ? (
-                                <span className="text-amber-400 uppercase tracking-wide">Costo Directo</span>
-                            ) : col.key === 'parcial' ? (
-                                <span className="font-mono text-amber-400">{fmtCurrency(costoDirecto)}</span>
-                            ) : col.key === 'item_order' ? null : (
-                                <span className="text-slate-700">—</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                <>
+                    <SummaryRow columns={columns} labelPrefix="Costo Directo" amount={costoDirecto} />
+                    {resumenPresupuesto && (
+                        <>
+                            <SummaryRow
+                                columns={columns}
+                                labelPrefix="Gastos Generales"
+                                percentage={resumenPresupuesto.gastosGeneralesPorcentaje}
+                                amount={resumenPresupuesto.gastosGenerales}
+                                onPercentageChange={onGastosGeneralesPorcentajeChange}
+                                saving={savingGastosGenerales}
+                            />
+                            <SummaryRow
+                                columns={columns}
+                                labelPrefix="Utilidad"
+                                percentage={resumenPresupuesto.utilidadPorcentaje}
+                                amount={resumenPresupuesto.utilidad}
+                                onPercentageChange={onUtilidadPorcentajeChange}
+                                saving={savingUtilidad}
+                            />
+                            <SummaryRow
+                                columns={columns}
+                                labelPrefix="Total"
+                                amount={costoDirecto + resumenPresupuesto.gastosGenerales + resumenPresupuesto.utilidad}
+                                emphasize
+                            />
+                        </>
+                    )}
+                </>
             )}
 
             {ctx && (

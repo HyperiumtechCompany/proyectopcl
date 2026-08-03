@@ -13,6 +13,16 @@ export type Permission = {
     guard_name: string;
 };
 
+export type OrganizationPlan = 'negocios' | 'empresarial';
+
+export type Organization = {
+    id: number;
+    nombre: string;
+    plan: OrganizationPlan;
+    owner_id: number | null;
+    users_count?: number;
+};
+
 export type UserExtended = {
     id: number;
     name: string;
@@ -24,6 +34,7 @@ export type UserExtended = {
     plan: UserPlan;
     plan_expires_at: string | null;
     status: UserStatus;
+    organization_id: number | null;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
     created_at: string;
@@ -54,4 +65,20 @@ export type UserFilters = {
     role?: string;
     plan?: UserPlan | '';
     status?: UserStatus | '';
+};
+
+export type PlanRequestPlan = 'free' | 'mensual' | 'anual' | 'negocios' | 'empresarial';
+export type PlanRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export type PlanRequest = {
+    id: number;
+    nombre: string;
+    email: string;
+    plan: PlanRequestPlan;
+    empresa: string | null;
+    comprobante_path: string | null;
+    status: PlanRequestStatus;
+    notas_admin: string | null;
+    user_id: number | null;
+    created_at: string;
 };

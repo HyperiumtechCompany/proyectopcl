@@ -1,0 +1,218 @@
+import { CheckCircle2, Scale } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
+import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
+import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
+import { ALL_STANDARDS, type NormKey, type NormProfile } from '../normativeData';
+import { PanelCard } from '../primitives';
+
+const NORM_KEY_TO_STANDARD: Record<NormKey, NormativeStandard> = {
+    EN_12464_1: 'en_12464',
+    EN_12464_2: 'en_12464',
+    IESNA: 'ies_na',
+    NTP_370: 'rne_peru',
+    EN_1838: 'en_1838',
+};
+
+// 'en_12464' es ambiguo (EN_12464_1 o _2) — no hay forma de distinguirlos
+// desde el valor persistido, así que ante ese caso mostramos _2 (el más común).
+const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
+    en_12464: 'EN_12464_2',
+    ies_na: 'IESNA',
+    rne_peru: 'NTP_370',
+    en_1838: 'EN_1838',
+    nfpa101: 'EN_12464_2',
+    ds024: 'EN_12464_2',
+};
+
+interface NormativaPanelProps {
+    onDefaultNormativeStandardChange: (v: NormativeStandard) => void;
+    onApplyProfile: (opts: {
+        standard: NormativeStandard;
+        normaLux: number;
+        ugrLimit?: number;
+        uniformityTarget?: number;
+        colorRenderingRa?: number;
+        roomIds?: string[];
+    }) => void;
+}
+
+export const NormativaPanel: React.FC<NormativaPanelProps> = ({
+    onDefaultNormativeStandardChange,
+    onApplyProfile,
+}) => {
+    // Si hay un ambiente/pasadizo seleccionado en el plano, "Aplicar" solo lo
+    // afecta a él — de lo contrario sobrescribe la norma de TODOS los
+    // ambientes del proyecto cada vez que se usa este panel.
+    const selectedId = useEditorStore((s) => s.ui.selectedId);
+    const scene = useEditorStore((s) => s.activeScene());
+    const selectedRoom = scene?.rooms.find(
+        (r) =>
+            r.id === selectedId &&
+            (r.roomType === 'ambient' || r.roomType === 'corridor'),
+    );
+    const defaultStandard = useEditorStore(
+        (s) => s.defaultRoomNormativeStandard,
+    );
+    const currentStandard = selectedRoom?.normativeStandard ?? defaultStandard;
+
+    // El panel debe reflejar la norma realmente aplicada (persistida por
+    // ambiente o por defecto del proyecto), no un valor fijo — de lo
+    // contrario, al volver a entrar al proyecto parece que la norma
+    // aplicada "cambió sola" aunque los datos guardados sigan correctos.
+    const [selectedKey, setSelectedKey] = useState<NormKey>(
+        () => STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2',
+    );
+    const [selectedSectionId, setSelectedSectionId] = useState<string>('5');
+    const [selectedSubId, setSelectedSubId] = useState<string>('5.3');
+    const [selectedProfileId, setSelectedProfileId] = useState<string>('5.3.1');
+    const [applied, setApplied] = useState(false);
+
+    // Carga los catálogos con fuente única en BD (EM.010 y EN 1838) y fuerza
+    // un re-render cuando reemplazan la transcripción estática.
+    const [, setNormDataVersion] = useState(0);
+    useEffect(() => {
+        void Promise.all([
+            ensureStandardDataLoaded('rne_peru'),
+            ensureStandardDataLoaded('en_1838'),
+        ]).then(() => setNormDataVersion((v) => v + 1));
+    }, []);
+
+    // Al cambiar la selección de ambiente (o al montar), re-sincroniza el
+    // resaltado con la norma realmente guardada para ese ambiente/proyecto.
+    useEffect(() => {
+        setSelectedKey(STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId, currentStandard]);
+
+    const std = ALL_STANDARDS.find((s) => s.key === selectedKey)!;
+    const section = std.sections.find((s) => s.id === selectedSectionId);
+    const subsection = section?.subsections?.find(
+        (s) => s.id === selectedSubId,
+    );
+    const profiles: NormProfile[] =
+        subsection?.profiles ?? section?.profiles ?? [];
+    const profile =
+        profiles.find((p) => p.id === selectedProfileId) ?? profiles[0];
+
+    // Reset selections when standard changes
+    const handleStdChange = (key: NormKey) => {
+        const newStd = ALL_STANDARDS.find((s) => s.key === key)!;
+        const sec = newStd.sections[0];
+        setSelectedKey(key);
+        setSelectedSectionId(sec.id);
+        const sub = sec.subsections?.[0];
+        setSelectedSubId(sub?.id ?? '');
+        const prof = sub?.profiles[0] ?? sec.profiles?.[0];
+        setSelectedProfileId(prof?.id ?? '');
+        setApplied(false);
+    };
+
+    const handleApply = () => {
+        if (!profile) return;
+        const standard = NORM_KEY_TO_STANDARD[selectedKey];
+        onApplyProfile({
+            standard,
+            normaLux: profile.Em_work,
+            ugrLimit: profile.UGR ?? undefined,
+            uniformityTarget: profile.uniformity ?? undefined,
+            colorRenderingRa: profile.Ra,
+            roomIds: selectedRoom ? [selectedRoom.id] : undefined,
+        });
+        // Conserva la última norma elegida al cerrar/reabrir el panel. El
+        // alcance de `onApplyProfile` sigue evitando tocar otros ambientes.
+        onDefaultNormativeStandardChange(standard);
+        setApplied(true);
+        setTimeout(() => setApplied(false), 2500);
+    };
+
+    return (
+        <div className="flex flex-col gap-2.5">
+            {/* Standard selector */}
+            <PanelCard title="Estándar normativo" tone="normativa">
+                <div className="flex flex-col gap-1.5">
+                    {ALL_STANDARDS.map((s) => (
+                        <button
+                            key={s.key}
+                            type="button"
+                            onClick={() => handleStdChange(s.key)}
+                            className={`flex items-start gap-2 rounded px-2.5 py-2 text-left transition-colors ${
+                                selectedKey === s.key
+                                    ? 'bg-emerald-900/25 ring-1 ring-emerald-700/40'
+                                    : 'hover:bg-gray-700/40'
+                            }`}
+                        >
+                            <div
+                                className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                                    selectedKey === s.key
+                                        ? 'bg-emerald-400'
+                                        : 'bg-gray-600'
+                                }`}
+                            />
+                            <div>
+                                <p
+                                    className={`text-[11px] font-semibold ${
+                                        selectedKey === s.key
+                                            ? 'text-emerald-300'
+                                            : 'text-gray-300'
+                                    }`}
+                                >
+                                    {s.label}
+                                </p>
+                                <p className="text-[9.5px] leading-snug text-gray-500">
+                                    {s.region}
+                                </p>
+                            </div>
+                            {selectedKey === s.key && (
+                                <CheckCircle2
+                                    size={12}
+                                    className="mt-0.5 ml-auto shrink-0 text-emerald-400"
+                                />
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <p className="mt-2 px-1 text-[9.5px] leading-snug text-gray-600">
+                    {std.fullName}
+                </p>
+            </PanelCard>
+
+            {selectedRoom && (
+                <div className="rounded-lg border border-blue-800/40 bg-blue-950/20 px-2.5 py-1.5 text-[9.5px] text-blue-300">
+                    Se aplicará solo a <strong>{selectedRoom.name}</strong>. Los
+                    demás ambientes no se tocan.
+                </div>
+            )}
+
+            <button
+                type="button"
+                onClick={handleApply}
+                className={`flex w-full items-center justify-center gap-2 rounded py-2 text-[11px] font-semibold transition-all duration-200 ${
+                    applied
+                        ? 'bg-emerald-700/40 text-emerald-300 ring-1 ring-emerald-600/40'
+                        : 'bg-emerald-800/30 text-emerald-200 ring-1 ring-emerald-800/40 hover:bg-emerald-700/40'
+                }`}
+            >
+                {applied ? (
+                    <>
+                        <CheckCircle2 size={13} /> Aplicado — dibujo y
+                        exportación
+                    </>
+                ) : selectedRoom ? (
+                    <>
+                        <Scale size={13} /> Aplicar solo a {selectedRoom.name}
+                    </>
+                ) : (
+                    <>
+                        <Scale size={13} /> Aplicar a todos los ambientes
+                    </>
+                )}
+            </button>
+            <p className="mt-1 px-1 text-center text-[9px] leading-snug text-gray-600">
+                {selectedRoom
+                    ? 'Selecciona otro ambiente en el plano para configurarlo con una norma distinta.'
+                    : 'Sin un ambiente seleccionado en el plano, se sobrescribe la norma de TODOS los ambientes. Selecciona uno primero para configurarlos por separado.'}
+            </p>
+        </div>
+    );
+};
