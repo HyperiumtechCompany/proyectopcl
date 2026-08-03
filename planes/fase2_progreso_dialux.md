@@ -175,9 +175,76 @@ el umbral de 400 líneas).
   riesgo que el canvas (sin RAF/efectos de sincronización), pero de todos
   modos requiere confirmación visual antes de un merge.
 
-## 4-6. Pendientes
+## 4. `House3DBuilder.ts` — revisado, NO descompuesto; 3 fugas de memoria corregidas (2026-08-02)
 
-`House3DBuilder.ts`, exportadores PDF/DXF y normativa — no iniciados. Antes
-de retomar el resto de `MlightcadCanvas2D.tsx` (más allá de la extracción
-conservadora del paso 2), se recomienda escribir el test caracterizador
-descrito en esa sección.
+**Decisión (confirmada con el usuario)**: se revisó el archivo a fondo antes
+de decidir. El plan maestro ya advertía en su §24 no empezar por este
+archivo "mientras el contrato de escena 3D no esté estabilizado" — la
+revisión confirmó que esa condición sigue vigente:
+
+- El archivo **creció** un 10% (3142→3469 líneas) desde que se escribió esa
+  advertencia, mientras el resto del módulo se congelaba para el refactor.
+- `hooks/wireLegacySync.ts` documenta en comentario que este builder
+  "todavía no lee `Conductor` directamente" — depende de arrays legacy
+  (`connectedFixtureIds`/`connectedSwitchIds`) como parche pendiente de
+  resolver.
+- `syncScene` mantiene dos modos de invocación coexistiendo (multi-piso vía
+  `syncAllFloors` vs. modo "compatibilidad" standalone).
+- `buildRoom` (908 líneas, el método más grande del archivo) mezcla recinto,
+  rampa, pasadizo y **dos caminos de construcción de escalera** coexistiendo.
+- **Cero tests** cubren esta clase.
+
+Dado ese cuadro, **no se hizo ninguna extracción/reestructuración** de la
+clase. Nota positiva encontrada: los tipos ya están correctamente
+centralizados (una sola interfaz local, `FixtureBodyOptions`; todo lo demás
+viene de `hooks/types.ts`) — cuando llegue el momento de descomponer, no
+hace falta trabajo previo de migración de tipos.
+
+### Hallazgo real corregido: 3 fugas de memoria de Babylon.js
+
+La revisión encontró que `buildIsolux`, `buildLightSwitch` y `buildConductors`
+(vía su helper `makeTube`) crean un `StandardMaterial` por instancia
+(interruptor/conducto/isolux) en **cada resync** (cada edición del usuario
+mientras el visor 3D está abierto), y sobrescriben su entrada en `meshMap`
+sin disponer el material anterior — cada resync dejaba huérfanos esos
+materiales (y, en el caso de isolux, también un `DynamicTexture`) en la
+GPU, indefinidamente, en una sesión de edición larga. Esto es distinto a
+`matFixtureCache`/`matElecDeviceCache`/`matStairMarkerCache`, que sí cachean
+por color/tipo y se reutilizan correctamente entre resyncs.
+
+Corrección aplicada (aditiva, sin cambiar la forma en que se construye la
+escena):
+- Nuevo método privado `disposeOwnedMeshes(meshes)`: dispone un grupo de
+  meshes junto con su material (y texturas). Documentado explícitamente que
+  SOLO es seguro para meshes con material exclusivo de esa instancia —
+  nunca para meshes que usan un material cacheado a nivel de clase (eso
+  rompería a todos los demás meshes que aún lo usan).
+- Llamado al inicio de `buildIsolux` (`meshMap.get('isolux')`),
+  `buildLightSwitch` (`meshMap.get(ls.id)`) y dentro de `makeTube` en
+  `buildConductors` (`meshMap.get(name)`), antes de crear el nuevo mesh/material.
+- `dispose()` (limpieza al desmontar el visor 3D) ahora también vacía
+  `matElecDeviceCache` y `matStairMarkerCache` — antes solo se limpiaba
+  `matFixtureCache`, dejando esos dos cachés sin disponer al cerrar el visor.
+
+### Verificación de este paso
+
+- `vitest run`: 506/506 (sigue sin existir ningún test dedicado a esta clase).
+- `tsc --noEmit`: sin cambio (123, los mismos preexistentes; ninguno cerca
+  de las líneas tocadas).
+- ESLint: los 13 errores en el archivo son exactamente los mismos 13
+  preexistentes (verificado contra el original vía `git show HEAD:...`),
+  solo desplazados de línea.
+- `npm run build`: OK.
+- Verificación en navegador: no realizada (sin chromium-cli/Playwright en
+  este entorno) — para este cambio en particular es aditivo (solo agrega
+  disposición de recursos, no cambia geometría/materiales visibles), pero
+  la confirmación real de que no aparecen errores de consola en runtime
+  queda pendiente para el equipo.
+
+## 5-6. Pendientes
+
+Exportadores PDF/DXF y normativa — no iniciados. Antes de retomar la
+descomposición real de `House3DBuilder.ts` o el resto de
+`MlightcadCanvas2D.tsx`, se recomienda: (a) resolver el acoplamiento legacy
+de `Conductor` documentado en `wireLegacySync.ts`, y (b) escribir tests
+caracterizadores para ambos archivos.

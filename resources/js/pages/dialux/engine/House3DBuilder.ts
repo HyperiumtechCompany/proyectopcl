@@ -471,6 +471,12 @@ export class House3DBuilder {
     ) {
         if (!result.grid_rows || !result.grid_cols || !result.max_lux) return;
 
+        // El plano/material/textura de isolux se recrean en cada resync (cada
+        // edición del usuario mientras el mapa isolux está activo) — hay que
+        // disponer la instancia anterior o cada resync deja un StandardMaterial
+        // y un DynamicTexture huérfanos en la GPU.
+        this.disposeOwnedMeshes(this.meshMap.get('isolux'));
+
         // El grid puede empezar en cualquier punto de la escena (no solo el
         // origen 0,0): hay que anclar el plano a grid_origin_x/y, si no la
         // isolux aparece flotando sobre el recinto equivocado cuando el
@@ -2809,6 +2815,12 @@ export class House3DBuilder {
         walls: Wall[] = [],
         rooms: Room[] = [],
     ) {
+        // El interruptor se reconstruye en cada resync con un material propio
+        // por instancia (`mat_switch_${id}`/`mat_rocker_${id}`, no cacheado) —
+        // hay que disponer la instancia anterior o cada resync deja huérfanos
+        // esos dos materiales por interruptor.
+        this.disposeOwnedMeshes(this.meshMap.get(ls.id));
+
         const meshes: Mesh[] = [];
 
         // ── Caja del interruptor (plástico blanco en la pared) ──
@@ -3091,6 +3103,10 @@ export class House3DBuilder {
 
         const makeTube = (name: string, path: Vector3[], radiusM: number, colorHex: string) => {
             if (path.length < 2) return;
+            // Cada conducto tiene un material propio por instancia (`mat_${name}`,
+            // no cacheado) que se recrea en cada resync — disponer el anterior
+            // evita acumular un StandardMaterial huérfano por conducto y resync.
+            this.disposeOwnedMeshes(this.meshMap.get(name));
             const tube = MeshBuilder.CreateTube(
                 name,
                 { path, radius: Math.max(0.006, radiusM), tessellation: 6, cap: Mesh.CAP_ALL },
@@ -3448,6 +3464,29 @@ export class House3DBuilder {
 
     // ── Limpieza ──────────────────────────────────────────────────────────────
 
+    /**
+     * Dispone un grupo de meshes JUNTO con su material (y las texturas que
+     * ese material tenga asignadas). Solo es seguro llamarlo con meshes cuyo
+     * material es EXCLUSIVO de esa instancia (interruptores `mat_switch_*`,
+     * conductos `mat_conduit_*`, el plano de isolux) — nunca con meshes que
+     * usan un material cacheado a nivel de clase (`matWall`, `matFixtureCache`,
+     * `matElecDeviceCache`, `matStairMarkerCache`, etc.), porque disponer un
+     * material compartido rompería todos los demás meshes que aún lo usan.
+     *
+     * Antes de este helper, `buildLightSwitch`/`buildConductors`/`buildIsolux`
+     * sobrescribían su entrada en `meshMap` en cada resync (cada edición del
+     * usuario) sin disponer el material/textura anterior — cada resync dejaba
+     * huérfano un `StandardMaterial` (y, en isolux, también un `DynamicTexture`)
+     * por interruptor/conducto/isolux, acumulando memoria de GPU indefinidamente
+     * en una sesión de edición larga.
+     */
+    private disposeOwnedMeshes(meshes: Mesh[] | undefined) {
+        meshes?.forEach((m) => {
+            m.material?.dispose(false, true);
+            m.dispose();
+        });
+    }
+
     disposeObject(id: string) {
         this.meshMap.get(id)?.forEach((m) => m.dispose());
         this.meshMap.delete(id);
@@ -3458,9 +3497,13 @@ export class House3DBuilder {
         // Meshes
         this.meshMap.forEach((meshes) => meshes.forEach((m) => m.dispose()));
         this.meshMap.clear();
-        // Materiales cacheados de fixtures
+        // Materiales cacheados de fixtures/dispositivos eléctricos/marcadores de escalera
         this.matFixtureCache.forEach((mat) => mat.dispose());
         this.matFixtureCache.clear();
+        this.matElecDeviceCache.forEach((mat) => mat.dispose());
+        this.matElecDeviceCache.clear();
+        this.matStairMarkerCache.forEach((mat) => mat.dispose());
+        this.matStairMarkerCache.clear();
         // Luces de fixtures
         this.scene.lights
             .filter((l) => l.name.startsWith('light_'))
