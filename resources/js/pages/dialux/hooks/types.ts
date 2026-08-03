@@ -410,6 +410,24 @@ export interface Fixture {
         c_angles: number[];
         gamma_angles: number[];
         candela: number[][];
+        /**
+         * Origen del dato (Fase 3 del plan maestro — nunca debe poder
+         * confundirse una aproximación con fotometría real de fabricante):
+         *   'manufacturer' → archivo IES/LDT del fabricante.
+         *   'manual-curve' → curva punto a punto ingresada a mano por el usuario.
+         *   'synthetic'    → modelo coseno^n derivado solo del ángulo de apertura.
+         * Ausente = dato legacy anterior a esta fase, tratar como desconocido,
+         * nunca asumir 'manufacturer' por defecto.
+         */
+        provenance?: 'manufacturer' | 'manual-curve' | 'synthetic';
+        /** Código de simetría EULUMDAT (0-4) cuando el origen es un LDT. No se expande la matriz según este código todavía (Fase 3, fuera de alcance). */
+        symmetry?: number;
+        /** Tabla de tilt de un IES con TILT=INCLUDE. Registrada para trazabilidad; el multiplicador por ángulo aún no se aplica al cálculo. */
+        tilt?: {
+            lamp_to_luminaire_geometry: number;
+            angles: number[];
+            multipliers: number[];
+        } | null;
     } | null;
     polarDiagramAssetId?: string | null;
     productPhotoAssetId?: string | null;

@@ -125,10 +125,15 @@ class ProductImportService
                 'total_lumens' => $totalLumens,
                 'beam_angle_50' => $beamAngle50,
             ];
+        // `provenance` distingue una curva realmente medida/ingresada por el
+        // usuario ('manual-curve') de una aproximación puramente matemática
+        // ('synthetic') — ninguna de las dos es dato de fabricante, pero no
+        // son la misma confiabilidad, y el informe debe poder decir cuál es.
         $record['photometric_web'] = [
             'c_angles' => $photometric['c_angles'],
             'gamma_angles' => $photometric['gamma_angles'],
             'candela' => $photometric['candela'],
+            'provenance' => $hasCustomCurve ? 'manual-curve' : 'synthetic',
         ];
 
         $record = $this->withReportPayload($record, [
@@ -250,6 +255,15 @@ class ProductImportService
                 }
             }
 
+            // El binario Rust parsea el mismo archivo de fabricante que la
+            // ruta PHP — la matriz que produce es tan "manufacturer" como la
+            // de `parseIes`/`parseLdt`, solo que el binario hoy no anota
+            // `provenance` en su salida.
+            $rustPhotometricWeb = $payload['photometric_web'] ?? null;
+            if (is_array($rustPhotometricWeb) && ! isset($rustPhotometricWeb['provenance'])) {
+                $rustPhotometricWeb['provenance'] = 'manufacturer';
+            }
+
             return array_filter([
                 'name' => $payload['name'] ?? null,
                 'manufacturer' => $payload['manufacturer'] ?? null,
@@ -264,7 +278,7 @@ class ProductImportService
                 'beam_angle_10' => $payload['beam_angle_10'] ?? null,
                 'max_candela' => $payload['max_candela'] ?? null,
                 'photometric_summary' => $payload['photometric_summary'] ?? null,
-                'photometric_web' => $payload['photometric_web'] ?? null,
+                'photometric_web' => $rustPhotometricWeb,
                 'dimensions' => $payload['dimensions'] ?? null,
                 'luminous_opening' => $payload['luminous_opening'] ?? null,
                 'metadata' => $payload['metadata'] ?? null,
@@ -337,18 +351,18 @@ class ProductImportService
             $idx++;
         }
 
-        // Saltar TILT
+        // Línea TILT (NONE / INCLUDE / nombre de archivo externo — LM-63 permite las 3 formas)
         $tiltLine = $lines[$idx] ?? 'TILT=NONE';
         $tiltType = strtoupper(trim(explode('=', $tiltLine)[1] ?? 'NONE'));
         $idx++;
 
-        if ($tiltType === 'INCLUDE') {
-            // Saltar 3 líneas: lamp-to-lum geometry, N, angles+multipliers
-            $nPairs = (int) trim($lines[$idx] ?? '0');
-            $idx += 1 + $nPairs;
-        }
-
-        // Recolectar todos los números restantes
+        // Recolectar TODOS los números restantes en un único flujo (config +
+        // ángulos + candela, y si TILT=INCLUDE, precedidos por la tabla de
+        // tilt). Tokenizar de una sola vez evita el bug anterior: LM-63
+        // permite que la tabla de tilt (N ángulos + N multiplicadores) y la
+        // matriz de candela se envuelvan en cualquier cantidad de líneas
+        // físicas — contar líneas en vez de tokens numéricos desalineaba
+        // todo lo que viene después cuando TILT=INCLUDE.
         $numbers = [];
         for ($i = $idx; $i < count($lines); $i++) {
             foreach (preg_split('/[\s,]+/', trim($lines[$i])) as $token) {
@@ -357,6 +371,40 @@ class ProductImportService
                     $numbers[] = (float) $token;
                 }
             }
+        }
+
+        $tiltTable = null;
+        if ($tiltType === 'INCLUDE') {
+            // Formato: geometría lámpara-luminaria (1 valor) → N (1 valor) →
+            // N ángulos → N multiplicadores → recién ahí el bloque de 10
+            // campos de configuración.
+            if (count($numbers) < 2) {
+                $warnings[] = 'IES: TILT=INCLUDE declarado pero faltan los datos de geometría/tabla de tilt.';
+            } else {
+                $lampToLuminaireGeometry = (int) array_shift($numbers);
+                $tiltPairCount = (int) array_shift($numbers);
+                if ($tiltPairCount > 0 && count($numbers) >= $tiltPairCount * 2) {
+                    $tiltAngles = array_splice($numbers, 0, $tiltPairCount);
+                    $tiltMultipliers = array_splice($numbers, 0, $tiltPairCount);
+                    $tiltTable = [
+                        'lamp_to_luminaire_geometry' => $lampToLuminaireGeometry,
+                        'angles' => $tiltAngles,
+                        'multipliers' => $tiltMultipliers,
+                    ];
+                    // La tabla se registra para trazabilidad, pero el multiplicador
+                    // por-ángulo de operación aún no se aplica a la matriz de
+                    // candela (requiere conocer el ángulo de operación real de la
+                    // lámpara, que no se declara en el archivo) — solo se aplica
+                    // el multiplicador global de la línea de configuración, igual
+                    // que en TILT=NONE. No reportar esto sería fingir una
+                    // corrección que no ocurre.
+                    $warnings[] = 'IES: TILT=INCLUDE detectado — tabla de tilt registrada en metadata, pero el multiplicador por ángulo aún no se aplica a la matriz de candela (fuera de alcance de esta fase).';
+                } else {
+                    $warnings[] = 'IES: TILT=INCLUDE declarado pero la tabla de ángulos/multiplicadores está incompleta o inconsistente con N.';
+                }
+            }
+        } elseif ($tiltType !== 'NONE') {
+            $warnings[] = "IES: TILT={$tiltType} (archivo externo) no soportado; se ignora y se asume TILT=NONE.";
         }
 
         if (count($numbers) < 10) {
@@ -392,10 +440,20 @@ class ProductImportService
             $ni += $numV;
         }
 
+        // Validaciones de integridad de la matriz (Fase 3 del plan maestro:
+        // "garantizar que el dato de fabricante llega correctamente al
+        // solver") — no bloquean el import (igual que el resto del parser),
+        // pero dejan advertencia explícita si algo no cuadra.
+        $this->checkAngleMonotonic($vAngles, 'verticales (gamma)', $warnings);
+        $this->checkAngleMonotonic($hAngles, 'horizontales (C)', $warnings);
+        $this->checkMatrixDimensions($candela, $numH, $numV, 'IES', $warnings);
+
         // Calcular métricas derivadas
         $totalLumens = ($lumensPerLamp > 0)
             ? $lumensPerLamp * $numLamps
             : $this->estimateLumens($candela, $vAngles, $hAngles);
+
+        $this->checkFluxConsistency($totalLumens, $candela, $vAngles, $hAngles, 'IES', $warnings);
 
         $maxCandela = max(0.0, ...array_merge(...$candela));
         [$beam50, $beam10] = $this->computeBeamAngles($candela[0] ?? [], $vAngles, $maxCandela);
@@ -416,8 +474,16 @@ class ProductImportService
             'photometric_type' => (int) $photometricType,
         ];
 
-        // Almacenar la web fotométrica completa si es pequeña (< 500 KB)
-        $webData = ['c_angles' => $hAngles, 'gamma_angles' => $vAngles, 'candela' => $candela];
+        // Almacenar la web fotométrica completa si es pequeña (< 500 KB).
+        // `provenance: 'manufacturer'` — viene de un archivo IES real, nunca
+        // debe confundirse en el informe con una curva manual/sintética.
+        $webData = [
+            'c_angles' => $hAngles,
+            'gamma_angles' => $vAngles,
+            'candela' => $candela,
+            'provenance' => 'manufacturer',
+            'tilt' => $tiltTable,
+        ];
         $webJson = json_encode($webData);
         $photometricWeb = (strlen($webJson) < 512_000) ? $webData : null;
 
@@ -487,14 +553,26 @@ class ProductImportService
         $ni = 0;
         $scale = ($lumens > 0) ? $lumens / 1000.0 : 1.0; // cd/klm → cd
         $planeCount = max(1, min($numC, intdiv(count($remaining), $numG) ?: $numC));
+        if ($planeCount < $numC) {
+            $warnings[] = "LDT: se declararon {$numC} planos C pero solo se pudieron parsear {$planeCount} (datos insuficientes en el archivo).";
+        }
+        $incompletePlaneWarned = false;
         for ($c = 0; $c < $planeCount; $c++) {
             $plane = array_slice($remaining, $ni, $numG);
+            if (count($plane) < $numG && ! $incompletePlaneWarned) {
+                $warnings[] = "LDT: el plano C índice {$c} tiene menos de {$numG} valores de gamma declarados — se completó con 0 cd, revisar el archivo.";
+                $incompletePlaneWarned = true;
+            }
             while (count($plane) < $numG) {
                 $plane[] = 0.0;
             }
             $candela[] = array_map(fn ($v) => $v * $scale, $plane);
             $ni += $numG;
         }
+
+        $this->checkAngleMonotonic($cAngles, 'C (LDT)', $warnings);
+        $this->checkAngleMonotonic($gAngles, 'gamma (LDT)', $warnings);
+        $this->checkFluxConsistency($lumens, $candela, $gAngles, $cAngles, 'LDT', $warnings);
 
         $maxCandela = max(0.0, ...array_merge(...$candela));
         [$beam50, $beam10] = $this->computeBeamAngles($candela[0] ?? [], $gAngles, $maxCandela);
@@ -517,7 +595,18 @@ class ProductImportService
             'symmetry' => $symmetry,
         ];
 
-        $webData = ['c_angles' => $cAngles, 'gamma_angles' => $gAngles, 'candela' => $candela];
+        // `provenance: 'manufacturer'` — viene de un archivo LDT/EULUMDAT real.
+        // `symmetry` (código EULUMDAT 0-4) se conserva tal cual el archivo lo
+        // declara; NO se expande la matriz a los cuadrantes simétricos aquí
+        // (fuera de alcance de esta fase) — el consumidor debe interpretar
+        // el código de simetría si necesita cobertura completa de azimut.
+        $webData = [
+            'c_angles' => $cAngles,
+            'gamma_angles' => $gAngles,
+            'candela' => $candela,
+            'provenance' => 'manufacturer',
+            'symmetry' => $symmetry,
+        ];
         $webJson = json_encode($webData);
 
         return [
@@ -614,6 +703,14 @@ class ProductImportService
 
         $effLmW = ($watts > 0) ? round($totalLumens / $watts, 1) : 0.0;
 
+        // GLDF típicamente referencia un archivo LDT/IES o LES embebido para
+        // la matriz fotométrica real; extraerlo es una brecha conocida y
+        // más grande que el resto de esta fase (fuera de alcance aquí — ver
+        // planes/fase3_progreso_dialux.md). Advertirlo explícitamente evita
+        // que el cálculo use el fallback Lambertiano en silencio sin que
+        // quede registro de por qué falta la matriz.
+        $warnings[] = 'GLDF: no se extrae la matriz fotométrica de este formato todavía; el cálculo usará el modelo Lambertiano aproximado hasta que se importe esta luminaria en IES/LDT o se implemente el parseo GLDF.';
+
         return [
             'name' => $name,
             'manufacturer' => $manufacturer,
@@ -632,6 +729,106 @@ class ProductImportService
     }
 
     // ─── Helpers matemáticos ──────────────────────────────────────────────────
+
+    /**
+     * Verifica que una lista de ángulos sea monotónicamente creciente (no
+     * decreciente). Un archivo IES/LDT con ángulos fuera de orden casi
+     * siempre indica un desalineamiento de parseo (offset equivocado) más
+     * que una fotometría real así declarada — LM-63/EULUMDAT exigen orden
+     * creciente. Solo se reporta el primer punto fuera de orden: no
+     * floodear `warnings` con N-1 mensajes por un mismo desalineamiento.
+     *
+     * @param  float[]  $angles
+     * @param  string[]  $warnings
+     */
+    private function checkAngleMonotonic(array $angles, string $label, array &$warnings): void
+    {
+        for ($i = 1; $i < count($angles); $i++) {
+            if ($angles[$i] < $angles[$i - 1] - 1e-6) {
+                $warnings[] = sprintf(
+                    'Fotometría: los ángulos %s no son monotónicamente crecientes (posición %d: %.2f < %.2f) — la matriz podría estar mal parseada.',
+                    $label,
+                    $i,
+                    $angles[$i],
+                    $angles[$i - 1],
+                );
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Verifica que la matriz de candela tenga la forma declarada
+     * (planos × valores-por-plano). Una matriz recortada o inflada respecto
+     * a lo declarado por el archivo es indistinguible de datos corruptos —
+     * mejor advertir que dejar que el solver interpole silenciosamente
+     * sobre huecos que en el archivo original no existían.
+     *
+     * @param  float[][]  $candela
+     * @param  string[]  $warnings
+     */
+    private function checkMatrixDimensions(array $candela, int $expectedPlanes, int $expectedPerPlane, string $label, array &$warnings): void
+    {
+        if (count($candela) !== $expectedPlanes) {
+            $warnings[] = sprintf(
+                'Fotometría (%s): se esperaban %d planos de candela, se obtuvieron %d.',
+                $label,
+                $expectedPlanes,
+                count($candela),
+            );
+        }
+
+        foreach ($candela as $index => $plane) {
+            if (count($plane) !== $expectedPerPlane) {
+                $warnings[] = sprintf(
+                    'Fotometría (%s): el plano %d tiene %d valores, se esperaban %d.',
+                    $label,
+                    $index,
+                    count($plane),
+                    $expectedPerPlane,
+                );
+                break;
+            }
+        }
+    }
+
+    /**
+     * Compara el flujo luminoso declarado por el fabricante contra el flujo
+     * que resulta de integrar la propia matriz de candela. Una discrepancia
+     * grande (fuera de ±25%/+33%, tolerancia amplia deliberada: el muestreo
+     * angular real de un archivo de fabricante es coarse y ya introduce
+     * error de integración normal) señala casi siempre un error de unidades
+     * o de parseo, no ruido numérico — advertir en vez de fallar en
+     * silencio, igual que el resto de este parser.
+     *
+     * @param  float[][]  $candela
+     * @param  float[]  $vAngles
+     * @param  float[]  $hAngles
+     * @param  string[]  $warnings
+     */
+    private function checkFluxConsistency(float $declaredLumens, array $candela, array $vAngles, array $hAngles, string $label, array &$warnings): void
+    {
+        if ($declaredLumens <= 0.0) {
+            return;
+        }
+
+        $estimated = $this->estimateLumens($candela, $vAngles, $hAngles);
+        if ($estimated <= 0.0) {
+            return;
+        }
+
+        $ratio = $estimated / $declaredLumens;
+        if ($ratio < 0.75 || $ratio > 1.33) {
+            $warnings[] = sprintf(
+                'Fotometría (%s): el flujo declarado (%.0f lm) difiere del flujo integrado de la curva (%.0f lm, %.0f%%) más de lo esperable — revisar el archivo.',
+                $label,
+                $declaredLumens,
+                $estimated,
+                $ratio * 100,
+            );
+        }
+    }
 
     /** Estima lúmenes totales integrando la esfera de candelas. */
     private function estimateLumens(array $candela, array $vAngles, array $hAngles): float
@@ -716,6 +913,12 @@ class ProductImportService
             ['label' => 'CRI', 'value' => $this->formatReportValue($data['cri_ra'] ?? null, '', 0)],
             ['label' => 'Imax', 'value' => $this->formatReportValue($data['max_candela'] ?? null, ' cd', 0)],
             ['label' => 'Haz 50%', 'value' => $this->formatReportValue($data['beam_angle_50'] ?? null, '°', 1)],
+            // Al final para no correr los índices de las filas de arriba —
+            // Fase 3 del plan maestro: la puerta de salida exige que ninguna
+            // fotometría sintética/manual se reporte como si fuera del
+            // fabricante. Esta fila lo hace explícito en el propio informe
+            // técnico, no solo en un warning que puede pasar desapercibido.
+            ['label' => 'Origen fotometría', 'value' => $this->describePhotometricProvenance($web)],
         ];
 
         $polarSvg = is_string($data['report_assets']['polar_svg'] ?? null)
@@ -741,6 +944,23 @@ class ProductImportService
         }
 
         return $data;
+    }
+
+    /**
+     * Traduce `photometric_web.provenance` a un texto explícito para el
+     * informe técnico. Nunca debe poder confundirse una aproximación con un
+     * dato de fabricante con solo mirar la ficha del producto.
+     *
+     * @param  array<string, mixed>  $web
+     */
+    private function describePhotometricProvenance(array $web): string
+    {
+        return match ($web['provenance'] ?? null) {
+            'manufacturer' => 'Archivo de fabricante (IES/LDT)',
+            'manual-curve' => 'Curva ingresada manualmente (no es dato de fabricante)',
+            'synthetic' => 'Modelo sintético aproximado (no es dato de fabricante)',
+            default => $web === [] ? 'Sin matriz fotométrica (aprox. Lambertiana en el cálculo)' : 'Sin clasificar',
+        };
     }
 
     /**
