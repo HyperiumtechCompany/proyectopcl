@@ -71,7 +71,62 @@ requirieron ningún cambio.
   la creación manual siguen funcionando igual antes de dar este paso por
   cerrado.
 
-## 2-6. Pendientes
+## 2. `MlightcadCanvas2D.tsx` — extracción conservadora (2026-08-02)
 
-`MlightcadCanvas2D.tsx`, `RoomProps.tsx`, `House3DBuilder.ts`, exportadores
-PDF/DXF y normativa — no iniciados.
+**1565 → 1397 líneas** (−11%, deliberadamente modesto). Este archivo es
+cualitativamente distinto a `CatalogPanel.tsx`: es el traductor de
+clics/arrastre del mouse a mutaciones de geometría real (recintos, muros,
+luminarias, cableado), sincronizado con el motor CAD nativo vía un loop RAF
+único, con ~30 callbacks de mutación entrelazados con estado de UI
+(previews, calibración, medición de área) y con advertencias explícitas en
+el propio código sobre orden de declaración sensible a TDZ. No tiene test
+caracterizador, y esta sesión no tiene navegador headless disponible para
+verificar en vivo (ver Fase 2 §1 más arriba).
+
+**Decisión (confirmada con el usuario)**: extracción conservadora únicamente
+— solo piezas sin estado ni efectos propios. Se decidió NO tocar la lógica
+de interacción/RAF/efectos hasta que exista forma de verificarla en vivo o
+un test caracterizador previo (§4.6 del plan maestro).
+
+Extraído a `resources/js/pages/dialux/components/canvas/`:
+
+| Archivo | Líneas | Contenido |
+|---|---:|---|
+| `canvasToolConstants.ts` | 95 | `CURSOR_MAP`, `DRAWING_TOOLS`, `INTERACTIVE_TOOLS`, `CAD_OSNAP_TOOLS` — datos estáticos, cero lógica |
+| `CanvasSvgDefs.tsx` | 21 | `<defs>` del overlay SVG (patrón de achurado + filtro de glow) — sin props |
+| `CadStatusOverlays.tsx` | 97 | Loading/error/badge de documento/badge de calibración/label del motor — puramente presentacional |
+
+Verificado bit a bit que cada bloque movido es exactamente el mismo JSX/dato
+(diff visual contra el original), sin tocar ninguna línea de estado, efecto,
+o de los ~30 callbacks de `useCanvasInteraction`.
+
+### Lo que queda deliberadamente sin tocar (alto riesgo, fuera de este paso)
+
+Toda la lógica de estado/efectos/interacción sigue en un único componente:
+el loop RAF (sincronización de vista + cursor de arrastre), los 5 `useEffect`
+(inicialización del motor, restauración de plano, reactivación de vista 2D,
+ResizeObserver con debounce, wheel/zoom), el objeto gigante de callbacks de
+`useCanvasInteraction`, y todo el árbol de overlays SVG con sus ~20 props
+cada uno. Descomponer esto en los hooks que propone el plan
+(`useCadLifecycle`, `useViewportTransform`, `useToolController`,
+`useCanvasKeyboard`, `useOverlayModel` — §7.2) requiere, antes de tocarlo:
+1. Un test caracterizador (§4.6) que cubra al menos: colocar un recinto,
+   colocar una luminaria, arrastrar un objeto, hacer zoom, y calibrar.
+2. Verificación visual real en navegador (bloqueada en este entorno).
+
+### Verificación de este paso
+
+- `vitest run`: 506/506 (sin test dedicado, igual que en el paso 1).
+- `tsc --noEmit`: sin errores nuevos (125 preexistentes, sin cambio).
+- ESLint: 5 errores en el archivo, los 5 preexistentes (verificado contra
+  el original vía `git show HEAD:...`) — ninguno introducido por esta
+  extracción.
+- `npm run build`: OK.
+- Verificación en navegador: no realizada (mismo motivo que el paso 1).
+
+## 3-6. Pendientes
+
+`RoomProps.tsx`, `House3DBuilder.ts`, exportadores PDF/DXF y normativa — no
+iniciados. Antes de retomar el resto de `MlightcadCanvas2D.tsx` (más allá de
+esta extracción conservadora), se recomienda escribir el test caracterizador
+descrito arriba.

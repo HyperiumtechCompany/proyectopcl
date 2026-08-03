@@ -58,7 +58,10 @@ import { applyLegacyLinkUpdate, computeLegacyLinkUpdate } from '@/pages/dialux/h
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { CalibrationDialog } from '../CalibrationDialog';
+import { CadStatusOverlays } from './CadStatusOverlays';
 import { CalibrationOverlay } from './CalibrationOverlay';
+import { CanvasSvgDefs } from './CanvasSvgDefs';
+import { CAD_OSNAP_TOOLS, CURSOR_MAP, INTERACTIVE_TOOLS } from './canvasToolConstants';
 import {
     cadToMeters,
     getCanvasScalePxPerMeter,
@@ -83,81 +86,6 @@ import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayWires } from './OverlayWires';
 import { classifyConductorLayer, isElectricalItemVisible } from '@/pages/dialux/electrical/electricalLayerVisibility';
-
-// ─── Helpers locales ──────────────────────────────────────────────────────────
-
-const CURSOR_MAP: Record<string, string> = {
-    select: 'default',
-    room: 'crosshair',
-    wall: 'crosshair',
-    'education-wall': 'crosshair',
-    window: 'cell',
-    door: 'cell',
-    canopy: 'crosshair',
-    corridor: 'crosshair',
-    stair: 'crosshair',
-    fixture: 'cell',
-    'fixture-grid': 'cell',
-    switch: 'cell',
-    wire: 'crosshair',
-    measure: 'crosshair',
-    'measure-area': 'crosshair',
-    calibrate: 'crosshair',
-    pan: 'grab',
-    'elec-meter': 'cell',
-    'elec-main-panel': 'cell',
-    'elec-sub-panel': 'cell',
-    'elec-transfer': 'cell',
-    'elec-arrival': 'cell',
-    'elec-junction-box': 'cell',
-    'elec-earth-pit': 'cell',
-    'elec-facp': 'cell',
-    'elec-outlet-floor': 'cell',
-    'elec-outlet-initial': 'cell',
-    'elec-outlet-high-180': 'cell',
-    'elec-outlet-floor-box': 'cell',
-    'elec-outlet-waterproof': 'cell',
-    'elec-outlet-ceiling': 'cell',
-    'elec-outlet-rack': 'cell',
-    'elec-water-heater': 'cell',
-};
-
-const DRAWING_TOOLS = new Set([
-    'room',
-    'wall',
-    'education-wall',
-    'window',
-    'door',
-    'canopy',
-    'corridor',
-    'stair',
-    'fixture',
-    'fixture-grid',
-    'switch',
-    'wire',
-    'measure',
-    'measure-area',
-    'calibrate',
-    'pan',
-    'elec-meter',
-    'elec-main-panel',
-    'elec-sub-panel',
-    'elec-transfer',
-    'elec-arrival',
-    'elec-junction-box',
-    'elec-earth-pit',
-    'elec-facp',
-    'elec-outlet-floor',
-    'elec-outlet-initial',
-    'elec-outlet-high-180',
-    'elec-outlet-floor-box',
-    'elec-outlet-waterproof',
-    'elec-outlet-ceiling',
-    'elec-outlet-rack',
-    'elec-water-heater',
-]);
-
-const INTERACTIVE_TOOLS = new Set([...DRAWING_TOOLS, 'select']);
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -349,20 +277,6 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             [cadView, effectiveScale, engine, hasCadView, worldPoint],
         );
-
-        // Herramientas que realmente necesitan OSNAP CAD (view.pick es costoso).
-        // 'calibrate' excluido: solo necesita 2 puntos de referencia, el snap DXF
-        // del store es suficiente y evita crashes con hatches sin boundaries.
-        const CAD_OSNAP_TOOLS = new Set([
-            'calibrate',
-            'room',
-            'wall',
-            'education-wall',
-            'corridor',
-            'stair',
-            'canopy',
-            'partition',
-        ]);
 
         // ── Interacción ───────────────────────────────────────────────────────────
         // IMPORTANT: useCanvasInteraction MUST be declared before the RAF useEffect
@@ -1229,33 +1143,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }}
                     onDoubleClick={onDoubleClick}
                 >
-                    {/* ── Defs reutilizados por los overlays ── */}
-                    <defs>
-                        <pattern
-                            id="hatch-canopy-svg"
-                            patternUnits="userSpaceOnUse"
-                            width={8}
-                            height={8}
-                            patternTransform="rotate(45)"
-                        >
-                            <line
-                                x1={0}
-                                y1={0}
-                                x2={0}
-                                y2={8}
-                                stroke="#f59e0b"
-                                strokeWidth={1.5}
-                                strokeOpacity={0.5}
-                            />
-                        </pattern>
-                        <filter id="glow-fixture">
-                            <feGaussianBlur stdDeviation={3} result="blur" />
-                            <feMerge>
-                                <feMergeNode in="blur" />
-                                <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                        </filter>
-                    </defs>
+                    <CanvasSvgDefs />
 
                     {/* ── Grilla ── */}
                     {ui.showGrid && (
@@ -1493,72 +1381,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }}
                 />
 
-                {/* ── Overlay de carga ── */}
-                {engine.isLoading && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                        <div className="flex min-w-65 flex-col items-center gap-4 rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl">
-                            <div className="relative h-12 w-12">
-                                <div className="absolute inset-0 rounded-full border-4 border-slate-700" />
-                                <div className="absolute inset-0 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-sm font-semibold text-slate-200">
-                                    Procesando archivo CAD
-                                </p>
-                                <p className="mt-1 font-mono text-xs text-slate-400">
-                                    {engine.fileName}
-                                </p>
-                            </div>
-                            <div className="h-1.5 w-full rounded-full bg-slate-700">
-                                <div
-                                    className="h-1.5 rounded-full bg-cyan-500 transition-all"
-                                    style={{ width: `${engine.loadProgress}%` }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Error banner ── */}
-                {engine.error && !engine.isLoading && (
-                    <div className="absolute top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-red-700/70 bg-red-900/90 px-4 py-2 text-xs text-red-200 shadow-lg backdrop-blur-sm">
-                        <span>⚠</span>
-                        <span>{engine.error}</span>
-                    </div>
-                )}
-
-                {/* ── Badge de documento activo ── */}
-                {engine.activeDoc && !engine.isLoading && (
-                    <div className="absolute top-3 right-3 z-30 flex items-center gap-2 rounded-lg border border-cyan-900/60 bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
-                        <div className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
-                        <span className="font-mono text-cyan-300">
-                            {engine.fileName}
-                        </span>
-                        <button
-                            onClick={() => engine.fitToView()}
-                            className="ml-1 rounded border border-cyan-700/40 bg-cyan-800/40 px-2 py-0.5 text-[10px] text-cyan-200 hover:bg-cyan-700/50"
-                        >
-                            Fit
-                        </button>
-                    </div>
-                )}
-
-                {/* ── Badge de calibración activa ── */}
-                {scaleConfig.isCalibrated && scaleConfig.calibrationFactor !== 1 && (
-                    <div className="absolute top-14 right-3 z-30 flex items-center gap-2 rounded-lg border border-amber-900/60 bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
-                        <div className="text-amber-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
-                        </div>
-                        <span className="font-mono text-amber-300 font-semibold" title="Los objetos arquitectónicos están escalados con este factor.">
-                            Calibrado ×{scaleConfig.calibrationFactor.toFixed(4)}
-                        </span>
-                    </div>
-                )}
-
-                {/* ── Label del motor ── */}
-                <div className="pointer-events-none absolute right-3 bottom-3 z-20 font-mono text-[9px] text-cyan-900/60 select-none">
-                    mlightcad engine
-                </div>
+                <CadStatusOverlays
+                    isLoading={engine.isLoading}
+                    loadProgress={engine.loadProgress}
+                    fileName={engine.fileName}
+                    error={engine.error}
+                    activeDoc={engine.activeDoc}
+                    onFitToView={() => engine.fitToView()}
+                    isCalibrated={scaleConfig.isCalibrated}
+                    calibrationFactor={scaleConfig.calibrationFactor}
+                />
             </div>
         );
     },
