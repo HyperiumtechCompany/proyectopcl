@@ -24,7 +24,6 @@
     "electrical/export/electricalExcelExport.ts",
     "engine/House3DBuilder.ts",
     "export/dialux-export.test.ts",
-    "export/document/buildDialuxFormalDocument.ts",
     "export/domain/types.ts",
     "export/dxf/__fixtures__/dxfLevelFixtures.ts",
     "export/dxf/buildDialuxDxfExport.ts",

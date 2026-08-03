@@ -241,10 +241,61 @@ escena):
   la confirmación real de que no aparecen errores de consola en runtime
   queda pendiente para el equipo.
 
-## 5-6. Pendientes
+## 5. Exportador PDF (`buildDialuxFormalDocument.ts`) — hecho (2026-08-02)
 
-Exportadores PDF/DXF y normativa — no iniciados. Antes de retomar la
-descomposición real de `House3DBuilder.ts` o el resto de
-`MlightcadCanvas2D.tsx`, se recomienda: (a) resolver el acoplamiento legacy
-de `Conductor` documentado en `wireLegacySync.ts`, y (b) escribir tests
-caracterizadores para ambos archivos.
+**1324 → 203 líneas** (−85%). A diferencia del canvas 2D y House3DBuilder,
+este archivo es solo funciones puras de transformación de datos (sin
+DOM/Babylon/React) y **ya tenía cobertura de tests real** sobre su única
+función pública (`buildDialuxFormalDocument`): `fase5LevelPages.test.ts`,
+`fase6AmbientDossier.test.ts`, `fase7StablePagination.test.ts`,
+`fase8Glossary.test.ts`, `luminaireListPagination.test.ts`,
+`dialux-export.test.ts`, `moduloIFixture.test.ts`,
+`fase10FinalValidation.test.ts` (40 tests) — ninguno de ellos importa las
+funciones internas, todos pasan por la función pública. Esto permitió una
+extracción completa con alta confianza: los mismos 40 tests, sin modificar,
+verifican que el resultado no cambió byte a byte.
+
+Extraído a `resources/js/pages/dialux/export/document/`:
+
+| Archivo | Líneas | Contenido |
+|---|---:|---|
+| `pageSeed.ts` | 26 | Interfaz `PageSeed` (representación intermedia de página antes de numerar) |
+| `pagination.ts` | 247 | Constantes de filas/página, `chunkIndices`, generación de la tabla de contenidos |
+| `productPages.ts` | 293 | Agregación de luminarias/productos (proyecto/nivel/ambiente) + páginas de lista/ficha de producto |
+| `levelPages.ts` | 59 | Agregados por nivel (Scene) |
+| `ambientDossier.ts` | 222 | Métricas por ambiente (`buildAmbientDetails`) |
+| `roomAmbientPages.ts` | 216 | Páginas Recinto→Nivel→Ambiente (separado de `ambientDossier.ts`: datos vs. páginas, juntos superaban 400 líneas) |
+| `frontMatter.ts` | 89 | Portada + observaciones preliminares |
+| `terrainPages.ts` | 75 | Páginas de plano de terreno (CAD → dibujo → isolux) |
+| `glossaryPages.ts` | 26 | Páginas de glosario |
+
+`buildDialuxFormalDocument.ts` (203 líneas) ahora solo orquesta: llama a
+cada builder en el orden correcto, arma la lista de páginas con su
+numeración final (que depende de cuántas páginas de TOC hagan falta) y
+construye el objeto `DialuxFormalDocument` final. Se retiró de
+`fileSizeBudget.allowlist.json`.
+
+### Corrección durante la extracción
+
+Al transcribir `toFileBaseName` cometí un error propio: el regex
+`/[̀-ͯ]/g` (quita marcas diacríticas tras `normalize('NFD')`) se
+corrompió en caracteres Unicode literales en vez de la secuencia de escape
+de texto. Detectado por inspección antes de dar el paso por terminado (no
+por los tests, que no cubren ese caso límite específico) y corregido para
+que el archivo sea byte-idéntico al original en esa línea.
+
+### Verificación de este paso
+
+- `vitest run`: 506/506, incluyendo los mismos 40 tests de exportación PDF
+  sin ninguna modificación.
+- `tsc --noEmit`: sin cambio (123).
+- ESLint: sin errores nuevos (los pocos preexistentes — 3 escapes
+  innecesarios en una regex, import/order en tests no tocados — verificados
+  contra el original).
+- `npm run build`: OK.
+- No requiere verificación en navegador: es generación de datos/documento,
+  no UI — la cobertura de tests existente es la verificación real.
+
+## 6. Pendiente
+
+Normativa — no iniciada.
