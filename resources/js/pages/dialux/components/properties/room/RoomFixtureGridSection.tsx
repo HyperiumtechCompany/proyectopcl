@@ -2,7 +2,7 @@ import { Layers, Zap } from 'lucide-react';
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CatalogPanel } from '@/pages/dialux/components/CatalogPanel';
-import { polygonBBox, suggestFixtureGridSize } from '@/pages/dialux/hooks/fixtureGrid';
+import { estimatePhotometricFixtureQuantity, polygonBBox, suggestFixtureGridSize } from '@/pages/dialux/hooks/fixtureGrid';
 import { calculateExactQuantity, calculateRoundedQuantity } from '@/pages/dialux/hooks/lightingCalculations';
 import type { Fixture, Room, Vertex } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
@@ -21,6 +21,8 @@ export function RoomFixtureGridSection({
     lumensRequired,
     fixtureLumensFallback,
     fixturesInRoom,
+    calculationRoomId,
+    targetLux,
 }: {
     room: Room;
     calculationVertices: Vertex[];
@@ -29,6 +31,8 @@ export function RoomFixtureGridSection({
     /** Lúmenes por luminaria a usar si no hay ninguna elegida en el picker (`inputs.fixtureLumens`). */
     fixtureLumensFallback: number;
     fixturesInRoom: Fixture[];
+    calculationRoomId: string;
+    targetLux: number;
 }) {
     const store = useEditorStore();
     const [gridRows, setGridRows] = React.useState(store.ui.fixtureGridRows);
@@ -46,7 +50,15 @@ export function RoomFixtureGridSection({
     const gridFixture = store.ui.fixtureTemplate;
     const gridFixtureLumens = gridFixture.lumens ?? fixtureLumensFallback;
     const gridExactQuantity = calculateExactQuantity(lumensRequired, gridFixtureLumens);
-    const gridRoundedQuantity = calculateRoundedQuantity(gridExactQuantity);
+    const lastResult = store.resultsByRoom[calculationRoomId];
+    const gridRoundedQuantity = lastResult
+        ? estimatePhotometricFixtureQuantity(
+              fixturesInRoom.length,
+              lastResult.avg_lux,
+              targetLux,
+              gridExactQuantity,
+          ).rounded
+        : calculateRoundedQuantity(gridExactQuantity);
 
     // Sugerencia de grilla: cuántas filas/columnas hacen falta para llegar a
     // la cantidad exigida (con la luminaria elegida) sin cambiar de forma la
@@ -54,7 +66,8 @@ export function RoomFixtureGridSection({
     const gridBBox = polygonBBox(calculationVertices);
     const gridAspectRatio = gridBBox.height > 0 ? gridBBox.width / gridBBox.height : 1;
     const suggestedGrid = suggestFixtureGridSize(gridRows, gridCols, gridRoundedQuantity, gridAspectRatio);
-    const gridBelowNorm = gridRows * gridCols < gridRoundedQuantity;
+    const gridCountMismatch = gridRows * gridCols !== gridRoundedQuantity;
+    const generationGrid = gridCountMismatch ? suggestedGrid : { rows: gridRows, columns: gridCols };
 
     return (
         <div className="mt-4 border-t border-gray-800/80 pt-3">
@@ -82,10 +95,10 @@ export function RoomFixtureGridSection({
                 <EditField label="Filas" value={gridRows} min={1} max={20} step={1} onChange={setGridRows} />
                 <EditField label="Columnas" value={gridCols} min={1} max={20} step={1} onChange={setGridCols} />
             </div>
-            {gridBelowNorm && (
+            {gridCountMismatch && (
                 <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
                     <span className="text-[9px] leading-snug text-amber-400">
-                        {gridRows}×{gridCols} = {gridRows * gridCols}, faltan para llegar a {gridRoundedQuantity} con "
+                        {gridRows}×{gridCols} = {gridRows * gridCols}; el cálculo recomienda {gridRoundedQuantity} con "
                         {gridFixture.name ?? 'este foco'}" ({gridFixtureLumens.toLocaleString()} lm)
                     </span>
                     <button
@@ -134,8 +147,8 @@ export function RoomFixtureGridSection({
 
                     const newIds = store.addFixtureGrid({
                         roomId: room.id,
-                        rows: gridRows,
-                        columns: gridCols,
+                        rows: generationGrid.rows,
+                        columns: generationGrid.columns,
                         fixtureTemplate: store.ui.fixtureTemplate,
                         ambientVertices: calculationVertices,
                     });
@@ -149,7 +162,7 @@ export function RoomFixtureGridSection({
                 }}
                 className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
             >
-                Generar en Techo {gridRows}x{gridCols}
+                Generar en Techo {generationGrid.rows}x{generationGrid.columns}
             </button>
         </div>
     );

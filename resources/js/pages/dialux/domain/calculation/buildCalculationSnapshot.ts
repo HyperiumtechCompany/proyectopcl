@@ -220,6 +220,8 @@ function toCalculationLuminaire(fixture: Fixture, levelId: string): CalculationL
                   provenance: fixture.photometricWeb.provenance,
               }
             : null,
+        emergencyType: fixture.emergencyType ?? 'none',
+        emergencyFlux: fixture.emergencyFlux ?? null,
     };
 }
 

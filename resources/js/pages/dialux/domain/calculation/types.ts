@@ -51,6 +51,16 @@ export interface CalculationLuminaire {
         reference_lumens?: number;
         provenance?: 'manufacturer' | 'manual-curve' | 'synthetic';
     } | null;
+    /**
+     * Fase 14 ("Emergencia"). `'none'` nunca participa en `config.emergencyMode`
+     * (en un corte real, los circuitos normales pierden alimentación — el
+     * estado de escena/interruptor es irrelevante). `emergencyFlux` es dato
+     * de fabricante, nunca inventado; sin él, la luminaria queda excluida
+     * del cálculo de emergencia con advertencia explícita — ver
+     * `runDirectPreviewEngine.ts`.
+     */
+    emergencyType: 'none' | 'emergency' | 'permanent';
+    emergencyFlux: number | null;
 }
 
 export interface CalculationRequirement {
@@ -165,6 +175,16 @@ export interface CalculationConfig {
     meshPolicy: { gridSpacingM: number };
     /** Depreciación por mantenimiento, aplicada al resultado fotométrico final. */
     maintenanceFactor?: number;
+    /**
+     * Fase 14 ("Emergencia"). Default `undefined`/`false` — comportamiento
+     * idéntico al de siempre (flujo normal, filtro de escena/interruptor
+     * habitual) para todo llamador que no lo pase explícitamente. `true`
+     * cambia de raíz qué luminarias participan y con qué flujo — ver
+     * `runDirectPreviewEngine.ts`. No es una "escena guardada" (Fase 10):
+     * es un modo de cálculo reproducible y verificable, tal como pide la
+     * puerta de salida del plan maestro para esta fase.
+     */
+    emergencyMode?: boolean;
     glare: {
         enabled: boolean;
         /**

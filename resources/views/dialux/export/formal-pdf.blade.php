@@ -972,6 +972,7 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                 $lum['polarDiagramAssetId'] ?? null,
                             );
                             $technicalRows = $lum['reportData']['technical_table'] ?? null;
+                            $ugrTableComputed = $lum['reportData']['ugrTableComputed'] ?? null;
                         @endphp
                         <div class="product-sheet-card">
                             @if ($lum)
@@ -1049,10 +1050,26 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                                         </div>
                                         <div class="detail-block-title" style="margin-bottom:2mm;">Evaluación del
                                             deslumbramiento según UGR</div>
-                                        @if (!empty($lum['ugrDiagramValue']) || !empty($lum['ugrTable']))
-                                            <div class="placeholder-box">
-                                                {{ $lum['ugrDiagramValue'] ?? 'Tabla UGR estructurada proporcionada' }}
-                                            </div>
+                                        @if (is_array($ugrTableComputed) && !empty($ugrTableComputed['entries']))
+                                            <table class="product-table" style="font-size:8px;">
+                                                <tr>
+                                                    <th>Sala de referencia</th>
+                                                    <th>UGR transversal</th>
+                                                    <th>UGR longitudinal</th>
+                                                </tr>
+                                                @foreach ($ugrTableComputed['entries'] as $ugrRow)
+                                                    <tr>
+                                                        <td>{{ $ugrRow['roomLabel'] ?? '-' }}</td>
+                                                        <td>{{ $formatNumber($ugrRow['ugrCrosswise'] ?? null, 1) }}</td>
+                                                        <td>{{ $formatNumber($ugrRow['ugrEndwise'] ?? null, 1) }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </table>
+                                            {{-- Fase 15: nunca se presenta como dato de fabricante — el disclaimer
+                                                 de procedencia va siempre visible junto a la tabla. --}}
+                                            <p style="font-size:7px;color:#64748b;margin-top:1mm;">
+                                                {{ $ugrTableComputed['disclaimer'] ?? '' }}
+                                            </p>
                                         @else
                                             <div class="placeholder-box">Información UGR no disponible</div>
                                         @endif
@@ -1472,6 +1489,62 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         @else
                             <div class="placeholder-box">No hay datos de comparaci&oacute;n disponibles para esta p&aacute;gina.</div>
                         @endif
+
+                        {{-- Informe de alumbrado de EMERGENCIA (Fase 14, §11) — documento
+                             DISTINTO del informe normal (puerta de salida: "los resultados
+                             de emergencia nunca se confunden con iluminación normal"). --}}
+                    @elseif ($page['kind'] === 'emergency-cover')
+                        <div class="detail-block-title" style="font-size:14px; margin-bottom:4mm;">{{ $page['title'] }}</div>
+                        @foreach ($page['notes'] ?? [] as $note)
+                            <p>{{ $note }}</p>
+                        @endforeach
+                    @elseif ($page['kind'] === 'emergency-compliance-table')
+                        @php $emergencyRooms = $page['emergencyRooms'] ?? []; @endphp
+                        @if (empty($emergencyRooms))
+                            <div class="placeholder-box">Este proyecto no tiene ambientes marcados como ruta de evacuaci&oacute;n o &aacute;rea antip&aacute;nico.</div>
+                        @endif
+                        @foreach ($emergencyRooms as $emergencyRoom)
+                            <div class="ambient-provenance" style="margin-bottom:2mm;">
+                                <strong>{{ $emergencyRoom['roomName'] ?? '-' }}</strong>
+                                ({{ ($emergencyRoom['roomType'] ?? null) === 'evacuation-route' ? 'Ruta de evacuaci&oacute;n' : 'Área antip&aacute;nico' }})
+                                &mdash; Nivel: {{ $emergencyRoom['levelName'] ?? '-' }}
+                                @if (!empty($emergencyRoom['criticalPoint']))
+                                    &middot; Punto cr&iacute;tico: ({{ $formatNumber($emergencyRoom['criticalPoint']['x'] ?? null, 2) }}, {{ $formatNumber($emergencyRoom['criticalPoint']['y'] ?? null, 2) }})
+                                @endif
+                            </div>
+                            <table class="luminaire-table" style="table-layout:fixed; margin-bottom:4mm;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align:left; width:40%;">Norma</th>
+                                        <th class="number" style="width:20%;">Exigido (lx)</th>
+                                        <th class="number" style="width:20%;">Calculado (lx)</th>
+                                        <th class="result-check" style="width:20%;">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($emergencyRoom['evaluations'] ?? [] as $evaluation)
+                                        <tr>
+                                            <td style="text-align:left;">
+                                                {{ $evaluation['source'] ?? '-' }}
+                                                {{ ($evaluation['mandatory'] ?? false) ? '(obligatoria)' : '(referencia)' }}
+                                            </td>
+                                            <td class="number">{{ $formatNumber($evaluation['requiredLux'] ?? null, 1) }}</td>
+                                            <td class="number">{{ $formatNumber($evaluation['calculatedLux'] ?? null, 1) }}</td>
+                                            <td class="result-check">
+                                                @php $evalStatus = $evaluation['status'] ?? 'not-evaluated'; @endphp
+                                                <span class="verification-status status-{{ e($evalStatus) }}">
+                                                    {{ match ($evalStatus) {
+                                                        'pass' => 'Conforme',
+                                                        'fail' => 'No conforme',
+                                                        default => 'No evaluado',
+                                                    } }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @endforeach
 
                         {{-- Glosario --}}
                     @elseif ($page['kind'] === 'glossary')

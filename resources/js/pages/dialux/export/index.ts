@@ -4,4 +4,6 @@ export * from './derived/buildDialuxExportAssets';
 export * from './document/buildDialuxExportDocument';
 export * from './document/buildDialuxFormalDocument';
 export * from './useDialuxPdfExport';
+export * from './useDialuxEmergencyPdfExport';
+export * from './document/buildDialuxEmergencyDocument';
 export * from './useDialuxDxfExport';

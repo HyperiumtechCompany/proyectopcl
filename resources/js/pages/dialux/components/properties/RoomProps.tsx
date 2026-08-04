@@ -131,6 +131,8 @@ export const RoomProps: React.FC<{
                     lumensRequired={inputs.lumensRequired}
                     fixtureLumensFallback={inputs.fixtureLumens}
                     fixturesInRoom={fixturesInRoom}
+                    calculationRoomId={calculationRoom.id}
+                    targetLux={inputs.illuminanceLux}
                 />
             )}
 

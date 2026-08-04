@@ -3,14 +3,14 @@
  */
 
 import { Link } from '@inertiajs/react';
-import { ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
 import React, { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
 import { hashCalculationSnapshot } from '@/pages/dialux/domain/calculation/hashSnapshot';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
 import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationRun } from '@/pages/dialux/domain/calculation/types';
-import { useDialuxPdfExport } from '@/pages/dialux/export';
+import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
@@ -295,6 +295,7 @@ export const EditorLayout = memo(function EditorLayout() {
     const engine = useLightingEngine();
     const calcWorker = useDialuxCalculationWorker();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
+    const { exportEmergencyPdf, isExporting: isExportingEmergency } = useDialuxEmergencyPdfExport();
 
     const floorsSorted = getFloorsSorted();
 
@@ -399,6 +400,15 @@ export const EditorLayout = memo(function EditorLayout() {
             console.error('Error al exportar el PDF de DIAlux:', error);
         });
     }, [exportPdf]);
+
+    // Fase 14 ("Emergencia"): acción separada del export normal a propósito
+    // (no un toggle sobre "Exportar PDF") — refuerza que los resultados de
+    // emergencia nunca se confunden con la iluminación normal.
+    const handleExportEmergencyPdf = useCallback(() => {
+        void exportEmergencyPdf().catch((error: unknown) => {
+            console.error('Error al exportar el informe de emergencia:', error);
+        });
+    }, [exportEmergencyPdf]);
 
     useEffect(() => {
         if (project) return;
@@ -1072,6 +1082,20 @@ export const EditorLayout = memo(function EditorLayout() {
                                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
                                     <FileCode size={13} />
                                     Exportar DXF
+                                </button>
+
+                                <button
+                                    id="dialux-btn-export-emergency"
+                                    type="button"
+                                    onClick={() => {
+                                        setShowExportMenu(false);
+                                        handleExportEmergencyPdf();
+                                    }}
+                                    disabled={!project || isExportingEmergency}
+                                    title="Informe separado de alumbrado de emergencia (RNE A.130 / EN 1838) — nunca se confunde con el PDF normal"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-amber-200 transition hover:bg-amber-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    <AlertTriangle size={13} />
+                                    {isExportingEmergency ? 'Generando...' : 'Informe de emergencia'}
                                 </button>
                             </div>
                         )}

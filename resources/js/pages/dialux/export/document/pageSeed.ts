@@ -1,4 +1,4 @@
-import type { DialuxDocumentPage, DialuxSceneComparisonSummary } from '../domain/types';
+import type { DialuxDocumentPage, DialuxEmergencyRoomReport, DialuxSceneComparisonSummary } from '../domain/types';
 
 /**
  * Representación intermedia de una página del informe formal, antes de que
@@ -24,4 +24,5 @@ export interface PageSeed {
     rowRangeStart?: number | null;
     rowRangeEnd?: number | null;
     sceneComparison?: DialuxSceneComparisonSummary | null;
+    emergencyRooms?: DialuxEmergencyRoomReport[] | null;
 }

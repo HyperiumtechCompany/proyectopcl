@@ -112,13 +112,13 @@ function toEngineRoom(object: CalculationObject): Room {
 }
 
 /**
- * `dimmingFactor` (Fase 10, §11: "encendido, apagado y regulación") escala
- * el flujo luminoso ANTES de convertir a `Fixture` — reduce el `lumens` que
- * ve el motor, no un factor aplicado después sobre el resultado (así la
- * regulación afecta correctamente la interreflexión/UGR, que dependen de
- * cuánta luz entra al recinto, no solo del resultado final punto a punto).
+ * `lumens` ya resuelto por el llamador (Fase 10, §11: "encendido, apagado y
+ * regulación" — `luminaire.lumens * dimmingFactor`; Fase 14: `emergencyFlux`
+ * en `config.emergencyMode`) — se aplica ANTES de convertir a `Fixture`,
+ * no como un factor posterior sobre el resultado (así afecta correctamente
+ * la interreflexión/UGR, que dependen de cuánta luz entra al recinto).
  */
-function toEngineFixture(luminaire: CalculationLuminaire, dimmingFactor: number): Fixture {
+function toEngineFixture(luminaire: CalculationLuminaire, lumens: number): Fixture {
     return {
         id: luminaire.id,
         name: luminaire.name,
@@ -126,7 +126,7 @@ function toEngineFixture(luminaire: CalculationLuminaire, dimmingFactor: number)
         y: luminaire.y,
         z: luminaire.z,
         rotation: luminaire.rotation,
-        lumens: luminaire.lumens * dimmingFactor,
+        lumens,
         efficiency: luminaire.efficiency,
         fixtureType: luminaire.fixtureType as Fixture['fixtureType'],
         fixtureShape: (luminaire.fixtureShape ?? undefined) as Fixture['fixtureShape'],
@@ -246,27 +246,58 @@ export async function runDirectPreviewEngine(
             return state.on && state.dimmingFactor > 0;
         };
 
-        const fixtures = object.luminaireIds
+        const objectLuminaires = object.luminaireIds
             .map((id) => luminairesById.get(id))
-            .filter((luminaire): luminaire is CalculationLuminaire => luminaire !== undefined)
-            .filter((luminaire) => isEffectivelyOn(luminaire.id))
-            .map((luminaire) => toEngineFixture(luminaire, luminaireStateById.get(luminaire.id)?.dimmingFactor ?? 1));
+            .filter((luminaire): luminaire is CalculationLuminaire => luminaire !== undefined);
 
-        if (object.luminaireIds.length === 0) {
+        const hasNoLuminaires = object.luminaireIds.length === 0;
+        if (hasNoLuminaires) {
             warnings.push({
                 code: 'object-without-luminaires',
-                message: `"${object.name}" no tiene luminarias asociadas — el resultado es 0 en todos los puntos.`,
+                message: `"${object.name}" no tiene luminarias asociadas — el resultado ${config.emergencyMode ? 'de emergencia ' : ''}es 0 en todos los puntos.`,
                 objectId: object.id,
             });
-        } else if (fixtures.length === 0) {
+        }
+
+        let fixtures: Fixture[];
+
+        // Fase 14: en un corte real los circuitos normales pierden alimentación, así que `isEffectivelyOn`/escena
+        // es irrelevante aquí a propósito — solo `emergency`/`permanent` con `emergencyFlux` de fabricante participan (nunca flujo normal ni un % inventado, verificado con chief-electrical-engineer-reviewer).
+        if (config.emergencyMode) {
+            const emergencyCapable = objectLuminaires.filter((luminaire) => luminaire.emergencyType !== 'none');
+            const withoutFluxData = emergencyCapable.filter((luminaire) => luminaire.emergencyFlux == null);
+            if (withoutFluxData.length > 0) {
+                warnings.push({
+                    code: 'luminaire-without-emergency-flux-data',
+                    message: `"${object.name}": ${withoutFluxData.length} luminaria(s) de emergencia/permanente sin emergencyFlux definido — se excluyen. Nunca se usa el flujo normal como sustituto ni se inventa un valor.`,
+                    objectId: object.id,
+                });
+            }
+
+            fixtures = emergencyCapable.filter((l) => l.emergencyFlux != null).map((l) => toEngineFixture(l, l.emergencyFlux!));
+
+            if (!hasNoLuminaires && fixtures.length === 0) {
+                warnings.push({
+                    code: 'no-emergency-fixtures-in-object',
+                    message: `"${object.name}" no tiene ninguna luminaria de emergencia/permanente con flujo definido — el resultado de emergencia es 0 en todos los puntos.`,
+                    objectId: object.id,
+                });
+            }
+        } else {
+            fixtures = objectLuminaires
+                .filter((luminaire) => isEffectivelyOn(luminaire.id))
+                .map((luminaire) => toEngineFixture(luminaire, luminaire.lumens * (luminaireStateById.get(luminaire.id)?.dimmingFactor ?? 1)));
+
             // Distinto de "sin luminarias": el ambiente SÍ tiene luminarias,
             // pero todas están apagadas en la escena seleccionada — resultado
             // 0 esperado, no un problema de datos (Fase 10).
-            warnings.push({
-                code: 'all-fixtures-off-in-scene',
-                message: `Todas las luminarias de "${object.name}" están apagadas en la escena "${scene?.name ?? 'por defecto'}" — el resultado es 0 en todos los puntos.`,
-                objectId: object.id,
-            });
+            if (!hasNoLuminaires && fixtures.length === 0) {
+                warnings.push({
+                    code: 'all-fixtures-off-in-scene',
+                    message: `Todas las luminarias de "${object.name}" están apagadas en la escena "${scene?.name ?? 'por defecto'}" — el resultado es 0 en todos los puntos.`,
+                    objectId: object.id,
+                });
+            }
         }
 
         let surfaceReflectances: { ceiling: number; wall: number; floor: number } | null = null;
@@ -315,15 +346,9 @@ export async function runDirectPreviewEngine(
             });
         }
 
-        // Auditoría `dialux-calc-reviewer` de Fase 9: activar `surfaceReflectances`
-        // junto con `guth-observers` CAMBIA EL MÉTODO de cálculo de la
-        // luminancia de fondo (`Lb`) — de `avg/π` (promedio directo+indirecto
-        // de toda la malla) a `Eind/π` (solo la componente indirecta real en
-        // el ojo del observador), casi siempre un valor mucho más chico.
-        // Verificado que esto puede subir el UGR reportado varias unidades
-        // de un cálculo a otro SIN que haya cambiado el diseño — es un
-        // artefacto metodológico, no un cambio físico. Advertir para que no
-        // se interprete como una regresión del diseño.
+        // Auditoría `dialux-calc-reviewer` Fase 9: `surfaceReflectances` + `guth-observers` cambia el MÉTODO de
+        // luminancia de fondo (`Lb`) de `avg/π` a `Eind/π` (casi siempre mucho más chico) — puede subir el UGR
+        // reportado varias unidades sin que cambie el diseño; es un artefacto metodológico, no físico.
         if (glareConfig && surfaceReflectances) {
             warnings.push({
                 code: 'ugr-background-luminance-method-changed',
@@ -349,15 +374,8 @@ export async function runDirectPreviewEngine(
 
         runOptions?.onProgress?.(surfaces.length, total);
 
-        // Cede el hilo ENTRE objetos (Fase 12: "UI fluida durante cálculo",
-        // "cancelación perceptible en <500ms") — un yield de microtarea
-        // (`await Promise.resolve()`) NO basta: los mensajes `postMessage`
-        // del worker se procesan como macrotareas, así que una cancelación
-        // pendiente no se vería hasta la siguiente vuelta del event loop.
-        // `setTimeout(...,0)` cede a la cola de macrotareas. No cambia
-        // ningún valor calculado, solo cuándo se reanuda — verificado contra
-        // los goldens de todas las fases anteriores (comparan valores
-        // resueltos, no orden de scheduling).
+        // Cede el hilo ENTRE objetos (Fase 12) — un yield de microtarea no basta porque los `postMessage` del
+        // worker son macrotareas; `setTimeout(...,0)` cede a esa cola. No cambia ningún valor, solo el scheduling.
         await new Promise((resolve) => setTimeout(resolve, 0));
     }
 

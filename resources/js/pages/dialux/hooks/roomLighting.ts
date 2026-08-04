@@ -15,6 +15,7 @@ export type NormativeStandard =
     | 'en_12464'
     | 'ies_na'
     | 'rne_peru'
+    | 'rne_a130'
     | 'en_1838'
     | 'nfpa101'
     | 'ds024';
@@ -23,7 +24,8 @@ export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
     en_12464: 'EN 12464-1 (Europa)',
     ies_na: 'IESNA / IES HB-10 (EE. UU.)',
     rne_peru: 'RNE EM.010 / CNE (Perú)',
-    en_1838: 'EN 1838 - Alumbrado de emergencia (Europa)',
+    rne_a130: 'RNE A.130 - Alumbrado de emergencia (Perú, obligatoria)',
+    en_1838: 'EN 1838 - Alumbrado de emergencia (Europa, referencia)',
     nfpa101: 'NFPA 101 - Life Safety Code (EE. UU.)',
     ds024: 'DS-024-2016-EM - Minería (Perú)',
 };

@@ -218,12 +218,21 @@ export interface Room {
     name: string;
     /**
      * Categoría del espacio:
-     *   'room'     → Recinto (envolvente exterior del edificio, sin iluminación propia)
-     *   'ambient'  → Ambiente interior (espacio habitable con iluminación/normativa)
-     *   'corridor' → Pasadizo (ambiente con configuración propia)
-     *   'stair'    → Escalera
+     *   'room'             → Recinto (envolvente exterior del edificio, sin iluminación propia)
+     *   'ambient'          → Ambiente interior (espacio habitable con iluminación/normativa)
+     *   'corridor'         → Pasadizo (ambiente con configuración propia)
+     *   'stair'            → Escalera
+     *   'evacuation-route' → Fase 14: medio de evacuación — se evalúa contra
+     *                        RNE A.130 (10 lx, obligatoria) y, como referencia
+     *                        complementaria opcional, EN 1838 (1 lx eje, 40:1,
+     *                        curva de respuesta) — ver `hooks/emergencyCompliance.ts`.
+     *                        Reutiliza el motor de grilla existente (Room
+     *                        poligonal), no hay geometría de ruta/polilínea
+     *                        propia todavía.
+     *   'antipanic-area'   → Fase 14: área antipánico (EN 1838 únicamente,
+     *                        0.5 lx — RNE A.130 no define esta categoría).
      */
-    roomType?: 'room' | 'ambient' | 'corridor' | 'stair';
+    roomType?: 'room' | 'ambient' | 'corridor' | 'stair' | 'evacuation-route' | 'antipanic-area';
     /** PolÃƒÂ­gono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
     height: number; // metros
@@ -467,6 +476,20 @@ export interface Fixture {
     reportData?: {
         technical_table?: Array<{ label: string; value: string }>;
         warnings?: string[];
+        /**
+         * Tabla de referencia UGR calculada por el motor propio (Fase 15,
+         * Parte B) sobre un subconjunto acotado de salas normalizadas —
+         * NUNCA una reproducción certificada de la tabla CIE 117 publicada.
+         * Ver `export/derived/data/computeEngineUgrTable.ts`.
+         */
+        ugrTableComputed?: {
+            provenance: 'manufacturer' | 'engine-calculated';
+            method: string;
+            disclaimer: string;
+            shr: number;
+            reflectances: { ceiling: number; wall: number; floor: number };
+            entries: Array<{ roomLabel: string; ugrCrosswise: number | null; ugrEndwise: number | null }>;
+        } | null;
     } | null;
     reportAssets?: {
         polar_svg?: string | null;
@@ -512,6 +535,19 @@ export interface Fixture {
     /** SÃƒÂ­mbolo CAD asociado: 'rect_red'|'rect_green'|'rect_white'|'circle_black'|'circle_magenta'|'spot_yellow'|'spot_orange'|'emergency'|'emergency_perm' */
     catalogSymbol?: string;
     emergencyType?: 'none' | 'emergency' | 'permanent';
+    /**
+     * Flujo luminoso (lúmenes) que emite ESTA luminaria en modo emergencia —
+     * Fase 14 del plan maestro ("Emergencia"). Dato de fabricante (kit de
+     * batería autónomo o alimentación centralizada), NUNCA un porcentaje
+     * inventado del flujo normal: no existe una fórmula normativa (ni EN
+     * 1838 ni RNE A.130) que defina esa relación — verificado por
+     * `chief-electrical-engineer-reviewer`. Solo tiene efecto cuando
+     * `emergencyType !== 'none'`; sin este dato, la luminaria queda
+     * excluida del cálculo de emergencia con una advertencia explícita
+     * (`domain/calculation/runDirectPreviewEngine.ts`), nunca sustituida
+     * por el flujo normal.
+     */
+    emergencyFlux?: number | null;
     /** Rotación en planta, grados sentido horario (0-360). Default 0. */
     rotation?: number;
 }

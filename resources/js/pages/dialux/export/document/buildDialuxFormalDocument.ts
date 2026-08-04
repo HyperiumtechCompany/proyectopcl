@@ -29,7 +29,7 @@ import { buildTerrainPageSeeds } from './terrainPages';
  * través de la única función pública, `buildDialuxFormalDocument`.
  */
 
-function toFileBaseName(projectName: string): string {
+export function toFileBaseName(projectName: string): string {
     return projectName
         .toLowerCase()
         .normalize('NFD')

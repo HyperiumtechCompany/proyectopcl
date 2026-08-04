@@ -22,7 +22,7 @@
  *  - DS-024-2016-EM: Reglamento de Seguridad en Minería - MEM Perú (estructura base, sin catálogo cargado aún).
  */
 
-import { en12464Regulations, en1838Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
+import { a130Regulations, en12464Regulations, en1838Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
 import type { RawNormativeLeaf, RawNormativeBranch } from './normativaData';
 import type { NormativeStandard } from './roomLighting';
 import type { LightingResult, Room } from './types';
@@ -114,8 +114,23 @@ const IES_DISCLAIMER =
 const RNE_DISCLAIMER =
     'Valores basados en Norma EM.010 del Reglamento Nacional de Edificaciones (MVCS - D.S. N°006-2014-V). Norma oficial peruana de carácter público.';
 
+// Fase 14 (plan maestro §11): la edición citada anteriormente aquí
+// ("EN 1838:2019") no existe en el catálogo público de CEN/BSI — las
+// ediciones reales son 1999 → 2013 (retirada 18-dic-2024) → 2024
+// (vigente). Los valores numéricos ya cargados en `en1838Regulations`
+// (1 lx eje de ruta, 0.5 lx antipánico, 40:1, 50%@5s/100%@60s, 1h)
+// coinciden con fuentes secundarias convergentes para la edición 2013 —
+// se cita esa edición porque es la que respalda los valores YA cargados,
+// no porque se haya verificado el texto de pago de la edición 2024
+// (ver `planes/fase14_progreso_dialux.md`, matriz normativa). EN 1838
+// NO tiene adopción legal en Perú — usar solo como referencia
+// complementaria de buena práctica, nunca como fuente obligatoria para
+// un proyecto peruano (esa es RNE A.130, ver `RNE_A130_DISCLAIMER`).
 const EN_1838_DISCLAIMER =
-    'Valores basados en EN 1838:2019 (Aplicaciones de la iluminación — Alumbrado de emergencia), publicada por CEN/TC 169. Parámetros técnicos fácticos de dominio público. Para información completa consulte la publicación oficial.';
+    'Valores basados en EN 1838:2013 (Aplicaciones de la iluminación — Alumbrado de emergencia), publicada por CEN/TC 169 — edición retirada el 18-dic-2024, sustituida por EN 1838:2024 (valores exactos de esa edición nueva no verificados en este sistema). Parámetros técnicos fácticos de dominio público. NO tiene adopción legal en Perú: úsese solo como referencia de buena práctica internacional, nunca como sustituto de RNE A.130. Para información completa consulte la publicación oficial.';
+
+const RNE_A130_DISCLAIMER =
+    'Valores basados en RNE Norma A.130 "Requisitos de Seguridad" (D.S. N°017-2012-VIVIENDA), Artículos 39-41. Norma oficial peruana de carácter público y de cumplimiento obligatorio — es la fuente legal para alumbrado de emergencia en Perú (a diferencia de RNE EM.010, que no trata este tema). El Art. 40 inciso d) remite a CNE Tomo V (Utilización) Art. 7.1.2.1 para las conexiones eléctricas del circuito — ese artículo específico no está verificado en este sistema.';
 
 const NFPA_DISCLAIMER =
     'Valores basados en NFPA 101 Life Safety Code (National Fire Protection Association). Para información completa consulte la publicación oficial.';
@@ -172,19 +187,39 @@ export const NORMATIVE_STANDARDS_META: Record<NormativeStandard, NormativeStanda
         url: 'https://www.gob.pe/mvcs',
         disclaimer: RNE_DISCLAIMER,
     },
+    // Fase 14 (plan maestro §11, "Emergencia"): fuente OBLIGATORIA real
+    // para alumbrado de emergencia en Perú — RNE EM.010 (arriba) no trata
+    // este tema en absoluto (verificado por texto completo del documento
+    // oficial, cero coincidencias de "alumbrado de emergencia"/"evacuación").
+    rne_a130: {
+        id: 'rne_a130',
+        name: 'RNE A.130',
+        fullName: 'Reglamento Nacional de Edificaciones — A.130 Requisitos de Seguridad (Arts. 39-41)',
+        region: 'americas_peru',
+        country: 'PE',
+        source: 'RNE A.130 (D.S. N°017-2012-VIVIENDA), Arts. 39-41',
+        version: '2012',
+        year: 2012,
+        authority: 'MVCS – Ministerio de Vivienda, Construcción y Saneamiento',
+        legalStatus: 'mandatory',
+        active: true,
+        notes: 'Norma obligatoria en el Perú para alumbrado de emergencia (10 lx a nivel de piso en medios de evacuación, autonomía 1½ h, transferencia ≤10 s, señalización según NTP 399.010-1). No define áreas antipánico ni relación de uniformidad — ver EN 1838 como referencia complementaria opcional para esos conceptos.',
+        url: 'https://www.gob.pe/mvcs',
+        disclaimer: RNE_A130_DISCLAIMER,
+    },
     en_1838: {
         id: 'en_1838',
         name: 'EN 1838',
         fullName: 'Aplicaciones de la iluminación — Alumbrado de emergencia',
         region: 'europe',
         country: 'EU',
-        source: 'EN 1838:2019',
-        version: '2019',
-        year: 2019,
+        source: 'EN 1838:2013',
+        version: '2013',
+        year: 2013,
         authority: 'CEN/TC 169',
         legalStatus: 'mandatory',
         active: true,
-        notes: 'Norma europea de cumplimiento obligatorio para rutas de evacuación, áreas antipánico y zonas de tarea de alto riesgo. Complementa a EN 12464-1, no la reemplaza.',
+        notes: 'Norma europea de cumplimiento obligatorio EN SU PROPIA JURISDICCIÓN (no en Perú) para rutas de evacuación, áreas antipánico y zonas de tarea de alto riesgo. Complementa a EN 12464-1, no la reemplaza. Para proyectos peruanos, la fuente obligatoria es RNE A.130 — esta norma solo aporta como referencia de buena práctica los conceptos que A.130 no cubre (áreas antipánico, uniformidad 40:1, curva de respuesta).',
         url: 'https://www.en-standard.eu',
         disclaimer: EN_1838_DISCLAIMER,
     },
@@ -237,8 +272,13 @@ export const NORMATIVE_REGIONS: NormativeRegion[] = [
                 // ds024 no está en esta lista: no tiene catálogo cargado
                 // (getNormData() devolvería vacío) — ofrecerla como norma de
                 // referencia/comparación mostraría una comparación vacía sin aviso.
-                applicableStandards: ['rne_peru', 'en_12464'],
-                priorityOrder: ['rne_peru', 'en_12464', 'ies_na'],
+                // rne_a130 (Fase 14): fuente obligatoria de alumbrado de
+                // emergencia en Perú — distinta de rne_peru (EM.010, que no
+                // trata emergencia). en_1838 se ofrece como referencia
+                // complementaria opcional (áreas antipánico/uniformidad),
+                // nunca como sustituto de rne_a130.
+                applicableStandards: ['rne_peru', 'rne_a130', 'en_12464', 'en_1838'],
+                priorityOrder: ['rne_peru', 'rne_a130', 'en_12464', 'ies_na'],
             },
         ],
     },
@@ -427,6 +467,8 @@ export function getNormData(standard: NormativeStandard): RawNormativeBranch[] {
             return iesnaRegulations;
         case 'rne_peru':
             return rnePeruRegulations;
+        case 'rne_a130':
+            return a130Regulations;
         case 'en_1838':
             return en1838Regulations;
         case 'nfpa101':

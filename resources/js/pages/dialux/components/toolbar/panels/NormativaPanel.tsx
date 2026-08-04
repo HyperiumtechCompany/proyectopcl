@@ -20,6 +20,15 @@ const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
     en_1838: 'EN_1838',
     nfpa101: 'EN_12464_2',
     ds024: 'EN_12464_2',
+    // RNE A.130 (Fase 14) es una norma de alumbrado de EMERGENCIA (10 lx en
+    // rutas de evacuación, 50 lx en señalización) — no un nivel de
+    // iluminancia por actividad. Este panel aplica una norma "globalmente a
+    // todos los recintos" para diseño NORMAL; no tiene sentido ofrecer A.130
+    // aquí (aplicar 10 lx a todo ambiente sería incorrecto). Se mapea a un
+    // valor de relleno, igual que nfpa101/ds024, para no romper la
+    // exhaustividad del Record — A.130 se selecciona por recinto/ambiente
+    // vía NormativeWizardPanel.tsx, no desde este panel rápido.
+    rne_a130: 'EN_12464_2',
 };
 
 interface NormativaPanelProps {

@@ -957,7 +957,70 @@ Incorporar un flujo separado y verificable.
 
 Los resultados de emergencia nunca se confunden con iluminación normal.
 
-## Fase 15 — Materiales, objetos y visualización avanzada
+## Fase 15 — Corrección de fichas fotométricas: CDL polar y UGR
+
+### Objetivo
+
+Garantizar que toda luminaria importada desde IES/LDT con fotometría válida muestre una CDL polar reproducible en el PDF y que la sección UGR diferencie correctamente entre el UGR calculado del proyecto y una tabla o diagrama UGR de producto. La exportación no debe perder datos ya persistidos por depender de una segunda consulta de red.
+
+### Diagnóstico de partida
+
+- El parser Rust entrega `c_angles`, `gamma_angles` y `candela`, y `ProductImportService` genera y persiste `report_assets.polar_svg`.
+- Las instancias de luminaria conservan `productId` y pueden conservar también `reportAssets.polar_svg` dentro del snapshot del proyecto.
+- `enrichProducts()` vuelve a consultar el catálogo durante cada exportación y solo desde esa respuesta crea `polarDiagramAssetId`; si la consulta falla, captura la excepción y la exportación continúa sin CDL aunque el SVG ya exista en el snapshot.
+- El PDF solo muestra UGR de la ficha cuando existen `ugrDiagramValue` o `ugrTable`. El importador Rust/PHP no genera esos campos y el UGR calculado por ambiente no se conecta con esa sección.
+- Una tabla UGR de luminaria y el UGR calculado para un ambiente no son equivalentes y no deben presentarse como si lo fueran.
+
+### Trabajo — CDL polar
+
+- Definir una fuente primaria y fallbacks explícitos para el asset polar:
+  1. `fixture.reportAssets.polar_svg` ya presente en el snapshot.
+  2. `product.report_assets.polar_svg` obtenido del catálogo.
+  3. Generación determinista desde `fixture.photometricWeb` si existe una matriz válida.
+- Crear `polarDiagramAssetId` sin requerir una petición HTTP cuando el snapshot ya contiene el SVG o la matriz necesaria.
+- Mantener el enriquecimiento remoto para foto, logotipo y datos actualizados, pero no convertir su fallo en pérdida silenciosa de la CDL persistida.
+- Emitir un warning de exportación trazable cuando fallen todos los orígenes, indicando producto, `productId` y causa.
+- Verificar que el asset sobreviva a `buildDialuxFormalDocument()`, `pruneUnusedAssets()`, validación Laravel y render de Dompdf.
+- Confirmar que agrupaciones de varias instancias del mismo producto conserven una sola ficha y un único asset polar correcto.
+- Representar al menos los planos C principales disponibles; si inicialmente se muestra solo C0, declararlo en la ficha y no presentarlo como distribución completa cuando la luminaria no sea rotacionalmente simétrica.
+- Mantener escala fotométrica coherente entre flujo de referencia, flujo configurado e `Imax`; documentar en el asset si la curva fue reescalada.
+
+### Trabajo — UGR y SHR
+
+- Separar formalmente tres conceptos en dominio, UI y PDF:
+  - `ambientUgrResult`: resultado UGR calculado para un ambiente, observador y dirección concretos.
+  - `productUgrTable`: tabla UGR del fabricante o calculada bajo geometrías normalizadas verificables.
+  - `productUgrDiagram`: representación visual de dicha tabla, con SHR y condiciones declaradas.
+- No fabricar una tabla UGR únicamente desde el valor UGR máximo del ambiente ni desde la matriz de candelas sin los parámetros geométricos y fotométricos requeridos.
+- Definir el contrato de una tabla UGR: dimensiones del área luminosa, flujo de referencia, reflectancias techo/pared/plano, relación geométrica del recinto, espaciamiento o SHR, direcciones de observación, método/edición y procedencia.
+- Determinar si el LDT contiene datos suficientes para calcular la tabla solicitada. Los campos ausentes deben producir `no disponible` con motivo técnico, no una tabla sintética presentada como dato de fabricante.
+- Implementar, una vez validado el contrato, el generador de tabla/diagrama UGR para los casos soportados, incluyendo la serie de SHR aprobada y `SHR: 0.25` cuando sea aplicable.
+- Conectar el UGR real de cada ambiente con la sección de resultados del ambiente, mostrando observador, dirección, modelo, valor, límite y estado; no colocarlo en la ficha como tabla de producto.
+- En la ficha del producto, etiquetar claramente si la tabla UGR es `fabricante`, `calculada por el motor` o `no disponible`.
+- Mantener `no evaluable` para luminarias o escenarios fuera del alcance del método UGR y explicar la causa.
+
+### Validación
+
+- Fixture real de regresión: `FLIQ 400.3040.01_FLIQZ 400.24` importado mediante Rust.
+- Test de importación: matriz válida y `report_assets.polar_svg` no vacío.
+- Test frontend sin red: una luminaria con `reportAssets.polar_svg` produce `polarDiagramAssetId` y asset incluido en el documento.
+- Test de fallo de API: el PDF conserva la CDL local y registra warning, sin abortar la exportación.
+- Test de extremo a extremo: importación LDT → proyecto guardado/recargado → snapshot → documento formal → PDF con texto/asset `CDL polar`.
+- Test de poda: `pruneUnusedAssets()` conserva todos los assets polares referenciados y elimina únicamente los no utilizados.
+- Tests UGR positivos y negativos: datos completos, dimensiones ausentes, fotometría inválida, caso no aplicable y distinción entre tabla de producto y resultado de ambiente.
+- Benchmark UGR contra una referencia independiente y versión/configuración documentadas antes de habilitar una etiqueta de conformidad.
+- Inspección visual del PDF real, además de aserciones sobre HTML, para detectar incompatibilidades SVG/bitmap de Dompdf.
+
+### Puerta de salida
+
+- El PDF del fixture FLIQ muestra la CDL polar incluso cuando la consulta de enriquecimiento del catálogo falla.
+- Ningún PDF muestra “Gráfico no disponible” si el snapshot contiene un SVG polar válido o una matriz desde la cual puede generarse de forma determinista.
+- La sección UGR identifica sin ambigüedad si presenta una tabla de producto o un resultado calculado del ambiente.
+- `SHR: 0.25` solo se muestra cuando fue calculado o importado con entradas completas, método y procedencia trazables.
+- PDF, snapshot y base de datos conservan el mismo identificador, origen, escala fotométrica y valores relevantes.
+- Los tests de importación, enriquecimiento, composición formal y render PDF pasan, y no quedan errores silenciosos en consola para estos flujos.
+
+## Fase 16 — Materiales, objetos y visualización avanzada
 
 ### Objetivo
 
@@ -972,7 +1035,7 @@ Mejorar coherencia entre cálculo y 3D.
 - Vista 3D de resultados.
 - Render físicamente plausible como visualización, separado del solver normativo.
 
-## Fase 16 — Luz natural
+## Fase 17 — Luz natural
 
 ### Dependencias
 
@@ -990,7 +1053,7 @@ No iniciar sin solver interior y materiales validados.
 - Autonomía y métricas anuales.
 - Integración con control artificial.
 
-## Fase 17 — Exteriores, vial y luz intrusiva
+## Fase 18 — Exteriores, vial y luz intrusiva
 
 Dividir en productos internos independientes:
 
@@ -1000,7 +1063,7 @@ Dividir en productos internos independientes:
 
 Cada uno requiere objetos, normas, resultados y benchmarks propios. No reutilizar forzadamente reglas de interiores.
 
-## Fase 18 — BIM/IFC
+## Fase 19 — BIM/IFC
 
 ### Trabajo
 
@@ -1011,7 +1074,7 @@ Cada uno requiere objetos, normas, resultados y benchmarks propios. No reutiliza
 - Exportar luminarias con coordenadas y propiedades.
 - Manejar cambios/reimportación.
 
-## Fase 19 — Capacidades superiores al escritorio
+## Fase 20 — Capacidades superiores al escritorio
 
 - Colaboración en tiempo real con bloqueo/merge de operaciones.
 - Comentarios anclados a objetos.
@@ -1245,11 +1308,11 @@ Resultado: escenas, resultados, rendimiento y documentación coherente.
 
 ### Entrega E — Especialidades
 
-Fases 14–18, una por una.
+Fases 14–19, una por una.
 
 ### Entrega F — Diferenciadores
 
-Fase 19.
+Fase 20.
 
 ## 20. Qué no hacer
 

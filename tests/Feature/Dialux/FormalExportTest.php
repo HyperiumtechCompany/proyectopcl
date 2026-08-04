@@ -1651,6 +1651,167 @@ test('accepts a lighting-scene-comparison page with a full sceneComparison paylo
     $response->assertHeader('content-type', 'application/pdf');
 });
 
+test('formal dialux blade renders the emergency lighting cover and compliance table separately from the normal report (Fase 14)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Informe de Alumbrado de Emergencia',
+            'subtitle' => 'RNE A.130 / EN 1838',
+            'generatedAt' => '2026-08-04T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo — ALUMBRADO DE EMERGENCIA', 'subtitle' => 'RNE A.130 / EN 1838'],
+            'footer' => ['left' => 'PCL — Informe de emergencia', 'right' => '2026-08-04'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => [],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-emergency-cover',
+                'kind' => 'emergency-cover',
+                'sectionId' => 'emergency-cover',
+                'pageNumber' => 1,
+                'title' => 'INFORME DE ALUMBRADO DE EMERGENCIA',
+                'subtitle' => 'Proyecto Demo',
+                'assets' => [],
+                'notes' => ['Se evaluó 1 ambiente de emergencia contra RNE A.130 y EN 1838, nunca fusionadas.'],
+            ],
+            [
+                'id' => 'page-emergency-compliance-table',
+                'kind' => 'emergency-compliance-table',
+                'sectionId' => 'emergency-compliance-table',
+                'pageNumber' => 2,
+                'title' => 'Cumplimiento normativo — alumbrado de emergencia',
+                'subtitle' => null,
+                'assets' => [],
+                'notes' => [],
+                'emergencyRooms' => [
+                    [
+                        'roomId' => 'route-1',
+                        'roomName' => 'Pasillo principal',
+                        'roomType' => 'evacuation-route',
+                        'levelId' => 'scene-1',
+                        'levelName' => 'Piso 1',
+                        'minLux' => 5.0,
+                        'criticalPoint' => ['x' => 2.5, 'y' => 1.0],
+                        'evaluations' => [
+                            [
+                                'standard' => 'rne_a130',
+                                'source' => 'RNE A.130 (D.S. N°017-2012-VIVIENDA), Art. 40',
+                                'mandatory' => true,
+                                'metric' => 'illuminance',
+                                'requiredLux' => 10,
+                                'calculatedLux' => 5.0,
+                                'status' => 'fail',
+                            ],
+                            [
+                                'standard' => 'en_1838',
+                                'source' => 'EN 1838:2013 (referencia internacional, sin adopción legal en Perú)',
+                                'mandatory' => false,
+                                'metric' => 'illuminance',
+                                'requiredLux' => 1,
+                                'calculatedLux' => 5.0,
+                                'status' => 'pass',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('INFORME DE ALUMBRADO DE EMERGENCIA');
+    $view->assertSee('Pasillo principal');
+    $view->assertSee('RNE A.130');
+    $view->assertSee('(obligatoria)');
+    $view->assertSee('EN 1838:2013');
+    $view->assertSee('(referencia)');
+    $view->assertSee('No conforme');
+    $view->assertSee('Conforme');
+    // Nunca fusiona ambas normas en un solo veredicto: ambos estados distintos coexisten.
+    $view->assertDontSee('Reporte DIAlux');
+});
+
+test('accepts emergency-cover and emergency-compliance-table pages with a full emergencyRooms payload (Fase 14)', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['pages'][] = [
+        'id' => 'page-emergency-cover',
+        'kind' => 'emergency-cover',
+        'sectionId' => 'emergency-cover',
+        'pageNumber' => 4,
+        'title' => 'INFORME DE ALUMBRADO DE EMERGENCIA',
+        'subtitle' => 'Proyecto Demo',
+        'assetIds' => [],
+        'notes' => ['Se evaluó 1 ambiente de emergencia contra RNE A.130 y EN 1838, nunca fusionadas.'],
+    ];
+    $payload['document']['pages'][] = [
+        'id' => 'page-emergency-compliance-table',
+        'kind' => 'emergency-compliance-table',
+        'sectionId' => 'emergency-compliance-table',
+        'pageNumber' => 5,
+        'title' => 'Cumplimiento normativo — alumbrado de emergencia',
+        'subtitle' => null,
+        'assetIds' => [],
+        'notes' => [],
+        'emergencyRooms' => [
+            [
+                'roomId' => 'route-1',
+                'roomName' => 'Pasillo principal',
+                'roomType' => 'evacuation-route',
+                'levelId' => 'scene-1',
+                'levelName' => 'Piso 1',
+                'minLux' => 5.0,
+                'criticalPoint' => ['x' => 2.5, 'y' => 1.0],
+                'evaluations' => [
+                    [
+                        'standard' => 'rne_a130',
+                        'source' => 'RNE A.130 (D.S. N°017-2012-VIVIENDA), Art. 40',
+                        'mandatory' => true,
+                        'metric' => 'illuminance',
+                        'requiredLux' => 10,
+                        'calculatedLux' => 5.0,
+                        'status' => 'fail',
+                    ],
+                    [
+                        'standard' => 'en_1838',
+                        'source' => 'EN 1838:2013 (referencia internacional, sin adopción legal en Perú)',
+                        'mandatory' => false,
+                        'metric' => 'illuminance',
+                        'requiredLux' => 1,
+                        'calculatedLux' => 5.0,
+                        'status' => 'pass',
+                    ],
+                ],
+            ],
+        ],
+    ];
+    $payload['document']['toc'][] = [
+        'sectionId' => 'emergency-cover',
+        'title' => 'INFORME DE ALUMBRADO DE EMERGENCIA',
+        'subtitle' => null,
+        'level' => 0,
+        'pageNumber' => 4,
+    ];
+    $payload['document']['toc'][] = [
+        'sectionId' => 'emergency-compliance-table',
+        'title' => 'Cumplimiento normativo — alumbrado de emergencia',
+        'subtitle' => null,
+        'level' => 0,
+        'pageNumber' => 5,
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+});
+
 test('formal dialux pdf tables use scoped column width rules', function () {
     $css = file_get_contents(resource_path('css/style-exportado-dialux.css'));
 
@@ -1881,4 +2042,107 @@ test('formal dialux blade renders the glossary grouped by letter and sliced by r
     $view->assertSee('Definicion de UGR.');
     // Encabezados de letra de agrupación.
     $view->assertSeeInOrder(['P', 'Potencia', 'U', 'UGR']);
+});
+
+test('formal dialux blade renders the engine-calculated UGR reference table with its disclaimer (Fase 15, Parte B)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-08-04T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-08-04'],
+            'metadata' => [],
+            'luminaires' => [
+                [
+                    'id' => 'fixture-3',
+                    'name' => 'Downlight con fotometria real',
+                    'model' => 'recessed',
+                    'brand' => 'Regiolux',
+                    'articleNumber' => 'DALL-21W',
+                    'lumens' => 2014,
+                    'powerWatts' => 21,
+                    'efficiency' => 95.9,
+                    'quantity' => 1,
+                    'reportData' => [
+                        'ugrTableComputed' => [
+                            'provenance' => 'engine-calculated',
+                            'method' => 'Motor propio (evaluateUGR, Fase 9) sobre salas de referencia normalizadas',
+                            'disclaimer' => 'Cálculo propio con el motor de esta plataforma — NO es una reproducción certificada de la tabla CIE 117 publicada por el fabricante.',
+                            'shr' => 0.25,
+                            'reflectances' => ['ceiling' => 70, 'wall' => 50, 'floor' => 20],
+                            'entries' => [
+                                ['roomLabel' => '4×4 m (2H×2H)', 'ugrCrosswise' => 19.4, 'ugrEndwise' => 18.1],
+                                ['roomLabel' => '24×16 m (12H×8H)', 'ugrCrosswise' => 21.7, 'ugrEndwise' => 20.9],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-product-sheet-fixture-3',
+                'kind' => 'product-sheet',
+                'sectionId' => 'product-sheet:fixture-3',
+                'pageNumber' => 1,
+                'title' => 'Ficha de producto: Downlight con fotometria real',
+                'subtitle' => 'recessed',
+                'assetIds' => [],
+                'assets' => [],
+                'notes' => [],
+                'ambientDetail' => null,
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('4×4 m (2H×2H)');
+    $view->assertSee('24×16 m (12H×8H)');
+    $view->assertSee('NO es una reproducción certificada');
+    $view->assertDontSee('Información UGR no disponible');
+});
+
+test('accepts document.luminaires.*.reportData.ugrTableComputed (Fase 15, Parte B)', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['luminaires'] = [
+        [
+            'id' => 'fixture-3',
+            'name' => 'Downlight con fotometria real',
+            'model' => 'recessed',
+            'brand' => 'Regiolux',
+            'articleNumber' => 'DALL-21W',
+            'fixtureShape' => null,
+            'shape' => null,
+            'lumens' => 2014,
+            'powerWatts' => 21,
+            'efficiency' => 95.9,
+            'roomName' => null,
+            'ambientName' => null,
+            'quantity' => 1,
+            'reportData' => [
+                'ugrTableComputed' => [
+                    'provenance' => 'engine-calculated',
+                    'method' => 'Motor propio (evaluateUGR, Fase 9) sobre salas de referencia normalizadas',
+                    'disclaimer' => 'Cálculo propio — no es una reproducción certificada de la tabla CIE 117.',
+                    'shr' => 0.25,
+                    'reflectances' => ['ceiling' => 70, 'wall' => 50, 'floor' => 20],
+                    'entries' => [
+                        ['roomLabel' => '4×4 m (2H×2H)', 'ugrCrosswise' => 19.4, 'ugrEndwise' => 18.1],
+                    ],
+                ],
+            ],
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
 });

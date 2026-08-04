@@ -1,4 +1,5 @@
 import type { SceneComparisonEntry } from '@/pages/dialux/domain/calculation/compareLightingScenes';
+import type { EmergencyRequirementEvaluation } from '@/pages/dialux/domain/calculation/emergencyCompliance';
 import type { CalculationWarning } from '@/pages/dialux/domain/calculation/types';
 import type {
     Canopy,
@@ -291,6 +292,32 @@ export interface DialuxExportDocument {
     assets: DialuxExportAsset[];
 }
 
+/** Una fila de la tabla de referencia UGR de producto — Fase 15, Parte B. */
+export interface ProductUgrTableEntry {
+    /** Etiqueta de la sala de referencia, ej. "4×4 m (2H×2H)". */
+    roomLabel: string;
+    ugrCrosswise: number | null;
+    ugrEndwise: number | null;
+}
+
+/**
+ * Tabla de referencia UGR de un producto — Fase 15, Parte B del plan
+ * maestro. `provenance: 'engine-calculated'` es un cálculo PROPIO (motor de
+ * Fase 9, `evaluateUGR`) sobre un subconjunto acotado de salas normalizadas,
+ * NUNCA una reproducción certificada de la tabla CIE 117 publicada por
+ * fabricantes — el `disclaimer` debe mostrarse siempre junto a la tabla.
+ * `provenance: 'manufacturer'` queda reservado para cuando el propio
+ * fabricante provea la tabla (hoy ningún importador la genera).
+ */
+export interface ProductUgrTable {
+    provenance: 'manufacturer' | 'engine-calculated';
+    method: string;
+    disclaimer: string;
+    shr: number;
+    reflectances: { ceiling: number; wall: number; floor: number };
+    entries: ProductUgrTableEntry[];
+}
+
 export interface DialuxLuminaireListItem {
     id: string;
     name: string;
@@ -312,6 +339,7 @@ export interface DialuxLuminaireListItem {
     reportData?: {
         technical_table?: Array<{ label: string; value: string }>;
         warnings?: string[];
+        ugrTableComputed?: ProductUgrTable | null;
     } | null;
     reportAssets?: {
         polar_svg?: string | null;
@@ -429,6 +457,28 @@ export interface DialuxAmbientDetail {
     }>;
 }
 
+/**
+ * Fase 14 ("Emergencia", plan maestro §11). Una fila del informe de
+ * emergencia — un ambiente `roomType: 'evacuation-route'|'antipanic-area'`
+ * con su resultado calculado en `config.emergencyMode: true` y su
+ * evaluación normativa (RNE A.130 / EN 1838, SIEMPRE por separado, ver
+ * `domain/calculation/emergencyCompliance.ts`). El builder ya arma este
+ * objeto completo — igual que `DialuxSceneComparisonSummary` (Fase 13), sin
+ * join en el backend.
+ */
+export interface DialuxEmergencyRoomReport {
+    roomId: string;
+    roomName: string;
+    roomType: 'evacuation-route' | 'antipanic-area';
+    levelId: string;
+    levelName: string;
+    /** `null` si el ambiente no tiene resultado de emergencia calculado todavía. */
+    minLux: number | null;
+    /** Punto más oscuro de la malla (Fase 11, `findResultExtremum`) — el "punto crítico" de esta ruta/área. `null` si no se pudo localizar. */
+    criticalPoint: { x: number; y: number } | null;
+    evaluations: EmergencyRequirementEvaluation[];
+}
+
 export type DialuxFormalPageKind =
     | 'cover'
     | 'preliminary-observations'
@@ -452,6 +502,8 @@ export type DialuxFormalPageKind =
     | 'room-calculation-object'
     | 'level-luminaire-list'
     | 'lighting-scene-comparison'
+    | 'emergency-cover'
+    | 'emergency-compliance-table'
     | 'glossary'
     | 'placeholder';
 
@@ -493,7 +545,9 @@ export type DialuxFormalSectionId =
     | `room-luminaires:${string}`
     | `room-calculation-object:${string}`
     | `level-luminaire-list:${string}`
-    | 'cad-overview-luminaires';
+    | 'cad-overview-luminaires'
+    | 'emergency-cover'
+    | 'emergency-compliance-table';
 
 export interface DialuxTocEntry {
     sectionId: DialuxFormalSectionId;
@@ -527,6 +581,8 @@ export interface DialuxDocumentPage {
     rowRangeEnd?: number | null;
     /** Fase 13: datos completos de UNA comparación de escenas (`kind: 'lighting-scene-comparison'`). El builder ya tiene el objeto a mano — sin join en el backend. */
     sceneComparison?: DialuxSceneComparisonSummary | null;
+    /** Fase 14: filas del informe de emergencia (`kind: 'emergency-compliance-table'`). El builder ya tiene el objeto a mano — sin join en el backend. */
+    emergencyRooms?: DialuxEmergencyRoomReport[] | null;
 }
 
 /**

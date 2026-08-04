@@ -1,0 +1,43 @@
+{
+  "requisitos_minimos_iluminacion": {
+    "1": {
+      "categoria": "MEDIOS DE EVACUACIÓN (RNE A.130, ART. 40)",
+      "areas": [
+        {
+          "area": "Iluminación de emergencia de los medios de evacuación",
+          "Em_lux": 10,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": null,
+          "requisitos": [
+            "Iluminancia mínima 10 lx medida a nivel del suelo, en todos los medios de evacuación",
+            "Autonomía mínima 1½ hora ante un corte del fluido eléctrico",
+            "Transferencia automática de energía en un tiempo máximo de 10 segundos",
+            "El sistema debe diseñarse de forma que la falla de una sola lámpara no deje áreas en completa oscuridad",
+            "Conexiones según CNE Tomo V (Utilización) Art. 7.1.2.1 (artículo específico no verificado en este sistema)",
+            "Alimentado por un circuito que sirve normalmente el alumbrado del área, conectado antes que cualquier interruptor local"
+          ]
+        }
+      ]
+    },
+    "2": {
+      "categoria": "SEÑALIZACIÓN DE EVACUACIÓN (RNE A.130, ARTS. 39 Y 41)",
+      "areas": [
+        {
+          "area": "Nivel de iluminación de las señales de salida",
+          "Em_lux": 50,
+          "UGRL": null,
+          "Uo": null,
+          "Ra": null,
+          "requisitos": [
+            "Iluminancia sobre el propio letrero de señalización (natural o artificial), no sobre la ruta de circulación",
+            "No confundir con el requisito de 10 lx a nivel de piso de los medios de evacuación (Art. 40)",
+            "Señalización según NTP 399.010-1",
+            "Señal \"NO USAR EN CASOS DE EMERGENCIA\" en ascensores",
+            "Señales luminosas sobre el dintel de las salidas en establecimientos con concurrencia de público (Art. 41)"
+          ]
+        }
+      ]
+    }
+  }
+}

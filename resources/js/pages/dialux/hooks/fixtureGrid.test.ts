@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { buildFixtureGridObjects, suggestFixtureGridSize } from './fixtureGrid';
+import { buildFixtureGridObjects, estimatePhotometricFixtureQuantity, suggestFixtureGridSize } from './fixtureGrid';
+
+describe('estimatePhotometricFixtureQuantity', () => {
+    it('ajusta la recomendación con el resultado punto-a-punto', () => {
+        expect(estimatePhotometricFixtureQuantity(2, 76, 200, 1.5)).toEqual({
+            exact: 200 / 38,
+            rounded: 6,
+        });
+    });
+
+    it('nunca recomienda menos que el método de lúmenes', () => {
+        expect(estimatePhotometricFixtureQuantity(4, 427, 200, 1.5)).toEqual({
+            exact: 800 / 427,
+            rounded: 2,
+        });
+    });
+});
 
 describe('suggestFixtureGridSize', () => {
     it('grows columns first when that keeps the grid closer to a square room', () => {
@@ -13,14 +29,27 @@ describe('suggestFixtureGridSize', () => {
         expect(suggestFixtureGridSize(2, 2, 8, 4)).toEqual({ rows: 2, columns: 4 });
     });
 
-    it('leaves the grid untouched when it already meets the requirement', () => {
-        expect(suggestFixtureGridSize(3, 3, 6, 1)).toEqual({ rows: 3, columns: 3 });
+    it('reduces an oversized grid to the exact required quantity', () => {
+        expect(suggestFixtureGridSize(2, 2, 2, 1)).toEqual({ rows: 1, columns: 2 });
     });
 
     it('rounds and clamps non-integer or zero inputs before growing', () => {
-        // rows=0 -> clamp a 1, columns=1.6 -> round a 2; crece filas para
-        // corregir la forma alargada (1x2) hacia el aspectRatio cuadrado.
-        expect(suggestFixtureGridSize(0, 1.6, 5, 1)).toEqual({ rows: 3, columns: 2 });
+        expect(suggestFixtureGridSize(0, 1.6, 5, 1)).toEqual({ rows: 1, columns: 5 });
+    });
+
+    it('conserva la fotometría LDT y las dimensiones al regenerar la grilla', () => {
+        const photometricWeb = {
+            c_angles: [0, 90], gamma_angles: [0, 45], candela: [[100, 200], [100, 200]],
+            reference_lumens: 2580, provenance: 'manufacturer' as const, symmetry: 1,
+        };
+        const dimensions = { length: 0.2, width: 0.2, height: 0.104 };
+        const fixtures = buildFixtureGridObjects({
+            roomId: 'room-a', rows: 1, columns: 2,
+            fixtureTemplate: { name: 'FLIQ', lumens: 2580, photometricWeb, dimensions },
+        }, [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }], () => 'group-1');
+
+        expect(fixtures.every((fixture) => fixture.photometricWeb === photometricWeb)).toBe(true);
+        expect(fixtures.every((fixture) => fixture.dimensions === dimensions)).toBe(true);
     });
 });
 

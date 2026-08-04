@@ -129,11 +129,9 @@ export function calculateCenteredOffsetOnWall(
 // ─── Sugerencia de tamaño de grilla según normativa ───────────────────────────
 
 /**
- * Sugiere filas/columnas que alcancen `requiredCount` luminarias, partiendo de
- * la grilla actual y creciendo la dimensión que mantenga la forma más cercana
- * a `aspectRatio` (ancho/alto del ambiente) — así 3×2 insuficiente se convierte
- * en 3×3 (o 4×2, según la forma del ambiente) en vez de crecer siempre en el
- * mismo eje.
+ * Sugiere una grilla cuyo producto sea exactamente `requiredCount`. Entre las
+ * parejas de factores posibles elige la que mejor reproduce la proporción
+ * ancho/alto del ambiente. Esto también corrige grillas sobredimensionadas.
  */
 export function suggestFixtureGridSize(
     currentRows: number,
@@ -141,24 +139,52 @@ export function suggestFixtureGridSize(
     requiredCount: number,
     aspectRatio = 1,
 ): { rows: number; columns: number } {
-    let rows = Math.max(1, Math.round(currentRows));
-    let columns = Math.max(1, Math.round(currentColumns));
+    const current = {
+        rows: Math.max(1, Math.round(currentRows)),
+        columns: Math.max(1, Math.round(currentColumns)),
+    };
+    const count = Math.max(1, Math.ceil(requiredCount));
     const ratio = aspectRatio > 0 ? aspectRatio : 1;
-    let guard = 0;
+    const candidates: Array<{ rows: number; columns: number }> = [];
 
-    while (rows * columns < requiredCount && guard < 500) {
-        const diffMoreColumns = Math.abs((columns + 1) / rows - ratio);
-        const diffMoreRows = Math.abs(columns / (rows + 1) - ratio);
-
-        if (diffMoreColumns <= diffMoreRows) {
-            columns += 1;
-        } else {
-            rows += 1;
-        }
-        guard += 1;
+    for (let rows = 1; rows <= Math.sqrt(count); rows += 1) {
+        if (count % rows !== 0) continue;
+        const columns = count / rows;
+        candidates.push({ rows, columns });
+        if (rows !== columns) candidates.push({ rows: columns, columns: rows });
     }
 
-    return { rows, columns };
+    return candidates.reduce((best, candidate) => {
+        // La distancia logarítmica trata de forma simétrica, por ejemplo,
+        // 1×2 y 2×1 cuando el recinto es cuadrado.
+        const shapeError = Math.abs(Math.log((candidate.columns / candidate.rows) / ratio));
+        const bestShapeError = Math.abs(Math.log((best.columns / best.rows) / ratio));
+        if (shapeError !== bestShapeError) return shapeError < bestShapeError ? candidate : best;
+
+        const movement = Math.abs(candidate.rows - current.rows) + Math.abs(candidate.columns - current.columns);
+        const bestMovement = Math.abs(best.rows - current.rows) + Math.abs(best.columns - current.columns);
+        return movement < bestMovement ? candidate : best;
+    });
+}
+
+/**
+ * Estima la cantidad necesaria a partir del resultado punto-a-punto vigente.
+ * La iluminancia es lineal respecto de luminarias idénticas; la nueva grilla
+ * debe recalcularse después porque sus posiciones también afectan Em y Uo.
+ */
+export function estimatePhotometricFixtureQuantity(
+    currentCount: number,
+    currentAverageLux: number,
+    targetLux: number,
+    lumenMethodQuantity: number,
+): { exact: number; rounded: number } {
+    const lumenFallback = Math.max(1, lumenMethodQuantity);
+    if (currentCount <= 0 || currentAverageLux <= 0 || targetLux <= 0) {
+        return { exact: lumenFallback, rounded: Math.ceil(lumenFallback) };
+    }
+
+    const exact = Math.max(lumenFallback, currentCount * targetLux / currentAverageLux);
+    return { exact, rounded: Math.ceil(exact) };
 }
 
 // ─── Generación de fixtures de grilla ────────────────────────────────────────
@@ -183,6 +209,7 @@ export function buildFixtureGridObjects(
     const z       = config.mountingHeight ?? 2.7;
 
     return positions.map((pos, index) => ({
+        ...tmpl,
         name: `${tmpl.name ?? `Luminaria G${config.rows}×${config.columns}`} [${index + 1}]`,
         x: pos.x,
         y: pos.y,
@@ -198,7 +225,7 @@ export function buildFixtureGridObjects(
         productId:     tmpl.productId,
         catalogSymbol: tmpl.catalogSymbol,
         emergencyType: tmpl.emergencyType,
-        roomId:       config.roomId,
+        roomId:       config.roomId ?? undefined,
         gridGroupId:  groupId,
     }));
 }

@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
+import { estimatePhotometricFixtureQuantity } from '@/pages/dialux/hooks/fixtureGrid';
+import { determineCoverage } from '@/pages/dialux/hooks/lightingCalculations';
 import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
 import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/useEditorStore';
 
@@ -97,6 +99,12 @@ const coverageLabels = {
 export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
     return rooms.map(({ room, fixtures, result, sourceRoomName, levelId, levelName, levelIndex }) => {
         const inputs = buildRoomLightingInputs(room, fixtures);
+        const photometricQuantity = estimatePhotometricFixtureQuantity(
+            inputs.fixtureCount,
+            result.avg_lux,
+            inputs.illuminanceLux,
+            inputs.exactQuantity,
+        );
 
         return {
             id: room.id,
@@ -113,8 +121,8 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             fixtureLumens: inputs.fixtureLumens,
             fixtureLumensSource: inputs.detectedFixtureLumens ? 'detected' : 'fallback',
             lumensRequired: inputs.lumensRequired,
-            exactQuantity: inputs.exactQuantity,
-            roundedQuantity: inputs.roundedQuantity,
+            exactQuantity: photometricQuantity.exact,
+            roundedQuantity: photometricQuantity.rounded,
             avgLux: result.avg_lux,
             minLux: result.min_lux,
             maxLux: result.max_lux,
@@ -126,7 +134,10 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             hasNormativeSource: Boolean(
                 room.normativeStandard || room.normativeLabel || room.normativeCategory,
             ),
-            coverage: inputs.coverage,
+            coverage: determineCoverage(
+                photometricQuantity.exact,
+                inputs.fixtureCount || photometricQuantity.rounded,
+            ),
         };
     });
 }

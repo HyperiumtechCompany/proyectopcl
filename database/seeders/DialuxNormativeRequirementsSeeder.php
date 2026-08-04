@@ -20,6 +20,10 @@ class DialuxNormativeRequirementsSeeder extends Seeder
     private const SOURCES = [
         'normativa_luminarias_peru.json' => 'rne_peru',
         'normativa_en1838.json' => 'en_1838',
+        // Fase 14 (plan maestro §11, "Emergencia"): fuente OBLIGATORIA real
+        // de alumbrado de emergencia en Perú — 'rne_peru' (EM.010) no trata
+        // este tema en absoluto (verificado por texto completo del RNE).
+        'normativa_a130.json' => 'rne_a130',
     ];
 
     /**

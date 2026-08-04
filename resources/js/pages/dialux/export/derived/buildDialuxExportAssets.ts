@@ -49,7 +49,15 @@ export async function buildDialuxExportAssets(
     // tabla técnica, CCT/CRI). Muta el snapshot y devuelve los assets visuales
     // por producto que consumen las fichas de producto del documento formal.
     try {
-        assets.push(...(await enrichProducts(snapshot)));
+        const enriched = await enrichProducts(snapshot);
+        assets.push(...enriched.assets);
+        // Fase 15: warnings trazables (productId + causa) cuando un fixture
+        // se queda sin CDL a pesar de agotar catálogo remoto y datos locales
+        // — se anexan a `globalWarnings` (mismo array que ya renderiza
+        // `frontMatter.ts` desde la Fase 13), no solo a la consola.
+        for (const message of enriched.warnings) {
+            snapshot.globalWarnings.push({ code: 'product-asset-fetch-failed', message, objectId: null });
+        }
     } catch (error) {
         console.warn('[DIAlux] No se pudieron enriquecer los productos:', error);
     }

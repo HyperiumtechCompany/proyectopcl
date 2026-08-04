@@ -1081,10 +1081,14 @@ export const rnePeruRegulations: RawNormativeBranch[] = [
     },
 ];
 
-// ─── EN 1838:2019 — Alumbrado de emergencia ─────────────────────────────────
+// ─── EN 1838:2013 — Alumbrado de emergencia ─────────────────────────────────
 // Dataset estático de respaldo (fallback offline); la fuente única de verdad
 // es la BD (dialux_normative_requirements, standard='en_1838'), cargada en
 // runtime vía ensureStandardDataLoaded('en_1838') — ver normativeRemoteData.ts.
+// Fase 14 (plan maestro §11): edición corregida de "2019" (inexistente) a
+// "2013" — ver EN_1838_DISCLAIMER en normativeEngine.ts para el detalle.
+// Esta norma NO tiene adopción legal en Perú — ver a130Regulations abajo
+// para la fuente obligatoria peruana.
 export const en1838Regulations: RawNormativeBranch[] = [
     {
         title: 'Rutas de evacuación',
@@ -1143,6 +1147,49 @@ export const en1838Regulations: RawNormativeBranch[] = [
                 Uo: 0.1,
                 Ra: 40,
                 requisitos_especificos: 'El mayor entre 10% del nivel normal de la tarea o 15 lx; sin demora — disponible de forma instantánea',
+            },
+        ],
+    },
+];
+
+// ─── RNE A.130 (D.S. N°017-2012-VIVIENDA), Arts. 39-41 — Alumbrado de
+// emergencia en Perú ─────────────────────────────────────────────────────────
+// Fase 14 (plan maestro §11): fuente OBLIGATORIA real para alumbrado de
+// emergencia en proyectos peruanos — verificada contra el texto completo del
+// documento oficial (no un resumen de buscador). RNE EM.010 (rnePeruRegulations,
+// arriba en este archivo) NO contiene ningún artículo de emergencia — no
+// citarla para este dominio. A.130 no define áreas antipánico ni relación de
+// uniformidad; esos conceptos solo existen en EN 1838 (en1838Regulations,
+// arriba), ofrecido como referencia complementaria, nunca fusionado con estos
+// valores. Dataset estático de respaldo (fallback offline); la fuente única de
+// verdad es la BD (dialux_normative_requirements, standard='rne_a130'),
+// cargada en runtime vía ensureStandardDataLoaded('rne_a130').
+export const a130Regulations: RawNormativeBranch[] = [
+    {
+        title: 'Medios de evacuación (Art. 40)',
+        subsections: [
+            {
+                title: 'Iluminación de emergencia de los medios de evacuación',
+                label: 'Medios de evacuación',
+                iluminancia_lux: 10,
+                UGR: null,
+                Uo: null,
+                Ra: null,
+                requisitos_especificos: 'Medida a nivel del suelo; autonomía mínima 1½ hora ante corte de fluido eléctrico; transferencia automática de energía en máximo 10 s; el sistema debe diseñarse para que la falla de una sola lámpara no deje áreas en completa oscuridad; conexión según CNE Tomo V (Utilización) Art. 7.1.2.1 (artículo específico no verificado en este sistema); alimentado por un circuito que sirve normalmente el área, conectado antes que cualquier interruptor local.',
+            },
+        ],
+    },
+    {
+        title: 'Señalización de evacuación (Art. 39)',
+        subsections: [
+            {
+                title: 'Nivel de iluminación de las señales de salida',
+                label: 'Señalización de salida',
+                iluminancia_lux: 50,
+                UGR: null,
+                Uo: null,
+                Ra: null,
+                requisitos_especificos: 'Iluminancia sobre el propio letrero de señalización (natural o artificial), no sobre la ruta de circulación — no confundir con el requisito de 10 lx a nivel de piso del Art. 40. Señalización según NTP 399.010-1; señal "NO USAR EN CASOS DE EMERGENCIA" en ascensores (Art. 39); señales luminosas sobre el dintel de las salidas en establecimientos con concurrencia de público (Art. 41).',
             },
         ],
     },
