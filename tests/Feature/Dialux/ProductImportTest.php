@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\Dialux\DialuxProject;
 use App\Models\LuminaireProduct;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -777,4 +779,76 @@ test('gldf import warns that photometric matrix extraction is not implemented ye
 
     expect(collect($product->report_data['warnings'])
         ->contains(fn ($w) => str_contains($w, 'no se extrae la matriz fotométrica')))->toBeTrue();
+});
+
+test('photometry repair restores legacy ldt data and synchronizes placed fixtures without losing edits', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+    $path = 'dialux/product-catalog/user_'.$user->id.'/legacy.ldt';
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = 'Test Lighting';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'Legacy repaired';
+    $lines[27] = 'LED';
+    $lines[28] = '2000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '20';
+    $lines = array_merge($lines, ['0.51', '0.62', '0.70', '0.78', '0.82', '0.86', '0.90', '0.93', '0.95', '0.97'], ['0'], ['0', '45', '90'], ['500', '250', '0']);
+    Storage::put($path, implode("\n", $lines));
+
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $user->id,
+        'name' => 'Nombre editado',
+        'source_format' => 'ldt',
+        'source_file_path' => $path,
+        'total_lumens' => 1000,
+        'power_watts' => 18,
+        'photometric_web' => [
+            'c_angles' => [0.51],
+            'gamma_angles' => [0, 45, 90],
+            'candela' => [[500, 250, 0]],
+        ],
+    ]);
+    $project = DialuxProject::factory()->for($user)->create([
+        'data' => [
+            'scenes' => [[
+                'fixtures' => [[
+                    'id' => 'fixture-1',
+                    'productId' => $product->id,
+                    'lumens' => 750,
+                    'powerWatts' => 15,
+                    'x' => 1.25,
+                    'z' => 4.67,
+                    'photometricWeb' => $product->photometric_web,
+                ]],
+            ]],
+        ],
+    ]);
+
+    expect(Artisan::call('dialux:repair-photometry', ['--product' => [$product->id]]))->toBe(0);
+
+    $product->refresh();
+    $fixture = $project->refresh()->data['scenes'][0]['fixtures'][0];
+    $imaxRow = collect($product->report_data['technical_table'])->firstWhere('label', 'Imax');
+
+    expect(array_map('floatval', $product->photometric_web['c_angles']))->toBe([0.0])
+        ->and((float) $product->photometric_web['reference_lumens'])->toBe(2000.0)
+        ->and((int) $product->photometric_web['schema_version'])->toBe(2)
+        ->and($product->name)->toBe('Nombre editado')
+        ->and($product->total_lumens)->toBe(1000.0)
+        ->and($product->power_watts)->toBe(18.0)
+        ->and($product->max_candela)->toBe(500.0)
+        ->and($imaxRow['value'])->toBe('500 cd')
+        ->and($product->report_assets['polar_svg'])->toContain('Imax 500 cd')
+        ->and($fixture['lumens'])->toBe(750)
+        ->and($fixture['powerWatts'])->toBe(15)
+        ->and($fixture['x'])->toBe(1.25)
+        ->and($fixture['z'])->toBe(4.67)
+        ->and((float) $fixture['photometricWeb']['c_angles'][0])->toBe(0.0)
+        ->and((float) $fixture['photometricWeb']['reference_lumens'])->toBe(2000.0);
 });

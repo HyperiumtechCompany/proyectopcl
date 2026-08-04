@@ -163,6 +163,8 @@ export interface CalculationConfig {
     maxBounces: number;
     convergenceTolerance: number;
     meshPolicy: { gridSpacingM: number };
+    /** Depreciación por mantenimiento, aplicada al resultado fotométrico final. */
+    maintenanceFactor?: number;
     glare: {
         enabled: boolean;
         /**
@@ -206,6 +208,7 @@ export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     maxBounces: 0,
     convergenceTolerance: 0,
     meshPolicy: { gridSpacingM: GRID_SPACING },
+    maintenanceFactor: 0.8,
     glare: { enabled: true, observerModel: 'legacy' },
 };
 

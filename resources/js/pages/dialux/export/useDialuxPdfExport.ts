@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { useCallback, useState } from 'react';
 import Swal from 'sweetalert2';
-import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { fitCadViewToDrawing } from '@/pages/dialux/hooks/useMlightcadEngine';
 import * as dialuxRoutes from '@/routes/dialux';
@@ -11,6 +10,8 @@ import { captureCompositeViewerBitmap } from './assets/captureCompositeViewerBit
 import { buildDialuxExportAssets } from './derived/buildDialuxExportAssets';
 import { buildDialuxFormalDocument } from './document/buildDialuxFormalDocument';
 import type { DialuxBitmapAsset, DialuxFormalDocument } from './domain/types';
+import { resolveCalculationRunForExport } from './resolveCalculationRunForExport';
+import { resolveSceneComparisonsForExport } from './resolveSceneComparisonsForExport';
 import { buildDialuxExportSnapshot } from './snapshot/buildDialuxExportSnapshot';
 
 export interface UseDialuxPdfExportResult {
@@ -285,22 +286,41 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
         });
 
         try {
-            // ── Step 0: Recalcular TODOS los ambientes con el estado actual
-            // (recintos/luminarias pueden haber cambiado desde el último
-            // "Calcular" manual; el PDF nunca debe mostrar resultados viejos).
-            // Fase 11 (§11: "cada valor visible puede trazarse a una
-            // ejecución, configuración, punto y objeto"): pasa por
-            // `runDirectPreviewEngine` (vía `runProjectLightingCalculation`)
-            // en vez de llamar `calculateLightingResult` ambiente por
-            // ambiente sin ninguna trazabilidad — la `CalculationRun`
-            // resultante (versión, hash, config, warnings) se pasa al
-            // snapshot de export para que el PDF la refleje.
-            updateSwalProgress('Recalculando resultados de iluminación...', 10);
+            // ── Step 0: Asegurar que el resultado esté al día antes de
+            // exportar (el PDF nunca debe mostrar resultados viejos, Fase
+            // 11). Fase 13 (§11: "evitar recálculos en exportadores" +
+            // "invalidar si stale"): `resolveCalculationRunForExport`
+            // VERIFICA con `isCalculationRunStale` si el último
+            // `CalculationRun` guardado (`lastCalculationRun`, poblado por
+            // "Calcular" en `EditorLayout.tsx`) sigue siendo válido para el
+            // proyecto actual — si lo es, lo reusa sin recalcular; si no,
+            // recalcula como antes (garantía de Fase 11 intacta).
             const projectToRecalculate =
                 useEditorStore.getState().project ?? project;
-            const { resultsByRoom: recalculatedResults, run: calculationRun } =
-                await runProjectLightingCalculation(projectToRecalculate);
-            useEditorStore.getState().setResultsByRoom(recalculatedResults);
+            const cachedRun = useEditorStore.getState().lastCalculationRun;
+
+            updateSwalProgress(
+                cachedRun ? 'Verificando si el cálculo sigue vigente...' : 'Recalculando resultados de iluminación...',
+                10,
+            );
+            const { resultsByRoom, calculationRun, reused } = await resolveCalculationRunForExport(
+                projectToRecalculate,
+                cachedRun,
+            );
+            if (reused) {
+                updateSwalProgress('Usando el último cálculo (sin cambios desde entonces)...', 15);
+            } else {
+                useEditorStore.getState().setLastCalculationRun(calculationRun);
+            }
+
+            useEditorStore.getState().setResultsByRoom(resultsByRoom);
+
+            // Anexo comparativo de escenas (Fase 13, §11: "anexos
+            // comparativos") — solo hace trabajo real (corre el motor una
+            // vez por escena adicional) cuando algún nivel tiene 2+
+            // `lightingScenes`; hoy ninguna UI las crea, así que esto es
+            // `[]` (0 llamadas al motor) en todo proyecto real.
+            const sceneComparisons = await resolveSceneComparisonsForExport(projectToRecalculate);
 
             // ── Step 1: Prepare project data
             updateSwalProgress('Preparando datos del proyecto...', 20);
@@ -314,6 +334,7 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                 includeAllScenes: true,
                 resultsByRoom: exportState.resultsByRoom,
                 calculationRun,
+                sceneComparisons,
                 dxfEntities: exportState.dxfEntities,
                 dxfExtents: exportState.dxfExtents,
                 visualConfig: {

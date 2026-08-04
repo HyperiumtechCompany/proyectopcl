@@ -1,3 +1,4 @@
+import type { SceneComparisonEntry } from '@/pages/dialux/domain/calculation/compareLightingScenes';
 import type { CalculationWarning } from '@/pages/dialux/domain/calculation/types';
 import type {
     Canopy,
@@ -129,6 +130,23 @@ export interface DialuxExportSummary {
     averageUniformity: number;
 }
 
+/**
+ * Anexo comparativo de escenas lumínicas (Fase 13, §11: "añadir anexos
+ * comparativos"). Envuelve `SceneComparisonEntry[]` (`compareLightingScenes`,
+ * Fase 10) con los nombres legibles de las dos escenas comparadas — hoy
+ * NINGUNA UI permite crear más de una `lightingScenes` por nivel, así que
+ * `DialuxExportSnapshot.sceneComparisons` es `[]` en todo proyecto real
+ * (plomería lista para cuando esa UI exista, sin costo mientras tanto).
+ */
+export interface DialuxSceneComparisonSummary {
+    id: string;
+    levelId: string;
+    levelName: string;
+    baselineSceneName: string;
+    comparisonSceneName: string;
+    entries: SceneComparisonEntry[];
+}
+
 export interface DialuxExportSnapshot {
     formatVersion: '1.0.0';
     exportedAt: string;
@@ -152,6 +170,8 @@ export interface DialuxExportSnapshot {
      * hubo ninguna o cuando el snapshot no trae `calculationRun`.
      */
     globalWarnings: CalculationWarning[];
+    /** Fase 13: `[]` en todo proyecto sin 2+ `lightingScenes` por nivel — ver `DialuxSceneComparisonSummary`. */
+    sceneComparisons: DialuxSceneComparisonSummary[];
     visualConfig: DialuxExportVisualConfig;
     summary: DialuxExportSummary;
 }
@@ -431,6 +451,7 @@ export type DialuxFormalPageKind =
     | 'room-luminaires'
     | 'room-calculation-object'
     | 'level-luminaire-list'
+    | 'lighting-scene-comparison'
     | 'glossary'
     | 'placeholder';
 
@@ -504,6 +525,8 @@ export interface DialuxDocumentPage {
      */
     rowRangeStart?: number | null;
     rowRangeEnd?: number | null;
+    /** Fase 13: datos completos de UNA comparación de escenas (`kind: 'lighting-scene-comparison'`). El builder ya tiene el objeto a mano — sin join en el backend. */
+    sceneComparison?: DialuxSceneComparisonSummary | null;
 }
 
 /**

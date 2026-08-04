@@ -1346,6 +1346,311 @@ test('formal dialux blade renders calculated local and calculation object values
         ->and(substr_count($planeRows[3], '<td'))->toBe(5);
 });
 
+test('formal dialux blade renders engine version, calculation date and warnings for an ambient (Fase 13)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-04-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => [],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-summary-room-1::ambient-1',
+                'kind' => 'ambient-summary',
+                'sectionId' => 'ambient-summary:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resumen',
+                'subtitle' => 'GUARDIANIA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'GUARDIANIA',
+                    'activity' => null,
+                    'area' => 3.28,
+                    'targetLux' => 500,
+                    'avgLux' => 540.25,
+                    'minLux' => 332.1,
+                    'maxLux' => 688.9,
+                    'uniformity' => 0.615,
+                    'g2' => 0.482,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18.2,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 1,
+                    'totalPowerWatts' => 40,
+                    'lumensRequired' => 2072.9,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 0.52,
+                    'roundedQuantity' => 1,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                    'provenance' => [
+                        'engine' => 'direct-preview',
+                        'engineVersion' => 'direct-preview-v1',
+                        'calculatedAt' => '2026-04-21T09:55:00.000Z',
+                        'status' => 'calculated',
+                    ],
+                    'warnings' => [
+                        ['code' => 'object-without-luminaires', 'message' => 'Mensaje de advertencia de prueba', 'objectId' => 'room-1::ambient-1'],
+                    ],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('Motor de c&aacute;lculo', false);
+    $view->assertSee('direct-preview-v1');
+    $view->assertSee('2026-04-21T09:55:00.000Z');
+    $view->assertSee('Advertencias del c&aacute;lculo', false);
+    $view->assertSee('Mensaje de advertencia de prueba');
+});
+
+test('formal dialux blade renders no provenance/warnings block when the ambient has none (Fase 13, default no disruptivo)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-04-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => [],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-summary-room-1::ambient-1',
+                'kind' => 'ambient-summary',
+                'sectionId' => 'ambient-summary:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resumen',
+                'subtitle' => 'GUARDIANIA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'GUARDIANIA',
+                    'activity' => null,
+                    'area' => 3.28,
+                    'targetLux' => 500,
+                    'avgLux' => 540.25,
+                    'minLux' => 332.1,
+                    'maxLux' => 688.9,
+                    'uniformity' => 0.615,
+                    'g2' => 0.482,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18.2,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 1,
+                    'totalPowerWatts' => 40,
+                    'lumensRequired' => 2072.9,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 0.52,
+                    'roundedQuantity' => 1,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertDontSee('Motor de c&aacute;lculo', false);
+    $view->assertDontSee('Advertencias del c&aacute;lculo', false);
+});
+
+test('accepts ambientDetails.provenance.snapshotHash/configSummary and ambientDetails.warnings (Fase 13, gap de la Fase 11)', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['ambientDetails'] = [
+        [
+            'ambientId' => 'room-1::ambient-1',
+            'roomId' => 'room-1',
+            'roomName' => 'Modulo XIV',
+            'ambientName' => 'GUARDIANIA',
+            'activity' => null,
+            'area' => 3.28,
+            'targetLux' => 500,
+            'avgLux' => 540.25,
+            'minLux' => 332.1,
+            'maxLux' => 688.9,
+            'uniformity' => 0.615,
+            'uniformityTarget' => 0.4,
+            'ugr' => 18.2,
+            'ugrLimit' => 22,
+            'fixtureCount' => 1,
+            'totalPowerWatts' => 40,
+            'lumensRequired' => 2072.9,
+            'fixtureLumens' => 4000,
+            'exactQuantity' => 0.52,
+            'roundedQuantity' => 1,
+            'coverage' => 'Optimal',
+            'complianceLabel' => 'Cumple',
+            'planAssetId' => null,
+            'isoluxAssetId' => null,
+            'luminaires' => [],
+            'provenance' => [
+                'engine' => 'direct-preview',
+                'engineVersion' => 'direct-preview-v1',
+                'calculatedAt' => now()->toIso8601String(),
+                'status' => 'calculated',
+                'snapshotHash' => str_repeat('a', 64),
+                'configSummary' => 'oclusión: no · interreflexión: none · UGR: legacy',
+            ],
+            'warnings' => [
+                ['code' => 'object-without-luminaires', 'message' => 'Mensaje de advertencia de prueba', 'objectId' => 'room-1::ambient-1'],
+            ],
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+});
+
+test('formal dialux blade renders the lighting scene comparison annex (Fase 13, dormido hoy)', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => ['title' => 'Proyecto Demo', 'subtitle' => 'Planta Baja'],
+            'footer' => ['left' => 'DIAlux Web', 'right' => '2026-04-21'],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => [],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-lighting-scene-comparison-nivel-1::modo-nocturno',
+                'kind' => 'lighting-scene-comparison',
+                'sectionId' => 'technical-appendix',
+                'pageNumber' => 1,
+                'title' => 'Comparación de escenas lumínicas',
+                'subtitle' => 'Piso 1: Todo encendido vs. Modo nocturno',
+                'assets' => [],
+                'notes' => [],
+                'sceneComparison' => [
+                    'id' => 'nivel-1::modo-nocturno',
+                    'levelId' => 'nivel-1',
+                    'levelName' => 'Piso 1',
+                    'baselineSceneName' => 'Todo encendido',
+                    'comparisonSceneName' => 'Modo nocturno',
+                    'entries' => [
+                        [
+                            'objectId' => 'room-1::ambient-1',
+                            'objectName' => 'Oficina',
+                            'levelId' => 'nivel-1',
+                            'avgLuxDelta' => -120.5,
+                            'minLuxDelta' => -80.0,
+                            'maxLuxDelta' => -150.0,
+                            'uniformityDelta' => -0.05,
+                            'ugrDelta' => -2.1,
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    $view->assertSee('Todo encendido vs.', false);
+    $view->assertSee('Modo nocturno');
+    $view->assertSee('Oficina');
+    $view->assertSee('-120.5');
+    $view->assertSee('-2.1');
+});
+
+test('accepts a lighting-scene-comparison page with a full sceneComparison payload (Fase 13, anexo dormido)', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = minimalValidFormalDocumentPayload($project->id);
+    $payload['document']['pages'][] = [
+        'id' => 'page-lighting-scene-comparison-nivel-1::modo-nocturno',
+        'kind' => 'lighting-scene-comparison',
+        'sectionId' => 'technical-appendix',
+        'pageNumber' => 4,
+        'title' => 'Comparación de escenas lumínicas',
+        'subtitle' => 'Piso 1: Todo encendido vs. Modo nocturno',
+        'assetIds' => [],
+        'notes' => [],
+        'sceneComparison' => [
+            'id' => 'nivel-1::modo-nocturno',
+            'levelId' => 'nivel-1',
+            'levelName' => 'Piso 1',
+            'baselineSceneName' => 'Todo encendido',
+            'comparisonSceneName' => 'Modo nocturno',
+            'entries' => [
+                [
+                    'objectId' => 'room-1::ambient-1',
+                    'objectName' => 'Oficina',
+                    'levelId' => 'nivel-1',
+                    'avgLuxDelta' => -120.5,
+                    'minLuxDelta' => -80.0,
+                    'maxLuxDelta' => -150.0,
+                    'uniformityDelta' => -0.05,
+                    'ugrDelta' => -2.1,
+                ],
+            ],
+        ],
+    ];
+    $payload['document']['toc'][] = [
+        'sectionId' => 'technical-appendix',
+        'title' => 'Comparación de escenas lumínicas',
+        'subtitle' => null,
+        'level' => 0,
+        'pageNumber' => 4,
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+});
+
 test('formal dialux pdf tables use scoped column width rules', function () {
     $css = file_get_contents(resource_path('css/style-exportado-dialux.css'));
 

@@ -4,12 +4,16 @@
 
 import { Link } from '@inertiajs/react';
 import { ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
+import { hashCalculationSnapshot } from '@/pages/dialux/domain/calculation/hashSnapshot';
+import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
+import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import { LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import { useDialuxCalculationWorker } from '@/pages/dialux/hooks/useDialuxCalculationWorker';
 import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux/hooks/useEditorStore';
@@ -73,11 +77,13 @@ export const EditorLayout = memo(function EditorLayout() {
     const selectedId = useEditorStore((s) => s.ui.selectedId);
     const currentResult = useEditorStore((s) => s.result);
     const resultsByRoom = useEditorStore((s) => s.resultsByRoom);
+    const lastCalculationRun = useEditorStore((s) => s.lastCalculationRun);
     const setProject = useEditorStore((s) => s.setProject);
     const setActiveScene = useEditorStore((s) => s.setActiveScene);
     const setCalculating = useEditorStore((s) => s.setCalculating);
     const setResultsByRoom = useEditorStore((s) => s.setResultsByRoom);
     const setResult = useEditorStore((s) => s.setResult);
+    const setLastCalculationRun = useEditorStore((s) => s.setLastCalculationRun);
     const setTool = useEditorStore((s) => s.setTool);
     const setSelectedId = useEditorStore((s) => s.setSelectedId);
     const selectedFixtureIds = useEditorStore((s) => s.ui.selectedFixtureIds);
@@ -420,32 +426,51 @@ export const EditorLayout = memo(function EditorLayout() {
                 ambients: deriveSceneAmbientSpaces(scene),
             }));
 
-            type MinimalCalculationRun = {
-                surfaces: Array<{ objectId: string; result: RoomResultSummary['result'] }>;
-                status: string;
-            };
+            const snapshot = buildCalculationSnapshot(project);
 
-            let run: MinimalCalculationRun;
+            let run: CalculationRun;
             try {
                 // Cálculo real en un Web Worker (no bloquea la UI mientras corre) —
                 // el worker intenta acelerar el término directo con el kernel
                 // WASM de `dialux-core`; si no está disponible, usa el motor TS
                 // puro, con el mismo resultado.
-                run = await calcWorker.calculate(buildCalculationSnapshot(project));
+                run = await calcWorker.calculate(snapshot);
             } catch (workerError) {
                 console.warn(
                     '[Dialux] El worker de cálculo falló, se usa el motor síncrono de respaldo en el hilo principal.',
                     workerError,
                 );
-                const fallbackSurfaces: MinimalCalculationRun['surfaces'] = [];
-                for (const { ambients } of ambientsByScene) {
+                const fallbackStartedAt = new Date().toISOString();
+                const fallbackSurfaces: CalculationRun['surfaces'] = [];
+                for (const { scene, ambients } of ambientsByScene) {
                     for (const ambient of ambients) {
-                        fallbackSurfaces.push({ objectId: ambient.room.id, result: await engine.calculate(ambient.room, ambient.fixtures) });
+                        fallbackSurfaces.push({
+                            objectId: ambient.room.id,
+                            objectName: ambient.name,
+                            levelId: scene.id,
+                            result: await engine.calculate(ambient.room, ambient.fixtures),
+                        });
                     }
                 }
-                run = { surfaces: fallbackSurfaces, status: 'completed' };
+                // Fase 13 (§11: "invalidar si stale"): incluso el camino de
+                // respaldo produce un `CalculationRun` real (con hash), para
+                // que `lastCalculationRun`/`isCalculationRunStale` funcionen
+                // igual sin importar qué camino haya calculado el resultado.
+                run = {
+                    id: `run-fallback-${Date.now()}`,
+                    engineVersion: LIGHTING_ENGINE_VERSION,
+                    snapshotHash: await hashCalculationSnapshot(snapshot),
+                    status: 'completed',
+                    config: DEFAULT_DIRECT_PREVIEW_CONFIG,
+                    startedAt: fallbackStartedAt,
+                    completedAt: new Date().toISOString(),
+                    durationMs: 0,
+                    warnings: [],
+                    surfaces: fallbackSurfaces,
+                };
             }
 
+            setLastCalculationRun(run);
             const resultByObjectId = new Map(run.surfaces.map((surface) => [surface.objectId, surface.result]));
 
             const calculations: RoomResultSummary[] = ambientsByScene.flatMap(({ scene, ambients }) =>
@@ -462,7 +487,14 @@ export const EditorLayout = memo(function EditorLayout() {
                     })),
             );
 
-            setRoomResults(calculations);
+            // Una tabla con muchos ambientes es trabajo visual no urgente;
+            // el canvas y los controles mantienen prioridad interactiva.
+            startTransition(() => {
+                setRoomResults(calculations);
+                if (run.status !== 'cancelled') {
+                    setResultsModalOpen(calculations.length > 0);
+                }
+            });
             setResultsByRoom(
                 Object.fromEntries(
                     calculations.map(({ room, result }) => [room.id, result]),
@@ -470,10 +502,6 @@ export const EditorLayout = memo(function EditorLayout() {
             );
             // Un cálculo cancelado actualiza los resultados parciales sin
             // abrir el modal — el usuario pidió detenerlo, no verlo de golpe.
-            if (run.status !== 'cancelled') {
-                setResultsModalOpen(calculations.length > 0);
-            }
-
             const selectedRoomResult =
                 calculations.find(({ room }) => room.id === selectedId) ??
                 calculations.find(({ room }) =>
@@ -492,9 +520,34 @@ export const EditorLayout = memo(function EditorLayout() {
         project,
         selectedId,
         setCalculating,
+        setLastCalculationRun,
         setResult,
         setResultsByRoom,
     ]);
+    // Fase 13 (§11: "invalidar... si el resultado está stale"): compara el
+    // hash del proyecto actual contra `lastCalculationRun.snapshotHash` —
+    // por comparación, no por evento empujado en cada mutación
+    // (`domain/calculation/staleness.ts`, ADR 0002 punto 6). Sin un run
+    // guardado (nunca se calculó) no hay nada que comparar: no se marca
+    // como desactualizado, se marca como "sin calcular" (ya lo indica
+    // `hasRooms`/`resultsByRoom` vacío en la UI existente).
+    const [isResultsStale, setIsResultsStale] = useState(false);
+    useEffect(() => {
+        if (!project || !lastCalculationRun) {
+            setIsResultsStale(false);
+            return;
+        }
+        let cancelled = false;
+        isCalculationRunStale(lastCalculationRun, project).then((stale) => {
+            if (!cancelled) {
+                setIsResultsStale(stale);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [project, lastCalculationRun]);
+
     /**buttons esportados */
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showDxfExportDialog, setShowDxfExportDialog] = useState(false);
@@ -958,6 +1011,16 @@ export const EditorLayout = memo(function EditorLayout() {
                         </button>
                     )}
 
+                    {!isCalculating && isResultsStale && (
+                        <span
+                            id="dialux-badge-resultados-desactualizados"
+                            title="El proyecto cambió desde el último cálculo — vuelve a calcular para ver resultados al día."
+                            className="flex items-center gap-1 rounded bg-amber-900/40 px-2 py-1 text-[11px] text-amber-300"
+                        >
+                            Resultados desactualizados
+                        </span>
+                    )}
+
                     <button
                         id="dialux-btn-calculo-ct"
                         onClick={() => setShowWireCalc(true)}
@@ -1062,7 +1125,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-                        <ResultsPanel rooms={roomResults} />
+                        <ResultsPanel rooms={roomResults} calculationRun={lastCalculationRun} />
                     </div>
                 </DialogContent>
             </Dialog>

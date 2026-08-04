@@ -15,6 +15,7 @@ import type {
     DialuxAmbientMetrics,
     DialuxExportSnapshot,
     DialuxExportVisualConfig,
+    DialuxSceneComparisonSummary,
     RequirementEvaluation,
 } from '../domain/types';
 
@@ -41,14 +42,9 @@ export interface DialuxExportSnapshotInput {
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
     visualConfig: DialuxExportVisualConfig;
-    /**
-     * Ejecución completa (Fase 11) que produjo `resultsByRoom` — típicamente
-     * de `runProjectLightingCalculation(project, config)`. Opcional: sin
-     * ella (callers legacy, tests), `provenance`/`warnings` quedan como
-     * antes de esta fase (versión hardcodeada, sin hash/config/warnings) —
-     * ningún comportamiento existente cambia por omitirla.
-     */
+    /** Ejecución (Fase 11) que produjo `resultsByRoom`. Opcional — sin ella, `provenance`/`warnings` quedan como antes de esa fase. */
     calculationRun?: CalculationRun;
+    /** Fase 13 — ver `DialuxSceneComparisonSummary`. */ sceneComparisons?: DialuxSceneComparisonSummary[];
 }
 
 function sortScenesByFloor(project: Project): Project['scenes'] {
@@ -274,7 +270,17 @@ export function buildDialuxExportSnapshot(
         deriveSceneAmbientSpaces(currentScene).map((ambient) => {
             const result =
                 resultsByRoom[ambient.room.id] ??
-                calculateLightingResult(ambient.room, ambient.fixtures);
+                calculateLightingResult(
+                    ambient.room,
+                    ambient.fixtures,
+                    undefined,
+                    [],
+                    null,
+                    null,
+                    null,
+                    undefined,
+                    0.8,
+                );
             resultsByRoom[ambient.room.id] = result;
             const exportAmbient: DialuxAmbientExport = {
                 id: ambient.id,
@@ -352,6 +358,7 @@ export function buildDialuxExportSnapshot(
         ambients,
         resultsByRoom,
         globalWarnings,
+        sceneComparisons: input.sceneComparisons ?? [],
         visualConfig: input.visualConfig,
         summary: {
             roomCount: reportRooms.length,

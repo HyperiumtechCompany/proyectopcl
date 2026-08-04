@@ -1054,6 +1054,28 @@ table th.number {
     line-height: 1.45;
 }
 
+/* Fase 13 (§11: "mostrar engineVersion, modo y warnings") */
+.ambient-provenance {
+    width: 96%;
+    margin: 2mm auto 0;
+    color: #94a3b8;
+    font-size: 8px;
+    line-height: 1.45;
+}
+
+.ambient-warnings {
+    width: 96%;
+    margin: 2mm auto 0;
+    color: #b45309;
+    font-size: 8px;
+    line-height: 1.45;
+}
+
+.ambient-warnings ul {
+    margin: 1mm 0 0;
+    padding-left: 4mm;
+}
+
 .situation-product-layout {
     width: 96%;
     margin: 0 auto 5mm;

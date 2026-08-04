@@ -304,6 +304,7 @@ export async function runDirectPreviewEngine(
             iterativeConfig,
             glareConfig,
             runOptions?.directIlluminanceBatch,
+            config.maintenanceFactor ?? 0.8,
         );
 
         if (iterativeConfig && result.interreflection_converged === false) {

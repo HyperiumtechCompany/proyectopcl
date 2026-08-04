@@ -19,6 +19,79 @@ use Throwable;
 class ProductImportService
 {
     /**
+     * Reprocesa el archivo original de un producto sin alterar sus campos
+     * editables. Se usa para migrar fotometrías legacy ya colocadas.
+     *
+     * @return array{product: LuminaireProduct, warnings: string[]}
+     */
+    public function repairStoredProduct(LuminaireProduct $product, bool $persist = true): array
+    {
+        $storagePath = $product->source_file_path;
+        $extension = strtolower((string) $product->source_format);
+        if (! is_string($storagePath) || $storagePath === '' || ! Storage::exists($storagePath)) {
+            throw new \RuntimeException("No existe el archivo fotométrico original de {$product->name}.");
+        }
+
+        $warnings = [];
+        $content = file_get_contents(Storage::path($storagePath));
+        $parsed = $this->parseWithRust($storagePath, $extension, $warnings) ?? match ($extension) {
+            'ies' => $this->parseIes($content, $warnings),
+            'ldt' => $this->parseLdt($content, $warnings),
+            'gldf' => $this->parseGldf($content, $warnings),
+            default => throw new \RuntimeException("Formato {$extension} no reparable."),
+        };
+
+        $web = $parsed['photometric_web'] ?? null;
+        if (! is_array($web) || empty($web['candela'])) {
+            throw new \RuntimeException("El archivo original de {$product->name} no produjo una matriz fotométrica válida.");
+        }
+
+        $referenceLumens = (float) ($parsed['photometric_summary']['total_lumens'] ?? $parsed['total_lumens'] ?? 0);
+        if ($referenceLumens > 0) {
+            $web['reference_lumens'] = $referenceLumens;
+        }
+        $web['schema_version'] = 2;
+
+        $currentLumens = (float) ($product->total_lumens ?? 0);
+        $candelaScale = $referenceLumens > 0 && $currentLumens > 0
+            ? $currentLumens / $referenceLumens
+            : 1.0;
+
+        $data = array_merge($product->only([
+            'name', 'manufacturer', 'catalog_number', 'article_number', 'description',
+            'total_lumens', 'power_watts', 'cct', 'cri_ra', 'fixture_type',
+            'fixture_shape', 'normative_standard', 'product_image_path', 'brand_logo_path',
+        ]), [
+            'beam_angle_50' => $parsed['beam_angle_50'] ?? $product->beam_angle_50,
+            'beam_angle_10' => $parsed['beam_angle_10'] ?? $product->beam_angle_10,
+            'max_candela' => isset($parsed['max_candela'])
+                ? (float) $parsed['max_candela'] * $candelaScale
+                : $product->max_candela,
+            'photometric_summary' => $parsed['photometric_summary'] ?? $product->photometric_summary,
+            'photometric_web' => $web,
+            'dimensions' => $parsed['dimensions'] ?? $product->dimensions,
+            'luminous_opening' => $parsed['luminous_opening'] ?? $product->luminous_opening,
+            'metadata' => array_merge($product->metadata ?? [], $parsed['metadata'] ?? [], [
+                'photometry_repaired_at' => now()->toIso8601String(),
+            ]),
+            // Se regeneran desde la matriz nueva; conservarlos dejaría el CDL
+            // y la tabla técnica apuntando a la fotometría antigua.
+            'report_data' => null,
+            'report_assets' => null,
+        ]);
+        $data = $this->withReportPayload($data, $warnings);
+
+        if ($persist) {
+            $product->update($data);
+            $product->refresh();
+        } else {
+            $product->forceFill($data);
+        }
+
+        return ['product' => $product, 'warnings' => $warnings];
+    }
+
+    /**
      * Importa un archivo fotométrico y persiste el producto.
      *
      * @return array{product: LuminaireProduct, warnings: string[]}
@@ -262,6 +335,11 @@ class ProductImportService
             $rustPhotometricWeb = $payload['photometric_web'] ?? null;
             if (is_array($rustPhotometricWeb) && ! isset($rustPhotometricWeb['provenance'])) {
                 $rustPhotometricWeb['provenance'] = 'manufacturer';
+            }
+            if (is_array($rustPhotometricWeb) && ! isset($rustPhotometricWeb['reference_lumens'])) {
+                $rustPhotometricWeb['reference_lumens'] = $payload['photometric_summary']['total_lumens']
+                    ?? $payload['total_lumens']
+                    ?? null;
             }
 
             return array_filter([
@@ -903,6 +981,15 @@ class ProductImportService
             ? $data['photometric_web']
             : [];
 
+        $referenceLumens = (float) ($web['reference_lumens'] ?? 0);
+        $currentLumens = (float) ($data['total_lumens'] ?? 0);
+        $candelaScale = $referenceLumens > 0 && $currentLumens > 0
+            ? $currentLumens / $referenceLumens
+            : 1.0;
+        $webForReport = $this->scalePhotometricWeb($web, $candelaScale);
+        $reportedMaxCandela = $this->maxCandelaFromWeb($webForReport)
+            ?? ($data['max_candela'] ?? null);
+
         $technicalRows = [
             ['label' => 'Fabricante', 'value' => $data['manufacturer'] ?? 'Importado'],
             ['label' => 'Producto', 'value' => $data['name'] ?? 'Producto'],
@@ -912,7 +999,7 @@ class ProductImportService
             ['label' => 'Rendimiento', 'value' => $this->formatReportValue($summary['efficiency_lm_w'] ?? $this->computeEfficiency($data), ' lm/W', 1)],
             ['label' => 'CCT', 'value' => $data['cct'] ?? '-'],
             ['label' => 'CRI', 'value' => $this->formatReportValue($data['cri_ra'] ?? null, '', 0)],
-            ['label' => 'Imax', 'value' => $this->formatReportValue($data['max_candela'] ?? null, ' cd', 0)],
+            ['label' => 'Imax', 'value' => $this->formatReportValue($reportedMaxCandela, ' cd', 0)],
             ['label' => 'Haz 50%', 'value' => $this->formatReportValue($data['beam_angle_50'] ?? null, '°', 1)],
             // Al final para no correr los índices de las filas de arriba —
             // Fase 3 del plan maestro: la puerta de salida exige que ninguna
@@ -924,7 +1011,7 @@ class ProductImportService
 
         $polarSvg = is_string($data['report_assets']['polar_svg'] ?? null)
             ? $data['report_assets']['polar_svg']
-            : $this->buildPolarSvg($web, $data['name'] ?? 'Producto');
+            : $this->buildPolarSvg($webForReport, $data['name'] ?? 'Producto');
 
         $data['report_data'] = array_replace_recursive([
             'version' => '1.0',
@@ -945,6 +1032,36 @@ class ProductImportService
         }
 
         return $data;
+    }
+
+    /** @param array<string, mixed> $web */
+    private function scalePhotometricWeb(array $web, float $scale): array
+    {
+        if (abs($scale - 1.0) < 0.000001 || ! is_array($web['candela'] ?? null)) {
+            return $web;
+        }
+
+        $web['candela'] = array_map(
+            fn (mixed $plane): mixed => is_array($plane)
+                ? array_map(fn (mixed $value): float => (float) $value * $scale, $plane)
+                : $plane,
+            $web['candela'],
+        );
+
+        return $web;
+    }
+
+    /** @param array<string, mixed> $web */
+    private function maxCandelaFromWeb(array $web): ?float
+    {
+        $values = [];
+        foreach ($web['candela'] ?? [] as $plane) {
+            if (is_array($plane)) {
+                array_push($values, ...array_map('floatval', $plane));
+            }
+        }
+
+        return $values === [] ? null : max($values);
     }
 
     /**

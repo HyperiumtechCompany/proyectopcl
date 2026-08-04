@@ -60,9 +60,14 @@ export function useDialuxCalculationWorker(): UseDialuxCalculationWorkerResult {
             }
 
             if (response.type === 'result') {
-                pending.resolve(response.run);
+                // No encadenar el render del modal/isolux a la misma tarea que
+                // deserializa las mallas grandes recibidas desde el worker.
+                window.setTimeout(() => pending.resolve(response.run), 0);
             } else {
-                pending.reject(new Error(response.message));
+                window.setTimeout(
+                    () => pending.reject(new Error(response.message)),
+                    0,
+                );
             }
         };
         worker.onerror = (event: ErrorEvent) => {

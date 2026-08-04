@@ -3,10 +3,24 @@ import { buildModuloIProjectFixture } from '@/pages/dialux/export/__fixtures__/m
 import { buildFase0MediumAmbients } from '@/pages/dialux/hooks/__fixtures__/fase0MediumFixture';
 import { buildFase0SmallFixtures, buildFase0SmallRoom } from '@/pages/dialux/hooks/__fixtures__/fase0SmallFixture';
 import { calculateLightingResult, GRID_SPACING, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
-import type { Project, Scene } from '@/pages/dialux/hooks/types';
+import type { Fixture, Project, Room, Scene } from '@/pages/dialux/hooks/types';
 import { buildCalculationSnapshot } from './buildCalculationSnapshot';
 import { runDirectPreviewEngine } from './runDirectPreviewEngine';
 import { DEFAULT_DIRECT_PREVIEW_CONFIG } from './types';
+
+function calculateMaintained(room: Room, fixtures: Fixture[]) {
+    return calculateLightingResult(
+        room,
+        fixtures,
+        undefined,
+        [],
+        null,
+        null,
+        null,
+        undefined,
+        0.8,
+    );
+}
 
 function buildSmallProject(): Project {
     const room = buildFase0SmallRoom();
@@ -40,7 +54,7 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
     it('produce el MISMO avg/min/max/uniformity/ugr que llamar a calculateLightingResult directamente (fixture pequeña)', async () => {
         const room = buildFase0SmallRoom();
         const fixtures = buildFase0SmallFixtures();
-        const direct = calculateLightingResult(room, fixtures);
+        const direct = calculateMaintained(room, fixtures);
 
         const snapshot = buildCalculationSnapshot(buildSmallProject());
         const run = await runDirectPreviewEngine(snapshot);
@@ -56,7 +70,7 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
 
     it('coincide con el golden de Fase 0 para la fixture mediana, ambiente por ambiente', async () => {
         const ambients = buildFase0MediumAmbients();
-        const directResults = ambients.map((a) => calculateLightingResult(a.room, a.fixtures));
+        const directResults = ambients.map((a) => calculateMaintained(a.room, a.fixtures));
 
         // Reconstruye el mismo proyecto como Scene única con 20 recintos.
         const scene: Scene = {
@@ -151,7 +165,7 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
         const snapshot = buildCalculationSnapshot(project);
 
         const run = await runDirectPreviewEngine(snapshot);
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeCloseTo(direct.avg_lux, 9);
         expect(run.warnings).toEqual([]);
@@ -165,7 +179,7 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
         const snapshot = buildCalculationSnapshot(project);
 
         const run = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeGreaterThan(direct.avg_lux);
         expect(run.warnings).toEqual([]);
@@ -174,7 +188,7 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
     it('con interreflection: "first-bounce" pero SIN reflectancias definidas, no hay diferencia y se advierte que falta material', async () => {
         const snapshot = buildCalculationSnapshot(buildSmallProject()); // sin reflectancias en el room
         const run = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeCloseTo(direct.avg_lux, 9);
         expect(run.warnings).toHaveLength(1);
@@ -228,7 +242,7 @@ describe('runDirectPreviewEngine — Fase 8 (interreflexión iterativa)', () => 
             maxBounces: 30,
             convergenceTolerance: 1e-5,
         });
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeCloseTo(direct.avg_lux, 9);
         expect(run.warnings.map((w) => w.code)).toContain('object-without-material-reflectance');
@@ -248,7 +262,7 @@ describe('runDirectPreviewEngine — Fase 8 (interreflexión iterativa)', () => 
             maxBounces: 30,
             convergenceTolerance: 1e-5,
         });
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBe(direct.avg_lux);
         expect(run.surfaces[0]!.result.interreflection_converged).toBe(true);
@@ -260,7 +274,7 @@ describe('runDirectPreviewEngine — Fase 9 (UGR y luminancia profesional)', () 
     it('con glare.observerModel: "legacy" (default), el UGR es idéntico al de antes de esta fase y no expone campos ugr_observer_*', async () => {
         const snapshot = buildCalculationSnapshot(buildSmallProject());
         const run = await runDirectPreviewEngine(snapshot);
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.ugr).toBeCloseTo(direct.ugr, 9);
         expect(run.surfaces[0]!.result.ugr_observer_view_direction_deg).toBeUndefined();

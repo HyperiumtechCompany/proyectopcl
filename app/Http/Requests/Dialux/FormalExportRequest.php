@@ -84,7 +84,7 @@ class FormalExportRequest extends FormRequest
             'document.metadata.*.value' => ['required', 'string', 'max:255'],
             'document.pages' => ['required', 'array', 'min:3', 'max:800'],
             'document.pages.*.id' => ['required', 'string', 'max:160'],
-            'document.pages.*.kind' => ['required', 'string', 'in:cover,preliminary-observations,toc,luminaire-list,product-sheet,terrain-cad,terrain-drawn,terrain-architectural,ambient-list,calculation-object-list,ambient-summary,ambient-results,ambient-detail,ambient-plan,ambient-luminaires,ambient-products,ambient-calculation-object,ambient-useful-plane,room-ambient-list,room-luminaires,room-calculation-object,level-luminaire-list,glossary,placeholder'],
+            'document.pages.*.kind' => ['required', 'string', 'in:cover,preliminary-observations,toc,luminaire-list,product-sheet,terrain-cad,terrain-drawn,terrain-architectural,ambient-list,calculation-object-list,ambient-summary,ambient-results,ambient-detail,ambient-plan,ambient-luminaires,ambient-products,ambient-calculation-object,ambient-useful-plane,room-ambient-list,room-luminaires,room-calculation-object,level-luminaire-list,lighting-scene-comparison,glossary,placeholder'],
             'document.pages.*.sectionId' => ['required', 'string'],
             'document.pages.*.pageNumber' => ['required', 'integer', 'min:1'],
             'document.pages.*.title' => ['required', 'string', 'max:255'],
@@ -99,6 +99,23 @@ class FormalExportRequest extends FormRequest
             'document.pages.*.sceneName' => ['nullable', 'string', 'max:255'],
             'document.pages.*.rowRangeStart' => ['nullable', 'integer', 'min:0'],
             'document.pages.*.rowRangeEnd' => ['nullable', 'integer', 'min:0'],
+            // Fase 13 (§11: "anexos comparativos") — el builder ya arma el
+            // objeto completo en el frontend, sin join en el backend.
+            'document.pages.*.sceneComparison' => ['nullable', 'array'],
+            'document.pages.*.sceneComparison.id' => ['required_with:document.pages.*.sceneComparison', 'string', 'max:160'],
+            'document.pages.*.sceneComparison.levelId' => ['required_with:document.pages.*.sceneComparison', 'string', 'max:160'],
+            'document.pages.*.sceneComparison.levelName' => ['required_with:document.pages.*.sceneComparison', 'string', 'max:255'],
+            'document.pages.*.sceneComparison.baselineSceneName' => ['required_with:document.pages.*.sceneComparison', 'string', 'max:255'],
+            'document.pages.*.sceneComparison.comparisonSceneName' => ['required_with:document.pages.*.sceneComparison', 'string', 'max:255'],
+            'document.pages.*.sceneComparison.entries' => ['array'],
+            'document.pages.*.sceneComparison.entries.*.objectId' => ['required', 'string', 'max:160'],
+            'document.pages.*.sceneComparison.entries.*.objectName' => ['required', 'string', 'max:255'],
+            'document.pages.*.sceneComparison.entries.*.levelId' => ['required', 'string', 'max:160'],
+            'document.pages.*.sceneComparison.entries.*.avgLuxDelta' => ['required', 'numeric'],
+            'document.pages.*.sceneComparison.entries.*.minLuxDelta' => ['required', 'numeric'],
+            'document.pages.*.sceneComparison.entries.*.maxLuxDelta' => ['required', 'numeric'],
+            'document.pages.*.sceneComparison.entries.*.uniformityDelta' => ['required', 'numeric'],
+            'document.pages.*.sceneComparison.entries.*.ugrDelta' => ['required', 'numeric'],
             'document.toc' => ['required', 'array', 'min:2', 'max:900'],
             'document.toc.*.sectionId' => ['required', 'string'],
             'document.toc.*.title' => ['required', 'string', 'max:255'],
@@ -223,6 +240,18 @@ class FormalExportRequest extends FormRequest
             'document.ambientDetails.*.provenance.engineVersion' => ['nullable', 'string', 'max:40'],
             'document.ambientDetails.*.provenance.calculatedAt' => ['nullable', 'string'],
             'document.ambientDetails.*.provenance.status' => ['nullable', 'string', 'in:calculated,stale,imported,not-calculated'],
+            // Fase 13 (§11: "mostrar engineVersion, modo y warnings"): estos
+            // dos campos de `provenance` se agregaron en la Fase 11 pero
+            // nunca se validaron aquí — sin regla, `validated()` los
+            // descartaba antes de llegar al Blade, dejando esa trazabilidad
+            // inaccesible en el request real (nunca lo notó ningún test).
+            'document.ambientDetails.*.provenance.snapshotHash' => ['nullable', 'string', 'max:64'],
+            'document.ambientDetails.*.provenance.configSummary' => ['nullable', 'string', 'max:255'],
+            // Mismo hallazgo: `warnings` por ambiente (Fase 11) tampoco se validaba.
+            'document.ambientDetails.*.warnings' => ['array'],
+            'document.ambientDetails.*.warnings.*.code' => ['required', 'string', 'max:120'],
+            'document.ambientDetails.*.warnings.*.message' => ['required', 'string', 'max:1000'],
+            'document.ambientDetails.*.warnings.*.objectId' => ['nullable', 'string', 'max:160'],
             'document.ambientDetails.*.luminaires' => ['present', 'array', 'max:500'],
             'document.ambientDetails.*.luminaires.*.id' => ['required', 'string', 'max:160'],
             'document.ambientDetails.*.luminaires.*.name' => ['required', 'string', 'max:255'],

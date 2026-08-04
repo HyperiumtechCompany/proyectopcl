@@ -266,6 +266,8 @@ export function calculateLightingResult(
     glareConfig: { observers?: GlareObserver[]; eyeHeight?: number } | null = null,
     /** Kernel WASM por lotes (Fase 12). Default `undefined` — idéntico al motor TS de siempre. Ver `calculatePointByPoint`. */
     directIlluminanceBatch?: DirectIlluminanceBatchKernel,
+    /** Factor de mantenimiento aplicado al resultado completo. Default 1 conserva los callers analíticos/legacy. */
+    maintenanceFactor = 1,
 ): LightingResult {
     const bbox = roomBBox(room);
     const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
@@ -291,8 +293,20 @@ export function calculateLightingResult(
         }
     }
 
-    const values = calculatePointByPoint(grid.points, enriched, obstacles, reflectedIlluminance, directIlluminanceBatch);
-    const activeValues = values.filter(
+    const safeMaintenanceFactor = Math.min(1, Math.max(0, maintenanceFactor));
+    const rawValues = calculatePointByPoint(
+        grid.points,
+        enriched,
+        obstacles,
+        reflectedIlluminance,
+        directIlluminanceBatch,
+    );
+    const values = rawValues.map((value) =>
+        value === null ? null : value * safeMaintenanceFactor,
+    );
+    // UGR se evalúa con la instalación inicial; el mantenimiento deprecia los
+    // lux mantenidos reportados, no la fuente usada para el deslumbramiento.
+    const activeValues = rawValues.filter(
         (value): value is number => value !== null,
     );
     const baseResult = {
@@ -380,9 +394,9 @@ export function calculateLightingResult(
     }
 
     return {
-        avg_lux: avg,
-        min_lux: min,
-        max_lux: max,
+        avg_lux: avg * safeMaintenanceFactor,
+        min_lux: min * safeMaintenanceFactor,
+        max_lux: max * safeMaintenanceFactor,
         uniformity,
         ugr: Math.max(0, ugr),
         ...baseResult,

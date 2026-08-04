@@ -471,7 +471,34 @@
         };
 
         /* ── Tabla de resultados por ambiente ───────────────────────── */
-        $renderAmbientResultsTable = static function (array $detail) use ($formatNumber): string {
+        // Fase 13 (§11: "mostrar engineVersion, modo y warnings"): un solo
+        // punto de cambio cubre tanto `ambient-summary` como
+        // `ambient-results` (ambas llaman a $renderAmbientResultsTable).
+        $renderAmbientProvenance = static function (array $detail): string {
+            $provenance = $detail['provenance'] ?? null;
+            $warnings = $detail['warnings'] ?? [];
+            $html = '';
+
+            if (is_array($provenance) && !empty($provenance['engineVersion'])) {
+                $calculatedAtLabel = !empty($provenance['calculatedAt'])
+                    ? e($provenance['calculatedAt'])
+                    : 'sin fecha registrada';
+                $html .= '<div class="ambient-provenance">Motor de c&aacute;lculo: '
+                    . e($provenance['engineVersion'])
+                    . ' &middot; calculado: ' . $calculatedAtLabel . '</div>';
+            }
+
+            if (is_array($warnings) && count($warnings) > 0) {
+                $items = collect($warnings)
+                    ->map(fn(array $w): string => '<li>' . e($w['message'] ?? '') . '</li>')
+                    ->implode('');
+                $html .= '<div class="ambient-warnings"><strong>Advertencias del c&aacute;lculo:</strong><ul>' . $items . '</ul></div>';
+            }
+
+            return $html;
+        };
+
+        $renderAmbientResultsTable = static function (array $detail) use ($formatNumber, $renderAmbientProvenance): string {
             // Iluminancia de referencia: la media calculada Ē; cae al nominal si no hay cálculo.
             $referenceLux = ($detail['avgLux'] ?? null) ?: ($detail['targetLux'] ?? null);
             $usefulArea = ($detail['usefulArea'] ?? null) ?: ($detail['area'] ?? null);
@@ -623,7 +650,7 @@
             (1)
 Valores calculados desde los resultados almacenados del ambiente.<br>
             (2) Consumo estimado para una jornada referencial de 8 h/d&iacute;a.
-        </div>';
+        </div>' . $renderAmbientProvenance($detail);
         };
 
         /* ── Fichas de producto por ambiente ────────────────────────── */
@@ -1403,6 +1430,48 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                         <div class="terrain-full-page">
                             {!! $renderAsset(collect($pageAssets)->first(), 188, 226, true) !!}
                         </div>
+
+                        {{-- Anexo comparativo de escenas lumínicas (Fase 13, §11: "anexos
+                             comparativos") — dormido hoy: ninguna UI crea 2+ lightingScenes
+                             por nivel, así que este page kind nunca aparece en un informe real
+                             todavía; queda listo para cuando esa UI exista. --}}
+                    @elseif ($page['kind'] === 'lighting-scene-comparison')
+                        @php $sceneComparison = $page['sceneComparison'] ?? null; @endphp
+                        @if (is_array($sceneComparison))
+                            <p class="ambient-provenance" style="margin-bottom:3mm;">
+                                Nivel: {{ $sceneComparison['levelName'] ?? '-' }} &middot;
+                                {{ $sceneComparison['baselineSceneName'] ?? '-' }} vs.
+                                {{ $sceneComparison['comparisonSceneName'] ?? '-' }}
+                            </p>
+                            <table class="luminaire-table" style="table-layout:fixed;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align:left; width:40%;">Objeto</th>
+                                        <th class="number" style="width:15%;">&Delta;E avg (lx)</th>
+                                        <th class="number" style="width:15%;">&Delta;E min (lx)</th>
+                                        <th class="number" style="width:15%;">&Delta;Uo</th>
+                                        <th class="number" style="width:15%;">&Delta;UGR</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($sceneComparison['entries'] ?? [] as $entry)
+                                        <tr>
+                                            <td style="text-align:left;">{{ $entry['objectName'] ?? '-' }}</td>
+                                            <td class="number">{{ $formatNumber($entry['avgLuxDelta'] ?? null, 1) }}</td>
+                                            <td class="number">{{ $formatNumber($entry['minLuxDelta'] ?? null, 1) }}</td>
+                                            <td class="number">{{ $formatNumber($entry['uniformityDelta'] ?? null, 3) }}</td>
+                                            <td class="number">{{ $formatNumber($entry['ugrDelta'] ?? null, 1) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5">Sin objetos en com&uacute;n entre ambas escenas.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        @else
+                            <div class="placeholder-box">No hay datos de comparaci&oacute;n disponibles para esta p&aacute;gina.</div>
+                        @endif
 
                         {{-- Glosario --}}
                     @elseif ($page['kind'] === 'glossary')

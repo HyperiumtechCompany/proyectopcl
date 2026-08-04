@@ -13,6 +13,31 @@ import type { PageSeed } from './pageSeed';
  * maestro) sin cambiar comportamiento.
  */
 
+/**
+ * Fase 13 (§11: "mostrar engineVersion, modo y warnings") — motor + resumen
+ * de configuración desde la procedencia de CUALQUIER ambiente que haya
+ * pasado por un `CalculationRun` real (todos comparten el mismo run en una
+ * misma exportación). `null` cuando ningún ambiente tiene procedencia
+ * (snapshot construido sin `calculationRun`, ej. tests legacy) — no se
+ * inventa un motor genérico.
+ */
+function buildEngineNote(snapshot: DialuxExportSnapshot): string | null {
+    const provenance = snapshot.ambients.find((ambient) => ambient.metrics.provenance.snapshotHash)?.metrics.provenance;
+    if (!provenance) {
+        return null;
+    }
+    const configPart = provenance.configSummary ? ` — ${provenance.configSummary}` : '';
+    return `Motor de calculo: ${provenance.engineVersion}${configPart}.`;
+}
+
+/** Fase 13: advertencias del motor SIN ambiente asociado (`CalculationRun.warnings` con `objectId: null`). */
+function buildGlobalWarningsNote(snapshot: DialuxExportSnapshot): string | null {
+    if (snapshot.globalWarnings.length === 0) {
+        return null;
+    }
+    return `Advertencias del motor de calculo: ${snapshot.globalWarnings.map((warning) => warning.message).join(' ')}`;
+}
+
 function buildPreliminaryNotes(
     snapshot: DialuxExportSnapshot,
     luminaires: DialuxLuminaireListItem[],
@@ -24,6 +49,8 @@ function buildPreliminaryNotes(
     const summaryLine = summaryAsset?.items
         .map((item) => `${item.label}: ${item.value}`)
         .join(' | ');
+    const engineNote = buildEngineNote(snapshot);
+    const globalWarningsNote = buildGlobalWarningsNote(snapshot);
 
     return [
         'Objetivo del estudio: documentar en formato formal el estado del modelado luminico, la jerarquia recinto -> ambiente y los principales indicadores tecnicos del proyecto exportado.',
@@ -39,7 +66,9 @@ function buildPreliminaryNotes(
         summaryLine
             ? `Resumen del proyecto: ${summaryLine}`
             : 'Resumen del proyecto: usar metadata y assets estructurados como fuente unica de lectura para las siguientes secciones del reporte.',
-    ];
+        engineNote,
+        globalWarningsNote,
+    ].filter((note): note is string => note !== null);
 }
 
 export function buildFixedPageSeeds(

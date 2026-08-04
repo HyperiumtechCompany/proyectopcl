@@ -11,6 +11,7 @@ import { buildFixedPageSeeds } from './frontMatter';
 import { selectGlossaryEntries } from './glossaryCatalog';
 import { buildGlossaryPageSeeds } from './glossaryPages';
 import { buildLevelSummaries } from './levelPages';
+import { buildLightingSceneComparisonPageSeeds } from './lightingSceneComparisonPages';
 import type { PageSeed } from './pageSeed';
 import { generateFormalTocFromSeeds, TOC_ROWS_PER_PAGE } from './pagination';
 import { buildLuminaireList, buildLuminaireTotals, buildProductPageSeeds } from './productPages';
@@ -50,6 +51,7 @@ function buildTechnicalPageSeeds(
         ...buildTerrainPageSeeds(assets),
         ...buildProductPageSeeds(luminaires),
         ...buildRoomAmbientPageSeeds(snapshot, ambientDetails, levelSummaries),
+        ...buildLightingSceneComparisonPageSeeds(snapshot.sceneComparisons),
         ...buildGlossaryPageSeeds(glossaryEntries),
     ];
 }
@@ -136,6 +138,7 @@ export function buildDialuxFormalDocument(
             sceneName: seed.sceneName ?? null,
             rowRangeStart: seed.rowRangeStart ?? null,
             rowRangeEnd: seed.rowRangeEnd ?? null,
+            sceneComparison: seed.sceneComparison ?? null,
         });
     });
 

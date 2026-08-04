@@ -121,7 +121,17 @@ describe('runDirectPreviewEngine — runOptions.directIlluminanceBatch', () => {
             // compuesto (`${room.id}::ambient-1}`), no con el `room.id`
             // original — ver `runDirectPreviewEngine.test.ts`.
             const ambient = ambients.find((a) => `${a.room.id}::ambient-1` === surface.objectId) ?? ambients[0]!;
-            const expected = calculateLightingResult(ambient.room, ambient.fixtures, undefined, [], null, null, null, constantKernel);
+            const expected = calculateLightingResult(
+                ambient.room,
+                ambient.fixtures,
+                undefined,
+                [],
+                null,
+                null,
+                null,
+                constantKernel,
+                0.8,
+            );
             expect(surface.result.avg_lux).toBeCloseTo(expected.avg_lux, 6);
         }
     });

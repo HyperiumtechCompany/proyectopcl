@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 
 // Re-export todos los tipos para que los consumidores importen desde un solo lugar
 export type {
@@ -193,6 +194,13 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     isCalculating: boolean;
     result: LightingResult | null;
     resultsByRoom: Record<string, LightingResult>;
+    /**
+     * Último `CalculationRun` completo (Fase 13: "evitar recálculos... e
+     * invalidar si stale"). Distinto de `resultsByRoom` (solo valores
+     * planos) — trae `snapshotHash`/`engineVersion`/`warnings`, necesarios
+     * para `isCalculationRunStale` y para mostrar trazabilidad en la UI/PDF.
+     */
+    lastCalculationRun: CalculationRun | null;
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
     ui: UIState;
@@ -342,6 +350,7 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     /** Fuerza al canvas 2D a releer el plano del piso activo (ver planReloadTick) */
     bumpPlanReloadTick: () => void;
     setResultsByRoom: (results: Record<string, LightingResult>) => void;
+    setLastCalculationRun: (run: CalculationRun | null) => void;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     activeScene: () => Scene | null;
@@ -398,6 +407,7 @@ export const useEditorStore = create<EditorState>()(
         isCalculating: false,
         result: null,
         resultsByRoom: {},
+        lastCalculationRun: null,
         dxfEntities: null,
         dxfExtents: null,
         defaultRoomNormativeStandard: 'en_12464',
@@ -472,6 +482,7 @@ export const useEditorStore = create<EditorState>()(
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
+        setLastCalculationRun: (lastCalculationRun) => set({ lastCalculationRun }),
         bumpPlanReloadTick: () =>
             set((s) => ({
                 ui: { ...s.ui, planReloadTick: s.ui.planReloadTick + 1 },

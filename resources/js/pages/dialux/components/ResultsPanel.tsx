@@ -8,6 +8,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import React, { useState } from 'react';
+import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
 import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/useEditorStore';
 
@@ -23,6 +24,12 @@ export interface RoomResultSummary {
 
 interface ResultsPanelProps {
     rooms: RoomResultSummary[];
+    /**
+     * Trazabilidad del cálculo (Fase 13: "mostrar engineVersion, modo y
+     * warnings"). Opcional — sin él, el panel se ve exactamente igual que
+     * antes de esta fase (mismo patrón no disruptivo de cada fase anterior).
+     */
+    calculationRun?: CalculationRun | null;
 }
 
 interface RoomTableRow {
@@ -130,7 +137,7 @@ function statusIcon(ok: boolean, warn = false) {
     return <XCircle size={14} className="text-red-400" />;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRun }) => {
     const rows = buildTableRows(rooms);
     const levels = Array.from(
         new Map(
@@ -286,6 +293,18 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                             el area del ambiente derivado, mientras que la normativa
                             aplicada proviene del recinto.
                         </p>
+                        {calculationRun && (
+                            <p className="mt-1.5 text-[11px] text-slate-500">
+                                Motor {calculationRun.engineVersion} · calculado{' '}
+                                {calculationRun.completedAt ? new Date(calculationRun.completedAt).toLocaleString('es-PE') : '—'}
+                                {calculationRun.warnings.length > 0 && (
+                                    <span className="ml-1.5 text-amber-400">
+                                        · {calculationRun.warnings.length} advertencia
+                                        {calculationRun.warnings.length === 1 ? '' : 's'}
+                                    </span>
+                                )}
+                            </p>
+                        )}
                     </div>
                 </div>
 

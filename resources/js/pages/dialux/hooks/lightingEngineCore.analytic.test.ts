@@ -117,4 +117,44 @@ describe('Fase 5 — validación analítica del solver direct-preview-v1', () =>
 
         expect(rotated.avg_lux).toBeCloseTo(unrotated.avg_lux, 9);
     });
+
+    it('reproduce los puntos A y B del caso LDT con factor de mantenimiento 0.80', () => {
+        const room = buildSinglePointRoom(0.8);
+        const photometricWeb: NonNullable<Fixture['photometricWeb']> = {
+            c_angles: [0, 90, 180, 270],
+            gamma_angles: [0, 22.5, 45, 67.5, 90],
+            candela: Array.from({ length: 4 }, () => [100, 250, 300, 150, 50]),
+            reference_lumens: 1000,
+            provenance: 'manufacturer',
+        };
+        const calculateWithMaintenance = (fixture: Fixture) =>
+            calculateLightingResult(
+                room,
+                [fixture],
+                GRID_SPACING,
+                [],
+                null,
+                null,
+                null,
+                undefined,
+                0.8,
+            );
+
+        const pointA = calculateWithMaintenance(
+            buildLambertianFixture({ z: 3, lumens: 1000, photometricWeb }),
+        );
+        const pointB = calculateWithMaintenance(
+            buildLambertianFixture({
+                x: GRID_SPACING / 2 + 1.5,
+                y: GRID_SPACING / 2 + 1.5,
+                z: 3,
+                lumens: 1000,
+                photometricWeb,
+            }),
+        );
+
+        expect(pointA.avg_lux).toBeCloseTo(16.53, 2);
+        expect(pointB.avg_lux).toBeCloseTo(18.36, 1);
+        expect(Math.abs(pointB.avg_lux - 18.36) / 18.36).toBeLessThan(0.01);
+    });
 });

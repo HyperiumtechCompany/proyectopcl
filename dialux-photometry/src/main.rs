@@ -392,48 +392,41 @@ fn normalize_ldt_lumens(raw_lumens: f64, lamp_count: f64) -> f64 {
 }
 
 fn extract_ldt_angles_and_candela_tokens(
-    mut tokens: Vec<f64>,
+    tokens: Vec<f64>,
     num_c: usize,
     dc: f64,
     num_g: usize,
     dg: f64,
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-    let mut c_angles = if dc > 0.0 {
+    let c_angles = if dc > 0.0 {
         (0..num_c).map(|index| index as f64 * dc).collect()
     } else {
         Vec::new()
     };
-    let mut gamma_angles = if dg > 0.0 {
+    let gamma_angles = if dg > 0.0 {
         (0..num_g).map(|index| index as f64 * dg).collect()
     } else {
         Vec::new()
     };
 
-    if dc <= 0.0 && tokens.len() >= num_c {
-        c_angles = tokens.drain(0..num_c).collect();
-    }
+    // EULUMDAT incluye diez factores de reducción antes de las listas de
+    // ángulos. Localizamos ambas listas también cuando dC=0 y existe un único
+    // plano rotacional; consumir el primer factor como C desplazaba la matriz.
+    let limit = tokens.len().saturating_sub(num_c + num_g).min(32);
+    for offset in 0..=limit {
+        let c_end = offset + num_c;
+        let g_end = c_end + num_g;
+        let candidate_c = &tokens[offset..c_end];
+        let candidate_g = &tokens[c_end..g_end];
 
-    if dg <= 0.0 && tokens.len() >= num_g {
-        gamma_angles = tokens.drain(0..num_g).collect();
-    }
-
-    if dc > 0.0 && dg > 0.0 {
-        let limit = tokens.len().saturating_sub(num_c + num_g).min(32);
-        for offset in 0..=limit {
-            let c_end = offset + num_c;
-            let g_end = c_end + num_g;
-            let candidate_c = &tokens[offset..c_end];
-            let candidate_g = &tokens[c_end..g_end];
-
-            if is_expected_angle_list(candidate_c, num_c, dc)
-                && is_expected_angle_list(candidate_g, num_g, dg)
-            {
-                return (
-                    candidate_c.to_vec(),
-                    candidate_g.to_vec(),
-                    tokens[g_end..].to_vec(),
-                );
-            }
+        if is_expected_angle_list(candidate_c, num_c, dc)
+            && is_expected_angle_list(candidate_g, num_g, dg)
+        {
+            return (
+                candidate_c.to_vec(),
+                candidate_g.to_vec(),
+                tokens[g_end..].to_vec(),
+            );
         }
     }
 
@@ -441,14 +434,63 @@ fn extract_ldt_angles_and_candela_tokens(
 }
 
 fn is_expected_angle_list(values: &[f64], count: usize, step: f64) -> bool {
-    if values.len() != count || step <= 0.0 {
+    if values.len() != count || (step <= 0.0 && count > 1) {
         return false;
     }
 
     values
         .iter()
         .enumerate()
-        .all(|(index, value)| (*value - (index as f64 * step)).abs() <= 0.01)
+        .all(|(index, value)| (*value - (index as f64 * step.max(0.0))).abs() <= 0.01)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn validation_ldt(dc: &str, c_angles: &[&str]) -> String {
+        let mut lines = vec!["0".to_string(); 32];
+        lines[0] = "Test Lighting".into();
+        lines[2] = "1".into();
+        lines[3] = c_angles.len().to_string();
+        lines[4] = dc.into();
+        lines[5] = "5".into();
+        lines[6] = "22.5".into();
+        lines[8] = "Luminaria validación".into();
+        lines[9] = "TEST-1000".into();
+        lines[12] = "600 600 100".into();
+        lines[27] = "LED".into();
+        lines[28] = "1000".into();
+        lines[29] = "4000".into();
+        lines[30] = "80".into();
+        lines[31] = "10,0".into();
+        lines.extend(["0.51", "0.62", "0.70", "0.78", "0.82", "0.86", "0.90", "0.93", "0.95", "0.97"].map(String::from));
+        lines.extend(c_angles.iter().map(|value| (*value).to_string()));
+        lines.extend(["0", "22.5", "45", "67.5", "90"].map(String::from));
+        for _ in c_angles {
+            lines.extend(["100", "250", "300", "150", "50"].map(String::from));
+        }
+        lines.join("\n")
+    }
+
+    #[test]
+    fn parses_validation_ldt_without_shifting_fields_or_matrix() {
+        let parsed = parse_ldt(&validation_ldt("90", &["0", "90", "180", "270"]));
+
+        assert_eq!(parsed.total_lumens, Some(1000.0));
+        assert_eq!(parsed.power_watts, Some(10.0));
+        assert_eq!(parsed.c_angles, vec![0.0, 90.0, 180.0, 270.0]);
+        assert_eq!(parsed.gamma_angles, vec![0.0, 22.5, 45.0, 67.5, 90.0]);
+        assert_eq!(parsed.candela, vec![vec![100.0, 250.0, 300.0, 150.0, 50.0]; 4]);
+    }
+
+    #[test]
+    fn parses_single_rotational_c_plane_after_reduction_factors() {
+        let parsed = parse_ldt(&validation_ldt("0", &["0"]));
+
+        assert_eq!(parsed.c_angles, vec![0.0]);
+        assert_eq!(parsed.candela[0], vec![100.0, 250.0, 300.0, 150.0, 50.0]);
+    }
 }
 
 fn parse_number(value: &str) -> Option<f64> {
