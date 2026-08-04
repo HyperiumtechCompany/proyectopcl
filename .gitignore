@@ -38,3 +38,6 @@ yarn-error.log
 .claudeignore
 /CLAUDE.md
 /dialux-core/target/
+/dialux-photometry/target/
+/public/dialux-core/
+/.recovery/

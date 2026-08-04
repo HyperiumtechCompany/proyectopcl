@@ -125,11 +125,39 @@ export function candelaFromPhotometricWeb(
  */
 export function candela(fixture: Fixture, gammaDeg: number, azimuthDeg = 0): number {
     if (fixture.photometricWeb) {
-        return candelaFromPhotometricWeb(fixture.photometricWeb, azimuthDeg, gammaDeg);
+        const web = fixture.photometricWeb;
+        const hasLegacyLdtOffset =
+            web.provenance === 'manufacturer' &&
+            web.c_angles.length === 1 &&
+            Math.abs(web.c_angles[0]) > 0.01;
+
+        // Las importaciones LDT antiguas con dC=0 guardaron un factor de
+        // reducción como ángulo C y desplazaron toda la matriz. Esa fotometría
+        // no es recuperable desde el snapshot: usamos el respaldo físico por
+        // flujo hasta que el modelo sea seleccionado/importado nuevamente.
+        if (!hasLegacyLdtOffset) {
+            const rawCandela = candelaFromPhotometricWeb(web, azimuthDeg, gammaDeg);
+            const referenceLumens = web.reference_lumens;
+            const fluxScale =
+                referenceLumens && referenceLumens > 0
+                    ? Math.max(0, fixture.lumens) / referenceLumens
+                    : 1;
+
+            return Math.max(0, rawCandela * fluxScale);
+        }
     }
 
     const intensity = (fixture.lumens * fixture.efficiency) / MATH_PI;
     const gammaRad = (gammaDeg * MATH_PI) / 180;
 
-    return intensity * Math.cos(gammaRad);
+    // La aproximación Lambertiana solo es válida en el hemisferio hacia
+    // adelante (gamma <= 90°, "nadir" hacia abajo) — hasta la Fase 7, nunca
+    // se evaluaba con gamma > 90° porque los únicos receptores eran puntos
+    // de malla por debajo/alrededor de la luminaria. Los parches de la
+    // envolvente (Fase 7, `firstBounceReflection.ts`) sí pueden quedar
+    // DETRÁS de una luminaria orientada hacia abajo (ej. el techo, justo
+    // encima) — sin este clamp, `Math.cos` se vuelve negativo ahí y la
+    // "iluminancia directa" del parche sale negativa (físicamente imposible:
+    // ninguna intensidad luminosa puede ser negativa).
+    return Math.max(0, intensity * Math.cos(gammaRad));
 }

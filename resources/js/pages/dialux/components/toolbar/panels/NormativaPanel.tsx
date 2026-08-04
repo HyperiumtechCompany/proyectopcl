@@ -1,9 +1,8 @@
 import { CheckCircle2, Scale } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { ensureStandardDataLoaded } from '@/pages/dialux/hooks/normativeRemoteData';
+import React, { useState } from 'react';
 import type { NormativeStandard } from '@/pages/dialux/hooks/roomLighting';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import { ALL_STANDARDS, type NormKey, type NormProfile } from '../normativeData';
+import { ALL_STANDARDS, type NormKey } from '../normativeData';
 import { PanelCard } from '../primitives';
 
 const NORM_KEY_TO_STANDARD: Record<NormKey, NormativeStandard> = {
@@ -14,8 +13,6 @@ const NORM_KEY_TO_STANDARD: Record<NormKey, NormativeStandard> = {
     EN_1838: 'en_1838',
 };
 
-// 'en_12464' es ambiguo (EN_12464_1 o _2) — no hay forma de distinguirlos
-// desde el valor persistido, así que ante ese caso mostramos _2 (el más común).
 const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
     en_12464: 'EN_12464_2',
     ies_na: 'IESNA',
@@ -26,144 +23,57 @@ const STANDARD_TO_NORM_KEY: Record<NormativeStandard, NormKey> = {
 };
 
 interface NormativaPanelProps {
-    onDefaultNormativeStandardChange: (v: NormativeStandard) => void;
-    onApplyProfile: (opts: {
-        standard: NormativeStandard;
-        normaLux: number;
-        ugrLimit?: number;
-        uniformityTarget?: number;
-        colorRenderingRa?: number;
-        roomIds?: string[];
-    }) => void;
+    onApplyStandardGlobally: (standard: NormativeStandard) => void;
 }
 
 export const NormativaPanel: React.FC<NormativaPanelProps> = ({
-    onDefaultNormativeStandardChange,
-    onApplyProfile,
+    onApplyStandardGlobally,
 }) => {
-    // Si hay un ambiente/pasadizo seleccionado en el plano, "Aplicar" solo lo
-    // afecta a él — de lo contrario sobrescribe la norma de TODOS los
-    // ambientes del proyecto cada vez que se usa este panel.
-    const selectedId = useEditorStore((s) => s.ui.selectedId);
-    const scene = useEditorStore((s) => s.activeScene());
-    const selectedRoom = scene?.rooms.find(
-        (r) =>
-            r.id === selectedId &&
-            (r.roomType === 'ambient' || r.roomType === 'corridor'),
-    );
     const defaultStandard = useEditorStore(
-        (s) => s.defaultRoomNormativeStandard,
+        (state) => state.defaultRoomNormativeStandard,
     );
-    const currentStandard = selectedRoom?.normativeStandard ?? defaultStandard;
-
-    // El panel debe reflejar la norma realmente aplicada (persistida por
-    // ambiente o por defecto del proyecto), no un valor fijo — de lo
-    // contrario, al volver a entrar al proyecto parece que la norma
-    // aplicada "cambió sola" aunque los datos guardados sigan correctos.
     const [selectedKey, setSelectedKey] = useState<NormKey>(
-        () => STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2',
+        () => STANDARD_TO_NORM_KEY[defaultStandard] ?? 'EN_12464_2',
     );
-    const [selectedSectionId, setSelectedSectionId] = useState<string>('5');
-    const [selectedSubId, setSelectedSubId] = useState<string>('5.3');
-    const [selectedProfileId, setSelectedProfileId] = useState<string>('5.3.1');
     const [applied, setApplied] = useState(false);
-
-    // Carga los catálogos con fuente única en BD (EM.010 y EN 1838) y fuerza
-    // un re-render cuando reemplazan la transcripción estática.
-    const [, setNormDataVersion] = useState(0);
-    useEffect(() => {
-        void Promise.all([
-            ensureStandardDataLoaded('rne_peru'),
-            ensureStandardDataLoaded('en_1838'),
-        ]).then(() => setNormDataVersion((v) => v + 1));
-    }, []);
-
-    // Al cambiar la selección de ambiente (o al montar), re-sincroniza el
-    // resaltado con la norma realmente guardada para ese ambiente/proyecto.
-    useEffect(() => {
-        setSelectedKey(STANDARD_TO_NORM_KEY[currentStandard] ?? 'EN_12464_2');
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedId, currentStandard]);
-
-    const std = ALL_STANDARDS.find((s) => s.key === selectedKey)!;
-    const section = std.sections.find((s) => s.id === selectedSectionId);
-    const subsection = section?.subsections?.find(
-        (s) => s.id === selectedSubId,
-    );
-    const profiles: NormProfile[] =
-        subsection?.profiles ?? section?.profiles ?? [];
-    const profile =
-        profiles.find((p) => p.id === selectedProfileId) ?? profiles[0];
-
-    // Reset selections when standard changes
-    const handleStdChange = (key: NormKey) => {
-        const newStd = ALL_STANDARDS.find((s) => s.key === key)!;
-        const sec = newStd.sections[0];
-        setSelectedKey(key);
-        setSelectedSectionId(sec.id);
-        const sub = sec.subsections?.[0];
-        setSelectedSubId(sub?.id ?? '');
-        const prof = sub?.profiles[0] ?? sec.profiles?.[0];
-        setSelectedProfileId(prof?.id ?? '');
-        setApplied(false);
-    };
+    const selectedStandard = ALL_STANDARDS.find(
+        (standard) => standard.key === selectedKey,
+    )!;
 
     const handleApply = () => {
-        if (!profile) return;
-        const standard = NORM_KEY_TO_STANDARD[selectedKey];
-        onApplyProfile({
-            standard,
-            normaLux: profile.Em_work,
-            ugrLimit: profile.UGR ?? undefined,
-            uniformityTarget: profile.uniformity ?? undefined,
-            colorRenderingRa: profile.Ra,
-            roomIds: selectedRoom ? [selectedRoom.id] : undefined,
-        });
-        // Conserva la última norma elegida al cerrar/reabrir el panel. El
-        // alcance de `onApplyProfile` sigue evitando tocar otros ambientes.
-        onDefaultNormativeStandardChange(standard);
+        onApplyStandardGlobally(NORM_KEY_TO_STANDARD[selectedKey]);
         setApplied(true);
         setTimeout(() => setApplied(false), 2500);
     };
 
     return (
         <div className="flex flex-col gap-2.5">
-            {/* Standard selector */}
-            <PanelCard title="Estándar normativo" tone="normativa">
+            <PanelCard title="Estándar normativo del proyecto" tone="normativa">
                 <div className="flex flex-col gap-1.5">
-                    {ALL_STANDARDS.map((s) => (
+                    {ALL_STANDARDS.map((standard) => (
                         <button
-                            key={s.key}
+                            key={standard.key}
                             type="button"
-                            onClick={() => handleStdChange(s.key)}
-                            className={`flex items-start gap-2 rounded px-2.5 py-2 text-left transition-colors ${
-                                selectedKey === s.key
-                                    ? 'bg-emerald-900/25 ring-1 ring-emerald-700/40'
-                                    : 'hover:bg-gray-700/40'
-                            }`}
+                            onClick={() => {
+                                setSelectedKey(standard.key);
+                                setApplied(false);
+                            }}
+                            className={`flex items-start gap-2 rounded px-2.5 py-2 text-left transition-colors ${selectedKey === standard.key ? 'bg-emerald-900/25 ring-1 ring-emerald-700/40' : 'hover:bg-gray-700/40'}`}
                         >
                             <div
-                                className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
-                                    selectedKey === s.key
-                                        ? 'bg-emerald-400'
-                                        : 'bg-gray-600'
-                                }`}
+                                className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${selectedKey === standard.key ? 'bg-emerald-400' : 'bg-gray-600'}`}
                             />
                             <div>
                                 <p
-                                    className={`text-[11px] font-semibold ${
-                                        selectedKey === s.key
-                                            ? 'text-emerald-300'
-                                            : 'text-gray-300'
-                                    }`}
+                                    className={`text-[11px] font-semibold ${selectedKey === standard.key ? 'text-emerald-300' : 'text-gray-300'}`}
                                 >
-                                    {s.label}
+                                    {standard.label}
                                 </p>
                                 <p className="text-[9.5px] leading-snug text-gray-500">
-                                    {s.region}
+                                    {standard.region}
                                 </p>
                             </div>
-                            {selectedKey === s.key && (
+                            {selectedKey === standard.key && (
                                 <CheckCircle2
                                     size={12}
                                     className="mt-0.5 ml-auto shrink-0 text-emerald-400"
@@ -173,46 +83,31 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                     ))}
                 </div>
                 <p className="mt-2 px-1 text-[9.5px] leading-snug text-gray-600">
-                    {std.fullName}
+                    {selectedStandard.fullName}
                 </p>
             </PanelCard>
 
-            {selectedRoom && (
-                <div className="rounded-lg border border-blue-800/40 bg-blue-950/20 px-2.5 py-1.5 text-[9.5px] text-blue-300">
-                    Se aplicará solo a <strong>{selectedRoom.name}</strong>. Los
-                    demás ambientes no se tocan.
-                </div>
-            )}
+            <div className="rounded-lg border border-blue-800/40 bg-blue-950/20 px-2.5 py-2 text-[9.5px] leading-snug text-blue-200/80">
+                Aquí se define únicamente la norma general. El área, la
+                subsección, la aplicación y los lux se configuran en las
+                propiedades de cada ambiente.
+            </div>
 
             <button
                 type="button"
                 onClick={handleApply}
-                className={`flex w-full items-center justify-center gap-2 rounded py-2 text-[11px] font-semibold transition-all duration-200 ${
-                    applied
-                        ? 'bg-emerald-700/40 text-emerald-300 ring-1 ring-emerald-600/40'
-                        : 'bg-emerald-800/30 text-emerald-200 ring-1 ring-emerald-800/40 hover:bg-emerald-700/40'
-                }`}
+                className={`flex w-full items-center justify-center gap-2 rounded py-2 text-[11px] font-semibold transition-all duration-200 ${applied ? 'bg-emerald-700/40 text-emerald-300 ring-1 ring-emerald-600/40' : 'bg-emerald-800/30 text-emerald-200 ring-1 ring-emerald-800/40 hover:bg-emerald-700/40'}`}
             >
                 {applied ? (
                     <>
-                        <CheckCircle2 size={13} /> Aplicado — dibujo y
-                        exportación
-                    </>
-                ) : selectedRoom ? (
-                    <>
-                        <Scale size={13} /> Aplicar solo a {selectedRoom.name}
+                        <CheckCircle2 size={13} /> Estándar actualizado
                     </>
                 ) : (
                     <>
-                        <Scale size={13} /> Aplicar a todos los ambientes
+                        <Scale size={13} /> Cambiar estándar del proyecto
                     </>
                 )}
             </button>
-            <p className="mt-1 px-1 text-center text-[9px] leading-snug text-gray-600">
-                {selectedRoom
-                    ? 'Selecciona otro ambiente en el plano para configurarlo con una norma distinta.'
-                    : 'Sin un ambiente seleccionado en el plano, se sobrescribe la norma de TODOS los ambientes. Selecciona uno primero para configurarlos por separado.'}
-            </p>
         </div>
     );
 };

@@ -228,4 +228,28 @@ describe('floorSlice.duplicateFloor', () => {
             expect(originalIds.has(id)).toBe(false);
         }
     });
+
+    it('Fase 10 (auditoría `dialux-calc-reviewer`): remapea las claves de switchStates en lightingScenes al ID nuevo del interruptor', () => {
+        const source = buildSourceScene();
+        source.lightingScenes = [
+            { id: 'noche', name: 'Noche', switchStates: { 'switch-1': { on: false, dimmingFactor: 1 } } },
+        ];
+        setProjectWithScene(source);
+
+        const newSceneId = useEditorStore.getState().duplicateFloor(source.id, 1, '1er Piso (copia)');
+        const newScene = useEditorStore.getState().project!.scenes.find((s) => s.id === newSceneId)!;
+        const newSwitchId = newScene.lightSwitches![0]!.id;
+
+        expect(newScene.lightingScenes).toHaveLength(1);
+        const preset = newScene.lightingScenes![0]!;
+        expect(preset.id).toBe('noche');
+        // La clave del switchStates debe ser el ID NUEVO del interruptor
+        // clonado, no el viejo — de lo contrario, `resolveLuminaireStates`
+        // (`domain/calculation/buildCalculationSnapshot.ts`) no encontraría
+        // el override y calcularía el piso duplicado como si "Noche" tuviera
+        // todo encendido, perdiendo silenciosamente la intención del preset.
+        expect(Object.keys(preset.switchStates)).toEqual([newSwitchId]);
+        expect(preset.switchStates[newSwitchId]).toEqual({ on: false, dimmingFactor: 1 });
+        expect(preset.switchStates['switch-1']).toBeUndefined();
+    });
 });

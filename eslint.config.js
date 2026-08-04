@@ -74,6 +74,13 @@ export default [
         files: [
             'resources/js/pages/dialux/hooks/lightingEngineCore.ts',
             'resources/js/pages/dialux/hooks/roomLighting.ts',
+            'resources/js/pages/dialux/hooks/roomPatches.ts',
+            'resources/js/pages/dialux/hooks/directIlluminance.ts',
+            'resources/js/pages/dialux/hooks/firstBounceReflection.ts',
+            'resources/js/pages/dialux/hooks/radiosityTransfer.ts',
+            'resources/js/pages/dialux/hooks/iterativeRadiosity.ts',
+            'resources/js/pages/dialux/hooks/glareObserver.ts',
+            'resources/js/pages/dialux/hooks/glareCalculation.ts',
             'resources/js/pages/dialux/hooks/lightingCalculations.ts',
             'resources/js/pages/dialux/domain/calculation/**/*.ts',
             'resources/js/pages/dialux/domain/geometry/**/*.ts',

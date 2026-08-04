@@ -46,9 +46,33 @@ interface RoomTableRow {
     minLux: number;
     maxLux: number;
     uniformity: number;
+    uniformityTarget: number;
     estimatedUniformity: number;
     ugr: number;
+    ugrLimit: number;
+    hasNormativeSource: boolean;
     coverage: 'optimal' | 'insufficient' | 'excessive';
+}
+
+type ComplianceValues = Pick<
+    RoomTableRow,
+    | 'avgLux'
+    | 'illuminanceLux'
+    | 'uniformity'
+    | 'uniformityTarget'
+    | 'ugr'
+    | 'ugrLimit'
+    | 'hasNormativeSource'
+>;
+
+/** Misma regla de conformidad que usa el PDF: norma + lux + Uo + UGR. */
+export function isRoomCompliant(row: ComplianceValues): boolean {
+    return (
+        row.hasNormativeSource &&
+        row.avgLux >= row.illuminanceLux &&
+        row.uniformity >= row.uniformityTarget &&
+        row.ugr <= row.ugrLimit
+    );
 }
 
 const coverageStyles = {
@@ -88,8 +112,13 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             minLux: result.min_lux,
             maxLux: result.max_lux,
             uniformity: result.uniformity,
+            uniformityTarget: room.uniformityTarget ?? 0.4,
             estimatedUniformity: inputs.estimatedUniformity,
             ugr: result.ugr,
+            ugrLimit: room.ugrLimit ?? 22,
+            hasNormativeSource: Boolean(
+                room.normativeStandard || room.normativeLabel || room.normativeCategory,
+            ),
             coverage: inputs.coverage,
         };
     });
@@ -147,9 +176,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
         );
     }
 
-    const compliantRooms = filteredRows.filter(
-        (row) => row.avgLux >= row.illuminanceLux && row.uniformity >= 0.4,
-    ).length;
+    const compliantRooms = filteredRows.filter(isRoomCompliant).length;
 
     return (
         <div className="space-y-5 text-xs">
@@ -285,8 +312,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                         <tbody>
                             {filteredRows.map((row, index) => {
                                 const luxOk = row.avgLux >= row.illuminanceLux;
-                                const uniformityOk = row.uniformity >= 0.4;
-                                const ugrOk = row.ugr <= 22;
+                                const uniformityOk =
+                                    row.uniformity >= row.uniformityTarget;
+                                const ugrOk = row.ugr <= row.ugrLimit;
+                                const compliant = isRoomCompliant(row);
                                 const warn = luxOk && (!uniformityOk || !ugrOk);
                                 const showLevelHeader =
                                     activeLevelId === 'all' &&
@@ -377,16 +406,25 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms }) => {
                                         <td className="px-3 py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 {statusIcon(
-                                                    luxOk && uniformityOk && ugrOk,
+                                                    compliant,
                                                     warn,
                                                 )}
                                                 <span
                                                     className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                                                        coverageStyles[row.coverage]
+                                                        compliant
+                                                            ? coverageStyles.optimal
+                                                            : 'border-red-800/70 bg-red-950/60 text-red-300'
                                                     }`}>
-                                                    {coverageLabels[row.coverage]}
+                                                    {compliant
+                                                        ? 'Conforme'
+                                                        : row.hasNormativeSource
+                                                          ? 'No conforme'
+                                                          : 'Sin norma'}
                                                 </span>
                                             </div>
+                                            <p className="mt-1 text-[10px] text-slate-500">
+                                                Cobertura: {coverageLabels[row.coverage]}
+                                            </p>
                                             {row.fixtureCount < row.roundedQuantity && (
                                                 <p className="mt-1.5 leading-snug font-semibold text-amber-400">
                                                     Faltan {row.roundedQuantity - row.fixtureCount}{' '}

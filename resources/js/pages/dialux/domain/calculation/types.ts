@@ -48,6 +48,8 @@ export interface CalculationLuminaire {
         c_angles: number[];
         gamma_angles: number[];
         candela: number[][];
+        reference_lumens?: number;
+        provenance?: 'manufacturer' | 'manual-curve' | 'synthetic';
     } | null;
 }
 
@@ -92,12 +94,34 @@ export interface LuminaireState {
     dimmingFactor: number;
 }
 
-/** Estado de encendido/regulación de un nivel — separado de `CalculationLevel` (§6.1). */
+/**
+ * Modelo INICIAL de disparador de escena (Fase 10, §11: "sensores y
+ * horarios como modelo inicial") — solo datos, sin motor de evaluación real
+ * (`runDirectPreviewEngine` nunca lo lee para decidir qué escena aplicar;
+ * la selección sigue siendo explícita vía `sceneSelectionByLevel`).
+ * Duplicado deliberadamente de `hooks/types.ts` (mismo criterio que el resto
+ * de este archivo, ver comentario de cabecera: el dominio no reutiliza los
+ * tipos de UI/store).
+ */
+export type SceneTrigger =
+    | { type: 'manual' }
+    | { type: 'schedule'; startTime: string; endTime: string }
+    | { type: 'sensor'; sensorType: 'occupancy' | 'daylight' };
+
+/**
+ * Estado de encendido/regulación de un nivel — separado de `CalculationLevel`
+ * (§6.1). Desde la Fase 10, un nivel puede tener MÁS DE UNA
+ * `LightingSceneState` (una por `LightingScenePreset` definido en el store);
+ * `buildCalculationSnapshot` sigue generando exactamente una "Escena por
+ * defecto" (todo encendido) cuando el nivel no define ningún preset — mismo
+ * comportamiento que antes de esta fase, no disruptivo.
+ */
 export interface LightingSceneState {
     id: string;
     levelId: string;
     name: string;
     luminaireStates: LuminaireState[];
+    trigger?: SceneTrigger;
 }
 
 /** Geometría y elevación de un nivel — sin estado de encendido (eso es `LightingSceneState`). */
@@ -139,15 +163,40 @@ export interface CalculationConfig {
     maxBounces: number;
     convergenceTolerance: number;
     meshPolicy: { gridSpacingM: number };
-    glare: { enabled: boolean };
+    glare: {
+        enabled: boolean;
+        /**
+         * `'legacy'` (default): el `calculateUGR` heredado (observador único
+         * implícito en el centro del recinto, sin índice de posición) — sin
+         * cambios desde la Fase 0. `'guth-observers'` (Fase 9: "UGR y
+         * luminancia profesional"): observadores reales con posición/altura/
+         * dirección e índice de posición de Guth (`pending-confirmation`, ver
+         * `hooks/glareCalculation.ts`).
+         */
+        observerModel: 'legacy' | 'guth-observers';
+    };
 }
 
 /**
- * Única configuración real hoy: el motor `direct-preview-v1` no soporta
- * oclusión ni interreflexión (Fase 0, brecha §3.3 del plan). `occlusion`/
- * `interreflection`/`maxBounces`/`convergenceTolerance` existen en el
- * contrato porque el plan los define desde ya (§8.2), pero `runDirectPreviewEngine`
- * los ignora — cambiarlos no tiene efecto hasta las Fases 6/8.
+ * Defaults no disruptivos: `occlusion: false` e `interreflection: 'none'`
+ * mantienen el comportamiento del motor `direct-preview-v1` original. Desde
+ * la Fase 6, `occlusion: true` activa oclusión real. Desde la Fase 7,
+ * `interreflection: 'first-bounce'` activa la primera reflexión difusa
+ * usando `CalculationSnapshot.materials` (`runDirectPreviewEngine` resuelve
+ * el material por `CalculationObject.materialId`). Desde la Fase 8,
+ * `interreflection: 'iterative'` activa radiosidad iterativa real (múltiples
+ * rebotes entre los mismos parches, hasta convergencia o `maxBounces`) —
+ * `maxBounces`/`convergenceTolerance` ahora tienen efecto en ese modo
+ * (`maxBounces <= 1` produce un warning: equivale a `first-bounce`, no a
+ * iteración real). Si un objeto no converge dentro de `maxBounces`,
+ * `runDirectPreviewEngine` advierte y usa el valor truncado, nunca lo
+ * presenta como convergido. Desde la Fase 9, `glare.observerModel:
+ * 'guth-observers'` activa UGR con observadores reales (posición/altura/
+ * dirección + índice de posición de Guth). `glare.enabled` SIGUE sin
+ * efecto (existe en el contrato desde antes de la Fase 9, pero
+ * `runDirectPreviewEngine` nunca lo lee — UGR siempre se calcula sin
+ * importar su valor; corrección de un comentario de la Fase 9 que
+ * afirmaba, por error, que ya estaba cableado).
  */
 export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     mode: 'preview',
@@ -157,7 +206,7 @@ export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     maxBounces: 0,
     convergenceTolerance: 0,
     meshPolicy: { gridSpacingM: GRID_SPACING },
-    glare: { enabled: true },
+    glare: { enabled: true, observerModel: 'legacy' },
 };
 
 export interface CalculationWarning {

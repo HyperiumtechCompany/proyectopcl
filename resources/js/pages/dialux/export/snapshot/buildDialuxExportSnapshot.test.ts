@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
+import { DEFAULT_DIRECT_PREVIEW_CONFIG } from '@/pages/dialux/domain/calculation/types';
 import type { Project, Room, Scene } from '@/pages/dialux/hooks/useEditorStore';
 import { buildDialuxExportSnapshot } from './buildDialuxExportSnapshot';
 
@@ -146,5 +148,145 @@ describe('buildDialuxExportSnapshot — requerimientos sin fuente normativa', ()
 
         expect(illuminance.source).toBe('en_12464');
         expect(['pass', 'fail']).toContain(illuminance.status);
+    });
+});
+
+describe('buildDialuxExportSnapshot — Fase 11 (resultados profesionales: procedencia real y warnings)', () => {
+    it('sin `calculationRun` (default), la procedencia se mantiene exactamente como antes de esta fase', () => {
+        const room = buildRoom();
+        const project = buildProjectWithRoom(room);
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom: {},
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const { provenance, warnings } = snapshot.ambients[0]!.metrics;
+        expect(provenance.snapshotHash).toBeUndefined();
+        expect(provenance.configSummary).toBeUndefined();
+        expect(warnings).toEqual([]);
+    });
+
+    it('con `calculationRun` real (runProjectLightingCalculation), la procedencia trae hash/config y las advertencias se filtran por ambiente', async () => {
+        const room = buildRoom({ normativeLabel: 'Aula — EN 12464-1', normativeCategory: 'educacion' });
+        const project = buildProjectWithRoom(room);
+
+        const { resultsByRoom, run } = await runProjectLightingCalculation(project);
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom,
+            calculationRun: run,
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const { provenance } = snapshot.ambients[0]!.metrics;
+        expect(provenance.snapshotHash).toBe(run.snapshotHash);
+        expect(provenance.engineVersion).toBe(run.engineVersion);
+        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: none · UGR: legacy');
+    });
+
+    it('un ambiente sin luminarias trae SU warning (`object-without-luminaires`) y no el de otros ambientes', async () => {
+        const room = buildRoom();
+        const project = buildProjectWithRoom(room);
+        project.scenes[0]!.fixtures = []; // sin luminarias en el único ambiente
+
+        const { resultsByRoom, run } = await runProjectLightingCalculation(project);
+        expect(run.warnings.map((w) => w.code)).toContain('object-without-luminaires');
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom,
+            calculationRun: run,
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const ambientWarnings = snapshot.ambients[0]!.metrics.warnings;
+        expect(ambientWarnings.map((w) => w.code)).toEqual(['object-without-luminaires']);
+    });
+
+    it('un warning global (`objectId: null`) va en `snapshot.globalWarnings`, no en el de ningún ambiente', async () => {
+        const room = buildRoom();
+        const project = buildProjectWithRoom(room);
+
+        // maxBounces=1 con interreflection='iterative' dispara
+        // 'interreflection-maxBounces-too-low', que es un warning global
+        // (objectId: null, no asociado a ningún ambiente en particular).
+        const { resultsByRoom, run } = await runProjectLightingCalculation(project, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'iterative',
+            maxBounces: 1,
+        });
+        expect(run.warnings.map((w) => w.code)).toContain('interreflection-maxBounces-too-low');
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom,
+            calculationRun: run,
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        expect(snapshot.globalWarnings.map((w) => w.code)).toContain('interreflection-maxBounces-too-low');
+        for (const ambient of snapshot.ambients) {
+            expect(ambient.metrics.warnings.map((w) => w.code)).not.toContain('interreflection-maxBounces-too-low');
+        }
+    });
+
+    it('un ambiente ausente del `calculationRun` (fallback a cálculo directo) no hereda la procedencia del run', async () => {
+        const roomA = buildRoom({ id: 'room-a' });
+        const roomB = buildRoom({ id: 'room-b' });
+
+        // El `calculationRun` solo cubre room-a: simula el caso de un
+        // ambiente agregado/editado después de haber corrido el cálculo,
+        // de modo que `resultsByRoom`/`calculationRun.surfaces` no lo cubren.
+        const projectForRun = buildProjectWithRoom(roomA);
+        const { resultsByRoom, run } = await runProjectLightingCalculation(projectForRun);
+
+        const fullProject = buildProjectWithRoom(roomA);
+        fullProject.scenes[0]!.rooms.push(roomB);
+        fullProject.scenes[0]!.fixtures.push({
+            id: 'fixture-2',
+            name: 'Panel LED B',
+            x: 2.5, y: 2, z: 2.9,
+            lumens: 4000,
+            efficiency: 0.8,
+            fixtureType: 'panel',
+            lightColor: '#fff5e1',
+            roomId: `${roomB.id}::ambient-1`,
+        });
+
+        const snapshot = buildDialuxExportSnapshot({
+            project: fullProject,
+            activeSceneId: 'scene-1',
+            resultsByRoom,
+            calculationRun: run,
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const ambientA = snapshot.ambients.find((a) => a.roomId === 'room-a')!;
+        const ambientB = snapshot.ambients.find((a) => a.roomId === 'room-b')!;
+
+        // room-a sí pasó por el run: trae hash/config reales.
+        expect(ambientA.metrics.provenance.snapshotHash).toBe(run.snapshotHash);
+
+        // room-b NO está en `run.surfaces` (cálculo de respaldo directo):
+        // no debe aparentar que vino del mismo `calculationRun`.
+        expect(ambientB.metrics.provenance.snapshotHash).toBeUndefined();
+        expect(ambientB.metrics.provenance.configSummary).toBeUndefined();
     });
 });

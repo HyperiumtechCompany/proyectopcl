@@ -10,7 +10,14 @@
  *   [10] svg#dialux-overlay        → geometría DIAlux + herramientas
  */
 
-import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
+import React, {
+    useEffect,
+    useRef,
+    useState,
+    useCallback,
+    useMemo,
+    memo,
+} from 'react';
 import {
     resolveFixtureRenderHeight,
     resolveRoomCeilingHeight,
@@ -54,14 +61,21 @@ import {
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
-import { applyLegacyLinkUpdate, computeLegacyLinkUpdate } from '@/pages/dialux/hooks/wireLegacySync';
+import {
+    applyLegacyLinkUpdate,
+    computeLegacyLinkUpdate,
+} from '@/pages/dialux/hooks/wireLegacySync';
 
 import { createCanvasTransforms } from '@/pages/dialux/geometry/coordinateTransform';
 import { CalibrationDialog } from '../CalibrationDialog';
 import { CadStatusOverlays } from './CadStatusOverlays';
 import { CalibrationOverlay } from './CalibrationOverlay';
 import { CanvasSvgDefs } from './CanvasSvgDefs';
-import { CAD_OSNAP_TOOLS, CURSOR_MAP, INTERACTIVE_TOOLS } from './canvasToolConstants';
+import {
+    CAD_OSNAP_TOOLS,
+    CURSOR_MAP,
+    INTERACTIVE_TOOLS,
+} from './canvasToolConstants';
 import {
     cadToMeters,
     getCanvasScalePxPerMeter,
@@ -78,14 +92,21 @@ import { OverlayElectricalDevices } from './OverlayElectricalDevices';
 import { OverlayFixtures } from './OverlayFixtures';
 import { OverlayLightSwitches } from './OverlayLightSwitches';
 import { OverlayMeasureArea } from './OverlayMeasureArea';
+import { OverlayMeasureDistance } from './OverlayMeasureDistance';
 import { OverlayPartitions } from './OverlayPartitions';
 import { OverlayPreviews } from './OverlayPreviews';
 import { OverlayRooms } from './OverlayRooms';
-import { OverlayRotateHandle, type RotatableTarget } from './OverlayRotateHandle';
+import {
+    OverlayRotateHandle,
+    type RotatableTarget,
+} from './OverlayRotateHandle';
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayWires } from './OverlayWires';
-import { classifyConductorLayer, isElectricalItemVisible } from '@/pages/dialux/electrical/electricalLayerVisibility';
+import {
+    classifyConductorLayer,
+    isElectricalItemVisible,
+} from '@/pages/dialux/electrical/electricalLayerVisibility';
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -159,12 +180,28 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             end: CanvasPoint;
         } | null>(null);
         /** Vértices en progreso para la herramienta measure-area */
-        const [measureAreaVertices, setMeasureAreaVertices] = useState<CanvasPoint[]>([]);
+        const [measureAreaVertices, setMeasureAreaVertices] = useState<
+            CanvasPoint[]
+        >([]);
         /** Punto de preview dinámico del cursor para measure-area */
-        const [measureAreaPreviewPt, setMeasureAreaPreviewPt] = useState<CanvasPoint | null>(null);
+        const [measureAreaPreviewPt, setMeasureAreaPreviewPt] =
+            useState<CanvasPoint | null>(null);
         /** Medición congelada al cerrar el polígono (para mantenerla visible) */
-        const [measureAreaFrozen, setMeasureAreaFrozen] = useState<CanvasPoint[] | null>(null);
-        const [tempElectricalDevice, setTempElectricalDevice] = useState<{ x: number; y: number; type: ElectricalDeviceType; label: string } | null>(null);
+        const [measureAreaFrozen, setMeasureAreaFrozen] = useState<
+            CanvasPoint[] | null
+        >(null);
+        const [distanceMeasurement, setDistanceMeasurement] = useState<{
+            start: CanvasPoint;
+            end: CanvasPoint;
+        } | null>(null);
+        const [isDistanceMeasurementFinal, setIsDistanceMeasurementFinal] =
+            useState(false);
+        const [tempElectricalDevice, setTempElectricalDevice] = useState<{
+            x: number;
+            y: number;
+            type: ElectricalDeviceType;
+            label: string;
+        } | null>(null);
         const [isDragging, setIsDragging] = useState(false);
         const [viewTick, setViewTick] = useState(0);
         const scaleConfig = normalizeScaleConfig(scene?.scaleConfig);
@@ -224,22 +261,37 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     size.h,
                 ),
             // eslint-disable-next-line react-hooks/exhaustive-deps
-            [hasCadView, cadView, scaleConfig.factor, scaleConfig.calibrationFactor, zoom, panX, panY, size.h, viewTick],
+            [
+                hasCadView,
+                cadView,
+                scaleConfig.factor,
+                scaleConfig.calibrationFactor,
+                zoom,
+                panX,
+                panY,
+                size.h,
+                viewTick,
+            ],
         );
 
         const screenPoint = useCallback(
-            (point: { x: number; y: number }) => transforms.sceneToScreen(point),
+            (point: { x: number; y: number }) =>
+                transforms.sceneToScreen(point),
             [transforms],
         );
 
         const screenDistance = useCallback(
-            (dx: number, dy: number, origin: { x: number; y: number } = { x: 0, y: 0 }) =>
-                transforms.screenDistance(dx, dy, origin),
+            (
+                dx: number,
+                dy: number,
+                origin: { x: number; y: number } = { x: 0, y: 0 },
+            ) => transforms.screenDistance(dx, dy, origin),
             [transforms],
         );
 
         const worldPoint = useCallback(
-            (px: number, py: number) => transforms.screenToScene({ x: px, y: py }),
+            (px: number, py: number) =>
+                transforms.screenToScene({ x: px, y: py }),
             [transforms],
         );
 
@@ -314,7 +366,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                               lastPoint: cadLast,
                           });
                       } catch (err) {
-                          console.warn('[DIAlux] engine.getOsnapPoint threw an error (malformed DXF entity?):', err);
+                          console.warn(
+                              '[DIAlux] engine.getOsnapPoint threw an error (malformed DXF entity?):',
+                              err,
+                          );
                       }
                       if (!osnapCad) return null;
                       // Retornar en metros para que el pipeline de snap sea consistente.
@@ -340,9 +395,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             doors: scene?.doors ?? [],
             conductors: scene?.conductors ?? [],
             partitions: scene?.partitions ?? [],
-            isObjectSelectable: (id) => scene
-                ? isElectricalItemVisible(scene, ui.electricalLayerVisibility, ui.hiddenElectricalIds, id)
-                : true,
+            isObjectSelectable: (id) =>
+                scene
+                    ? isElectricalItemVisible(
+                          scene,
+                          ui.electricalLayerVisibility,
+                          ui.hiddenElectricalIds,
+                          id,
+                      )
+                    : true,
             onDragGesture: (phase) => {
                 if (phase === 'start') store.beginHistoryGesture();
                 else store.endHistoryGesture();
@@ -353,7 +414,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 ids.forEach((id) => {
                     const fixture = fixtures.find((f) => f.id === id);
                     if (fixture) {
-                        store.updateFixture(id, { x: fixture.x + dx, y: fixture.y + dy });
+                        store.updateFixture(id, {
+                            x: fixture.x + dx,
+                            y: fixture.y + dy,
+                        });
                     }
                 });
             },
@@ -365,9 +429,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             onConnectWire: (sourceId, targetId, waypoints) => {
                 // If it already exists, remove it (toggle connection)
-                const existingWire = scene?.conductors?.find(c =>
-                    (c.sourceId === sourceId && c.targetId === targetId) ||
-                    (c.sourceId === targetId && c.targetId === sourceId)
+                const existingWire = scene?.conductors?.find(
+                    (c) =>
+                        (c.sourceId === sourceId && c.targetId === targetId) ||
+                        (c.sourceId === targetId && c.targetId === sourceId),
                 );
 
                 if (existingWire) {
@@ -381,7 +446,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     const endpointDevices = scene?.electricalDevices ?? [];
                     const connectsOutlet = [sourceId, targetId].some((id) =>
                         endpointDevices.some(
-                            (device) => device.id === id && isOutletDeviceType(device.type),
+                            (device) =>
+                                device.id === id &&
+                                isOutletDeviceType(device.type),
                         ),
                     );
                     store.addConductor({
@@ -415,18 +482,27 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             // (luminaria/interruptor/equipo), para corregir una conexión mal
             // hecha sin tener que borrar el cable y volver a trazarlo.
             onReconnectWireEndpoint: (conductorId, endpoint, newNodeId) => {
-                const conductor = scene?.conductors?.find((c) => c.id === conductorId);
+                const conductor = scene?.conductors?.find(
+                    (c) => c.id === conductorId,
+                );
                 if (!conductor) return;
 
-                const otherId = endpoint === 'source' ? conductor.targetId : conductor.sourceId;
-                const currentId = endpoint === 'source' ? conductor.sourceId : conductor.targetId;
+                const otherId =
+                    endpoint === 'source'
+                        ? conductor.targetId
+                        : conductor.sourceId;
+                const currentId =
+                    endpoint === 'source'
+                        ? conductor.sourceId
+                        : conductor.targetId;
                 if (newNodeId === otherId || newNodeId === currentId) return; // loop o sin cambios
 
                 const wouldDuplicate = scene?.conductors?.some(
                     (c) =>
                         c.id !== conductorId &&
                         ((c.sourceId === otherId && c.targetId === newNodeId) ||
-                            (c.sourceId === newNodeId && c.targetId === otherId)),
+                            (c.sourceId === newNodeId &&
+                                c.targetId === otherId)),
                 );
                 if (wouldDuplicate) return;
 
@@ -438,24 +514,45 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
                 // Romper el vínculo legacy de la conexión anterior...
                 applyLegacyLinkUpdate(
-                    computeLegacyLinkUpdate(conductor.sourceId, conductor.targetId, ctx, false),
+                    computeLegacyLinkUpdate(
+                        conductor.sourceId,
+                        conductor.targetId,
+                        ctx,
+                        false,
+                    ),
                     store,
                 );
 
-                const newSourceId = endpoint === 'source' ? newNodeId : conductor.sourceId;
-                const newTargetId = endpoint === 'target' ? newNodeId : conductor.targetId;
-                store.updateConductor(conductorId, endpoint === 'source' ? { sourceId: newNodeId } : { targetId: newNodeId });
+                const newSourceId =
+                    endpoint === 'source' ? newNodeId : conductor.sourceId;
+                const newTargetId =
+                    endpoint === 'target' ? newNodeId : conductor.targetId;
+                store.updateConductor(
+                    conductorId,
+                    endpoint === 'source'
+                        ? { sourceId: newNodeId }
+                        : { targetId: newNodeId },
+                );
 
                 // ...y crear el de la nueva.
                 applyLegacyLinkUpdate(
-                    computeLegacyLinkUpdate(newSourceId, newTargetId, ctx, true),
+                    computeLegacyLinkUpdate(
+                        newSourceId,
+                        newTargetId,
+                        ctx,
+                        true,
+                    ),
                     store,
                 );
             },
             onAddRoom: (verticesM) => {
                 const isCorridor = ui.activeTool === 'corridor';
                 const isStair = ui.activeTool === 'stair';
-                const effectiveRoomType = isStair ? 'stair' : isCorridor ? 'corridor' : (ui.roomTypeTemplate ?? 'room');
+                const effectiveRoomType = isStair
+                    ? 'stair'
+                    : isCorridor
+                      ? 'corridor'
+                      : (ui.roomTypeTemplate ?? 'room');
                 const stairCount =
                     scene?.rooms.filter((r) => r.roomType === 'stair').length ??
                     0;
@@ -463,7 +560,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     scene?.rooms.filter((r) => r.roomType === 'corridor')
                         .length ?? 0;
                 const ambientCount =
-                    scene?.rooms.filter((r) => r.roomType === 'ambient').length ?? 0;
+                    scene?.rooms.filter((r) => r.roomType === 'ambient')
+                        .length ?? 0;
                 const roomCount =
                     scene?.rooms.filter(
                         (r) => !r.roomType || r.roomType === 'room',
@@ -531,7 +629,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             },
             onAddWall: (vertices) => {
                 const isEducationWall = ui.activeTool === 'education-wall';
-                const wallType = isEducationWall ? 'interior' : (ui.wallTypeTemplate ?? 'interior');
+                const wallType = isEducationWall
+                    ? 'interior'
+                    : (ui.wallTypeTemplate ?? 'interior');
                 const preset = getPeruWallPreset(
                     'brick',
                     isEducationWall ? 'education' : 'housing',
@@ -689,10 +789,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     const base = defaults.label.replace(/-\d+$/, '');
                     label = `${base}-${String(existingOfType.length + 1).padStart(2, '0')}`;
                 }
-                const ambient = scene ? findAmbientSpaceAtPoint(scene, { x, y }) : null;
+                const ambient = scene
+                    ? findAmbientSpaceAtPoint(scene, { x, y })
+                    : null;
                 const mountingHeight =
                     template.type === 'outlet_ceiling' && ambient
-                        ? resolveRoomCeilingHeight(ambient.room, scene?.walls ?? [])
+                        ? resolveRoomCeilingHeight(
+                              ambient.room,
+                              scene?.walls ?? [],
+                          )
                         : defaults.mountingHeight;
                 const id = store.addElectricalDevice({
                     type: template.type,
@@ -702,7 +807,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     mountingHeight,
                     wallId,
                     connectedDeviceIds: [],
-                    properties: { ...defaults.properties, ...template.properties },
+                    properties: {
+                        ...defaults.properties,
+                        ...template.properties,
+                    },
                 });
                 store.setSelectedId(id);
             },
@@ -719,6 +827,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     start: p1Scene,
                     end: p2Scene,
                 });
+            },
+
+            onMeasureDistanceChange: (measurement, isFinal) => {
+                setDistanceMeasurement(measurement);
+                setIsDistanceMeasurementFinal(isFinal);
             },
 
             /**
@@ -765,35 +878,79 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         });
 
         // ── Manija de rotación (luminaria / interruptor / dispositivo único) ────
-        const rotateKind: 'fixture' | 'switch' | 'device' | null = useMemo(() => {
-            if (!scene || ui.activeTool !== 'select') return null;
-            if ((ui.selectedFixtureIds?.length ?? 0) === 1) return 'fixture';
-            if (ui.selectedId && scene.lightSwitches.some((s) => s.id === ui.selectedId)) return 'switch';
-            if (ui.selectedId && (scene.electricalDevices ?? []).some((d) => d.id === ui.selectedId)) return 'device';
-            return null;
-        }, [scene, ui.activeTool, ui.selectedFixtureIds, ui.selectedId]);
+        const rotateKind: 'fixture' | 'switch' | 'device' | null =
+            useMemo(() => {
+                if (!scene || ui.activeTool !== 'select') return null;
+                if ((ui.selectedFixtureIds?.length ?? 0) === 1)
+                    return 'fixture';
+                if (
+                    ui.selectedId &&
+                    scene.lightSwitches.some((s) => s.id === ui.selectedId)
+                )
+                    return 'switch';
+                if (
+                    ui.selectedId &&
+                    (scene.electricalDevices ?? []).some(
+                        (d) => d.id === ui.selectedId,
+                    )
+                )
+                    return 'device';
+                return null;
+            }, [scene, ui.activeTool, ui.selectedFixtureIds, ui.selectedId]);
 
         const rotateTarget: RotatableTarget | null = useMemo(() => {
             if (!scene || !rotateKind) return null;
             if (rotateKind === 'fixture') {
-                const fx = scene.fixtures.find((f) => f.id === ui.selectedFixtureIds![0]);
-                return fx ? { id: fx.id, x: fx.x, y: fx.y, rotation: fx.rotation ?? 0 } : null;
+                const fx = scene.fixtures.find(
+                    (f) => f.id === ui.selectedFixtureIds![0],
+                );
+                return fx
+                    ? {
+                          id: fx.id,
+                          x: fx.x,
+                          y: fx.y,
+                          rotation: fx.rotation ?? 0,
+                      }
+                    : null;
             }
             if (rotateKind === 'switch') {
-                const sw = scene.lightSwitches.find((s) => s.id === ui.selectedId);
-                return sw ? { id: sw.id, x: sw.x, y: sw.y, rotation: sw.rotation ?? 0 } : null;
+                const sw = scene.lightSwitches.find(
+                    (s) => s.id === ui.selectedId,
+                );
+                return sw
+                    ? {
+                          id: sw.id,
+                          x: sw.x,
+                          y: sw.y,
+                          rotation: sw.rotation ?? 0,
+                      }
+                    : null;
             }
-            const dev = (scene.electricalDevices ?? []).find((d) => d.id === ui.selectedId);
-            return dev ? { id: dev.id, x: dev.x, y: dev.y, rotation: dev.rotation ?? 0 } : null;
+            const dev = (scene.electricalDevices ?? []).find(
+                (d) => d.id === ui.selectedId,
+            );
+            return dev
+                ? {
+                      id: dev.id,
+                      x: dev.x,
+                      y: dev.y,
+                      rotation: dev.rotation ?? 0,
+                  }
+                : null;
         }, [scene, rotateKind, ui.selectedFixtureIds, ui.selectedId]);
 
         const rotateObjectRadiusPx = useMemo(() => {
             if (!rotateTarget) return 12;
             const origin = { x: rotateTarget.x, y: rotateTarget.y };
             if (rotateKind === 'fixture') {
-                const fx = scene?.fixtures.find((f) => f.id === rotateTarget.id);
+                const fx = scene?.fixtures.find(
+                    (f) => f.id === rotateTarget.id,
+                );
                 const half = fx?.dimensions
-                    ? Math.max(fx.dimensions.length ?? 0.3, fx.dimensions.width ?? 0.3) / 2
+                    ? Math.max(
+                          fx.dimensions.length ?? 0.3,
+                          fx.dimensions.width ?? 0.3,
+                      ) / 2
                     : 0.15;
                 return Math.max(8, screenDistance(half, 0, origin));
             }
@@ -802,9 +959,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
         const handleRotate = useCallback(
             (id: string, rotationDeg: number) => {
-                if (rotateKind === 'fixture') store.updateFixture(id, { rotation: rotationDeg });
-                else if (rotateKind === 'switch') store.updateLightSwitch(id, { rotation: rotationDeg });
-                else if (rotateKind === 'device') store.updateElectricalDevice(id, { rotation: rotationDeg });
+                if (rotateKind === 'fixture')
+                    store.updateFixture(id, { rotation: rotationDeg });
+                else if (rotateKind === 'switch')
+                    store.updateLightSwitch(id, { rotation: rotationDeg });
+                else if (rotateKind === 'device')
+                    store.updateElectricalDevice(id, { rotation: rotationDeg });
             },
             [rotateKind, store],
         );
@@ -824,7 +984,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
          */
         const overlaySelect = useCallback(
             (id: string | null) => {
-                if (useEditorStore.getState().ui.activeTool === 'select') return;
+                if (useEditorStore.getState().ui.activeTool === 'select')
+                    return;
                 store.setSelectedId(id);
             },
             [store],
@@ -832,7 +993,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
 
         const overlaySelectFixture = useCallback(
             (id: string, multi?: boolean) => {
-                if (useEditorStore.getState().ui.activeTool === 'select') return;
+                if (useEditorStore.getState().ui.activeTool === 'select')
+                    return;
                 if (multi) store.toggleFixtureSelection(id);
                 else store.setSelectedId(id);
             },
@@ -918,7 +1080,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         );
                         markDialuxPlanSyncOk(activeSceneId);
                     } catch (error) {
-                        console.warn('No se pudo migrar el plano local al servidor.', error);
+                        console.warn(
+                            'No se pudo migrar el plano local al servidor.',
+                            error,
+                        );
                         markDialuxPlanSyncFailed(activeSceneId);
                     }
                 }
@@ -936,7 +1101,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             );
                         }
                     } catch (error) {
-                        console.warn('No se pudo descargar el plano DIAlux.', error);
+                        console.warn(
+                            'No se pudo descargar el plano DIAlux.',
+                            error,
+                        );
                     }
                 }
 
@@ -963,7 +1131,10 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }
                     lastLoadedPlanKeyRef.current = planKey;
                 } catch (error) {
-                    console.warn('No se pudo restaurar el plano DIAlux.', error);
+                    console.warn(
+                        'No se pudo restaurar el plano DIAlux.',
+                        error,
+                    );
                     lastLoadedPlanKeyRef.current = null;
                 }
             })();
@@ -1090,7 +1261,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     style={{
                         zIndex: 0,
                         background: '#0d0f14',
-                        visibility: ui.electricalLayerVisibility.cad ? 'visible' : 'hidden',
+                        visibility: ui.electricalLayerVisibility.cad
+                            ? 'visible'
+                            : 'hidden',
                     }}
                 />
 
@@ -1110,7 +1283,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }}
                     onMouseDown={(e) => {
                         if (isInteractiveMode) {
-                            if (ui.activeTool !== 'measure-area') setMeasureAreaFrozen(null);
+                            if (ui.activeTool !== 'measure-area')
+                                setMeasureAreaFrozen(null);
                             onMouseDown(
                                 e,
                                 setRoomVertices,
@@ -1127,7 +1301,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             onMouseMove(
                                 e,
                                 (pt) => {
-                                    if (ui.activeTool === 'measure-area') setMeasureAreaPreviewPt(pt);
+                                    if (ui.activeTool === 'measure-area')
+                                        setMeasureAreaPreviewPt(pt);
                                     else setRoomPreviewPt(pt);
                                 },
                                 setWallPreview,
@@ -1139,7 +1314,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             );
                     }}
                     onMouseUp={(e) => {
-                        if (isInteractiveMode) onMouseUp(e, setCanopyPreview, setWireReconnectPreview);
+                        if (isInteractiveMode)
+                            onMouseUp(
+                                e,
+                                setCanopyPreview,
+                                setWireReconnectPreview,
+                            );
                     }}
                     onDoubleClick={onDoubleClick}
                 >
@@ -1264,9 +1444,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         opacity={1}
                     />
                     <OverlayFixtures
-                        fixtures={ui.electricalLayerVisibility.fixtures
-                            ? (scene?.fixtures ?? []).filter((item) => !ui.hiddenElectricalIds.includes(item.id))
-                            : []}
+                        fixtures={
+                            ui.electricalLayerVisibility.fixtures
+                                ? (scene?.fixtures ?? []).filter(
+                                      (item) =>
+                                          !ui.hiddenElectricalIds.includes(
+                                              item.id,
+                                          ),
+                                  )
+                                : []
+                        }
                         selectedFixtureIds={ui.selectedFixtureIds ?? []}
                         zoom={zoom}
                         onSelect={overlaySelectFixture}
@@ -1275,7 +1462,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     />
                     <OverlayWires
                         conductors={(scene?.conductors ?? []).filter((item) => {
-                            if (ui.hiddenElectricalIds.includes(item.id)) return false;
+                            if (ui.hiddenElectricalIds.includes(item.id))
+                                return false;
                             const layer = classifyConductorLayer(
                                 item,
                                 scene?.fixtures ?? [],
@@ -1293,13 +1481,22 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         selectedConductorIds={selectedCircuitConductorIds}
                         onSelect={overlaySelect}
                         activeTool={ui.activeTool}
-                        showLegacyLightingWires={ui.electricalLayerVisibility.fixtures}
+                        showLegacyLightingWires={
+                            ui.electricalLayerVisibility.fixtures
+                        }
                         reconnectPreview={wireReconnectPreview}
                     />
                     <OverlayLightSwitches
-                        lightSwitches={ui.electricalLayerVisibility.switches
-                            ? (scene?.lightSwitches ?? []).filter((item) => !ui.hiddenElectricalIds.includes(item.id))
-                            : []}
+                        lightSwitches={
+                            ui.electricalLayerVisibility.switches
+                                ? (scene?.lightSwitches ?? []).filter(
+                                      (item) =>
+                                          !ui.hiddenElectricalIds.includes(
+                                              item.id,
+                                          ),
+                                  )
+                                : []
+                        }
                         selectedId={ui.selectedId}
                         zoom={zoom}
                         onSelect={overlaySelect}
@@ -1307,12 +1504,18 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         screenDistance={screenDistance}
                     />
                     <OverlayElectricalDevices
-                        devices={(
-                            tempElectricalDevice
-                                ? [...(scene?.electricalDevices ?? []), { ...tempElectricalDevice, id: 'temp-preview' } as any]
-                                : (scene?.electricalDevices ?? [])
+                        devices={(tempElectricalDevice
+                            ? [
+                                  ...(scene?.electricalDevices ?? []),
+                                  {
+                                      ...tempElectricalDevice,
+                                      id: 'temp-preview',
+                                  } as any,
+                              ]
+                            : (scene?.electricalDevices ?? [])
                         ).filter((item) => {
-                            if (ui.hiddenElectricalIds.includes(item.id)) return false;
+                            if (ui.hiddenElectricalIds.includes(item.id))
+                                return false;
                             const isOutlet = item.type.startsWith('outlet_');
                             return isOutlet
                                 ? ui.electricalLayerVisibility.outlets
@@ -1339,11 +1542,24 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         }
                     />
                     <OverlayMeasureArea
-                        vertices={measureAreaVertices.length > 0 ? measureAreaVertices : (measureAreaFrozen ?? [])}
+                        vertices={
+                            measureAreaVertices.length > 0
+                                ? measureAreaVertices
+                                : (measureAreaFrozen ?? [])
+                        }
                         previewPoint={measureAreaPreviewPt}
-                        isClosed={measureAreaFrozen !== null && measureAreaVertices.length === 0}
+                        isClosed={
+                            measureAreaFrozen !== null &&
+                            measureAreaVertices.length === 0
+                        }
                         screenPoint={screenPoint}
                         zoom={zoom}
+                    />
+                    <OverlayMeasureDistance
+                        measurement={distanceMeasurement}
+                        isFinal={isDistanceMeasurementFinal}
+                        isCalibrated={scaleConfig.isCalibrated}
+                        screenPoint={screenPoint}
                     />
                     <OverlayRotateHandle
                         target={rotateTarget}

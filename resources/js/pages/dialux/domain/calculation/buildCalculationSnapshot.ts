@@ -1,6 +1,6 @@
 import { buildPartitionOcclusionBoxes, buildWallOcclusionBoxes } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
-import type { Fixture, Project, Room } from '@/pages/dialux/hooks/types';
+import type { Fixture, LightingScenePreset, LightSwitch, Project, Room } from '@/pages/dialux/hooks/types';
 import {
     CALCULATION_SNAPSHOT_SCHEMA_VERSION,
     type CalculationLevel,
@@ -44,7 +44,7 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
             floorHeight: scene.floorHeight,
         });
 
-        const luminaireStates: LuminaireState[] = [];
+        const levelLuminaireIds: string[] = [];
         const ambients = deriveSceneAmbientSpaces(scene);
 
         for (const ambient of ambients) {
@@ -56,19 +56,37 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
                 const luminaire = toCalculationLuminaire(fixture, scene.id);
                 luminaires.push(luminaire);
                 luminaireIds.push(luminaire.id);
-                luminaireStates.push({ luminaireId: luminaire.id, on: true, dimmingFactor: 1 });
+                levelLuminaireIds.push(luminaire.id);
             }
 
             calculationObjects.push(toCalculationObject(room, ambient.id, ambient.name, scene.id, materialId, luminaireIds));
         }
 
-        scenes.push({
-            id: `${scene.id}::default-scene`,
-            levelId: scene.id,
-            // Único estado real hoy: no existe UI de encendido/apagado por escena (Fase 10 la introduce).
-            name: 'Escena por defecto',
-            luminaireStates,
-        });
+        // Fase 10: un nivel puede definir varias escenas lumínicas
+        // (`lightingScenes`, presets de encendido/apagado/regulación por
+        // interruptor). Sin ninguna definida (`undefined`/`[]`, el caso de
+        // todo proyecto anterior a esta fase), se genera exactamente la
+        // misma "Escena por defecto" (todo encendido) que antes — mismo
+        // comportamiento, no disruptivo.
+        const presets = scene.lightingScenes ?? [];
+        if (presets.length > 0) {
+            for (const preset of presets) {
+                scenes.push({
+                    id: `${scene.id}::${preset.id}`,
+                    levelId: scene.id,
+                    name: preset.name,
+                    luminaireStates: resolveLuminaireStates(levelLuminaireIds, scene.lightSwitches, preset.switchStates),
+                    trigger: preset.trigger,
+                });
+            }
+        } else {
+            scenes.push({
+                id: `${scene.id}::default-scene`,
+                levelId: scene.id,
+                name: 'Escena por defecto',
+                luminaireStates: resolveLuminaireStates(levelLuminaireIds, scene.lightSwitches, null),
+            });
+        }
 
         const sceneBoxes = [
             ...buildWallOcclusionBoxes(scene.walls, scene.windows, scene.doors),
@@ -90,6 +108,71 @@ export function buildCalculationSnapshot(project: Project): CalculationSnapshot 
         calculationObjects,
         obstacles,
     };
+}
+
+/**
+ * Estado de encendido/regulación de cada luminaria de un nivel, para UNA
+ * escena (Fase 10). Los "grupos de control" del plan ya existen como
+ * `LightSwitch.connectedFixtureIds` — no se reinventa esa agrupación, solo
+ * se resuelve el estado de cada interruptor que controla cada luminaria.
+ *
+ * `switchStates === null` (sin ningún preset definido, el nivel usa la
+ * "Escena por defecto"): todas las luminarias quedan encendidas al 100%,
+ * SIN mirar `lightSwitches` — mismo comportamiento exacto que antes de la
+ * Fase 10, incluso si el nivel ya tiene interruptores modelados en el
+ * plano eléctrico.
+ *
+ * Con un preset real: un interruptor NO listado en `switchStates` se asume
+ * encendido al 100% (una escena es un "diff" desde todo encendido). Una
+ * luminaria controlada por MÁS DE UN interruptor (conmutación de varios
+ * puntos) usa la regla conservadora "apagada si CUALQUIERA de sus
+ * interruptores está apagado" y "atenuación = la más baja entre ellos" — no
+ * modela conmutación de 3 vías real (XOR), documentado como simplificación
+ * deliberada en `planes/fase10_progreso_dialux.md`.
+ */
+function resolveLuminaireStates(
+    luminaireIds: string[],
+    lightSwitches: LightSwitch[],
+    switchStates: LightingScenePreset['switchStates'] | null,
+): LuminaireState[] {
+    if (!switchStates) {
+        return luminaireIds.map((luminaireId) => ({ luminaireId, on: true, dimmingFactor: 1 }));
+    }
+
+    const switchesByFixture = new Map<string, LightSwitch[]>();
+    for (const lightSwitch of lightSwitches) {
+        for (const fixtureId of lightSwitch.connectedFixtureIds) {
+            const list = switchesByFixture.get(fixtureId);
+            if (list) {
+                list.push(lightSwitch);
+            } else {
+                switchesByFixture.set(fixtureId, [lightSwitch]);
+            }
+        }
+    }
+
+    return luminaireIds.map((luminaireId) => {
+        const controllingSwitches = switchesByFixture.get(luminaireId) ?? [];
+        if (controllingSwitches.length === 0) {
+            return { luminaireId, on: true, dimmingFactor: 1 };
+        }
+
+        let on = true;
+        let dimmingFactor = 1;
+        for (const lightSwitch of controllingSwitches) {
+            const state = switchStates[lightSwitch.id] ?? { on: true, dimmingFactor: 1 };
+            on = on && state.on;
+            // Recortado a [0,1] en el punto de lectura (auditoría `dialux-calc-reviewer`
+            // de esta fase): ninguna UI escribe `lightingScenes` todavía, pero
+            // el contrato ya lo permite, y un valor fuera de rango (dato
+            // malformado o negativo) no debe llegar sin filtro al motor —
+            // mismo criterio que `clampReflectance` en la Fase 7.
+            const clampedDimming = Number.isFinite(state.dimmingFactor) ? Math.min(1, Math.max(0, state.dimmingFactor)) : 1;
+            dimmingFactor = Math.min(dimmingFactor, clampedDimming);
+        }
+
+        return { luminaireId, on, dimmingFactor };
+    });
 }
 
 function resolveMaterialId(
@@ -133,6 +216,8 @@ function toCalculationLuminaire(fixture: Fixture, levelId: string): CalculationL
                   c_angles: [...fixture.photometricWeb.c_angles],
                   gamma_angles: [...fixture.photometricWeb.gamma_angles],
                   candela: fixture.photometricWeb.candela.map((row) => [...row]),
+                  reference_lumens: fixture.photometricWeb.reference_lumens,
+                  provenance: fixture.photometricWeb.provenance,
               }
             : null,
     };

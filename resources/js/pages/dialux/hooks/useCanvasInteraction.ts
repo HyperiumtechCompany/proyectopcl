@@ -1,5 +1,8 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { cycleCandidate, hitTestAtPoint } from '@/pages/dialux/selection/hitTest';
+import {
+    cycleCandidate,
+    hitTestAtPoint,
+} from '@/pages/dialux/selection/hitTest';
 import { getCanopyDraftStart } from './cadInteraction';
 import { resolveWireNodePosition } from './wireNodePosition';
 import type {
@@ -18,11 +21,11 @@ import type {
     ElectricalDevice,
     ElectricalDeviceType,
 } from './useEditorStore';
-import { 
+import {
     clampOpeningOffsetToWallSegment,
     projectPointToWallProjection,
-    useInteractionHelpers, 
-    wallLength, 
+    useInteractionHelpers,
+    wallLength,
     projectPointToWallOffset,
     resolveOffsetOnWall,
 } from './useInteractionHelpers';
@@ -63,7 +66,14 @@ interface InteractionOptions {
         p1: CanvasPoint,
         p2: CanvasPoint,
     ) => void;
-    electricalDeviceTemplate?: { type: ElectricalDeviceType; label?: string } | null;
+    onMeasureDistanceChange: (
+        measurement: { start: CanvasPoint; end: CanvasPoint } | null,
+        isFinal: boolean,
+    ) => void;
+    electricalDeviceTemplate?: {
+        type: ElectricalDeviceType;
+        label?: string;
+    } | null;
     /** Llamado cuando el usuario cierra el polígono de medición de área */
     onMeasureAreaFinish: (vertices: CanvasPoint[]) => void;
     onSelectObject: (id: string | null, multi?: boolean) => void;
@@ -90,13 +100,31 @@ interface InteractionOptions {
         y2: number,
     ) => void;
     onMoveWindow: (id: string, wallId: string, offsetAlongWall: number) => void;
-    onMoveDoor:   (id: string, wallId: string, offsetAlongWall: number) => void;
+    onMoveDoor: (id: string, wallId: string, offsetAlongWall: number) => void;
     onAddLightSwitch: (x: number, y: number, wallId?: string) => void;
-    onMoveLightSwitch: (id: string, x: number, y: number, wallId?: string) => void;
-    onMoveElectricalDevice?: (id: string, x: number, y: number, wallId?: string) => void;
-    onConnectWire?: (sourceId: string, targetId: string, waypoints?: { x: number; y: number }[]) => void;
+    onMoveLightSwitch: (
+        id: string,
+        x: number,
+        y: number,
+        wallId?: string,
+    ) => void;
+    onMoveElectricalDevice?: (
+        id: string,
+        x: number,
+        y: number,
+        wallId?: string,
+    ) => void;
+    onConnectWire?: (
+        sourceId: string,
+        targetId: string,
+        waypoints?: { x: number; y: number }[],
+    ) => void;
     /** Reconecta un extremo de un cable ya existente a otro nodo (arrastrar handle) */
-    onReconnectWireEndpoint?: (conductorId: string, endpoint: 'source' | 'target', newNodeId: string) => void;
+    onReconnectWireEndpoint?: (
+        conductorId: string,
+        endpoint: 'source' | 'target',
+        newNodeId: string,
+    ) => void;
     onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
     electricalDevices?: ElectricalDevice[];
     /** Cables y tabiques: solo participan del hit-testing de selección */
@@ -120,6 +148,7 @@ interface DrawState {
     canopyPreview: { start: CanvasPoint; end: CanvasPoint } | null;
     /** Punto inicial de calibración en coordenadas de ESCENA (metros) — para preview/snap. */
     calibrationStart: CanvasPoint | null;
+    measurementStart: CanvasPoint | null;
     /** Vértices acumulados para la herramienta measure-area (metros de escena). */
     measureAreaVertices: CanvasPoint[];
     wireStartNode: { type: 'switch' | 'fixture' | 'device'; id: string } | null;
@@ -128,7 +157,16 @@ interface DrawState {
     isDragging: boolean;
     dragStartScene: CanvasPoint | null;
     dragObjectId: string | null;
-    dragObjectType: 'fixture' | 'room' | 'canopy' | 'window' | 'door' | 'switch' | 'electrical-device' | 'conductor-endpoint' | null;
+    dragObjectType:
+        | 'fixture'
+        | 'room'
+        | 'canopy'
+        | 'window'
+        | 'door'
+        | 'switch'
+        | 'electrical-device'
+        | 'conductor-endpoint'
+        | null;
     /** Extremo del conductor que se está arrastrando (solo cuando dragObjectType === 'conductor-endpoint') */
     dragConductorEndpoint: 'source' | 'target' | null;
 }
@@ -154,6 +192,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onAddFixtureGrid,
         onAddLightSwitch,
         onCalibrationMeasure,
+        onMeasureDistanceChange,
         onMeasureAreaFinish,
         onSelectObject,
         onPanChange,
@@ -211,6 +250,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         wallPreview: null,
         canopyPreview: null,
         calibrationStart: null,
+        measurementStart: null,
         measureAreaVertices: [],
         wireStartNode: null,
         wireWaypoints: [],
@@ -225,9 +265,16 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         if (activeTool !== 'calibrate') {
             stateRef.current.calibrationStart = null;
         }
+        if (activeTool !== 'measure') {
+            stateRef.current.measurementStart = null;
+            onMeasureDistanceChange(null, false);
+        }
         if (activeTool !== 'measure-area') {
             stateRef.current.measureAreaVertices = [];
         }
+        // La limpieza solo debe ejecutarse al cambiar de herramienta; el callback
+        // llega inline desde el canvas y cambia de identidad en cada render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTool]);
 
     // ── Conversión coordenadas ────────────────────────────────────────────────
@@ -277,7 +324,12 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     // Candidato de nodo (switch/fixture/device) más cercano al cursor, para
     // trazar o reconectar cables. Compartido entre la herramienta "wire" y el
     // arrastre de un handle de extremo de un cable ya seleccionado.
-    type WireNodeCandidate = { kind: 'switch' | 'fixture' | 'device'; id: string; x: number; y: number };
+    type WireNodeCandidate = {
+        kind: 'switch' | 'fixture' | 'device';
+        id: string;
+        x: number;
+        y: number;
+    };
     const pickWireNodeCandidate = useCallback(
         (cx: number, cy: number): WireNodeCandidate | null => {
             const switchHit = findNearestLightSwitch(cx, cy);
@@ -299,30 +351,69 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const SNAP_DEV = 18 * 18;
 
             const candidates: (WireNodeCandidate & { dist2: number })[] = [];
-            if (switchHit && dist2Switch <= SNAP_SW) candidates.push({ kind: 'switch', id: switchHit.id, x: switchHit.x, y: switchHit.y, dist2: dist2Switch });
-            if (fixtureHit && dist2Fixture <= SNAP_FIX) candidates.push({ kind: 'fixture', id: fixtureHit.id, x: fixtureHit.x, y: fixtureHit.y, dist2: dist2Fixture });
-            if (deviceHit && dist2Device <= SNAP_DEV) candidates.push({ kind: 'device', id: deviceHit.id, x: deviceHit.x, y: deviceHit.y, dist2: dist2Device });
+            if (switchHit && dist2Switch <= SNAP_SW)
+                candidates.push({
+                    kind: 'switch',
+                    id: switchHit.id,
+                    x: switchHit.x,
+                    y: switchHit.y,
+                    dist2: dist2Switch,
+                });
+            if (fixtureHit && dist2Fixture <= SNAP_FIX)
+                candidates.push({
+                    kind: 'fixture',
+                    id: fixtureHit.id,
+                    x: fixtureHit.x,
+                    y: fixtureHit.y,
+                    dist2: dist2Fixture,
+                });
+            if (deviceHit && dist2Device <= SNAP_DEV)
+                candidates.push({
+                    kind: 'device',
+                    id: deviceHit.id,
+                    x: deviceHit.x,
+                    y: deviceHit.y,
+                    dist2: dist2Device,
+                });
             candidates.sort((a, b) => a.dist2 - b.dist2);
             return candidates[0] ?? null;
         },
-        [findNearestLightSwitch, findNearestFixture, findNearestElectricalDevice, sceneToCanvas],
+        [
+            findNearestLightSwitch,
+            findNearestFixture,
+            findNearestElectricalDevice,
+            sceneToCanvas,
+        ],
     );
 
     // Helper local para determinar el punto previo para ortho snap
-    const getPrevPointM = useCallback((tool: string, s: DrawState): CanvasPoint | null => {
-        if ((tool === 'room' || tool === 'corridor' || tool === 'stair') && s.roomVertices.length > 0) return s.roomVertices[s.roomVertices.length - 1];
-        if (isWallTool(tool) && s.wallVertices.length > 0) return s.wallVertices[s.wallVertices.length - 1];
-        if (tool === 'canopy' && s.isDrawing && s.wallStart) return s.wallStart;
-        if (tool === 'calibrate' && s.calibrationStart) return s.calibrationStart;
-        if (tool === 'measure-area' && s.measureAreaVertices.length > 0) return s.measureAreaVertices[s.measureAreaVertices.length - 1];
-        return null;
-    }, []);
+    const getPrevPointM = useCallback(
+        (tool: string, s: DrawState): CanvasPoint | null => {
+            if (
+                (tool === 'room' || tool === 'corridor' || tool === 'stair') &&
+                s.roomVertices.length > 0
+            )
+                return s.roomVertices[s.roomVertices.length - 1];
+            if (isWallTool(tool) && s.wallVertices.length > 0)
+                return s.wallVertices[s.wallVertices.length - 1];
+            if (tool === 'canopy' && s.isDrawing && s.wallStart)
+                return s.wallStart;
+            if (tool === 'calibrate' && s.calibrationStart)
+                return s.calibrationStart;
+            if (tool === 'measure' && s.measurementStart)
+                return s.measurementStart;
+            if (tool === 'measure-area' && s.measureAreaVertices.length > 0)
+                return s.measureAreaVertices[s.measureAreaVertices.length - 1];
+            return null;
+        },
+        [],
+    );
 
     const getReferenceAngles = useCallback(
         (tool: string, s: DrawState, cx: number, cy: number): number[] => {
             const inferred = getGuideAngles(cx, cy);
             const vertices =
-                (tool === 'room' || tool === 'corridor' || tool === 'stair')
+                tool === 'room' || tool === 'corridor' || tool === 'stair'
                     ? s.roomVertices
                     : isWallTool(tool)
                       ? s.wallVertices
@@ -337,13 +428,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (Math.hypot(dx, dy) < 0.001) return inferred;
 
             const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
-            return [
-                ...inferred,
-                angle,
-                angle + 90,
-                angle + 180,
-                angle + 270,
-            ];
+            return [...inferred, angle, angle + 90, angle + 180, angle + 270];
         },
         [getGuideAngles],
     );
@@ -365,31 +450,50 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             setCalibrationSnapPoint: (p: CanvasPoint | null) => void,
             setMeasureAreaVertices: (v: CanvasPoint[]) => void,
         ) => {
-            const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+            const rect = (
+                e.currentTarget as SVGSVGElement
+            ).getBoundingClientRect();
             if (isNaN(rect.left) || isNaN(rect.top)) return;
             const rawX = e.clientX - rect.left;
             const rawY = e.clientY - rect.top;
 
             const s = stateRef.current;
             const activeVerticesCanvas = (
-                (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') ? s.roomVertices : (isWallTool(activeTool) ? s.wallVertices : [])
+                activeTool === 'room' ||
+                activeTool === 'corridor' ||
+                activeTool === 'stair'
+                    ? s.roomVertices
+                    : isWallTool(activeTool)
+                      ? s.wallVertices
+                      : []
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const noSnapTools = ['switch', 'wire', 'fixture', 'fixture-grid', 'select', 'pan'];
+            const noSnapTools = [
+                'switch',
+                'wire',
+                'fixture',
+                'fixture-grid',
+                'select',
+                'pan',
+            ];
             const shouldSnap = !noSnapTools.includes(activeTool);
 
-            const cadOsnapPoint = shouldSnap ? resolveCadOsnap?.(
-                canvasToScene(rawX, rawY),
-                prevPointM,
-            ) : null;
+            const cadOsnapPoint = shouldSnap
+                ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
+                : null;
             let cx = rawX;
             let cy = rawY;
 
             if (shouldSnap) {
                 const snapped = cadOsnapPoint
                     ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                    : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
+                    : resolveSnap(
+                          rawX,
+                          rawY,
+                          activeVerticesCanvas,
+                          disableDxfSnap,
+                      );
                 const referenceAngles = getReferenceAngles(
                     activeTool,
                     s,
@@ -425,8 +529,14 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (activeTool === 'measure-area') {
                 const scenePoint = canvasToScene(cx, cy);
                 if (s.measureAreaVertices.length >= 2) {
-                    const first = sceneToCanvas(s.measureAreaVertices[0].x, s.measureAreaVertices[0].y);
-                    if (Math.hypot(first.x - cx, first.y - cy) < closeThresholdPx) {
+                    const first = sceneToCanvas(
+                        s.measureAreaVertices[0].x,
+                        s.measureAreaVertices[0].y,
+                    );
+                    if (
+                        Math.hypot(first.x - cx, first.y - cy) <
+                        closeThresholdPx
+                    ) {
                         // Cerrar polígono
                         if (s.measureAreaVertices.length >= 3) {
                             onMeasureAreaFinish([...s.measureAreaVertices]);
@@ -441,12 +551,34 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
+            if (activeTool === 'measure') {
+                const scenePoint = canvasToScene(cx, cy);
+                if (!s.measurementStart) {
+                    s.measurementStart = scenePoint;
+                    onMeasureDistanceChange(
+                        { start: scenePoint, end: scenePoint },
+                        false,
+                    );
+                    return;
+                }
+
+                onMeasureDistanceChange(
+                    { start: s.measurementStart, end: scenePoint },
+                    true,
+                );
+                s.measurementStart = null;
+                return;
+            }
+
             if (activeTool === 'calibrate') {
                 if (!s.calibrationStart) {
                     // Primer clic: guardar en ESCENA
                     const scenePoint = canvasToScene(cx, cy);
                     s.calibrationStart = scenePoint;
-                    setCalibrationPreview({ start: scenePoint, end: scenePoint });
+                    setCalibrationPreview({
+                        start: scenePoint,
+                        end: scenePoint,
+                    });
                     setCalibrationSnapPoint(scenePoint);
                     return;
                 }
@@ -460,32 +592,49 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 );
 
                 if (sceneDistanceM > 0) {
-                    setCalibrationPreview({ start: s.calibrationStart, end: endScene });
+                    setCalibrationPreview({
+                        start: s.calibrationStart,
+                        end: endScene,
+                    });
                     setCalibrationSnapPoint(endScene);
                     // Pasamos coordenadas de escena (metros) al canvas para recuperar
                     // la distancia CAD nativa pura dividiendo por effectiveScale.
                     onCalibrationMeasure(
                         sceneDistanceM,
                         s.calibrationStart, // metros
-                        endScene,           // metros
+                        endScene, // metros
                     );
                 } else {
                     setCalibrationPreview(null);
                     setCalibrationSnapPoint(null);
                 }
-                s.calibrationStart       = null;
+                s.calibrationStart = null;
                 s.isDrawing = false;
                 return;
             }
 
-
-            if (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') {
+            if (
+                activeTool === 'room' ||
+                activeTool === 'corridor' ||
+                activeTool === 'stair'
+            ) {
                 if (s.roomVertices.length > 2) {
-                    const first = sceneToCanvas(s.roomVertices[0].x, s.roomVertices[0].y);
+                    const first = sceneToCanvas(
+                        s.roomVertices[0].x,
+                        s.roomVertices[0].y,
+                    );
                     // Umbral adaptativo al zoom: evita cierre prematuro en muros cortos
-                    if (Math.hypot(first.x - cx, first.y - cy) < closeThresholdPx) {
+                    if (
+                        Math.hypot(first.x - cx, first.y - cy) <
+                        closeThresholdPx
+                    ) {
                         onAddRoom(s.roomVertices);
-                        stateRef.current = { ...s, isDrawing: false, roomVertices: [], previewPoint: null };
+                        stateRef.current = {
+                            ...s,
+                            isDrawing: false,
+                            roomVertices: [],
+                            previewPoint: null,
+                        };
                         setRoomVertices([]);
                         return;
                     }
@@ -502,9 +651,18 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 if (!s.wallVertices) s.wallVertices = [];
                 const newPoint = canvasToScene(cx, cy);
                 if (s.wallVertices.length > 0) {
-                    const first = sceneToCanvas(s.wallVertices[0].x, s.wallVertices[0].y);
-                    const newPointScreen = sceneToCanvas(newPoint.x, newPoint.y);
-                    const dist = Math.hypot(newPointScreen.x - first.x, newPointScreen.y - first.y);
+                    const first = sceneToCanvas(
+                        s.wallVertices[0].x,
+                        s.wallVertices[0].y,
+                    );
+                    const newPointScreen = sceneToCanvas(
+                        newPoint.x,
+                        newPoint.y,
+                    );
+                    const dist = Math.hypot(
+                        newPointScreen.x - first.x,
+                        newPointScreen.y - first.y,
+                    );
                     // Umbral adaptativo al zoom igual que para rooms
                     if (dist < closeThresholdPx) {
                         onAddWall([...s.wallVertices, s.wallVertices[0]]);
@@ -556,7 +714,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 if (hit) {
                     const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
                     if (wallPos) {
-                        onAddElectricalDevice?.(wallPos.x, wallPos.y, hit.wall.id);
+                        onAddElectricalDevice?.(
+                            wallPos.x,
+                            wallPos.y,
+                            hit.wall.id,
+                        );
                     } else {
                         onAddElectricalDevice?.(scenePoint.x, scenePoint.y);
                     }
@@ -566,8 +728,6 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-
-
             if (activeTool === 'wire') {
                 const scPt = canvasToScene(cx, cy);
                 const winner = pickWireNodeCandidate(cx, cy);
@@ -576,7 +736,13 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     const start = s.wireStartNode;
 
                     if (start && start.id !== winner.id) {
-                        onConnectWire?.(start.id, winner.id, s.wireWaypoints.length ? s.wireWaypoints : undefined);
+                        onConnectWire?.(
+                            start.id,
+                            winner.id,
+                            s.wireWaypoints.length
+                                ? s.wireWaypoints
+                                : undefined,
+                        );
                     }
                     s.wireStartNode = { type: winner.kind, id: winner.id };
                     s.wireWaypoints = [];
@@ -597,16 +763,22 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-
-
             if (activeTool === 'canopy') {
-                s.wallStart = getCanopyDraftStart({ x: cx, y: cy }, canvasToScene);
+                s.wallStart = getCanopyDraftStart(
+                    { x: cx, y: cy },
+                    canvasToScene,
+                );
                 s.isDrawing = true;
                 return;
             }
 
             if (activeTool === 'pan') {
-                stateRef.current = { ...s, isDrawing: true, startX: cx, startY: cy };
+                stateRef.current = {
+                    ...s,
+                    isDrawing: true,
+                    startX: cx,
+                    startY: cy,
+                };
                 return;
             }
 
@@ -615,21 +787,42 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 // extremos agarra ese handle para reconectarlo a otro nodo en
                 // vez de reseleccionar/arrastrar el objeto completo.
                 if (opts.selectedId) {
-                    const selectedConductor = conductors.find((c) => c.id === opts.selectedId);
+                    const selectedConductor = conductors.find(
+                        (c) => c.id === opts.selectedId,
+                    );
                     if (selectedConductor) {
-                        const nodeCtx = { fixtures, lightSwitches, electricalDevices };
-                        const srcPos = resolveWireNodePosition(selectedConductor.sourceId, nodeCtx);
-                        const tgtPos = resolveWireNodePosition(selectedConductor.targetId, nodeCtx);
+                        const nodeCtx = {
+                            fixtures,
+                            lightSwitches,
+                            electricalDevices,
+                        };
+                        const srcPos = resolveWireNodePosition(
+                            selectedConductor.sourceId,
+                            nodeCtx,
+                        );
+                        const tgtPos = resolveWireNodePosition(
+                            selectedConductor.targetId,
+                            nodeCtx,
+                        );
                         const HANDLE_TOL2 = 12 * 12;
-                        const srcCanvas = srcPos ? sceneToCanvas(srcPos.x, srcPos.y) : null;
-                        const tgtCanvas = tgtPos ? sceneToCanvas(tgtPos.x, tgtPos.y) : null;
-                        const dSrc2 = srcCanvas ? (srcCanvas.x - cx) ** 2 + (srcCanvas.y - cy) ** 2 : Infinity;
-                        const dTgt2 = tgtCanvas ? (tgtCanvas.x - cx) ** 2 + (tgtCanvas.y - cy) ** 2 : Infinity;
+                        const srcCanvas = srcPos
+                            ? sceneToCanvas(srcPos.x, srcPos.y)
+                            : null;
+                        const tgtCanvas = tgtPos
+                            ? sceneToCanvas(tgtPos.x, tgtPos.y)
+                            : null;
+                        const dSrc2 = srcCanvas
+                            ? (srcCanvas.x - cx) ** 2 + (srcCanvas.y - cy) ** 2
+                            : Infinity;
+                        const dTgt2 = tgtCanvas
+                            ? (tgtCanvas.x - cx) ** 2 + (tgtCanvas.y - cy) ** 2
+                            : Infinity;
                         if (dSrc2 <= HANDLE_TOL2 || dTgt2 <= HANDLE_TOL2) {
                             s.isDragging = true;
                             s.dragObjectId = selectedConductor.id;
                             s.dragObjectType = 'conductor-endpoint';
-                            s.dragConductorEndpoint = dSrc2 <= dTgt2 ? 'source' : 'target';
+                            s.dragConductorEndpoint =
+                                dSrc2 <= dTgt2 ? 'source' : 'target';
                             onDragGesture?.('start');
                             return;
                         }
@@ -676,7 +869,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
 
                 // Solo los tipos con movimiento soportado inician un arrastre;
                 // muros, tabiques y cables se seleccionan sin arrastrarse.
-                const DRAGGABLE: Partial<Record<typeof winner.kind, DrawState['dragObjectType']>> = {
+                const DRAGGABLE: Partial<
+                    Record<typeof winner.kind, DrawState['dragObjectType']>
+                > = {
                     fixture: 'fixture',
                     switch: 'switch',
                     'electrical-device': 'electrical-device',
@@ -696,12 +891,46 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
         },
         [
-            activeTool, angleSnapMode, canvasToScene, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM,
-            findNearestWall, findNearestFixture, findNearestRoom, findNearestLightSwitch, findNearestElectricalDevice, pickWireNodeCandidate,
-            onAddFixture, onCalibrationMeasure, onMeasureAreaFinish, onAddRoom, onAddWall, onAddWindow, onAddDoor, onSelectObject,
-            onAddLightSwitch, onAddElectricalDevice, onConnectWire, onDragGesture,
-            fixtures, lightSwitches, electricalDevices, windows, doors, conductors, canopies, walls, partitions, rooms,
-            opts.selectedId, closeThresholdPx,
+            activeTool,
+            angleSnapMode,
+            canvasToScene,
+            sceneToCanvas,
+            resolveCadOsnap,
+            resolveSnap,
+            getReferenceAngles,
+            applyAngleSnap,
+            getPrevPointM,
+            findNearestWall,
+            findNearestFixture,
+            findNearestRoom,
+            findNearestLightSwitch,
+            findNearestElectricalDevice,
+            pickWireNodeCandidate,
+            onAddFixture,
+            onCalibrationMeasure,
+            onMeasureDistanceChange,
+            onMeasureAreaFinish,
+            onAddRoom,
+            onAddWall,
+            onAddWindow,
+            onAddDoor,
+            onSelectObject,
+            onAddLightSwitch,
+            onAddElectricalDevice,
+            onConnectWire,
+            onDragGesture,
+            fixtures,
+            lightSwitches,
+            electricalDevices,
+            windows,
+            doors,
+            conductors,
+            canopies,
+            walls,
+            partitions,
+            rooms,
+            opts.selectedId,
+            closeThresholdPx,
         ],
     );
 
@@ -720,18 +949,36 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
             setCalibrationSnapPoint: (p: CanvasPoint | null) => void,
-            setTempElectricalDevice: (p: { x: number; y: number; type: ElectricalDeviceType; label: string } | null) => void,
+            setTempElectricalDevice: (
+                p: {
+                    x: number;
+                    y: number;
+                    type: ElectricalDeviceType;
+                    label: string;
+                } | null,
+            ) => void,
             setWireReconnectPreview?: (
-                p: { conductorId: string; endpoint: 'source' | 'target'; point: CanvasPoint } | null,
+                p: {
+                    conductorId: string;
+                    endpoint: 'source' | 'target';
+                    point: CanvasPoint;
+                } | null,
             ) => void,
         ) => {
             const s = stateRef.current;
-            const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+            const rect = (
+                e.currentTarget as SVGSVGElement
+            ).getBoundingClientRect();
             if (isNaN(rect.left) || isNaN(rect.top)) return;
             const rawX = e.clientX - rect.left;
             const rawY = e.clientY - rect.top;
 
-            if (s.isDragging && s.dragObjectType === 'conductor-endpoint' && s.dragObjectId && s.dragConductorEndpoint) {
+            if (
+                s.isDragging &&
+                s.dragObjectType === 'conductor-endpoint' &&
+                s.dragObjectId &&
+                s.dragConductorEndpoint
+            ) {
                 setWireReconnectPreview?.({
                     conductorId: s.dragObjectId,
                     endpoint: s.dragConductorEndpoint,
@@ -741,24 +988,41 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
 
             const activeVerticesCanvas = (
-                (activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') ? s.roomVertices : (isWallTool(activeTool) ? s.wallVertices : [])
+                activeTool === 'room' ||
+                activeTool === 'corridor' ||
+                activeTool === 'stair'
+                    ? s.roomVertices
+                    : isWallTool(activeTool)
+                      ? s.wallVertices
+                      : []
             ).map((v) => sceneToCanvas(v.x, v.y));
 
             const prevPointM = getPrevPointM(activeTool, s);
-            const noSnapTools = ['switch', 'wire', 'fixture', 'fixture-grid', 'select', 'pan'];
+            const noSnapTools = [
+                'switch',
+                'wire',
+                'fixture',
+                'fixture-grid',
+                'select',
+                'pan',
+            ];
             const shouldSnap = !noSnapTools.includes(activeTool);
 
-            const cadOsnapPoint = shouldSnap ? resolveCadOsnap?.(
-                canvasToScene(rawX, rawY),
-                prevPointM,
-            ) : null;
+            const cadOsnapPoint = shouldSnap
+                ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
+                : null;
             let cx = rawX;
             let cy = rawY;
 
             if (shouldSnap) {
                 const snapped = cadOsnapPoint
                     ? sceneToCanvas(cadOsnapPoint.x, cadOsnapPoint.y)
-                    : resolveSnap(rawX, rawY, activeVerticesCanvas, disableDxfSnap);
+                    : resolveSnap(
+                          rawX,
+                          rawY,
+                          activeVerticesCanvas,
+                          disableDxfSnap,
+                      );
                 const referenceAngles = getReferenceAngles(
                     activeTool,
                     s,
@@ -777,14 +1041,30 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 cy = finalPointCanvas.y;
             }
 
-            if ((activeTool === 'room' || activeTool === 'corridor' || activeTool === 'stair') && s.roomVertices.length > 0) {
+            if (
+                (activeTool === 'room' ||
+                    activeTool === 'corridor' ||
+                    activeTool === 'stair') &&
+                s.roomVertices.length > 0
+            ) {
                 s.previewPoint = canvasToScene(cx, cy);
                 setPreviewPoint(s.previewPoint);
                 return;
             }
 
-            if (activeTool === 'measure-area' && s.measureAreaVertices.length > 0) {
+            if (
+                activeTool === 'measure-area' &&
+                s.measureAreaVertices.length > 0
+            ) {
                 setPreviewPoint(canvasToScene(cx, cy));
+                return;
+            }
+
+            if (activeTool === 'measure' && s.measurementStart) {
+                onMeasureDistanceChange(
+                    { start: s.measurementStart, end: canvasToScene(cx, cy) },
+                    false,
+                );
                 return;
             }
 
@@ -813,18 +1093,28 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 setTempElectricalDevice(null);
             }
 
-            if (isWallTool(activeTool) && s.wallVertices && s.wallVertices.length > 0) {
+            if (
+                isWallTool(activeTool) &&
+                s.wallVertices &&
+                s.wallVertices.length > 0
+            ) {
                 setWallPreview([...s.wallVertices, canvasToScene(cx, cy)]);
                 return;
             }
 
             if (activeTool === 'canopy' && s.isDrawing && s.wallStart) {
-                setCanopyPreview({ start: s.wallStart, end: canvasToScene(cx, cy) });
+                setCanopyPreview({
+                    start: s.wallStart,
+                    end: canvasToScene(cx, cy),
+                });
                 return;
             }
 
             if (activeTool === 'calibrate' && s.calibrationStart) {
-                setCalibrationPreview({ start: s.calibrationStart, end: canvasToScene(cx, cy) });
+                setCalibrationPreview({
+                    start: s.calibrationStart,
+                    end: canvasToScene(cx, cy),
+                });
                 return;
             }
 
@@ -847,8 +1137,15 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         onMoveFixtures(selectedFixtureIds, dxM, dyM);
                     } else {
                         // Mover una sola (fallback o click en una no seleccionada que arrastró)
-                        const fixture = fixtures.find((f) => f.id === s.dragObjectId);
-                        if (fixture) onMoveFixture(s.dragObjectId, fixture.x + dxM, fixture.y + dyM);
+                        const fixture = fixtures.find(
+                            (f) => f.id === s.dragObjectId,
+                        );
+                        if (fixture)
+                            onMoveFixture(
+                                s.dragObjectId,
+                                fixture.x + dxM,
+                                fixture.y + dyM,
+                            );
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'room') {
@@ -856,32 +1153,62 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     if (room) onMoveRoom(s.dragObjectId, dxM, dyM);
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'canopy') {
-                    const canopy = canopies.find((c) => c.id === s.dragObjectId);
+                    const canopy = canopies.find(
+                        (c) => c.id === s.dragObjectId,
+                    );
                     if (canopy) {
-                        onMoveCanopy(s.dragObjectId, canopy.x1 + dxM, canopy.y1 + dyM, canopy.x2 + dxM, canopy.y2 + dyM);
+                        onMoveCanopy(
+                            s.dragObjectId,
+                            canopy.x1 + dxM,
+                            canopy.y1 + dyM,
+                            canopy.x2 + dxM,
+                            canopy.y2 + dyM,
+                        );
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'electrical-device') {
-                    const dev = electricalDevices.find((d) => d.id === s.dragObjectId);
+                    const dev = electricalDevices.find(
+                        (d) => d.id === s.dragObjectId,
+                    );
                     if (dev) {
                         const newX = dev.x + dxM;
                         const newY = dev.y + dyM;
                         // Intentar anclar a la pared más cercana
                         const hit = findNearestWall(cx, cy);
                         if (hit) {
-                            const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                            const wallPos = resolveOffsetOnWall(
+                                hit.wall,
+                                hit.offset,
+                            );
                             if (wallPos) {
-                                onMoveElectricalDevice?.(s.dragObjectId, wallPos.x, wallPos.y, hit.wall.id);
+                                onMoveElectricalDevice?.(
+                                    s.dragObjectId,
+                                    wallPos.x,
+                                    wallPos.y,
+                                    hit.wall.id,
+                                );
                             } else {
-                                onMoveElectricalDevice?.(s.dragObjectId, newX, newY, hit.wall.id);
+                                onMoveElectricalDevice?.(
+                                    s.dragObjectId,
+                                    newX,
+                                    newY,
+                                    hit.wall.id,
+                                );
                             }
                         } else {
-                            onMoveElectricalDevice?.(s.dragObjectId, newX, newY, undefined);
+                            onMoveElectricalDevice?.(
+                                s.dragObjectId,
+                                newX,
+                                newY,
+                                undefined,
+                            );
                         }
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'switch') {
-                    const lSwitch = lightSwitches.find((sw) => sw.id === s.dragObjectId);
+                    const lSwitch = lightSwitches.find(
+                        (sw) => sw.id === s.dragObjectId,
+                    );
                     if (lSwitch) {
                         // Movemos el switch. Si intentan anclarlo a otra pared, buscaremos la más cercana a currentScene
                         const newX = lSwitch.x + dxM;
@@ -889,33 +1216,64 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         // Intentar anclar a la pared más cercana
                         const hit = findNearestWall(cx, cy);
                         if (hit) {
-                            const wallPos = resolveOffsetOnWall(hit.wall, hit.offset);
+                            const wallPos = resolveOffsetOnWall(
+                                hit.wall,
+                                hit.offset,
+                            );
                             if (wallPos) {
-                                onMoveLightSwitch(s.dragObjectId, wallPos.x, wallPos.y, hit.wall.id);
+                                onMoveLightSwitch(
+                                    s.dragObjectId,
+                                    wallPos.x,
+                                    wallPos.y,
+                                    hit.wall.id,
+                                );
                             } else {
-                                onMoveLightSwitch(s.dragObjectId, newX, newY, hit.wall.id);
+                                onMoveLightSwitch(
+                                    s.dragObjectId,
+                                    newX,
+                                    newY,
+                                    hit.wall.id,
+                                );
                             }
                         } else {
-                            onMoveLightSwitch(s.dragObjectId, newX, newY, undefined); // sin pared
+                            onMoveLightSwitch(
+                                s.dragObjectId,
+                                newX,
+                                newY,
+                                undefined,
+                            ); // sin pared
                         }
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'window') {
                     const win = windows.find((w) => w.id === s.dragObjectId);
-                    const wall = win ? walls.find((w) => w.id === win.wallId) : null;
+                    const wall = win
+                        ? walls.find((w) => w.id === win.wallId)
+                        : null;
                     if (win && wall) {
                         const wallLen = wallLength(wall.vertices);
-                        let newOffset = projectPointToWallOffset(currentScene, wall);
-                        newOffset = Math.max(0.1, Math.min(wallLen - 0.1, newOffset));
+                        let newOffset = projectPointToWallOffset(
+                            currentScene,
+                            wall,
+                        );
+                        newOffset = Math.max(
+                            0.1,
+                            Math.min(wallLen - 0.1, newOffset),
+                        );
                         onMoveWindow(s.dragObjectId, win.wallId, newOffset);
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'door') {
                     const door = doors.find((d) => d.id === s.dragObjectId);
-                    const wall = door ? walls.find((w) => w.id === door.wallId) : null;
+                    const wall = door
+                        ? walls.find((w) => w.id === door.wallId)
+                        : null;
                     if (door && wall) {
                         const wallLen = wallLength(wall.vertices);
-                        const projection = projectPointToWallProjection(currentScene, wall);
+                        const projection = projectPointToWallProjection(
+                            currentScene,
+                            wall,
+                        );
                         const newOffset = projection
                             ? clampOpeningOffsetToWallSegment(
                                   projection,
@@ -925,7 +1283,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                               )
                             : Math.max(
                                   0,
-                                  Math.min(wallLen - door.width, door.offsetAlongWall),
+                                  Math.min(
+                                      wallLen - door.width,
+                                      door.offsetAlongWall,
+                                  ),
                               );
                         onMoveDoor(s.dragObjectId, door.wallId, newOffset);
                     }
@@ -934,10 +1295,38 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
         },
         [
-            activeTool, angleSnapMode, sceneToCanvas, resolveCadOsnap, resolveSnap, getReferenceAngles, applyAngleSnap, getPrevPointM, canvasToScene,
-            onPanChange, fixtures, rooms, canopies, windows, doors, walls, lightSwitches, electricalDevices,
-            onMoveFixture, onMoveFixtures, onMoveRoom, onMoveCanopy, onMoveWindow, onMoveDoor, onMoveLightSwitch, onMoveElectricalDevice,
-            findNearestWall, selectedFixtureIds, conductors, partitions, isObjectSelectable,
+            activeTool,
+            angleSnapMode,
+            sceneToCanvas,
+            resolveCadOsnap,
+            resolveSnap,
+            getReferenceAngles,
+            applyAngleSnap,
+            getPrevPointM,
+            canvasToScene,
+            onMeasureDistanceChange,
+            onPanChange,
+            fixtures,
+            rooms,
+            canopies,
+            windows,
+            doors,
+            walls,
+            lightSwitches,
+            electricalDevices,
+            onMoveFixture,
+            onMoveFixtures,
+            onMoveRoom,
+            onMoveCanopy,
+            onMoveWindow,
+            onMoveDoor,
+            onMoveLightSwitch,
+            onMoveElectricalDevice,
+            findNearestWall,
+            selectedFixtureIds,
+            conductors,
+            partitions,
+            isObjectSelectable,
         ],
     );
 
@@ -951,19 +1340,34 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 p: { start: CanvasPoint; end: CanvasPoint } | null,
             ) => void,
             setWireReconnectPreview?: (
-                p: { conductorId: string; endpoint: 'source' | 'target'; point: CanvasPoint } | null,
+                p: {
+                    conductorId: string;
+                    endpoint: 'source' | 'target';
+                    point: CanvasPoint;
+                } | null,
             ) => void,
         ) => {
             const s = stateRef.current;
 
-            if (s.isDragging && s.dragObjectType === 'conductor-endpoint' && s.dragObjectId && s.dragConductorEndpoint) {
-                const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+            if (
+                s.isDragging &&
+                s.dragObjectType === 'conductor-endpoint' &&
+                s.dragObjectId &&
+                s.dragConductorEndpoint
+            ) {
+                const rect = (
+                    e.currentTarget as SVGSVGElement
+                ).getBoundingClientRect();
                 if (!isNaN(rect.left) && !isNaN(rect.top)) {
                     const cx = e.clientX - rect.left;
                     const cy = e.clientY - rect.top;
                     const target = pickWireNodeCandidate(cx, cy);
                     if (target) {
-                        onReconnectWireEndpoint?.(s.dragObjectId, s.dragConductorEndpoint, target.id);
+                        onReconnectWireEndpoint?.(
+                            s.dragObjectId,
+                            s.dragConductorEndpoint,
+                            target.id,
+                        );
                     }
                 }
                 setWireReconnectPreview?.(null);
@@ -977,7 +1381,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             }
 
             if (activeTool === 'canopy' && s.isDrawing && s.wallStart) {
-                const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+                const rect = (
+                    e.currentTarget as SVGSVGElement
+                ).getBoundingClientRect();
                 if (isNaN(rect.left) || isNaN(rect.top)) return;
                 const rawX = e.clientX - rect.left;
                 const rawY = e.clientY - rect.top;
@@ -1004,19 +1410,34 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 onDragGesture?.('end');
             }
         },
-        [activeTool, canvasToScene, resolveSnap, onAddCanopy, onDragGesture, pickWireNodeCandidate, onReconnectWireEndpoint],
+        [
+            activeTool,
+            canvasToScene,
+            resolveSnap,
+            onAddCanopy,
+            onDragGesture,
+            pickWireNodeCandidate,
+            onReconnectWireEndpoint,
+        ],
     );
 
     const handleDoubleClick = useCallback(() => {
         const s = stateRef.current;
-        if (isWallTool(activeTool) && s.wallVertices && s.wallVertices.length >= 2) {
+        if (
+            isWallTool(activeTool) &&
+            s.wallVertices &&
+            s.wallVertices.length >= 2
+        ) {
             onAddWall(s.wallVertices);
             s.wallVertices = [];
             s.isDrawing = false;
             onDoubleClick();
             return;
         }
-        if (activeTool === 'measure-area' && s.measureAreaVertices.length >= 3) {
+        if (
+            activeTool === 'measure-area' &&
+            s.measureAreaVertices.length >= 3
+        ) {
             onMeasureAreaFinish([...s.measureAreaVertices]);
             stateRef.current.measureAreaVertices = [];
             onDoubleClick();

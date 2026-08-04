@@ -211,6 +211,21 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
                 })),
                 junctionBoxes: (source.junctionBoxes ?? []).map((j) => ({ ...j, id: remapId(j.id) })),
                 partitions: (source.partitions ?? []).map((p) => ({ ...p, id: remapId(p.id) })),
+                // Fase 10 (auditoría `dialux-calc-reviewer`): las claves de
+                // `switchStates` referencian IDs de interruptor — sin este
+                // remapeo, quedarían apuntando a los IDs VIEJOS (los
+                // interruptores clonados arriba ya tienen IDs nuevos), y
+                // `resolveLuminaireStates` (`buildCalculationSnapshot.ts`)
+                // trataría esos interruptores como "no listados" (encendidos
+                // al 100% por defecto) en el piso duplicado — un preset como
+                // "Modo nocturno" se calcularía silenciosamente como si todo
+                // estuviera encendido.
+                lightingScenes: source.lightingScenes?.map((preset) => ({
+                    ...preset,
+                    switchStates: Object.fromEntries(
+                        Object.entries(preset.switchStates).map(([switchId, state]) => [remapRef(switchId), state]),
+                    ),
+                })),
                 visible: source.visible ?? true,
             };
 

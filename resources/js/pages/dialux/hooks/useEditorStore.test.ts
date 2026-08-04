@@ -37,11 +37,17 @@ describe('useEditorStore electrical legend controls', () => {
         store.toggleElectricalLayer('fixtures');
         store.toggleElectricalItemVisibility('fixture-1');
 
-        expect(useEditorStore.getState().ui.electricalLayerVisibility.fixtures).toBe(!wasVisible);
-        expect(useEditorStore.getState().ui.hiddenElectricalIds).toContain('fixture-1');
+        expect(
+            useEditorStore.getState().ui.electricalLayerVisibility.fixtures,
+        ).toBe(!wasVisible);
+        expect(useEditorStore.getState().ui.hiddenElectricalIds).toContain(
+            'fixture-1',
+        );
 
         useEditorStore.getState().toggleElectricalItemVisibility('fixture-1');
-        expect(useEditorStore.getState().ui.hiddenElectricalIds).not.toContain('fixture-1');
+        expect(useEditorStore.getState().ui.hiddenElectricalIds).not.toContain(
+            'fixture-1',
+        );
     });
 });
 
@@ -134,18 +140,23 @@ describe('useEditorStore normative defaults', () => {
 
         expect(updated1?.illuminanceLux).toBe(150);
         expect(updated1?.normativeStandard).toBe('rne_peru');
+        expect(updated1?.normativeCategory).toBeUndefined();
+        expect(updated1?.normativeSection).toBeUndefined();
+        expect(updated1?.normativeActivity).toBeUndefined();
+        expect(updated1?.normativeLabel).toBeUndefined();
         expect(useEditorStore.getState().defaultRoomNormativeStandard).toBe(
-            'rne_peru',
+            'en_12464',
         );
         expect(
             useEditorStore.getState().project?.defaultRoomNormativeStandard,
-        ).toBe('rne_peru');
+        ).toBeUndefined();
         // El segundo ambiente conserva su configuración previa intacta.
         expect(untouched2?.illuminanceLux).toBe(500);
         expect(untouched2?.normativeStandard).toBe('en_12464');
+        expect(untouched2?.normativeCategory).toBe('Previous category');
     });
 
-    it('applyNormativeProfileToRooms without roomIds still applies to every ambient (comportamiento global explícito)', () => {
+    it('rechaza aplicar una misma clasificación global cuando no hay roomIds', () => {
         const ambient1: Room = {
             ...baseRoom('ambient-1', 'en_12464'),
             roomType: 'ambient',
@@ -173,6 +184,123 @@ describe('useEditorStore normative defaults', () => {
         });
 
         const rooms = useEditorStore.getState().project?.scenes[0].rooms ?? [];
-        expect(rooms.every((r) => r.illuminanceLux === 300)).toBe(true);
+        expect(rooms.every((r) => r.illuminanceLux === 500)).toBe(true);
+        expect(rooms.every((r) => r.normativeStandard === 'en_12464')).toBe(
+            true,
+        );
+    });
+
+    it('guarda la etiqueta del perfil nuevo sin conservar la actividad europea', () => {
+        const ambient: Room = {
+            ...baseRoom('ambient-1', 'en_12464'),
+            roomType: 'ambient',
+        };
+        const project: Project = {
+            id: 'project-1',
+            name: 'Project',
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+            scenes: [scene('scene-1', [ambient])],
+        };
+        useEditorStore.getState().setProject(project);
+
+        useEditorStore.getState().applyNormativeProfileToRooms({
+            standard: 'rne_peru',
+            normaLux: 300,
+            normativeLabel: 'Sala de juegos / Guardería',
+            roomIds: ['ambient-1'],
+        });
+
+        const updated = useEditorStore.getState().project?.scenes[0].rooms[0];
+        expect(updated?.normativeLabel).toBe('Sala de juegos / Guardería');
+        expect(updated?.normativeActivity).toBeUndefined();
+    });
+
+    it('aplica globalmente la norma a recintos contenedores, ambientes derivados y paredes sin reconstruirlos', () => {
+        const outerRoom: Room = {
+            ...baseRoom('recinto-1', 'en_12464'),
+            roomType: 'room',
+            ambientConfigs: {
+                'ambient-1': {
+                    normativeStandard: 'en_12464',
+                    normativeCategory: 'Educación',
+                    activity: 'Aula europea',
+                    illuminanceLux: 500,
+                },
+            },
+        };
+        const currentScene = scene('scene-1', [outerRoom]);
+        currentScene.walls = [
+            {
+                id: 'wall-1',
+                vertices: [
+                    { x: 0, y: 0 },
+                    { x: 4, y: 0 },
+                ],
+                height: 2.7,
+                thickness: 0.15,
+                normativeStandard: 'en_12464',
+            },
+        ];
+        const project: Project = {
+            id: 'project-1',
+            name: 'Project',
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+            scenes: [currentScene],
+        };
+        useEditorStore.getState().setProject(project);
+
+        useEditorStore.getState().setDefaultRoomNormativeStandard('rne_peru');
+        useEditorStore.getState().applyDefaultNormativeStandardToRooms();
+
+        const updatedScene = useEditorStore.getState().project!.scenes[0];
+        const updatedRoom = updatedScene.rooms[0];
+        const updatedConfig = updatedRoom.ambientConfigs?.['ambient-1'];
+        expect(updatedRoom.id).toBe('recinto-1');
+        expect(updatedRoom.vertices).toEqual(outerRoom.vertices);
+        expect(updatedRoom.normativeStandard).toBe('rne_peru');
+        expect(updatedConfig?.normativeStandard).toBe('rne_peru');
+        expect(updatedConfig?.activity).toBeUndefined();
+        expect(updatedConfig?.illuminanceLux).toBe(500);
+        expect(updatedScene.walls[0].id).toBe('wall-1');
+        expect(updatedScene.walls[0].normativeStandard).toBe('rne_peru');
+        expect(updatedScene.walls[0].illuminanceLux).toBeUndefined();
+    });
+
+    it('al cambiar solo el estándar global no impone la misma aplicación ni los mismos lux a todos los ambientes', () => {
+        const bathroom: Room = {
+            ...baseRoom('bathroom', 'en_12464'),
+            roomType: 'ambient',
+            normativeActivity: 'Baño',
+            illuminanceLux: 200,
+        };
+        const bedroom: Room = {
+            ...baseRoom('bedroom', 'en_12464'),
+            roomType: 'ambient',
+            normativeActivity: 'Dormitorio',
+            illuminanceLux: 100,
+        };
+        const project: Project = {
+            id: 'project-1',
+            name: 'Project',
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+            scenes: [scene('scene-1', [bathroom, bedroom])],
+        };
+        useEditorStore.getState().setProject(project);
+        useEditorStore.getState().setDefaultRoomNormativeStandard('rne_peru');
+        useEditorStore.getState().applyDefaultNormativeStandardToRooms();
+
+        const rooms = useEditorStore.getState().project!.scenes[0].rooms;
+        expect(rooms.map((room) => room.normativeStandard)).toEqual([
+            'rne_peru',
+            'rne_peru',
+        ]);
+        expect(rooms.map((room) => room.normativeActivity)).toEqual([
+            undefined,
+            undefined,
+        ]);
+        expect(rooms.map((room) => room.illuminanceLux)).toEqual([200, 100]);
     });
 });

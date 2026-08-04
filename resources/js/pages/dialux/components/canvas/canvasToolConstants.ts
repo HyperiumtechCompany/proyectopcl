@@ -84,6 +84,7 @@ export const INTERACTIVE_TOOLS = new Set([...DRAWING_TOOLS, 'select']);
  * del store es suficiente y evita crashes con hatches sin boundaries.
  */
 export const CAD_OSNAP_TOOLS = new Set([
+    'measure',
     'calibrate',
     'room',
     'wall',

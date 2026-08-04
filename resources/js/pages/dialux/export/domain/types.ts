@@ -1,3 +1,4 @@
+import type { CalculationWarning } from '@/pages/dialux/domain/calculation/types';
 import type {
     Canopy,
     Door,
@@ -35,6 +36,21 @@ export interface CalculationProvenance {
     engineVersion: string;
     calculatedAt: string | null;
     status: 'calculated' | 'stale' | 'imported' | 'not-calculated';
+    /**
+     * Hash del `CalculationSnapshot` que produjo este resultado (Fase 11,
+     * §11: "cada valor visible puede trazarse a una ejecución") —
+     * `CalculationRun.snapshotHash`. Presente solo cuando el cálculo pasó
+     * por `runDirectPreviewEngine`/`runProjectLightingCalculation`;
+     * `undefined` en cálculos legacy directos (`calculateLightingResult`
+     * sin motor de ejecución detrás, ej. tests que no pasan `calculationRun`).
+     */
+    snapshotHash?: string;
+    /**
+     * Resumen legible de la configuración usada (oclusión, interreflexión,
+     * modelo de UGR) — "trazarse a... una configuración" (plan §11 Fase 11).
+     * Mismo criterio de opcionalidad que `snapshotHash`.
+     */
+    configSummary?: string;
 }
 
 export interface DialuxAmbientMetrics {
@@ -61,6 +77,13 @@ export interface DialuxAmbientMetrics {
     complies: boolean;
     requirementEvaluations: RequirementEvaluation[];
     provenance: CalculationProvenance;
+    /**
+     * Advertencias del motor específicas de este ambiente (Fase 11, §11:
+     * "warnings... visibles") — ej. oclusión no convergida, luminarias
+     * excluidas de UGR, etc. `[]` cuando no hubo ninguna o cuando el cálculo
+     * no pasó por una ejecución completa (`CalculationRun`).
+     */
+    warnings: CalculationWarning[];
 }
 
 export interface DialuxAmbientExport {
@@ -122,6 +145,13 @@ export interface DialuxExportSnapshot {
     fixtures: Fixture[];
     ambients: DialuxAmbientExport[];
     resultsByRoom: Record<string, LightingResult>;
+    /**
+     * Advertencias del motor SIN objeto asociado (Fase 11, §11: "warnings...
+     * visibles") — ej. `interreflection-maxBounces-too-low`, `scene-not-found`
+     * (ver `domain/calculation/runDirectPreviewEngine.ts`). `[]` cuando no
+     * hubo ninguna o cuando el snapshot no trae `calculationRun`.
+     */
+    globalWarnings: CalculationWarning[];
     visualConfig: DialuxExportVisualConfig;
     summary: DialuxExportSummary;
 }
@@ -363,6 +393,7 @@ export interface DialuxAmbientDetail {
     isoluxAssetId: string | null;
     requirementEvaluations: RequirementEvaluation[];
     provenance: CalculationProvenance;
+    warnings: CalculationWarning[];
     luminaires: DialuxAmbientLuminaireItem[];
     fixturePositions: Array<{
         id: string;

@@ -13,6 +13,11 @@ export interface ProjectSlice {
         ugrLimit?: number;
         uniformityTarget?: number;
         colorRenderingRa?: number;
+        normativeLabel?: string;
+        normativeCategory?: string;
+        normativeSection?: string;
+        normativeActivity?: string;
+        specificRequirements?: string | null;
         /** Si se especifica, el perfil solo se aplica a estos ambientes (por id), no a todo el proyecto. */
         roomIds?: string[];
     }) => void;
@@ -68,10 +73,9 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                     scenes: state.project.scenes.map((scene) => ({
                         ...scene,
                         rooms: scene.rooms.map((room) => {
-                            if (
-                                (room.normativeStandard ?? defaultStandard) ===
-                                defaultStandard
-                            ) {
+                            const standardChanged =
+                                room.normativeStandard !== defaultStandard;
+                            if (!standardChanged) {
                                 return {
                                     ...room,
                                     normativeStandard: defaultStandard,
@@ -89,8 +93,36 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                                 uniformityTarget: undefined,
                                 colorRenderingRa: undefined,
                                 specificRequirements: undefined,
+                                ambientConfigs: room.ambientConfigs
+                                    ? Object.fromEntries(
+                                          Object.entries(
+                                              room.ambientConfigs,
+                                          ).map(([key, config]) => [
+                                              key,
+                                              {
+                                                  ...config,
+                                                  normativeStandard:
+                                                      defaultStandard,
+                                                  normativeCategory: undefined,
+                                                  normativeSection: undefined,
+                                                  activity: undefined,
+                                              },
+                                          ]),
+                                      )
+                                    : room.ambientConfigs,
                             };
                         }),
+                        walls: scene.walls.map((wall) =>
+                            wall.normativeStandard === defaultStandard
+                                ? wall
+                                : {
+                                      ...wall,
+                                      normativeStandard: defaultStandard,
+                                      normativeCategory: undefined,
+                                      normativeSection: undefined,
+                                      normativeActivity: undefined,
+                                  },
+                        ),
                     })),
                 },
             };
@@ -100,27 +132,66 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
         set((state) => {
             if (!state.project) return state;
             const scoped = opts.roomIds !== undefined;
+            // La clasificación (baño, dormitorio, aula, etc.) nunca es global.
+            // Exigir un alcance explícito evita imponer un único uso a todo el proyecto.
+            if (!scoped || opts.roomIds!.length === 0) return state;
             return {
                 ...state,
                 // La norma elegida debe sobrevivir al desmontaje del panel y a
                 // la recarga. El alcance solo controla qué ambientes cambian.
-                defaultRoomNormativeStandard: opts.standard,
+                defaultRoomNormativeStandard: scoped
+                    ? state.defaultRoomNormativeStandard
+                    : opts.standard,
                 project: {
                     ...state.project,
-                    defaultRoomNormativeStandard: opts.standard,
+                    defaultRoomNormativeStandard: scoped
+                        ? state.project.defaultRoomNormativeStandard
+                        : opts.standard,
                     scenes: state.project.scenes.map((scene) => ({
                         ...scene,
                         rooms: scene.rooms.map((room) => {
                             // Recintos (outer shells) and stairs have no lighting — skip them
-                            const isAmbiente =
-                                room.roomType === 'ambient' ||
-                                room.roomType === 'corridor';
-                            if (!isAmbiente) return room;
                             if (scoped && !opts.roomIds!.includes(room.id))
                                 return room;
+                            const standardChanged =
+                                room.normativeStandard !== opts.standard;
                             return {
                                 ...room,
                                 normativeStandard: opts.standard,
+                                normativeCategory: opts.normativeCategory,
+                                normativeSection: opts.normativeSection,
+                                normativeActivity: opts.normativeActivity,
+                                normativeLabel:
+                                    opts.normativeLabel ??
+                                    (standardChanged
+                                        ? undefined
+                                        : room.normativeLabel),
+                                specificRequirements:
+                                    opts.specificRequirements ??
+                                    (standardChanged
+                                        ? undefined
+                                        : room.specificRequirements),
+                                ambientConfigs: room.ambientConfigs
+                                    ? Object.fromEntries(
+                                          Object.entries(
+                                              room.ambientConfigs,
+                                          ).map(([key, config]) => [
+                                              key,
+                                              {
+                                                  ...config,
+                                                  normativeStandard:
+                                                      opts.standard,
+                                                  normativeCategory:
+                                                      opts.normativeCategory,
+                                                  normativeSection:
+                                                      opts.normativeSection,
+                                                  activity:
+                                                      opts.normativeActivity,
+                                                  illuminanceLux: opts.normaLux,
+                                              },
+                                          ]),
+                                      )
+                                    : room.ambientConfigs,
                                 norma: opts.normaLux,
                                 illuminanceLux: opts.normaLux,
                                 ugrLimit: opts.ugrLimit ?? room.ugrLimit,
@@ -132,6 +203,16 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                                     room.colorRenderingRa,
                             };
                         }),
+                        walls: scoped
+                            ? scene.walls
+                            : scene.walls.map((wall) => ({
+                                  ...wall,
+                                  normativeStandard: opts.standard,
+                                  normativeCategory: opts.normativeCategory,
+                                  normativeSection: opts.normativeSection,
+                                  normativeActivity: opts.normativeActivity,
+                                  illuminanceLux: opts.normaLux,
+                              })),
                     })),
                 },
             };

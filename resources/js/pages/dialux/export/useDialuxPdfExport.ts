@@ -1,12 +1,7 @@
 import axios from 'axios';
 import { useCallback, useState } from 'react';
 import Swal from 'sweetalert2';
-import { deriveAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
-import { calculateLightingResult } from '@/pages/dialux/hooks/lightingEngineCore';
-import type {
-    LightingResult,
-    Project,
-} from '@/pages/dialux/hooks/useEditorStore';
+import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
 import { fitCadViewToDrawing } from '@/pages/dialux/hooks/useMlightcadEngine';
 import * as dialuxRoutes from '@/routes/dialux';
@@ -37,39 +32,6 @@ function waitForTwoFrames(): Promise<void> {
     return new Promise((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
-}
-
-/**
- * Recalcula el resultado lumínico de TODOS los ambientes del proyecto (todos
- * los niveles) a partir del estado ACTUAL de recintos/luminarias — mismo
- * cálculo que el botón "Calcular" (ver runCalc en EditorLayout.tsx), pero sin
- * sus efectos secundarios de UI (no abre el modal de resultados).
- *
- * El export usaba el `resultsByRoom` cacheado del store, que no se invalida
- * cuando se edita una luminaria/recinto después del último "Calcular": un PDF
- * exportado sin recalcular podía mostrar valores desactualizados sin ningún
- * aviso. Se recalcula siempre antes de exportar para que el PDF refleje el
- * estado real del proyecto en el momento de la exportación.
- */
-function recalculateAllResults(project: Project): Record<string, LightingResult> {
-    const resultsByRoom: Record<string, LightingResult> = {};
-
-    for (const scene of project.scenes) {
-        for (const room of scene.rooms) {
-            for (const ambient of deriveAmbientSpaces(
-                room,
-                scene.walls,
-                scene.fixtures,
-            )) {
-                resultsByRoom[ambient.room.id] = calculateLightingResult(
-                    ambient.room,
-                    ambient.fixtures,
-                );
-            }
-        }
-    }
-
-    return resultsByRoom;
 }
 
 function wait(ms: number): Promise<void> {
@@ -326,14 +288,19 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
             // ── Step 0: Recalcular TODOS los ambientes con el estado actual
             // (recintos/luminarias pueden haber cambiado desde el último
             // "Calcular" manual; el PDF nunca debe mostrar resultados viejos).
+            // Fase 11 (§11: "cada valor visible puede trazarse a una
+            // ejecución, configuración, punto y objeto"): pasa por
+            // `runDirectPreviewEngine` (vía `runProjectLightingCalculation`)
+            // en vez de llamar `calculateLightingResult` ambiente por
+            // ambiente sin ninguna trazabilidad — la `CalculationRun`
+            // resultante (versión, hash, config, warnings) se pasa al
+            // snapshot de export para que el PDF la refleje.
             updateSwalProgress('Recalculando resultados de iluminación...', 10);
             const projectToRecalculate =
                 useEditorStore.getState().project ?? project;
-            useEditorStore
-                .getState()
-                .setResultsByRoom(
-                    recalculateAllResults(projectToRecalculate),
-                );
+            const { resultsByRoom: recalculatedResults, run: calculationRun } =
+                await runProjectLightingCalculation(projectToRecalculate);
+            useEditorStore.getState().setResultsByRoom(recalculatedResults);
 
             // ── Step 1: Prepare project data
             updateSwalProgress('Preparando datos del proyecto...', 20);
@@ -346,6 +313,7 @@ export function useDialuxPdfExport(): UseDialuxPdfExportResult {
                 activeSceneId: exportActiveSceneId,
                 includeAllScenes: true,
                 resultsByRoom: exportState.resultsByRoom,
+                calculationRun,
                 dxfEntities: exportState.dxfEntities,
                 dxfExtents: exportState.dxfExtents,
                 visualConfig: {

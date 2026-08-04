@@ -604,6 +604,7 @@ class ProductImportService
             'c_angles' => $cAngles,
             'gamma_angles' => $gAngles,
             'candela' => $candela,
+            'reference_lumens' => $lumens,
             'provenance' => 'manufacturer',
             'symmetry' => $symmetry,
         ];
@@ -1021,24 +1022,17 @@ class ProductImportService
         $cAngles = $dc > 0.0 ? array_map(fn ($i) => $i * $dc, range(0, $numC - 1)) : [];
         $gAngles = $dg > 0.0 ? array_map(fn ($i) => $i * $dg, range(0, $numG - 1)) : [];
 
-        if ($dc <= 0.0 && count($tokens) >= $numC) {
-            $cAngles = array_slice($tokens, 0, $numC);
-            $tokens = array_slice($tokens, $numC);
-        }
-
-        if ($dg <= 0.0 && count($tokens) >= $numG) {
-            $gAngles = array_slice($tokens, 0, $numG);
-            $tokens = array_slice($tokens, $numG);
-        }
-
-        if ($dc > 0.0 && $dg > 0.0) {
-            $limit = max(0, min(32, count($tokens) - $numC - $numG));
-            for ($offset = 0; $offset <= $limit; $offset++) {
-                $candidateC = array_slice($tokens, $offset, $numC);
-                $candidateG = array_slice($tokens, $offset + $numC, $numG);
-                if ($this->isExpectedAngleList($candidateC, $numC, $dc) && $this->isExpectedAngleList($candidateG, $numG, $dg)) {
-                    return [$candidateC, $candidateG, array_slice($tokens, $offset + $numC + $numG)];
-                }
+        // Entre la cabecera de lámpara y los ángulos EULUMDAT existen diez
+        // factores de reducción. Hay que localizar ambas listas aunque dC sea
+        // cero (caso habitual de una luminaria rotacional con un solo plano C).
+        // Antes se tomaba el primer factor como ángulo C y toda la matriz de
+        // intensidades quedaba desplazada.
+        $limit = max(0, min(32, count($tokens) - $numC - $numG));
+        for ($offset = 0; $offset <= $limit; $offset++) {
+            $candidateC = array_slice($tokens, $offset, $numC);
+            $candidateG = array_slice($tokens, $offset + $numC, $numG);
+            if ($this->isExpectedAngleList($candidateC, $numC, $dc) && $this->isExpectedAngleList($candidateG, $numG, $dg)) {
+                return [$candidateC, $candidateG, array_slice($tokens, $offset + $numC + $numG)];
             }
         }
 
@@ -1050,12 +1044,12 @@ class ProductImportService
      */
     private function isExpectedAngleList(array $values, int $count, float $step): bool
     {
-        if (count($values) !== $count || $step <= 0.0) {
+        if (count($values) !== $count || ($step <= 0.0 && $count > 1)) {
             return false;
         }
 
         foreach ($values as $index => $value) {
-            if (abs($value - ($index * $step)) > 0.01) {
+            if (abs($value - ($index * max(0.0, $step))) > 0.01) {
                 return false;
             }
         }

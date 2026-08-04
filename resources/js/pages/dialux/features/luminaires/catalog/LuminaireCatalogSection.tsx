@@ -1,6 +1,7 @@
-import { Globe, Share2, Trash2, Upload, Wrench } from 'lucide-react';
+import { Globe, Pencil, Share2, Trash2, Upload, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { isFixtureMatch } from '@/pages/dialux/components/catalogData';
+import type { ImportedLuminaireProduct } from './catalogApi';
 import { isImportedProductActive } from './fixtureMappers';
 import { ImportPhotometryForm } from './ImportPhotometryForm';
 import { ManualLuminaireForm } from './ManualLuminaireForm';
@@ -21,6 +22,7 @@ export interface LuminaireCatalogSectionProps extends UseLuminaireCatalogOptions
 export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }: LuminaireCatalogSectionProps) {
     const [importMode, setImportMode] = useState(false);
     const [manualMode, setManualMode] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<ImportedLuminaireProduct | null>(null);
 
     const catalog = useLuminaireCatalog({ ...hookOptions, showAllInSinglePage: isCompactFixtureGrid });
     const {
@@ -66,6 +68,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                     onClick={() => {
                         setImportMode((v) => !v);
                         setManualMode(false);
+                        setEditingProduct(null);
                     }}
                     title="Importar catalogo IES / LDT"
                     className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-amber-400 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-amber-700 dark:hover:text-amber-300`}
@@ -78,6 +81,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                     onClick={() => {
                         setManualMode((v) => !v);
                         setImportMode(false);
+                        setEditingProduct(null);
                     }}
                     title="Crear luminaria propia con datos manuales"
                     className={`${isCompactFixtureGrid ? 'hidden' : 'flex'} items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-amber-400 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-amber-700 dark:hover:text-amber-300`}
@@ -105,6 +109,17 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
             {importMode && <ImportPhotometryForm isLoadingProducts={isLoadingProducts} onImported={addImportedProduct} />}
 
             {manualMode && <ManualLuminaireForm onCreated={addImportedProduct} />}
+            {editingProduct && (
+                <ManualLuminaireForm
+                    key={editingProduct.id}
+                    product={editingProduct}
+                    onCancel={() => setEditingProduct(null)}
+                    onCreated={(product) => {
+                        addImportedProduct(product);
+                        setEditingProduct(null);
+                    }}
+                />
+            )}
 
             {isCompactFixtureGrid && (
                 <div className="grid min-h-[17.5rem] grid-cols-3 grid-rows-5 gap-1">
@@ -242,6 +257,29 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                             <Globe size={12} />
                                         </span>
                                     )
+                                )}
+                                {product.is_owner && (
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setManualMode(false);
+                                            setImportMode(false);
+                                            setEditingProduct(product);
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                setEditingProduct(product);
+                                            }
+                                        }}
+                                        title="Editar esta luminaria"
+                                        className="shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-amber-900/40 hover:text-amber-400 focus-visible:outline-2 focus-visible:outline-amber-400"
+                                    >
+                                        <Pencil size={12} />
+                                    </span>
                                 )}
                                 {product.is_owner && (
                                     <span

@@ -108,6 +108,40 @@ test('authenticated users can import an ldt luminaire product with report data',
         ->and($product->report_assets['polar_svg'])->toContain('CDL polar');
 });
 
+test('ldt with one c plane skips reduction factors before photometric angles', function () {
+    Storage::fake();
+
+    $user = User::factory()->create();
+    $lines = array_fill(0, 32, '0');
+    $lines[0] = 'Test Lighting';
+    $lines[2] = '1';
+    $lines[3] = '1';
+    $lines[4] = '0';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'Single C plane';
+    $lines[27] = 'LED';
+    $lines[28] = '2000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '20';
+    $lines = array_merge($lines, ['0.51', '0.62', '0.70', '0.78', '0.82', '0.86', '0.90', '0.93', '0.95', '0.97'], ['0'], ['0', '45', '90'], ['500', '250', '0']);
+
+    $file = UploadedFile::fake()->createWithContent('single-plane.ldt', implode("\n", $lines));
+
+    $this->actingAs($user)->post(route('dialux.products.import'), [
+        'file' => $file,
+        'normative_standard' => 'universal',
+    ])->assertCreated();
+
+    $web = LuminaireProduct::query()->firstOrFail()->photometric_web;
+
+    expect(array_map('floatval', $web['c_angles']))->toBe([0.0])
+        ->and(array_map('floatval', $web['gamma_angles']))->toBe([0.0, 45.0, 90.0])
+        ->and(array_map('floatval', $web['candela'][0]))->toBe([1000.0, 500.0, 0.0])
+        ->and((float) $web['reference_lumens'])->toBe(2000.0);
+});
+
 test('authenticated users can import an extended ldt luminaire product without shifting photometric fields', function () {
     Storage::fake();
 
@@ -554,6 +588,60 @@ test('manual custom curve photometry is tagged as manual-curve, distinct from th
 
     $lastRow = collect($product->report_data['technical_table'])->last();
     expect($lastRow['value'])->toBe('Curva ingresada manualmente (no es dato de fabricante)');
+});
+
+test('an owner can update editable luminaire catalog properties', function () {
+    $user = User::factory()->create();
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $user->id,
+        'name' => 'Panel original',
+        'source_format' => 'manual',
+        'total_lumens' => 1200,
+        'power_watts' => 12,
+        'cct' => '3000K',
+    ]);
+
+    $this->actingAs($user)
+        ->patchJson(route('dialux.products.update', $product), [
+            'name' => 'Panel actualizado',
+            'manufacturer' => 'Marca propia',
+            'catalog_number' => 'P-20',
+            'total_lumens' => 2400,
+            'power_watts' => 20,
+            'cct' => '4000K',
+            'cri_ra' => 90,
+        ])
+        ->assertSuccessful()
+        ->assertJsonPath('product.name', 'Panel actualizado')
+        ->assertJsonPath('product.total_lumens', 2400)
+        ->assertJsonPath('product.is_owner', true);
+
+    $this->assertDatabaseHas('luminaire_products', [
+        'id' => $product->id,
+        'name' => 'Panel actualizado',
+        'total_lumens' => 2400,
+        'cri_ra' => 90,
+    ]);
+});
+
+test('a user cannot update another users luminaire', function () {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $product = LuminaireProduct::query()->create([
+        'user_id' => $owner->id,
+        'name' => 'Luminaria privada',
+        'source_format' => 'manual',
+        'total_lumens' => 1200,
+    ]);
+
+    $this->actingAs($otherUser)
+        ->patchJson(route('dialux.products.update', $product), [
+            'name' => 'Cambio no permitido',
+            'total_lumens' => 5000,
+        ])
+        ->assertNotFound();
+
+    expect($product->refresh()->name)->toBe('Luminaria privada');
 });
 
 test('ies import warns when vertical angles are not monotonically increasing', function () {

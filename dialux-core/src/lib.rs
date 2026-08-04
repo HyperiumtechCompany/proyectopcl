@@ -5,6 +5,7 @@ mod gldf_reader;
 mod lighting;
 mod dxf_parser;
 mod building;
+mod direct_illuminance;
 
 use wasm_bindgen::prelude::*;
 use serde_json;
@@ -297,4 +298,35 @@ pub fn generate_grid(room_json: &str, spacing: f64, wp_height: f64) -> String {
     };
     let grid = geometry::CalculationGrid::from_room(&room, spacing, wp_height);
     serde_json::to_string(&grid).unwrap_or_default()
+}
+
+/// Kernel por lotes de la Fase 12 (plan maestro, "Rendimiento: Worker y
+/// WASM"): iluminancia DIRECTA (sin componente reflejada/radiosidad, que
+/// sigue calculándose en TS) para toda una malla de puntos × luminarias en
+/// una sola llamada — evita cruzar la frontera JS↔WASM por cada
+/// punto×luminaria, que anularía cualquier ganancia. Espejo fiel de
+/// `hooks/directIlluminance.ts`/`photometricInterpolation.ts` (ver
+/// `direct_illuminance.rs`); NO reutiliza `lighting.rs` (motor viejo,
+/// desconectado de la app real, sin las físicas de las Fases 6-11).
+/// `points_json`: `[{x,y,z,normal:{x,y,z}}, ...]`.
+/// `fixtures_json`: `[{x,y,z,rotation?,lumens,efficiency,photometricWeb?}, ...]`.
+/// `obstacles_json`: `[{originX,originY,angleRad,length,thickness,zMin,zMax}, ...]` (puede ser `[]`).
+/// Devuelve JSON `[number, ...]` alineado con `points`, o `{"error":"..."}` si el parseo falla.
+#[wasm_bindgen]
+pub fn compute_direct_illuminance_grid(points_json: &str, fixtures_json: &str, obstacles_json: &str) -> String {
+    let points: Vec<direct_illuminance::SurfacePointInput> = match serde_json::from_str(points_json) {
+        Ok(p) => p,
+        Err(e) => return format!("{{\"error\":\"points: {e}\"}}"),
+    };
+    let fixtures: Vec<direct_illuminance::FixtureInput> = match serde_json::from_str(fixtures_json) {
+        Ok(f) => f,
+        Err(e) => return format!("{{\"error\":\"fixtures: {e}\"}}"),
+    };
+    let obstacles: Vec<direct_illuminance::OcclusionBoxInput> = match serde_json::from_str(obstacles_json) {
+        Ok(o) => o,
+        Err(e) => return format!("{{\"error\":\"obstacles: {e}\"}}"),
+    };
+
+    let values = direct_illuminance::compute_direct_illuminance_grid_values(&points, &fixtures, &obstacles);
+    serde_json::to_string(&values).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"))
 }

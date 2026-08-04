@@ -6,9 +6,11 @@ import { Link } from '@inertiajs/react';
 import { ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
 import { useDialuxPdfExport } from '@/pages/dialux/export';
-import { deriveAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
+import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
+import { useDialuxCalculationWorker } from '@/pages/dialux/hooks/useDialuxCalculationWorker';
 import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux/hooks/useEditorStore';
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
@@ -285,6 +287,7 @@ export const EditorLayout = memo(function EditorLayout() {
     }, [project, setProject]);
 
     const engine = useLightingEngine();
+    const calcWorker = useDialuxCalculationWorker();
     const { exportPdf, isExporting, exportStep } = useDialuxPdfExport();
 
     const floorsSorted = getFloorsSorted();
@@ -403,34 +406,61 @@ export const EditorLayout = memo(function EditorLayout() {
 
     const runCalc = useCallback(async () => {
         const scenes = project?.scenes ?? [];
-        if (!engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
+        if (!project || !engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
 
         setCalculating(true);
         try {
-            const calculations = (
-                await Promise.all(
-                    scenes.map(async (scene) => {
-                        const ambients = scene.rooms.flatMap((room) =>
-                            deriveAmbientSpaces(room, scene.walls, scene.fixtures),
-                        );
+            // Ambientes locales (room/fixtures) para `ResultsPanel`/`RoomLightingSection`
+            // — misma derivación que usa `buildCalculationSnapshot` internamente
+            // (`deriveSceneAmbientSpaces`, no la primitiva por-room), así
+            // `ambient.room.id` coincide exactamente con `objectId` en
+            // `CalculationRun.surfaces` (Fase 12: "Rendimiento: Worker y WASM").
+            const ambientsByScene = scenes.map((scene) => ({
+                scene,
+                ambients: deriveSceneAmbientSpaces(scene),
+            }));
 
-                        return Promise.all(
-                            ambients.map(async (ambient) => ({
-                                room: ambient.room,
-                                fixtures: ambient.fixtures,
-                                result: await engine.calculate(
-                                    ambient.room,
-                                    ambient.fixtures,
-                                ),
-                                sourceRoomName: ambient.roomName,
-                                levelId: scene.id,
-                                levelName: scene.name,
-                                levelIndex: scene.floorIndex ?? 0,
-                            })),
-                        );
-                    }),
-                )
-            ).flat();
+            type MinimalCalculationRun = {
+                surfaces: Array<{ objectId: string; result: RoomResultSummary['result'] }>;
+                status: string;
+            };
+
+            let run: MinimalCalculationRun;
+            try {
+                // Cálculo real en un Web Worker (no bloquea la UI mientras corre) —
+                // el worker intenta acelerar el término directo con el kernel
+                // WASM de `dialux-core`; si no está disponible, usa el motor TS
+                // puro, con el mismo resultado.
+                run = await calcWorker.calculate(buildCalculationSnapshot(project));
+            } catch (workerError) {
+                console.warn(
+                    '[Dialux] El worker de cálculo falló, se usa el motor síncrono de respaldo en el hilo principal.',
+                    workerError,
+                );
+                const fallbackSurfaces: MinimalCalculationRun['surfaces'] = [];
+                for (const { ambients } of ambientsByScene) {
+                    for (const ambient of ambients) {
+                        fallbackSurfaces.push({ objectId: ambient.room.id, result: await engine.calculate(ambient.room, ambient.fixtures) });
+                    }
+                }
+                run = { surfaces: fallbackSurfaces, status: 'completed' };
+            }
+
+            const resultByObjectId = new Map(run.surfaces.map((surface) => [surface.objectId, surface.result]));
+
+            const calculations: RoomResultSummary[] = ambientsByScene.flatMap(({ scene, ambients }) =>
+                ambients
+                    .filter((ambient) => resultByObjectId.has(ambient.room.id))
+                    .map((ambient) => ({
+                        room: ambient.room,
+                        fixtures: ambient.fixtures,
+                        result: resultByObjectId.get(ambient.room.id)!,
+                        sourceRoomName: ambient.roomName,
+                        levelId: scene.id,
+                        levelName: scene.name,
+                        levelIndex: scene.floorIndex ?? 0,
+                    })),
+            );
 
             setRoomResults(calculations);
             setResultsByRoom(
@@ -438,7 +468,11 @@ export const EditorLayout = memo(function EditorLayout() {
                     calculations.map(({ room, result }) => [room.id, result]),
                 ),
             );
-            setResultsModalOpen(calculations.length > 0);
+            // Un cálculo cancelado actualiza los resultados parciales sin
+            // abrir el modal — el usuario pidió detenerlo, no verlo de golpe.
+            if (run.status !== 'cancelled') {
+                setResultsModalOpen(calculations.length > 0);
+            }
 
             const selectedRoomResult =
                 calculations.find(({ room }) => room.id === selectedId) ??
@@ -453,6 +487,7 @@ export const EditorLayout = memo(function EditorLayout() {
             setCalculating(false);
         }
     }, [
+        calcWorker,
         engine,
         project,
         selectedId,
@@ -910,6 +945,18 @@ export const EditorLayout = memo(function EditorLayout() {
                         <Calculator size={13} />
                         {isCalculating ? 'Calculando...' : 'Calcular'}
                     </button>
+
+                    {isCalculating && (
+                        <button
+                            id="dialux-btn-cancelar-calculo"
+                            onClick={calcWorker.cancel}
+                            title="Cancelar el cálculo en curso"
+                            className="flex items-center gap-1.5 rounded bg-red-900/60 px-2.5 py-1.5 text-xs text-red-200 shadow-sm transition-all hover:bg-red-800/70"
+                        >
+                            <X size={13} />
+                            Cancelar
+                        </button>
+                    )}
 
                     <button
                         id="dialux-btn-calculo-ct"

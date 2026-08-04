@@ -38,6 +38,8 @@ export type {
     RoomLightingCalculation,
     ModuleLightingCalculations,
     Scene,
+    LightingScenePreset,
+    SceneTrigger,
     Project,
     LightingResult,
     DxfEntity,
@@ -60,7 +62,6 @@ export type {
     StairFlight,
     CorridorConfig,
 } from './types';
-
 
 import {
     buildFixtureGridObjects,
@@ -115,7 +116,11 @@ import { createProjectSlice } from './store/projectSlice';
 import { createSceneObjectsSlice } from './store/sceneObjectsSlice';
 import { createUiSlice } from './store/uiSlice';
 import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
-import { createHistorySlice, installHistoryCapture, type HistorySlice } from './store/historySlice';
+import {
+    createHistorySlice,
+    installHistoryCapture,
+    type HistorySlice,
+} from './store/historySlice';
 
 export { createScaleConfig, normalizeScaleConfig } from './storeHelpers';
 
@@ -139,8 +144,15 @@ interface UIState {
     windowTemplate: Partial<Window>;
     doorTemplate: Partial<Door>;
     corridorTemplate: CorridorConfig;
-    switchTemplate: { type: LightSwitch['type']; mountingHeight: number; label?: string };
-    wireTemplate: { wireCount: Conductor['wireCount']; wireLabel: NonNullable<Conductor['wireLabel']> };
+    switchTemplate: {
+        type: LightSwitch['type'];
+        mountingHeight: number;
+        label?: string;
+    };
+    wireTemplate: {
+        wireCount: Conductor['wireCount'];
+        wireLabel: NonNullable<Conductor['wireLabel']>;
+    };
     junctionBoxTemplate: { size: JunctionBox['size'] };
     /** Template para el dispositivo eléctrico activo (tipo que se insertará al hacer clic) */
     electricalDeviceTemplate: {
@@ -199,10 +211,17 @@ export interface EditorState extends DeletionSlice, HistorySlice {
         ugrLimit?: number;
         uniformityTarget?: number;
         colorRenderingRa?: number;
+        normativeLabel?: string;
+        normativeCategory?: string;
+        normativeSection?: string;
+        normativeActivity?: string;
+        specificRequirements?: string | null;
         roomIds?: string[];
     }) => void;
     setProjectNormativeConfig: (config: ProjectNormativeConfig | null) => void;
-    updateComplianceSummary: (summary: ProjectNormativeConfig['complianceSummary']) => void;
+    updateComplianceSummary: (
+        summary: ProjectNormativeConfig['complianceSummary'],
+    ) => void;
 
     // ── Scale ────────────────────────────────────────────────────────────────
     setScaleConfig: (
@@ -210,7 +229,7 @@ export interface EditorState extends DeletionSlice, HistorySlice {
         rescaleObjects?: boolean,
     ) => void;
     rescaleScene: (ratio: number) => void;
-    
+
     // --- DXF Entities ---
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => void;
     setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) => void;
@@ -231,7 +250,9 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     /** Genera una grilla de focos N×M centrada en el room indicado */
     addFixtureGrid: (config: FixtureGridConfig) => string[];
     addPartition: (partition: Omit<Partition, 'id'>) => string;
-    addLightSwitch: (lightSwitch: Omit<LightSwitch, 'id' | 'connectedFixtureIds'>) => string;
+    addLightSwitch: (
+        lightSwitch: Omit<LightSwitch, 'id' | 'connectedFixtureIds'>,
+    ) => string;
     addConductor: (conductor: Omit<Conductor, 'id'>) => string;
     addJunctionBox: (box: Omit<JunctionBox, 'id'>) => string;
     addElectricalDevice: (device: Omit<ElectricalDevice, 'id'>) => string;
@@ -242,12 +263,30 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     updateDoor: (id: string, patch: Partial<Omit<Door, 'id'>>) => void;
     updateCanopy: (id: string, patch: Partial<Omit<Canopy, 'id'>>) => void;
     updateFixture: (id: string, patch: Partial<Omit<Fixture, 'id'>>) => void;
-    updateFixtures: (ids: string[], patch: Partial<Omit<Fixture, 'id'>>) => void;
-    updatePartition: (id: string, patch: Partial<Omit<Partition, 'id'>>) => void;
-    updateLightSwitch: (id: string, patch: Partial<Omit<LightSwitch, 'id'>>) => void;
-    updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
-    updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
-    updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
+    updateFixtures: (
+        ids: string[],
+        patch: Partial<Omit<Fixture, 'id'>>,
+    ) => void;
+    updatePartition: (
+        id: string,
+        patch: Partial<Omit<Partition, 'id'>>,
+    ) => void;
+    updateLightSwitch: (
+        id: string,
+        patch: Partial<Omit<LightSwitch, 'id'>>,
+    ) => void;
+    updateConductor: (
+        id: string,
+        patch: Partial<Omit<Conductor, 'id'>>,
+    ) => void;
+    updateJunctionBox: (
+        id: string,
+        patch: Partial<Omit<JunctionBox, 'id'>>,
+    ) => void;
+    updateElectricalDevice: (
+        id: string,
+        patch: Partial<Omit<ElectricalDevice, 'id'>>,
+    ) => void;
     setElectricalDeviceTemplate: (
         type: ElectricalDeviceType,
         label?: string,
@@ -282,8 +321,15 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     setWindowTemplate: (t: Partial<Window>) => void;
     setDoorTemplate: (t: Partial<Door>) => void;
     setCorridorTemplate: (template: CorridorConfig) => void;
-    setSwitchTemplate: (template: { type: LightSwitch['type']; mountingHeight: number; label?: string }) => void;
-    setWireTemplate: (template: { wireCount: Conductor['wireCount']; wireLabel: NonNullable<Conductor['wireLabel']> }) => void;
+    setSwitchTemplate: (template: {
+        type: LightSwitch['type'];
+        mountingHeight: number;
+        label?: string;
+    }) => void;
+    setWireTemplate: (template: {
+        wireCount: Conductor['wireCount'];
+        wireLabel: NonNullable<Conductor['wireLabel']>;
+    }) => void;
     setJunctionBoxTemplate: (template: { size: JunctionBox['size'] }) => void;
     setWallTypeTemplate: (type: 'interior' | 'exterior' | 'cerco') => void;
     setRoomTypeTemplate: (type: 'room' | 'ambient') => void;
@@ -304,16 +350,27 @@ export interface EditorState extends DeletionSlice, HistorySlice {
 
     // ── Floor Management ─────────────────────────────────────────────────────
     /** Crea un nuevo piso vacío. Devuelve el ID de la nueva Scene. */
-    addFloor: (name: string, floorIndex: number, floorHeight?: number) => string;
+    addFloor: (
+        name: string,
+        floorIndex: number,
+        floorHeight?: number,
+    ) => string;
     /** Elimina un piso (y cambia activeScene si era el activo) */
     removeFloor: (sceneId: string) => void;
     /**
      * Duplica la geometría de un piso como nuevo piso.
      * Genera IDs nuevos para todos los objetos del piso clonado.
      */
-    duplicateFloor: (sourceSceneId: string, newFloorIndex: number, newName: string) => string;
+    duplicateFloor: (
+        sourceSceneId: string,
+        newFloorIndex: number,
+        newName: string,
+    ) => string;
     /** Actualiza propiedades del piso (name, floorHeight, etc.) */
-    updateFloor: (sceneId: string, patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex'>>) => void;
+    updateFloor: (
+        sceneId: string,
+        patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex'>>,
+    ) => void;
     /**
      * Recalcula `floorElevation` de todos los pisos basándose en su
      * `floorIndex` y `floorHeight`. Llamar tras cualquier reordenamiento.
@@ -386,7 +443,11 @@ export const useEditorStore = create<EditorState>()(
                 slabThickness: 0.2,
                 railingHeight: 1.05,
             },
-            switchTemplate: { type: 'single', mountingHeight: 1.4, label: 'S(a)' },
+            switchTemplate: {
+                type: 'single',
+                mountingHeight: 1.4,
+                label: 'S(a)',
+            },
             wireTemplate: { wireCount: 3, wireLabel: 'F+N+T' },
             junctionBoxTemplate: { size: '100x100x50' },
             electricalDeviceTemplate: null,
@@ -411,13 +472,19 @@ export const useEditorStore = create<EditorState>()(
         setCalculating: (val) => set({ isCalculating: val }),
         setResult: (result) => set({ result }),
         setResultsByRoom: (resultsByRoom) => set({ resultsByRoom }),
-        bumpPlanReloadTick: () => set((s) => ({ ui: { ...s.ui, planReloadTick: s.ui.planReloadTick + 1 } })),
+        bumpPlanReloadTick: () =>
+            set((s) => ({
+                ui: { ...s.ui, planReloadTick: s.ui.planReloadTick + 1 },
+            })),
     })),
 );
 
 installHistoryCapture(useEditorStore);
 
-export type { DeletionAnalysis, DeletionChild } from '@/pages/dialux/selection/deletionPolicy';
+export type {
+    DeletionAnalysis,
+    DeletionChild,
+} from '@/pages/dialux/selection/deletionPolicy';
 
 // ─── Helper privado ───────────────────────────────────────────────────────────
 

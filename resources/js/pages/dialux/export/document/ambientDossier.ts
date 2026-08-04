@@ -195,6 +195,7 @@ export function buildAmbientDetails(
                     : null,
                 requirementEvaluations: ambient.metrics.requirementEvaluations,
                 provenance: ambient.metrics.provenance,
+                warnings: ambient.metrics.warnings,
                 luminaires,
                 fixturePositions: ambient.fixtures.map(
                     (fixture, fixtureIndex) => ({

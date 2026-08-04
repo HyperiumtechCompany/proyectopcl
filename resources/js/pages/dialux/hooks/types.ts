@@ -12,31 +12,76 @@ import type { NormativeStandard } from './roomLighting';
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Herramientas y UI Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export type DrawTool =
-    | 'select' | 'room' | 'wall' | 'education-wall' | 'window' | 'door' | 'canopy' | 'corridor' | 'stair'
-    | 'partition' | 'fixture' | 'fixture-grid' | 'switch' | 'wire' | 'measure' | 'measure-area' | 'pan' | 'calibrate'
-    | 'elec-meter' | 'elec-main-panel' | 'elec-sub-panel'
-    | 'elec-transfer' | 'elec-arrival' | 'elec-junction-box'
-    | 'elec-earth-pit' | 'elec-facp'
-    | 'elec-outlet-floor' | 'elec-outlet-initial' | 'elec-outlet-high-180' | 'elec-outlet-floor-box' | 'elec-outlet-waterproof'
-    | 'elec-outlet-ceiling' | 'elec-outlet-rack'
+    | 'select'
+    | 'room'
+    | 'wall'
+    | 'education-wall'
+    | 'window'
+    | 'door'
+    | 'canopy'
+    | 'corridor'
+    | 'stair'
+    | 'partition'
+    | 'fixture'
+    | 'fixture-grid'
+    | 'switch'
+    | 'wire'
+    | 'measure'
+    | 'measure-area'
+    | 'pan'
+    | 'calibrate'
+    | 'elec-meter'
+    | 'elec-main-panel'
+    | 'elec-sub-panel'
+    | 'elec-transfer'
+    | 'elec-arrival'
+    | 'elec-junction-box'
+    | 'elec-earth-pit'
+    | 'elec-facp'
+    | 'elec-outlet-floor'
+    | 'elec-outlet-initial'
+    | 'elec-outlet-high-180'
+    | 'elec-outlet-floor-box'
+    | 'elec-outlet-waterproof'
+    | 'elec-outlet-ceiling'
+    | 'elec-outlet-rack'
     | 'elec-water-heater';
 
-export type SidebarTab = 'catalog' | 'objects' | 'properties' | 'results' | 'legend';
-export type ElectricalLayerGroup = 'cad' | 'fixtures' | 'wires' | 'switches' | 'outlets' | 'panels';
+export type SidebarTab =
+    | 'catalog'
+    | 'objects'
+    | 'properties'
+    | 'results'
+    | 'legend';
+export type ElectricalLayerGroup =
+    | 'cad'
+    | 'fixtures'
+    | 'wires'
+    | 'switches'
+    | 'outlets'
+    | 'panels';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
-export type AngleSnapMode = 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
+export type AngleSnapMode =
+    | 'smart'
+    | 'free'
+    | 'orthogonal'
+    | 'diagonal'
+    | 'fine';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GeometrÃƒÂ­a 2D Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface ScaleConfig {
     unit: 'mm' | 'cm' | 'm';
-    factor: number;      // Multiply DXF units by this to get meters. (e.g. if unit is mm, factor is 0.001)
+    factor: number; // Multiply DXF units by this to get meters. (e.g. if unit is mm, factor is 0.001)
     displayUnit: string;
     calibrationFactor: number;
     isCalibrated: boolean;
 }
 
-export interface Vertex { x: number; y: number }
+export interface Vertex {
+    x: number;
+    y: number;
+}
 
 export interface AmbientConfig {
     name?: string;
@@ -181,7 +226,7 @@ export interface Room {
     roomType?: 'room' | 'ambient' | 'corridor' | 'stair';
     /** PolÃƒÂ­gono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
-    height: number;        // metros
+    height: number; // metros
     color: string;
     illuminanceLux?: number;
     fixtureLumens?: number;
@@ -196,8 +241,8 @@ export interface Room {
     specificRequirements?: string | null;
     usefulPlaneHeight?: number | null;
     marginalZone?: number | null;
-    norma?: number;        // Nivel de lux requerido (EN 12464-1)
-    fixtureFlux?: number;  // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
+    norma?: number; // Nivel de lux requerido (EN 12464-1)
+    fixtureFlux?: number; // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
     /** Regla usada para calcular automáticamente los tomacorrientes. */
     outletUse?: 'aula' | 'comedor' | 'exterior';
     /** Variante/altura aplicada a los tomacorrientes autogenerados. */
@@ -221,7 +266,7 @@ export interface Room {
 /** ConfiguraciÃƒÂ³n normativa del proyecto (sincronizada con backend) */
 export interface ProjectNormativeConfig {
     dialuxProjectId: string;
-    countryCode: string;                                     // ISO 3166-1 alpha-2
+    countryCode: string; // ISO 3166-1 alpha-2
     region: 'europe' | 'americas_usa' | 'americas_peru';
     installationType: string | null;
     primaryStandard: NormativeStandard;
@@ -246,9 +291,9 @@ export interface ProjectNormativeConfig {
 /** Pared: polilÃƒÂ­nea en planta */
 export interface Wall {
     id: string;
-    vertices: Vertex[];  // Ã¢â€°Â¥ 2 puntos, en metros
-    thickness: number;   // metros (default 0.20)
-    height: number;      // metros (default 2.80)
+    vertices: Vertex[]; // Ã¢â€°Â¥ 2 puntos, en metros
+    thickness: number; // metros (default 0.20)
+    height: number; // metros (default 2.80)
     material?: 'brick' | 'adobe';
     normativeUse?: 'housing' | 'education' | 'generic';
     mortarJointMin?: number;
@@ -267,11 +312,19 @@ export interface Wall {
     postSpacing?: number;
     /** Configuración de iluminación para paredes interiores */
     illuminanceLux?: number;
+    normativeStandard?: NormativeStandard;
     normativeCategory?: string;
     normativeSection?: string;
     normativeActivity?: string;
     fixtureLumens?: number;
-    fixtureType?: 'recessed' | 'surface' | 'pendant' | 'spot' | 'strip' | 'panel' | 'tube';
+    fixtureType?:
+        | 'recessed'
+        | 'surface'
+        | 'pendant'
+        | 'spot'
+        | 'strip'
+        | 'panel'
+        | 'tube';
     fixtureShape?: 'round' | 'square' | 'rectangular' | 'cylindrical';
 }
 
@@ -279,10 +332,10 @@ export interface Wall {
 export interface Window {
     id: string;
     wallId: string;
-    offsetAlongWall: number;  // metros desde el inicio de la pared
-    width: number;            // metros
-    height: number;           // metros
-    sillHeight: number;       // altura del antepecho en metros (default 0.90)
+    offsetAlongWall: number; // metros desde el inicio de la pared
+    width: number; // metros
+    height: number; // metros
+    sillHeight: number; // altura del antepecho en metros (default 0.90)
     windowType?: 'fixed' | 'sliding' | 'casement' | 'awning' | 'bathroom';
     windowShape?: 'rectangular' | 'arched' | 'circular';
     /** Si true, el offset se recalcula automÃƒÂ¡ticamente al centro de la pared */
@@ -293,9 +346,9 @@ export interface Window {
 export interface Door {
     id: string;
     wallId: string;
-    offsetAlongWall: number;   // metros desde el inicio de la pared
-    width: number;             // metros (default 0.90)
-    height: number;            // metros (default 2.10)
+    offsetAlongWall: number; // metros desde el inicio de la pared
+    width: number; // metros (default 0.90)
+    height: number; // metros (default 2.10)
     /**
      * Tipo de puerta:
      *   'single'   Ã¢â€ â€™ puerta sencilla batiente (default)
@@ -305,11 +358,17 @@ export interface Door {
      *   'bathroom' Ã¢â€ â€™ puerta de cubÃƒÂ­culo SS.HH (ancho 0.60-0.70m, gap inferior 0.15m)
      *   'opening'  Ã¢â€ â€™ solo vano (hueco sin panel ni marco)
      */
-    doorType?: 'single' | 'double' | 'sliding' | 'folding' | 'bathroom' | 'opening';
+    doorType?:
+        | 'single'
+        | 'double'
+        | 'sliding'
+        | 'folding'
+        | 'bathroom'
+        | 'opening';
     openingDirection?: 'inward' | 'outward';
     /** Lado donde estÃƒÂ¡ la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';
-    openingAngle?: number;     // grados (default 90)
+    openingAngle?: number; // grados (default 90)
     /** Si true, el offset se recalcula automÃƒÂ¡ticamente al centro de la pared */
     centered?: boolean;
     /**
@@ -364,31 +423,42 @@ export interface Partition {
 /** Voladizo / alero */
 export interface Canopy {
     id: string;
-    x1: number; y1: number;  // punto de anclaje al muro (metros)
-    x2: number; y2: number;  // extremo libre (metros)
-    width: number;           // anchura a lo largo del muro (metros)
-    slabThickness: number;   // grosor de losa (metros, default 0.15)
-    height: number;          // altura de montaje desde el suelo (metros)
+    x1: number;
+    y1: number; // punto de anclaje al muro (metros)
+    x2: number;
+    y2: number; // extremo libre (metros)
+    width: number; // anchura a lo largo del muro (metros)
+    slabThickness: number; // grosor de losa (metros, default 0.15)
+    height: number; // altura de montaje desde el suelo (metros)
 }
 
 /** Luminaria */
 export interface Fixture {
     id: string;
     name: string;
-    x: number; y: number; z: number;  // posiciÃƒÂ³n en metros en la escena
+    x: number;
+    y: number;
+    z: number; // posiciÃƒÂ³n en metros en la escena
     lumens: number;
     power?: number;
-    efficiency: number;  // 0-1, factor de aprovechamiento
-    fixtureType: 'recessed' | 'pendant' | 'surface' | 'spot' | 'strip' | 'panel' | 'tube';
+    efficiency: number; // 0-1, factor de aprovechamiento
+    fixtureType:
+        | 'recessed'
+        | 'pendant'
+        | 'surface'
+        | 'spot'
+        | 'strip'
+        | 'panel'
+        | 'tube';
     fixtureShape?: 'round' | 'square' | 'rectangular' | 'cylindrical';
     dimensions?: { length: number; width: number; height: number }; // En metros
     brand?: string;
     articleNumber?: string;
     productId?: number;
     productSourceFormat?: string;
-    lightColor: string;  // hex, e.g. '#fff5e1' blanco cÃƒÂ¡lido
-    wallId?: string;     // opcional: ID de la pared donde estÃƒÂ¡ colocada (para drag/drop)
-    roomId?: string;     // opcional: ID del recinto al que pertenece
+    lightColor: string; // hex, e.g. '#fff5e1' blanco cÃƒÂ¡lido
+    wallId?: string; // opcional: ID de la pared donde estÃƒÂ¡ colocada (para drag/drop)
+    roomId?: string; // opcional: ID del recinto al que pertenece
     gridGroupId?: string; // opcional: ID de grupo de grilla para conectar visualmente
     cct?: number | null;
     cri?: number | null;
@@ -410,6 +480,8 @@ export interface Fixture {
         c_angles: number[];
         gamma_angles: number[];
         candela: number[][];
+        /** Flujo original con el que se expresaron las candelas; permite escalar la curva al editar lúmenes. */
+        reference_lumens?: number;
         /**
          * Origen del dato (Fase 3 del plan maestro — nunca debe poder
          * confundirse una aproximación con fotometría real de fabricante):
@@ -434,9 +506,9 @@ export interface Fixture {
     brandLogoAssetId?: string | null;
     lineDrawingAssetId?: string | null;
     // Ã¢â€ â‚¬Ã¢â€ â‚¬ Campos del catÃƒÂ¡logo real Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
-    mountingHeight?: number;     // Altura de montaje S.N.P.T. en metros (ej: 3.50)
-    ip?: string;                 // Grado de protecciÃƒÂ³n (ej: "IP20", "IP65")
-    ik?: string;                 // Resistencia a impacto (ej: "IK02", "IK07")
+    mountingHeight?: number; // Altura de montaje S.N.P.T. en metros (ej: 3.50)
+    ip?: string; // Grado de protecciÃƒÂ³n (ej: "IP20", "IP65")
+    ik?: string; // Resistencia a impacto (ej: "IK02", "IK07")
     /** SÃƒÂ­mbolo CAD asociado: 'rect_red'|'rect_green'|'rect_white'|'circle_black'|'circle_magenta'|'spot_yellow'|'spot_orange'|'emergency'|'emergency_perm' */
     catalogSymbol?: string;
     emergencyType?: 'none' | 'emergency' | 'permanent';
@@ -461,14 +533,14 @@ export interface LightSwitch {
 /** Conductor eléctrico punto a punto */
 export interface Conductor {
     id: string;
-    sourceId: string;              // ID origen (Interruptor, Tablero o Luminaria)
-    targetId: string;              // ID destino (Luminaria o Interruptor)
-    circuitGroupId?: string;       // ID para agrupar cables de una misma tirada
-    wireCount: number;             // Número de conductores (2, 3, 4)
-    wireLabel?: string;            // Etiqueta visible: F+N+T, 2F+T, 3F, etc.
+    sourceId: string; // ID origen (Interruptor, Tablero o Luminaria)
+    targetId: string; // ID destino (Luminaria o Interruptor)
+    circuitGroupId?: string; // ID para agrupar cables de una misma tirada
+    wireCount: number; // Número de conductores (2, 3, 4)
+    wireLabel?: string; // Etiqueta visible: F+N+T, 2F+T, 3F, etc.
     routeType: 'floor' | 'wall_ceiling'; // Empotrado en piso o pared/techo
-    tubeSize: number;              // Diámetro de tubería en mm (20mm default)
-    conductorType: string;         // Tipo: "Cu LSOH", "N2XOH", etc.
+    tubeSize: number; // Diámetro de tubería en mm (20mm default)
+    conductorType: string; // Tipo: "Cu LSOH", "N2XOH", etc.
     /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
     sectionMm2: number;
     /** Parámetros editables del cálculo CT para la salida raíz del circuito. */
@@ -612,39 +684,174 @@ export interface ElectricalDevice {
     /** Rotación en planta, grados sentido horario (0-360). Default 0. */
     rotation?: number;
     properties: ElectricalDeviceProperties;
-    wireProps?: Record<string, {
-        wireCount: number;
-        wireLabel?: string;
-        routeType: 'floor' | 'wall_ceiling';
-        tubeSize: number;
-        conductorType: string;
-        /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
-        sectionMm2: number;
-    }>;
+    wireProps?: Record<
+        string,
+        {
+            wireCount: number;
+            wireLabel?: string;
+            routeType: 'floor' | 'wall_ceiling';
+            tubeSize: number;
+            conductorType: string;
+            /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */
+            sectionMm2: number;
+        }
+    >;
 }
 
 /** Defaults de montaje y label por tipo de dispositivo */
-export const ELECTRICAL_DEVICE_DEFAULTS: Record<ElectricalDeviceType, {
-    label: string;
-    mountingHeight: number;
-    properties: ElectricalDeviceProperties;
-}> = {
-    meter:             { label: 'Medidor',    mountingHeight: 1.20, properties: { voltage: '220V', phases: '1O', boxMaterial: 'F.G. Liviano' } },
-    main_panel:        { label: 'TG',         mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', lengthM: 0, designFactor: 1.25, connectionType: 'star', workingTemperatureC: 20, copperResistivity: 0.0175, upstreamVoltageDropV: 0, defaultPowerFactor: 0.9, defaultDemandFactor: 1, boxMaterial: 'F.G. Liviano' } },
-    sub_panel:         { label: 'TD-01',      mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', lengthM: 0, designFactor: 1.25, connectionType: 'star', workingTemperatureC: 20, copperResistivity: 0.0175, upstreamVoltageDropV: 6.22, defaultPowerFactor: 0.9, defaultDemandFactor: 1, boxMaterial: 'F.G. Liviano' } },
-    transfer_switch:   { label: 'ATS',        mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
-    arrival_panel:     { label: 'T.Llegada',  mountingHeight: 1.80, properties: { voltage: '380V', phases: '3O', boxMaterial: 'F.G. Liviano' } },
-    junction_box:      { label: 'C-01',       mountingHeight: 0.40, properties: { boxSize: '100x100x50', boxMaterial: 'RECTO' } },
-    earth_pit:         { label: 'PAT',        mountingHeight: 0.00, properties: {} },
-    facp:              { label: 'FACP',       mountingHeight: 1.40, properties: { voltage: '220V', phases: '1O' } },
-    outlet_floor:      { label: 'T',          mountingHeight: 0.40, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_initial:    { label: 'TI',         mountingHeight: 1.50, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_high_180:   { label: 'TA',         mountingHeight: 1.80, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_floor_box:  { label: 'TP',         mountingHeight: 0.00, properties: { boxSize: '100x100x55', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_waterproof: { label: 'T',          mountingHeight: 1.20, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_ceiling:    { label: 'T',          mountingHeight: 0.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    outlet_rack:       { label: 'T',          mountingHeight: 2.00, properties: { boxSize: '100x55x50', boxMaterial: 'RECTO', ratedPowerW: DEFAULT_OUTLET_POWER_W } },
-    water_heater_30l:  { label: 'TE',         mountingHeight: 1.80, properties: { voltage: '220V', phases: '1O', boxSize: '575x340x340', boxMaterial: 'TERMA 30L' } },
+export const ELECTRICAL_DEVICE_DEFAULTS: Record<
+    ElectricalDeviceType,
+    {
+        label: string;
+        mountingHeight: number;
+        properties: ElectricalDeviceProperties;
+    }
+> = {
+    meter: {
+        label: 'Medidor',
+        mountingHeight: 1.2,
+        properties: {
+            voltage: '220V',
+            phases: '1O',
+            boxMaterial: 'F.G. Liviano',
+        },
+    },
+    main_panel: {
+        label: 'TG',
+        mountingHeight: 1.8,
+        properties: {
+            voltage: '380V',
+            phases: '3O',
+            lengthM: 0,
+            designFactor: 1.25,
+            connectionType: 'star',
+            workingTemperatureC: 20,
+            copperResistivity: 0.0175,
+            upstreamVoltageDropV: 0,
+            defaultPowerFactor: 0.9,
+            defaultDemandFactor: 1,
+            boxMaterial: 'F.G. Liviano',
+        },
+    },
+    sub_panel: {
+        label: 'TD-01',
+        mountingHeight: 1.8,
+        properties: {
+            voltage: '220V',
+            phases: '1O',
+            lengthM: 0,
+            designFactor: 1.25,
+            connectionType: 'star',
+            workingTemperatureC: 20,
+            copperResistivity: 0.0175,
+            upstreamVoltageDropV: 6.22,
+            defaultPowerFactor: 0.9,
+            defaultDemandFactor: 1,
+            boxMaterial: 'F.G. Liviano',
+        },
+    },
+    transfer_switch: {
+        label: 'ATS',
+        mountingHeight: 1.8,
+        properties: {
+            voltage: '380V',
+            phases: '3O',
+            boxMaterial: 'F.G. Liviano',
+        },
+    },
+    arrival_panel: {
+        label: 'T.Llegada',
+        mountingHeight: 1.8,
+        properties: {
+            voltage: '380V',
+            phases: '3O',
+            boxMaterial: 'F.G. Liviano',
+        },
+    },
+    junction_box: {
+        label: 'C-01',
+        mountingHeight: 0.4,
+        properties: { boxSize: '100x100x50', boxMaterial: 'RECTO' },
+    },
+    earth_pit: { label: 'PAT', mountingHeight: 0.0, properties: {} },
+    facp: {
+        label: 'FACP',
+        mountingHeight: 1.4,
+        properties: { voltage: '220V', phases: '1O' },
+    },
+    outlet_floor: {
+        label: 'T',
+        mountingHeight: 0.4,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_initial: {
+        label: 'TI',
+        mountingHeight: 1.5,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_high_180: {
+        label: 'TA',
+        mountingHeight: 1.8,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_floor_box: {
+        label: 'TP',
+        mountingHeight: 0.0,
+        properties: {
+            boxSize: '100x100x55',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_waterproof: {
+        label: 'T',
+        mountingHeight: 1.2,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_ceiling: {
+        label: 'T',
+        mountingHeight: 0.0,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    outlet_rack: {
+        label: 'T',
+        mountingHeight: 2.0,
+        properties: {
+            boxSize: '100x55x50',
+            boxMaterial: 'RECTO',
+            ratedPowerW: DEFAULT_OUTLET_POWER_W,
+        },
+    },
+    water_heater_30l: {
+        label: 'TE',
+        mountingHeight: 1.8,
+        properties: {
+            voltage: '220V',
+            phases: '1O',
+            boxSize: '575x340x340',
+            boxMaterial: 'TERMA 30L',
+        },
+    },
 };
 
 /** Caja de pase independiente (legacy Ã¢â‚¬â€ usar ElectricalDevice type=junction_box) */
@@ -658,12 +865,12 @@ export interface JunctionBox {
 
 /** ConfiguraciÃƒÂ³n para inserciÃƒÂ³n de grilla de luminarias */
 export interface FixtureGridConfig {
-    rows: number;                       // filas de focos (Ã¢â€°Â¥1)
-    columns: number;                    // columnas de focos (Ã¢â€°Â¥1)
-    roomId?: string | null;             // recinto donde se coloca la grilla (null = usar ambientVertices directamente)
-    fixtureTemplate: Partial<Fixture>;  // template para cada foco
-    mountingHeight?: number;            // altura de montaje (default 2.7m)
-    ambientVertices?: Vertex[];         // vÃƒÂ©rtices del ambiente derivado (si se omite, usa room.vertices)
+    rows: number; // filas de focos (Ã¢â€°Â¥1)
+    columns: number; // columnas de focos (Ã¢â€°Â¥1)
+    roomId?: string | null; // recinto donde se coloca la grilla (null = usar ambientVertices directamente)
+    fixtureTemplate: Partial<Fixture>; // template para cada foco
+    mountingHeight?: number; // altura de montaje (default 2.7m)
+    ambientVertices?: Vertex[]; // vÃƒÂ©rtices del ambiente derivado (si se omite, usa room.vertices)
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CÃƒÂ¡lculos de IluminaciÃƒÂ³n (Lighting Calculations) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -673,30 +880,30 @@ export interface RoomLightingCalculation {
     id: string;
     roomId: string;
     name: string;
-    
+
     // Entrada: Datos del recinto
-    area: number;                    // mÃ‚Â², calculada del polÃƒÂ­gono
-    scaledUnit: 'mm' | 'cm' | 'm';  // unidad de medida escalada
-    normaLux: number;               // 200, 300, o 500 lux (EN 12464-1)
-    
+    area: number; // mÃ‚Â², calculada del polÃƒÂ­gono
+    scaledUnit: 'mm' | 'cm' | 'm'; // unidad de medida escalada
+    normaLux: number; // 200, 300, o 500 lux (EN 12464-1)
+
     // Paso 1: CÃƒÂ¡lculo de lÃƒÂºmenes requeridos
-    lumensRequired: number;          // ((area * normaLux) / 0.8) / 0.99
-    
+    lumensRequired: number; // ((area * normaLux) / 0.8) / 0.99
+
     // Entrada: Tipo de luminaria seleccionada
-    fixtureType: string;            // nombre o modelo de la luminaria
-    fixtureLumens: number;          // lumenes del foco seleccionado
-    
+    fixtureType: string; // nombre o modelo de la luminaria
+    fixtureLumens: number; // lumenes del foco seleccionado
+
     // Paso 2: Cantidad de luminarias
-    exactQuantity: number;          // lumensRequired / fixtureLumens
-    roundedQuantity: number;        // CEIL(exactQuantity)
-    
+    exactQuantity: number; // lumensRequired / fixtureLumens
+    roundedQuantity: number; // CEIL(exactQuantity)
+
     // Paso 3: RecomendaciÃƒÂ³n final del usuario
-    recommendedQuantity: number;    // cantidad que el usuario finalmente considera
-    
+    recommendedQuantity: number; // cantidad que el usuario finalmente considera
+
     // Resultado: Resumen
-    uniformityEstimate?: number;    // estimaciÃƒÂ³n de uniformidad (0-1)
+    uniformityEstimate?: number; // estimaciÃƒÂ³n de uniformidad (0-1)
     coverage?: 'optimal' | 'insufficient' | 'excessive';
-    
+
     // Metadata
     createdAt: string;
     updatedAt: string;
@@ -710,6 +917,34 @@ export interface ModuleLightingCalculations {
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Escena Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+/**
+ * Modelo INICIAL de disparador de escena (Fase 10 del plan maestro,
+ * §11: "sensores y horarios como modelo inicial") — solo estructura de
+ * datos, sin motor de evaluación real todavía (nada activa una escena
+ * automáticamente según sensor/horario; la selección de escena sigue siendo
+ * manual/explícita, ver `runDirectPreviewEngine.ts`).
+ */
+export type SceneTrigger =
+    | { type: 'manual' }
+    | { type: 'schedule'; startTime: string; endTime: string }
+    | { type: 'sensor'; sensorType: 'occupancy' | 'daylight' };
+
+/**
+ * Escena lumínica (Fase 10: "Varias escenas por proyecto/nivel" — estado de
+ * encendido/regulación, distinto de `Scene`, que es un NIVEL/piso). Los
+ * "grupos de control" del plan ya existen como `LightSwitch.connectedFixtureIds`
+ * — una escena no repite esa agrupación, solo referencia el `id` del
+ * interruptor. Un interruptor NO listado en `switchStates` se asume
+ * encendido al 100%: una escena es un "diff" desde todo encendido, no una
+ * lista exhaustiva.
+ */
+export interface LightingScenePreset {
+    id: string;
+    name: string;
+    switchStates: Record<string, { on: boolean; dimmingFactor: number }>;
+    trigger?: SceneTrigger;
+}
 
 export interface Scene {
     id: string;
@@ -747,6 +982,14 @@ export interface Scene {
      * Default: true. Cuando false, la geometrÃƒÂ­a se oculta sin eliminarla.
      */
     visible?: boolean;
+    /**
+     * Escenas lumínicas de este nivel (Fase 10: "varias escenas por
+     * proyecto/nivel"). `undefined`/`[]` — comportamiento idéntico al de
+     * antes de esta fase (una única escena implícita, todo encendido al
+     * 100%); ninguna UI las crea todavía (ver pendientes en
+     * `planes/fase10_progreso_dialux.md`).
+     */
+    lightingScenes?: LightingScenePreset[];
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Proyecto Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -780,99 +1023,158 @@ export interface LightingResult {
     room_vertices?: Vertex[];
     useful_plane_height?: number;
     marginal_zone?: number;
+    /** Presentes solo cuando se calculó con radiosidad iterativa (Fase 8: "Interreflexión iterativa"). Ausentes con luz directa o primera reflexión (Fase 7). */
+    interreflection_iterations?: number;
+    interreflection_converged?: boolean;
+    interreflection_residual?: number;
+    /**
+     * Presentes solo cuando `ugr` se calculó con el camino de observadores de
+     * Guth (Fase 9: "UGR y luminancia profesional") — identifican el
+     * observador/dirección que produjo el peor caso (plan §11: "reportar
+     * máximo y ubicación"). Ausentes con el `calculateUGR` heredado (sin
+     * `glareConfig`).
+     */
+    ugr_observer_x?: number;
+    ugr_observer_y?: number;
+    ugr_observer_eye_height?: number;
+    ugr_observer_view_direction_deg?: number;
+    /** Luminarias excluidas del cálculo de UGR (campo visual inferior o fuera del rango de validez H/R>2 — ver `glareCalculation.ts`). Solo presente junto a los campos `ugr_observer_*`. */
+    ugr_excluded_fixture_count?: number;
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Entidades DXF Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export interface DxfLineEntity {
-    id: string; type: 'line';
-    x1: number; y1: number; x2: number; y2: number;
+    id: string;
+    type: 'line';
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
     layer: string;
 }
 
 export interface DxfPolylineEntity {
-    id: string; type: 'polyline';
+    id: string;
+    type: 'polyline';
     vertices: [number, number][];
     closed: boolean;
     layer: string;
 }
 
 export interface DxfCircleEntity {
-    id: string; type: 'circle';
-    cx: number; cy: number; r: number;
+    id: string;
+    type: 'circle';
+    cx: number;
+    cy: number;
+    r: number;
     layer: string;
 }
 
 export interface DxfArcEntity {
-    id: string; type: 'arc';
-    cx: number; cy: number; r: number;
-    start_angle: number; end_angle: number;
+    id: string;
+    type: 'arc';
+    cx: number;
+    cy: number;
+    r: number;
+    start_angle: number;
+    end_angle: number;
     layer: string;
 }
 
 export interface DxfEllipseEntity {
-    id: string; type: 'ellipse';
-    cx: number; cy: number;
-    major_x: number; major_y: number;
+    id: string;
+    type: 'ellipse';
+    cx: number;
+    cy: number;
+    major_x: number;
+    major_y: number;
     minor_ratio: number;
-    start_param: number; end_param: number;
+    start_param: number;
+    end_param: number;
     layer: string;
 }
 
 export interface DxfTextEntity {
-    id: string; type: 'text';
-    x: number; y: number;
-    text: string; height: number; rotation: number;
+    id: string;
+    type: 'text';
+    x: number;
+    y: number;
+    text: string;
+    height: number;
+    rotation: number;
     layer: string;
 }
 
 export interface DxfPointEntity {
-    id: string; type: 'point';
-    x: number; y: number;
+    id: string;
+    type: 'point';
+    x: number;
+    y: number;
     layer: string;
 }
 
 export interface DxfRectangleEntity {
-    id: string; type: 'rectangle';
-    x: number; y: number;
-    width: number; height: number; rotation: number;
+    id: string;
+    type: 'rectangle';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
     layer: string;
 }
 
 export interface DxfPolygonEntity {
-    id: string; type: 'polygon';
+    id: string;
+    type: 'polygon';
     vertices: [number, number][];
     closed: boolean;
     layer: string;
 }
 
 export interface DxfHatchEntity {
-    id: string; type: 'hatch';
-    pattern_name: string; solid: boolean;
+    id: string;
+    type: 'hatch';
+    pattern_name: string;
+    solid: boolean;
     boundary_paths: [number, number][][];
     layer: string;
 }
 
 export interface DxfSplineEntity {
-    id: string; type: 'spline';
+    id: string;
+    type: 'spline';
     control_points: [number, number][];
-    closed: boolean; degree: number;
+    closed: boolean;
+    degree: number;
     layer: string;
 }
 
 export interface DxfSolidEntity {
-    id: string; type: 'solid';
+    id: string;
+    type: 'solid';
     vertices: [number, number][];
     layer: string;
 }
 
 export type DxfEntity =
-    | DxfLineEntity | DxfPolylineEntity | DxfCircleEntity
-    | DxfArcEntity  | DxfEllipseEntity  | DxfTextEntity
-    | DxfPointEntity | DxfRectangleEntity | DxfPolygonEntity
-    | DxfHatchEntity | DxfSplineEntity   | DxfSolidEntity;
+    | DxfLineEntity
+    | DxfPolylineEntity
+    | DxfCircleEntity
+    | DxfArcEntity
+    | DxfEllipseEntity
+    | DxfTextEntity
+    | DxfPointEntity
+    | DxfRectangleEntity
+    | DxfPolygonEntity
+    | DxfHatchEntity
+    | DxfSplineEntity
+    | DxfSolidEntity;
 
 export interface DxfExtents {
-    min_x: number; min_y: number;
-    max_x: number; max_y: number;
+    min_x: number;
+    min_y: number;
+    max_x: number;
+    max_y: number;
 }

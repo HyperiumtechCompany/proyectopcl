@@ -1,14 +1,28 @@
 import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
 import { isSegmentOccluded } from '@/pages/dialux/domain/geometry/segmentOcclusion';
 import { pointInPolygon } from '@/pages/dialux/geometry/polygonGeometry';
+import { illuminanceFromFixture, luminousArea, type DirectIlluminanceBatchKernel, type SurfacePoint, type Vector3 } from './directIlluminance';
+import { computePatchDirectIlluminance, firstBounceIlluminance } from './firstBounceReflection';
+import { evaluateUGR } from './glareCalculation';
+import { buildDefaultObservers, DEFAULT_UGR_EYE_HEIGHT, type GlareObserver } from './glareObserver';
+import { gatherRadiosityIlluminance, solveRadiosity } from './iterativeRadiosity';
 import { candela } from './photometricInterpolation';
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
+import { buildRoomEnclosurePatches, type EnclosureReflectances } from './roomPatches';
 import type { Fixture, LightingResult, Room } from './useEditorStore';
 
 /**
  * Identificador del ÚNICO motor que calcula avg/min/max/uniformity/UGR punto a
  * punto para un ambiente (Fase 0, planes/plan_maestro_dialux_web_motor_arquitectura_validacion.md).
- * Alcance: solo luz directa, sin oclusión ni interreflexión, malla fija (`GRID_SPACING`).
+ * Alcance base: luz directa con malla parametrizable (Fase 5). Oclusión
+ * (Fase 6), primera reflexión difusa (Fase 7) e interreflexión iterativa
+ * (Fase 8, radiosidad Gauss-Seidel) son OPCIONALES vía los parámetros
+ * `obstacles`/`surfaceReflectances`/`iterativeConfig` de
+ * `calculateLightingResult` — con sus defaults (`[]`/`null`/`null`) el
+ * resultado es idéntico al motor original. Ningún camino de exportación/UI
+ * activa estos parámetros todavía (ver pendientes en
+ * `planes/fase8_progreso_dialux.md`) — solo `domain/calculation/runDirectPreviewEngine.ts`
+ * los cablea hoy, vía `CalculationConfig`.
  * No incrementar sin actualizar los goldens en `hooks/__fixtures__/`.
  */
 export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';
@@ -16,12 +30,6 @@ export const LIGHTING_ENGINE_VERSION = 'direct-preview-v1';
 /** Espaciado de malla en metros — exportado para no duplicarlo en `domain/calculation/types.ts`. */
 export const GRID_SPACING = 0.5;
 const MATH_PI = Math.PI;
-
-interface Vector3 {
-    x: number;
-    y: number;
-    z: number;
-}
 
 /**
  * Normal de la superficie receptora en este punto (Fase 4: "el mismo solver
@@ -111,69 +119,43 @@ function buildGrid(room: Room, spacing: number, wpHeight: number) {
     return { points, rows, cols, minX, minY, cellW, cellH };
 }
 
-function illuminanceFromFixture(point: GridPoint, fixture: Fixture, obstacles: OcclusionBox[]): number {
-    const dx = point.x - fixture.x;
-    const dy = point.y - fixture.y;
-    const dz = point.z - fixture.z;
-    const dist2 = dx * dx + dy * dy + dz * dz;
-
-    if (dist2 < 1e-6) {
-        return 0;
-    }
-
-    // Fase 6: oclusión — sin línea de vista directa, la luminaria no aporta
-    // nada a este punto. `obstacles` viene vacío por defecto (ver
-    // `calculateLightingResult`), así que este chequeo no tiene costo ni
-    // efecto para ningún llamador que no pase obstáculos explícitamente.
-    if (obstacles.length > 0 && isSegmentOccluded(point, { x: fixture.x, y: fixture.y, z: fixture.z }, obstacles)) {
-        return 0;
-    }
-
-    const dist = Math.sqrt(dist2);
-    // Coseno de incidencia (Lambert): producto punto entre la dirección
-    // unitaria punto→luminaria y la normal de la superficie receptora. Con
-    // `point.normal = (0,0,1)` (único caso que produce `buildGrid` hoy) esto
-    // es exactamente `-dz/dist`, igual que la fórmula anterior — ver
-    // comentario de `GridPoint.normal`.
-    const cosIncident = Math.max(
-        0,
-        (-dx / dist) * point.normal.x + (-dy / dist) * point.normal.y + (-dz / dist) * point.normal.z,
-    );
-
-    if (cosIncident <= 0) {
-        return 0;
-    }
-
-    const gammaDeg = (Math.acos(-dz / dist) * 180) / MATH_PI;
-    const rawAzimuthDeg = (Math.atan2(dy, dx) * 180) / MATH_PI;
-    const azimuthDeg = rawAzimuthDeg - (fixture.rotation ?? 0);
-
-    return (candela(fixture, gammaDeg, azimuthDeg) * cosIncident) / dist2;
-}
-
-/** Área luminosa real (m²) de la luminaria, para el cálculo de luminancia en UGR. Fallback conservador si no hay dimensiones. */
-function luminousArea(fixture: Fixture): number {
-    const dims = fixture.dimensions;
-    if (dims && dims.length > 0 && dims.width > 0) {
-        return dims.length * dims.width;
-    }
-    return 0.1;
-}
-
 function calculatePointByPoint(
     points: GridPoint[],
     fixtures: Fixture[],
     obstacles: OcclusionBox[],
+    /**
+     * Contribución reflejada (primera reflexión de Fase 7 o radiosidad
+     * iterativa de Fase 8) para un punto dado — inyectada por
+     * `calculateLightingResult` en vez de recibir `patches`/`patchIlluminance`
+     * directamente, así esta función no necesita saber si el rebote es único
+     * o iterativo.
+     */
+    reflectedIlluminance: (point: GridPoint) => number,
+    /** Kernel por lotes inyectable (Fase 12). Default `undefined` — bucle de siempre; solo `workers/dialuxCalculationWorker.ts` lo provee (WASM), este archivo sigue sin saber nada de eso. */
+    directIlluminanceBatch?: DirectIlluminanceBatchKernel,
 ): Array<number | null> {
-    return points.map((point) =>
-        point.active
-            ? fixtures.reduce(
-                  (sum, fixture) =>
-                      sum + illuminanceFromFixture(point, fixture, obstacles),
-                  0,
-              )
-            : null,
-    );
+    const activePoints = directIlluminanceBatch ? points.filter((point) => point.active) : [];
+    if (directIlluminanceBatch && activePoints.length > 0) {
+        const direct = directIlluminanceBatch(activePoints, fixtures, obstacles);
+        let i = 0;
+        return points.map((point) => {
+            if (!point.active) {
+                return null;
+            }
+            const value = (direct[i] ?? 0) + reflectedIlluminance(point);
+            i += 1;
+            return value;
+        });
+    }
+
+    return points.map((point) => {
+        if (!point.active) {
+            return null;
+        }
+
+        const direct = fixtures.reduce((sum, fixture) => sum + illuminanceFromFixture(point, fixture, obstacles), 0);
+        return direct + reflectedIlluminance(point);
+    });
 }
 
 function calculateUGR(
@@ -249,6 +231,41 @@ export function calculateLightingResult(
      * `CalculationConfig.occlusion === true`.
      */
     obstacles: OcclusionBox[] = [],
+    /**
+     * Reflectancias de piso/pared/techo para la primera reflexión difusa
+     * (Fase 7: "Materiales e interreflexión inicial"). Default `null` — sin
+     * reflectancias no se construye ningún parche y el resultado es idéntico
+     * al de antes de esta fase para todo llamador que no las pase
+     * explícitamente (mismo patrón no disruptivo que `obstacles` en Fase 6).
+     * Pasar `{ ceiling: 0, wall: 0, floor: 0 }` en vez de `null` también
+     * reproduce el cálculo directo exacto — es el caso de prueba de la
+     * puerta de salida ("reflectancia 0 reproduce cálculo directo"), no un
+     * atajo interno.
+     */
+    surfaceReflectances: EnclosureReflectances | null = null,
+    /**
+     * Configuración de radiosidad iterativa (Fase 8: "Interreflexión
+     * iterativa"). Default `null` — sin ella, con `surfaceReflectances` dado
+     * se obtiene el resultado de un único rebote de la Fase 7 (idéntico,
+     * mismo patrón no disruptivo). Solo tiene efecto cuando
+     * `surfaceReflectances` también está presente: sin parches no hay nada
+     * que iterar.
+     */
+    iterativeConfig: { maxBounces: number; convergenceTolerance: number } | null = null,
+    /**
+     * Configuración de UGR con observadores de Guth (Fase 9: "UGR y
+     * luminancia profesional"). Default `null` — sin ella, `ugr` se calcula
+     * con el `calculateUGR` heredado (observador único e implícito en el
+     * centro del recinto, sin índice de posición), IDÉNTICO al de antes de
+     * esta fase para todo llamador que no la pase explícitamente (mismo
+     * patrón no disruptivo que `iterativeConfig` en Fase 8 — no altera los
+     * goldens de Fase 0). Pasar `{}` activa el camino nuevo con los
+     * observadores por defecto (`buildDefaultObservers`); `observers`/
+     * `eyeHeight` permiten personalizarlos.
+     */
+    glareConfig: { observers?: GlareObserver[]; eyeHeight?: number } | null = null,
+    /** Kernel WASM por lotes (Fase 12). Default `undefined` — idéntico al motor TS de siempre. Ver `calculatePointByPoint`. */
+    directIlluminanceBatch?: DirectIlluminanceBatchKernel,
 ): LightingResult {
     const bbox = roomBBox(room);
     const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
@@ -258,7 +275,23 @@ export function calculateLightingResult(
         z: fixture.z > 0 ? fixture.z : room.height - 0.1,
     }));
     const grid = buildGrid(room, spacingM > 0 ? spacingM : GRID_SPACING, usefulPlaneHeight);
-    const values = calculatePointByPoint(grid.points, enriched, obstacles);
+
+    let reflectedIlluminance: (point: SurfacePoint) => number = () => 0;
+    let radiosityMeta: { iterations: number; converged: boolean; residual: number } | null = null;
+
+    const patches = surfaceReflectances ? buildRoomEnclosurePatches(room, surfaceReflectances) : [];
+    if (patches.length > 0) {
+        const patchIlluminance = computePatchDirectIlluminance(patches, enriched, obstacles);
+        if (iterativeConfig) {
+            const radiosity = solveRadiosity(patches, patchIlluminance, obstacles, iterativeConfig.maxBounces, iterativeConfig.convergenceTolerance);
+            reflectedIlluminance = (point) => gatherRadiosityIlluminance(point, patches, radiosity.exitance, obstacles);
+            radiosityMeta = { iterations: radiosity.iterations, converged: radiosity.converged, residual: radiosity.residual };
+        } else {
+            reflectedIlluminance = (point) => firstBounceIlluminance(point, patches, patchIlluminance, obstacles);
+        }
+    }
+
+    const values = calculatePointByPoint(grid.points, enriched, obstacles, reflectedIlluminance, directIlluminanceBatch);
     const activeValues = values.filter(
         (value): value is number => value !== null,
     );
@@ -274,6 +307,13 @@ export function calculateLightingResult(
         room_vertices: room.vertices,
         useful_plane_height: usefulPlaneHeight,
         marginal_zone: marginalZone,
+        ...(radiosityMeta
+            ? {
+                  interreflection_iterations: radiosityMeta.iterations,
+                  interreflection_converged: radiosityMeta.converged,
+                  interreflection_residual: radiosityMeta.residual,
+              }
+            : {}),
     };
 
     if (activeValues.length === 0) {
@@ -303,8 +343,41 @@ export function calculateLightingResult(
 
     const avg = sum / activeValues.length;
     const uniformity = avg > 0 ? min / avg : 0;
-    const lb = avg / MATH_PI;
-    const ugr = calculateUGR(bbox.cx, bbox.cy, enriched, lb, usefulPlaneHeight, obstacles);
+    const fallbackLb = avg / MATH_PI;
+
+    let ugr: number;
+    let glareMeta: { observer: GlareObserver; excludedFixtureCount: number } | null = null;
+
+    if (glareConfig) {
+        const observers = glareConfig.observers ?? buildDefaultObservers(room, glareConfig.eyeHeight ?? DEFAULT_UGR_EYE_HEIGHT);
+        // Luminancia de fondo por observador (plan §11 Fase 9: "calcular
+        // luminancia de fondo desde la escena"): `Eind/π`, con `Eind` la
+        // iluminancia INDIRECTA en el ojo del observador (fórmula verificada
+        // en la documentación de soporte de DIALux evo) — usa el mismo
+        // `reflectedIlluminance` de Fases 7/8 sobre un plano vertical hacia
+        // donde mira el observador. Sin datos de interreflexión activos
+        // (`surfaceReflectances` no dado, o `Eind` resulta 0) cae al mismo
+        // respaldo `avg/π` que el motor ya usaba desde la Fase 0 — nunca
+        // deja `Lb` en 0 (eso volvería UGR indefinido/infinito).
+        const computeBackgroundLuminance = (observer: GlareObserver) => {
+            const observerViewRad = (observer.viewDirectionDeg * MATH_PI) / 180;
+            const eind = reflectedIlluminance({
+                x: observer.x,
+                y: observer.y,
+                z: observer.eyeHeight,
+                normal: { x: Math.cos(observerViewRad), y: Math.sin(observerViewRad), z: 0 },
+            });
+            return eind > 0 ? eind / MATH_PI : fallbackLb;
+        };
+
+        const result = evaluateUGR(observers, enriched, obstacles, computeBackgroundLuminance);
+        ugr = result.ugr;
+        if (result.observer) {
+            glareMeta = { observer: result.observer, excludedFixtureCount: result.excludedFixtureCount };
+        }
+    } else {
+        ugr = calculateUGR(bbox.cx, bbox.cy, enriched, fallbackLb, usefulPlaneHeight, obstacles);
+    }
 
     return {
         avg_lux: avg,
@@ -313,5 +386,14 @@ export function calculateLightingResult(
         uniformity,
         ugr: Math.max(0, ugr),
         ...baseResult,
+        ...(glareMeta
+            ? {
+                  ugr_observer_x: glareMeta.observer.x,
+                  ugr_observer_y: glareMeta.observer.y,
+                  ugr_observer_eye_height: glareMeta.observer.eyeHeight,
+                  ugr_observer_view_direction_deg: glareMeta.observer.viewDirectionDeg,
+                  ugr_excluded_fixture_count: glareMeta.excludedFixtureCount,
+              }
+            : {}),
     };
 }

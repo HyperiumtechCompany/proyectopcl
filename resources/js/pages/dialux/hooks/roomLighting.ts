@@ -11,17 +11,22 @@ import type { RawNormativeBranch, RawNormativeLeaf } from './normativaData';
 import { getNormData } from './normativeEngine';
 import type { Fixture, Room } from './types';
 
-export type NormativeStandard = 'en_12464' | 'ies_na' | 'rne_peru' | 'en_1838' | 'nfpa101' | 'ds024';
+export type NormativeStandard =
+    | 'en_12464'
+    | 'ies_na'
+    | 'rne_peru'
+    | 'en_1838'
+    | 'nfpa101'
+    | 'ds024';
 
 export const NORMATIVE_LABELS: Record<NormativeStandard, string> = {
     en_12464: 'EN 12464-1 (Europa)',
-    ies_na:   'IESNA / IES HB-10 (EE. UU.)',
+    ies_na: 'IESNA / IES HB-10 (EE. UU.)',
     rne_peru: 'RNE EM.010 / CNE (Perú)',
-    en_1838:  'EN 1838 - Alumbrado de emergencia (Europa)',
-    nfpa101:  'NFPA 101 - Life Safety Code (EE. UU.)',
-    ds024:    'DS-024-2016-EM - Minería (Perú)',
+    en_1838: 'EN 1838 - Alumbrado de emergencia (Europa)',
+    nfpa101: 'NFPA 101 - Life Safety Code (EE. UU.)',
+    ds024: 'DS-024-2016-EM - Minería (Perú)',
 };
-
 
 export interface NormativeLeafOption {
     id: string;
@@ -77,7 +82,9 @@ function buildLeaf(
     };
 }
 
-function flattenNormativeTree(branches: RawNormativeBranch[]): NormativeLeafOption[] {
+function flattenNormativeTree(
+    branches: RawNormativeBranch[],
+): NormativeLeafOption[] {
     return branches.flatMap((category) =>
         (category.subsections ?? []).flatMap((subsection) => {
             if (isRawLeaf(subsection)) {
@@ -100,22 +107,31 @@ function flattenNormativeTree(branches: RawNormativeBranch[]): NormativeLeafOpti
  * permanentemente la transcripción estática aunque la BD ya hubiera
  * cargado un catálogo distinto.
  */
-export function getNormativeOptions(standard: NormativeStandard): NormativeLeafOption[] {
+export function getNormativeOptions(
+    standard: NormativeStandard,
+): NormativeLeafOption[] {
     return flattenNormativeTree(getNormData(standard));
 }
 
-export function getCategoryOptions(standard: NormativeStandard = 'en_12464'): string[] {
+export function getCategoryOptions(
+    standard: NormativeStandard = 'en_12464',
+): string[] {
     const options = getNormativeOptions(standard);
     return Array.from(new Set(options.map((option) => option.category)));
 }
 
-export function getSectionOptions(standard: NormativeStandard = 'en_12464', category: string | undefined): string[] {
+export function getSectionOptions(
+    standard: NormativeStandard = 'en_12464',
+    category: string | undefined,
+): string[] {
     if (!category) return [];
     const options = getNormativeOptions(standard);
     return Array.from(
         new Set(
             options
-                .filter((option) => option.category === category && option.section)
+                .filter(
+                    (option) => option.category === category && option.section,
+                )
                 .map((option) => option.section as string),
         ),
     );
@@ -135,7 +151,13 @@ export function getActivityOptions(
     second?: string,
     third?: string,
 ): NormativeLeafOption[] {
-    const hasStandard = first === 'en_12464' || first === 'ies_na' || first === 'rne_peru' || first === 'en_1838';
+    const hasStandard =
+        first === 'en_12464' ||
+        first === 'ies_na' ||
+        first === 'rne_peru' ||
+        first === 'en_1838' ||
+        first === 'nfpa101' ||
+        first === 'ds024';
     const standard = hasStandard ? (first as NormativeStandard) : 'en_12464';
     const category = hasStandard ? second : first;
     const section = hasStandard ? third : second;
@@ -182,7 +204,7 @@ export function isFixtureInsideRoom(room: Room, fixture: Fixture) {
         const b = vertices[j];
 
         if (
-            (a.y > fixture.y) !== (b.y > fixture.y) &&
+            a.y > fixture.y !== b.y > fixture.y &&
             fixture.x < ((b.x - a.x) * (fixture.y - a.y)) / (b.y - a.y) + a.x
         ) {
             inside = !inside;
@@ -279,11 +301,16 @@ export function getRoomMarginalZone(room: Room): number {
         Math.max(...ys) - Math.min(...ys),
     );
 
-    return Number(Math.min(0.2, Math.max(0.05, minDimension * 0.05)).toFixed(3));
+    return Number(
+        Math.min(0.2, Math.max(0.05, minDimension * 0.05)).toFixed(3),
+    );
 }
 
 /** Índice del local (k) a partir del bbox del recinto y la altura de montaje sobre el plano de trabajo. */
-export function calculateRoomIndexForRoom(room: Room, usefulPlaneHeight: number): number {
+export function calculateRoomIndexForRoom(
+    room: Room,
+    usefulPlaneHeight: number,
+): number {
     if (room.vertices.length < 3) {
         return 0;
     }

@@ -19,6 +19,8 @@ export interface ImportedLuminaireProduct {
     total_lumens: number | null;
     power_watts: number | null;
     cct: string | null;
+    cri_ra?: number | null;
+    beam_angle_50?: number | null;
     fixture_type: string | null;
     fixture_shape: string | null;
     efficiency: number | null;
@@ -121,6 +123,18 @@ export async function createManualLuminaire(
 ): Promise<{ product: ImportedLuminaireProduct; message?: string }> {
     const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string }>(
         productRoutes.storeManual.url(),
+        payload,
+        jsonRequestConfig,
+    );
+    return response.data;
+}
+
+export async function updateLuminaire(
+    productId: number,
+    payload: Omit<ManualLuminairePayload, 'beam_angle_50' | 'photometric_table'>,
+): Promise<{ product: ImportedLuminaireProduct; message?: string }> {
+    const response = await axios.patch<{ product: ImportedLuminaireProduct; message?: string }>(
+        productRoutes.update(productId).url,
         payload,
         jsonRequestConfig,
     );

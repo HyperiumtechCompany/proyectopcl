@@ -1,3 +1,4 @@
+import type { CalculationConfig, CalculationRun, CalculationWarning } from '@/pages/dialux/domain/calculation/types';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
@@ -19,6 +20,19 @@ import type {
 
 const LIGHTING_ENGINE_NAME = 'lightingEngineCore';
 
+/**
+ * Resumen legible de `CalculationConfig` (Fase 11, §11: "trazarse a...
+ * una configuración") — solo los campos que hoy tienen efecto real sobre el
+ * resultado (ver `domain/calculation/runDirectPreviewEngine.ts`).
+ */
+function buildConfigSummary(config: CalculationConfig): string {
+    return [
+        `oclusión: ${config.occlusion ? 'sí' : 'no'}`,
+        `interreflexión: ${config.interreflection}`,
+        `UGR: ${config.glare.observerModel}`,
+    ].join(' · ');
+}
+
 export interface DialuxExportSnapshotInput {
     project: Project;
     activeSceneId: string;
@@ -27,6 +41,14 @@ export interface DialuxExportSnapshotInput {
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
     visualConfig: DialuxExportVisualConfig;
+    /**
+     * Ejecución completa (Fase 11) que produjo `resultsByRoom` — típicamente
+     * de `runProjectLightingCalculation(project, config)`. Opcional: sin
+     * ella (callers legacy, tests), `provenance`/`warnings` quedan como
+     * antes de esta fase (versión hardcodeada, sin hash/config/warnings) —
+     * ningún comportamiento existente cambia por omitirla.
+     */
+    calculationRun?: CalculationRun;
 }
 
 function sortScenesByFloor(project: Project): Project['scenes'] {
@@ -150,6 +172,15 @@ function buildRequirementEvaluations(
 function buildAmbientMetrics(
     ambient: DialuxAmbientExport,
     result: LightingResult | null,
+    /**
+     * Ejecución completa (Fase 11) que produjo `result`, cuando el llamador
+     * la tiene — `undefined` para callers que todavía no pasan por
+     * `runProjectLightingCalculation` (tests, u otros usos legacy de este
+     * builder). Con ella, `provenance` y `warnings` reflejan la ejecución
+     * real; sin ella, se mantiene el comportamiento exacto de antes de esta
+     * fase (versión hardcodeada, sin hash/config/warnings).
+     */
+    calculationRun: CalculationRun | undefined,
 ): DialuxAmbientMetrics {
     const inputs = buildRoomLightingInputs(ambient.room, ambient.fixtures);
     const uniformityTarget = ambient.room.uniformityTarget ?? 0.4;
@@ -170,10 +201,19 @@ function buildAmbientMetrics(
         );
     const provenance: CalculationProvenance = {
         engine: LIGHTING_ENGINE_NAME,
-        engineVersion: LIGHTING_ENGINE_VERSION,
-        calculatedAt: result !== null ? new Date().toISOString() : null,
-        status: result !== null ? 'calculated' : 'not-calculated',
+        engineVersion: calculationRun?.engineVersion ?? LIGHTING_ENGINE_VERSION,
+        // Con `calculationRun`, usar SU `completedAt` (el momento real en que
+        // terminó ese cálculo) en vez de "ahora" — pueden pasar varios
+        // segundos entre calcular y construir este snapshot de export
+        // (capturas de bitmap de por medio, ver `useDialuxPdfExport.ts`);
+        // usar "ahora" desalinearía la trazabilidad del propio dato que dice
+        // representar (auditoría `dialux-calc-reviewer`).
+        calculatedAt: calculationRun?.completedAt ?? (result !== null ? new Date().toISOString() : null),
+        status: calculationRun ? (calculationRun.status === 'completed' ? 'calculated' : 'not-calculated') : result !== null ? 'calculated' : 'not-calculated',
+        snapshotHash: calculationRun?.snapshotHash,
+        configSummary: calculationRun ? buildConfigSummary(calculationRun.config) : undefined,
     };
+    const warnings: CalculationWarning[] = calculationRun?.warnings.filter((warning) => warning.objectId === ambient.id) ?? [];
 
     return {
         area: inputs.area,
@@ -202,6 +242,7 @@ function buildAmbientMetrics(
         complies,
         requirementEvaluations,
         provenance,
+        warnings,
     };
 }
 
@@ -220,6 +261,15 @@ export function buildDialuxExportSnapshot(
     const scenes = input.includeAllScenes
         ? sortScenesByFloor(input.project)
         : [scene];
+    // Fase 11 (auditoría `dialux-calc-reviewer`): `calculationRun` solo
+    // describe la EJECUCIÓN de la que salieron `resultsByRoom` — un ambiente
+    // que cae al fallback `calculateLightingResult` de abajo (porque
+    // `resultsByRoom` no traía su resultado, ej. un caller que no pasa por
+    // `runProjectLightingCalculation`) NUNCA pasó por esa ejecución, así que
+    // no debe heredar su `engineVersion`/`snapshotHash`/`configSummary`/
+    // `warnings` — eso presentaría un cálculo directo sin trazar como si
+    // tuviera la trazabilidad completa de `calculationRun`.
+    const objectIdsInRun = new Set(input.calculationRun?.surfaces.map((surface) => surface.objectId) ?? []);
     const ambients = scenes.flatMap((currentScene) =>
         deriveSceneAmbientSpaces(currentScene).map((ambient) => {
             const result =
@@ -244,11 +294,19 @@ export function buildDialuxExportSnapshot(
                 metrics: {} as DialuxAmbientMetrics,
             };
 
-            exportAmbient.metrics = buildAmbientMetrics(exportAmbient, result);
+            const runForThisAmbient = objectIdsInRun.has(ambient.id) ? input.calculationRun : undefined;
+            exportAmbient.metrics = buildAmbientMetrics(exportAmbient, result, runForThisAmbient);
 
             return exportAmbient;
         }),
     );
+    // Advertencias SIN objeto asociado (`objectId: null`, ej.
+    // `interreflection-maxBounces-too-low`, `scene-not-found`) — un warning
+    // de este tipo no pertenece a ningún ambiente, así que
+    // `DialuxAmbientMetrics.warnings` nunca podría mostrarlo; se exponen a
+    // nivel de snapshot para no perderlas en silencio (auditoría
+    // `dialux-calc-reviewer`).
+    const globalWarnings = input.calculationRun?.warnings.filter((warning) => warning.objectId === null) ?? [];
     const reportRooms = scenes
         .flatMap((currentScene) => currentScene.rooms)
         .filter(
@@ -293,6 +351,7 @@ export function buildDialuxExportSnapshot(
         fixtures: scenes.flatMap((currentScene) => currentScene.fixtures),
         ambients,
         resultsByRoom,
+        globalWarnings,
         visualConfig: input.visualConfig,
         summary: {
             roomCount: reportRooms.length,

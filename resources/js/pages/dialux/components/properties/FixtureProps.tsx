@@ -43,10 +43,21 @@ export const FixtureProps: React.FC<{
                 value={fixture.name}
                 onChange={(value) => onUpdate({ name: value })}
             />
-            <PropField label="Lumenes" value={`${fixture.lumens} lm`} />
-            <PropField
-                label="Eficiencia"
-                value={`${(fixture.efficiency * 100).toFixed(0)}%`}
+            <EditField
+                label="Lúmenes (lm)"
+                value={fixture.lumens}
+                min={1}
+                max={1000000}
+                step={50}
+                onChange={(value) => onUpdate({ lumens: value })}
+            />
+            <EditField
+                label="Eficiencia (%)"
+                value={Number((fixture.efficiency * 100).toFixed(2))}
+                min={0}
+                max={100}
+                step={1}
+                onChange={(value) => onUpdate({ efficiency: value / 100 })}
             />
             <EditField
                 label="Potencia (W)"
@@ -55,6 +66,22 @@ export const FixtureProps: React.FC<{
                 max={2000}
                 step={1}
                 onChange={(value) => onUpdate({ power: value })}
+            />
+            <EditField
+                label="Temperatura (K)"
+                value={fixture.cct ?? 0}
+                min={0}
+                max={20000}
+                step={100}
+                onChange={(value) => onUpdate({ cct: value || null })}
+            />
+            <EditField
+                label="CRI / Ra"
+                value={fixture.cri ?? 0}
+                min={0}
+                max={100}
+                step={1}
+                onChange={(value) => onUpdate({ cri: value || null })}
             />
 
             <EditField

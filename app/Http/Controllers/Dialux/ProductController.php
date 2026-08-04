@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dialux;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\ImportProductRequest;
 use App\Http\Requests\Dialux\StoreManualProductRequest;
+use App\Http\Requests\Dialux\UpdateProductRequest;
 use App\Models\LuminaireProduct;
 use App\Services\ProductImportService;
 use Illuminate\Http\JsonResponse;
@@ -104,6 +105,23 @@ class ProductController extends Controller
 
         return response()->json([
             'product' => $this->formatProduct($product, withWeb: true, userId: $userId),
+        ]);
+    }
+
+    /**
+     * Actualiza los datos editables de una luminaria propia.
+     */
+    public function update(UpdateProductRequest $request, int $productId): JsonResponse
+    {
+        $product = LuminaireProduct::query()
+            ->forUser($request->user()->id)
+            ->findOrFail($productId);
+
+        $product->update($request->validated());
+
+        return response()->json([
+            'product' => $this->formatProduct($product->refresh(), userId: $request->user()->id),
+            'message' => 'Luminaria actualizada correctamente.',
         ]);
     }
 
