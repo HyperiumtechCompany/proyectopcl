@@ -220,6 +220,25 @@ export interface CalculationConfig {
  * importar su valor; corrección de un comentario de la Fase 9 que
  * afirmaba, por error, que ya estaba cableado).
  */
+/**
+ * `observerModel: 'guth-observers'` (Fase 16, a pedido explícito del
+ * usuario, con visto bueno de `chief-electrical-engineer-reviewer`):
+ * verificado contra un proyecto real — el modelo `legacy` (un observador
+ * fijo en el centroide, sin índice de posición) sobreestimaba UGR de forma
+ * insensible a la cantidad de luminarias (≈33-34 sin importar si había 2 o
+ * 3 focos), mientras DIALux evo (con método de posición real) daba valores
+ * coherentes con la geometría. El agente no encontró ningún tipo de
+ * recinto donde `legacy` sea preferible.
+ *
+ * CAVEAT que debe seguir documentado (no ocultar): `guthPositionIndex()`
+ * en `glareCalculation.ts` es una forma cerrada ampliamente reproducida en
+ * software de iluminación, pero sus coeficientes NO están verificados
+ * letra por letra contra el texto primario de CIE 117-1995 — DIALux evo
+ * documenta usar interpolación de tabla (R,T,H), no esta ecuación. Sigue
+ * siendo la mejor aproximación disponible en este sistema y notablemente
+ * más precisa que `legacy`, pero no se debe declarar "UGR validado
+ * certificado" mientras este punto siga en `pending-confirmation`.
+ */
 export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     mode: 'preview',
     directLight: true,
@@ -229,7 +248,7 @@ export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     convergenceTolerance: 0,
     meshPolicy: { gridSpacingM: GRID_SPACING },
     maintenanceFactor: 0.8,
-    glare: { enabled: true, observerModel: 'legacy' },
+    glare: { enabled: true, observerModel: 'guth-observers' },
 };
 
 export interface CalculationWarning {

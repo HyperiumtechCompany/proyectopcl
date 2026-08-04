@@ -606,9 +606,19 @@ class ProductImportService
         [$lumL, $lumW, $lumH] = $this->parseTriplet($get(12));
         $downwardFlux = (float) $get(14);
 
-        $cursor = 27;
-        if (is_numeric($get($cursor))) {
-            $numLamps = max(1, (int) $get($cursor++));
+        // EULUMDAT: número de lámparas del primer set vive en la línea 27
+        // (1-indexada), no en la 28 (esa es el tipo de lámpara, un texto).
+        // El signo importa: positivo = el flujo declarado es POR lámpara
+        // (multiplicar); negativo = el flujo ya es el TOTAL del conjunto (no
+        // multiplicar — el valor absoluto es solo informativo). Verificado
+        // contra 8 archivos LDT reales subidos por usuarios; uno declara
+        // "-2" y multiplicar ahí habría duplicado el flujo importado.
+        $cursor = 26;
+        $rawLampField = $get($cursor);
+        if (is_numeric($rawLampField)) {
+            $rawLampCount = (float) $rawLampField;
+            $numLamps = $rawLampCount > 0 ? (int) $rawLampCount : 1;
+            $cursor++;
             $lampType = $get($cursor++);
         } else {
             $numLamps = 1;

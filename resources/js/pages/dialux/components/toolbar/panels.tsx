@@ -8,3 +8,4 @@ export { VistaPanel } from './panels/VistaPanel';
 export { ExportacionPanel } from './panels/ExportacionPanel';
 export { EditarPanel } from './panels/EditarPanel';
 export { ProyectoPanel } from './panels/ProyectoPanel';
+export { EmergenciaPanel } from './panels/EmergenciaPanel';

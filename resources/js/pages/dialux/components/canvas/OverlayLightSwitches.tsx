@@ -42,11 +42,12 @@ export const OverlayLightSwitches = memo(function OverlayLightSwitches({
             {lightSwitches.map((sw) => {
                 const fp = screenPoint({ x: sw.x, y: sw.y });
                 const isSelected = selectedId === sw.id;
+                const symbolScale = Math.max(0.25, sw.symbolScale ?? 1);
                 // Tamaño real del símbolo: metros físicos → píxeles de pantalla,
                 // igual criterio que luminarias/dispositivos (mantiene escala al hacer zoom).
                 const R = screenDistance
-                    ? Math.max(MIN_PX, screenDistance(PHYS_RADIUS_M, 0, { x: sw.x, y: sw.y }))
-                    : Math.max(MIN_PX, 10 * zoom);
+                    ? Math.max(MIN_PX, screenDistance(PHYS_RADIUS_M * symbolScale, 0, { x: sw.x, y: sw.y }))
+                    : Math.max(MIN_PX, 10 * zoom * symbolScale);
                 const rotation = sw.rotation ?? 0;
                 const label = getSwitchLabel(sw);
 

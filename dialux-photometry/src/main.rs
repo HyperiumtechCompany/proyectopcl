@@ -159,15 +159,20 @@ fn parse_ldt(content: &str) -> ParsedProduct {
     product.name = non_empty(get(8));
     product.catalog_number = non_empty(get(9));
 
-    let mut cursor = 27usize;
-    let lamp_count = if parse_number(get(cursor)).is_some() {
-        let count = parse_number(get(cursor)).unwrap_or(1.0).max(1.0);
-        cursor += 2;
-        count
-    } else {
-        cursor += 1;
-        1.0
+    // EULUMDAT: número de lámparas del primer set (línea 27, 1-indexada — no
+    // la 28, que es el tipo de lámpara). El signo importa: positivo = el
+    // flujo declarado es POR lámpara (hay que multiplicar); negativo = el
+    // flujo declarado ya es el TOTAL del conjunto (no multiplicar, el valor
+    // absoluto es solo informativo). Verificado contra 8 archivos LDT reales
+    // subidos por usuarios — uno declara "-2" (2 lámparas, flujo ya total);
+    // multiplicar por 2 ahí habría duplicado el flujo importado.
+    let mut cursor = 26usize;
+    let raw_lamp_field = parse_number(get(cursor));
+    let lamp_count = match raw_lamp_field {
+        Some(count) if count > 0.0 => count,
+        _ => 1.0,
     };
+    cursor += if raw_lamp_field.is_some() { 2 } else { 1 };
     product.total_lumens = parse_number(get(cursor)).map(|value| round1(normalize_ldt_lumens(value, lamp_count)));
     cursor += 1;
     product.cct = parse_number(get(cursor)).map(|value| format!("{}K", trim_float(value)));
@@ -490,6 +495,41 @@ mod tests {
 
         assert_eq!(parsed.c_angles, vec![0.0]);
         assert_eq!(parsed.candela[0], vec![100.0, 250.0, 300.0, 150.0, 50.0]);
+    }
+
+    /// Fase 16: el número de lámparas vive en la línea 27 (1-indexada), no en
+    /// la 28 — verificado contra 8 archivos LDT reales de usuarios. Un
+    /// número POSITIVO significa "el flujo declarado es por lámpara"
+    /// (multiplicar); antes de este fix, el cursor arrancaba una línea tarde
+    /// y el multiplicador se perdía siempre (quedaba en 1), subestimando el
+    /// flujo total de cualquier luminaria multi-lámpara.
+    #[test]
+    fn multiplies_total_lumens_by_a_positive_declared_lamp_count() {
+        let mut lines: Vec<String> = validation_ldt("90", &["0", "90", "180", "270"])
+            .lines()
+            .map(String::from)
+            .collect();
+        lines[26] = "4".to_string(); // 4 lámparas, flujo declarado POR lámpara.
+
+        let parsed = parse_ldt(&lines.join("\n"));
+
+        assert_eq!(parsed.total_lumens, Some(4000.0));
+    }
+
+    /// Un número NEGATIVO significa "el flujo declarado ya es el total del
+    /// conjunto" — no debe multiplicarse (el valor absoluto es solo
+    /// informativo). Confirmado contra un archivo LDT real que declara "-2".
+    #[test]
+    fn does_not_multiply_total_lumens_when_declared_lamp_count_is_negative() {
+        let mut lines: Vec<String> = validation_ldt("90", &["0", "90", "180", "270"])
+            .lines()
+            .map(String::from)
+            .collect();
+        lines[26] = "-2".to_string();
+
+        let parsed = parse_ldt(&lines.join("\n"));
+
+        assert_eq!(parsed.total_lumens, Some(1000.0));
     }
 }
 

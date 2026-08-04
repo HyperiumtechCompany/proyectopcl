@@ -442,6 +442,13 @@ export const OverlayRooms = memo(function OverlayRooms({
     const ambientes = rooms.filter(r => r.roomType === 'ambient');
     const pasadizos = rooms.filter(r => r.roomType === 'corridor');
     const escaleras = rooms.filter(r => r.roomType === 'stair');
+    // Fase 16 (panel de Emergencia): sin este balde, un roomType no
+    // reconocido por ninguno de los 4 de arriba nunca se dibuja — quedaban
+    // invisibles en el canvas 2D. Se renderizan con el mismo `RoomPolygon`
+    // genérico (fallback de `renderOne`), distinguidos por su propio color.
+    const emergencias = rooms.filter(
+        r => r.roomType === 'evacuation-route' || r.roomType === 'antipanic-area',
+    );
 
     const renderOne = (room: Room) => {
         const sv  = room.vertices.map(v => screenPoint(v));
@@ -496,6 +503,7 @@ export const OverlayRooms = memo(function OverlayRooms({
             {ambientes.map(renderOne)}
             {pasadizos.map(renderOne)}
             {escaleras.map(renderOne)}
+            {emergencias.map(renderOne)}
         </g>
     );
 });

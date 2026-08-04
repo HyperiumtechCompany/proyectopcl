@@ -27,22 +27,22 @@ export const PropField: React.FC<{ label: string; value: string; mono?: boolean 
 );
 
 export const EditField: React.FC<{ label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void;}> = ({ label, value, min, max, step = 0.1, onChange }) => (
-    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
-        <span className="shrink-0 text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(5rem,auto)] items-center gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+        <span className="min-w-0 break-words text-[10px] leading-snug text-slate-500 dark:text-gray-500">{label}</span>
         <input type="number" value={value} min={min} max={max} step={step}
             onChange={(event) => {
                 const nextValue = parseFloat(event.target.value);
                 if (!Number.isNaN(nextValue)) onChange(nextValue);
             }}
-            className="w-20 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"
+            className="w-20 max-w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"
         />
     </div>
 );
 
 export const TextField: React.FC<{ label: string; value: string; onChange: (value: string) => void;}> = ({ label, value, onChange }) => (
-    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
-        <span className="shrink-0 text-[10px] text-slate-500 dark:text-gray-500">{label}</span>
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="w-32 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"/>
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(8rem,1.35fr)] items-center gap-2 border-b border-slate-200 pb-1.5 dark:border-gray-800/40">
+        <span className="min-w-0 break-words text-[10px] leading-snug text-slate-500 dark:text-gray-500">{label}</span>
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:focus:border-blue-600/50"/>
     </div>
 );
 

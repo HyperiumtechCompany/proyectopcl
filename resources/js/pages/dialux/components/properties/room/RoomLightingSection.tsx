@@ -128,10 +128,31 @@ export function RoomLightingSection({
                         const act = normActivities.find(
                             (a) => a.activity === val,
                         );
+                        // Antes solo se aplicaba `illuminanceLux` — el
+                        // límite de UGR, la uniformidad y el Ra objetivo de
+                        // la norma quedaban descartados en TODO proyecto,
+                        // cayendo siempre a valores genéricos por defecto
+                        // (`room.ugrLimit ?? 22`, etc.) sin importar qué
+                        // actividad se hubiera elegido realmente. `null` en
+                        // el catálogo significa "esta actividad no regula
+                        // este parámetro" (ej. UGR en estacionamientos) — se
+                        // aplica tal cual, nunca se interpreta como "sin
+                        // dato" para caer al valor previo del recinto.
                         onUpdate({
                             normativeActivity: val,
+                            normativeLabel: act?.label ?? room.normativeLabel,
                             illuminanceLux:
                                 act?.illuminanceLux ?? inputs.illuminanceLux,
+                            uniformityTarget: act
+                                ? act.uniformity
+                                : room.uniformityTarget,
+                            ugrLimit: act ? act.ugr : room.ugrLimit,
+                            colorRenderingRa: act
+                                ? act.ra
+                                : room.colorRenderingRa,
+                            specificRequirements: act
+                                ? act.specificRequirements
+                                : room.specificRequirements,
                         });
                     }}
                 />

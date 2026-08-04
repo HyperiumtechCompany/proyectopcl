@@ -21,6 +21,8 @@ export type DrawTool =
     | 'canopy'
     | 'corridor'
     | 'stair'
+    | 'evacuation-route'
+    | 'antipanic-area'
     | 'partition'
     | 'fixture'
     | 'fixture-grid'
@@ -564,6 +566,8 @@ export interface LightSwitch {
     label?: string; // Etiqueta visible: "S(a)", "Sc(a)", "2S(a)", etc.
     /** Rotación en planta, grados sentido horario (0-360). Default 0. */
     rotation?: number;
+    /** Factor visual del símbolo 2D. 1 = tamaño CAD base calibrado. */
+    symbolScale?: number;
 }
 
 /** Conductor eléctrico punto a punto */
@@ -575,6 +579,8 @@ export interface Conductor {
     wireCount: number; // Número de conductores (2, 3, 4)
     wireLabel?: string; // Etiqueta visible: F+N+T, 2F+T, 3F, etc.
     routeType: 'floor' | 'wall_ceiling'; // Empotrado en piso o pared/techo
+    /** Altura de la ruta horizontal S.N.P.T. en m. Ausente = techo real del recinto. */
+    routeHeightM?: number;
     tubeSize: number; // Diámetro de tubería en mm (20mm default)
     conductorType: string; // Tipo: "Cu LSOH", "N2XOH", etc.
     /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */

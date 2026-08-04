@@ -82,7 +82,12 @@ class FormalExportRequest extends FormRequest
             'document.metadata' => ['required', 'array'],
             'document.metadata.*.label' => ['required', 'string', 'max:255'],
             'document.metadata.*.value' => ['required', 'string', 'max:255'],
-            'document.pages' => ['required', 'array', 'min:3', 'max:800'],
+            // min:1 (antes min:3): el informe de emergencia (Fase 14) es un
+            // documento legítimo de solo 2 páginas (portada + tabla de
+            // cumplimiento) — el export formal normal siempre supera esto
+            // de sobra por su propio contenido, así que bajar el mínimo no
+            // relaja nada para ese caso.
+            'document.pages' => ['required', 'array', 'min:1', 'max:800'],
             'document.pages.*.id' => ['required', 'string', 'max:160'],
             'document.pages.*.kind' => ['required', 'string', 'in:cover,preliminary-observations,toc,luminaire-list,product-sheet,terrain-cad,terrain-drawn,terrain-architectural,ambient-list,calculation-object-list,ambient-summary,ambient-results,ambient-detail,ambient-plan,ambient-luminaires,ambient-products,ambient-calculation-object,ambient-useful-plane,room-ambient-list,room-luminaires,room-calculation-object,level-luminaire-list,lighting-scene-comparison,emergency-cover,emergency-compliance-table,glossary,placeholder'],
             'document.pages.*.sectionId' => ['required', 'string'],
@@ -315,7 +320,11 @@ class FormalExportRequest extends FormRequest
             'document.ambientDetails.*.fixturePositions.*.articleNumber' => ['nullable', 'string', 'max:255'],
             'document.ambientDetails.*.fixturePositions.*.lumens' => ['nullable', 'numeric'],
             'document.ambientDetails.*.fixturePositions.*.powerWatts' => ['nullable', 'numeric'],
-            'document.assets' => ['required', 'array', 'max:1500'],
+            // 'present' (no 'required'): el informe de emergencia (Fase 14)
+            // es un documento legítimo sin ningún asset (sin CDL, sin
+            // planos) — Laravel trata un array vacío como "vacío" bajo
+            // 'required', rechazando ese caso válido.
+            'document.assets' => ['present', 'array', 'max:1500'],
             'document.assets.*.id' => ['required', 'string', 'max:160'],
             'document.assets.*.title' => ['required', 'string', 'max:255'],
             'document.assets.*.purpose' => ['required', 'string', 'max:80'],

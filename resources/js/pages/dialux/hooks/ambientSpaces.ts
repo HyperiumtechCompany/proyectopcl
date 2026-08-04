@@ -697,7 +697,9 @@ function buildWallDefinedAmbientSpaces(
     walls: Wall[],
     fixtures: Fixture[],
 ): DerivedAmbientSpace[] {
-    if (room.roomType === 'corridor') {
+    // Fase 16: una ruta de evacuación/área antipánico es un polígono único,
+    // igual que un pasadizo — nunca se subdivide por muros interiores.
+    if (room.roomType === 'corridor' || room.roomType === 'evacuation-route' || room.roomType === 'antipanic-area') {
         return [];
     }
 
@@ -806,7 +808,7 @@ export function deriveAmbientSpaces(
     walls: Wall[],
     fixtures: Fixture[],
 ): DerivedAmbientSpace[] {
-    if (room.roomType === 'corridor') {
+    if (room.roomType === 'corridor' || room.roomType === 'evacuation-route' || room.roomType === 'antipanic-area') {
         return [buildSingleAmbientSpace(room, fixtures)];
     }
 

@@ -107,7 +107,13 @@ describe('MÓDULO I fixture (3 niveles × 24 ambientes)', () => {
         });
 
         for (const ambient of snapshot.ambients) {
-            expect(ambient.metrics.requirementEvaluations).toHaveLength(3);
+            // Fase 16: ya no son siempre 3 — una actividad que no regula
+            // UGR/Uo (ej. estacionamientos, baños) omite esa fila en vez de
+            // compararla contra un límite genérico inventado. Iluminancia
+            // sí se evalúa siempre.
+            expect(ambient.metrics.requirementEvaluations.length).toBeGreaterThanOrEqual(1);
+            expect(ambient.metrics.requirementEvaluations.length).toBeLessThanOrEqual(3);
+            expect(ambient.metrics.requirementEvaluations.map((e) => e.metric)).toContain('illuminance');
             expect(ambient.metrics.provenance.status).toBe('calculated');
             expect(ambient.metrics.provenance.engine).toBeTruthy();
 

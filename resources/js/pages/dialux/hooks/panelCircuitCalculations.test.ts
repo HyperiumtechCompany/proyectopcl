@@ -193,7 +193,13 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(circuit.voltageDropPct).toBeGreaterThan(0);
     });
 
-    it('suma la subida del tablero hasta el techo aunque la ruta esté configurada por piso', () => {
+    it('baja el tablero hasta el piso (no hasta el techo) en una ruta de piso, como un circuito de tomacorrientes', () => {
+        // El cable de un circuito de piso (tomacorrientes) sale del tablero,
+        // BAJA por la pared hasta el piso (mountingHeight del propio
+        // tablero), recorre embutido en la losa y SUBE hasta el destino —
+        // nunca sube al techo para luego bajar al piso. Mismo criterio que
+        // ya usa el render 3D (`House3DBuilder.ts::buildPath`, sin caso
+        // especial para tableros).
         const panel = {
             id: 'td',
             type: 'sub_panel',
@@ -220,8 +226,8 @@ describe('calculatePanelCircuitSummaries', () => {
         const [circuit] = calculatePanelCircuitSummaries(scene);
 
         expect(circuit.horizontalLengthM).toBeCloseTo(4, 8);
-        expect(circuit.verticalLengthM).toBeCloseTo(1.2, 8);
-        expect(circuit.lengthM).toBeCloseTo(5.2, 8);
+        expect(circuit.verticalLengthM).toBeCloseTo(1.8, 8);
+        expect(circuit.lengthM).toBeCloseTo(5.8, 8);
     });
 
     it('recalcula el tramo vertical con la altura editable del interruptor', () => {
@@ -254,6 +260,33 @@ describe('calculatePanelCircuitSummaries', () => {
 
         expect(atOneTwenty.verticalLengthM).toBeCloseTo(3, 8);
         expect(atOneFifty.verticalLengthM).toBeCloseTo(2.7, 8);
+    });
+
+    it('cuenta una sola vez la montante de un interruptor compartido por varios tramos', () => {
+        const panel = {
+            id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0,
+            mountingHeight: 1.8, properties: {},
+        } as ElectricalDevice;
+        const lightSwitch = {
+            id: 'switch-1', type: 'single', label: 'S1', x: 2, y: 0,
+            mountingHeight: 1.4, connectedFixtureIds: [],
+        };
+        const load = { ...fixture('load-1', 'room-a', 26), x: 4, y: 0, z: 3 };
+        const scene = {
+            floorHeight: 3,
+            fixtures: [load],
+            electricalDevices: [panel],
+            lightSwitches: [lightSwitch],
+            conductors: [
+                { ...conductor('wire-1', 'td', 'switch-1', 2), routeType: 'wall_ceiling' as const, waypoints: [] },
+                { ...conductor('wire-2', 'switch-1', 'load-1', 2), routeType: 'wall_ceiling' as const, waypoints: [] },
+            ],
+            rooms: [], walls: [],
+        } as unknown as Scene;
+
+        const [circuit] = calculatePanelCircuitSummaries(scene);
+
+        expect(circuit.verticalLengthM).toBeCloseTo((3 - 1.8) + (3 - 1.4), 8);
     });
 
     it.each([2.7, 3, 4.5])(
@@ -478,13 +511,13 @@ describe('calculatePanelCircuitSummaries', () => {
     });
 
     it('descarta una salida degenerada (0 m, sin carga, sin alimentar otro tablero)', () => {
-        // mountingHeight del tablero = altura de recinto por defecto (2.7 m,
-        // porque el room tiene vertices: [] y no cubre el punto) para que el
-        // tramo vertical del propio tablero dé 0; el interruptor también en
-        // 0 m de altura y en el mismo punto (0,0) para que el tramo
+        // mountingHeight del tablero = 0 (ruta de piso: el tramo vertical
+        // del propio tablero es su propia altura de montaje, no la del
+        // recinto) para que el tramo vertical dé 0; el interruptor también
+        // en 0 m de altura y en el mismo punto (0,0) para que el tramo
         // horizontal dé 0. Sin luminarias enganchadas: es un cable "muerto".
         const panel = {
-            id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0, mountingHeight: 2.7,
+            id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0, mountingHeight: 0,
         } as ElectricalDevice;
         const deadSwitch = {
             id: 'sw-dead', x: 0, y: 0, mountingHeight: 0,

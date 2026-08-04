@@ -12,7 +12,7 @@ import {
     isOutletDeviceType,
 } from '@/pages/dialux/hooks/types';
 import { useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import { calculateConductorLength } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { calculateConductorGroupLength, resolveConductorRouteHeight } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { SectionWrapper, EditField, SelectField } from './PropertyFields';
 
 const connectionRowClass =
@@ -52,6 +52,14 @@ export function LightSwitchProps({
                         value={lightSwitch.rotation ?? 0}
                         onChange={(val) => onUpdate({ rotation: ((val % 360) + 360) % 360 })}
                         step={5}
+                    />
+                    <EditField
+                        label="Escala del símbolo"
+                        value={lightSwitch.symbolScale ?? 1}
+                        onChange={(val) => onUpdate({ symbolScale: Math.max(0.25, val) })}
+                        min={0.25}
+                        max={5}
+                        step={0.1}
                     />
                 </div>
             </SectionWrapper>
@@ -104,12 +112,18 @@ export function ConductorProps({
     const targetNode = scene?.lightSwitches.find(s => s.id === conductor.targetId) || scene?.fixtures.find(f => f.id === conductor.targetId) || scene?.electricalDevices?.find(d => d.id === conductor.targetId);
 
     const lengthM = scene
-        ? (circuitConductorIds ?? [conductor.id]).reduce((sum, id) => {
-              const item = id === conductor.id ? conductor : scene.conductors?.find((c) => c.id === id);
-              if (!item) return sum;
-              return sum + (calculateConductorLength(scene, item)?.totalLengthM ?? 0);
-          }, 0)
+        ? calculateConductorGroupLength(
+              scene,
+              circuitConductorIds ?? [conductor.id],
+          ).totalLengthM
         : null;
+    const effectiveRouteHeightM = scene
+        ? resolveConductorRouteHeight(scene, conductor)
+        : (conductor.routeHeightM ?? 2.7);
+    const automaticRouteHeightM = scene
+        ? resolveConductorRouteHeight(scene, { ...conductor, routeHeightM: undefined })
+        : 2.7;
+    const usesAutomaticRouteHeight = conductor.routeHeightM === undefined || conductor.routeHeightM <= 0;
 
     const getNodeLabel = (node: any) => {
         if (!node) return 'Desconocido';
@@ -159,6 +173,29 @@ export function ConductorProps({
                             { value: 'floor', label: 'Piso' },
                         ]}
                     />
+                    {conductor.routeType === 'wall_ceiling' && (
+                        <EditField
+                            label={`Altura de ruta S.N.P.T. (m) · ${usesAutomaticRouteHeight ? 'automática' : 'manual'}`}
+                            value={Number(effectiveRouteHeightM.toFixed(2))}
+                            min={0}
+                            max={20}
+                            step={0.05}
+                            onChange={(value) => onUpdate({
+                                routeHeightM: value > 0 ? value : undefined,
+                            })}
+                        />
+                    )}
+                    {conductor.routeType === 'wall_ceiling' && (
+                        <button
+                            type="button"
+                            onClick={() => onUpdate({ routeHeightM: undefined })}
+                            className="w-full rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-left text-[10px] leading-snug text-cyan-700 transition-colors hover:bg-cyan-500/20 dark:text-cyan-300"
+                        >
+                            {usesAutomaticRouteHeight
+                                ? `Usando techo del recinto: ${effectiveRouteHeightM.toFixed(2)} m`
+                                : `Restablecer al techo automático (${automaticRouteHeightM.toFixed(2)} m)`}
+                        </button>
+                    )}
                     <SelectField
                         label="Tipo"
                         value={conductor.conductorType}

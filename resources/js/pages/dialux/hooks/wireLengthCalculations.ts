@@ -71,18 +71,36 @@ function nodeMountingHeight(node: WireNode): number {
     return Math.max(0, node.mountingHeight ?? 0);
 }
 
+/**
+ * Tramo vertical de UN extremo del conductor (tablero, luminaria, foco o
+ * interruptor) — sigue el `routeType` del propio conductor, nunca el tipo
+ * de nodo: un tablero alimentando un circuito `wall_ceiling` (alumbrado)
+ * baja desde el cielo raso (`roomHeight - mountingHeight`); el MISMO
+ * tablero alimentando un circuito `floor` (tomacorrientes) baja hasta el
+ * piso (`mountingHeight`) para entrar a la canaleta embutida, igual que
+ * cualquier otro nodo — mismo criterio ya usado por el render 3D
+ * (`House3DBuilder.ts::buildPath`, sin caso especial para tableros).
+ *
+ * ANTES: un tablero SIEMPRE tomaba la fórmula de cielo raso sin importar
+ * `routeType`, así que un circuito de tomacorrientes (piso) sumaba
+ * `roomHeight - mountingHeight` en el extremo del tablero en vez de
+ * `mountingHeight` — sobrestimando la longitud (y a veces contradiciendo
+ * físicamente el recorrido: el cable no sube al techo para después bajar
+ * al piso). Reportado por el usuario contra un proyecto real donde DIALux
+ * evo daba una longitud menor y consistente con el recorrido por piso.
+ */
 function nodeVerticalAllowance(
     scene: Scene,
     node: WireNode,
-    routeType: Conductor['routeType'],
+    conductor: Conductor,
 ): number {
     const mountingHeight = nodeMountingHeight(node);
-    const isPanel =
-        node.nodeType === 'device' &&
-        (node.type === 'main_panel' || node.type === 'sub_panel');
 
-    if (routeType === 'wall_ceiling' || isPanel) {
-        return Math.max(0, roomHeightAt(scene, node) - mountingHeight);
+    if (conductor.routeType === 'wall_ceiling') {
+        const routeHeight = conductor.routeHeightM !== undefined
+            ? Math.max(0, conductor.routeHeightM)
+            : roomHeightAt(scene, node);
+        return Math.abs(routeHeight - mountingHeight);
     }
 
     return mountingHeight;
@@ -97,7 +115,7 @@ function conductorLengthComponents(
     const horizontalLengthM = conductorPlanLength(conductor, source, target);
     const verticalLengthM = [source, target].reduce(
         (total, node) =>
-            total + nodeVerticalAllowance(scene, node, conductor.routeType),
+            total + nodeVerticalAllowance(scene, node, conductor),
         0,
     );
 
@@ -136,12 +154,69 @@ export function calculateConductorLength(
     return conductorLengthComponents(scene, conductor, source, target);
 }
 
+/** Longitud de una línea conectada, sin repetir montantes en nodos compartidos. */
+export function calculateConductorGroupLength(
+    scene: Scene,
+    conductorIds: string[],
+): ConductorLength {
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+    const countedVerticalNodeIds = new Set<string>();
+    let horizontalLengthM = 0;
+    let verticalLengthM = 0;
+
+    for (const conductor of (scene.conductors ?? []).filter((item) => conductorIds.includes(item.id))) {
+        const source = resolveNode(conductor.sourceId, fixtures, switches, devices);
+        const target = resolveNode(conductor.targetId, fixtures, switches, devices);
+        if (!source || !target) continue;
+
+        horizontalLengthM += conductorPlanLength(conductor, source, target);
+        for (const [nodeId, node] of [
+            [conductor.sourceId, source],
+            [conductor.targetId, target],
+        ] as const) {
+            if (countedVerticalNodeIds.has(nodeId)) continue;
+            countedVerticalNodeIds.add(nodeId);
+            verticalLengthM += nodeVerticalAllowance(scene, node, conductor);
+        }
+    }
+
+    return {
+        horizontalLengthM,
+        verticalLengthM,
+        totalLengthM: horizontalLengthM + verticalLengthM,
+    };
+}
+
 function roomHeightAt(scene: Scene, point: Vertex): number {
     const room = scene.rooms.find(
         (item) => item.vertices.length >= 3 && pointInPolygon(point, item.vertices),
     );
 
     return room?.height ?? scene.floorHeight ?? DEFAULT_ROOM_HEIGHT;
+}
+
+/** Altura horizontal visible/efectiva de una ruta de cable. */
+export function resolveConductorRouteHeight(
+    scene: Scene,
+    conductor: Conductor,
+): number {
+    if (conductor.routeHeightM !== undefined && conductor.routeHeightM > 0) {
+        return conductor.routeHeightM;
+    }
+
+    const fixtures = scene.fixtures ?? [];
+    const switches = scene.lightSwitches ?? [];
+    const devices = scene.electricalDevices ?? [];
+    const endpoints = [
+        resolveNode(conductor.sourceId, fixtures, switches, devices),
+        resolveNode(conductor.targetId, fixtures, switches, devices),
+    ].filter((node): node is WireNode => node !== null);
+
+    return endpoints.length > 0
+        ? Math.max(...endpoints.map((node) => roomHeightAt(scene, node)))
+        : scene.floorHeight ?? DEFAULT_ROOM_HEIGHT;
 }
 
 function switchLabel(lightSwitch: LightSwitch): string {
@@ -520,6 +595,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             const reachedOutlets = new Set<string>();
             const reachedPanelIds = new Set<string>();
             const traversedRoomNames = new Set<string>();
+            const countedVerticalNodeIds = new Set<string>();
             const queue: Array<{ conductor: Conductor; fromNodeId: string }> = [{ conductor: root, fromNodeId: panel.id }];
             let horizontalLengthM = 0;
             let verticalLengthM = 0;
@@ -539,7 +615,18 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                     target,
                 );
                 horizontalLengthM += lengths.horizontalLengthM;
-                verticalLengthM += lengths.verticalLengthM;
+                for (const [nodeId, node] of [
+                    [current.conductor.sourceId, source],
+                    [current.conductor.targetId, target],
+                ] as const) {
+                    if (countedVerticalNodeIds.has(nodeId)) continue;
+                    countedVerticalNodeIds.add(nodeId);
+                    verticalLengthM += nodeVerticalAllowance(
+                        scene,
+                        node,
+                        current.conductor,
+                    );
+                }
                 ambientNamesAlongConductor(
                     current.conductor,
                     source,

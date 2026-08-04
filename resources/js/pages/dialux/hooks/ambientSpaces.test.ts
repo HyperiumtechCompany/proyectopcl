@@ -142,4 +142,22 @@ describe('ambientSpaces', () => {
             findAmbientSpaceAtPoint(scene, { x: 4, y: 0.75 })?.id,
         ).toBe('module-1::corridor-1::ambient-1');
     });
+
+    it.each(['evacuation-route', 'antipanic-area'] as const)(
+        'derives %s room type as one ambient without wall-defined splits (Fase 16)',
+        (roomType) => {
+            const room = { ...corridorRoom, id: `emergency-1`, roomType } satisfies Room;
+
+            const ambients = deriveAmbientSpaces(
+                room,
+                [closedWallInsideCorridor],
+                [],
+            );
+
+            expect(ambients).toHaveLength(1);
+            expect(ambients[0]?.roomId).toBe('emergency-1');
+            expect(ambients[0]?.wallId).toBeUndefined();
+            expect(ambients[0]?.area).toBe(12);
+        },
+    );
 });

@@ -57,7 +57,14 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
         const direct = calculateMaintained(room, fixtures);
 
         const snapshot = buildCalculationSnapshot(buildSmallProject());
-        const run = await runDirectPreviewEngine(snapshot);
+        // glare en 'legacy': `direct` (`calculateMaintained`) llama al motor
+        // sin glareConfig (legacy implícito) — para comparar "el wrapper no
+        // cambia la fórmula" hay que pedirle al wrapper EL MISMO modo, no el
+        // default (guth-observers desde la Fase 16).
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
 
         expect(run.surfaces).toHaveLength(1);
         const wrapped = run.surfaces[0]!.result;
@@ -112,7 +119,15 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
 
     it('etiqueta el run con LIGHTING_ENGINE_VERSION y estado completed', async () => {
         const snapshot = buildCalculationSnapshot(buildModuloIProjectFixture());
-        const run = await runDirectPreviewEngine(snapshot);
+        // glare en 'legacy': este test verifica metadatos del run (versión,
+        // estado, hash, cantidad de superficies), no UGR — con guth-observers
+        // (default desde la Fase 16) este proyecto real de 24 ambientes
+        // legítimamente excluye luminarias fuera del cono visual en varios
+        // de ellos, ruido irrelevante para lo que se verifica acá.
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
 
         expect(run.engineVersion).toBe(LIGHTING_ENGINE_VERSION);
         expect(run.status).toBe('completed');
@@ -164,7 +179,15 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
         project.scenes[0]!.rooms[0]!.floorReflectance = 0.2;
         const snapshot = buildCalculationSnapshot(project);
 
-        const run = await runDirectPreviewEngine(snapshot);
+        // glare en 'legacy': este test es sobre interreflexión (avg_lux
+        // idéntico al de antes de la Fase 7), no sobre UGR — con
+        // guth-observers (default desde la Fase 16) esta sala de referencia
+        // legítimamente excluye luminarias fuera del cono visual, ruido
+        // irrelevante para lo que se verifica acá.
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeCloseTo(direct.avg_lux, 9);
@@ -178,7 +201,15 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
         project.scenes[0]!.rooms[0]!.floorReflectance = 0.2;
         const snapshot = buildCalculationSnapshot(project);
 
-        const run = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
+        // glare en 'legacy': este test es sobre interreflexión, no sobre UGR —
+        // con guth-observers (default desde la Fase 16) activar reflectancias
+        // dispara además el warning documentado de cambio de método de Lb,
+        // ruido irrelevante para lo que se verifica acá.
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'first-bounce',
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeGreaterThan(direct.avg_lux);
@@ -187,7 +218,11 @@ describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicia
 
     it('con interreflection: "first-bounce" pero SIN reflectancias definidas, no hay diferencia y se advierte que falta material', async () => {
         const snapshot = buildCalculationSnapshot(buildSmallProject()); // sin reflectancias en el room
-        const run = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'first-bounce',
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.avg_lux).toBeCloseTo(direct.avg_lux, 9);
@@ -209,12 +244,17 @@ describe('runDirectPreviewEngine — Fase 8 (interreflexión iterativa)', () => 
     it('con interreflection: "iterative" y maxBounces > 1, el avg_lux es mayor que con "first-bounce" (más rebotes suman más luz)', async () => {
         const snapshot = buildCalculationSnapshot(projectWithReflectances());
 
-        const firstBounceRun = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
+        const firstBounceRun = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'first-bounce',
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const iterativeRun = await runDirectPreviewEngine(snapshot, {
             ...DEFAULT_DIRECT_PREVIEW_CONFIG,
             interreflection: 'iterative',
             maxBounces: 30,
             convergenceTolerance: 1e-5,
+            glare: { enabled: true, observerModel: 'legacy' },
         });
 
         expect(iterativeRun.surfaces[0]!.result.avg_lux).toBeGreaterThan(firstBounceRun.surfaces[0]!.result.avg_lux);
@@ -261,6 +301,7 @@ describe('runDirectPreviewEngine — Fase 8 (interreflexión iterativa)', () => 
             interreflection: 'iterative',
             maxBounces: 30,
             convergenceTolerance: 1e-5,
+            glare: { enabled: true, observerModel: 'legacy' },
         });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
@@ -271,13 +312,30 @@ describe('runDirectPreviewEngine — Fase 8 (interreflexión iterativa)', () => 
 });
 
 describe('runDirectPreviewEngine — Fase 9 (UGR y luminancia profesional)', () => {
-    it('con glare.observerModel: "legacy" (default), el UGR es idéntico al de antes de esta fase y no expone campos ugr_observer_*', async () => {
+    it('con glare.observerModel: "legacy" (explícito), el UGR es idéntico al de antes de esta fase y no expone campos ugr_observer_*', async () => {
+        // Desde la Fase 16, el DEFAULT ya no es 'legacy' (ver
+        // `DEFAULT_DIRECT_PREVIEW_CONFIG`) — este test ya no valida el
+        // comportamiento por defecto, sino que el modo 'legacy' en sí
+        // sigue funcionando igual que antes de la Fase 9, para quien lo
+        // pida explícitamente.
         const snapshot = buildCalculationSnapshot(buildSmallProject());
-        const run = await runDirectPreviewEngine(snapshot);
+        const run = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
 
         expect(run.surfaces[0]!.result.ugr).toBeCloseTo(direct.ugr, 9);
         expect(run.surfaces[0]!.result.ugr_observer_view_direction_deg).toBeUndefined();
+    });
+
+    it('con la configuración por DEFECTO (guth-observers desde la Fase 16), expone el observador ganador', async () => {
+        const snapshot = buildCalculationSnapshot(buildSmallProject());
+        const run = await runDirectPreviewEngine(snapshot);
+
+        const result = run.surfaces[0]!.result;
+        expect(result.ugr_observer_x).toBeDefined();
+        expect([0, 90, 180, 270]).toContain(result.ugr_observer_view_direction_deg);
     });
 
     it('con glare.observerModel: "guth-observers", expone el observador ganador y el conteo de exclusiones', async () => {
@@ -316,7 +374,11 @@ describe('runDirectPreviewEngine — Fase 9 (UGR y luminancia profesional)', () 
         project.scenes[0]!.rooms[0]!.floorReflectance = 0.2;
         const snapshot = buildCalculationSnapshot(project);
 
-        const onlyReflectances = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'first-bounce' });
+        const onlyReflectances = await runDirectPreviewEngine(snapshot, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'first-bounce',
+            glare: { enabled: true, observerModel: 'legacy' },
+        });
         const onlyGuthObservers = await runDirectPreviewEngine(snapshot, {
             ...DEFAULT_DIRECT_PREVIEW_CONFIG,
             glare: { enabled: true, observerModel: 'guth-observers' },

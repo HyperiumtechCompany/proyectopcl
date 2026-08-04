@@ -11,6 +11,7 @@ export type PanelId =
     | 'exportacion'
     | 'normativa'
     | 'proyecto'
+    | 'emergencia'
     | null;
 
 export type PanelWidth = 'sm' | 'md' | 'lg' | 'xl';

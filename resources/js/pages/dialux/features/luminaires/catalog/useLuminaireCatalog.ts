@@ -41,6 +41,8 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
     const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
     const [fixturePage, setFixturePage] = useState(1);
     const photometricWebCache = useRef<Map<number, PhotometricWeb | null>>(new Map());
+    /** Fase 16: descarta el resultado de una selección vieja si el usuario ya eligió otro producto mientras se esperaba la fotometría (ver `setImportedFixture`). */
+    const latestFixtureSelectionRef = useRef(0);
 
     const loadProducts = useCallback(async () => {
         setIsLoadingProducts(true);
@@ -136,34 +138,29 @@ export function useLuminaireCatalog(options: UseLuminaireCatalogOptions) {
         }
     };
 
-    const setImportedFixture = (product: ImportedLuminaireProduct) => {
+    const setImportedFixture = async (product: ImportedLuminaireProduct) => {
+        // Fase 16: la fotometría real ("photometricWeb") se espera ANTES de
+        // aplicar el modelo — nunca se coloca una luminaria (individual o en
+        // grilla) sin ella cuando el producto sí la tiene. Antes, el modelo
+        // se aplicaba de inmediato y `photometricWeb` llegaba después por
+        // una promesa en segundo plano; si el usuario dibujaba una grilla
+        // (o colocaba una luminaria) ANTES de que esa promesa resolviera —
+        // un flujo de UI perfectamente normal y rápido — la(s) luminaria(s)
+        // se creaban con `photometricWeb` ausente PARA SIEMPRE, sin ningún
+        // error visible: el motor de cálculo caía en la aproximación
+        // Lambertiana genérica en vez de la curva real del fabricante,
+        // subestimando lux de forma silenciosa. Confirmado contra un
+        // proyecto real del usuario (`dialux:repair-photometry`).
+        const requestId = ++latestFixtureSelectionRef.current;
         const modelFields = productToFixtureFields(product);
-
-        // Aplica de inmediato con los datos que ya tenemos (lúmenes, tipo,
-        // forma, etc.) en vez de esperar la red: `photometricWeb` solo hace
-        // falta para el render de distribución fotométrica detallada, no
-        // para elegir el modelo ni para el cálculo de lúmenes de la grilla.
-        // Antes este `await` bloqueaba TODA la actualización visible detrás
-        // de un round-trip HTTP — cualquier lentitud del backend (arranque
-        // en frío de PHP, antivirus, etc.) se sentía como "elegí la
-        // luminaria y no pasó nada" durante ese tiempo entero.
-        const targetIds = applyToFixtureIds?.length ? [...applyToFixtureIds] : null;
-        applyFixtureFields(modelFields);
-
-        void fetchPhotometricWeb(product.id).then((photometricWeb) => {
-            if (!photometricWeb) return;
-            // Se lee el estado ACTUAL (no el `store` cerrado sobre el render
-            // de este clic) porque para cuando esta promesa resuelve puede
-            // haber pasado un buen rato — usar el snapshot viejo aquí
-            // aplicaría la web fotométrica sobre una plantilla ya obsoleta.
-            const liveUi = useEditorStore.getState().ui;
-            if (targetIds) {
-                store.updateFixtures(targetIds, { photometricWeb });
-            } else if (liveUi.fixtureTemplate.productId === product.id) {
-                // Solo si el usuario no eligió otro producto mientras tanto.
-                store.setFixtureTemplate({ ...liveUi.fixtureTemplate, photometricWeb });
-            }
-        });
+        const photometricWeb = await fetchPhotometricWeb(product.id);
+        if (latestFixtureSelectionRef.current !== requestId) {
+            // El usuario ya eligió otro producto mientras se esperaba esta
+            // fotometría — descartar, para no aplicar datos de un modelo
+            // que ya no es la selección vigente.
+            return;
+        }
+        applyFixtureFields(photometricWeb ? { ...modelFields, photometricWeb } : modelFields);
     };
 
     const toggleShare = async (product: ImportedLuminaireProduct, event: React.MouseEvent) => {

@@ -55,10 +55,11 @@ interface RoomTableRow {
     minLux: number;
     maxLux: number;
     uniformity: number;
-    uniformityTarget: number;
+    /** `null` = la actividad normativa seleccionada no regula este parámetro (ej. UGR en estacionamientos, Uo en baños) — nunca se interpreta como "sin dato" para caer a un límite genérico inventado. */
+    uniformityTarget: number | null;
     estimatedUniformity: number;
     ugr: number;
-    ugrLimit: number;
+    ugrLimit: number | null;
     hasNormativeSource: boolean;
     coverage: 'optimal' | 'insufficient' | 'excessive';
 }
@@ -74,13 +75,20 @@ type ComplianceValues = Pick<
     | 'hasNormativeSource'
 >;
 
-/** Misma regla de conformidad que usa el PDF: norma + lux + Uo + UGR. */
+/**
+ * Misma regla de conformidad que usa el PDF: norma + lux + Uo + UGR.
+ * `uniformityTarget`/`ugrLimit` en `null` significa que la actividad
+ * normativa seleccionada NO regula ese parámetro (ej. UGR en
+ * estacionamientos, Uo en baños — ver `normativaData.ts`) — se trata como
+ * automáticamente satisfecho, nunca como "sin dato" contra un límite
+ * genérico inventado.
+ */
 export function isRoomCompliant(row: ComplianceValues): boolean {
     return (
         row.hasNormativeSource &&
         row.avgLux >= row.illuminanceLux &&
-        row.uniformity >= row.uniformityTarget &&
-        row.ugr <= row.ugrLimit
+        (row.uniformityTarget === null || row.uniformity >= row.uniformityTarget) &&
+        (row.ugrLimit === null || row.ugr <= row.ugrLimit)
     );
 }
 
@@ -127,10 +135,10 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             minLux: result.min_lux,
             maxLux: result.max_lux,
             uniformity: result.uniformity,
-            uniformityTarget: room.uniformityTarget ?? 0.4,
+            uniformityTarget: room.uniformityTarget ?? null,
             estimatedUniformity: inputs.estimatedUniformity,
             ugr: result.ugr,
-            ugrLimit: room.ugrLimit ?? 22,
+            ugrLimit: room.ugrLimit ?? null,
             hasNormativeSource: Boolean(
                 room.normativeStandard || room.normativeLabel || room.normativeCategory,
             ),
@@ -343,8 +351,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                             {filteredRows.map((row, index) => {
                                 const luxOk = row.avgLux >= row.illuminanceLux;
                                 const uniformityOk =
+                                    row.uniformityTarget === null ||
                                     row.uniformity >= row.uniformityTarget;
-                                const ugrOk = row.ugr <= row.ugrLimit;
+                                const ugrOk =
+                                    row.ugrLimit === null || row.ugr <= row.ugrLimit;
                                 const compliant = isRoomCompliant(row);
                                 const warn = luxOk && (!uniformityOk || !ugrOk);
                                 const showLevelHeader =
@@ -463,8 +473,17 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                             )}
                                             <p className="mt-1.5 leading-snug text-slate-500">
                                                 {luxOk ? 'Lux OK' : 'Lux bajo'} ·{' '}
-                                                {uniformityOk ? 'Uo OK' : 'Uo bajo'} ·{' '}
-                                                {ugrOk ? 'UGR OK' : 'UGR alto'}
+                                                {row.uniformityTarget === null
+                                                    ? 'Uo no regulado'
+                                                    : uniformityOk
+                                                      ? 'Uo OK'
+                                                      : 'Uo bajo'}{' '}
+                                                ·{' '}
+                                                {row.ugrLimit === null
+                                                    ? 'UGR no regulado'
+                                                    : ugrOk
+                                                      ? 'UGR OK'
+                                                      : 'UGR alto'}
                                             </p>
                                         </td>
                                         </tr>

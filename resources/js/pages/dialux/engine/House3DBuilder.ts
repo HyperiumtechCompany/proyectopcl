@@ -31,6 +31,8 @@ import earcut from 'earcut';
 (window as any).earcut = earcut;
 
 import { buildContourSegments } from '@/pages/dialux/hooks/isoluxContours';
+import { pointInPolygon } from '@/pages/dialux/hooks/ambientSpaces';
+import { buildConductor3DPath } from '@/pages/dialux/engine/conductor3DPath';
 import {
     DEFAULT_STRUCTURAL_SLAB_THICKNESS,
     getCorridorRenderFlags,
@@ -411,6 +413,8 @@ export class House3DBuilder {
             editorScene.fixtures || [],
             editorScene.lightSwitches || [],
             editorScene.electricalDevices || [],
+            editorScene.rooms || [],
+            editorScene.floorHeight ?? 2.7,
             floorNode,
         );
         (editorScene.doors || []).forEach((d) =>
@@ -3059,13 +3063,23 @@ export class House3DBuilder {
         fixtures: Fixture[],
         lightSwitches: LightSwitch[],
         electricalDevices: ElectricalDevice[],
+        rooms: Room[],
+        floorHeight: number,
         floorNode: TransformNode,
     ) {
         const FLOOR_Y = 0.05;
 
+        const ceilingHeightAt = (x: number, z: number): number =>
+            rooms.find((room) => pointInPolygon({ x, y: z }, room.vertices))?.height
+                ?? floorHeight;
+
         const resolveNode = (id: string): { x: number; y: number; z: number } | null => {
             const fx = fixtures.find((f) => f.id === id);
-            if (fx) return { x: fx.x, y: resolveFixtureRenderHeight(fx, 2.4), z: fx.y };
+            if (fx) return {
+                x: fx.x,
+                y: resolveFixtureRenderHeight(fx, ceilingHeightAt(fx.x, fx.y)),
+                z: fx.y,
+            };
             const sw = lightSwitches.find((s) => s.id === id);
             if (sw) return { x: sw.x, y: sw.mountingHeight ?? 1.2, z: sw.y };
             const dev = electricalDevices.find((d) => d.id === id);
@@ -3076,29 +3090,21 @@ export class House3DBuilder {
         const buildPath = (
             nodes: Array<{ x: number; y: number; z: number }>,
             routeType: 'floor' | 'wall_ceiling',
+            routeHeightM?: number,
         ): Vector3[] => {
-            const path: Vector3[] = [new Vector3(nodes[0].x, nodes[0].y, nodes[0].z)];
-            for (let i = 0; i < nodes.length - 1; i++) {
-                const p1 = nodes[i];
-                const p2 = nodes[i + 1];
-                if (routeType === 'floor') {
-                    path.push(new Vector3(p1.x, FLOOR_Y, p1.z));
-                    path.push(new Vector3(p2.x, FLOOR_Y, p2.z));
-                    path.push(new Vector3(p2.x, p2.y, p2.z));
-                } else {
-                    // El tramo debe subir pegado a la pared del nodo bajo
-                    // (interruptor/dispositivo) hasta el techo, y desde ahí
-                    // viajar horizontal a la luminaria — sin importar cuál
-                    // de los dos es sourceId/targetId. Si el doblez se ubica
-                    // en la posición del nodo alto (luminaria) en vez del
-                    // bajo, el tubo corta en diagonal a través del recinto.
-                    const low = p1.y <= p2.y ? p1 : p2;
-                    const high = p1.y <= p2.y ? p2 : p1;
-                    path.push(new Vector3(low.x, high.y, low.z));
-                    path.push(new Vector3(p2.x, p2.y, p2.z));
-                }
-            }
-            return path;
+            const autoCeiling = Math.max(
+                ...nodes.map((point) =>
+                    rooms.find((room) => pointInPolygon({ x: point.x, y: point.z }, room.vertices))?.height
+                        ?? floorHeight,
+                ),
+            );
+            const routeY = routeType === 'floor'
+                ? FLOOR_Y
+                : (routeHeightM ?? autoCeiling);
+
+            return buildConductor3DPath(nodes, routeY).map(
+                (point) => new Vector3(point.x, point.y, point.z),
+            );
         };
 
         const makeTube = (name: string, path: Vector3[], radiusM: number, colorHex: string) => {
@@ -3126,16 +3132,15 @@ export class House3DBuilder {
             if (!source || !target) return;
 
             const waypoints = (cond.waypoints ?? []).map((w) => {
-                // Los waypoints intermedios viajan a la altura de ruteo (piso o techo);
-                // se resuelven dentro de buildPath usando el nodo siguiente como referencia.
-                return { x: w.x, y: target.y, z: w.y };
+                // buildPath coloca todos los waypoints en la cota horizontal.
+                return { x: w.x, y: 0, z: w.y };
             });
 
             const nodes = [source, ...waypoints, target];
             const radiusM = Math.max(0.006, (cond.tubeSize || 20) / 1000 / 2);
             makeTube(
                 `conduit_${cond.id}`,
-                buildPath(nodes, cond.routeType ?? 'wall_ceiling'),
+                buildPath(nodes, cond.routeType ?? 'wall_ceiling', cond.routeHeightM),
                 radiusM,
                 '#f97316',
             );

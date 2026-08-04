@@ -76,12 +76,19 @@ test('authenticated users can import an ldt luminaire product with report data',
     $lines[9] = 'DALL-21W';
     $lines[12] = '0.2 0.2 0.08';
     $lines[14] = '0.72';
-    $lines[27] = '1';
-    $lines[28] = 'LED';
-    $lines[29] = '2.014';
-    $lines[30] = '4000';
-    $lines[31] = '80';
-    $lines[32] = '21';
+    // Índices 26-31 (0-idx) = número de lámparas, tipo, flujo, CCT, CRI,
+    // vatios del primer set de lámparas — verificado contra 8 archivos LDT
+    // reales subidos por usuarios (línea 27, 1-indexada, es el número de
+    // lámparas; la 28 es el tipo/texto). El fixture anterior dejaba el
+    // índice 26 vacío y arrancaba en 27, un desfase de 1 línea que
+    // coincidía por casualidad con un bug ya corregido en
+    // ProductImportService::parseLdt().
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '2.014';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '21';
     $lines[] = '900 600 80';
     $lines[] = '860 580 75';
 
@@ -528,12 +535,19 @@ test('ldt import tags photometric provenance as manufacturer', function () {
     $lines[9] = 'DALL-21W';
     $lines[12] = '0.2 0.2 0.08';
     $lines[14] = '0.72';
-    $lines[27] = '1';
-    $lines[28] = 'LED';
-    $lines[29] = '2.014';
-    $lines[30] = '4000';
-    $lines[31] = '80';
-    $lines[32] = '21';
+    // Índices 26-31 (0-idx) = número de lámparas, tipo, flujo, CCT, CRI,
+    // vatios del primer set de lámparas — verificado contra 8 archivos LDT
+    // reales subidos por usuarios (línea 27, 1-indexada, es el número de
+    // lámparas; la 28 es el tipo/texto). El fixture anterior dejaba el
+    // índice 26 vacío y arrancaba en 27, un desfase de 1 línea que
+    // coincidía por casualidad con un bug ya corregido en
+    // ProductImportService::parseLdt().
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '2.014';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '21';
     $lines[] = '900 600 80';
     $lines[] = '860 580 75';
 

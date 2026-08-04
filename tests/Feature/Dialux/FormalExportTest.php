@@ -1812,6 +1812,76 @@ test('accepts emergency-cover and emergency-compliance-table pages with a full e
     $response->assertHeader('content-type', 'application/pdf');
 });
 
+test('accepts the REAL minimal emergency-only document shape from buildDialuxEmergencyDocument.ts (Fase 16 regression)', function () {
+    // A diferencia del test anterior, que agrega páginas de emergencia
+    // SOBRE un documento normal ya válido (con 3+ páginas y assets no
+    // vacíos), este test envía exactamente la forma que produce
+    // `buildDialuxEmergencyDocument.ts` en el frontend: SOLO 2 páginas
+    // (portada + tabla de cumplimiento) y `assets: []` — sin ningún CDL,
+    // plano, ni ficha de producto. Un usuario real lo hizo fallar con
+    // 422 (validation.min_array en `document.pages`, validation.required
+    // en `document.assets`, que Laravel trata un array vacío como
+    // "vacío" bajo 'required') porque el fixture de arriba nunca ejercitó
+    // esta forma mínima real.
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+
+    $payload = [
+        'dialux_project_id' => $project->id,
+        'document' => [
+            'schemaVersion' => 1,
+            'title' => 'Proyecto Demo · Informe de Alumbrado de Emergencia',
+            'subtitle' => 'RNE A.130 / EN 1838',
+            'fileBaseName' => 'proyecto-demo-informe-emergencia',
+            'generatedAt' => now()->toIso8601String(),
+            'header' => ['title' => 'Proyecto Demo — ALUMBRADO DE EMERGENCIA', 'subtitle' => 'RNE A.130 / EN 1838'],
+            'footer' => ['left' => 'PCL — Informe de emergencia', 'right' => now()->format('Y-m-d')],
+            'metadata' => [
+                ['label' => 'Proyecto', 'value' => 'Proyecto Demo'],
+                ['label' => 'Tipo de informe', 'value' => 'Alumbrado de emergencia'],
+            ],
+            'pages' => [
+                [
+                    'id' => 'page-emergency-cover',
+                    'kind' => 'emergency-cover',
+                    'sectionId' => 'emergency-cover',
+                    'pageNumber' => 1,
+                    'title' => 'INFORME DE ALUMBRADO DE EMERGENCIA',
+                    'subtitle' => 'Proyecto Demo',
+                    'assetIds' => [],
+                    'notes' => ['Este proyecto no tiene ambientes marcados como ruta de evacuación o área antipánico — no hay nada que evaluar todavía.'],
+                ],
+                [
+                    'id' => 'page-emergency-compliance-table',
+                    'kind' => 'emergency-compliance-table',
+                    'sectionId' => 'emergency-compliance-table',
+                    'pageNumber' => 2,
+                    'title' => 'Cumplimiento normativo — alumbrado de emergencia',
+                    'subtitle' => 'RNE A.130 (obligatoria) y EN 1838 (referencia), evaluadas por separado',
+                    'assetIds' => [],
+                    'notes' => [],
+                    'emergencyRooms' => [],
+                ],
+            ],
+            'toc' => [
+                ['sectionId' => 'emergency-cover', 'title' => 'INFORME DE ALUMBRADO DE EMERGENCIA', 'subtitle' => 'Proyecto Demo', 'level' => 0, 'pageNumber' => 1],
+                ['sectionId' => 'emergency-compliance-table', 'title' => 'Cumplimiento normativo — alumbrado de emergencia', 'subtitle' => 'RNE A.130 (obligatoria) y EN 1838 (referencia), evaluadas por separado', 'level' => 0, 'pageNumber' => 2],
+            ],
+            'luminaires' => [],
+            'luminaireTotals' => ['totalLumens' => 0, 'totalPowerWatts' => 0, 'overallEfficiency' => 0],
+            'levels' => [],
+            'ambientDetails' => [],
+            'assets' => [],
+            'glossary' => [],
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('dialux.formal-export'), $payload);
+
+    $response->assertOk();
+    $response->assertHeader('content-type', 'application/pdf');
+});
+
 test('formal dialux pdf tables use scoped column width rules', function () {
     $css = file_get_contents(resource_path('css/style-exportado-dialux.css'));
 

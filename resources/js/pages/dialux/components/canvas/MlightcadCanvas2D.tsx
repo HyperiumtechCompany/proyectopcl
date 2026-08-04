@@ -548,11 +548,21 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onAddRoom: (verticesM) => {
                 const isCorridor = ui.activeTool === 'corridor';
                 const isStair = ui.activeTool === 'stair';
+                // Fase 16 (panel de Emergencia): 'evacuation-route'/'antipanic-area'
+                // se dibujan como un polígono único, igual que un pasadizo —
+                // ver `hooks/ambientSpaces.ts` (tratados como un solo espacio,
+                // sin subdivisión por muros).
+                const isEvacuationRoute = ui.activeTool === 'evacuation-route';
+                const isAntipanicArea = ui.activeTool === 'antipanic-area';
                 const effectiveRoomType = isStair
                     ? 'stair'
                     : isCorridor
                       ? 'corridor'
-                      : (ui.roomTypeTemplate ?? 'room');
+                      : isEvacuationRoute
+                        ? 'evacuation-route'
+                        : isAntipanicArea
+                          ? 'antipanic-area'
+                          : (ui.roomTypeTemplate ?? 'room');
                 const stairCount =
                     scene?.rooms.filter((r) => r.roomType === 'stair').length ??
                     0;
@@ -566,14 +576,24 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     scene?.rooms.filter(
                         (r) => !r.roomType || r.roomType === 'room',
                     ).length ?? 0;
+                const evacuationRouteCount =
+                    scene?.rooms.filter((r) => r.roomType === 'evacuation-route')
+                        .length ?? 0;
+                const antipanicAreaCount =
+                    scene?.rooms.filter((r) => r.roomType === 'antipanic-area')
+                        .length ?? 0;
                 const id = store.addRoom({
                     name: isStair
                         ? `Escalera ${stairCount + 1}`
                         : isCorridor
                           ? `Pasadizo ${corridorCount + 1}`
-                          : effectiveRoomType === 'ambient'
-                            ? `Ambiente ${ambientCount + 1}`
-                            : `Recinto ${roomCount + 1}`,
+                          : isEvacuationRoute
+                            ? `Ruta de evacuación ${evacuationRouteCount + 1}`
+                            : isAntipanicArea
+                              ? `Área antipánico ${antipanicAreaCount + 1}`
+                              : effectiveRoomType === 'ambient'
+                                ? `Ambiente ${ambientCount + 1}`
+                                : `Recinto ${roomCount + 1}`,
                     vertices: verticesM,
                     height: 2.7,
                     roomType: effectiveRoomType,
@@ -581,9 +601,11 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         ? 'rgba(251, 146, 60, 0.35)'
                         : isCorridor
                           ? 'rgba(59, 130, 246, 0.4)'
-                          : effectiveRoomType === 'ambient'
-                            ? 'rgba(34, 197, 94, 0.25)'
-                            : 'rgba(56,189,248,0.25)',
+                          : isEvacuationRoute || isAntipanicArea
+                            ? 'rgba(220, 38, 38, 0.3)'
+                            : effectiveRoomType === 'ambient'
+                              ? 'rgba(34, 197, 94, 0.25)'
+                              : 'rgba(56,189,248,0.25)',
                     stairConfig: isStair
                         ? {
                               normativeUse: 'generic',

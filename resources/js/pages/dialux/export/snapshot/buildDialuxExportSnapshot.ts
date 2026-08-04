@@ -95,74 +95,64 @@ function evaluateRequirementStatus(passes: boolean, source: string | undefined):
     return passes ? 'pass' : 'fail';
 }
 
+/**
+ * `uniformityTarget`/`ugrLimit` en `null` significa que la actividad
+ * normativa seleccionada NO regula ese parámetro (ej. UGR en
+ * estacionamientos, Uo en baños — ver `normativaData.ts`) — en ese caso NO
+ * se agrega ninguna fila para esa métrica (nunca se compara contra un
+ * límite genérico inventado, y el PDF ni siquiera la menciona en vez de
+ * mostrarla como "conforme" sin haber evaluado nada real).
+ */
 function buildRequirementEvaluations(
     inputs: { illuminanceLux: number },
-    uniformityTarget: number,
-    ugrLimit: number,
+    uniformityTarget: number | null,
+    ugrLimit: number | null,
     result: LightingResult | null,
     source: string | undefined,
 ): RequirementEvaluation[] {
-    if (result === null) {
-        return [
-            {
-                metric: 'illuminance',
-                calculatedValue: null,
-                operator: '>=',
-                requiredValue: inputs.illuminanceLux,
-                unit: 'lx',
-                status: 'not-evaluated',
-                source,
-            },
-            {
-                metric: 'uniformity',
-                calculatedValue: null,
-                operator: '>=',
-                requiredValue: uniformityTarget,
-                unit: 'ratio',
-                status: 'not-evaluated',
-                source,
-            },
-            {
-                metric: 'ugr',
-                calculatedValue: null,
-                operator: '<=',
-                requiredValue: ugrLimit,
-                unit: 'UGR',
-                status: 'not-evaluated',
-                source,
-            },
-        ];
-    }
-
-    return [
+    const evaluations: RequirementEvaluation[] = [
         {
             metric: 'illuminance',
-            calculatedValue: result.avg_lux,
+            calculatedValue: result?.avg_lux ?? null,
             operator: '>=',
             requiredValue: inputs.illuminanceLux,
             unit: 'lx',
-            status: evaluateRequirementStatus(result.avg_lux >= inputs.illuminanceLux, source),
-            source,
-        },
-        {
-            metric: 'uniformity',
-            calculatedValue: result.uniformity,
-            operator: '>=',
-            requiredValue: uniformityTarget,
-            unit: 'ratio',
-            status: evaluateRequirementStatus(result.uniformity >= uniformityTarget, source),
-            source,
-        },
-        {
-            metric: 'ugr',
-            calculatedValue: result.ugr,
-            operator: '<=',
-            requiredValue: ugrLimit,
-            unit: 'UGR',
-            status: evaluateRequirementStatus(result.ugr <= ugrLimit, source),
+            status: result === null
+                ? 'not-evaluated'
+                : evaluateRequirementStatus(result.avg_lux >= inputs.illuminanceLux, source),
             source,
         },
     ];
+
+    if (uniformityTarget !== null) {
+        evaluations.push({
+            metric: 'uniformity',
+            calculatedValue: result?.uniformity ?? null,
+            operator: '>=',
+            requiredValue: uniformityTarget,
+            unit: 'ratio',
+            status: result === null
+                ? 'not-evaluated'
+                : evaluateRequirementStatus(result.uniformity >= uniformityTarget, source),
+            source,
+        });
+    }
+
+    if (ugrLimit !== null) {
+        evaluations.push({
+            metric: 'ugr',
+            calculatedValue: result?.ugr ?? null,
+            operator: '<=',
+            requiredValue: ugrLimit,
+            unit: 'UGR',
+            status: result === null
+                ? 'not-evaluated'
+                : evaluateRequirementStatus(result.ugr <= ugrLimit, source),
+            source,
+        });
+    }
+
+    return evaluations;
 }
 
 function buildAmbientMetrics(
@@ -179,8 +169,8 @@ function buildAmbientMetrics(
     calculationRun: CalculationRun | undefined,
 ): DialuxAmbientMetrics {
     const inputs = buildRoomLightingInputs(ambient.room, ambient.fixtures);
-    const uniformityTarget = ambient.room.uniformityTarget ?? 0.4;
-    const ugrLimit = ambient.room.ugrLimit ?? 22;
+    const uniformityTarget = ambient.room.uniformityTarget ?? null;
+    const ugrLimit = ambient.room.ugrLimit ?? null;
     const g2 =
         result && result.max_lux > 0 ? result.min_lux / result.max_lux : null;
     const requirementEvaluations = buildRequirementEvaluations(

@@ -190,7 +190,7 @@ describe('buildDialuxExportSnapshot — Fase 11 (resultados profesionales: proce
         const { provenance } = snapshot.ambients[0]!.metrics;
         expect(provenance.snapshotHash).toBe(run.snapshotHash);
         expect(provenance.engineVersion).toBe(run.engineVersion);
-        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: none · UGR: legacy');
+        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: none · UGR: guth-observers');
     });
 
     it('un ambiente sin luminarias trae SU warning (`object-without-luminaires`) y no el de otros ambientes', async () => {

@@ -1,4 +1,5 @@
 import {
+    AlertTriangle,
     BookOpen,
     Building2,
     Eye,
@@ -50,6 +51,7 @@ import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
 import {
     ConstruccionPanel,
     EditarPanel,
+    EmergenciaPanel,
     ExportacionPanel,
     HerramientasPanel,
     LuzPanel,
@@ -106,6 +108,7 @@ export const Toolbar: React.FC = () => {
     const editarRef = useRef<HTMLDivElement>(null);
     const normativaRef = useRef<HTMLDivElement>(null);
     const proyectoRef = useRef<HTMLDivElement>(null);
+    const emergenciaRef = useRef<HTMLDivElement>(null);
 
     const refs = useMemo(
         () =>
@@ -120,6 +123,7 @@ export const Toolbar: React.FC = () => {
                 editar: editarRef,
                 normativa: normativaRef,
                 proyecto: proyectoRef,
+                emergencia: emergenciaRef,
             }) as const,
         [],
     );
@@ -279,6 +283,14 @@ export const Toolbar: React.FC = () => {
                 label: 'Norm.',
                 hasActive: false,
                 accentColor: 'text-emerald-400',
+            },
+            {
+                id: 'emergencia' as PanelId,
+                ref: refs.emergencia,
+                icon: <AlertTriangle size={15} />,
+                label: 'Emerg.',
+                hasActive: ['evacuation-route', 'antipanic-area'].includes(store.ui.activeTool),
+                accentColor: 'text-amber-400',
             },
             {
                 id: 'construccion' as PanelId,
@@ -617,6 +629,18 @@ export const Toolbar: React.FC = () => {
                             store.applyDefaultNormativeStandardToRooms();
                         }}
                     />
+                </FloatingPanelPortal>
+            )}
+
+            {openPanel === 'emergencia' && (
+                <FloatingPanelPortal
+                    title="Alumbrado de emergencia"
+                    icon={<AlertTriangle size={12} />}
+                    anchorRef={refs.emergencia}
+                    onClose={closePanel}
+                    width="md"
+                >
+                    <EmergenciaPanel />
                 </FloatingPanelPortal>
             )}
 
