@@ -34,6 +34,7 @@ class CostoProject extends Model
         'plantilla_firma',
         'is_demo',
         'demo_expires_at',
+        'formula_polinomica',
     ];
 
     protected function casts(): array
@@ -44,6 +45,7 @@ class CostoProject extends Model
             'fecha_fin' => 'date',
             'is_demo' => 'boolean',
             'demo_expires_at' => 'datetime',
+            'formula_polinomica' => 'array',
         ];
     }
 

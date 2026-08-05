@@ -23,14 +23,10 @@ function normalizedPartida(value: string): string {
 
 function filterRowsBySpecialties(rows: DelphinRow[], selectedIds: string[]): DelphinRow[] {
     if (!selectedIds || selectedIds.length === 0) return rows;
-
     const parentIds = new Set(selectedIds.map(id => parseInt(id, 10)));
-
     if (parentIds.size === 0) return rows;
-
     const rowById = new Map(rows.map(r => [r.id, r]));
     const result: DelphinRow[] = [];
-
     rows.forEach(row => {
         if (row.nivel === 1 && parentIds.has(row.id)) {
             result.push(row);
@@ -115,7 +111,6 @@ async function buildHeader(
 
     const logoIzq = proyecto?.plantilla_logo_izq_url || proyecto?.plantilla_logo_izq;
     const logoDer = proyecto?.plantilla_logo_der_url || proyecto?.plantilla_logo_der;
-
     const modular = proyecto?.codigos_modulares || '-';
     const codigoLocal = proyecto?.codigo_local || '-';
     const cui = proyecto?.codigo_cui || '-';
@@ -139,7 +134,6 @@ async function buildHeader(
     }
 
     const f1 = filaActual;
-
     // ── Logo izquierdo ──
     if (totalColumnas >= 2) {
         ws.mergeCells(f1, 1, f1 + 3, 2);
@@ -186,8 +180,8 @@ async function buildHeader(
         };
     }
 
-    // ── Agregar logo izquierdo ──
-    console.log('🖼️ logoIzq recibido:', logoIzq);
+    // ── Agregar logo izquierdo ──//
+
     if (logoIzq && typeof logoIzq === 'string' && logoIzq.trim() !== '') {
         try {
             // Si es base64 (empieza con "data:image")
@@ -203,11 +197,10 @@ async function buildHeader(
                 console.log('✅ Logo izq agregado desde base64');
             } else {
                 // Es URL, hacer fetch
-                console.log('🖼️ Logo izq es URL, haciendo fetch...');
+                
                 const url = logoIzq.startsWith('http') ? logoIzq : `/storage/${logoIzq.replace(/^\//, '')}`;
-                console.log('🖼️ URL fetch:', url);
                 const response = await fetch(url);
-                console.log('🖼️ Respuesta:', response.status, response.ok);
+               
                 if (response.ok) {
                     const blob = await response.blob();
                     const base64 = await blobToBase64(blob);
@@ -231,7 +224,7 @@ async function buildHeader(
     }
 
     // ── Agregar logo derecho ──
-    console.log('🖼️ logoDer recibido:', logoDer);
+   
     if (logoDer && typeof logoDer === 'string' && logoDer.trim() !== '') {
         try {
             if (logoDer.startsWith('data:image')) {
@@ -243,13 +236,12 @@ async function buildHeader(
                     br: { col: totalColumnas - 0.15, row: f1 - 1 + 3.85 } as any,
                     editAs: 'oneCell',
                 } as any);
-                console.log('✅ Logo der agregado desde base64');
+               
             } else {
-                console.log('🖼️ Logo der es URL, haciendo fetch...');
+                
                 const url = logoDer.startsWith('http') ? logoDer : `/storage/${logoDer.replace(/^\//, '')}`;
-                console.log('🖼️ URL fetch:', url);
                 const response = await fetch(url);
-                console.log('🖼️ Respuesta:', response.status, response.ok);
+                
                 if (response.ok) {
                     const blob = await response.blob();
                     const base64 = await blobToBase64(blob);
@@ -406,7 +398,6 @@ async function buildPresupuestoSheet(
         ws.getCell(filaActual, 5).value = isLeaf ? row.metrado : null;
         ws.getCell(filaActual, 6).value = isLeaf ? row.precio_unitario : null;
         ws.getCell(filaActual, 7).value = total;
-
         let bg = C.leafBg, fg = C.leafFg, bold = false;
         if (nivel === 1) { bg = C.titulo0Bg; fg = C.titulo0Fg; bold = true; }
         else if (nivel === 2) { bg = C.titulo1Bg; fg = C.titulo1Fg; bold = true; }
@@ -556,7 +547,6 @@ async function buildCronogramaSheet(
             indent: Math.max(0, nivel - 1),
         };
 
-
         ws.getRow(filaActual).height = 18;
 
         if (isLeaf) altIdx++;
@@ -566,8 +556,7 @@ async function buildCronogramaSheet(
 
     for (let i = 1; i <= totalColumnas; i++) {
         const column = ws.getColumn(i);
-        // ExcelJS no soporta autoFit directamente en la versión de tipos usada.
-        // Se mantiene un ancho mínimo y máximo para evitar columnas demasiado estrechas o anchas.
+    
         if (typeof column.width !== 'number' || column.width < 10) {
             column.width = 10;
         }
@@ -587,8 +576,6 @@ async function buildFormulaPolinomicaSheet(
     workbook: ExcelJS.Workbook
 ) {
     const totalColumnas = 5;
-
-
     ws.getColumn(1).width = 6;
     ws.getColumn(2).width = 55;
     ws.getColumn(3).width = 16;
@@ -634,7 +621,6 @@ async function buildFormulaPolinomicaSheet(
 
     // ── FILAS DE DATOS ────────────────────────────────────────────────────
     const monomios: any[] = formulaData?.monomios ?? [];
-
     if (monomios.length === 0) {
         ws.mergeCells(filaActual, 1, filaActual, totalColumnas);
         const cell = ws.getCell(filaActual, 1);
@@ -714,9 +700,7 @@ async function buildFormulaPolinomicaSheet(
     ws.getRow(filaActual).height = 22;
 
     // ── ANCHOS ADAPTATIVOS ────────────────────────────────────────────────
-
     ws.getColumn(2).width = Math.min(80, Math.max(50, maxDescLen * 0.9));
-
     ws.getColumn(1).width = 6;
     ws.getColumn(3).width = 14;
     ws.getColumn(4).width = 16;
@@ -859,7 +843,6 @@ async function buildAcusSheet(
     }
 }
 
-
 export async function exportDelphinExcel(
     content: DelphinExportContent,
     rows: DelphinRow[],
@@ -876,7 +859,6 @@ export async function exportDelphinExcel(
     const wb = new ExcelJS.Workbook();
     wb.creator = 'PCL Costos';
     wb.created = new Date();
-
     if (content === 'budget_only' || content === 'budget_gantt') {
         const ws = wb.addWorksheet('Presupuesto General');
         await buildPresupuestoSheet(ws, filteredRows, proyecto, projectName, wb);
@@ -934,7 +916,6 @@ export async function exportInsumosConsolidadosExcel(
     wb.created = new Date();
 
     const ws = wb.addWorksheet('Insumos Consolidados'.slice(0, 31));
-
     const totalColumnas = 7;
     // anchos provisionales — se recalculan abajo con datos reales
     ws.getColumn(1).width = 12;
@@ -1050,7 +1031,6 @@ export async function exportInsumosConsolidadosExcel(
         });
         ws.getRow(filaActual).height = 18;
         filaActual += 2;
-
         granTotal += subtotal;
     }
 
@@ -1097,7 +1077,6 @@ export async function exportInsumosConsolidadosExcel(
     ws.getColumn(5).width = Math.min(18, Math.max(10, colMaxLen[4] + 3));
     ws.getColumn(6).width = Math.min(24, Math.max(14, colMaxLen[5] + 3));
     ws.getColumn(7).width = Math.min(10, Math.max(7, colMaxLen[6] + 3));
-
     ws.views = [{}];
 
     // ── Guardar (AL FINAL, después de ajustar anchos) ───────────────────────

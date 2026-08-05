@@ -271,6 +271,7 @@ interface Props {
     acuRows: ACURowSummary[];
     diccionario: DicEntry[];
     projectName: string;
+    projectId?: number;
     resumenPresupuesto?: ResumenPresupuesto;
     onBack: () => void;
     onExportFormula?: (formulaData: any) => void;
@@ -278,7 +279,7 @@ interface Props {
 }
 
 export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionario, projectName,
-    resumenPresupuesto, onBack, onExportFormula, onMonomiosChange }: Props) {
+    resumenPresupuesto, onBack, onExportFormula, onMonomiosChange,  projectId }: Props) {
 
     // Subtree en pre-order
     const subtree = useMemo(() => subtreePreorder(rows, parentId), [rows, parentId]);
@@ -441,7 +442,6 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
             }
         }
 
-       
         onExportFormula?.(data.monomios);
     }, [getFormulaData, onExportFormula, builderMonomios]);
 
@@ -496,7 +496,6 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
     }, [subtree, expandedIds, parentIdSet, rowById]);
 
     // ── Totales y coeficientes ────────────────────────────────────────────────
-    // Total presupuesto del padre seleccionado (base para coeficiente de incidencia)
     const budgetTotal = Number(parentRow?.parcial ?? 0);
     const parentMap = matrix.get(parentId) ?? new Map<string, number>();
 
@@ -860,10 +859,9 @@ export function FormulaPolinomicaSplitView({ parentId, rows, acuRows, diccionari
                         budgetTotal={budgetTotal}
                         codeToDesc={codeToDesc}
                         sortedCodes={sortedCodes}
+                        projectId={projectId} 
                         onMonomiosChange={(monomios) => {
                            
-
-                            // ✅ Forzar actualización con setTimeout
                             setTimeout(() => {
                                 setBuilderMonomios(monomios);
                             }, 0);

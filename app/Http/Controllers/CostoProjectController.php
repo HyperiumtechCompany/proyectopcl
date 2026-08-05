@@ -237,6 +237,7 @@ class CostoProjectController extends Controller
                 'portada_logo_center_url' => $costoProject->portada_logo_center ? asset('storage/'.$costoProject->portada_logo_center) : null,
                 'plantilla_firma_url' => $costoProject->plantilla_firma ? asset('storage/'.$costoProject->plantilla_firma) : null,
                 'modules' => $costoProject->enabledModules->pluck('module_type')->toArray(),
+                'formula_polinomica' => $costoProject->formula_polinomica, 
                 'created_at' => $costoProject->created_at->format('d/m/Y'),
             ],
         ]);
@@ -312,6 +313,7 @@ class CostoProjectController extends Controller
             'plantilla_logo_der' => 'nullable|image|max:2048',
             'portada_logo_center' => 'nullable|image|max:2048',
             'plantilla_firma' => 'nullable|image|max:2048',
+            'formula_polinomica' => 'nullable|array',
         ]);
 
         try {
@@ -331,6 +333,7 @@ class CostoProjectController extends Controller
                 'provincia_id' => $validated['provincia_id'] ?? null,
                 'distrito_id' => $validated['distrito_id'] ?? null,
                 'centro_poblado' => $validated['centro_poblado'] ?? null,
+                'formula_polinomica' => $request->input('formula_polinomica'), 
             ]);
 
             if ($request->hasFile('plantilla_logo_izq')) {

@@ -40,10 +40,8 @@ class DelphinController extends Controller
             ->toArray();
 
         $tasks = $this->fetchTasks($presupuestoId);
-
         $projectParams = $this->dbService->getProjectParams($costoProject->database_name);
         $resumenPresupuesto = $this->resumenPresupuesto($presupuestoId, $projectParams);
-
         $projectData = [
             // El id del proyecto es indispensable para el fetch de ACUs del export
             // (`/costos/{id}/presupuesto/acus/export-data`) — sin él la hoja "ACUs"
@@ -206,25 +204,26 @@ class DelphinController extends Controller
         return (int) $id;
     }
 
-    private function fetchTasks(int $presupuestoId): array
-    {
-        $records = DB::connection('costos_tenant')
-            ->table('cronograma_general as cg')
-            ->leftJoin('presupuesto_general as pg', function ($join) use ($presupuestoId) {
-                $join->on('cg.partida', '=', 'pg.partida')
-                    ->where('pg.presupuesto_id', '=', $presupuestoId);
-            })
-            ->where('cg.presupuesto_id', $presupuestoId)
-            ->orderBy('cg.item_order')
-            ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'))
-            ->get();
+private function fetchTasks(int $presupuestoId): array
+{
+    $records = DB::connection('costos_tenant')
+        ->table('cronograma_general as cg')
+        ->leftJoin('presupuesto_general as pg', function ($join) use ($presupuestoId) {
+            $join->on('cg.partida', '=', 'pg.partida')
+                ->where('pg.presupuesto_id', '=', $presupuestoId);
+        })
+        ->where('cg.presupuesto_id', $presupuestoId)
+        ->orderBy('cg.item_order')
+        ->select('cg.*', DB::raw('COALESCE(pg.parcial, 0) as presupuesto'))
+        ->get()
+        ->unique('id')
+        ->values();
 
-        // Map partida → id so we can derive parent_id from dotted notation
-        // when the DB rows have parent_id = null (e.g. data imported externally).
-        $partidaToId = $records->pluck('id', 'partida')->all();
-
-        return $records->map(fn ($row) => $this->rowToV2($row, $partidaToId))->all();
-    }
+    // Map partida → id so we can derive parent_id from dotted notation
+    // when the DB rows have parent_id = null (e.g. data imported externally).
+    $partidaToId = $records->pluck('id', 'partida')->all();
+    return $records->map(fn ($row) => $this->rowToV2($row, $partidaToId))->all();
+}
 
     /**
      * Convert a raw DB row to the V2 task shape.
