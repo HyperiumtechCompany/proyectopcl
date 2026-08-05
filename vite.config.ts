@@ -49,6 +49,18 @@ export default defineConfig({
                 {
                     src: 'node_modules/@mlightcad/cad-simple-viewer/dist/*.js',
                     dest: '../../public/cad-workers'
+                },
+                {
+                    // Fase 19 ("BIM/IFC"): `web-ifc` (WASM) resuelve su binario en
+                    // runtime vía `fetch`, no vía el bundler — sin copiar este
+                    // archivo a un path público servible, `IfcAPI.Init()` falla
+                    // en producción con un 404 silencioso (mismo problema ya
+                    // resuelto para los workers de @mlightcad arriba). `rename`
+                    // aplana la ruta (sin esto, vite-plugin-static-copy conserva
+                    // `node_modules/web-ifc/...` cuando `src` no es un glob).
+                    src: 'node_modules/web-ifc/web-ifc.wasm',
+                    dest: '../../public/wasm',
+                    rename: { stripBase: true }
                 }
             ]
         }),

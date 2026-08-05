@@ -45,7 +45,7 @@ export const RoomProps: React.FC<{
     const area = calculatePolygonArea(calculationRoom.vertices);
     const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
     const generatedOutletsCount = (scene?.electricalDevices ?? []).filter(
-        (device) => device.generatedBy === 'outlet-rule' && device.roomId === room.id,
+        (device) => device.generatedBy === 'outlet-rule' && device.roomId === calculationRoom.id,
     ).length;
     const fixturesInRoom = selectedAmbient
         ? selectedAmbient.fixtures

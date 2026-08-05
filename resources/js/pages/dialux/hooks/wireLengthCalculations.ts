@@ -1,5 +1,6 @@
 import { circuitCurrent } from '../electrical/engine/formulas';
 import { deriveSceneAmbientSpaces, findAmbientSpaceContainingPoint, pointInPolygon } from './ambientSpaces';
+import { calculatePolygonArea, calculatePolygonPerimeter } from './lightingCalculations';
 import { CONDUCTOR_SECTION_OPTIONS, DEFAULT_OUTLET_POWER_W, isOutletDeviceType } from './types';
 import type {
     Conductor,
@@ -383,6 +384,8 @@ export interface PanelCircuitSummary {
     lengthM: number;
     /** true si `lengthM` viene de la "Longitud del tablero" declarada del hijo, no del trazo del plano. */
     lengthOverridden: boolean;
+    lightingOutletCount: number;
+    outletOutletCount: number;
     installedPowerW: number;
     lightingPowerW: number;
     outletPowerW: number;
@@ -891,6 +894,8 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 verticalLengthM,
                 lengthM,
                 lengthOverridden,
+                lightingOutletCount: reachedFixtures.size,
+                outletOutletCount: reachedOutlets.size,
                 installedPowerW: totalInstalledPowerW,
                 lightingPowerW,
                 outletPowerW,
@@ -1133,4 +1138,46 @@ export function resolveTreeConformingSections(
         conductorId,
         sectionMm2,
     }));
+}
+
+export interface RoomOutletValidation {
+    roomId: string;
+    roomName: string;
+    area: number;
+    perimeter: number;
+    outletUse: 'aula' | 'comedor' | 'exterior' | 'none';
+    requiredOutlets: number;
+    installedOutlets: number;
+}
+
+export function validateSceneOutlets(scene: Scene): RoomOutletValidation[] {
+    const derivedAmbients = deriveSceneAmbientSpaces(scene);
+    
+    return derivedAmbients.map(ambient => {
+        const outletUse = ambient.room.outletUse ?? 'none';
+        
+        // El calculationRoom es el propio ambient.room
+        const calculationRoom = ambient.room;
+        const area = calculatePolygonArea(calculationRoom.vertices);
+        const perimeter = calculatePolygonPerimeter(calculationRoom.vertices);
+        
+        let requiredOutlets = 0;
+        if (outletUse === 'aula') requiredOutlets = Math.ceil(area / 10);
+        else if (outletUse === 'comedor') requiredOutlets = Math.ceil(area / 15);
+        else if (outletUse === 'exterior') requiredOutlets = Math.ceil(perimeter / 9);
+        
+        const installedOutlets = (scene.electricalDevices ?? []).filter(
+            device => device.type.startsWith('outlet_') && device.roomId === ambient.room.id
+        ).length;
+        
+        return {
+            roomId: ambient.room.id,
+            roomName: ambient.name,
+            area,
+            perimeter,
+            outletUse,
+            requiredOutlets,
+            installedOutlets,
+        };
+    }).filter(v => v.outletUse !== 'none');
 }

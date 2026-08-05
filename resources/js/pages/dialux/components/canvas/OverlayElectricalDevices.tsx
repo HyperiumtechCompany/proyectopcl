@@ -323,8 +323,8 @@ export const OverlayElectricalDevices = memo(function OverlayElectricalDevices({
                 const origin = { x: dev.x, y: dev.y };
 
                 // Convert physical metres → screen pixels (same as luminaires).
-                const hw = Math.max(MIN_PX, screenDistance(phys.hw, 0, origin));
-                const hh = Math.max(MIN_PX * (phys.hh / phys.hw), screenDistance(0, phys.hh, origin));
+                const hw = screenDistance(phys.hw, 0, origin);
+                const hh = screenDistance(0, phys.hh, origin);
 
                 // Palette per device type
                 const colorMap: Record<string, string> = {

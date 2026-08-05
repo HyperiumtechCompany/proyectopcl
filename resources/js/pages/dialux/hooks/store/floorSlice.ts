@@ -20,7 +20,7 @@ export interface FloorSlice {
      */
     duplicateFloor: (sourceSceneId: string, newFloorIndex: number, newName: string) => string;
     /** Actualiza propiedades del piso (name, floorHeight, etc.) */
-    updateFloor: (sceneId: string, patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex'>>) => void;
+    updateFloor: (sceneId: string, patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex' | 'ifcGlobalId'>>) => void;
     /**
      * Recalcula `floorElevation` de todos los pisos basándose en su
      * `floorIndex` y `floorHeight`. Llamar tras cualquier reordenamiento.

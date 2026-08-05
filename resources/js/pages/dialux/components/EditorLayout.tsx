@@ -20,7 +20,7 @@ import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
 import type { Conductor } from '@/pages/dialux/hooks/types';
 import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
-import { calculatePanelCircuitSummaries, calculateRoomWireSummary, resolveTreeConformingSections } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { calculatePanelCircuitSummaries, calculateRoomWireSummary, resolveTreeConformingSections, validateSceneOutlets } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
 import { CtPanelOutputsDialog } from './CtPanelOutputsDialog';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
@@ -120,7 +120,11 @@ export const EditorLayout = memo(function EditorLayout() {
     const [panelCircuitSummaries, setPanelCircuitSummaries] = useState<
         ReturnType<typeof calculatePanelCircuitSummaries>
     >([]);
+    const [outletValidations, setOutletValidations] = useState<
+        ReturnType<typeof validateSceneOutlets>
+    >([]);
     const [isCtCalculating, setIsCtCalculating] = useState(false);
+
     useEffect(() => {
         if (!showWireCalc) {
             setIsCtCalculating(false);
@@ -131,7 +135,9 @@ export const EditorLayout = memo(function EditorLayout() {
         let sceneIndex = 0;
         const scenes = project?.scenes ?? [];
         const calculated: ReturnType<typeof calculatePanelCircuitSummaries> = [];
+        const validations: ReturnType<typeof validateSceneOutlets> = [];
         setPanelCircuitSummaries([]);
+        setOutletValidations([]);
         setIsCtCalculating(true);
 
         const calculateNextScene = () => {
@@ -140,16 +146,19 @@ export const EditorLayout = memo(function EditorLayout() {
             if (!scene) {
                 calculated.sort((a, b) => a.levelIndex - b.levelIndex);
                 setPanelCircuitSummaries(calculated);
+                setOutletValidations(validations);
                 setIsCtCalculating(false);
                 return;
             }
 
             calculated.push(...calculatePanelCircuitSummaries(scene));
+            validations.push(...validateSceneOutlets(scene));
             sceneIndex += 1;
             window.requestAnimationFrame(calculateNextScene);
         };
 
         const initialFrame = window.requestAnimationFrame(calculateNextScene);
+
         return () => {
             cancelled = true;
             window.cancelAnimationFrame(initialFrame);
@@ -695,7 +704,7 @@ export const EditorLayout = memo(function EditorLayout() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[#0d0f14] text-gray-200 select-none">
-            <header id="dialux-header" className="flex h-11 shrink-0 items-center gap-3 border-b border-gray-800/60 bg-[#161820] px-4">
+            <header id="dialux-header" className="flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-800/60 bg-[#161820] px-2 sm:gap-3 sm:px-4">
                 <Link
                     id="dialux-btn-back-to-list"
                     href="/dialux"
@@ -706,14 +715,14 @@ export const EditorLayout = memo(function EditorLayout() {
                     Proyectos
                 </Link>
 
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
                     <Lightbulb size={16} className="text-amber-400" />
                     <span className="bg-gradient-to-r from-amber-400 to-cyan-400 bg-clip-text text-sm font-bold tracking-wide text-transparent">
                         DIAlux Web
                     </span>
                 </div>
 
-                <span className="max-w-40 truncate text-xs text-gray-500">
+                <span className="hidden max-w-28 truncate text-xs text-gray-500 md:block">
                     {projectName}
                 </span>
 
@@ -950,7 +959,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     </div>
                 )}
 
-                <div className="flex items-center gap-1">
+                <div className="hidden items-center gap-1 sm:flex">
                     <button
                         onClick={() => undo()}
                         disabled={!historyCanUndo}
@@ -997,16 +1006,17 @@ export const EditorLayout = memo(function EditorLayout() {
                     </button>
                 )}
 
-                <WasmBadge ready={engine.ready} label="Motor JS" />
+                <span className="hidden lg:block"><WasmBadge ready={engine.ready} label="Motor JS" /></span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
                     <button
                         id="dialux-btn-calcular"
                         onClick={runCalc}
                         disabled={!engine.ready || isCalculating || !hasRooms}
-                        className="flex items-center gap-1.5 rounded bg-gradient-to-r from-green-700/80 to-emerald-700/80 px-3 py-1.5 text-xs text-green-200 shadow-sm transition-all hover:from-green-600/80 hover:to-emerald-600/80 disabled:cursor-not-allowed disabled:opacity-40">
+                        className="flex items-center gap-1.5 rounded bg-gradient-to-r from-green-700/80 to-emerald-700/80 px-2 py-1.5 text-xs text-green-200 shadow-sm transition-all hover:from-green-600/80 hover:to-emerald-600/80 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
+                        title={isCalculating ? 'Calculando...' : 'Calcular iluminación'}>
                         <Calculator size={13} />
-                        {isCalculating ? 'Calculando...' : 'Calcular'}
+                        <span className="hidden sm:inline">{isCalculating ? 'Calculando...' : 'Calcular'}</span>
                     </button>
 
                     {isCalculating && (
@@ -1025,7 +1035,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         <span
                             id="dialux-badge-resultados-desactualizados"
                             title="El proyecto cambió desde el último cálculo — vuelve a calcular para ver resultados al día."
-                            className="flex items-center gap-1 rounded bg-amber-900/40 px-2 py-1 text-[11px] text-amber-300"
+                            className="hidden items-center gap-1 rounded bg-amber-900/40 px-2 py-1 text-[11px] text-amber-300 sm:flex"
                         >
                             Resultados desactualizados
                         </span>
@@ -1035,11 +1045,11 @@ export const EditorLayout = memo(function EditorLayout() {
                         id="dialux-btn-calculo-ct"
                         onClick={() => setShowWireCalc(true)}
                         disabled={!activeScene}
-                        className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
                         title={selectedRoom ? `Cálculo CT — ${selectedRoom.name}` : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'}
                     >
                         <Calculator size={13} />
-                        Cálculo CT
+                        <span className="hidden sm:inline">Cálculo CT</span>
                     </button>
 
                     <div className="relative">
@@ -1047,14 +1057,14 @@ export const EditorLayout = memo(function EditorLayout() {
                             id="dialux-btn-export"
                             onClick={() => setShowExportMenu((prev) => !prev)}
                             disabled={!project}
-                            className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-3 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
                             title="Exportar proyecto">
                             <Download size={13} />
-
-                            {isExporting
-                                ? exportStep || "Exportando PDF..."
-                                : "Exportar"}
-
+                            <span className="hidden sm:inline">
+                                {isExporting
+                                    ? exportStep || "Exportando PDF..."
+                                    : "Exportar"}
+                            </span>
                             <ChevronDown size={13} />
                         </button>
 
@@ -1159,6 +1169,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     open={showWireCalc}
                     onOpenChange={setShowWireCalc}
                     circuits={panelCircuitSummaries}
+                    outletValidations={outletValidations}
                     loading={isCtCalculating}
                     onUpdateCircuit={updateCtCircuit}
                     onFixSection={updateCtSection}

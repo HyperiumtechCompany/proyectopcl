@@ -107,6 +107,32 @@ ventana en el muro de OTRO recinto de la misma escena".
   avg/min/max por ambiente, disclaimer de ERC siempre visible. Registrado
   en `Toolbar.tsx`/`PanelId` (botón "Sol", ícono `Sun`).
 
+## Bug real encontrado en verificación manual del usuario (post-entrega)
+
+El usuario abrió el panel en el editor real (proyecto "Vinchos") y confirmó
+que la UI renderiza correctamente, pero **el botón "Calcular Daylight
+Factor" no mostraba ningún resultado** — el panel era visible pero
+inutilizable. Causa raíz: `LuzNaturalPanel.tsx` filtraba
+`scene.rooms` por `room.roomType === 'ambient'`, copiando sin verificar la
+convención usada en los fixtures de test de `daylightFactorEngine.test.ts`.
+Verificado contra datos reales (`php artisan tinker` sobre el proyecto
+"Vinchos"): los recintos físicos reales usan `roomType: 'room'` (o el campo
+vacío) — `'ambient'`/`'corridor'` son subdivisiones normativas DERIVADAS
+del mismo recinto (`ambientSpaces.ts`), nunca entidades separadas en
+`scene.rooms`. El filtro original excluía TODOS los recintos reales de
+CUALQUIER proyecto — el panel nunca podía mostrar nada.
+
+Corregido replicando exactamente el criterio ya usado en
+`RoomProps.tsx:42` (`isRecinto = !room.roomType || room.roomType === 'room'`)
+— el mismo tipo de recinto donde ya se asignan reflectancias (Fase 16).
+Este bug NO fue detectado por la suite de tests porque el filtrado por
+`roomType` vive en el componente de UI (`LuzNaturalPanel.tsx`), una capa sin
+tests en este proyecto (consistente con la convención existente de probar
+solo lógica de dominio, no componentes React) — el motor
+`daylightFactorEngine.ts` en sí siempre estuvo correcto y probado. Lección:
+verificar convenciones de datos reales (`php artisan tinker`) en vez de
+asumir que un valor usado en un fixture de test es el que usa la UI real.
+
 ## Verificación
 
 - **Test dorado de auto-consistencia** (`skyReferenceIlluminance.test.ts`):
@@ -126,12 +152,13 @@ ventana en el muro de OTRO recinto de la misma escena".
   fase (confirmado filtrando la salida).
 - `npm run build`: OK.
 - `fileSizeBudget.test.ts`: sin nuevas violaciones.
-- **No verificado en navegador** (UI): el panel "Luz natural" y el selector
-  de vidrio no se probaron manualmente contra el editor corriendo — la
-  lógica de cálculo está exhaustivamente probada (incluido el test dorado
-  analítico), pero el flujo visual completo (dibujar ventana → asignar
-  vidrio → asignar material al recinto → calcular → leer resultado) queda
-  pendiente de una pasada manual.
+- **Verificado en navegador por el usuario** contra el editor real
+  (proyecto "Vinchos") — confirmó que el panel renderiza correctamente
+  (título, descripción, botón, disclaimer de ERC), y detectó el bug de
+  `roomType` de arriba, ya corregido y reverificado (`vitest`/`tsc` limpios
+  tras el fix). Pendiente: una segunda pasada del usuario confirmando que
+  el flujo completo (asignar vidrio + material → calcular → ver resultado)
+  ya funciona con el filtro corregido.
 
 ## Pendientes (fuera de alcance, documentado explícitamente)
 

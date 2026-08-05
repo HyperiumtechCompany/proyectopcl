@@ -111,11 +111,11 @@ import {
     rescaleDxfExtents,
     rescaleSceneEntities,
 } from './storeHelpers';
-import { createFloorSlice } from './store/floorSlice';
-import { createScaleDxfSlice } from './store/scaleDxfSlice';
-import { createProjectSlice } from './store/projectSlice';
-import { createSceneObjectsSlice } from './store/sceneObjectsSlice';
-import { createUiSlice } from './store/uiSlice';
+import { createFloorSlice, type FloorSlice } from './store/floorSlice';
+import { createScaleDxfSlice, type ScaleDxfSlice } from './store/scaleDxfSlice';
+import { createProjectSlice, type ProjectSlice } from './store/projectSlice';
+import { createSceneObjectsSlice, type SceneObjectsSlice } from './store/sceneObjectsSlice';
+import { createUiSlice, type UiSlice } from './store/uiSlice';
 import { createDeletionSlice, type DeletionSlice } from './store/deletionSlice';
 import {
     createHistorySlice,
@@ -188,7 +188,7 @@ interface UIState {
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 
-export interface EditorState extends DeletionSlice, HistorySlice {
+export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSlice, FloorSlice, ScaleDxfSlice, ProjectSlice, UiSlice {
     project: Project | null;
     activeSceneId: string | null;
     isCalculating: boolean;
@@ -378,7 +378,7 @@ export interface EditorState extends DeletionSlice, HistorySlice {
     /** Actualiza propiedades del piso (name, floorHeight, etc.) */
     updateFloor: (
         sceneId: string,
-        patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex'>>,
+        patch: Partial<Pick<Scene, 'name' | 'floorHeight' | 'floorIndex' | 'ifcGlobalId'>>,
     ) => void;
     /**
      * Recalcula `floorElevation` de todos los pisos basándose en su

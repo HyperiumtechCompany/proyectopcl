@@ -27,6 +27,7 @@ import {
     Tag,
     ToggleLeft,
     Trash2,
+    Loader2,
     Triangle,
     Type,
     Umbrella,
@@ -85,6 +86,9 @@ export const ExportacionPanel: React.FC<{
     scaleConfirmed: boolean;
     onNewDoc: () => void;
     onImportClick: () => void;
+    onImportIfcClick: () => void;
+    isIfcParsing: boolean;
+    ifcImportError: string | null;
     onApplyScale: (cfg: ScaleConfig) => Promise<void>;
     onCalibrate: () => void;
     onResetCalibration: () => void;
@@ -98,6 +102,9 @@ export const ExportacionPanel: React.FC<{
     scaleConfirmed,
     onNewDoc,
     onImportClick,
+    onImportIfcClick,
+    isIfcParsing,
+    ifcImportError,
     onApplyScale,
     onCalibrate,
     onResetCalibration,
@@ -132,6 +139,16 @@ export const ExportacionPanel: React.FC<{
                 <Upload size={13} />
                 <span className="text-[11px]">Importar DXF / DWG</span>
             </Button>
+            <Button
+                variant="outline"
+                className="w-full justify-start gap-2 border-cyan-800/40 bg-cyan-950/20 text-cyan-200 hover:bg-cyan-900/40"
+                onClick={onImportIfcClick}
+                disabled={isIfcParsing}
+            >
+                {isIfcParsing ? <Loader2 size={13} className="animate-spin" /> : <Building2 size={13} />}
+                <span className="text-[11px]">{isIfcParsing ? 'Leyendo IFC...' : 'Importar IFC'}</span>
+            </Button>
+            {ifcImportError && <p className="mt-1.5 text-[9.5px] text-red-400">{ifcImportError}</p>}
         </PanelCard>
 
         <PanelCard title="Escala y calibración">

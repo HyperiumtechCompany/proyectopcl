@@ -196,7 +196,7 @@ export interface StairConfig {
      * ElevaciÃƒÂ³n de arranque en metros (default 0).
      * ÃƒÅ¡salo cuando esta escalera es la segunda mitad de una escalera en U:
      * la Escalera 2 debe arrancar desde la altura del descanso
-     * (ej. 1.75 m si la Escalera 1 tiene 10 escalones Ãƒâ€” 0.175 m).
+     * (ej. 1.75 m si la Escalera 1 tiene 10 escalones Ã— 0.175 m).
      */
     startElevation?: number;
     /**
@@ -219,6 +219,14 @@ export interface Room {
     id: string;
     name: string;
     /**
+     * `GlobalId` STEP del `IfcSpace` de origen (Fase 19: "BIM/IFC" — importar
+     * y mapear estructura espacial). `undefined` para todo recinto creado a
+     * mano en el editor o importado antes de esta fase — nunca se fabrica un
+     * valor. Permite, en un ciclo posterior, reconciliar qué `Room` de este
+     * editor corresponde a cuál `IfcSpace` del archivo original al reimportar.
+     */
+    ifcGlobalId?: string;
+    /**
      * Categoría del espacio:
      *   'room'             → Recinto (envolvente exterior del edificio, sin iluminación propia)
      *   'ambient'          → Ambiente interior (espacio habitable con iluminación/normativa)
@@ -235,7 +243,7 @@ export interface Room {
      *                        0.5 lx — RNE A.130 no define esta categoría).
      */
     roomType?: 'room' | 'ambient' | 'corridor' | 'stair' | 'evacuation-route' | 'antipanic-area';
-    /** PolÃƒÂ­gono arbitrario en metros en el plano XY de la escena */
+    /** Polígono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
     height: number; // metros
     color: string;
@@ -255,7 +263,7 @@ export interface Room {
     norma?: number; // Nivel de lux requerido (EN 12464-1)
     fixtureFlux?: number; // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
     /** Regla usada para calcular automáticamente los tomacorrientes. */
-    outletUse?: 'aula' | 'comedor' | 'exterior';
+    outletUse?: 'aula' | 'comedor' | 'exterior' | 'none';
     /** Variante/altura aplicada a los tomacorrientes autogenerados. */
     outletDeviceType?: ElectricalDeviceType;
     /** Distancia en metros desde el primer vértice para iniciar la distribución. */
@@ -999,6 +1007,8 @@ export interface LightingScenePreset {
 export interface Scene {
     id: string;
     name: string;
+    /** `GlobalId` STEP del `IfcBuildingStorey` de origen (Fase 19: "BIM/IFC") — mismo criterio que `Room.ifcGlobalId`, nunca fabricado. */
+    ifcGlobalId?: string;
     /**
      * ÃƒÂndice del piso: 0 = planta baja, 1 = piso 1, -1 = sÃƒÂ³tano 1, etc.
      * Determina el orden vertical y el cÃƒÂ¡lculo de elevaciÃƒÂ³n.

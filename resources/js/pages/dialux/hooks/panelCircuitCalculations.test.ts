@@ -35,8 +35,8 @@ describe('calculatePanelCircuitSummaries', () => {
         const nodes = ['td', ...fixtures.map((item) => item.id)];
         const conductors = nodes.slice(0, -1).map((node, index) => conductor(`wire-${index}`, node, nodes[index + 1], index + 1));
         const rooms = [
-            { id: 'room-a', name: 'Ambiente A', vertices: [] },
-            { id: 'room-b', name: 'Ambiente B', vertices: [] },
+            { id: 'room-a', name: 'Ambiente A', vertices: [], height: 2.7, color: '#FFFFFF' },
+            { id: 'room-b', name: 'Ambiente B', vertices: [], height: 2.7, color: '#FFFFFF' },
         ] as Room[];
         const scene = { fixtures, electricalDevices: [panel], conductors, rooms, walls: [], lightSwitches: [] } as unknown as Scene;
 
@@ -71,7 +71,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 conductor('wire-lamp', 'td', 'lamp-1', 2),
                 conductor('wire-outlet', 'lamp-1', 'outlet-1', 3),
             ],
-            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -100,7 +100,7 @@ describe('calculatePanelCircuitSummaries', () => {
             fixtures: [],
             electricalDevices: [panel, socket],
             conductors: [conductor('wire-outlet', 'td', 'outlet-1', 3)],
-            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -118,7 +118,7 @@ describe('calculatePanelCircuitSummaries', () => {
             fixtures: [lamp],
             electricalDevices: [panel],
             conductors: [conductor('wire-lamp', 'td', 'lamp-1', 2)],
-            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Ambiente A', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -146,7 +146,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 conductor('wire-lamp', 'td', 'lamp-1', 2),
                 conductor('wire-outlet', 'td', 'outlet-1', 2),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -378,7 +378,7 @@ describe('calculatePanelCircuitSummaries', () => {
             fixtures,
             electricalDevices: [panel],
             conductors: [conductor('wire-1', 'td', 'load-1', 2), conductor('wire-2', 'td', 'load-2', 3)],
-            rooms: [{ id: 'room-a', name: 'A', vertices: [] }, { id: 'room-b', name: 'B', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'A', vertices: [], height: 2.7, color: '#FFFFFF' }, { id: 'room-b', name: 'B', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -434,7 +434,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 conductor('feeder', 'tg', 'td', 4),
                 conductor('branch', 'td', 'load-1', 4),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [],
             lightSwitches: [],
         } as unknown as Scene;
@@ -487,7 +487,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 conductor('feeder', 'tg', 'td', 4),
                 conductor('branch', 'td', 'load-1', 4),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [],
             lightSwitches: [],
         } as unknown as Scene;
@@ -535,7 +535,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 // tablero (p.ej. quedó sin terminar de cablear).
                 { ...conductor('wire-dead', 'td', 'sw-dead', 0), waypoints: [] },
             ],
-            rooms: [{ id: 'room-a', name: 'A', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'A', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [],
         } as unknown as Scene;
 
@@ -586,7 +586,7 @@ describe('calculatePanelCircuitSummaries', () => {
             fixtures: [load],
             electricalDevices: [panel],
             conductors: [wire],
-            rooms: [{ id: 'room', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [],
             lightSwitches: [],
         } as unknown as Scene);
@@ -654,7 +654,7 @@ describe('calculatePanelCircuitSummaries', () => {
                     voltageDropLimitPct: 1,
                 },
             }],
-            rooms: [{ id: 'room', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [],
             lightSwitches: [],
         } as unknown as Scene);
@@ -687,7 +687,7 @@ describe('calculatePanelCircuitSummaries', () => {
                 sectionMm2: 4,
                 ct: { outletPowerW: 0, forcePowerW: 0, powerFactor: 1, demandFactor: 1, system: 1 as const, phaseBalance: 'R' as const },
             }],
-            rooms: [{ id: 'room', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -716,7 +716,7 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
                 conductor('feeder', 'tg', 'td', 4),
                 conductor('branch', 'td', 'load-1', 4),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -750,7 +750,7 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
                 conductor('feeder-2', 'td1', 'td2', 5),
                 conductor('branch', 'td2', 'load-1', 3),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -777,7 +777,7 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
             fixtures: [load],
             electricalDevices: [panel],
             conductors: [conductor('wire-1', 'td', 'load-1', 3)],
-            rooms: [{ id: 'room-a', name: 'A', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'A', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 
@@ -799,7 +799,7 @@ describe('caída de tensión en cascada (árbol de tableros)', () => {
                 conductor('feeder', 'tg', 'td', 200),
                 conductor('branch', 'td', 'load-1', 2),
             ],
-            rooms: [{ id: 'room-a', name: 'Aula', vertices: [] }] as Room[],
+            rooms: [{ id: 'room-a', name: 'Aula', vertices: [], height: 2.7, color: '#FFFFFF' }] as Room[],
             walls: [], lightSwitches: [],
         } as unknown as Scene;
 

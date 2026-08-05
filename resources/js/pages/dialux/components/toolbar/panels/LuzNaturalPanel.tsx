@@ -32,7 +32,14 @@ export const LuzNaturalPanel: React.FC = () => {
     const [resultsByRoom, setResultsByRoom] = useState<Record<string, DaylightFactorResult> | null>(null);
     const [isCalculating, setIsCalculating] = useState(false);
 
-    const rooms = useMemo(() => (scene?.rooms ?? []).filter((room) => room.roomType === 'ambient'), [scene]);
+    // Mismo criterio que `RoomProps.tsx::isRecinto`: el recinto físico real
+    // (donde se asignan reflectancias/materiales, Fase 16) tiene
+    // `roomType` vacío o `'room'` — `'ambient'`/`'corridor'` son
+    // subdivisiones normativas DERIVADAS del mismo recinto, no entidades
+    // separadas en `scene.rooms` (bug real: el filtro original usaba
+    // `'ambient'`, que ningún recinto real tiene, dejando el panel sin
+    // ningún resultado que mostrar nunca).
+    const rooms = useMemo(() => (scene?.rooms ?? []).filter((room) => !room.roomType || room.roomType === 'room'), [scene]);
 
     const handleCalculate = () => {
         if (!scene) return;

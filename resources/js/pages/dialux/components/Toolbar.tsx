@@ -46,7 +46,9 @@ import {
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
+import { parseIfcFileForImport, type IfcImportPreview } from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
 import { getEffectiveScale } from './canvas/canvasUtils';
+import { IfcImportDialog, type IfcImportSelection } from './IfcImportDialog';
 import { ImportLuminairesModal } from './ImportLuminairesModal';
 import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
 import {
@@ -88,6 +90,11 @@ export const Toolbar: React.FC = () => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isImportLuminairesModalOpen, setIsImportLuminairesModalOpen] =
         useState(false);
+    const ifcFileInputRef = useRef<HTMLInputElement>(null);
+    const [ifcPreview, setIfcPreview] = useState<IfcImportPreview | null>(null);
+    const [isIfcDialogOpen, setIsIfcDialogOpen] = useState(false);
+    const [isIfcParsing, setIsIfcParsing] = useState(false);
+    const [ifcImportError, setIfcImportError] = useState<string | null>(null);
     const projectName = store.project?.name ?? '';
     const projectId = store.project?.id ?? null;
     const activeScene = store.activeScene();
@@ -220,6 +227,73 @@ export const Toolbar: React.FC = () => {
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [engine, projectId, store],
+    );
+
+    /**
+     * Fase 19 del plan maestro ("BIM/IFC" — importar y mapear estructura
+     * espacial, primer ciclo). A diferencia de DXF/DWG (que solo se usa como
+     * capa de calco visual), un IFC trae semántica espacial explícita: se
+     * parsea completo (`parseIfcFileForImport`) y se muestra en
+     * `IfcImportDialog` ANTES de crear nada — nunca se importa a ciegas.
+     */
+    const handleIfcFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (ifcFileInputRef.current) ifcFileInputRef.current.value = '';
+        if (!file) return;
+
+        setIfcImportError(null);
+        setIsIfcParsing(true);
+        try {
+            const buffer = new Uint8Array(await file.arrayBuffer());
+            const preview = await parseIfcFileForImport(buffer);
+            setIfcPreview(preview);
+            setIsIfcDialogOpen(true);
+        } catch (error) {
+            console.error('No se pudo parsear el archivo IFC.', error);
+            setIfcImportError(error instanceof Error ? error.message : 'No se pudo leer el archivo IFC.');
+        } finally {
+            setIsIfcParsing(false);
+        }
+    }, []);
+
+    const handleIfcImportApply = useCallback(
+        (selection: IfcImportSelection) => {
+            if (!ifcPreview) return;
+
+            const existingIndices = store.project?.scenes.map((s) => s.floorIndex) ?? [0];
+            let nextFloorIndex = Math.max(0, ...existingIndices) + 1;
+
+            for (const storey of ifcPreview.storeys) {
+                const selectedSpaceIds = selection.storeys.get(storey.expressId);
+                if (!selectedSpaceIds || selectedSpaceIds.size === 0) continue;
+
+                const spacesToImport = storey.spaces.filter(
+                    (space) => selectedSpaceIds.has(space.expressId) && space.footprint,
+                );
+                if (spacesToImport.length === 0) continue;
+
+                const floorHeight = Math.max(...spacesToImport.map((s) => s.footprint!.height));
+                const floorId = store.addFloor(storey.name ?? `Nivel IFC ${storey.expressId}`, nextFloorIndex, floorHeight);
+                nextFloorIndex += 1;
+                if (storey.globalId) store.updateFloor(floorId, { ifcGlobalId: storey.globalId });
+                store.setActiveScene(floorId);
+
+                for (const space of spacesToImport) {
+                    store.addRoom({
+                        name: space.name ?? `Espacio IFC ${space.expressId}`,
+                        vertices: space.footprint!.vertices,
+                        height: space.footprint!.height,
+                        color: 'rgba(56,189,248,0.25)',
+                        roomType: 'room',
+                        ifcGlobalId: space.globalId ?? undefined,
+                    });
+                }
+            }
+
+            setIsIfcDialogOpen(false);
+            setIfcPreview(null);
+        },
+        [ifcPreview, store],
     );
 
     const applyScaleConfig = useCallback(
@@ -394,6 +468,24 @@ export const Toolbar: React.FC = () => {
                 accept=".dxf,.dwg"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
+            />
+
+            <input
+                type="file"
+                className="hidden"
+                accept=".ifc"
+                ref={ifcFileInputRef}
+                onChange={handleIfcFileUpload}
+            />
+
+            <IfcImportDialog
+                open={isIfcDialogOpen}
+                preview={ifcPreview}
+                onCancel={() => {
+                    setIsIfcDialogOpen(false);
+                    setIfcPreview(null);
+                }}
+                onApply={handleIfcImportApply}
             />
 
             {/* ── Sidebar rail ── */}
@@ -725,6 +817,9 @@ export const Toolbar: React.FC = () => {
                         scaleConfirmed={scaleConfirmed}
                         onNewDoc={() => engine.newDocument?.()}
                         onImportClick={() => fileInputRef.current?.click()}
+                        onImportIfcClick={() => ifcFileInputRef.current?.click()}
+                        isIfcParsing={isIfcParsing}
+                        ifcImportError={ifcImportError}
                         onApplyScale={applyScaleConfig}
                         onCalibrate={() => {
                             store.setTool('calibrate');

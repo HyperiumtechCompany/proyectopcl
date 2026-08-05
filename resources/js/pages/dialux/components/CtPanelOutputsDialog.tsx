@@ -11,6 +11,7 @@ import {
     resolveConformingSectionMm2,
     type PanelCircuitSummary,
     type RoomWireSummary,
+    type RoomOutletValidation,
 } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { CONDUCTOR_SECTION_OPTIONS, type Conductor } from '@/pages/dialux/hooks/types';
 
@@ -23,6 +24,7 @@ interface CtPanelOutputsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     circuits: PanelCircuitSummary[];
+    outletValidations?: RoomOutletValidation[];
     loading?: boolean;
     selectedRoom?: SelectedRoomSummary | null;
     onUpdateCircuit?: (
@@ -234,6 +236,50 @@ export function CtPanelOutputsDialog({
                         </div>
                     )}
 
+                    {outletValidations && outletValidations.length > 0 && (
+                        <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+                            <h3 className="border-b border-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-200">
+                                Validación de Tomacorrientes por Normativa
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-[11px] whitespace-nowrap">
+                                    <thead className="bg-slate-50 text-[10px] font-semibold text-slate-500 uppercase tracking-wider dark:bg-slate-900/50 dark:text-slate-400">
+                                        <tr>
+                                            <th className="px-3 py-2">Ambiente</th>
+                                            <th className="px-3 py-2">Área / Perím.</th>
+                                            <th className="px-3 py-2">Uso</th>
+                                            <th className="px-3 py-2 text-center">Req. (CNE)</th>
+                                            <th className="px-3 py-2 text-center">Instalados</th>
+                                            <th className="px-3 py-2">Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {outletValidations.map(validation => (
+                                            <tr key={validation.roomId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
+                                                <td className="px-3 py-2 font-medium">{validation.roomName}</td>
+                                                <td className="px-3 py-2 font-mono text-slate-500">{validation.outletUse === 'exterior' ? `${validation.perimeter.toFixed(2)} m` : `${validation.area.toFixed(2)} m²`}</td>
+                                                <td className="px-3 py-2 capitalize">{validation.outletUse}</td>
+                                                <td className="px-3 py-2 text-center font-mono">{validation.requiredOutlets}</td>
+                                                <td className="px-3 py-2 text-center font-mono">{validation.installedOutlets}</td>
+                                                <td className="px-3 py-2">
+                                                    {validation.installedOutlets >= validation.requiredOutlets ? (
+                                                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                                                            <Check size={10} /> OK
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                                                            Faltan {validation.requiredOutlets - validation.installedOutlets}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
                     {levels.map(([levelId, levelCircuits]) => (
                         <section
                             key={levelId}
@@ -276,6 +322,9 @@ export function CtPanelOutputsDialog({
                                             <th className="px-3 py-2">Ruta por ambientes</th>
                                             <th className="px-3 py-2">PI alum. (W)</th>
                                             <th className="px-3 py-2">PI tomas (W)</th>
+                                            <th className="px-3 py-2"># Lumin.</th>
+                                            <th className="px-3 py-2"># Tomas</th>
+                                            <th className="px-3 py-2">Cable rec.</th>
                                             <th className="px-3 py-2">PI fuerza (W)</th>
                                             <th className="px-3 py-2">F. potencia</th>
                                             <th className="px-3 py-2">PI total (kW)</th>
@@ -401,6 +450,9 @@ export function CtPanelOutputsDialog({
                                                     <MonoCell value={circuit.traversedRoomNames.join(' → ') || '—'} />
                                                     <MonoCell value={circuit.lightingPowerW.toFixed(0)} />
                                                     <MonoCell value={circuit.outletPowerW.toFixed(0)} />
+                                                    <MonoCell value={circuit.lightingOutletCount.toString()} />
+                                                    <MonoCell value={circuit.outletOutletCount.toString()} />
+                                                    <MonoCell value={circuit.circuitLoadType === 'lighting' ? '2.5mm² (Nro.14)' : circuit.circuitLoadType === 'outlet' ? '4mm² (Nro.12)' : circuit.circuitLoadType === 'feeder' ? 'Alimentador' : 'Mixto'} />
                                                     <EditNumberCell
                                                         value={circuit.forcePowerW}
                                                         onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { forcePowerW: value })}
