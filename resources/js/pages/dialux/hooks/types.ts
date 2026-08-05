@@ -351,6 +351,14 @@ export interface Window {
     windowShape?: 'rectangular' | 'arched' | 'circular';
     /** Si true, el offset se recalcula automÃƒÂ¡ticamente al centro de la pared */
     centered?: boolean;
+    /**
+     * Transmitancia luminosa del vidrio (0-1, Fase 17: "Luz natural" —
+     * Daylight Factor). `null`/`undefined` (default) significa "sin vidrio
+     * asignado" — `daylightFactorEngine.ts` NUNCA inventa un valor típico en
+     * su lugar, la ventana simplemente no aporta luz natural hasta que se
+     * asigne uno (mismo criterio que `Room.ceilingReflectance` en la Fase 16).
+     */
+    glazingTransmittance?: number | null;
 }
 
 /** Puerta colocada sobre una pared o particiÃƒÂ³n */

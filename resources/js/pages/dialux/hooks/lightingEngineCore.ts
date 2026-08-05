@@ -39,7 +39,8 @@ const MATH_PI = Math.PI;
  * los goldens de Fase 0. Superficies verticales/inclinadas quedan fuera de
  * este ciclo (requieren poblar una normal distinta aguas arriba).
  */
-interface GridPoint {
+/** Exportado desde la Fase 17 para reutilizarse en `daylightFactorEngine.ts` — sin cambios de comportamiento. */
+export interface GridPoint {
     x: number;
     y: number;
     z: number;
@@ -49,7 +50,8 @@ interface GridPoint {
 
 const HORIZONTAL_UP_NORMAL: Vector3 = { x: 0, y: 0, z: 1 };
 
-function roomBBox(room: Room) {
+/** Exportado desde la Fase 17 para reutilizarse en `daylightFactorEngine.ts` — sin cambios de comportamiento. */
+export function roomBBox(room: Room) {
     if (room.vertices.length === 0) {
         return {
             minX: 0,
@@ -83,7 +85,8 @@ function roomBBox(room: Room) {
     };
 }
 
-function buildGrid(room: Room, spacing: number, wpHeight: number) {
+/** Exportado desde la Fase 17 para reutilizarse en `daylightFactorEngine.ts` — sin cambios de comportamiento. */
+export function buildGrid(room: Room, spacing: number, wpHeight: number) {
     const { minX, minY, width, length } = roomBBox(room);
 
     if (width < 0.01 || length < 0.01) {

@@ -14,6 +14,7 @@ import {
     Ruler,
     Scale,
     Square,
+    Sun,
     Trash2,
     Upload,
     Wrench,
@@ -54,6 +55,7 @@ import {
     EmergenciaPanel,
     ExportacionPanel,
     HerramientasPanel,
+    LuzNaturalPanel,
     LuzPanel,
     MedirPanel,
     NormativaPanel,
@@ -109,6 +111,7 @@ export const Toolbar: React.FC = () => {
     const normativaRef = useRef<HTMLDivElement>(null);
     const proyectoRef = useRef<HTMLDivElement>(null);
     const emergenciaRef = useRef<HTMLDivElement>(null);
+    const luznaturalRef = useRef<HTMLDivElement>(null);
 
     const refs = useMemo(
         () =>
@@ -124,6 +127,7 @@ export const Toolbar: React.FC = () => {
                 normativa: normativaRef,
                 proyecto: proyectoRef,
                 emergencia: emergenciaRef,
+                luznatural: luznaturalRef,
             }) as const,
         [],
     );
@@ -291,6 +295,14 @@ export const Toolbar: React.FC = () => {
                 label: 'Emerg.',
                 hasActive: ['evacuation-route', 'antipanic-area'].includes(store.ui.activeTool),
                 accentColor: 'text-amber-400',
+            },
+            {
+                id: 'luznatural' as PanelId,
+                ref: refs.luznatural,
+                icon: <Sun size={15} />,
+                label: 'Sol',
+                hasActive: false,
+                accentColor: 'text-yellow-300',
             },
             {
                 id: 'construccion' as PanelId,
@@ -641,6 +653,18 @@ export const Toolbar: React.FC = () => {
                     width="md"
                 >
                     <EmergenciaPanel />
+                </FloatingPanelPortal>
+            )}
+
+            {openPanel === 'luznatural' && (
+                <FloatingPanelPortal
+                    title="Luz natural — Daylight Factor"
+                    icon={<Sun size={12} />}
+                    anchorRef={refs.luznatural}
+                    onClose={closePanel}
+                    width="md"
+                >
+                    <LuzNaturalPanel />
                 </FloatingPanelPortal>
             )}
 

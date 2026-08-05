@@ -30,7 +30,15 @@ async function loadWasmModule(): Promise<DialuxCoreWasmModule | null> {
 
     try {
         const _import = new Function('u', 'return import(u)') as (u: string) => Promise<DialuxCoreWasmModule>;
-        const loadedModule = await _import('/dialux-core/pkg/dialux_core.js');
+        // En desarrollo el worker real se importa desde Vite (localhost:5173),
+        // pero su blob conserva el origen de Laravel (127.0.0.1:8000). Cargar
+        // el paquete desde ese origen evita la copia transformada/cacheada de
+        // Vite, que puede quedar desfasada respecto de public/dialux-core/pkg.
+        const wasmModuleUrl = new URL(
+            '/dialux-core/pkg/dialux_core.js?v=direct-grid-v2',
+            globalThis.location.origin,
+        ).href;
+        const loadedModule = await _import(wasmModuleUrl);
 
         if (typeof loadedModule.default === 'function') {
             await loadedModule.default();
@@ -38,6 +46,12 @@ async function loadWasmModule(): Promise<DialuxCoreWasmModule | null> {
             await loadedModule.init();
         } else {
             throw new Error('El modulo WASM no expone default() ni init()');
+        }
+
+        if (typeof loadedModule.compute_direct_illuminance_grid !== 'function') {
+            throw new Error(
+                'El modulo WASM cargado no expone compute_direct_illuminance_grid; regenere public/dialux-core/pkg.',
+            );
         }
 
         wasmModule = loadedModule;

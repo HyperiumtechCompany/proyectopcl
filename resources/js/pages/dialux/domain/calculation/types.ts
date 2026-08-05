@@ -239,11 +239,25 @@ export interface CalculationConfig {
  * más precisa que `legacy`, pero no se debe declarar "UGR validado
  * certificado" mientras este punto siga en `pending-confirmation`.
  */
+/**
+ * `interreflection: 'first-bounce'` (Fase 16, "Biblioteca de materiales"):
+ * cambio de default no disruptivo. `resolveMaterialId()`
+ * (`buildCalculationSnapshot.ts`) solo produce un `materialId` cuando el
+ * recinto tiene `ceilingReflectance`/`wallReflectance`/`floorReflectance`
+ * asignados explícitamente en la UI (`RoomSurfaceMaterialsSection.tsx`,
+ * nueva en esta fase); sin esos tres campos, `materialId` es `null`,
+ * `resolveSurfaceReflectances()` (`runDirectPreviewEngine.ts`) devuelve
+ * `null` y no se construye ningún parche de radiosidad — resultado
+ * bit-a-bit idéntico a `interreflection: 'none'`. Es decir: para todo
+ * proyecto existente (ninguno tiene estos campos asignados) este cambio
+ * no altera ningún resultado calculado; solo activa el solver ya
+ * construido desde la Fase 7 en cuanto un usuario asigna un material.
+ */
 export const DEFAULT_DIRECT_PREVIEW_CONFIG: CalculationConfig = {
     mode: 'preview',
     directLight: true,
     occlusion: false,
-    interreflection: 'none',
+    interreflection: 'first-bounce',
     maxBounces: 0,
     convergenceTolerance: 0,
     meshPolicy: { gridSpacingM: GRID_SPACING },

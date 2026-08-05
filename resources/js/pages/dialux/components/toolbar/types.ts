@@ -12,6 +12,7 @@ export type PanelId =
     | 'normativa'
     | 'proyecto'
     | 'emergencia'
+    | 'luznatural'
     | null;
 
 export type PanelWidth = 'sm' | 'md' | 'lg' | 'xl';

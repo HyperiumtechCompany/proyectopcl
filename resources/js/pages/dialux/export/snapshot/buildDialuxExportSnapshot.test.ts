@@ -190,7 +190,8 @@ describe('buildDialuxExportSnapshot — Fase 11 (resultados profesionales: proce
         const { provenance } = snapshot.ambients[0]!.metrics;
         expect(provenance.snapshotHash).toBe(run.snapshotHash);
         expect(provenance.engineVersion).toBe(run.engineVersion);
-        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: none · UGR: guth-observers');
+        // interreflexión 'first-bounce' es el default desde la Fase 16.
+        expect(provenance.configSummary).toBe('oclusión: no · interreflexión: first-bounce · UGR: guth-observers');
     });
 
     it('un ambiente sin luminarias trae SU warning (`object-without-luminaires`) y no el de otros ambientes', async () => {
@@ -198,7 +199,15 @@ describe('buildDialuxExportSnapshot — Fase 11 (resultados profesionales: proce
         const project = buildProjectWithRoom(room);
         project.scenes[0]!.fixtures = []; // sin luminarias en el único ambiente
 
-        const { resultsByRoom, run } = await runProjectLightingCalculation(project);
+        // interreflection en 'none': este test es sobre el filtrado de
+        // warnings por ambiente, no sobre materiales — `buildRoom()` no tiene
+        // reflectancias asignadas, así que con el default 'first-bounce'
+        // (Fase 16) aparecería además `object-without-material-reflectance`,
+        // ruido irrelevante para lo que se verifica acá.
+        const { resultsByRoom, run } = await runProjectLightingCalculation(project, {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'none',
+        });
         expect(run.warnings.map((w) => w.code)).toContain('object-without-luminaires');
 
         const snapshot = buildDialuxExportSnapshot({

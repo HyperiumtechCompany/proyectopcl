@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { CalculationConfig, CalculationRun, CalculationSnapshot } from '@/pages/dialux/domain/calculation/types';
+import dialuxCalculationWorkerUrl from '@/pages/dialux/workers/dialuxCalculationWorker?worker&url';
 import type {
     DialuxCalculationRequestMessage,
     DialuxCalculationResponseMessage,
@@ -33,6 +34,7 @@ interface PendingRequest {
 
 export function useDialuxCalculationWorker(): UseDialuxCalculationWorkerResult {
     const workerRef = useRef<Worker | null>(null);
+    const workerBlobUrlRef = useRef<string | null>(null);
     const pendingRef = useRef<Map<string, PendingRequest>>(new Map());
     const activeRequestIdRef = useRef<string | null>(null);
 
@@ -41,7 +43,24 @@ export function useDialuxCalculationWorker(): UseDialuxCalculationWorkerResult {
             return workerRef.current;
         }
 
-        const worker = new Worker(new URL('../workers/dialuxCalculationWorker.ts', import.meta.url), { type: 'module' });
+        // Worker exige que SU URL inicial sea same-origin. En desarrollo,
+        // Laravel puede estar en 127.0.0.1:8000 y Vite en localhost:5173.
+        // Un módulo blob local actúa como entrada y luego importa por CORS
+        // el módulo real de Vite. También funciona con el asset de producción.
+        const workerModuleUrl = new URL(dialuxCalculationWorkerUrl, window.location.href).href;
+        const blob = new Blob(
+            [`import ${JSON.stringify(workerModuleUrl)};`],
+            { type: 'text/javascript' },
+        );
+        const blobUrl = URL.createObjectURL(blob);
+        let worker: Worker;
+        try {
+            worker = new Worker(blobUrl, { type: 'module' });
+        } catch (error) {
+            URL.revokeObjectURL(blobUrl);
+            throw error;
+        }
+        workerBlobUrlRef.current = blobUrl;
         worker.onmessage = (event: MessageEvent<DialuxCalculationResponseMessage>) => {
             const response = event.data;
             const pending = pendingRef.current.get(response.requestId);
@@ -90,6 +109,10 @@ export function useDialuxCalculationWorker(): UseDialuxCalculationWorkerResult {
         return () => {
             workerRef.current?.terminate();
             workerRef.current = null;
+            if (workerBlobUrlRef.current) {
+                URL.revokeObjectURL(workerBlobUrlRef.current);
+                workerBlobUrlRef.current = null;
+            }
             pending.clear();
         };
     }, []);

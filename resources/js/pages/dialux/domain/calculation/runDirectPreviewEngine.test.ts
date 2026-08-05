@@ -119,13 +119,10 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
 
     it('etiqueta el run con LIGHTING_ENGINE_VERSION y estado completed', async () => {
         const snapshot = buildCalculationSnapshot(buildModuloIProjectFixture());
-        // glare en 'legacy': este test verifica metadatos del run (versión,
-        // estado, hash, cantidad de superficies), no UGR — con guth-observers
-        // (default desde la Fase 16) este proyecto real de 24 ambientes
-        // legítimamente excluye luminarias fuera del cono visual en varios
-        // de ellos, ruido irrelevante para lo que se verifica acá.
+        // glare 'legacy' + interreflection 'none': este test es sobre metadatos del run, no sobre UGR ni materiales (ambos ruido con los defaults de Fase 16).
         const run = await runDirectPreviewEngine(snapshot, {
             ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'none',
             glare: { enabled: true, observerModel: 'legacy' },
         });
 
@@ -163,7 +160,8 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
         const project = buildSmallProject();
         project.scenes[0]!.fixtures = []; // sin luminarias en el único ambiente
         const snapshot = buildCalculationSnapshot(project);
-        const run = await runDirectPreviewEngine(snapshot);
+        // interreflection 'none': este test es sobre el warning de luminarias faltantes, no sobre materiales (ruido con el default de Fase 16).
+        const run = await runDirectPreviewEngine(snapshot, { ...DEFAULT_DIRECT_PREVIEW_CONFIG, interreflection: 'none' });
 
         expect(run.warnings).toHaveLength(1);
         expect(run.warnings[0]!.code).toBe('object-without-luminaires');
@@ -172,20 +170,17 @@ describe('runDirectPreviewEngine — Fase 1 (wrapper, sin cambiar fórmula)', ()
 });
 
 describe('runDirectPreviewEngine — Fase 7 (materiales e interreflexión inicial)', () => {
-    it('con interreflection: "none" (default) el resultado es idéntico al de antes de esta fase, aunque el recinto tenga reflectancias', async () => {
+    it('con interreflection: "none" explícito el resultado es idéntico al de antes de esta fase, aunque el recinto tenga reflectancias', async () => {
         const project = buildSmallProject();
         project.scenes[0]!.rooms[0]!.ceilingReflectance = 0.7;
         project.scenes[0]!.rooms[0]!.wallReflectance = 0.5;
         project.scenes[0]!.rooms[0]!.floorReflectance = 0.2;
         const snapshot = buildCalculationSnapshot(project);
 
-        // glare en 'legacy': este test es sobre interreflexión (avg_lux
-        // idéntico al de antes de la Fase 7), no sobre UGR — con
-        // guth-observers (default desde la Fase 16) esta sala de referencia
-        // legítimamente excluye luminarias fuera del cono visual, ruido
-        // irrelevante para lo que se verifica acá.
+        // glare 'legacy' + interreflection 'none' explícito (default desde Fase 16 es 'first-bounce'): este test es sobre avg_lux sin interreflexión, no sobre UGR.
         const run = await runDirectPreviewEngine(snapshot, {
             ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'none',
             glare: { enabled: true, observerModel: 'legacy' },
         });
         const direct = calculateMaintained(buildFase0SmallRoom(), buildFase0SmallFixtures());
@@ -379,8 +374,10 @@ describe('runDirectPreviewEngine — Fase 9 (UGR y luminancia profesional)', () 
             interreflection: 'first-bounce',
             glare: { enabled: true, observerModel: 'legacy' },
         });
+        // interreflection 'none' explícito: este caso prueba SOLO guth-observers activo (el room tiene reflectancias, así que el default real activaría ambas condiciones a la vez).
         const onlyGuthObservers = await runDirectPreviewEngine(snapshot, {
             ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            interreflection: 'none',
             glare: { enabled: true, observerModel: 'guth-observers' },
         });
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "Fase 0 del plan maestro DIALux (planes/plan_maestro_dialux_web_motor_arquitectura_validacion.md, §4.5/§11). Archivos que YA superaban el presupuesto de tamaño al iniciar el refactor (línea base, capturada 2026-08-02 — ver planes/fase0_inventario_dialux.md). fileSizeBudget.test.ts falla si aparece un archivo NUEVO fuera de esta lista que supere el umbral (400 líneas para código, 500 para tests/fixtures) — no falla por estos, que son deuda conocida a descomponer en fases 2/7 del plan, no en Fase 0.",
+  "$comment": "Fase 0 del plan maestro DIALux (planes/plan_maestro_dialux_web_motor_arquitectura_validacion.md, §4.5/§11). Archivos que YA superaban el presupuesto de tamaño al iniciar el refactor (línea base, capturada 2026-08-02 — ver planes/fase0_inventario_dialux.md). fileSizeBudget.test.ts falla si aparece un archivo NUEVO fuera de esta lista que supere el umbral (400 líneas para código, 500 para tests/fixtures) — no falla por estos, que son deuda conocida a descomponer en fases 2/7 del plan, no en Fase 0. Excepción posterior: `hooks/lightingEngineCore.ts` se agregó el 2026-08-05 (detectado en Fase 16) — es el ÚNICO motor de cálculo punto a punto del sistema (el propio archivo prohíbe duplicar la fórmula) y creció legítimamente entre las Fases 5-9 agregando parámetros opcionales no disruptivos, nunca una segunda implementación paralela; partirlo rompería esa garantía de fuente única de verdad física, así que se prefiere aceptar el tamaño a fragmentar el motor.",
   "codeLimit": 400,
   "testLimit": 500,
   "allow": [
@@ -38,6 +38,7 @@
     "hooks/useEditorStore.ts",
     "hooks/useMlightcadEngine.ts",
     "hooks/useSnap.ts",
-    "hooks/wireLengthCalculations.ts"
+    "hooks/wireLengthCalculations.ts",
+    "hooks/lightingEngineCore.ts"
   ]
 }

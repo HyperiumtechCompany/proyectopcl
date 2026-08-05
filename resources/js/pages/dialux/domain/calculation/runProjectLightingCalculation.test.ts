@@ -37,7 +37,22 @@ function buildSmallProject(): Project {
 describe('Fase 11 — runProjectLightingCalculation', () => {
     it('produce resultsByRoom indexado por objectId (== ambient.id), igual que el motor directo', async () => {
         const project = buildSmallProject();
-        const direct = calculateLightingResult(buildFase0SmallRoom(), buildFase0SmallFixtures());
+        // maintenanceFactor explícito para igualar `DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor`
+        // (0.8) — `calculateLightingResult` por sí solo por defecto usa 1 (sin
+        // depreciar); mismatch preexistente detectado al tocar este archivo
+        // para la Fase 16, no introducido por ella (confirmado con git stash:
+        // ya fallaba antes del cambio de default de `interreflection`).
+        const direct = calculateLightingResult(
+            buildFase0SmallRoom(),
+            buildFase0SmallFixtures(),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
+        );
 
         const { resultsByRoom, run } = await runProjectLightingCalculation(project);
 

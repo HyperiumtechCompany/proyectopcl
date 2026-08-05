@@ -1,7 +1,60 @@
 import { AppWindow, DoorOpen, Move, Target, Umbrella } from 'lucide-react';
 import React from 'react';
+import { findGlazingPresetByValue, GLAZING_PRESETS } from '@/pages/dialux/hooks/glazingData';
 import type { Canopy, Door, Window } from '@/pages/dialux/hooks/useEditorStore';
 import { EditField, PropField, SectionWrapper, SelectField } from './PropertyFields';
+
+const GLAZING_UNSET = 'unset';
+const GLAZING_CUSTOM = 'custom';
+
+const GLAZING_SELECT_OPTIONS = [
+    { value: GLAZING_UNSET, label: 'Sin asignar' },
+    ...GLAZING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label })),
+    { value: GLAZING_CUSTOM, label: 'Personalizado' },
+];
+
+/**
+ * Selector de vidrio (Fase 17: "Luz natural" — Daylight Factor). Escribe
+ * directamente `window.glazingTransmittance`, el campo que
+ * `daylightFactorEngine.ts` ya sabe leer — sin asignar, la ventana no aporta
+ * luz natural (nunca se inventa un valor por defecto, mismo criterio que la
+ * biblioteca de materiales de la Fase 16).
+ */
+function WindowGlazingField({ win, onUpdate }: { win: Window; onUpdate: (patch: Partial<Omit<Window, 'id'>>) => void }) {
+    const transmittance = win.glazingTransmittance ?? null;
+    const matchedPreset = findGlazingPresetByValue(transmittance);
+    const selectValue = transmittance === null ? GLAZING_UNSET : (matchedPreset?.id ?? GLAZING_CUSTOM);
+
+    return (
+        <>
+            <SelectField
+                label="Vidrio"
+                value={selectValue}
+                options={GLAZING_SELECT_OPTIONS}
+                onChange={(next) => {
+                    if (next === GLAZING_UNSET) {
+                        onUpdate({ glazingTransmittance: null });
+                    } else if (next === GLAZING_CUSTOM) {
+                        onUpdate({ glazingTransmittance: transmittance ?? 0.8 });
+                    } else {
+                        const preset = GLAZING_PRESETS.find((p) => p.id === next);
+                        onUpdate({ glazingTransmittance: preset?.transmittance ?? null });
+                    }
+                }}
+            />
+            {selectValue === GLAZING_CUSTOM && (
+                <EditField
+                    label="Transmitancia (%)"
+                    value={Math.round((transmittance ?? 0) * 100)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onChange={(percent) => onUpdate({ glazingTransmittance: Math.min(1, Math.max(0, percent / 100)) })}
+                />
+            )}
+        </>
+    );
+}
 
 export const WindowProps: React.FC<{
     win: Window;
@@ -86,6 +139,7 @@ export const WindowProps: React.FC<{
                 onUpdate({ windowShape: value as Window['windowShape'] })
             }
         />
+        <WindowGlazingField win={win} onUpdate={onUpdate} />
         <PropField label="Pared ID" value={win.wallId.slice(0, 12)} />
         <PropField label="ID" value={win.id.slice(0, 12)} />
     </SectionWrapper>

@@ -19,6 +19,7 @@ import { RoomFixtureGridSection } from './room/RoomFixtureGridSection';
 import { RoomGeometrySection } from './room/RoomGeometrySection';
 import { RoomLightingSection } from './room/RoomLightingSection';
 import { RoomOutletsSection } from './room/RoomOutletsSection';
+import { RoomSurfaceMaterialsSection } from './room/RoomSurfaceMaterialsSection';
 
 /**
  * Panel de propiedades de un recinto/ambiente/pasadizo (Fase 2 del plan
@@ -110,6 +111,8 @@ export const RoomProps: React.FC<{
             />
 
             {isRecinto && <RoomConstructionSection room={room} onUpdate={onUpdate} />}
+
+            {isRecinto && <RoomSurfaceMaterialsSection room={room} onUpdate={onUpdate} />}
 
             {isAmbiente && (
                 <RoomLightingSection
