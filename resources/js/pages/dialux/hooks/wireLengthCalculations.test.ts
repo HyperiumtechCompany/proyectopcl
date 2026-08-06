@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { calculateConductorGroupLength, calculateConductorLength, calculateWireLengthByWall, resolveConductorRouteHeight } from './wireLengthCalculations';
-import type { Scene } from './types';
+import { calculateConductorGroupLength, calculateConductorLength, calculateWireLengthByWall, resolveConductorRouteHeight, validateSceneOutlets } from './wireLengthCalculations';
+import type { ElectricalDevice, Room, Scene } from './types';
 
 function buildScene(partial: Partial<Scene> = {}): Scene {
     return {
@@ -155,5 +155,80 @@ describe('calculateConductorGroupLength', () => {
         expect(result.horizontalLengthM).toBeCloseTo(4, 8);
         expect(result.verticalLengthM).toBeCloseTo(2.8, 8);
         expect(result.totalLengthM).toBeCloseTo(6.8, 8);
+    });
+});
+
+describe('validateSceneOutlets', () => {
+    function buildOutlet(overrides: Partial<ElectricalDevice> = {}): ElectricalDevice {
+        return {
+            id: 'outlet-1',
+            type: 'outlet_floor',
+            x: 1,
+            y: 1,
+            label: 'T-01',
+            mountingHeight: 0.4,
+            connectedDeviceIds: [],
+            properties: {},
+            ...overrides,
+        };
+    }
+
+    it('regresión: cuenta los tomacorrientes ya instalados en el ambiente (antes daba 0 siempre por comparar contra el id compuesto del ambiente)', () => {
+        const room: Room = {
+            id: 'room-1',
+            name: 'Aula 1',
+            roomType: 'ambient',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 4, y: 0 },
+                { x: 4, y: 3 },
+                { x: 0, y: 3 },
+            ],
+            height: 2.7,
+            color: '#ffffff',
+            outletUse: 'aula',
+        };
+        const scene = buildScene({
+            rooms: [room],
+            electricalDevices: [buildOutlet({ roomId: room.id })],
+        });
+
+        const validations = validateSceneOutlets(scene);
+
+        expect(validations).toHaveLength(1);
+        expect(validations[0]!.installedOutlets).toBe(1);
+    });
+
+    it('no cuenta tomacorrientes de OTRO sub-ambiente que comparte el mismo recinto físico (ej. Baño vs Guarderías)', () => {
+        const room: Room = {
+            id: 'room-shared',
+            name: 'Recinto compartido',
+            roomType: 'room',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 4, y: 0 },
+                { x: 4, y: 3 },
+                { x: 0, y: 3 },
+            ],
+            height: 2.7,
+            color: '#ffffff',
+            outletUse: 'aula',
+        };
+        const scene = buildScene({
+            rooms: [room],
+            electricalDevices: [
+                buildOutlet({ id: 'outlet-bano', roomId: room.id, ambientId: 'wall-bano' }),
+                buildOutlet({ id: 'outlet-guarderias', roomId: room.id, ambientId: 'wall-guarderias' }),
+            ],
+        });
+
+        const validations = validateSceneOutlets(scene);
+
+        // Sin paredes internas configuradas, `deriveSceneAmbientSpaces`
+        // deriva un único ambiente base (sin `wallId`) para este recinto —
+        // ninguno de los dos tomacorrientes (ambos con `ambientId` de una
+        // pared) pertenece a ese ambiente base.
+        expect(validations).toHaveLength(1);
+        expect(validations[0]!.installedOutlets).toBe(0);
     });
 });

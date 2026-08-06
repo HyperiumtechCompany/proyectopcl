@@ -491,7 +491,7 @@ export const Toolbar: React.FC = () => {
             {/* ── Sidebar rail ── */}
             <aside
                 id="dialux-toolbar"
-                className="relative flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-gray-800/70 bg-[#12141e] py-2 md:w-14"
+                className="relative z-40 flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-gray-800/70 bg-[#12141e] py-2 md:w-14"
             >
                 {/* ── Quick-access native tools ── */}
                 <span className="mt-1 mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-gray-700 uppercase">
@@ -743,6 +743,7 @@ export const Toolbar: React.FC = () => {
                     anchorRef={refs.emergencia}
                     onClose={closePanel}
                     width="md"
+                    dropdown
                 >
                     <EmergenciaPanel />
                 </FloatingPanelPortal>
@@ -806,6 +807,7 @@ export const Toolbar: React.FC = () => {
                     anchorRef={refs.exportacion}
                     onClose={closePanel}
                     width="md"
+                    dropdown
                 >
                     <ExportacionPanel
                         hasCadDoc={hasCadDoc}

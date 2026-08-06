@@ -21,11 +21,13 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
     const [isUploading, setIsUploading] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
     const [importMessage, setImportMessage] = useState<string | null>(null);
+    const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
     const submitProductImport = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setImportError(null);
         setImportMessage(null);
+        setImportWarnings([]);
 
         if (!selectedFile) {
             setImportError('Selecciona un archivo .ies, .ldt o .gldf.');
@@ -43,7 +45,7 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
         setIsUploading(true);
 
         try {
-            const { product, message } = await importPhotometryFile(formData);
+            const { product, message, warnings } = await importPhotometryFile(formData);
             onImported(product);
             setSelectedFile(null);
             setProductName('');
@@ -51,6 +53,7 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
             setProductImage(null);
             setBrandLogo(null);
             setImportMessage(message ?? 'Producto importado correctamente.');
+            setImportWarnings(warnings ?? []);
         } catch (error) {
             setImportError(extractErrorMessage(error, 'No se pudo importar el producto.'));
         } finally {
@@ -127,6 +130,15 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
             </button>
             {importError && <p className="mt-1 text-[8px] leading-tight text-red-300">{importError}</p>}
             {importMessage && <p className="mt-1 text-[8px] leading-tight text-emerald-300">{importMessage}</p>}
+            {importWarnings.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                    {importWarnings.map((warning, index) => (
+                        <li key={index} className="text-[8px] leading-tight text-amber-500">
+                            ⚠ {warning}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </form>
     );
 }

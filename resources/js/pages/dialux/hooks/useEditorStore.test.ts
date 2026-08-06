@@ -304,3 +304,41 @@ describe('useEditorStore normative defaults', () => {
         expect(rooms.map((room) => room.illuminanceLux)).toEqual([200, 100]);
     });
 });
+
+describe('useEditorStore.setProjectSiteSettings (panel "Terreno")', () => {
+    const project = (): Project => ({
+        id: 'project-terreno',
+        name: 'Proyecto',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+        scenes: [scene('scene-1', [])],
+    });
+
+    it('crea siteSettings en el proyecto cuando no existía', () => {
+        useEditorStore.getState().setProject(project());
+        useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
+
+        expect(useEditorStore.getState().project?.siteSettings).toEqual({
+            maintenanceFactor: 0.65,
+        });
+    });
+
+    it('hace merge parcial — no pisa campos ya seteados de otras secciones', () => {
+        useEditorStore.getState().setProject(project());
+        useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.65 });
+        useEditorStore.getState().setProjectSiteSettings({ environmentalZone: 'E3' });
+
+        expect(useEditorStore.getState().project?.siteSettings).toEqual({
+            maintenanceFactor: 0.65,
+            environmentalZone: 'E3',
+        });
+    });
+
+    it('no hace nada si no hay proyecto activo (no revienta)', () => {
+        useEditorStore.setState({ project: null });
+        expect(() =>
+            useEditorStore.getState().setProjectSiteSettings({ maintenanceFactor: 0.5 }),
+        ).not.toThrow();
+        expect(useEditorStore.getState().project).toBeNull();
+    });
+});

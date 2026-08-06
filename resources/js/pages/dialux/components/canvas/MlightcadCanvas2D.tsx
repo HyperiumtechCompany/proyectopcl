@@ -833,6 +833,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         ...defaults.properties,
                         ...template.properties,
                     },
+                    // Antes no se asignaba (a diferencia de `onAddFixture`,
+                    // arriba, que sí lo hace) — el dispositivo quedaba con
+                    // `roomId: undefined` para siempre, obligando a cada
+                    // consumidor (conteo de tomacorrientes por normativa,
+                    // agrupación para cálculo CT/longitud de cable) a inventar
+                    // su propio criterio de a qué ambiente pertenece, con
+                    // resultados inconsistentes entre pantallas.
+                    roomId: ambient?.sourceRoom.id,
                 });
                 store.setSelectedId(id);
             },

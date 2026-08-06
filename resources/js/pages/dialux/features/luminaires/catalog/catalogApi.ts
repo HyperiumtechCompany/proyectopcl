@@ -109,8 +109,10 @@ export async function fetchPhotometricWeb(productId: number): Promise<Photometri
     return response.data.product.photometric_web ?? null;
 }
 
-export async function importPhotometryFile(formData: FormData): Promise<{ product: ImportedLuminaireProduct; message?: string }> {
-    const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string }>(
+export async function importPhotometryFile(
+    formData: FormData,
+): Promise<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }> {
+    const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
         productRoutes.importMethod.url(),
         formData,
         jsonRequestConfig,
@@ -120,8 +122,8 @@ export async function importPhotometryFile(formData: FormData): Promise<{ produc
 
 export async function createManualLuminaire(
     payload: ManualLuminairePayload,
-): Promise<{ product: ImportedLuminaireProduct; message?: string }> {
-    const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string }>(
+): Promise<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }> {
+    const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
         productRoutes.storeManual.url(),
         payload,
         jsonRequestConfig,
@@ -132,8 +134,8 @@ export async function createManualLuminaire(
 export async function updateLuminaire(
     productId: number,
     payload: Omit<ManualLuminairePayload, 'beam_angle_50' | 'photometric_table'>,
-): Promise<{ product: ImportedLuminaireProduct; message?: string }> {
-    const response = await axios.patch<{ product: ImportedLuminaireProduct; message?: string }>(
+): Promise<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }> {
+    const response = await axios.patch<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
         productRoutes.update(productId).url,
         payload,
         jsonRequestConfig,

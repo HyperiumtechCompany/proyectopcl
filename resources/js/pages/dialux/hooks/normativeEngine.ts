@@ -25,7 +25,7 @@
 import { a130Regulations, en12464Regulations, en1838Regulations, iesnaRegulations, rnePeruRegulations} from './normativaData';
 import type { RawNormativeLeaf, RawNormativeBranch } from './normativaData';
 import type { NormativeStandard } from './roomLighting';
-import type { LightingResult, Room } from './types';
+import type { Fixture, LightingResult, Room } from './types';
 
 // ─── Tipos del Motor ──────────────────────────────────────────────────────────
 
@@ -542,8 +542,15 @@ function luxStatus(calculated: number, required: number): ComplianceStatus {
     return 'non_compliant';
 }
 
-function ugrStatus(calculated: number, limit: number | null): ComplianceStatus {
-    if (limit === null) {
+/**
+ * `notEvaluated`: todas las luminarias del ambiente quedaron excluidas de la
+ * suma de deslumbramiento (`LightingResult.ugr_not_evaluated` — ver
+ * `glareCalculation.ts`), así que `calculated: 0` no es un UGR real. Sin este
+ * chequeo, `0 <= limit` siempre es verdadero y el ambiente se reportaría
+ * "compliant" sin haberse evaluado el deslumbramiento en absoluto.
+ */
+function ugrStatus(calculated: number, limit: number | null, notEvaluated: boolean): ComplianceStatus {
+    if (limit === null || notEvaluated) {
         return 'needs_review';
     }
     if (calculated <= limit) {
@@ -571,12 +578,23 @@ function uniformityStatus(calculated: number, required: number | null): Complian
 /**
  * Evalúa el cumplimiento de un recinto contra su norma seleccionada.
  * Usa los resultados del motor de cálculo (isolux / lightingCalculations).
+ *
+ * `fixtures` (opcional, luminarias YA filtradas a las de este ambiente):
+ * cuando se provee, el Ra evaluado se deriva del dato REAL de las luminarias
+ * instaladas (`Fixture.cri`, el peor caso entre ellas) en vez de
+ * `room.colorRenderingRa` — antes ese campo se sobrescribía silenciosamente
+ * con el propio requisito de la norma al elegir la actividad
+ * (`RoomLightingSection.tsx`), así que la comparación terminaba siendo del
+ * requisito contra sí mismo y "Conforme" salía sin importar qué luminaria
+ * real se hubiera instalado. Sin `fixtures` (callers antiguos/tests), se
+ * mantiene el comportamiento previo leyendo `room.colorRenderingRa`.
  */
 export function evaluateCompliance(
     room: Room,
     result: LightingResult,
     normative: NormativeLeafOption,
     standardMeta?: NormativeStandardMeta,
+    fixtures?: Fixture[],
 ): ComplianceResult[] {
     const source = standardMeta?.source ?? 'Norma seleccionada';
     const results: ComplianceResult[] = [];
@@ -618,7 +636,7 @@ export function evaluateCompliance(
     });
 
     // 3. UGR
-    const ugrSt = ugrStatus(result.ugr, normative.ugr);
+    const ugrSt = ugrStatus(result.ugr, normative.ugr, result.ugr_not_evaluated ?? false);
     results.push({
         parameterId: 'ugr',
         parameterName: 'Índice de deslumbramiento (UGR)',
@@ -628,6 +646,8 @@ export function evaluateCompliance(
         status: ugrSt,
         message: normative.ugr === null
             ? 'UGR no especificado en esta norma/actividad'
+            : result.ugr_not_evaluated
+            ? 'UGR no evaluado: todas las luminarias quedaron fuera del cálculo de deslumbramiento'
             : ugrSt === 'compliant'
             ? `UGR ${result.ugr.toFixed(1)} ≤ ${normative.ugr} límite`
             : ugrSt === 'warning'
@@ -638,7 +658,17 @@ export function evaluateCompliance(
 
     // 4. Ra (si está disponible en el recinto y en la norma)
     const raRequired = normative.ra;
-    const raCalculated = room.colorRenderingRa ?? null;
+    const fixtureCriValues = (fixtures ?? [])
+        .map((fixture) => fixture.cri)
+        .filter((cri): cri is number => typeof cri === 'number');
+    // Peor caso entre las luminarias instaladas: basta con que UNA no
+    // alcance el Ra exigido para que el ambiente no cumpla realmente.
+    const raCalculated =
+        fixtures !== undefined
+            ? fixtureCriValues.length > 0
+                ? Math.min(...fixtureCriValues)
+                : null
+            : (room.colorRenderingRa ?? null);
 
     if (raRequired !== null) {
         const raSt: ComplianceStatus =

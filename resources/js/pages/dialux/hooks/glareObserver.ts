@@ -1,4 +1,4 @@
-import { polygonCentroid } from '@/pages/dialux/geometry/polygonGeometry';
+import { polygonBBox } from './fixtureGrid';
 import type { Room } from './types';
 
 /**
@@ -27,29 +27,42 @@ export interface GlareObserver {
  */
 export const DEFAULT_UGR_EYE_HEIGHT = 1.2;
 
-/** Direcciones cardinales de vista por defecto, en grados. */
-const DEFAULT_VIEW_DIRECTIONS_DEG = [0, 90, 180, 270];
-
 /**
- * Observadores por defecto cuando el llamador no especifica ninguno: un
- * observador en el centroide del recinto, evaluado en las 4 direcciones
- * cardinales de vista — mismo criterio que las tablas UGR normativas
- * (EN 12464-1/CIE 117), que reportan el peor caso entre las direcciones
- * principales de vista del observador típico, no una sola dirección
- * arbitraria (plan §11 Fase 9: "evaluar varios observadores/direcciones").
+ * Observadores por defecto cuando el llamador no especifica ninguno: uno en
+ * el punto medio de cada pared del recinto (bounding box), mirando hacia
+ * adentro — el mismo criterio CIE 117/EN 12464-1 que ya usa la tabla UGR de
+ * referencia por producto (`computeEngineUgrTable.ts::buildWallMidpointObserver`,
+ * Fase 15), NO el centro geométrico del recinto.
+ *
+ * Antes este observador vivía en el centroide del recinto — para cualquier
+ * ambiente pequeño con las luminarias más o menos centradas (el caso más
+ * común, no un borde raro), el observador quedaba casi directamente DEBAJO
+ * de ellas: horizDist chico, dz grande, disparando la exclusión H/R>2 de
+ * `glareCalculation.ts` para TODAS las luminarias en TODAS las direcciones
+ * de vista (esa exclusión no depende de hacia dónde mira el observador, solo
+ * de su posición). Resultado: UGR quedaba "no evaluado" de forma sistemática
+ * para cualquier ambiente chico y alto — no un caso límite, sino el caso
+ * típico de una caseta de control o baño — mientras que DIALux real evalúa
+ * ese mismo ambiente sin problema porque ubica su propio observador cerca de
+ * una pared, no en el centro (confirmado comparando contra un export real:
+ * mismo ambiente, mismas luminarias, RUG real=22 evaluado vs el nuestro
+ * "no evaluado" con el observador en el centroide).
  * Devuelve `[]` si el recinto no tiene un polígono válido — sin observadores
  * no hay UGR que evaluar, comportamiento seguro por defecto.
  */
 export function buildDefaultObservers(room: Room, eyeHeight: number = DEFAULT_UGR_EYE_HEIGHT): GlareObserver[] {
-    const centroid = polygonCentroid(room.vertices);
-    if (!centroid) {
+    if (room.vertices.length < 3) {
         return [];
     }
 
-    return DEFAULT_VIEW_DIRECTIONS_DEG.map((viewDirectionDeg) => ({
-        x: centroid.x,
-        y: centroid.y,
-        eyeHeight,
-        viewDirectionDeg,
-    }));
+    const { minX, minY, maxX, maxY } = polygonBBox(room.vertices);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    return [
+        { x: minX, y: midY, eyeHeight, viewDirectionDeg: 0 }, // pared izquierda, mira hacia +X (adentro)
+        { x: maxX, y: midY, eyeHeight, viewDirectionDeg: 180 }, // pared derecha, mira hacia -X (adentro)
+        { x: midX, y: minY, eyeHeight, viewDirectionDeg: 90 }, // pared inferior, mira hacia +Y (adentro)
+        { x: midX, y: maxY, eyeHeight, viewDirectionDeg: 270 }, // pared superior, mira hacia -Y (adentro)
+    ];
 }

@@ -168,7 +168,13 @@ export function buildAmbientDetails(
                 reflectionFloor:
                     projectPhotometricDefaults.reflectionFloor ??
                     DEFAULT_REFLECTANCE_FLOOR,
+                // `siteSettings.maintenanceFactor` (panel "Terreno" ·
+                // Mantenimiento) es el override real que también alimenta el
+                // cálculo — `projectPhotometricDefaults.maintenanceFactor`
+                // queda como fallback legacy por si algún snapshot viejo lo
+                // trae en la raíz en vez de anidado.
                 maintenanceFactor:
+                    snapshot.project.siteSettings?.maintenanceFactor ??
                     projectPhotometricDefaults.maintenanceFactor ??
                     DEFAULT_MAINTENANCE_FACTOR,
                 usefulPlaneHeight: Number(

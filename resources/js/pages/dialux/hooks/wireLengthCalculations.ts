@@ -1166,10 +1166,21 @@ export function validateSceneOutlets(scene: Scene): RoomOutletValidation[] {
         else if (outletUse === 'comedor') requiredOutlets = Math.ceil(area / 15);
         else if (outletUse === 'exterior') requiredOutlets = Math.ceil(perimeter / 9);
         
+        // `ambient.room.id` es el id SINTÉTICO del ambiente derivado
+        // (`${room.id}::ambient-N`) — nunca coincide con `device.roomId`
+        // (siempre el id FÍSICO plano del recinto, `ambient.roomId`). Con
+        // esa comparación, `installedOutlets` daba 0 siempre, sin importar
+        // cuántos tomacorrientes hubiera realmente colocados. Además de
+        // corregir el id, se filtra también por `ambient.wallId` (contra
+        // `device.ambientId`) para no contar tomacorrientes de OTRO
+        // sub-ambiente que comparte el mismo recinto físico (ej. "Baño" vs
+        // "Guarderías" delimitados por paredes internas distintas).
         const installedOutlets = (scene.electricalDevices ?? []).filter(
-            device => device.type.startsWith('outlet_') && device.roomId === ambient.room.id
+            device => device.type.startsWith('outlet_')
+                && device.roomId === ambient.roomId
+                && device.ambientId === ambient.wallId
         ).length;
-        
+
         return {
             roomId: ambient.room.id,
             roomName: ambient.name,

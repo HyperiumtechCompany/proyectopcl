@@ -19,15 +19,23 @@ function buildSquareRoom(): Room {
 }
 
 describe('Fase 9 — buildDefaultObservers', () => {
-    it('genera 4 observadores en el centroide del recinto, uno por dirección cardinal', () => {
+    it('genera 4 observadores en el punto medio de cada pared, mirando hacia adentro (no en el centroide)', () => {
         const room = buildSquareRoom();
         const observers = buildDefaultObservers(room);
 
         expect(observers).toHaveLength(4);
         expect(new Set(observers.map((o) => o.viewDirectionDeg))).toEqual(new Set([0, 90, 180, 270]));
+
+        const byDirection = new Map(observers.map((o) => [o.viewDirectionDeg, o]));
+        // Pared izquierda (x=0), mirando hacia +X.
+        expect(byDirection.get(0)).toMatchObject({ x: 0, y: 2 });
+        // Pared derecha (x=4), mirando hacia -X.
+        expect(byDirection.get(180)).toMatchObject({ x: 4, y: 2 });
+        // Pared inferior (y=0), mirando hacia +Y.
+        expect(byDirection.get(90)).toMatchObject({ x: 2, y: 0 });
+        // Pared superior (y=4), mirando hacia -Y.
+        expect(byDirection.get(270)).toMatchObject({ x: 2, y: 4 });
         for (const observer of observers) {
-            expect(observer.x).toBeCloseTo(2, 9);
-            expect(observer.y).toBeCloseTo(2, 9);
             expect(observer.eyeHeight).toBe(DEFAULT_UGR_EYE_HEIGHT);
         }
     });

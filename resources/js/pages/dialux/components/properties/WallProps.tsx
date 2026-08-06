@@ -501,6 +501,32 @@ export const WallProps: React.FC<{
                 deriveAmbientSpaces(room, scene.walls, scene.fixtures),
             )
             .find((ambient) => ambient.wallId === wall.id) ?? null;
+    // Regla de tomacorrientes de ESTE sub-ambiente (ver `AmbientConfig.outletUse`)
+    // — no confundir con `outletRoom.outletUse` (recinto físico, compartido
+    // por todos sus sub-ambientes).
+    const ambientOutletConfig =
+        ambientMatch?.sourceRoom.ambientConfigs?.[ambientMatch.configKey];
+    const updateAmbientOutletConfig = (
+        patch: Partial<
+            Pick<
+                NonNullable<Room['ambientConfigs']>[string],
+                'outletUse' | 'outletDeviceType' | 'outletStartOffset'
+            >
+        >,
+    ) => {
+        if (!ambientMatch) return;
+        onUpdateRoom(ambientMatch.sourceRoom.id, {
+            ambientConfigs: {
+                ...(ambientMatch.sourceRoom.ambientConfigs ?? {}),
+                [ambientMatch.configKey]: {
+                    ...(ambientMatch.sourceRoom.ambientConfigs?.[
+                        ambientMatch.configKey
+                    ] ?? {}),
+                    ...patch,
+                },
+            },
+        });
+    };
 
     // Estado local para la grilla de techo — independiente de la grilla de
     // pared (más abajo en el mismo panel) y de la herramienta "fixture-grid"
@@ -557,10 +583,10 @@ export const WallProps: React.FC<{
         !!ceilingInputs &&
         ceilingGridRows * ceilingGridCols < ceilingRoundedQuantity;
     const outletRoom = ambientMatch?.sourceRoom ?? null;
-    const outletUse = outletRoom?.outletUse ?? 'aula';
+    const outletUse = ambientOutletConfig?.outletUse ?? 'aula';
     const outletRule = OUTLET_RULES[outletUse];
     const outletDeviceType =
-        outletRoom?.outletDeviceType ??
+        ambientOutletConfig?.outletDeviceType ??
         (outletUse === 'exterior' ? 'outlet_waterproof' : 'outlet_floor');
     const requiredOutlets = ambientMatch
         ? requiredOutletCount(ambientMatch.room.vertices, outletUse)
@@ -568,7 +594,8 @@ export const WallProps: React.FC<{
     const generatedOutlets = (scene?.electricalDevices ?? []).filter(
         (device) =>
             device.generatedBy === 'outlet-rule' &&
-            device.roomId === outletRoom?.id,
+            device.roomId === outletRoom?.id &&
+            device.ambientId === wall.id,
     );
     const regenerateOutlets = () => {
         if (!ambientMatch || !outletRoom) return;
@@ -576,7 +603,7 @@ export const WallProps: React.FC<{
         const devices = distributeOutletsOnPerimeter(
             ambientMatch.room.vertices,
             requiredOutlets,
-            outletRoom.outletStartOffset,
+            ambientOutletConfig?.outletStartOffset,
         ).map((point, index) => ({
             type: outletDeviceType,
             x: point.x,
@@ -587,11 +614,18 @@ export const WallProps: React.FC<{
                     ? ambientMatch.room.height
                     : defaults.mountingHeight,
             roomId: outletRoom.id,
-            generatedBy: 'outlet-rule',
+            // NO se fija `wallId` aquí a propósito: cada punto se reparte
+            // por TODO el perímetro del ambiente (puede quedar pegado a
+            // cualquier pared, no solo a `wall`), así que `buildElectricalDevice`
+            // (House3DBuilder) debe seguir buscando la pared más cercana por
+            // sí mismo en 2D/3D. `ambientId` es solo para agrupar el
+            // conjunto generado, no para orientación.
+            ambientId: wall.id,
+            generatedBy: 'outlet-rule' as const,
             connectedDeviceIds: [],
             properties: { ...defaults.properties },
         }));
-        store.replaceGeneratedOutletsForRoom(outletRoom.id, devices);
+        store.replaceGeneratedOutletsForRoom(outletRoom.id, devices, wall.id);
     };
 
     // Una pared interior y el recinto que delimita son, físicamente, la
@@ -928,12 +962,12 @@ export const WallProps: React.FC<{
                             )}
                             onChange={(value) => {
                                 const nextUse = value as OutletUse;
-                                onUpdateRoom(outletRoom!.id, {
+                                updateAmbientOutletConfig({
                                     outletUse: nextUse,
                                     outletDeviceType:
                                         nextUse === 'exterior'
                                             ? 'outlet_waterproof'
-                                            : (outletRoom?.outletDeviceType ??
+                                            : (ambientOutletConfig?.outletDeviceType ??
                                               'outlet_floor'),
                                 });
                             }}
@@ -972,7 +1006,7 @@ export const WallProps: React.FC<{
                                 const type = value as ElectricalDeviceType;
                                 const defaults =
                                     ELECTRICAL_DEVICE_DEFAULTS[type];
-                                onUpdateRoom(outletRoom!.id, {
+                                updateAmbientOutletConfig({
                                     outletDeviceType: type,
                                 });
                                 store.updateGeneratedOutletsForRoom(
@@ -985,12 +1019,13 @@ export const WallProps: React.FC<{
                                                 : defaults.mountingHeight,
                                         properties: { ...defaults.properties },
                                     },
+                                    wall.id,
                                 );
                             }}
                         />
                         <EditField
                             label="Inicio en perímetro (m)"
-                            value={outletRoom?.outletStartOffset ?? 0}
+                            value={ambientOutletConfig?.outletStartOffset ?? 0}
                             min={0}
                             max={Math.max(
                                 calculatePolygonPerimeter(
@@ -1000,7 +1035,7 @@ export const WallProps: React.FC<{
                             )}
                             step={0.1}
                             onChange={(value) =>
-                                onUpdateRoom(outletRoom!.id, {
+                                updateAmbientOutletConfig({
                                     outletStartOffset: value,
                                 })
                             }
@@ -1047,6 +1082,7 @@ export const WallProps: React.FC<{
                                 onClick={() =>
                                     store.removeGeneratedOutletsForRoom(
                                         outletRoom!.id,
+                                        wall.id,
                                     )
                                 }
                                 className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20"

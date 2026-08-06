@@ -117,10 +117,29 @@ class ProductController extends Controller
             ->forUser($request->user()->id)
             ->findOrFail($productId);
 
+        // El archivo fotométrico original NO se vuelve a subir en este
+        // endpoint (solo edita metadatos) — si el nombre nuevo diverge del
+        // nombre que el propio archivo declara internamente (guardado en
+        // `metadata.source_internal_name` al importar/reparar), el producto
+        // queda mostrando una etiqueta que ya no corresponde a los datos de
+        // flujo/potencia realmente almacenados. Avisar aquí es el único
+        // punto que puede detectar ese desfase en el momento del renombre.
+        $internalName = is_string($product->metadata['source_internal_name'] ?? null)
+            ? trim($product->metadata['source_internal_name'])
+            : null;
+        $newName = trim((string) $request->validated('name'));
+        $warnings = [];
+        if ($internalName !== null && $internalName !== '' && $newName !== ''
+            && strcasecmp($internalName, $newName) !== 0
+            && strcasecmp($internalName, trim((string) $product->name)) === 0) {
+            $warnings[] = "El nuevo nombre (\"{$newName}\") ya no coincide con el nombre interno del archivo fotométrico almacenado (\"{$internalName}\"). El archivo no se reemplaza al renombrar — si el producto real es otra variante, vuelve a importarlo con el archivo correcto en vez de solo renombrarlo.";
+        }
+
         $product->update($request->validated());
 
         return response()->json([
             'product' => $this->formatProduct($product->refresh(), userId: $request->user()->id),
+            'warnings' => $warnings,
             'message' => 'Luminaria actualizada correctamente.',
         ]);
     }

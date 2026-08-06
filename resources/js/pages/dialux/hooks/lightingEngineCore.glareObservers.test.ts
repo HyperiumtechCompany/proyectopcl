@@ -59,13 +59,23 @@ describe('Fase 9 — compatibilidad hacia atrás', () => {
 });
 
 describe('Fase 9 — glareConfig activa el camino de observadores de Guth', () => {
-    it('con glareConfig: {}, usa los observadores por defecto y reporta el observador ganador', () => {
+    it('con glareConfig: {}, usa los observadores por defecto (punto medio de cada pared) y reporta el observador ganador', () => {
         const room = buildRoom();
         const fixture = buildFixture();
         const result = calculateLightingResult(room, [fixture], GRID_SPACING, [], null, null, {});
 
-        expect(result.ugr_observer_x).toBeCloseTo(2, 9); // centroide del recinto 4x4
-        expect(result.ugr_observer_y).toBeCloseTo(2, 9);
+        // Los 4 observadores por defecto viven en el punto medio de cada
+        // pared del recinto 4x4 (0,2)/(4,2)/(2,0)/(2,4) — no en el centroide
+        // (ver `glareObserver.ts::buildDefaultObservers`). Cuál de los 4 gana
+        // el peor caso depende del ángulo de incidencia real (Guth), no solo
+        // de la distancia, así que no se fija cuál específicamente gana.
+        const wallMidpoints = [
+            [0, 2],
+            [4, 2],
+            [2, 0],
+            [2, 4],
+        ];
+        expect(wallMidpoints).toContainEqual([result.ugr_observer_x, result.ugr_observer_y]);
         expect(result.ugr_observer_eye_height).toBe(DEFAULT_UGR_EYE_HEIGHT);
         expect([0, 90, 180, 270]).toContain(result.ugr_observer_view_direction_deg);
         expect(result.ugr_excluded_fixture_count).toBeDefined();

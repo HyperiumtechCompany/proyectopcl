@@ -9,7 +9,7 @@ import {
     type NormativeLeafOption,
     type NormativeStandardMeta,
 } from './normativeEngine';
-import type { LightingResult, Room } from './types';
+import type { Fixture, LightingResult, Room } from './types';
 
 /**
  * Cobertura mínima de `normativeEngine.ts` (hallazgo de Fase 6,
@@ -46,6 +46,21 @@ function buildResult(overrides: Partial<LightingResult> = {}): LightingResult {
         grid_rows: 4,
         grid_cols: 5,
         grid_values: [],
+        ...overrides,
+    };
+}
+
+function buildFixture(overrides: Partial<Fixture> = {}): Fixture {
+    return {
+        id: 'fixture-1',
+        name: 'Luminaria de prueba',
+        x: 1,
+        y: 1,
+        z: 2.5,
+        lumens: 2000,
+        efficiency: 0.8,
+        fixtureType: 'surface',
+        lightColor: '#fff5e1',
         ...overrides,
     };
 }
@@ -147,6 +162,35 @@ describe('evaluateCompliance', () => {
 
         const mal = evaluateCompliance(buildRoom({ colorRenderingRa: 60 }), result, normative);
         expect(mal.find((e) => e.parameterId === 'ra')!.status).toBe('non_compliant');
+    });
+
+    it('Ra: cuando se pasan luminarias, usa el CRI real (peor caso) en vez de room.colorRenderingRa', () => {
+        const result = buildResult();
+        const normative = buildNormative({ ra: 80 });
+        // `colorRenderingRa` quedó igual al requisito (bug histórico: la UI
+        // copiaba `act.ra` ahí) — si el motor lo siguiera leyendo, esto
+        // saldría "compliant" sin importar la luminaria real instalada.
+        const room = buildRoom({ colorRenderingRa: 80 });
+
+        const fixtures = [buildFixture({ cri: 90 }), buildFixture({ id: 'fixture-2', cri: 70 })];
+        const evaluations = evaluateCompliance(room, result, normative, undefined, fixtures);
+        const ra = evaluations.find((e) => e.parameterId === 'ra')!;
+
+        // Peor caso entre las luminarias (70), no el valor stale del recinto (80).
+        expect(ra.calculatedValue).toBe(70);
+        expect(ra.status).toBe('non_compliant');
+    });
+
+    it('Ra: needs_review si se pasan luminarias pero ninguna tiene CRI cargado', () => {
+        const result = buildResult();
+        const normative = buildNormative({ ra: 80 });
+        const room = buildRoom({ colorRenderingRa: 80 });
+
+        const fixtures = [buildFixture(), buildFixture({ id: 'fixture-2' })];
+        const evaluations = evaluateCompliance(room, result, normative, undefined, fixtures);
+        const ra = evaluations.find((e) => e.parameterId === 'ra')!;
+
+        expect(ra.status).toBe('needs_review');
     });
 
     it('normativeSource proviene de standardMeta.source cuando se provee, y de un valor genérico si no', () => {

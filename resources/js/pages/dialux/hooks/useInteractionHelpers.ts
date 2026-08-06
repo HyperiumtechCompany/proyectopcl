@@ -164,6 +164,15 @@ export function clampOpeningOffsetToWallSegment(
 export function useInteractionHelpers({
     walls, fixtures, rooms, canopies, windows, doors, lightSwitches, electricalDevices = [], sceneToCanvas,
 }: HelperOptions) {
+    // px/metro en el zoom actual (delta entre dos puntos, cancela el pan).
+    // Los símbolos crecen con el zoom sin techo; un `SNAP_DIST_PX` fijo
+    // dejaba el área "más cercana" anclada a un radio pequeño alrededor del
+    // centro exacto por más grande que se viera el símbolo en pantalla.
+    const pxPerMeter = () => {
+        const o = sceneToCanvas(0, 0);
+        const u = sceneToCanvas(1, 0);
+        return Math.hypot(u.x - o.x, u.y - o.y);
+    };
 
     const findNearestWall = useCallback(
         (cx: number, cy: number): {
@@ -223,7 +232,7 @@ export function useInteractionHelpers({
 
     const findNearestFixture = useCallback(
         (cx: number, cy: number): { id: string; x: number; y: number } | null => {
-            const SNAP_DIST_PX = 15;
+            const SNAP_DIST_PX = Math.max(15, pxPerMeter() * 0.15);
             let closest: { id: string; x: number; y: number } | null = null;
             let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
 
@@ -338,7 +347,7 @@ export function useInteractionHelpers({
 
     const findNearestLightSwitch = useCallback(
         (cx: number, cy: number): { id: string; x: number; y: number } | null => {
-            const SNAP_DIST_PX = 15;
+            const SNAP_DIST_PX = Math.max(15, pxPerMeter() * 0.15);
             let closest: { id: string; x: number; y: number } | null = null;
             let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
 
@@ -357,7 +366,7 @@ export function useInteractionHelpers({
 
     const findNearestElectricalDevice = useCallback(
         (cx: number, cy: number): { id: string; x: number; y: number } | null => {
-            const SNAP_DIST_PX = 20;
+            const SNAP_DIST_PX = Math.max(20, pxPerMeter() * 0.22);
             let closest: { id: string; x: number; y: number } | null = null;
             let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
 

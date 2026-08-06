@@ -145,7 +145,13 @@ function buildRequirementEvaluations(
             operator: '<=',
             requiredValue: ugrLimit,
             unit: 'UGR',
-            status: result === null
+            // `ugr_not_evaluated`: todas las luminarias quedaron excluidas de
+            // la suma de deslumbramiento (campo visual inferior o H/R>2 —
+            // ver `glareCalculation.ts`), así que el `ugr: 0` resultante no
+            // es un valor físico real. Sin este chequeo, `0 <= ugrLimit` es
+            // siempre verdadero y el ambiente se reportaría "Conforme" sin
+            // haberse evaluado el deslumbramiento en absoluto.
+            status: result === null || result.ugr_not_evaluated
                 ? 'not-evaluated'
                 : evaluateRequirementStatus(result.ugr <= ugrLimit, source),
             source,

@@ -4,12 +4,12 @@
 
 import { Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, Calculator, Check, ChevronDown, Download, Eye, EyeOff, FileCode, FileText, Lightbulb, Pencil, X } from 'lucide-react';
-import React, { memo, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
 import { hashCalculationSnapshot } from '@/pages/dialux/domain/calculation/hashSnapshot';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
-import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationRun } from '@/pages/dialux/domain/calculation/types';
+import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig, type CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
@@ -32,6 +32,7 @@ import { SidebarPanel } from './SidebarPanel';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import { WasmBadge } from './WasmBadge';
+import { FloatingPanelPortal } from './toolbar/FloatingPanelPortal';
 
 const DEMO_SCENE_ID = 'scene-default';
 
@@ -433,6 +434,15 @@ export const EditorLayout = memo(function EditorLayout() {
         const scenes = project?.scenes ?? [];
         if (!project || !engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
 
+        // Panel "Terreno" · Mantenimiento (`ProyectoPanel.tsx`) — único campo
+        // de `siteSettings` que de verdad altera el resultado calculado
+        // (E ∝ MF). El resto (orientación, luz molesta) es metadata sin
+        // consumidor todavía, ver comentario de `ProjectSiteSettings`.
+        const calcConfig: CalculationConfig = {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
+        };
+
         setCalculating(true);
         try {
             // Ambientes locales (room/fixtures) para `ResultsPanel`/`RoomLightingSection`
@@ -453,7 +463,7 @@ export const EditorLayout = memo(function EditorLayout() {
                 // el worker intenta acelerar el término directo con el kernel
                 // WASM de `dialux-core`; si no está disponible, usa el motor TS
                 // puro, con el mismo resultado.
-                run = await calcWorker.calculate(snapshot);
+                run = await calcWorker.calculate(snapshot, calcConfig);
             } catch (workerError) {
                 console.warn(
                     '[Dialux] El worker de cálculo falló, se usa el motor síncrono de respaldo en el hilo principal.',
@@ -480,7 +490,12 @@ export const EditorLayout = memo(function EditorLayout() {
                     engineVersion: LIGHTING_ENGINE_VERSION,
                     snapshotHash: await hashCalculationSnapshot(snapshot),
                     status: 'completed',
-                    config: DEFAULT_DIRECT_PREVIEW_CONFIG,
+                    // El motor síncrono de respaldo (`engine.calculate`, más
+                    // simple) no recibe `maintenanceFactor` — solo se
+                    // etiqueta con la config resuelta para que el registro
+                    // del cálculo no muestre un valor distinto al que el
+                    // usuario configuró, aunque este camino no lo aplique.
+                    config: calcConfig,
                     startedAt: fallbackStartedAt,
                     completedAt: new Date().toISOString(),
                     durationMs: 0,
@@ -570,6 +585,9 @@ export const EditorLayout = memo(function EditorLayout() {
     /**buttons esportados */
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [showDxfExportDialog, setShowDxfExportDialog] = useState(false);
+
+    const exportBtnRef = useRef<HTMLButtonElement | null>(null);
+    const floorSelectorRef = useRef<HTMLButtonElement | null>(null);
 
     const isExportDisabled = !project || isExporting;
 
@@ -704,7 +722,7 @@ export const EditorLayout = memo(function EditorLayout() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[#0d0f14] text-gray-200 select-none">
-            <header id="dialux-header" className="flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-800/60 bg-[#161820] px-2 sm:gap-3 sm:px-4">
+            <header id="dialux-header" className="sticky top-0 z-50 flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-800/60 bg-[#161820] px-2 sm:gap-3 sm:px-4">
                 <Link
                     id="dialux-btn-back-to-list"
                     href="/dialux"
@@ -737,6 +755,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         {/* Active floor badge + dropdown toggle */}
                         <button
                             id="dialux-floor-selector"
+                            ref={floorSelectorRef}
                             onClick={() => setShowFloorPanel((v) => !v)}
                             title="Gestionar pisos"
                             className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${showFloorPanel
@@ -762,8 +781,14 @@ export const EditorLayout = memo(function EditorLayout() {
 
                         {/* Floor panel dropdown */}
                         {showFloorPanel && (
-                            <div
-                                className="absolute top-full left-0 z-50 mt-1 min-w-52 rounded-lg border border-slate-700/60 bg-[#191c2c] shadow-2xl"
+                            <FloatingPanelPortal
+                                title="Pisos del Proyecto"
+                                icon={<Eye size={12} />}
+                                anchorRef={floorSelectorRef}
+                                onClose={() => setShowFloorPanel(false)}
+                                dropdown
+                                hideHeader
+                                width="md"
                             >
                                 <div className="border-b border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
                                     Pisos del Proyecto
@@ -954,7 +979,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </FloatingPanelPortal>
                         )}
                     </div>
                 )}
@@ -1055,6 +1080,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     <div className="relative">
                         <button
                             id="dialux-btn-export"
+                            ref={exportBtnRef}
                             onClick={() => setShowExportMenu((prev) => !prev)}
                             disabled={!project}
                             className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
@@ -1069,7 +1095,15 @@ export const EditorLayout = memo(function EditorLayout() {
                         </button>
 
                         {showExportMenu && (
-                            <div className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded border border-slate-700 bg-slate-950 shadow-lg">
+                            <FloatingPanelPortal
+                                title="Exportar"
+                                icon={<Download size={13} />}
+                                anchorRef={exportBtnRef}
+                                onClose={() => setShowExportMenu(false)}
+                                dropdown
+                                hideHeader
+                                width="sm"
+                            >
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -1107,7 +1141,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                     <AlertTriangle size={13} />
                                     {isExportingEmergency ? 'Generando...' : 'Informe de emergencia'}
                                 </button>
-                            </div>
+                            </FloatingPanelPortal>
                         )}
                     </div>
                 </div>

@@ -35,11 +35,13 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
     const [isSubmittingManual, setIsSubmittingManual] = useState(false);
     const [manualError, setManualError] = useState<string | null>(null);
     const [manualMessage, setManualMessage] = useState<string | null>(null);
+    const [manualWarnings, setManualWarnings] = useState<string[]>([]);
 
     const submitManualProduct = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setManualError(null);
         setManualMessage(null);
+        setManualWarnings([]);
 
         const totalLumens = Number.parseFloat(manualTotalLumens);
         const beamAngle50 = Number.parseFloat(manualBeamAngle50);
@@ -86,7 +88,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                 cct: manualCct.trim() || undefined,
                 cri_ra: manualCriRa ? Number.parseFloat(manualCriRa) : undefined,
             };
-            const { product: savedProduct, message } = isEditing
+            const { product: savedProduct, message, warnings } = isEditing
                 ? await updateLuminaire(product.id, payload)
                 : await createManualLuminaire({
                 ...payload,
@@ -95,6 +97,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
             });
 
             onCreated(savedProduct);
+            setManualWarnings(warnings ?? []);
             setManualName('');
             setManualManufacturer('');
             setManualCatalogNumber('');
@@ -226,6 +229,15 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
             </div>
             {manualError && <p className="mt-1 text-[8px] leading-tight text-red-300">{manualError}</p>}
             {manualMessage && <p className="mt-1 text-[8px] leading-tight text-emerald-300">{manualMessage}</p>}
+            {manualWarnings.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                    {manualWarnings.map((warning, index) => (
+                        <li key={index} className="text-[8px] leading-tight text-amber-500">
+                            ⚠ {warning}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </form>
     );
 }

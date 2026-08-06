@@ -10,6 +10,18 @@ const MIN_FIXTURE_HEIGHT = 0.2;
 /** Las luminarias de emergencia siempre se montan a esta altura fija, sin importar el techo. */
 const EMERGENCY_MOUNTING_HEIGHT = 2.2;
 
+/**
+ * Por debajo de esta fracción de `room.height`, una pared más baja que el
+ * recinto deja de tratarse como techo visible intencional (soffito, viga,
+ * sección rebajada) y pasa a tratarse como dato sin sincronizar — altura por
+ * defecto al dibujar la pared, nunca actualizada para igualar la altura real
+ * del recinto. Confiar en ella sin este piso montaba luminarias pegadas al
+ * "techo" equivocado en recintos altos (ej. pared en 2.78 m con recinto real
+ * en 4.670 m), acercando la luminaria al plano de trabajo y disparando la
+ * iluminancia muy por encima del valor real de DIALux.
+ */
+const WALL_CEILING_TRUST_RATIO = 0.75;
+
 export function resolveRoomCeilingHeight(room: Room, walls: Wall[]): number {
     const wallHeights = walls
         .map((wall) => wall.height)
@@ -19,7 +31,12 @@ export function resolveRoomCeilingHeight(room: Room, walls: Wall[]): number {
         return room.height;
     }
 
-    return Math.min(room.height, Math.max(...wallHeights));
+    const tallestWall = Math.max(...wallHeights);
+    if (tallestWall < room.height * WALL_CEILING_TRUST_RATIO) {
+        return room.height;
+    }
+
+    return Math.min(room.height, tallestWall);
 }
 
 export function resolveFixtureRenderHeight(

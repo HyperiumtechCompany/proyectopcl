@@ -18,6 +18,9 @@ struct ParsedProduct {
     c_angles: Vec<f64>,
     gamma_angles: Vec<f64>,
     candela: Vec<Vec<f64>>,
+    /// Código de simetría EULUMDAT (Isym, línea 3 / índice 2) — solo LDT.
+    /// Ausente (`None`) para IES/GLDF, que no declaran este campo.
+    symmetry: Option<i64>,
     warnings: Vec<String>,
 }
 
@@ -83,6 +86,20 @@ fn parse_ies(content: &str) -> ParsedProduct {
     while index < lines.len() {
         let line = lines[index].trim();
         if line.starts_with("TILT") {
+            // TILT=INCLUDE antepone una tabla de geometria/angulos/multiplicadores
+            // (LM-63 Sec.2.2) antes de los datos fotometricos; este parser rapido
+            // no la reconoce y, sin este chequeo, leia esos numeros como si fueran
+            // el encabezado fotometrico (num_lamps, lumens_per_lamp, ...),
+            // corrompiendo el flujo total. El fallback PHP si soporta TILT=INCLUDE
+            // completo (tabla de tilt registrada en metadata) — declinar aqui deja
+            // que ese camino, ya correcto, se haga cargo.
+            let tilt_value = line.splitn(2, '=').nth(1).unwrap_or("").trim().to_ascii_uppercase();
+            if tilt_value == "INCLUDE" {
+                fail(
+                    "tilt_include_unsupported",
+                    "TILT=INCLUDE requiere el parser PHP (tabla de tilt no soportada en Rust todavia)",
+                );
+            }
             break;
         }
 
@@ -115,18 +132,19 @@ fn parse_ies(content: &str) -> ParsedProduct {
     let num_h = numbers[4].max(1.0) as usize;
     let mut cursor = 10usize;
 
-    product.gamma_angles = numbers.get(cursor..cursor + num_v).unwrap_or(&[]).to_vec();
+    product.gamma_angles = slice_partial(&numbers, cursor, num_v);
     cursor += num_v;
-    product.c_angles = numbers.get(cursor..cursor + num_h).unwrap_or(&[]).to_vec();
+    product.c_angles = slice_partial(&numbers, cursor, num_h);
     cursor += num_h;
 
+    // Sin relleno artificial: un plano mas corto que `num_v` (archivo
+    // truncado/malformado) debe llegar tal cual a PHP para que su propia
+    // validacion de dimensiones lo detecte y avise — rellenar con ceros acá
+    // ocultaria la corrupcion en vez de señalarla.
     for _ in 0..num_h {
-        let mut plane = numbers.get(cursor..cursor + num_v).unwrap_or(&[]).to_vec();
+        let mut plane = slice_partial(&numbers, cursor, num_v);
         for value in &mut plane {
             *value *= multiplier;
-        }
-        while plane.len() < num_v {
-            plane.push(0.0);
         }
         product.candela.push(plane);
         cursor += num_v;
@@ -152,6 +170,9 @@ fn parse_ldt(content: &str) -> ParsedProduct {
 
     let get = |index: usize| lines.get(index).map(|line| line.trim()).unwrap_or("");
     product.manufacturer = non_empty(get(0));
+    // Isym (código de simetría EULUMDAT, línea 3 / índice 2) — se conserva
+    // tal cual el archivo lo declara, igual que el parser PHP.
+    product.symmetry = parse_number(get(2)).map(|value| value as i64);
     let num_c = parse_number(get(3)).unwrap_or(1.0).max(1.0) as usize;
     let dc = parse_number(get(4)).unwrap_or(0.0);
     let num_g = parse_number(get(5)).unwrap_or(1.0).max(1.0) as usize;
@@ -191,12 +212,9 @@ fn parse_ldt(content: &str) -> ParsedProduct {
     let mut offset = 0usize;
     let plane_count = (remaining.len() / num_g).clamp(1, num_c);
     for _ in 0..plane_count {
-        let mut plane = remaining.get(offset..offset + num_g).unwrap_or(&[]).to_vec();
+        let mut plane = slice_partial(&remaining, offset, num_g);
         for value in &mut plane {
             *value *= scale;
-        }
-        while plane.len() < num_g {
-            plane.push(0.0);
         }
         product.candela.push(plane);
         offset += num_g;
@@ -282,7 +300,7 @@ fn to_json(product: &ParsedProduct) -> String {
     ];
 
     format!(
-        "{{{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\"photometric_summary\":{{\"format_version\":\"{}\",\"total_lumens\":{},\"max_candela\":{},\"beam_angle_50\":{},\"beam_angle_10\":{},\"efficiency_lm_w\":{}}},\"photometric_web\":{{\"c_angles\":{},\"gamma_angles\":{},\"candela\":{}}},\"report_data\":{{\"version\":\"1.0\",\"technical_table\":[{}],\"warnings\":{}}},\"metadata\":{{\"parser\":\"rust\",\"format_version\":\"{}\"}},\"warnings\":{}}}",
+        "{{{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\"photometric_summary\":{{\"format_version\":\"{}\",\"total_lumens\":{},\"max_candela\":{},\"beam_angle_50\":{},\"beam_angle_10\":{},\"efficiency_lm_w\":{}}},\"photometric_web\":{{\"c_angles\":{},\"gamma_angles\":{},\"candela\":{},\"symmetry\":{}}},\"report_data\":{{\"version\":\"1.0\",\"technical_table\":[{}],\"warnings\":{}}},\"metadata\":{{\"parser\":\"rust\",\"format_version\":\"{}\"}},\"warnings\":{}}}",
         field_str("name", &product.name),
         field_str("manufacturer", &product.manufacturer),
         field_str("catalog_number", &product.catalog_number),
@@ -308,6 +326,7 @@ fn to_json(product: &ParsedProduct) -> String {
         json_vec(&product.c_angles),
         json_vec(&product.gamma_angles),
         json_matrix(&product.candela),
+        json_opt_int(product.symmetry),
         technical_table
             .iter()
             .map(|(label, value)| format!("{{\"label\":\"{}\",\"value\":\"{}\"}}", json_escape(label), json_escape(value)))
@@ -334,6 +353,10 @@ fn field_num(key: &str, value: Option<f64>) -> String {
 
 fn json_num(value: Option<f64>) -> String {
     value.map(trim_float).unwrap_or_else(|| "null".to_string())
+}
+
+fn json_opt_int(value: Option<i64>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_else(|| "null".to_string())
 }
 
 fn json_vec(values: &[f64]) -> String {
@@ -535,6 +558,20 @@ mod tests {
 
 fn parse_number(value: &str) -> Option<f64> {
     value.trim().replace(',', ".").parse::<f64>().ok()
+}
+
+/// Igual que `array_slice($values, $start, $len)` en PHP: si el rango pedido
+/// excede lo disponible, devuelve lo que SÍ hay (posiblemente más corto o
+/// vacío) en vez de fallar o devolver un slice vacío por estar el límite
+/// superior fuera de rango — `values[start..start+len]` de Rust panicaría (o,
+/// con `.get()`, devolvería `None` para TODO el rango) incluso cuando parte
+/// de los datos pedidos sí existen.
+fn slice_partial(values: &[f64], start: usize, len: usize) -> Vec<f64> {
+    if start >= values.len() {
+        return Vec::new();
+    }
+    let end = (start + len).min(values.len());
+    values[start..end].to_vec()
 }
 
 fn collect_numbers(content: &str) -> Vec<f64> {

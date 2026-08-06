@@ -35,6 +35,34 @@ describe('hitTestAtPoint — Prueba A: interruptor sobre el borde de un ambiente
     });
 });
 
+describe('hitTestAtPoint — la tolerancia de clic crece con el zoom (regresión: "hay que alejarse para seleccionar")', () => {
+    it('a zoom alto, un clic lejos del centro pero dentro del símbolo dibujado sigue acertando', () => {
+        // 400 px/m: zoom bien acercado, típico de trabajo de precisión al cablear.
+        const zoomedIn = (x: number, y: number) => ({ x: x * 400, y: y * 400 });
+        const scene: HitTestScene = {
+            electricalDevices: [
+                { id: 'dev-1', type: 'sub_panel', x: 5, y: 5, mountingHeight: 1.4, connectedDeviceIds: [] } as any,
+            ],
+        };
+        const clickPt = zoomedIn(5, 5);
+        clickPt.x += 40; // 40px de distancia al centro — dentro del símbolo a este zoom, pero fuera del radio fijo (20px) de antes.
+        const ranked = hitTestAtPoint(scene, clickPt, { x: 5.1, y: 5 }, zoomedIn);
+        expect(ranked[0]?.id).toBe('dev-1');
+    });
+
+    it('a zoom bajo (identidad, 60 px/m) se mantiene el radio fijo mínimo — no se vuelve más difícil clickear', () => {
+        const scene: HitTestScene = {
+            electricalDevices: [
+                { id: 'dev-1', type: 'sub_panel', x: 5, y: 5, mountingHeight: 1.4, connectedDeviceIds: [] } as any,
+            ],
+        };
+        const clickPt = sceneToCanvas(5, 5);
+        clickPt.x += 19; // dentro del radio fijo mínimo (20px)
+        const ranked = hitTestAtPoint(scene, clickPt, { x: 5.3, y: 5 }, sceneToCanvas);
+        expect(ranked[0]?.id).toBe('dev-1');
+    });
+});
+
 describe('hitTestAtPoint — Prueba de contenedores anidados', () => {
     const nestedScene: HitTestScene = {
         rooms: [

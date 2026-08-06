@@ -1085,9 +1085,14 @@ const NTP_370: NormStandardDef = {
                 {
                     id: '2.17',
                     application: 'Vestíbulo de entrada (educación)',
+                    // Verificado contra un export real de DIALux evo (EN
+                    // 12464-1 §44.18 "Entrance halls"): 200 lx, UGR≤25, Ra 80,
+                    // Uo SIN regular (por eso se omite `uniformity` — antes
+                    // decía 0.4, divergente del catálogo del motor
+                    // `hooks/normativaData.ts`, que sí tiene la fuente citada
+                    // para esta misma fila).
                     Em_work: 200,
-                    UGR: 22,
-                    uniformity: 0.4,
+                    UGR: 25,
                     Ra: 80,
                 },
                 {

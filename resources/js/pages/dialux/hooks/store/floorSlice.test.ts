@@ -80,6 +80,11 @@ function buildSourceScene(): Scene {
         mountingHeight: 0.4,
         wallId: wall.id,
         roomId: ambientRoomId,
+        // Grupo de tomacorrientes generados por sub-ambiente (`WallProps.tsx`
+        // lo fija = id de la pared delimitadora) — distinto de `wallId`,
+        // coincide con él acá solo porque el fixture de prueba tiene un
+        // único muro.
+        ambientId: wall.id,
         connectedDeviceIds: [],
         connectedFixtureIds: [fixture.id],
         connectedSwitchIds: [lightSwitch.id],
@@ -191,6 +196,12 @@ describe('floorSlice.duplicateFloor', () => {
         expect(newOutlet.roomId).toBe(`${newRoomId}::ambient-1`);
         expect(newOutlet.connectedFixtureIds).toEqual([newFixtureId]);
         expect(newOutlet.connectedSwitchIds).toEqual([newSwitchId]);
+        // Regresión: `ambientId` (grupo de tomacorrientes por sub-ambiente)
+        // no se remapeaba al duplicar piso — quedaba apuntando al muro del
+        // piso ORIGEN, y "Regenerar" en el piso nuevo nunca encontraba estos
+        // dispositivos para reemplazarlos (se acumulaban como huérfanos).
+        expect(newOutlet.ambientId).toBe(newWallId);
+        expect(newOutlet.ambientId).not.toBe(source.electricalDevices![0]!.ambientId);
 
         const newConductor = newScene.conductors![0]!;
         expect(newConductor.sourceId).toBe(newSwitchId);

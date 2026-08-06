@@ -6,6 +6,15 @@ export interface RawNormativeLeaf {
     Uo: number | null;
     Ra: number | null;
     requisitos_especificos: string | null;
+    /**
+     * Altura del plano útil (m) que DIALux evo usa por defecto para esta
+     * actividad. `undefined` = no verificado todavía contra DIALux real —
+     * el motor sigue usando el respaldo genérico de `getRoomUsefulPlaneHeight`
+     * (`roomLighting.ts`: 0m para espacios tipo pasillo, 0.8m para el resto).
+     * Rellenar SOLO con un valor confirmado contra un export real de DIALux
+     * evo — no estimar ni copiar de otra actividad "parecida".
+     */
+    workPlaneHeight?: number;
 }
 
 export interface RawNormativeBranch {
@@ -168,6 +177,19 @@ export const en12464Regulations: RawNormativeBranch[] = [
     {
         title: 'Educacion',
         subsections: [
+            {
+                title: 'Vestíbulos',
+                label: 'Vestíbulo de entrada, recepción y áreas de distribución (EN 12464-1 §44.18 Entrance halls)',
+                iluminancia_lux: 200,
+                UGR: 25,
+                Uo: null,
+                Ra: 80,
+                requisitos_especificos: 'Ninguno',
+                // Verificado contra export real DIALux evo (proyecto "Módulo
+                // 22", ambiente CASETA DE CONTROL, 2026-08-05): Altura del
+                // plano útil = 0.600 m para esta actividad exacta.
+                workPlaneHeight: 0.6,
+            },
             {
                 title: 'Sala de juegos',
                 label: 'Salas de juegos, salas de television y similares',

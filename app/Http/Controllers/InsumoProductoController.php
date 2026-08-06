@@ -21,11 +21,11 @@ class InsumoProductoController extends Controller
 
         // Run the seeders
         Artisan::call('db:seed', [
-            '--class' => 'Database\\Seeders\\diccionarioSeeder',
+            '--class' => 'Database\\Seeders\\DiccionarioSeeder',
             '--force' => true,
         ]);
         Artisan::call('db:seed', [
-            '--class' => 'Database\\Seeders\\unidadSeeder',
+            '--class' => 'Database\\Seeders\\UnidadSeeder',
             '--force' => true,
         ]);
         Artisan::call('db:seed', [

@@ -151,6 +151,21 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
                                         ]}
                                     />
                                 </label>
+                                <span className="text-zinc-700">|</span>
+                                <label
+                                    className="flex items-center gap-1"
+                                    title="Límite de caída de tensión ACUMULADA desde el tablero raíz hasta el punto de uso final (TG→TP→TD→circuito) — distinto del límite por tramo individual, que cada circuito/alimentador ya valida por separado. El motor ya calcula el acumulado siempre; sin este límite configurado, nunca se marca como error aunque la cascada sea excesiva. Vacío = sin verificar (pending-confirmation del umbral normativo)."
+                                >
+                                    ΔV acum. máx.
+                                    <NumCell
+                                        value={doc.settings.maxTotalVoltageDropPct}
+                                        onChange={(v) => update((d) => ({ ...d, settings: { ...d.settings, maxTotalVoltageDropPct: v } }))}
+                                        step={0.5}
+                                        width={50}
+                                        placeholder="—"
+                                    />
+                                    %
+                                </label>
                             </div>
 
                             {/* Estado de guardado */}

@@ -164,7 +164,10 @@ export const NormativeCompliancePanel: React.FC = () => {
             if (result && normLeaf) {
                 const standard = room.normativeStandard ?? 'en_12464';
                 const meta = NORMATIVE_STANDARDS_META[standard] ?? undefined;
-                params = evaluateCompliance(room, result, normLeaf, meta);
+                const roomFixtures = scene.fixtures.filter(
+                    (fixture) => fixture.roomId === room.id,
+                );
+                params = evaluateCompliance(room, result, normLeaf, meta, roomFixtures);
                 overallStatus = computeOverallStatus(params);
             }
 

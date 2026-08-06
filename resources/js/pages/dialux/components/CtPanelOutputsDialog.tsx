@@ -92,6 +92,7 @@ export function CtPanelOutputsDialog({
     open,
     onOpenChange,
     circuits,
+    outletValidations,
     loading = false,
     selectedRoom,
     onUpdateCircuit,

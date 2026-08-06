@@ -57,6 +57,19 @@ class ProductImportService
             ? $currentLumens / $referenceLumens
             : 1.0;
 
+        // El nombre que el propio archivo declara (línea 9 EULUMDAT / LUMCAT
+        // IES) puede haber divergido del nombre visible del producto si éste
+        // se renombró en algún momento sin volver a subir el archivo — la
+        // reparación reprocesa la fotometría pero NUNCA toca `name` (está en
+        // la lista `only()` de arriba), así que es el punto exacto donde
+        // detectar ese desfase sin haberlo detectado antes.
+        $parsedName = is_string($parsed['name'] ?? null) ? trim($parsed['name']) : null;
+        $currentName = trim((string) $product->name);
+        if ($parsedName !== null && $parsedName !== '' && $currentName !== ''
+            && strcasecmp($parsedName, $currentName) !== 0) {
+            $warnings[] = "El nombre del producto (\"{$currentName}\") no coincide con el nombre interno del archivo fotométrico almacenado (\"{$parsedName}\"). El producto pudo renombrarse después de importar un archivo de otra variante — verifica flujo/potencia contra la ficha del fabricante.";
+        }
+
         $data = array_merge($product->only([
             'name', 'manufacturer', 'catalog_number', 'article_number', 'description',
             'total_lumens', 'power_watts', 'cct', 'cri_ra', 'fixture_type',
@@ -73,6 +86,7 @@ class ProductImportService
             'luminous_opening' => $parsed['luminous_opening'] ?? $product->luminous_opening,
             'metadata' => array_merge($product->metadata ?? [], $parsed['metadata'] ?? [], [
                 'photometry_repaired_at' => now()->toIso8601String(),
+                'source_internal_name' => $parsedName,
             ]),
             // Se regeneran desde la matriz nueva; conservarlos dejaría el CDL
             // y la tabla técnica apuntando a la fotometría antigua.
@@ -125,6 +139,21 @@ class ProductImportService
             ],
         };
 
+        // El nombre override (elegido por el usuario en el diálogo de
+        // importación) puede divergir del nombre que el propio archivo
+        // fotométrico declara internamente (línea 9 EULUMDAT / palabra clave
+        // LUMCAT IES) — p.ej. el usuario etiqueta el producto como variante
+        // "...400.24" pero el .ldt subido es en realidad el de la variante
+        // "...400.05" (mismo fabricante, óptica distinta, flujo distinto).
+        // Sin este aviso, un archivo fotométrico equivocado queda importado
+        // en silencio bajo un nombre de producto que no le corresponde.
+        $overrideName = is_string($overrides['name'] ?? null) ? trim($overrides['name']) : null;
+        $parsedName = is_string($parsed['name'] ?? null) ? trim($parsed['name']) : null;
+        if ($overrideName !== null && $parsedName !== null && $overrideName !== '' && $parsedName !== ''
+            && strcasecmp($overrideName, $parsedName) !== 0) {
+            $warnings[] = "El nombre indicado (\"{$overrideName}\") no coincide con el nombre interno del archivo fotométrico (\"{$parsedName}\"). Verifica que se subió el archivo correcto para este producto — podría tratarse de otra variante con distinto flujo/potencia.";
+        }
+
         // Aplicar overrides del usuario
         $data = array_merge($parsed, array_filter($overrides, fn ($v) => $v !== null));
 
@@ -134,6 +163,16 @@ class ProductImportService
         $data['source_file_name'] = $originalName;
         $data['user_id'] = $userId;
         $data['name'] = $data['name'] ?? pathinfo($originalName, PATHINFO_FILENAME);
+        // Se conserva el nombre TAL COMO lo declara el archivo (independiente
+        // de un override posterior) para poder avisar más adelante si el
+        // producto se renombra (`update()`) de forma que ya no corresponda
+        // al archivo fotométrico realmente almacenado — ver aviso análogo
+        // arriba para el caso de override en el momento de la importación.
+        if ($parsedName !== null && $parsedName !== '') {
+            $data['metadata'] = array_merge(is_array($data['metadata'] ?? null) ? $data['metadata'] : [], [
+                'source_internal_name' => $parsedName,
+            ]);
+        }
         $data = $this->withReportPayload($data, $warnings);
 
         // Crear producto
@@ -295,7 +334,12 @@ class ProductImportService
      */
     private function parseWithRust(string $storagePath, string $extension, array &$warnings): ?array
     {
-        if (! in_array($extension, ['ies', 'ldt', 'gldf'], true)) {
+        // GLDF queda fuera a propósito: Rust no extrae matriz fotométrica
+        // para este formato (igual que `parseGldf` en PHP), así que no
+        // aporta nada sobre delegarlo directamente al parser PHP — que
+        // además es el único que deja registrada la advertencia explícita
+        // de "matriz no implementada" que el resto del sistema espera leer.
+        if (! in_array($extension, ['ies', 'ldt'], true)) {
             return null;
         }
 
@@ -333,6 +377,16 @@ class ProductImportService
             // de `parseIes`/`parseLdt`, solo que el binario hoy no anota
             // `provenance` en su salida.
             $rustPhotometricWeb = $payload['photometric_web'] ?? null;
+
+            // Un plano sin ningún punto de candela (p.ej. GLDF, que Rust no
+            // sabe extraer todavía y devuelve como matriz vacía) no es una
+            // fotometría válida — tratarlo como "sin matriz" en vez de un
+            // objeto con arrays vacíos evita que se reporte `provenance:
+            // manufacturer`/`reference_lumens` sobre datos que no existen.
+            if (is_array($rustPhotometricWeb) && $this->candelaPointCount($rustPhotometricWeb['candela'] ?? []) === 0) {
+                $rustPhotometricWeb = null;
+            }
+
             if (is_array($rustPhotometricWeb) && ! isset($rustPhotometricWeb['provenance'])) {
                 $rustPhotometricWeb['provenance'] = 'manufacturer';
             }
@@ -340,6 +394,24 @@ class ProductImportService
                 $rustPhotometricWeb['reference_lumens'] = $payload['photometric_summary']['total_lumens']
                     ?? $payload['total_lumens']
                     ?? null;
+            }
+
+            // Rust no replica las validaciones de integridad del parser PHP
+            // (ángulos monotónicos, forma de la matriz de candela, flujo
+            // declarado vs. integrado) — se corren aquí, sobre la misma
+            // matriz ya extraída, para que un archivo mal formado avise igual
+            // sin importar qué parser lo procesó primero.
+            if (is_array($rustPhotometricWeb)) {
+                $cAngles = is_array($rustPhotometricWeb['c_angles'] ?? null) ? $rustPhotometricWeb['c_angles'] : [];
+                $gAngles = is_array($rustPhotometricWeb['gamma_angles'] ?? null) ? $rustPhotometricWeb['gamma_angles'] : [];
+                $candela = is_array($rustPhotometricWeb['candela'] ?? null) ? $rustPhotometricWeb['candela'] : [];
+                $label = strtoupper($extension);
+                $this->checkAngleMonotonic($cAngles, "C ({$label})", $warnings);
+                $this->checkAngleMonotonic($gAngles, "gamma ({$label})", $warnings);
+                if ($extension === 'ies') {
+                    $this->checkMatrixDimensions($candela, count($cAngles), count($gAngles), $label, $warnings);
+                }
+                $this->checkFluxConsistency((float) ($payload['total_lumens'] ?? 0), $candela, $gAngles, $cAngles, $label, $warnings);
             }
 
             return array_filter([
@@ -360,8 +432,14 @@ class ProductImportService
                 'dimensions' => $payload['dimensions'] ?? null,
                 'luminous_opening' => $payload['luminous_opening'] ?? null,
                 'metadata' => $payload['metadata'] ?? null,
-                'report_data' => $payload['report_data'] ?? null,
-                'report_assets' => $payload['report_assets'] ?? null,
+                // `report_data`/`report_assets` NO se reenvían: Rust ya
+                // incluye su propia copia de `warnings` ahí dentro, y
+                // `withReportPayload()` (llamado siempre después de esto)
+                // hace `array_replace_recursive` dejando ganar lo que ya
+                // venga en `$data['report_data']` — con la copia de Rust
+                // presente, las validaciones agregadas arriba nunca
+                // llegarían al informe. `withReportPayload` reconstruye
+                // igual de bien esta sección a partir de los campos planos.
             ], fn ($value): bool => $value !== null);
         } catch (Throwable) {
             $warnings[] = 'Rust: no se pudo ejecutar el parser; se uso fallback PHP.';
@@ -847,6 +925,17 @@ class ProductImportService
         }
     }
 
+    /** @param  array<mixed>  $candela */
+    private function candelaPointCount(array $candela): int
+    {
+        $count = 0;
+        foreach ($candela as $plane) {
+            $count += is_array($plane) ? count($plane) : 0;
+        }
+
+        return $count;
+    }
+
     /**
      * Verifica que la matriz de candela tenga la forma declarada
      * (planos × valores-por-plano). Una matriz recortada o inflada respecto
@@ -1220,22 +1309,41 @@ class ProductImportService
             $mirrored[] = round($x, 2).','.round($y, 2);
         }
 
-        $polyline = implode(' ', array_merge($points, $mirrored));
+        $curvePath = 'M '.implode(' L ', array_merge($points, $mirrored));
         $safeTitle = htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeMax = number_format($maxCandela, 0, '.', ',');
+
+        // Todo el dibujo son `<path>` — nunca `<circle>`/`<line>`/`<polyline>`.
+        // dompdf (motor que rasteriza este SVG a PDF) solo tiene probado
+        // soporte de SVG para paths/curvas/arcos (el resto de diagramas de
+        // este export, que sí funcionan, solo usan `<path>`/`<rect>`);
+        // `<circle>` y `<line>` nunca se habían usado en ningún otro SVG de
+        // la app — con ellos, TODO el dibujo (incluida la curva) salía
+        // invisible en el PDF aunque el SVG se viera perfecto en un
+        // navegador, y aunque cada figura ya declarara su propio stroke/fill
+        // (fix previo de herencia de estilo por `<g>`, insuficiente por sí
+        // solo) — verificado contra un export real y contra el SVG
+        // persistido en la base de datos.
+        $circlePath = static function (int $r): string {
+            return 'M '.(160 + $r)." 160 A {$r} {$r} 0 1 0 ".(160 - $r)." 160 A {$r} {$r} 0 1 0 ".(160 + $r).' 160';
+        };
+        $circle40 = $circlePath(40);
+        $circle80 = $circlePath(80);
+        $circle120 = $circlePath(120);
+        $gridAttrs = 'stroke="#d7dde6" stroke-width="0.7" fill="none"';
 
         return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="520" viewBox="0 0 320 260">
     <rect width="320" height="260" fill="#ffffff"/>
-    <g transform="translate(0 -30)" stroke="#d7dde6" stroke-width="0.7" fill="none">
-        <circle cx="160" cy="160" r="40"/>
-        <circle cx="160" cy="160" r="80"/>
-        <circle cx="160" cy="160" r="120"/>
-        <line x1="40" y1="160" x2="280" y2="160"/>
-        <line x1="160" y1="40" x2="160" y2="280"/>
-        <line x1="75" y1="75" x2="245" y2="245"/>
-        <line x1="245" y1="75" x2="75" y2="245"/>
-        <polyline points="{$polyline}" stroke="#2563eb" stroke-width="2.2"/>
+    <g transform="translate(0 -30)">
+        <path d="{$circle40}" {$gridAttrs}/>
+        <path d="{$circle80}" {$gridAttrs}/>
+        <path d="{$circle120}" {$gridAttrs}/>
+        <path d="M 40 160 L 280 160" {$gridAttrs}/>
+        <path d="M 160 40 L 160 280" {$gridAttrs}/>
+        <path d="M 75 75 L 245 245" {$gridAttrs}/>
+        <path d="M 245 75 L 75 245" {$gridAttrs}/>
+        <path d="{$curvePath}" stroke="#2563eb" stroke-width="2.2" fill="none"/>
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">{$safeTitle}</text>

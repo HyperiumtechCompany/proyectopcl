@@ -62,4 +62,30 @@ describe('grupos de tomacorrientes por ambiente', () => {
         expect(devices.some((device) => device.roomId === 'room-a')).toBe(false);
         expect(devices.some((device) => device.roomId === 'room-b')).toBe(true);
     });
+
+    it('dos ambientes delimitados por paredes distintas dentro del MISMO recinto no se pisan (regresión: Baño vs Guarderías)', () => {
+        const store = useEditorStore.getState();
+        // Mismo roomId físico ("room-shared"), dos paredes distintas
+        // delimitan dos ambientes normativos independientes.
+        store.replaceGeneratedOutletsForRoom('room-shared', [outlet('room-shared', 'BANO-01')], 'wall-bano');
+        store.replaceGeneratedOutletsForRoom('room-shared', [outlet('room-shared', 'GUARD-01')], 'wall-guarderias');
+
+        let devices = useEditorStore.getState().activeScene()?.electricalDevices ?? [];
+        expect(devices.filter((d) => d.ambientId === 'wall-bano').map((d) => d.label)).toEqual(['BANO-01']);
+        expect(devices.filter((d) => d.ambientId === 'wall-guarderias').map((d) => d.label)).toEqual(['GUARD-01']);
+        // `wallId` (snap 3D) no debe verse afectado — no se fija en el generador.
+        expect(devices.every((d) => d.wallId === undefined)).toBe(true);
+
+        // Regenerar "Guarderías" NO debe tocar los tomacorrientes de "Baño".
+        store.replaceGeneratedOutletsForRoom('room-shared', [outlet('room-shared', 'GUARD-NEW-01')], 'wall-guarderias');
+        devices = useEditorStore.getState().activeScene()?.electricalDevices ?? [];
+        expect(devices.filter((d) => d.ambientId === 'wall-bano').map((d) => d.label)).toEqual(['BANO-01']);
+        expect(devices.filter((d) => d.ambientId === 'wall-guarderias').map((d) => d.label)).toEqual(['GUARD-NEW-01']);
+
+        // Eliminar el conjunto de "Baño" tampoco debe tocar "Guarderías".
+        store.removeGeneratedOutletsForRoom('room-shared', 'wall-bano');
+        devices = useEditorStore.getState().activeScene()?.electricalDevices ?? [];
+        expect(devices.some((d) => d.ambientId === 'wall-bano')).toBe(false);
+        expect(devices.filter((d) => d.ambientId === 'wall-guarderias').map((d) => d.label)).toEqual(['GUARD-NEW-01']);
+    });
 });

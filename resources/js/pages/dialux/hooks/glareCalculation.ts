@@ -28,6 +28,18 @@ export interface UgrResult {
     observer: GlareObserver | null;
     /** Luminarias excluidas de la suma en el observador ganador (campo visual inferior o fuera del rango de validez H/R — ver `computeUgrForObserver`). */
     excludedFixtureCount: number;
+    /**
+     * `true` cuando TODAS las luminarias de la escena quedaron excluidas de
+     * la suma del observador ganador — en ese caso `ugr: 0` no es un
+     * resultado físico real (no queda nada que sumar), es el valor de
+     * partida sin evaluar nada. Sin esta bandera, un `ugr: 0` así es
+     * indistinguible de un deslumbramiento genuinamente nulo y, si la
+     * actividad tiene un límite normativo asignado, pasa la comparación
+     * `0 <= límite` y se reporta "Conforme" sin haberse evaluado en
+     * realidad — el consumidor de este resultado debe tratarlo como
+     * "no evaluado", no como aprobado.
+     */
+    fullyExcluded: boolean;
 }
 
 /**
@@ -200,13 +212,26 @@ export function evaluateUGR(
     obstacles: OcclusionBox[],
     computeBackgroundLuminance: (observer: GlareObserver) => number,
 ): UgrResult {
-    let best: UgrResult = { ugr: 0, observer: null, excludedFixtureCount: 0 };
+    let best: UgrResult = { ugr: 0, observer: null, excludedFixtureCount: 0, fullyExcluded: false };
 
     for (const observer of observers) {
         const lb = computeBackgroundLuminance(observer);
         const { ugr, excluded } = computeUgrForObserver(observer, fixtures, obstacles, lb);
-        if (best.observer === null || ugr > best.ugr) {
-            best = { ugr, observer, excludedFixtureCount: excluded };
+        const fullyExcluded = fixtures.length > 0 && excluded === fixtures.length;
+        // En empate de `ugr` (típicamente 0 contra 0), preferir SIEMPRE el
+        // observador con una evaluación real sobre uno degenerado por
+        // exclusión total — sin esto, cuál de los dos "gana" dependía del
+        // orden de iteración de `observers` (a su vez sensible al orden de
+        // `room.vertices`/paredes), y el mismo ambiente sin cambios podía
+        // salir "Conforme"/UGR-OK en un cálculo y "No evaluado" en el
+        // siguiente. Verificado en vivo: mismo Ē/Uo, veredicto de UGR
+        // distinto entre dos cálculos consecutivos del mismo ambiente.
+        const isBetter =
+            best.observer === null ||
+            ugr > best.ugr ||
+            (ugr === best.ugr && best.fullyExcluded && !fullyExcluded);
+        if (isBetter) {
+            best = { ugr, observer, excludedFixtureCount: excluded, fullyExcluded };
         }
     }
 

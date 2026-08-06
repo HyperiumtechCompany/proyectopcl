@@ -172,9 +172,22 @@ export function hitTestAtPoint(
     sceneToCanvas: SceneToCanvas,
     options: HitTestOptions = {},
 ): HitCandidate[] {
-    const tol = options.tolerancePx ?? 15;
+    // Escala actual (px por metro de escena), derivada de dos puntos de
+    // `sceneToCanvas` — el delta cancela cualquier pan/offset. Los símbolos
+    // de switch/dispositivo/luminaria se DIBUJAN con tamaño proporcional al
+    // zoom (ver `OverlayElectricalDevices.tsx`, sin techo superior), pero
+    // hasta ahora la tolerancia de clic era un radio fijo en px — con zoom
+    // alto el símbolo se veía grande en pantalla mientras el área clicable
+    // seguía anclada a esos mismos px fijos alrededor del centro exacto,
+    // obligando a acercar el clic casi pixel a pixel (o alejar la vista
+    // hasta que el símbolo encogiera a ese tamaño). Ahora la tolerancia
+    // crece con el zoom para seguir cubriendo el símbolo dibujado.
+    const originPx = sceneToCanvas(0, 0);
+    const unitPx = sceneToCanvas(1, 0);
+    const pxPerMeter = Math.hypot(unitPx.x - originPx.x, unitPx.y - originPx.y);
+    const tol = Math.max(options.tolerancePx ?? 15, pxPerMeter * 0.15);
     const doorTol = options.doorTolerancePx ?? 18;
-    const deviceTol = options.deviceTolerancePx ?? 20;
+    const deviceTol = Math.max(options.deviceTolerancePx ?? 20, pxPerMeter * 0.22);
     const candidates: HitCandidate[] = [];
     const isSelectable = options.isSelectable ?? (() => true);
 

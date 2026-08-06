@@ -92,6 +92,18 @@ export interface AmbientConfig {
     normativeSection?: string;
     activity?: string;
     illuminanceLux?: number;
+    /**
+     * Regla de tomacorrientes de ESTE sub-ambiente (delimitado por una
+     * pared interna) — antes vivían como `Room.outletUse`/`outletDeviceType`/
+     * `outletStartOffset`, campos únicos del recinto físico compartidos por
+     * TODOS sus sub-ambientes (ej. "Baño" y "Guarderías" leían/escribían el
+     * mismo valor), así que cambiar la regla de uno pisaba silenciosamente
+     * la del otro aunque los tomacorrientes GENERADOS ya estuvieran
+     * separados por ambiente.
+     */
+    outletUse?: 'aula' | 'comedor' | 'exterior' | 'none';
+    outletDeviceType?: ElectricalDeviceType;
+    outletStartOffset?: number;
 }
 
 export type CorridorType =
@@ -732,9 +744,20 @@ export interface ElectricalDevice {
     y: number;
     label: string;
     mountingHeight: number;
+    /** Pared física contra la que el dispositivo se ORIENTA/PEGA en 2D/3D (`House3DBuilder.buildElectricalDevice`) — NO usar para agrupar tomacorrientes por ambiente, ver `ambientId`. */
     wallId?: string;
-    /** Ambiente propietario cuando se generó mediante una regla. */
+    /** Ambiente propietario — el recinto que contenía el punto (x, y) al colocar el dispositivo (manual o generado por regla). */
     roomId?: string;
+    /**
+     * Sub-ambiente (delimitado por una pared interna) al que pertenece este
+     * tomacorriente AUTO-GENERADO — distingue "Baño" de "Guarderías" cuando
+     * ambos comparten el mismo `roomId` físico. Independiente de `wallId`:
+     * los tomacorrientes se reparten por TODO el perímetro del ambiente
+     * (`distributeOutletsOnPerimeter`), no solo contra la pared que lo
+     * delimita, así que no puede reutilizarse `wallId` para esto sin romper
+     * la orientación 3D contra la pared real más cercana.
+     */
+    ambientId?: string;
     generatedBy?: 'outlet-rule';
     connectedDeviceIds: string[];
     connectedFixtureIds?: string[];
@@ -1054,6 +1077,33 @@ export interface Scene {
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Proyecto Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
+/**
+ * Configuración de sitio ("Terreno" en DIALux evo), a nivel de proyecto.
+ * Dos niveles distintos, no confundir uno por otro:
+ * - `maintenanceFactor` SÍ afecta el cálculo real (viaja hasta
+ *   `CalculationConfig.maintenanceFactor` en cada disparador de cálculo).
+ * - El resto (orientación de terreno, luz molesta) es metadata documentada
+ *   SIN consumidor todavía: el motor de luz natural (`daylightFactorEngine.ts`,
+ *   modelo CIE Overcast Sky) no depende de fecha/hora/orientación, y el
+ *   sistema no evalúa deslumbramiento de luminarias exteriores. Se guardan
+ *   para no perder el dato y para cuando exista el motor que los consuma
+ *   (CBDM / iluminación exterior), nunca deben presentarse como que ya
+ *   cambian algún resultado calculado.
+ */
+export interface ProjectSiteSettings {
+    /** Factor de mantenimiento (MF). Afecta el cálculo real. Default 0.80. */
+    maintenanceFactor?: number;
+    /** Solo documental — no cambia cómo se calcula `maintenanceFactor`. */
+    maintenanceMethod?: 'din_5035' | 'cie_97_2005' | 'iesna' | 'jieg_001';
+    /** Metadata sin consumidor de cálculo hoy (ver comentario de la interfaz). */
+    latitude?: number;
+    longitude?: number;
+    northOrientationDeg?: number;
+    timezone?: string;
+    obtrusiveLightStandard?: string;
+    environmentalZone?: 'E0' | 'E1' | 'E2' | 'E3' | 'E4';
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -1061,6 +1111,7 @@ export interface Project {
     updated_at: string;
     /** Última norma aplicada; se persiste con el documento para rehidratar el panel. */
     defaultRoomNormativeStandard?: NonNullable<Room['normativeStandard']>;
+    siteSettings?: ProjectSiteSettings;
     scenes: Scene[];
 }
 
@@ -1100,6 +1151,8 @@ export interface LightingResult {
     ugr_observer_view_direction_deg?: number;
     /** Luminarias excluidas del cálculo de UGR (campo visual inferior o fuera del rango de validez H/R>2 — ver `glareCalculation.ts`). Solo presente junto a los campos `ugr_observer_*`. */
     ugr_excluded_fixture_count?: number;
+    /** `true` cuando TODAS las luminarias quedaron excluidas del cálculo de UGR — `ugr: 0` en ese caso no es un resultado físico real, es "no evaluado" (ver `UgrResult.fullyExcluded` en `glareCalculation.ts`). Solo presente junto a los campos `ugr_observer_*`. */
+    ugr_not_evaluated?: boolean;
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Entidades DXF Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

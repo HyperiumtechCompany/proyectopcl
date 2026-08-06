@@ -8,6 +8,7 @@ const compliantValues = {
     uniformityTarget: 0.4,
     ugr: 18,
     ugrLimit: 22,
+    ugrNotEvaluated: false,
     hasNormativeSource: true,
 };
 
@@ -18,6 +19,12 @@ describe('isRoomCompliant', () => {
         expect(isRoomCompliant({ ...compliantValues, uniformity: 0.39 })).toBe(false);
         expect(isRoomCompliant({ ...compliantValues, ugr: 22.1 })).toBe(false);
         expect(isRoomCompliant({ ...compliantValues, hasNormativeSource: false })).toBe(false);
+    });
+
+    it('no reporta conforme cuando el UGR no se evaluo (todas las luminarias excluidas)', () => {
+        expect(
+            isRoomCompliant({ ...compliantValues, ugr: 0, ugrNotEvaluated: true }),
+        ).toBe(false);
     });
 
     it('respeta los límites particulares de cada tipo de ambiente', () => {

@@ -1,11 +1,12 @@
 import type { NormativeStandard } from '../roomLighting';
-import type { Project, ProjectNormativeConfig } from '../types';
+import type { Project, ProjectNormativeConfig, ProjectSiteSettings } from '../types';
 import type { EditorSlice } from './sliceTypes';
 
 export interface ProjectSlice {
     setProject: (project: Project) => void;
     setActiveScene: (sceneId: string) => void;
     setDefaultRoomNormativeStandard: (standard: NormativeStandard) => void;
+    setProjectSiteSettings: (partial: Partial<ProjectSiteSettings>) => void;
     applyDefaultNormativeStandardToRooms: () => void;
     applyNormativeProfileToRooms: (opts: {
         standard: NormativeStandard;
@@ -13,6 +14,8 @@ export interface ProjectSlice {
         ugrLimit?: number;
         uniformityTarget?: number;
         colorRenderingRa?: number;
+        /** Altura del plano útil (m) verificada contra DIALux evo para la actividad elegida — ver `RawNormativeLeaf.workPlaneHeight`. `undefined` = no verificada, conserva la altura previa de cada ambiente. */
+        usefulPlaneHeight?: number;
         normativeLabel?: string;
         normativeCategory?: string;
         normativeSection?: string;
@@ -46,6 +49,19 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                   }
                 : null,
         })),
+    setProjectSiteSettings: (partial) =>
+        set((state) => {
+            if (!state.project) return state;
+            return {
+                project: {
+                    ...state.project,
+                    siteSettings: {
+                        ...state.project.siteSettings,
+                        ...partial,
+                    },
+                },
+            };
+        }),
     setProjectNormativeConfig: (config) =>
         set({ projectNormativeConfig: config }),
     updateComplianceSummary: (summary) =>
@@ -201,6 +217,9 @@ export const createProjectSlice: EditorSlice<ProjectSlice> = (set) => ({
                                 colorRenderingRa:
                                     opts.colorRenderingRa ??
                                     room.colorRenderingRa,
+                                usefulPlaneHeight:
+                                    opts.usefulPlaneHeight ??
+                                    room.usefulPlaneHeight,
                             };
                         }),
                         walls: scoped

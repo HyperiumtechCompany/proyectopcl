@@ -45,21 +45,32 @@ export function buildPolarSvgFromMatrix(web: PolarMatrixInput | null | undefined
         .map((candelaValue, index) => toPoint(-(angles[index] ?? index), candelaValue))
         .reverse();
 
-    const polyline = [...points, ...mirrored].join(' ');
+    const curvePath = 'M ' + [...points, ...mirrored].join(' L ');
     const safeTitle = escapeXml(title);
     const safeMax = Math.round(maxCandela).toLocaleString('en-US');
 
+    // Todo el dibujo son `<path>` — nunca `<circle>`/`<line>`/`<polyline>`.
+    // dompdf (motor PHP que rasteriza este SVG a PDF en el servidor) solo
+    // tiene probado soporte de SVG para paths/curvas/arcos (ver el resto de
+    // diagramas de este export, que sí funcionan y solo usan `<path>`/`<rect>`);
+    // `<circle>` y `<line>` nunca se habían usado en ningún otro SVG de la
+    // app — con ellos, TODO el dibujo (incluida la curva) salía invisible en
+    // el PDF aunque el SVG se viera perfecto en un navegador — verificado
+    // contra un export real y contra el SVG persistido en la base de datos.
+    const circlePath = (r: number) =>
+        `M ${160 + r} 160 A ${r} ${r} 0 1 0 ${160 - r} 160 A ${r} ${r} 0 1 0 ${160 + r} 160`;
+    const gridAttrs = 'stroke="#d7dde6" stroke-width="0.7" fill="none"';
     return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="520" viewBox="0 0 320 260">
     <rect width="320" height="260" fill="#ffffff"/>
-    <g transform="translate(0 -30)" stroke="#d7dde6" stroke-width="0.7" fill="none">
-        <circle cx="160" cy="160" r="40"/>
-        <circle cx="160" cy="160" r="80"/>
-        <circle cx="160" cy="160" r="120"/>
-        <line x1="40" y1="160" x2="280" y2="160"/>
-        <line x1="160" y1="40" x2="160" y2="280"/>
-        <line x1="75" y1="75" x2="245" y2="245"/>
-        <line x1="245" y1="75" x2="75" y2="245"/>
-        <polyline points="${polyline}" stroke="#2563eb" stroke-width="2.2"/>
+    <g transform="translate(0 -30)">
+        <path d="${circlePath(40)}" ${gridAttrs}/>
+        <path d="${circlePath(80)}" ${gridAttrs}/>
+        <path d="${circlePath(120)}" ${gridAttrs}/>
+        <path d="M 40 160 L 280 160" ${gridAttrs}/>
+        <path d="M 160 40 L 160 280" ${gridAttrs}/>
+        <path d="M 75 75 L 245 245" ${gridAttrs}/>
+        <path d="M 245 75 L 75 245" ${gridAttrs}/>
+        <path d="${curvePath}" stroke="#2563eb" stroke-width="2.2" fill="none"/>
     </g>
     <text x="18" y="22" font-family="Arial, sans-serif" font-size="11" fill="#0f172a" font-weight="700">CDL polar</text>
     <text x="18" y="38" font-family="Arial, sans-serif" font-size="8" fill="#64748b">${safeTitle}</text>

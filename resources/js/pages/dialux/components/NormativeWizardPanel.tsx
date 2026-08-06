@@ -305,11 +305,16 @@ function StepAmbientSummary({
                 : null;
 
             if (result && normLeaf) {
-                return computeOverallStatus(evaluateCompliance(room, result, normLeaf));
+                const roomFixtures = (scene?.fixtures ?? []).filter(
+                    (fixture) => fixture.roomId === room.id,
+                );
+                return computeOverallStatus(
+                    evaluateCompliance(room, result, normLeaf, undefined, roomFixtures),
+                );
             }
             return 'needs_review' as ComplianceStatus;
         });
-    }, [rooms, resultsByRoom]);
+    }, [rooms, resultsByRoom, scene]);
 
     const summaryKey = statuses.join(',');
 

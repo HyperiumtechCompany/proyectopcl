@@ -199,6 +199,14 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
                     id: remapId(d.id),
                     wallId: remapRef(d.wallId),
                     roomId: d.roomId ? remapRoomRef(d.roomId) : d.roomId,
+                    // `ambientId` (grupo de tomacorrientes generados por
+                    // sub-ambiente, = id de la pared delimitadora — ver
+                    // `types.ts::ElectricalDevice.ambientId`) es un id simple
+                    // igual que `wallId`, no un roomId compuesto — sin este
+                    // remapeo, un tomacorriente clonado quedaba apuntando a
+                    // la pared del piso ORIGEN, y "Regenerar" en el piso
+                    // nuevo nunca lo encontraba para reemplazarlo.
+                    ambientId: remapRef(d.ambientId),
                     connectedDeviceIds: remapRefList(d.connectedDeviceIds) ?? [],
                     connectedFixtureIds: remapRefList(d.connectedFixtureIds),
                     connectedSwitchIds: remapRefList(d.connectedSwitchIds),

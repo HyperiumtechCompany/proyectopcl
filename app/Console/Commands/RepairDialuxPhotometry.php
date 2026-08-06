@@ -58,6 +58,9 @@ class RepairDialuxPhotometry extends Command
                         $result['product']->photometric_web['c_angles'][0] ?? '-',
                         $result['product']->photometric_web['reference_lumens'] ?? '-',
                     ));
+                    foreach ($result['warnings'] as $warning) {
+                        $this->warn("  #{$product->id}: {$warning}");
+                    }
                 } catch (Throwable $error) {
                     $failures++;
                     $this->error("#{$product->id} {$product->name}: {$error->getMessage()}");

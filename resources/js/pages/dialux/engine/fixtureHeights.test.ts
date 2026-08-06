@@ -48,6 +48,23 @@ describe('fixtureHeights', () => {
         expect(resolveRoomCeilingHeight(room, walls)).toBe(2.4);
     });
 
+    it('ignora una pared MUCHO más baja que el recinto (dato sin sincronizar, no techo rebajado real)', () => {
+        const tallRoom: Room = { ...room, height: 4.67 };
+        const unsyncedWalls = [
+            {
+                id: 'wall-1',
+                vertices: [
+                    { x: 0, y: 0 },
+                    { x: 4, y: 0 },
+                ],
+                thickness: 0.15,
+                height: 2.78, // altura por defecto al dibujar, nunca actualizada a 4.67
+            },
+        ] satisfies Wall[];
+
+        expect(resolveRoomCeilingHeight(tallRoom, unsyncedWalls)).toBe(4.67);
+    });
+
     it('keeps fixtures below the visible ceiling', () => {
         expect(resolveFixtureRenderHeight(fixture, 2.4)).toBeCloseTo(2.32);
     });

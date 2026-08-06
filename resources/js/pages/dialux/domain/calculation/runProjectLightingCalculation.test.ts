@@ -87,4 +87,46 @@ describe('Fase 11 — runProjectLightingCalculation', () => {
         expect(run.config).toBe(DEFAULT_DIRECT_PREVIEW_CONFIG);
         expect(Array.isArray(run.warnings)).toBe(true);
     });
+
+    // Panel "Terreno" (`ProyectoPanel.tsx`, comparación DIALux evo): mismo
+    // patrón de override que arma `EditorLayout.tsx::runCalc` a partir de
+    // `project.siteSettings.maintenanceFactor` — probado acá contra el motor
+    // real en vez de montar el componente completo.
+    it('Terreno · Mantenimiento: un MF de proyecto distinto del default cambia el lux calculado proporcionalmente (E ∝ MF)', async () => {
+        const project = buildSmallProject();
+        project.siteSettings = { maintenanceFactor: 0.4 };
+
+        const configWithOverride = {
+            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
+            maintenanceFactor: project.siteSettings.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
+        };
+
+        const baseline = await runProjectLightingCalculation(buildSmallProject());
+        const overridden = await runProjectLightingCalculation(project, configWithOverride);
+
+        const baselineLux = baseline.run.surfaces[0]!.result.avg_lux;
+        const overriddenLux = overridden.run.surfaces[0]!.result.avg_lux;
+        const expectedRatio = 0.4 / (DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor ?? 0.8);
+
+        expect(overriddenLux).not.toBeCloseTo(baselineLux, 1);
+        expect(overriddenLux / baselineLux).toBeCloseTo(expectedRatio, 6);
+    });
+
+    it('Terreno · Orientación/Luz molesta: siguen sin consumidor de cálculo — el lux es idéntico con o sin esos campos', async () => {
+        const withoutSiteSettings = buildSmallProject();
+        const withSiteSettings = buildSmallProject();
+        withSiteSettings.siteSettings = {
+            latitude: -12.05,
+            longitude: -77.04,
+            northOrientationDeg: 15,
+            timezone: 'America/Lima',
+            obtrusiveLightStandard: 'en_12464_2_2014',
+            environmentalZone: 'E3',
+        };
+
+        const a = await runProjectLightingCalculation(withoutSiteSettings);
+        const b = await runProjectLightingCalculation(withSiteSettings);
+
+        expect(b.run.surfaces[0]!.result.avg_lux).toBe(a.run.surfaces[0]!.result.avg_lux);
+    });
 });

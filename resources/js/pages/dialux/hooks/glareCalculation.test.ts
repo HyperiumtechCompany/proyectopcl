@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateUGR, guthPositionIndex } from './glareCalculation';
+import { buildDefaultObservers, DEFAULT_UGR_EYE_HEIGHT } from './glareObserver';
 import type { GlareObserver } from './glareObserver';
-import type { Fixture } from './types';
+import type { Fixture, Room } from './types';
 
 /**
  * Suite de la Fase 9 ("UGR y luminancia profesional", plan maestro §11).
@@ -138,6 +139,65 @@ describe('Fase 9 — evaluateUGR: múltiples observadores/direcciones, reporta e
         const result = evaluateUGR([], [buildFixture(5, 0, 2.2)], [], () => CONSTANT_LB);
         expect(result.ugr).toBe(0);
         expect(result.observer).toBeNull();
+    });
+});
+
+describe('Fase 9 — observador en punto medio de pared vs. centroide', () => {
+    it('en un ambiente de proporción normal (4×4 m, techo 3 m), el observador de pared SÍ evalúa una luminaria que el centroide excluía', () => {
+        const room: Room = {
+            id: 'room-normal',
+            name: 'Ambiente de proporción normal',
+            roomType: 'ambient',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 4, y: 0 },
+                { x: 4, y: 4 },
+                { x: 0, y: 4 },
+            ],
+            height: 3,
+            color: '#000000',
+        };
+        // Luminaria centrada — con el observador en el centroide (comportamiento
+        // viejo) esto disparaba la exclusión H/R>2 (distancia horizontal 0).
+        const fixtures = [buildFixture(2, 2, 3)];
+        const observers = buildDefaultObservers(room, DEFAULT_UGR_EYE_HEIGHT);
+
+        const result = evaluateUGR(observers, fixtures, [], () => CONSTANT_LB);
+
+        expect(result.fullyExcluded).toBe(false);
+        expect(result.excludedFixtureCount).toBe(0);
+    });
+
+    it('DOCUMENTA UN GAP CONOCIDO: en un ambiente desproporcionadamente alto y angosto (ej. caseta de control real, 2.1×2.3 m con techo de 4.67 m), NINGÚN punto dentro del ambiente cumple H/R≤2 — el observador de pared reduce pero no elimina el problema', () => {
+        const room: Room = {
+            id: 'room-caseta',
+            name: 'Caseta de Control (geometría real del proyecto de prueba)',
+            roomType: 'ambient',
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 2.1, y: 0 },
+                { x: 2.1, y: 2.32 },
+                { x: 0, y: 2.32 },
+            ],
+            height: 4.67,
+            color: '#000000',
+        };
+        const fixtures = [buildFixture(0.525, 1.16, 4.67), buildFixture(1.576, 1.16, 4.67)];
+        const observers = buildDefaultObservers(room, DEFAULT_UGR_EYE_HEIGHT);
+
+        const result = evaluateUGR(observers, fixtures, [], () => CONSTANT_LB);
+
+        // El DIALux evo real SÍ evalúa UGR para este mismo ambiente/luminarias
+        // (RUG=22, Conforme) — nuestro motor sigue marcándolo "no evaluado"
+        // incluso con el observador movido a la pared, porque para un techo
+        // más de 2x más alto que el ambiente es ancho, la razón H/R (altura
+        // del ojo a la luminaria / distancia horizontal) supera 2 desde
+        // CUALQUIER punto posible dentro del ambiente, no solo el centroide.
+        // Esto sugiere que el criterio H/R>2 en sí (o cómo se mide H aquí)
+        // no coincide con el de DIALux real — pendiente de verificar contra
+        // fuente primaria antes de tocar el umbral (ver `guthPositionIndex`,
+        // ya marcado `pending-confirmation` por el mismo motivo).
+        expect(result.fullyExcluded).toBe(true);
     });
 });
 

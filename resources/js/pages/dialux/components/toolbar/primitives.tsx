@@ -50,7 +50,7 @@ export const MetricRow = ({
     highlight?: boolean;
 }) => (
     <div
-        className={`flex items-baseline justify-between rounded px-1.5 py-[3px] ${highlight ? 'bg-cyan-950/20' : ''}`}
+        className={`flex items-baseline justify-between rounded px-1 py-[3px] ${highlight ? 'bg-cyan-950/20' : ''}`}
     >
         <span className="text-[10px] leading-tight text-gray-500">{label}</span>
         <span

@@ -98,6 +98,20 @@ export default function PanelsTab({ api }: Props) {
                             <span className="text-[10px] text-zinc-500">
                                 {res.circuitCount} circ. · {fmt(res.installedPowerW / 1000, 2)} kW inst. · {fmt(res.demandPowerW / 1000, 2)} kW dem. ·{' '}
                                 {fmt(res.currentA, 1)} A · ITM {res.mainBreakerA} A
+                                {res.depth > 0 && (
+                                    <>
+                                        {' · ΔV acum. '}
+                                        <span
+                                            className={
+                                                doc.settings.maxTotalVoltageDropPct != null && res.cumulativeVoltageDropPct > doc.settings.maxTotalVoltageDropPct
+                                                    ? 'text-rose-400'
+                                                    : undefined
+                                            }
+                                            title="Caída de tensión acumulada en la barra de este tablero desde el tablero raíz.">
+                                            {fmt(res.cumulativeVoltageDropPct, 2)}%
+                                        </span>
+                                    </>
+                                )}
                             </span>
                         )}
                         {res && res.warnings.length > 0 && <StatusBadge status="advertencia" title={res.warnings.join(' • ')} />}
@@ -217,11 +231,12 @@ export default function PanelsTab({ api }: Props) {
                         'Secc. manual',
                         'ITM (A)',
                         'ΔV %',
+                        'ΔV acum. %',
                         'Estado',
                         '',
                     ]}>
                     {doc.feeders.length === 0 && (
-                        <EmptyRow colSpan={12} message={doc.panels.length < 2 ? 'Necesitas al menos dos tableros para crear un alimentador.' : 'Sin alimentadores registrados.'} />
+                        <EmptyRow colSpan={13} message={doc.panels.length < 2 ? 'Necesitas al menos dos tableros para crear un alimentador.' : 'Sin alimentadores registrados.'} />
                     )}
                     {doc.feeders.map((f) => {
                         const res = feederResults.get(f.id);
@@ -257,6 +272,21 @@ export default function PanelsTab({ api }: Props) {
                                 </td>
                                 <td className="px-2 py-1 text-right tabular-nums">{res?.breakerA ?? '—'}</td>
                                 <td className="px-2 py-1 text-right tabular-nums">{res ? fmt(res.voltageDropPct, 2) : '—'}</td>
+                                <td className="px-2 py-1 text-right tabular-nums">
+                                    {res ? (
+                                        <span
+                                            className={
+                                                doc.settings.maxTotalVoltageDropPct != null && res.cumulativeVoltageDropPct > doc.settings.maxTotalVoltageDropPct
+                                                    ? 'text-rose-400'
+                                                    : 'text-zinc-400'
+                                            }
+                                            title="Caída de tensión acumulada en el extremo receptor de este alimentador, desde el tablero raíz.">
+                                            {fmt(res.cumulativeVoltageDropPct, 2)}
+                                        </span>
+                                    ) : (
+                                        '—'
+                                    )}
+                                </td>
                                 <td className="px-2 py-1">{res && <StatusBadge status={res.status} title={res.warnings.join(' • ') || undefined} />}</td>
                                 <td className="px-2 py-1 text-right">
                                     <DeleteButton onClick={() => removeFeeder(f.id)} />

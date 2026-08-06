@@ -41,6 +41,8 @@ export interface NormativeLeafOption {
     uniformity: number | null;
     ra: number | null;
     specificRequirements: string | null;
+    /** Altura del plano útil (m) verificada contra DIALux evo para esta actividad — `null` si aún no se verificó (ver `RawNormativeLeaf.workPlaneHeight`). */
+    workPlaneHeight: number | null;
 }
 
 export interface RoomLightingInputs {
@@ -81,6 +83,7 @@ function buildLeaf(
         uniformity: leaf.Uo,
         ra: leaf.Ra,
         specificRequirements: leaf.requisitos_especificos,
+        workPlaneHeight: leaf.workPlaneHeight ?? null,
     };
 }
 

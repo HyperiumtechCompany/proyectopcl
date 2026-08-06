@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * MetradoElectricasValue
+ * MetradoElectricoValue
  *
  * Maneja los cálculos numéricos y totales del metrado eléctrico.
  * Separa los valores calculados de la estructura de nodos.
  */
-class MetradoElectricasValue extends Model
+class MetradoElectricoValue extends Model
 {
     protected $table = 'metrados_electricos_valores';
 

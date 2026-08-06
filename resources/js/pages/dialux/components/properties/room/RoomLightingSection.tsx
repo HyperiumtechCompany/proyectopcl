@@ -147,12 +147,27 @@ export function RoomLightingSection({
                                 ? act.uniformity
                                 : room.uniformityTarget,
                             ugrLimit: act ? act.ugr : room.ugrLimit,
-                            colorRenderingRa: act
-                                ? act.ra
-                                : room.colorRenderingRa,
+                            // NO se copia `act.ra` aquí: `colorRenderingRa`
+                            // representa el Ra REAL de las luminarias
+                            // instaladas (ver `normativeEngine.ts`), no el
+                            // requisito de la norma — compararía el requisito
+                            // contra sí mismo y "Conforme" saldría siempre,
+                            // sin importar qué luminaria se instale de
+                            // verdad. El requisito ya vive en `act.ra` /
+                            // `normative.ra`, se lee directo de ahí.
                             specificRequirements: act
                                 ? act.specificRequirements
                                 : room.specificRequirements,
+                            // `act.workPlaneHeight` solo viene poblado para
+                            // actividades verificadas contra DIALux real (ver
+                            // `RawNormativeLeaf.workPlaneHeight`) — cuando no
+                            // está verificada (`null`), se conserva el valor
+                            // previo del ambiente en vez de pisarlo con una
+                            // altura sin fuente confirmada.
+                            usefulPlaneHeight:
+                                act && act.workPlaneHeight !== null
+                                    ? act.workPlaneHeight
+                                    : room.usefulPlaneHeight,
                         });
                     }}
                 />

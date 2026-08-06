@@ -60,6 +60,8 @@ interface RoomTableRow {
     estimatedUniformity: number;
     ugr: number;
     ugrLimit: number | null;
+    /** `true` cuando TODAS las luminarias del ambiente quedaron excluidas del cálculo de UGR — `ugr: 0` en ese caso no es un resultado físico real (ver `LightingResult.ugr_not_evaluated`). */
+    ugrNotEvaluated: boolean;
     hasNormativeSource: boolean;
     coverage: 'optimal' | 'insufficient' | 'excessive';
 }
@@ -72,6 +74,7 @@ type ComplianceValues = Pick<
     | 'uniformityTarget'
     | 'ugr'
     | 'ugrLimit'
+    | 'ugrNotEvaluated'
     | 'hasNormativeSource'
 >;
 
@@ -81,14 +84,16 @@ type ComplianceValues = Pick<
  * normativa seleccionada NO regula ese parámetro (ej. UGR en
  * estacionamientos, Uo en baños — ver `normativaData.ts`) — se trata como
  * automáticamente satisfecho, nunca como "sin dato" contra un límite
- * genérico inventado.
+ * genérico inventado. `ugrNotEvaluated` es distinto: SÍ hay límite, pero
+ * el cálculo no produjo un UGR real (todas las luminarias quedaron
+ * excluidas de la suma) — no puede tratarse como conforme.
  */
 export function isRoomCompliant(row: ComplianceValues): boolean {
     return (
         row.hasNormativeSource &&
         row.avgLux >= row.illuminanceLux &&
         (row.uniformityTarget === null || row.uniformity >= row.uniformityTarget) &&
-        (row.ugrLimit === null || row.ugr <= row.ugrLimit)
+        (row.ugrLimit === null || (!row.ugrNotEvaluated && row.ugr <= row.ugrLimit))
     );
 }
 
@@ -139,6 +144,7 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             estimatedUniformity: inputs.estimatedUniformity,
             ugr: result.ugr,
             ugrLimit: room.ugrLimit ?? null,
+            ugrNotEvaluated: result.ugr_not_evaluated ?? false,
             hasNormativeSource: Boolean(
                 room.normativeStandard || room.normativeLabel || room.normativeCategory,
             ),
@@ -170,6 +176,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
     );
     const [selectedLevelId, setSelectedLevelId] = useState('all');
     const [selectedRoomName, setSelectedRoomName] = useState('all');
+    const [showWarnings, setShowWarnings] = useState(false);
     const activeLevelId =
         selectedLevelId === 'all' || levels.some((level) => level.id === selectedLevelId)
             ? selectedLevelId
@@ -313,16 +320,33 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                             aplicada proviene del recinto.
                         </p>
                         {calculationRun && (
-                            <p className="mt-1.5 text-[11px] text-slate-500">
-                                Motor {calculationRun.engineVersion} · calculado{' '}
-                                {calculationRun.completedAt ? new Date(calculationRun.completedAt).toLocaleString('es-PE') : '—'}
-                                {calculationRun.warnings.length > 0 && (
-                                    <span className="ml-1.5 text-amber-400">
-                                        · {calculationRun.warnings.length} advertencia
-                                        {calculationRun.warnings.length === 1 ? '' : 's'}
-                                    </span>
+                            <>
+                                <p className="mt-1.5 text-[11px] text-slate-500">
+                                    Motor {calculationRun.engineVersion} · calculado{' '}
+                                    {calculationRun.completedAt ? new Date(calculationRun.completedAt).toLocaleString('es-PE') : '—'}
+                                    {calculationRun.warnings.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowWarnings((v) => !v)}
+                                            className="ml-1.5 text-amber-400 underline decoration-dotted underline-offset-2 hover:text-amber-300"
+                                        >
+                                            · {calculationRun.warnings.length} advertencia
+                                            {calculationRun.warnings.length === 1 ? '' : 's'}
+                                            {' '}({showWarnings ? 'ocultar' : 'ver'})
+                                        </button>
+                                    )}
+                                </p>
+                                {showWarnings && calculationRun.warnings.length > 0 && (
+                                    <ul className="mt-2 max-w-4xl space-y-1 rounded-lg border border-amber-900/40 bg-amber-950/10 p-2.5">
+                                        {calculationRun.warnings.map((warning, index) => (
+                                            <li key={`${warning.code}-${warning.objectId ?? index}`} className="flex items-start gap-1.5 text-[11px] text-amber-200">
+                                                <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-400" />
+                                                <span>{warning.message}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 )}
-                            </p>
+                            </>
                         )}
                     </div>
                 </div>
@@ -354,7 +378,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                     row.uniformityTarget === null ||
                                     row.uniformity >= row.uniformityTarget;
                                 const ugrOk =
-                                    row.ugrLimit === null || row.ugr <= row.ugrLimit;
+                                    row.ugrLimit === null ||
+                                    (!row.ugrNotEvaluated && row.ugr <= row.ugrLimit);
                                 const compliant = isRoomCompliant(row);
                                 const warn = luxOk && (!uniformityOk || !ugrOk);
                                 const showLevelHeader =
@@ -481,9 +506,11 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                 ·{' '}
                                                 {row.ugrLimit === null
                                                     ? 'UGR no regulado'
-                                                    : ugrOk
-                                                      ? 'UGR OK'
-                                                      : 'UGR alto'}
+                                                    : row.ugrNotEvaluated
+                                                      ? 'UGR no evaluado'
+                                                      : ugrOk
+                                                        ? 'UGR OK'
+                                                        : 'UGR alto'}
                                             </p>
                                         </td>
                                         </tr>

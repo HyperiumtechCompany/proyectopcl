@@ -363,7 +363,7 @@ export function calculateLightingResult(
     const fallbackLb = avg / MATH_PI;
 
     let ugr: number;
-    let glareMeta: { observer: GlareObserver; excludedFixtureCount: number } | null = null;
+    let glareMeta: { observer: GlareObserver; excludedFixtureCount: number; fullyExcluded: boolean } | null = null;
 
     if (glareConfig) {
         const observers = glareConfig.observers ?? buildDefaultObservers(room, glareConfig.eyeHeight ?? DEFAULT_UGR_EYE_HEIGHT);
@@ -390,7 +390,11 @@ export function calculateLightingResult(
         const result = evaluateUGR(observers, enriched, obstacles, computeBackgroundLuminance);
         ugr = result.ugr;
         if (result.observer) {
-            glareMeta = { observer: result.observer, excludedFixtureCount: result.excludedFixtureCount };
+            glareMeta = {
+                observer: result.observer,
+                excludedFixtureCount: result.excludedFixtureCount,
+                fullyExcluded: result.fullyExcluded,
+            };
         }
     } else {
         ugr = calculateUGR(bbox.cx, bbox.cy, enriched, fallbackLb, usefulPlaneHeight, obstacles);
@@ -410,6 +414,7 @@ export function calculateLightingResult(
                   ugr_observer_eye_height: glareMeta.observer.eyeHeight,
                   ugr_observer_view_direction_deg: glareMeta.observer.viewDirectionDeg,
                   ugr_excluded_fixture_count: glareMeta.excludedFixtureCount,
+                  ugr_not_evaluated: glareMeta.fullyExcluded,
               }
             : {}),
     };

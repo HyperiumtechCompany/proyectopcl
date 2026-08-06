@@ -98,10 +98,11 @@ export default function CircuitsTab({ api }: Props) {
                         'Secc. manual',
                         'ITM (A)',
                         'ΔV %',
+                        'ΔV acum. %',
                         'Estado',
                         '',
                     ]}>
-                    {doc.circuits.length === 0 && <EmptyRow colSpan={15} message="Sin circuitos. Crea circuitos y asigna cargas más abajo." />}
+                    {doc.circuits.length === 0 && <EmptyRow colSpan={16} message="Sin circuitos. Crea circuitos y asigna cargas más abajo." />}
                     {doc.circuits.map((c) => {
                         const res = resultsById.get(c.id);
                         return (
@@ -167,6 +168,21 @@ export default function CircuitsTab({ api }: Props) {
                                     {res ? (
                                         <span className={res.voltageDropPct > res.maxVoltageDropPct ? 'text-rose-400' : 'text-zinc-200'}>
                                             {fmt(res.voltageDropPct, 2)}
+                                        </span>
+                                    ) : (
+                                        '—'
+                                    )}
+                                </td>
+                                <td className="px-2 py-1 text-right tabular-nums">
+                                    {res ? (
+                                        <span
+                                            className={
+                                                doc.settings.maxTotalVoltageDropPct != null && res.cumulativeVoltageDropPct > doc.settings.maxTotalVoltageDropPct
+                                                    ? 'text-rose-400'
+                                                    : 'text-zinc-400'
+                                            }
+                                            title="Caída de tensión acumulada desde el tablero raíz (TG→TP→TD→circuito), no solo este tramo.">
+                                            {fmt(res.cumulativeVoltageDropPct, 2)}
                                         </span>
                                     ) : (
                                         '—'
