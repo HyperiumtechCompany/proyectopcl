@@ -664,11 +664,18 @@ function buildSingleAmbientSpace(
         normativeLabel: activityOption?.label ?? room.normativeLabel,
         illuminanceLux,
         norma: illuminanceLux,
-        ugrLimit: activityOption?.ugr ?? room.ugrLimit,
-        uniformityTarget: activityOption?.uniformity ?? room.uniformityTarget,
+        ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
+        uniformityTarget:
+            ambientConfig?.uniformityTarget ??
+            activityOption?.uniformity ??
+            room.uniformityTarget,
         colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
         specificRequirements:
             activityOption?.specificRequirements ?? room.specificRequirements,
+        usefulPlaneHeight:
+            ambientConfig?.usefulPlaneHeight ?? room.usefulPlaneHeight,
+        marginalZone: ambientConfig?.marginalZone ?? room.marginalZone,
+        manualUgr: ambientConfig?.manualUgr ?? room.manualUgr,
     };
     const centroid = findInteriorPoint(room.vertices);
     const baseFixtures = fixtures.filter((fixture) =>
@@ -732,8 +739,40 @@ function buildWallDefinedAmbientSpaces(
 
     if (closedWallAmbients.length === 0) return [];
 
+    // Ancla cada pared a su `configKey` ya guardado (vía `AmbientConfig.
+    // wallId`) en vez de asignarlo siempre por orden de área — si la
+    // geometría cambia de forma que el orden de tamaño entre dos
+    // sub-ambientes se invierte, la config de un ambiente nombrado por el
+    // usuario ya no salta a la pared equivocada en silencio. Paredes sin
+    // pin todavía (nunca configuradas, o config vieja de antes de este fix)
+    // se siguen asignando por orden de área descendente, igual que siempre.
+    const pinnedKeyByWallId = new Map<string, string>();
+    for (const [key, config] of Object.entries(room.ambientConfigs ?? {})) {
+        if (config?.wallId) {
+            pinnedKeyByWallId.set(config.wallId, key);
+        }
+    }
+    const allKeys = closedWallAmbients.map((_, i) => `ambient-${i + 1}`);
+    const claimedKeys = new Set(
+        closedWallAmbients
+            .map((ambient) => pinnedKeyByWallId.get(ambient.wall.id))
+            .filter((key): key is string => !!key && allKeys.includes(key)),
+    );
+    const availableKeys = allKeys.filter((key) => !claimedKeys.has(key));
+    let nextAvailableIndex = 0;
+    const configKeyByWallId = new Map<string, string>();
+    for (const ambient of closedWallAmbients) {
+        const pinned = pinnedKeyByWallId.get(ambient.wall.id);
+        if (pinned && allKeys.includes(pinned)) {
+            configKeyByWallId.set(ambient.wall.id, pinned);
+        } else {
+            configKeyByWallId.set(ambient.wall.id, availableKeys[nextAvailableIndex]!);
+            nextAvailableIndex += 1;
+        }
+    }
+
     return closedWallAmbients.map((ambient, index) => {
-        const configKey = `ambient-${index + 1}`;
+        const configKey = configKeyByWallId.get(ambient.wall.id)!;
         const ambientConfig = room.ambientConfigs?.[configKey];
         const activity =
             ambientConfig?.activity ?? room.normativeActivity ?? undefined;
@@ -768,13 +807,19 @@ function buildWallDefinedAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
-            ugrLimit: activityOption?.ugr ?? room.ugrLimit,
+            ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
-                activityOption?.uniformity ?? room.uniformityTarget,
+                ambientConfig?.uniformityTarget ??
+                activityOption?.uniformity ??
+                room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
+            usefulPlaneHeight:
+                ambientConfig?.usefulPlaneHeight ?? room.usefulPlaneHeight,
+            marginalZone: ambientConfig?.marginalZone ?? room.marginalZone,
+            manualUgr: ambientConfig?.manualUgr ?? room.manualUgr,
         };
 
         const fixturesInsideRoom = fixtures.filter((fixture) =>
@@ -854,13 +899,19 @@ export function deriveAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
-            ugrLimit: activityOption?.ugr ?? room.ugrLimit,
+            ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
-                activityOption?.uniformity ?? room.uniformityTarget,
+                ambientConfig?.uniformityTarget ??
+                activityOption?.uniformity ??
+                room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
+            usefulPlaneHeight:
+                ambientConfig?.usefulPlaneHeight ?? room.usefulPlaneHeight,
+            marginalZone: ambientConfig?.marginalZone ?? room.marginalZone,
+            manualUgr: ambientConfig?.manualUgr ?? room.manualUgr,
         };
         const centroid =
             regions[0]?.centroid ?? findInteriorPoint(room.vertices);
@@ -927,13 +978,19 @@ export function deriveAmbientSpaces(
             normativeLabel: activityOption?.label ?? room.normativeLabel,
             illuminanceLux,
             norma: illuminanceLux,
-            ugrLimit: activityOption?.ugr ?? room.ugrLimit,
+            ugrLimit: ambientConfig?.ugrLimit ?? activityOption?.ugr ?? room.ugrLimit,
             uniformityTarget:
-                activityOption?.uniformity ?? room.uniformityTarget,
+                ambientConfig?.uniformityTarget ??
+                activityOption?.uniformity ??
+                room.uniformityTarget,
             colorRenderingRa: activityOption?.ra ?? room.colorRenderingRa,
             specificRequirements:
                 activityOption?.specificRequirements ??
                 room.specificRequirements,
+            usefulPlaneHeight:
+                ambientConfig?.usefulPlaneHeight ?? room.usefulPlaneHeight,
+            marginalZone: ambientConfig?.marginalZone ?? room.marginalZone,
+            manualUgr: ambientConfig?.manualUgr ?? room.manualUgr,
         };
 
         return {

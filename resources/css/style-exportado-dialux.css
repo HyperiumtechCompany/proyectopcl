@@ -1042,7 +1042,8 @@ table th.number {
 }
 
 .verification-status.status-not-evaluated,
-.verification-status.status-stale {
+.verification-status.status-stale,
+.verification-status.status-not-regulated {
     color: #64748b;
 }
 

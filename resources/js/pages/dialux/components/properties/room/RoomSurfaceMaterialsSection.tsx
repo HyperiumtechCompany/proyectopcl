@@ -60,8 +60,13 @@ function SurfaceReflectanceField({
  * Sección "Materiales fotométricos" de `RoomProps.tsx` (Fase 16 del plan
  * maestro) — reflectancia de techo/pared/piso del recinto, consumida por
  * `resolveMaterialId()` (`domain/calculation/buildCalculationSnapshot.ts`)
- * para el cálculo de interreflexión. Solo se renderiza para el recinto
- * exterior, igual que `RoomConstructionSection`. Valores de referencia
+ * para el cálculo de interreflexión. Se renderiza tanto para el recinto
+ * exterior como para cada ambiente/pasadizo — cada uno guarda su propia
+ * reflectancia (`room.ceilingReflectance`/etc en ESE `Room`, no heredada del
+ * recinto padre: `buildRoomLightingInputs` lee siempre del `calculationRoom`
+ * exacto que se le pasa). Antes solo se mostraba en el recinto, así que un
+ * ambiente sin reflectancia propia asignada no tenía forma de editarla desde
+ * la UI aunque sí influía en su cálculo real. Valores de referencia
  * documentados en `hooks/materialsData.ts` — no confundir con
  * `room.material` (`'brick'|'adobe'`), que es el material ESTRUCTURAL del
  * muro (RNE), un concepto distinto.

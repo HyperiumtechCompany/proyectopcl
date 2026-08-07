@@ -1,3 +1,4 @@
+import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
@@ -31,7 +32,7 @@ export async function resolveCalculationRunForExport(
         };
     }
 
-    const recalculated = await runProjectLightingCalculation(project);
+    const recalculated = await runProjectLightingCalculation(project, buildProductionCalculationConfig(project));
     return {
         calculationRun: recalculated.run,
         resultsByRoom: recalculated.resultsByRoom,

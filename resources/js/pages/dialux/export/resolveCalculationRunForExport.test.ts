@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { runProjectLightingCalculation } from '@/pages/dialux/domain/calculation/runProjectLightingCalculation';
 import { buildFase0SmallFixtures, buildFase0SmallRoom } from '@/pages/dialux/hooks/__fixtures__/fase0SmallFixture';
 import type { Project, Scene } from '@/pages/dialux/hooks/types';
@@ -54,7 +55,7 @@ describe('resolveCalculationRunForExport', () => {
 
     it('con cachedRun vigente (proyecto sin cambios), lo reusa sin recalcular', async () => {
         const project = buildProject();
-        const { run: cachedRun } = await runProjectLightingCalculation(project);
+        const { run: cachedRun } = await runProjectLightingCalculation(project, buildProductionCalculationConfig(project));
 
         const resolved = await resolveCalculationRunForExport(project, cachedRun);
 
@@ -65,7 +66,7 @@ describe('resolveCalculationRunForExport', () => {
 
     it('con cachedRun obsoleto (se agregó una luminaria desde que se calculó), recalcula en vez de reusarlo', async () => {
         const project = buildProject();
-        const { run: cachedRun } = await runProjectLightingCalculation(project);
+        const { run: cachedRun } = await runProjectLightingCalculation(project, buildProductionCalculationConfig(project));
 
         const mutatedProject: Project = {
             ...project,
@@ -79,5 +80,19 @@ describe('resolveCalculationRunForExport', () => {
 
         expect(resolved.reused).toBe(false);
         expect(resolved.calculationRun.snapshotHash).not.toBe(cachedRun.snapshotHash);
+    });
+
+    it('con cachedRun calculado con una config de producción vieja (mismo proyecto), recalcula en vez de reusarlo', async () => {
+        const project = buildProject();
+        // Sin pasar config explícita: usa el `DEFAULT_DIRECT_PREVIEW_CONFIG`
+        // crudo — simula un run calculado antes de un cambio a
+        // `buildProductionCalculationConfig` (bug real reportado: un cambio
+        // de config/motor no invalidaba el caché).
+        const { run: cachedRun } = await runProjectLightingCalculation(project);
+
+        const resolved = await resolveCalculationRunForExport(project, cachedRun);
+
+        expect(resolved.reused).toBe(false);
+        expect(resolved.calculationRun).not.toBe(cachedRun);
     });
 });

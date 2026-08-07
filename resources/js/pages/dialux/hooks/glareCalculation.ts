@@ -45,22 +45,34 @@ export interface UgrResult {
 /**
  * Aproximación analítica del índice de posición de Guth.
  *
- * ESTADO: `pending-confirmation`. Es la forma cerrada ampliamente reproducida
- * en software e investigación de iluminación como ajuste de las curvas
- * empíricas originales de Guth (Luckiesh & Guth, 1949; Guth, 1963,
- * "A method for the evaluation of discomfort glare", Illuminating
- * Engineering 58(5)), pero sus coeficientes numéricos NO fueron verificados
- * letra por letra contra el texto primario de CIE 117-1995 ("Discomfort
- * Glare in Interior Lighting") en este ciclo — no se pudo acceder a ese
- * documento con las herramientas disponibles. DIALux evo documenta usar una
- * tabla de interpolación (coordenadas R, T, H respecto al observador) en vez
- * de esta fórmula cerrada (fuente: documentación de soporte de DIALux evo,
- * artículo "UGR Verfahren - Unified Glare Rating").
+ * ESTADO: coeficientes CONFIRMADOS contra fuente secundaria independiente
+ * (2026-08-06, WebSearch/WebFetch) — sigue sin verificarse letra por letra
+ * contra el texto primario pagado de CIE 117:1995, pero ya no es una cita
+ * de memoria sin contrastar. Origen real de esta forma cerrada: Levin, R.E.
+ * (1975), "Position index in VCP calculations", Journal of the Illuminating
+ * Engineering Society, 4(2), 99-105 — el ajuste analítico que la propia
+ * IESNA adoptó para las curvas empíricas originales de posición de Guth
+ * (Luckiesh & Guth, 1949; Guth, 1963, "A method for the evaluation of
+ * discomfort glare", Illuminating Engineering 58(5)). Los CINCO
+ * coeficientes numéricos de abajo (35.2, 0.31889, 1.22, 2/9, 21, 0.26667,
+ * 0.002963) coinciden dígito a dígito con la misma fórmula reproducida de
+ * forma independiente en Iwata, T. et al., "Discomfort glare index for
+ * automated blind control", ISES Solar World Congress 2011 (ecuación con
+ * idénticos coeficientes, atribuida a la misma cadena Guth→Levin→IESNA).
+ * Dos fuentes académicas independientes con los mismos números es evidencia
+ * razonable de que la transcripción a este código es correcta.
  *
- * NO declarar UGR como "validado" en la matriz de paridad del plan (§23)
- * mientras este estado siga en `pending-confirmation` — un especialista debe
- * confirmar estos coeficientes contra la fuente primaria antes de esa
- * declaración.
+ * Lo que esto NO confirma: que DIALux evo vaya a dar el MISMO UGR. DIALux
+ * evo documenta usar una tabla de interpolación (coordenadas R, T, H
+ * respecto al observador, precomputada para salas de referencia en
+ * múltiplos de H) en vez de esta fórmula cerrada evaluada punto a punto
+ * (fuente: documentación de soporte de DIALux evo, artículo "UGR Verfahren
+ * - Unified Glare Rating"). Son dos métodos DISTINTOS, ambos derivados de
+ * la misma base experimental de Guth y ambos con precedente en la
+ * literatura — que difieran numéricamente en un caso concreto (más aún en
+ * salas pequeñas cerca del límite inferior de validez de la tabla, 2H×2H)
+ * no implica que uno esté mal; implica que hay que citar CUÁL método se usó
+ * al reportar un UGR, nunca presentarlo como un único "UGR verdadero".
  *
  * `tauDeg`: componente horizontal (azimutal) del ángulo entre la línea de
  * visión y la dirección a la fuente. `sigmaDeg`: ángulo total (3D) entre la

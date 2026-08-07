@@ -74,10 +74,41 @@ function inwardWallNormal(a: Vertex, b: Vertex, isCounterClockwise: boolean): Ve
 }
 
 /**
+ * Cuántas bandas verticales necesita UNA pared para que la aproximación
+ * punto-a-parche (usada en `firstBounceReflection.ts`/`iterativeRadiosity.ts`)
+ * siga siendo válida — "razonable en campo lejano" según el propio
+ * comentario de ese módulo, pero que colapsa en recintos angostos y altos:
+ * verificado contra un caso real (SS.HH, piso 2.15 m², altura 4.67 m →
+ * pared completa ≈28 m² como UN solo parche) donde la radiosidad iterativa
+ * convergía a ~2x la contribución de interreflexión que reporta DIALux evo
+ * para el mismo recinto/reflectancias — la relación total/directo empírica
+ * (293.8/150.1≈1.96) coincidía con el límite asintótico teórico 1/(1-ρ̄) del
+ * método de cavidad zonal, es decir: el solver converge bien, el problema es
+ * que un parche de pared mucho más grande que la propia sección del
+ * recinto ya no se comporta como una fuente lejana para los puntos de malla
+ * cercanos a esa pared.
+ *
+ * Cota elegida: ningún parche de pared debe ser más alto que la dimensión
+ * horizontal más corta del recinto (`cap`) — un parche más alto que el
+ * propio ancho del recinto garantiza que algún punto de malla quede en su
+ * campo cercano. Para un recinto de proporciones normales (altura ≤ ancho
+ * más corto, el caso típico) da `1` — sin subdividir, cero cambio de
+ * comportamiento (verificado con los goldens existentes de Fase 7).
+ */
+function wallVerticalSegments(height: number, cap: number): number {
+    if (!(cap > 1e-6)) {
+        return 1;
+    }
+    return Math.max(1, Math.ceil(height / cap));
+}
+
+/**
  * Construye los parches de la envolvente de `room` (piso, techo, una pared
- * por arista) con su reflectancia difusa ya asignada. Devuelve `[]` cuando
- * el recinto no tiene polígono válido o altura no positiva — sin parches no
- * hay primera reflexión, comportamiento seguro por defecto.
+ * por arista — subdividida en bandas verticales cuando el recinto es
+ * angosto/alto, ver `wallVerticalSegments`) con su reflectancia difusa ya
+ * asignada. Devuelve `[]` cuando el recinto no tiene polígono válido o
+ * altura no positiva — sin parches no hay primera reflexión, comportamiento
+ * seguro por defecto.
  */
 export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureReflectances): EnclosurePatch[] {
     const ring = sanitizePolygon(room.vertices);
@@ -115,6 +146,12 @@ export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureRef
         },
     ];
 
+    const xs = ring.map((vertex) => vertex.x);
+    const ys = ring.map((vertex) => vertex.y);
+    const cap = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    const segments = wallVerticalSegments(room.height, cap);
+    const segmentHeight = room.height / segments;
+
     for (let i = 0; i < ring.length; i++) {
         const a = ring[i]!;
         const b = ring[(i + 1) % ring.length]!;
@@ -125,14 +162,16 @@ export function buildRoomEnclosurePatches(room: Room, reflectances: EnclosureRef
 
         const mid = edgeMidpoint(a, b);
         const normal = inwardWallNormal(a, b, isCounterClockwise);
-        patches.push({
-            x: mid.x,
-            y: mid.y,
-            z: room.height / 2,
-            normal,
-            area: length * room.height,
-            reflectance: wallReflectance,
-        });
+        for (let k = 0; k < segments; k++) {
+            patches.push({
+                x: mid.x,
+                y: mid.y,
+                z: segmentHeight * (k + 0.5),
+                normal,
+                area: length * segmentHeight,
+                reflectance: wallReflectance,
+            });
+        }
     }
 
     return patches;

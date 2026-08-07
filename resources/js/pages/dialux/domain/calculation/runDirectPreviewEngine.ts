@@ -1,15 +1,20 @@
 import type { OcclusionBox } from '@/pages/dialux/domain/geometry/occlusionBoxes';
+import { resolveMeshSpacing } from '@/pages/dialux/hooks/adaptiveGridSpacing';
 import type { DirectIlluminanceBatchKernel } from '@/pages/dialux/hooks/directIlluminance';
 import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
-import type { Fixture, Room } from '@/pages/dialux/hooks/types';
+import { getRoomUsefulPlaneHeight } from '@/pages/dialux/hooks/roomLighting';
+import type { Fixture } from '@/pages/dialux/hooks/types';
 import { hashCalculationSnapshot } from './hashSnapshot';
+import {
+    groupObstaclesByLevel,
+    resolveSurfaceReflectances,
+    toEngineFixture,
+    toEngineRoom,
+} from './runDirectPreviewEngineAdapters';
 import {
     DEFAULT_DIRECT_PREVIEW_CONFIG,
     type CalculationConfig,
     type CalculationLuminaire,
-    type CalculationMaterial,
-    type CalculationObject,
-    type CalculationObstacle,
     type CalculationRun,
     type CalculationSnapshot,
     type CalculationWarning,
@@ -49,91 +54,6 @@ function resolveSceneForLevel(
         objectId: null,
     });
     return candidates[0];
-}
-
-/**
- * Reflectancias efectivas para la primera reflexión difusa (Fase 7, §11).
- * `null` cuando falta un dato requerido: nunca se inventa un valor típico
- * (70/50/20) en su lugar (plan §20: "no ocultar fallbacks sintéticos") — sin
- * material asignado simplemente no hay primera reflexión para ese objeto.
- */
-function resolveSurfaceReflectances(
-    material: CalculationMaterial | undefined,
-): { ceiling: number; wall: number; floor: number } | null {
-    if (!material) {
-        return null;
-    }
-    return {
-        ceiling: material.ceilingReflectance ?? 0,
-        wall: material.wallReflectance ?? 0,
-        floor: material.floorReflectance ?? 0,
-    };
-}
-
-/** Agrupa obstáculos por nivel — un ambiente solo debe ocluirse con muros/particiones de SU MISMO nivel (Fase 6: "dos niveles superpuestos" no debe filtrar entre sí). */
-function groupObstaclesByLevel(obstacles: CalculationObstacle[]): Map<string, OcclusionBox[]> {
-    const byLevel = new Map<string, OcclusionBox[]>();
-    for (const obstacle of obstacles) {
-        const list = byLevel.get(obstacle.levelId);
-        if (list) {
-            list.push(obstacle);
-        } else {
-            byLevel.set(obstacle.levelId, [obstacle]);
-        }
-    }
-    return byLevel;
-}
-
-/**
- * Adapta un `CalculationObject`/`CalculationLuminaire` (dominio puro, Fase 1)
- * a la forma `Room`/`Fixture` que `calculateLightingResult` espera hoy
- * (motor `direct-preview-v1`, sin cambios de fórmula — plan maestro §11 Fase
- * 1: "adaptar el motor actual mediante un wrapper, sin cambiar fórmula").
- *
- * `color`/`lightColor` son campos requeridos por `Room`/`Fixture` pero el
- * motor nunca los lee (verificado: no aparecen en `lightingEngineCore.ts` ni
- * en `roomLighting.ts`) — son un remanente de que esos tipos sirven también
- * a la UI. Se rellenan con un placeholder inerte, nunca se leen.
- */
-function toEngineRoom(object: CalculationObject): Room {
-    return {
-        id: object.id,
-        name: object.name,
-        roomType: object.roomType,
-        vertices: object.vertices,
-        height: object.height,
-        color: '#000000', // no leído por el motor — ver comentario de arriba.
-        usefulPlaneHeight: object.usefulPlaneHeight,
-        marginalZone: object.marginalZone,
-        illuminanceLux: object.requirement.illuminanceLux ?? undefined,
-        uniformityTarget: object.requirement.uniformityTarget,
-        ugrLimit: object.requirement.ugrLimit,
-    };
-}
-
-/**
- * `lumens` ya resuelto por el llamador (Fase 10, §11: "encendido, apagado y
- * regulación" — `luminaire.lumens * dimmingFactor`; Fase 14: `emergencyFlux`
- * en `config.emergencyMode`) — se aplica ANTES de convertir a `Fixture`,
- * no como un factor posterior sobre el resultado (así afecta correctamente
- * la interreflexión/UGR, que dependen de cuánta luz entra al recinto).
- */
-function toEngineFixture(luminaire: CalculationLuminaire, lumens: number): Fixture {
-    return {
-        id: luminaire.id,
-        name: luminaire.name,
-        x: luminaire.x,
-        y: luminaire.y,
-        z: luminaire.z,
-        rotation: luminaire.rotation,
-        lumens,
-        efficiency: luminaire.efficiency,
-        fixtureType: luminaire.fixtureType as Fixture['fixtureType'],
-        fixtureShape: (luminaire.fixtureShape ?? undefined) as Fixture['fixtureShape'],
-        dimensions: luminaire.dimensions ?? undefined,
-        photometricWeb: luminaire.photometricWeb,
-        lightColor: '#ffffff', // no leído por el motor — ver comentario de arriba.
-    };
 }
 
 /**
@@ -324,18 +244,29 @@ export async function runDirectPreviewEngine(
         // `calculateUGR` heredado sin cambios (Fase 0).
         const glareConfig = config.glare.observerModel === 'guth-observers' ? {} : null;
 
-        // Fase 5: `meshPolicy.gridSpacingM` era metadata sin efecto real
-        // hasta ahora — `calculateLightingResult` ya lo acepta.
+        // Fase 5/adaptativo: `resolveMeshSpacing` decide espaciado fijo vs
+        // adaptativo por recinto (`hooks/adaptiveGridSpacing.ts`) — sin
+        // `meshPolicy.adaptive`, idéntico al comportamiento de siempre.
+        const levelObstacles = obstaclesByLevel.get(object.levelId) ?? [];
+        const { spacingM, marginalZoneOverride } = resolveMeshSpacing(
+            room,
+            fixtures,
+            getRoomUsefulPlaneHeight(room),
+            levelObstacles,
+            config.meshPolicy,
+        );
         const result = calculateLightingResult(
             room,
             fixtures,
-            config.meshPolicy.gridSpacingM,
-            obstaclesByLevel.get(object.levelId) ?? [],
+            spacingM,
+            levelObstacles,
             surfaceReflectances,
             iterativeConfig,
             glareConfig,
             runOptions?.directIlluminanceBatch,
             config.maintenanceFactor ?? 0.8,
+            marginalZoneOverride,
+            config.excludeMarginalZoneFromStats,
         );
 
         if (iterativeConfig && result.interreflection_converged === false) {

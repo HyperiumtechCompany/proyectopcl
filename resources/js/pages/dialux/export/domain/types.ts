@@ -72,6 +72,8 @@ export interface DialuxAmbientMetrics {
     uniformity: number | null;
     g2: number | null;
     ugr: number | null;
+    /** `true` cuando `ugr` viene de `Room.manualUgr`/`AmbientConfig.manualUgr` (cargado a mano) en vez del motor de posición de Guth — ver doc-comment de `Room.manualUgr`. */
+    ugrIsManual: boolean;
     usefulPlaneHeight: number;
     marginalZone: number;
     uniformityTarget: number | null;
@@ -420,6 +422,8 @@ export interface DialuxAmbientDetail {
     g2: number | null;
     uniformityTarget: number | null;
     ugr: number | null;
+    /** `true` cuando `ugr` viene de `Room.manualUgr`/`AmbientConfig.manualUgr` (cargado a mano) en vez del motor de posición de Guth — ver doc-comment de `Room.manualUgr`. */
+    ugrIsManual: boolean;
     ugrLimit: number | null;
     interiorHeight: number;
     reflectionCeiling: number;

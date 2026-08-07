@@ -1,28 +1,11 @@
-import {
-    AlertTriangle,
-    Building2,
-    CheckCircle,
-    Layers3,
-    Lightbulb,
-    TableProperties,
-    XCircle,
-} from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Building2, CheckCircle, Gauge, Layers3, Lightbulb, RotateCcw, TableProperties, XCircle } from 'lucide-react';
 import React, { useState } from 'react';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
-import { estimatePhotometricFixtureQuantity } from '@/pages/dialux/hooks/fixtureGrid';
 import { determineCoverage } from '@/pages/dialux/hooks/lightingCalculations';
-import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
+import { buildRoomLightingInputs, getRoomManualUgr } from '@/pages/dialux/hooks/roomLighting';
 import type { Fixture, LightingResult, Room } from '@/pages/dialux/hooks/useEditorStore';
 
-export interface RoomResultSummary {
-    room: Room;
-    fixtures: Fixture[];
-    result: LightingResult;
-    sourceRoomName?: string;
-    levelId: string;
-    levelName: string;
-    levelIndex: number;
-}
+export interface RoomResultSummary { room: Room; fixtures: Fixture[]; result: LightingResult; sourceRoomName?: string; levelId: string; levelName: string; levelIndex: number; }
 
 interface ResultsPanelProps {
     rooms: RoomResultSummary[];
@@ -60,8 +43,10 @@ interface RoomTableRow {
     estimatedUniformity: number;
     ugr: number;
     ugrLimit: number | null;
-    /** `true` cuando TODAS las luminarias del ambiente quedaron excluidas del cálculo de UGR — `ugr: 0` en ese caso no es un resultado físico real (ver `LightingResult.ugr_not_evaluated`). */
+    /** `true` cuando TODAS las luminarias del ambiente quedaron excluidas del cálculo de UGR — `ugr: 0` en ese caso no es un resultado físico real (ver `LightingResult.ugr_not_evaluated`). Siempre `false` cuando `ugrIsManual` es `true` (el dato manual reemplaza la evaluación, no depende de ella). */
     ugrNotEvaluated: boolean;
+    /** `true` cuando `ugr` viene de `Room.manualUgr`/`AmbientConfig.manualUgr` (cargado a mano por el usuario) en vez del motor de posición de Guth — ver doc-comment de `Room.manualUgr`. */
+    ugrIsManual: boolean;
     hasNormativeSource: boolean;
     coverage: 'optimal' | 'insufficient' | 'excessive';
 }
@@ -112,12 +97,6 @@ const coverageLabels = {
 export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
     return rooms.map(({ room, fixtures, result, sourceRoomName, levelId, levelName, levelIndex }) => {
         const inputs = buildRoomLightingInputs(room, fixtures);
-        const photometricQuantity = estimatePhotometricFixtureQuantity(
-            inputs.fixtureCount,
-            result.avg_lux,
-            inputs.illuminanceLux,
-            inputs.exactQuantity,
-        );
 
         return {
             id: room.id,
@@ -134,23 +113,24 @@ export function buildTableRows(rooms: RoomResultSummary[]): RoomTableRow[] {
             fixtureLumens: inputs.fixtureLumens,
             fixtureLumensSource: inputs.detectedFixtureLumens ? 'detected' : 'fallback',
             lumensRequired: inputs.lumensRequired,
-            exactQuantity: photometricQuantity.exact,
-            roundedQuantity: photometricQuantity.rounded,
+            exactQuantity: inputs.exactQuantity,
+            roundedQuantity: inputs.roundedQuantity,
             avgLux: result.avg_lux,
             minLux: result.min_lux,
             maxLux: result.max_lux,
             uniformity: result.uniformity,
             uniformityTarget: room.uniformityTarget ?? null,
             estimatedUniformity: inputs.estimatedUniformity,
-            ugr: result.ugr,
+            ugr: getRoomManualUgr(room) ?? result.ugr,
             ugrLimit: room.ugrLimit ?? null,
-            ugrNotEvaluated: result.ugr_not_evaluated ?? false,
+            ugrNotEvaluated: getRoomManualUgr(room) === null && (result.ugr_not_evaluated ?? false),
+            ugrIsManual: getRoomManualUgr(room) !== null,
             hasNormativeSource: Boolean(
                 room.normativeStandard || room.normativeLabel || room.normativeCategory,
             ),
             coverage: determineCoverage(
-                photometricQuantity.exact,
-                inputs.fixtureCount || photometricQuantity.rounded,
+                inputs.exactQuantity,
+                inputs.fixtureCount || inputs.roundedQuantity,
             ),
         };
     });
@@ -196,8 +176,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
         activeRoomName === 'all'
             ? levelRows
             : levelRows.filter(
-                  (row) => (row.sourceRoomName ?? 'Sin recinto') === activeRoomName,
-              );
+                (row) => (row.sourceRoomName ?? 'Sin recinto') === activeRoomName,
+            );
 
     if (filteredRows.length === 0) {
         return (
@@ -214,40 +194,46 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
     return (
         <div className="space-y-5 text-xs">
             <section
-                className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/60 sm:p-4"
-                aria-label="Filtros de resultados">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-                    <label className="space-y-1.5">
-                        <span className="flex items-center gap-2 font-medium text-slate-600 dark:text-slate-300">
-                            <Layers3 size={14} className="text-cyan-500 dark:text-cyan-300" />
+                aria-label="Filtros e indicadores generales"
+                className="rounded-xl border border-slate-800 bg-slate-950/50 p-3"
+            >
+                <div
+                    className=" grid gap-2 lg:grid-cols-4 xl:grid-cols-[1fr_1.25fr_auto_repeat(4,0.8fr)] xl:items-center">
+                    {/* Piso */}
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-800 bg-slate-900/70 px-3">
+                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                            <Layers3 size={13} className="text-cyan-400" />
                             Piso
                         </span>
+
                         <select
                             value={activeLevelId}
-                            onChange={(event) => {
-                                setSelectedLevelId(event.target.value);
-                                setSelectedRoomName('all');
-                            }}
-                            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                            onChange={(event) => setSelectedLevelId(event.target.value)}
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-100 outline-none focus:ring-0">
                             <option value="all">Todos los pisos</option>
+
                             {levels.map((level) => (
                                 <option key={level.id} value={level.id}>
-                                    {level.name} ({rows.filter((row) => row.levelId === level.id).length})
+                                    {level.name}
                                 </option>
                             ))}
                         </select>
                     </label>
 
-                    <label className="space-y-1.5">
-                        <span className="flex items-center gap-2 font-medium text-slate-600 dark:text-slate-300">
-                            <Building2 size={14} className="text-amber-500 dark:text-amber-300" />
+
+                    {/* Recinto */}
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-800 bg-slate-900/70 px-3">
+                        <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                            <Building2 size={13} className="text-amber-400" />
                             Recinto
                         </span>
+
                         <select
                             value={activeRoomName}
                             onChange={(event) => setSelectedRoomName(event.target.value)}
-                            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-100 outline-none focus:ring-0">
                             <option value="all">Todos los recintos</option>
+
                             {roomNames.map((roomName) => (
                                 <option key={roomName} value={roomName}>
                                     {roomName}
@@ -256,6 +242,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                         </select>
                     </label>
 
+
+                    {/* Limpiar */}
                     <button
                         type="button"
                         onClick={() => {
@@ -263,49 +251,87 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                             setSelectedRoomName('all');
                         }}
                         disabled={activeLevelId === 'all' && activeRoomName === 'all'}
-                        className="h-10 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        className=" flex h-14 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900/70 px-4 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-40">
+                        <RotateCcw size={14} />
                         Limpiar
                     </button>
+
+
+                    {/* Ambientes */}
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
+                        <Building2 size={16} className="text-slate-400" />
+
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                                Ambientes
+                            </p>
+
+                            <p className="text-xl font-semibold text-white tabular-nums">
+                                {filteredRows.length}
+                            </p>
+                        </div>
+                    </div>
+
+
+                    {/* Luminarias */}
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
+                        <Lightbulb size={16} className="text-amber-300" />
+
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                                Luminarias
+                            </p>
+
+                            <p className="text-xl font-semibold text-amber-300 tabular-nums">
+                                {filteredRows.reduce(
+                                    (sum, row) => sum + row.fixtureCount,
+                                    0
+                                )}
+                            </p>
+                        </div>
+                    </div>
+
+
+                    {/* Lux promedio */}
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
+                        <Gauge size={16} className="text-cyan-300" />
+
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                                Lux promedio
+                            </p>
+
+                            <p className="text-xl font-semibold text-cyan-300 tabular-nums">
+                                {filteredRows.length
+                                    ? Math.round(
+                                        filteredRows.reduce(
+                                            (sum, row) => sum + row.avgLux,
+                                            0
+                                        ) / filteredRows.length
+                                    )
+                                    : 0}
+                            </p>
+                        </div>
+                    </div>
+
+
+                    {/* Cumplen */}
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
+                        <BadgeCheck size={16} className="text-emerald-300" />
+
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                                Cumplen
+                            </p>
+
+                            <p className="text-xl font-semibold text-emerald-300 tabular-nums">
+                                {compliantRooms}/{filteredRows.length}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Indicadores generales">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                        Ambientes
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums text-white sm:text-2xl">
-                        {filteredRows.length}
-                    </p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                        Luminarias
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums text-amber-300 sm:text-2xl">
-                        {filteredRows.reduce((sum, row) => sum + row.fixtureCount, 0)}
-                    </p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                        Lux Promedio
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums text-cyan-300 sm:text-2xl">
-                        {(
-                            filteredRows.reduce((sum, row) => sum + row.avgLux, 0) /
-                            filteredRows.length
-                        ).toFixed(0)}
-                    </p>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                        Cumplen
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums text-emerald-300 sm:text-2xl">
-                        {compliantRooms}/{filteredRows.length}
-                    </p>
-                </div>
-            </section>
 
             <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70 shadow-2xl">
                 <div className="flex items-start gap-3 border-b border-slate-800 px-4 py-3 sm:px-5 sm:py-4">
@@ -402,117 +428,126 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                             </tr>
                                         )}
                                         <tr className="border-b border-slate-800/70 text-center text-xs text-slate-200 transition-colors hover:bg-slate-900/60">
-                                        <td className="px-3 py-3">
-                                            <div className="flex items-start gap-2 text-left">
-                                                <Lightbulb
-                                                    size={15}
-                                                    className="mt-0.5 text-amber-300"
-                                                />
-                                                <div className="min-w-0">
-                                                    <p className="leading-snug font-semibold text-white">
-                                                        {row.roomName}
-                                                    </p>
-                                                    <p className="mt-0.5 leading-snug text-slate-500">
-                                                         {row.sourceRoomName
-                                                            ? `${row.levelName} · Recinto: ${row.sourceRoomName}`
-                                                            : row.normativeLabel ??
-                                                              `Uniformidad est.: ${(row.estimatedUniformity * 100).toFixed(0)}%`}
-                                                    </p>
+                                            <td className="px-3 py-3">
+                                                <div className="flex items-start gap-2 text-left">
+                                                    <Lightbulb
+                                                        size={15}
+                                                        className="mt-0.5 text-amber-300"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <p className="leading-snug font-semibold text-white">
+                                                            {row.roomName}
+                                                        </p>
+                                                        <p className="mt-0.5 leading-snug text-slate-500">
+                                                            {row.sourceRoomName
+                                                                ? `${row.levelName} · Recinto: ${row.sourceRoomName}`
+                                                                : row.normativeLabel ??
+                                                                `Uniformidad est.: ${(row.estimatedUniformity * 100).toFixed(0)}%`}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.area.toFixed(2)} m²
-                                        </td>
-                                        <td className="px-2 py-3">
-                                            {row.activityName ?? '-'}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.illuminanceLux} lux
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.fixtureCount}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            <div>
-                                                {row.fixtureLumens.toLocaleString('es-PE')}
-                                            </div>
-                                            <div className="text-slate-500">
-                                                {row.fixtureLumensSource === 'detected'
-                                                    ? 'Detectado'
-                                                    : 'Respaldo'}
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.lumensRequired.toFixed(0)}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            <div>{row.fixtureCount} inst.</div>
-                                            <div className="text-slate-500">
-                                                {row.exactQuantity.toFixed(2)} calc. /{' '}
-                                                {row.roundedQuantity} red.
-                                            </div>
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.avgLux.toFixed(0)}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.minLux.toFixed(0)}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.maxLux.toFixed(0)}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.uniformity.toFixed(3)}
-                                        </td>
-                                        <td className="px-2 py-3 font-mono tabular-nums">
-                                            {row.ugr.toFixed(1)}
-                                        </td>
-                                        <td className="px-3 py-3">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {statusIcon(
-                                                    compliant,
-                                                    warn,
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.area.toFixed(2)} m²
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                {row.activityName ?? '-'}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.illuminanceLux} lux
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.fixtureCount}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                <div>
+                                                    {row.fixtureLumens.toLocaleString('es-PE')}
+                                                </div>
+                                                <div className="text-slate-500">
+                                                    {row.fixtureLumensSource === 'detected'
+                                                        ? 'Detectado'
+                                                        : 'Respaldo'}
+                                                </div>
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.lumensRequired.toFixed(0)}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                <div>{row.fixtureCount} inst.</div>
+                                                <div className="text-slate-500">
+                                                    {row.exactQuantity.toFixed(2)} calc. /{' '}
+                                                    {row.roundedQuantity} red.
+                                                </div>
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.avgLux.toFixed(0)}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.minLux.toFixed(0)}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.maxLux.toFixed(0)}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.uniformity.toFixed(3)}
+                                            </td>
+                                            <td className="px-2 py-3 font-mono tabular-nums">
+                                                {row.ugr.toFixed(1)}
+                                                {row.ugrIsManual && (
+                                                    <span
+                                                        title="UGR cargado a mano — el método calculado no evaluó ninguna luminaria en este ambiente (H/R fuera de rango de validez)."
+                                                        className="ml-1 text-[9px] font-semibold text-amber-400"
+                                                    >
+                                                        manual
+                                                    </span>
                                                 )}
-                                                <span
-                                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                                                        compliant
+                                            </td>
+                                            <td className="px-3 py-3">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {statusIcon(
+                                                        compliant,
+                                                        warn,
+                                                    )}
+                                                    <span
+                                                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${compliant
                                                             ? coverageStyles.optimal
                                                             : 'border-red-800/70 bg-red-950/60 text-red-300'
-                                                    }`}>
-                                                    {compliant
-                                                        ? 'Conforme'
-                                                        : row.hasNormativeSource
-                                                          ? 'No conforme'
-                                                          : 'Sin norma'}
-                                                </span>
-                                            </div>
-                                            <p className="mt-1 text-[10px] text-slate-500">
-                                                Cobertura: {coverageLabels[row.coverage]}
-                                            </p>
-                                            {row.fixtureCount < row.roundedQuantity && (
-                                                <p className="mt-1.5 leading-snug font-semibold text-amber-400">
-                                                    Faltan {row.roundedQuantity - row.fixtureCount}{' '}
-                                                    luminaria(s) según normativa
+                                                            }`}>
+                                                        {compliant
+                                                            ? 'Conforme'
+                                                            : row.hasNormativeSource
+                                                                ? 'No conforme'
+                                                                : 'Sin norma'}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-[10px] text-slate-500">
+                                                    Cobertura: {coverageLabels[row.coverage]}
                                                 </p>
-                                            )}
-                                            <p className="mt-1.5 leading-snug text-slate-500">
-                                                {luxOk ? 'Lux OK' : 'Lux bajo'} ·{' '}
-                                                {row.uniformityTarget === null
-                                                    ? 'Uo no regulado'
-                                                    : uniformityOk
-                                                      ? 'Uo OK'
-                                                      : 'Uo bajo'}{' '}
-                                                ·{' '}
-                                                {row.ugrLimit === null
-                                                    ? 'UGR no regulado'
-                                                    : row.ugrNotEvaluated
-                                                      ? 'UGR no evaluado'
-                                                      : ugrOk
-                                                        ? 'UGR OK'
-                                                        : 'UGR alto'}
-                                            </p>
-                                        </td>
+                                                {row.fixtureCount < row.roundedQuantity && (
+                                                    <p className="mt-1.5 leading-snug font-semibold text-amber-400">
+                                                        ≈{row.roundedQuantity - row.fixtureCount}{' '}
+                                                        luminaria(s) más (estimación método de
+                                                        lúmenes) — no es el resultado del cálculo
+                                                        punto a punto de arriba
+                                                    </p>
+                                                )}
+                                                <p className="mt-1.5 leading-snug text-slate-500">
+                                                    {luxOk ? 'Lux OK' : 'Lux bajo'} ·{' '}
+                                                    {row.uniformityTarget === null
+                                                        ? 'Uo no regulado'
+                                                        : uniformityOk
+                                                            ? 'Uo OK'
+                                                            : 'Uo bajo'}{' '}
+                                                    ·{' '}
+                                                    {row.ugrLimit === null
+                                                        ? 'UGR no regulado'
+                                                        : row.ugrNotEvaluated
+                                                            ? 'UGR no evaluado'
+                                                            : ugrOk
+                                                                ? row.ugrIsManual ? 'UGR OK (manual)' : 'UGR OK'
+                                                                : row.ugrIsManual ? 'UGR alto (manual)' : 'UGR alto'}
+                                                </p>
+                                            </td>
                                         </tr>
                                     </React.Fragment>
                                 );

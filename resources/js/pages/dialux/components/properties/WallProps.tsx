@@ -32,9 +32,10 @@ import {
 import {
     NORMATIVE_LABELS,
     buildRoomLightingInputs,
-    calculateRoomIndexForRoom,
     getActivityOptions,
     getCategoryOptions,
+    getRoomManualUgr,
+    getRoomMarginalZone,
     getRoomUsefulPlaneHeight,
     getSectionOptions,
 } from '@/pages/dialux/hooks/roomLighting';
@@ -128,32 +129,22 @@ const WallInteriorLightingSection: React.FC<{
         wall.illuminanceLux ??
         ambientMatch?.room.illuminanceLux ??
         300;
+    // Límite de UGR efectivo (tras el override de `ambientConfig.ugrLimit`,
+    // ver `ambientSpaces.ts`) — `ambientRoom.ugrLimit` ya refleja esa
+    // prioridad; solo hace falta un respaldo cuando todavía no hay ambiente
+    // resuelto.
+    const effectiveUgrLimit =
+        ambientRoom?.ugrLimit ?? ambientConfig?.ugrLimit ?? null;
+    // Mismo mecanismo, para el objetivo de uniformidad (Uo).
+    const effectiveUniformityTarget =
+        ambientRoom?.uniformityTarget ??
+        ambientConfig?.uniformityTarget ??
+        null;
     const fixLumens = wall.fixtureLumens ?? 4000;
-    // Mismo factor de utilización que el cálculo de techo del ambiente (índice
-    // del local + reflectancias), en vez de asumir ~99% de aprovechamiento:
-    // sin esto, "Lm requeridos (pared)" salía muy por debajo del cálculo real
-    // del ambiente para la misma normativa, dando una falsa sensación de que
-    // bastan menos luminarias de las que realmente exige la iluminancia objetivo.
-    const roomIndex = ambientRoom
-        ? calculateRoomIndexForRoom(
-              ambientRoom,
-              getRoomUsefulPlaneHeight(ambientRoom),
-          )
-        : undefined;
-    const lumensReq = calculateLumensRequired(
-        wallArea,
-        lux,
-        roomIndex
-            ? {
-                  roomIndex,
-                  reflectances: {
-                      ceiling: ambientRoom!.ceilingReflectance ?? 0.7,
-                      wall: ambientRoom!.wallReflectance ?? 0.5,
-                      floor: ambientRoom!.floorReflectance ?? 0.2,
-                  },
-              }
-            : undefined,
-    );
+    // Mismo Fm/Fu fijos (0.8/0.8) que el cálculo de techo del ambiente
+    // (`calculateLumensRequired`), para que "Lm requeridos (pared)" sea
+    // consistente con el resto de la tabla de resultados.
+    const lumensReq = calculateLumensRequired(wallArea, lux);
     const exactQty = calculateExactQuantity(lumensReq, fixLumens);
     const roundedQty = calculateRoundedQuantity(exactQty);
 
@@ -354,6 +345,153 @@ const WallInteriorLightingSection: React.FC<{
                 }}
             />
 
+            <div className="border-b border-gray-800/40 pb-1.5">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-blue-500"
+                        checked={ambientConfig?.ugrLimit !== undefined}
+                        onChange={(event) =>
+                            onUpdateAmbient({
+                                ugrLimit: event.target.checked
+                                    ? (effectiveUgrLimit ?? 22)
+                                    : undefined,
+                            })
+                        }
+                    />
+                    <span className="text-[10px] text-gray-500">
+                        Límite UGR manual (anula el de la actividad)
+                    </span>
+                </label>
+                {ambientConfig?.ugrLimit !== undefined && (
+                    <div className="mt-1.5">
+                        <EditField
+                            label="Límite UGR"
+                            value={effectiveUgrLimit ?? 22}
+                            min={10}
+                            max={40}
+                            step={1}
+                            onChange={(val) =>
+                                onUpdateAmbient({ ugrLimit: val })
+                            }
+                        />
+                    </div>
+                )}
+                <p className="mt-1 text-[9px] text-gray-600">
+                    Igual que Iluminancia: la actividad "{normativeActivity ??
+                        '—'}" trae su propio límite — si tu iluminancia ya
+                    está sobreescrita a mano, alineá el límite UGR también.
+                </p>
+            </div>
+
+            <div className="border-b border-gray-800/40 pb-1.5">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-blue-500"
+                        checked={ambientConfig?.uniformityTarget !== undefined}
+                        onChange={(event) =>
+                            onUpdateAmbient({
+                                uniformityTarget: event.target.checked
+                                    ? (effectiveUniformityTarget ?? 0.4)
+                                    : undefined,
+                            })
+                        }
+                    />
+                    <span className="text-[10px] text-gray-500">
+                        Objetivo Uo manual (anula el de la actividad)
+                    </span>
+                </label>
+                {ambientConfig?.uniformityTarget !== undefined && (
+                    <div className="mt-1.5">
+                        <EditField
+                            label="Uo objetivo"
+                            value={effectiveUniformityTarget ?? 0.4}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            onChange={(val) =>
+                                onUpdateAmbient({ uniformityTarget: val })
+                            }
+                        />
+                    </div>
+                )}
+                <p className="mt-1 text-[9px] text-gray-600">
+                    Mismo caso que el límite UGR de arriba, para Uo.
+                </p>
+            </div>
+
+            <EditField
+                label="Altura plano útil (m)"
+                value={
+                    ambientRoom
+                        ? getRoomUsefulPlaneHeight(ambientRoom)
+                        : (ambientConfig?.usefulPlaneHeight ?? 0.8)
+                }
+                min={0}
+                max={3}
+                step={0.05}
+                onChange={(val) => onUpdateAmbient({ usefulPlaneHeight: val })}
+            />
+
+            <EditField
+                label="Zona marginal (m)"
+                value={
+                    ambientRoom
+                        ? getRoomMarginalZone(ambientRoom)
+                        : (ambientConfig?.marginalZone ?? 0.1)
+                }
+                min={0}
+                max={2}
+                step={0.005}
+                onChange={(val) => onUpdateAmbient({ marginalZone: val })}
+            />
+
+            {(() => {
+                const manualUgr = ambientRoom
+                    ? getRoomManualUgr(ambientRoom)
+                    : (ambientConfig?.manualUgr ?? null);
+                return (
+                    <div className="border-b border-gray-800/40 pb-1.5">
+                        <label className="flex cursor-pointer items-center gap-1.5">
+                            <input
+                                type="checkbox"
+                                className="accent-blue-500"
+                                checked={manualUgr !== null}
+                                onChange={(event) =>
+                                    onUpdateAmbient({
+                                        manualUgr: event.target.checked
+                                            ? (manualUgr ?? 19)
+                                            : null,
+                                    })
+                                }
+                            />
+                            <span className="text-[10px] text-gray-500">
+                                UGR manual (reemplaza al calculado)
+                            </span>
+                        </label>
+                        {manualUgr !== null && (
+                            <div className="mt-1.5">
+                                <EditField
+                                    label="UGR"
+                                    value={manualUgr}
+                                    min={0}
+                                    max={40}
+                                    step={0.1}
+                                    onChange={(val) =>
+                                        onUpdateAmbient({ manualUgr: val })
+                                    }
+                                />
+                            </div>
+                        )}
+                        <p className="mt-1 text-[9px] text-gray-600">
+                            Solo cuando el motor no puede evaluar (H/R≤2, "No
+                            evaluado") — declara aquí el valor de referencia.
+                        </p>
+                    </div>
+                );
+            })()}
+
             <div className="flex items-center justify-between">
                 <PropField
                     label="Luminarias en pared"
@@ -522,6 +660,8 @@ export const WallProps: React.FC<{
                     ...(ambientMatch.sourceRoom.ambientConfigs?.[
                         ambientMatch.configKey
                     ] ?? {}),
+                    // Ver comentario de `wallId` en `updateAmbientConfig` más abajo.
+                    wallId: wall.id,
                     ...patch,
                 },
             },
@@ -681,6 +821,13 @@ export const WallProps: React.FC<{
                     ...(ambientMatch.sourceRoom.ambientConfigs?.[
                         ambientMatch.configKey
                     ] ?? {}),
+                    // Ancla esta clave a la pared que la delimita — sin
+                    // esto, `buildWallDefinedAmbientSpaces` reasigna
+                    // `ambient-N` por orden de área en cada recálculo (ver
+                    // `AmbientConfig.wallId`). Se escribe siempre, así una
+                    // config guardada antes de este fix se auto-sana la
+                    // próxima vez que se edite.
+                    wallId: wall.id,
                     ...patch,
                 },
             },

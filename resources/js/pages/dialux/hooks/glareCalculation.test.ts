@@ -8,12 +8,12 @@ import type { Fixture, Room } from './types';
  * Suite de la Fase 9 ("UGR y luminancia profesional", plan maestro §11).
  * Puerta de salida citada por el plan: "los casos UGR soportados cumplen la
  * tolerancia y el informe muestra observador/dirección" — el índice de
- * posición de Guth está marcado `pending-confirmation` (ver
- * `glareCalculation.ts`), así que estos tests verifican invariantes
- * matemáticas exactas de la fórmula (verificables independientemente de si
- * sus coeficientes coinciden letra por letra con CIE 117) y el
- * comportamiento correcto de exclusiones/observadores múltiples, no un
- * valor de referencia externo.
+ * posición de Guth (Levin 1975, coeficientes confirmados contra fuente
+ * secundaria, ver `glareCalculation.ts`) sigue sin verificarse letra por
+ * letra contra el texto primario pagado de CIE 117, así que estos tests
+ * verifican invariantes matemáticas exactas de la fórmula (verificables
+ * independientemente de esa confirmación) y el comportamiento correcto de
+ * exclusiones/observadores múltiples, no un valor de referencia externo.
  */
 
 function buildFixture(x: number, y: number, z: number, overrides: Partial<Fixture> = {}): Fixture {

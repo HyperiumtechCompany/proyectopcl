@@ -43,124 +43,31 @@ export function calculatePolygonPerimeter(
 }
 
 /**
- * Índice del local (k) del método de los lúmenes: k = (L·W) / (Hm·(L+W)).
- * A menor k, más "estrecho/alto" el recinto y menor la fracción de flujo
- * que llega al plano de trabajo tras las reflexiones en techo/paredes.
- */
-export function calculateRoomIndex(
-    length: number,
-    width: number,
-    mountingHeight: number,
-): number {
-    if (length <= 0 || width <= 0 || mountingHeight <= 0) {
-        return 0;
-    }
-    return (length * width) / (mountingHeight * (length + width));
-}
-
-/** Reflectancias de referencia (techo 70% / pared 50% / piso 20%) usadas como base de comparación. */
-const REFERENCE_WEIGHTED_REFLECTANCE = 0.5 * 0.7 + 0.3 * 0.5 + 0.2 * 0.2;
-
-/**
- * Tabla de factor de utilización (UF) por índice de local `k`, para una luminaria
- * directa de distribución media-ancha (el caso típico de paneles LED/downlights de
- * la mayoría del catálogo) con reflectancias de referencia 70/50/20. Son los valores
- * publicados en tablas de UF de manuales de alumbrado (CIBSE/IESNA) para ese tipo de
- * luminaria — a diferencia de una curva de saturación inventada, esto reproduce los
- * factores de utilización reales que usa un software certificado (DIALux) a partir
- * de la fotometría del fabricante, evitando pedir muchas más luminarias de la cuenta.
- */
-const UF_TABLE: Array<[k: number, uf: number]> = [
-    [0.6, 0.43],
-    [0.8, 0.51],
-    [1.0, 0.57],
-    [1.25, 0.62],
-    [1.5, 0.66],
-    [2.0, 0.71],
-    [2.5, 0.75],
-    [3.0, 0.77],
-    [4.0, 0.8],
-    [5.0, 0.82],
-];
-
-function lookupBaseUtilization(roomIndex: number): number {
-    const [firstK, firstUf] = UF_TABLE[0];
-    if (roomIndex <= firstK) {
-        // Por debajo del rango tabulado, extrapola linealmente hacia un mínimo
-        // razonable en vez de cortar en seco en el primer valor de la tabla.
-        const slope = (UF_TABLE[1][1] - firstUf) / (UF_TABLE[1][0] - firstK);
-        return Math.max(0.2, firstUf + slope * (roomIndex - firstK));
-    }
-
-    const [lastK, lastUf] = UF_TABLE[UF_TABLE.length - 1];
-    if (roomIndex >= lastK) {
-        return Math.min(0.88, lastUf);
-    }
-
-    for (let i = 0; i < UF_TABLE.length - 1; i++) {
-        const [k0, uf0] = UF_TABLE[i];
-        const [k1, uf1] = UF_TABLE[i + 1];
-        if (roomIndex >= k0 && roomIndex <= k1) {
-            const t = (roomIndex - k0) / (k1 - k0);
-            return uf0 + (uf1 - uf0) * t;
-        }
-    }
-
-    return lastUf;
-}
-
-/**
- * Estima el factor de utilización (fracción del flujo emitido que llega al plano de
- * trabajo) a partir del índice del local y las reflectancias de las superficies,
- * interpolando la tabla de UF (`UF_TABLE`) y ajustando por reflectancia media
- * ponderada. No sustituye la tabla de utilización específica del fabricante de la
- * luminaria si está disponible (ver `lightingEngineCore.ts` para el cálculo punto a
- * punto con la fotometría real IES/LDT).
- */
-export function estimateUtilizationFactor(
-    roomIndex: number,
-    reflectances?: { ceiling: number; wall: number; floor: number },
-): number {
-    if (roomIndex <= 0) {
-        return 0.4;
-    }
-
-    const baseUtilization = lookupBaseUtilization(roomIndex);
-    const weightedReflectance = reflectances
-        ? 0.5 * reflectances.ceiling + 0.3 * reflectances.wall + 0.2 * reflectances.floor
-        : REFERENCE_WEIGHTED_REFLECTANCE;
-    const reflectanceFactor =
-        0.85 + (0.15 * weightedReflectance) / REFERENCE_WEIGHTED_REFLECTANCE;
-
-    return Number(
-        Math.min(0.9, Math.max(0.15, baseUtilization * reflectanceFactor)).toFixed(3),
-    );
-}
-
-/**
- * Cálculo de lúmenes requeridos (método de los lúmenes): (area * norma) / Fm / UF
+ * Cálculo de lúmenes requeridos: `((área × norma) / Fm) × Fu` — fórmula
+ * indicada TAL CUAL por el ingeniero supervisor del proyecto (Fm=Fu=0.8 por
+ * defecto), confirmada explícitamente por el usuario 2026-08-07 tras
+ * mostrarle que, con Fm=Fu, esto matemáticamente equivale a `área × norma`
+ * sin ningún factor de pérdida real (÷k×k se cancela) — decisión consciente,
+ * no un error de transcripción. NO "corregir" a `/Fm/Fu` (método de lúmenes
+ * clásico): ya se probó esa lectura antes en este mismo proyecto y se
+ * descartó a favor de esta.
  *   - area: área del recinto en m²
  *   - norma: nivel de iluminancia requerido en lux
- *   - Fm: factor de mantenimiento (depreciación por suciedad/envejecimiento), 0.8 por defecto
- *   - UF: factor de utilización — dinámico según índice de local y reflectancias si se
- *     provee `roomIndex`; si no hay geometría de sala disponible (ej. cálculo de pared),
- *     se mantiene el valor de referencia 0.99 usado históricamente.
+ *   - Fm: factor de mantenimiento, 0.8 por defecto
+ *   - Fu: factor de utilización, 0.8 por defecto
  */
 export function calculateLumensRequired(
     areaM2: number,
     normaLux: number,
     options?: {
-        roomIndex?: number;
-        reflectances?: { ceiling: number; wall: number; floor: number };
         maintenanceFactor?: number;
+        utilizationFactor?: number;
     },
 ): number {
     const maintenanceFactor = options?.maintenanceFactor ?? 0.8;
-    const utilizationFactor = options?.roomIndex
-        ? estimateUtilizationFactor(options.roomIndex, options.reflectances)
-        : 0.99;
+    const utilizationFactor = options?.utilizationFactor ?? 0.8;
 
-    return (areaM2 * normaLux) / maintenanceFactor / utilizationFactor;
+    return ((areaM2 * normaLux) / maintenanceFactor) * utilizationFactor;
 }
 
 /**
@@ -289,7 +196,7 @@ export function formatCalculationResult(calc: RoomLightingCalculation): string {
   • Lúmenes: ${calc.fixtureLumens.toLocaleString('es-PE')} lm
 
 🔢 CÁLCULOS:
-  Fórmula: ((Área × Norma) / 0.8) / 0.99
+  Fórmula: ((Área × Norma) / 0.8) × 0.8
   
   • Lúmenes Requeridos: ${calc.lumensRequired.toLocaleString('es-PE')} lm
   • Cantidad Exacta: ${calc.exactQuantity.toFixed(2)} luminarias

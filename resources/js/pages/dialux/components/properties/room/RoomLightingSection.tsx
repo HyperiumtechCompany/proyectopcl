@@ -4,6 +4,9 @@ import type {
     NormativeStandard,
 } from '@/pages/dialux/hooks/roomLighting';
 import {
+    getRoomManualUgr,
+    getRoomMarginalZone,
+    getRoomUsefulPlaneHeight,
     NORMATIVE_LABELS,
     type RoomLightingInputs,
 } from '@/pages/dialux/hooks/roomLighting';
@@ -40,6 +43,7 @@ export function RoomLightingSection({
     fixturesInRoom: Fixture[];
 }) {
     const store = useEditorStore();
+    const manualUgr = getRoomManualUgr(room);
 
     return (
         <SectionWrapper
@@ -182,6 +186,59 @@ export function RoomLightingSection({
                     onUpdate({ illuminanceLux: value, norma: value })
                 }
             />
+            <EditField
+                label="Altura plano útil (m)"
+                value={getRoomUsefulPlaneHeight(room)}
+                min={0}
+                max={3}
+                step={0.05}
+                onChange={(value) => onUpdate({ usefulPlaneHeight: value })}
+            />
+            <EditField
+                label="Zona marginal (m)"
+                value={getRoomMarginalZone(room)}
+                min={0}
+                max={2}
+                step={0.005}
+                onChange={(value) => onUpdate({ marginalZone: value })}
+            />
+            <div className="border-b border-gray-800/40 pb-1.5">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                        type="checkbox"
+                        className="accent-blue-500"
+                        checked={manualUgr !== null}
+                        onChange={(event) =>
+                            onUpdate({
+                                manualUgr: event.target.checked
+                                    ? (manualUgr ?? room.ugrLimit ?? 19)
+                                    : null,
+                            })
+                        }
+                    />
+                    <span className="text-[10px] text-gray-500">
+                        UGR manual (reemplaza al calculado)
+                    </span>
+                </label>
+                {manualUgr !== null && (
+                    <div className="mt-1.5">
+                        <EditField
+                            label="UGR"
+                            value={manualUgr}
+                            min={0}
+                            max={40}
+                            step={0.1}
+                            onChange={(value) => onUpdate({ manualUgr: value })}
+                        />
+                    </div>
+                )}
+                <p className="mt-1 text-[9px] text-gray-600">
+                    Solo cuando el motor no puede evaluar (todas las
+                    luminarias fuera del rango H/R≤2, "No evaluado") —
+                    declara aquí el valor de referencia (ej. de un informe
+                    DIALux evo) en vez de dejarlo sin evaluar.
+                </p>
+            </div>
             <div className="flex items-center justify-between">
                 <PropField
                     label="Luminarias"

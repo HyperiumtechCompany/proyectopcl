@@ -56,7 +56,13 @@ test('authenticated users can import an ies luminaire product', function () {
 
     expect(LuminaireProduct::query()->where('user_id', $user->id)->count())->toBe(1);
     expect(LuminaireProduct::query()->first()?->photometric_web)->toHaveKeys(['c_angles', 'gamma_angles', 'candela'])
-        ->and(LuminaireProduct::query()->first()?->report_assets['polar_svg'] ?? null)->toContain('<svg');
+        ->and(LuminaireProduct::query()->first()?->report_assets['polar_svg'] ?? null)->toContain('<svg')
+        // `reference_lumens` = flujo contra el que la tabla de candelas está
+        // normalizada (aquí, 1 lámpara x 4000 lm/lámpara del header IES) —
+        // sin este campo, editar el flujo del producto después del import
+        // no reescala la curva de candelas (bug corregido: parseIes() no lo
+        // escribía, a diferencia de parseLdt()).
+        ->and((float) (LuminaireProduct::query()->first()?->photometric_web['reference_lumens'] ?? 0))->toBe(4000.0);
     Storage::disk('public')->assertExists(LuminaireProduct::query()->firstOrFail()->product_image_path);
     Storage::disk('public')->assertExists(LuminaireProduct::query()->firstOrFail()->brand_logo_path);
 });

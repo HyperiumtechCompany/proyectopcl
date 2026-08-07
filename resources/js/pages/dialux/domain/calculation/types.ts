@@ -172,9 +172,27 @@ export interface CalculationConfig {
     interreflection: 'none' | 'first-bounce' | 'iterative';
     maxBounces: number;
     convergenceTolerance: number;
-    meshPolicy: { gridSpacingM: number };
+    meshPolicy: {
+        gridSpacingM: number;
+        /**
+         * Espaciado adaptativo por recinto (`hooks/adaptiveGridSpacing.ts`)
+         * — más fino cuanto más gradiente de luz tenga cada recinto, nunca
+         * más grueso que `gridSpacingM`. Default `undefined`/`false`
+         * preserva el espaciado fijo de siempre (mismo patrón no disruptivo
+         * que el resto de `CalculationConfig`).
+         */
+        adaptive?: boolean;
+    };
     /** Depreciación por mantenimiento, aplicada al resultado fotométrico final. */
     maintenanceFactor?: number;
+    /**
+     * Excluye del promedio/min/max/uniformidad reales los puntos de la
+     * franja de borde ("zona marginal") de cada recinto — hasta esta
+     * bandera, la zona marginal solo se reportaba, nunca afectaba el
+     * cálculo (`hooks/lightingEngineCore.ts`, `hooks/marginalZoneFilter.ts`).
+     * Default `undefined`/`false` preserva el comportamiento de siempre.
+     */
+    excludeMarginalZoneFromStats?: boolean;
     /**
      * Fase 14 ("Emergencia"). Default `undefined`/`false` — comportamiento
      * idéntico al de siempre (flujo normal, filtro de escena/interruptor
@@ -192,8 +210,8 @@ export interface CalculationConfig {
          * implícito en el centro del recinto, sin índice de posición) — sin
          * cambios desde la Fase 0. `'guth-observers'` (Fase 9: "UGR y
          * luminancia profesional"): observadores reales con posición/altura/
-         * dirección e índice de posición de Guth (`pending-confirmation`, ver
-         * `hooks/glareCalculation.ts`).
+         * dirección e índice de posición de Guth (Levin 1975, coeficientes
+         * confirmados — ver `hooks/glareCalculation.ts`).
          */
         observerModel: 'legacy' | 'guth-observers';
     };
@@ -231,13 +249,17 @@ export interface CalculationConfig {
  * recinto donde `legacy` sea preferible.
  *
  * CAVEAT que debe seguir documentado (no ocultar): `guthPositionIndex()`
- * en `glareCalculation.ts` es una forma cerrada ampliamente reproducida en
- * software de iluminación, pero sus coeficientes NO están verificados
- * letra por letra contra el texto primario de CIE 117-1995 — DIALux evo
- * documenta usar interpolación de tabla (R,T,H), no esta ecuación. Sigue
- * siendo la mejor aproximación disponible en este sistema y notablemente
- * más precisa que `legacy`, pero no se debe declarar "UGR validado
- * certificado" mientras este punto siga en `pending-confirmation`.
+ * en `glareCalculation.ts` es la forma cerrada de Levin, R.E. (1975,
+ * JIES 4(2):99-105) — sus coeficientes ya están confirmados contra una
+ * fuente académica secundaria independiente (2026-08-06, ver el docstring
+ * de `guthPositionIndex`), pero DIALux evo usa un método DISTINTO
+ * (interpolación de tabla R,T,H), no esta ecuación evaluada punto a punto —
+ * ambos válidos, no intercambiables número por número. Sigue siendo la
+ * mejor aproximación disponible en este sistema y notablemente más precisa
+ * que `legacy`, pero no se debe declarar "UGR idéntico a DIALux evo" solo
+ * porque el método esté confirmado: son dos métodos legítimos que pueden
+ * divergir, especialmente en salas pequeñas cerca del límite inferior de
+ * validez de la tabla (2H×2H).
  */
 /**
  * `interreflection: 'first-bounce'` (Fase 16, "Biblioteca de materiales"):

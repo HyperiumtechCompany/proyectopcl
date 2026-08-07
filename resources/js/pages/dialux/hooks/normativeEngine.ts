@@ -562,6 +562,17 @@ function ugrStatus(calculated: number, limit: number | null, notEvaluated: boole
     return 'non_compliant';
 }
 
+/**
+ * UGR cargado a mano para este ambiente (`Room.manualUgr`/
+ * `AmbientConfig.manualUgr` — ver doc-comment en `types.ts`). Inline en vez
+ * de importar `getRoomManualUgr` de `roomLighting.ts` porque ese módulo ya
+ * importa `getNormData` de ESTE archivo — un import de vuelta crearía un
+ * ciclo runtime nuevo por una función de una línea.
+ */
+function manualUgrOf(room: Room): number | null {
+    return typeof room.manualUgr === 'number' ? room.manualUgr : null;
+}
+
 function uniformityStatus(calculated: number, required: number | null): ComplianceStatus {
     if (required === null) {
         return 'needs_review';
@@ -636,16 +647,30 @@ export function evaluateCompliance(
     });
 
     // 3. UGR
-    const ugrSt = ugrStatus(result.ugr, normative.ugr, result.ugr_not_evaluated ?? false);
+    // `manualUgr`: cargado a mano cuando el método analítico de posición de
+    // Guth excluye TODAS las luminarias del ambiente (H/R fuera de su rango
+    // de validez documentado — ver `glareCalculation.ts`) y no queda nada
+    // que evaluar. Con un valor manual, SIEMPRE se evalúa contra él (nunca
+    // "needs_review") — el mensaje deja explícito que es un dato cargado,
+    // no calculado por este motor.
+    const manualUgr = manualUgrOf(room);
+    const effectiveUgr = manualUgr ?? result.ugr;
+    const ugrSt = ugrStatus(effectiveUgr, normative.ugr, manualUgr === null && (result.ugr_not_evaluated ?? false));
     results.push({
         parameterId: 'ugr',
         parameterName: 'Índice de deslumbramiento (UGR)',
         requiredValue: normative.ugr,
-        calculatedValue: result.ugr,
+        calculatedValue: effectiveUgr,
         unit: '',
         status: ugrSt,
         message: normative.ugr === null
             ? 'UGR no especificado en esta norma/actividad'
+            : manualUgr !== null
+            ? (ugrSt === 'compliant'
+                ? `UGR ${effectiveUgr.toFixed(1)} ≤ ${normative.ugr} límite (valor cargado a mano)`
+                : ugrSt === 'warning'
+                ? `UGR ${effectiveUgr.toFixed(1)} cumple pero próximo al límite (valor cargado a mano)`
+                : `UGR ${effectiveUgr.toFixed(1)} > ${normative.ugr} límite (valor cargado a mano)`)
             : result.ugr_not_evaluated
             ? 'UGR no evaluado: todas las luminarias quedaron fuera del cálculo de deslumbramiento'
             : ugrSt === 'compliant'

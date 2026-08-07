@@ -157,17 +157,27 @@ export function buildAmbientDetails(
                     ambient.metrics.ugr === null
                         ? null
                         : Number(ambient.metrics.ugr.toFixed(2)),
+                ugrIsManual: ambient.metrics.ugrIsManual,
                 ugrLimit: ambient.metrics.ugrLimit,
                 interiorHeight: Number(ambient.room.height.toFixed(3)),
-                reflectionCeiling:
-                    projectPhotometricDefaults.reflectionCeiling ??
-                    DEFAULT_REFLECTANCE_CEILING,
-                reflectionWall:
-                    projectPhotometricDefaults.reflectionWall ??
-                    DEFAULT_REFLECTANCE_WALL,
-                reflectionFloor:
-                    projectPhotometricDefaults.reflectionFloor ??
-                    DEFAULT_REFLECTANCE_FLOOR,
+                // Mismo criterio de resolución que el motor de cálculo real
+                // (`roomLighting.ts` — reflectancias por ambiente, 0-1 ??
+                // default), no el default de proyecto: ese queda
+                // desconectado de lo que el motor realmente usó para
+                // interreflexión, y mostrarlo hacía que el PDF reportara
+                // "70/50/20" fijo aunque el recinto tuviera otro valor.
+                reflectionCeiling: Math.round(
+                    (ambient.room.ceilingReflectance ??
+                        DEFAULT_REFLECTANCE_CEILING / 100) * 100,
+                ),
+                reflectionWall: Math.round(
+                    (ambient.room.wallReflectance ??
+                        DEFAULT_REFLECTANCE_WALL / 100) * 100,
+                ),
+                reflectionFloor: Math.round(
+                    (ambient.room.floorReflectance ??
+                        DEFAULT_REFLECTANCE_FLOOR / 100) * 100,
+                ),
                 // `siteSettings.maintenanceFactor` (panel "Terreno" ·
                 // Mantenimiento) es el override real que también alimenta el
                 // cálculo — `projectPhotometricDefaults.maintenanceFactor`

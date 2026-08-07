@@ -1444,11 +1444,65 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         }
     }, [activeTool, onAddWall, onMeasureAreaFinish, onDoubleClick]);
 
+    /**
+     * Quita el último vértice colocado de la figura que se está dibujando
+     * (recinto/pasadizo/escalera, muro o medición de área), sin cancelar el
+     * trazo completo. Pensado para atarse a Ctrl+Z mientras hay un dibujo en
+     * curso: antes, un clic de más en un polígono grande obligaba a cancelar
+     * todo y volver a empezar. Devuelve `true` si quitó algo (para que el
+     * caller sepa que no debe además disparar el undo/redo global).
+     */
+    const undoLastDraftVertex = useCallback(
+        (
+            setRoomVertices: (v: CanvasPoint[]) => void,
+            setWallPreview: (p: CanvasPoint[] | null) => void,
+            setMeasureAreaVertices: (v: CanvasPoint[]) => void,
+        ): boolean => {
+            const s = stateRef.current;
+
+            if (
+                (activeTool === 'room' ||
+                    activeTool === 'corridor' ||
+                    activeTool === 'stair') &&
+                s.roomVertices.length > 0
+            ) {
+                s.roomVertices = s.roomVertices.slice(0, -1);
+                s.previewPoint =
+                    s.roomVertices[s.roomVertices.length - 1] ?? null;
+                s.isDrawing = s.roomVertices.length > 0;
+                setRoomVertices([...s.roomVertices]);
+                return true;
+            }
+
+            if (isWallTool(activeTool) && (s.wallVertices?.length ?? 0) > 0) {
+                s.wallVertices = s.wallVertices.slice(0, -1);
+                s.isDrawing = s.wallVertices.length > 0;
+                setWallPreview(
+                    s.wallVertices.length > 0 ? [...s.wallVertices] : null,
+                );
+                return true;
+            }
+
+            if (
+                activeTool === 'measure-area' &&
+                s.measureAreaVertices.length > 0
+            ) {
+                s.measureAreaVertices = s.measureAreaVertices.slice(0, -1);
+                setMeasureAreaVertices([...s.measureAreaVertices]);
+                return true;
+            }
+
+            return false;
+        },
+        [activeTool],
+    );
+
     return {
         onMouseDown,
         onMouseMove,
         onMouseUp,
         onDoubleClick: handleDoubleClick,
         isDragging: () => stateRef.current.isDragging,
+        undoLastDraftVertex,
     };
 }

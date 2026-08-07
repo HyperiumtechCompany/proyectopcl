@@ -340,6 +340,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onMouseUp,
             onDoubleClick,
             isDragging: isDraggingFn,
+            undoLastDraftVertex,
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
@@ -906,6 +907,38 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onMoveDoor: (id, wallId, offsetAlongWall) =>
                 store.updateDoor(id, { wallId, offsetAlongWall }),
         });
+
+        // Ctrl+Z mientras se está dibujando un recinto/muro/medición de área
+        // quita solo el último punto colocado, en vez de disparar el undo
+        // global (que actuaría sobre el último objeto ya confirmado). Sin
+        // esto, un clic de más en un polígono grande obligaba a cancelar todo
+        // el trazo y volver a empezar. Se escucha en fase de captura para
+        // interceptar el evento antes que el atajo global de EditorLayout.
+        useEffect(() => {
+            const handler = (e: KeyboardEvent) => {
+                if (
+                    e.target instanceof HTMLInputElement ||
+                    e.target instanceof HTMLTextAreaElement
+                ) {
+                    return;
+                }
+                if (!(e.ctrlKey || e.metaKey) || e.shiftKey) return;
+                if (e.key.toLowerCase() !== 'z') return;
+
+                const handled = undoLastDraftVertex(
+                    setRoomVertices,
+                    setWallPreview,
+                    setMeasureAreaVertices,
+                );
+                if (handled) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            };
+
+            window.addEventListener('keydown', handler, true);
+            return () => window.removeEventListener('keydown', handler, true);
+        }, [undoLastDraftVertex]);
 
         // ── Manija de rotación (luminaria / interruptor / dispositivo único) ────
         const rotateKind: 'fixture' | 'switch' | 'device' | null =

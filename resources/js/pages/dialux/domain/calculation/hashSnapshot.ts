@@ -8,10 +8,39 @@ import type { CalculationSnapshot } from './types';
  */
 async function sha256Hex(input: string): Promise<string> {
     const bytes = new TextEncoder().encode(input);
+    if (!crypto.subtle) {
+        return fallbackHashHex(input);
+    }
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest))
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('');
+}
+
+/**
+ * `crypto.subtle` solo existe en contextos seguros (HTTPS o localhost) — un
+ * dominio `.test` de Laragon servido por HTTP lo deja `undefined`, y sin
+ * este respaldo CUALQUIER cálculo rompía por completo (el fallback síncrono
+ * de `EditorLayout.tsx` ya calcula bien los resultados, pero después
+ * crasheaba armando el hash y los resultados nunca llegaban a la pantalla).
+ * Este hash SOLO se usa para detectar si el snapshot cambió (ADR 0002),
+ * nunca como garantía criptográfica — un hash no criptográfico determinista
+ * alcanza. 8 rondas de FNV-1a de 32 bits con semilla distinta cada una,
+ * concatenadas, para mantener el mismo formato de salida (64 hex) que
+ * SHA-256 y que ningún consumidor (validación, `slice(0,16)` para IDs,
+ * regex de tests) necesite distinguir cuál camino produjo el hash.
+ */
+function fallbackHashHex(input: string): string {
+    let out = '';
+    for (let round = 0; round < 8; round++) {
+        let hash = 0x811c9dc5 ^ round;
+        for (let i = 0; i < input.length; i++) {
+            hash ^= input.charCodeAt(i);
+            hash = Math.imul(hash, 0x01000193);
+        }
+        out += (hash >>> 0).toString(16).padStart(8, '0');
+    }
+    return out;
 }
 
 /**

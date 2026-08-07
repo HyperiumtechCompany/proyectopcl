@@ -2,7 +2,6 @@ import {
     calculateExactQuantity,
     calculateLumensRequired,
     calculatePolygonArea,
-    calculateRoomIndex,
     calculateRoundedQuantity,
     determineCoverage,
     estimateUniformity,
@@ -290,9 +289,23 @@ export function getRoomUsefulPlaneHeight(room: Room): number {
     return isCorridorLikeRoom(room) ? 0 : 0.8;
 }
 
+/**
+ * Zona marginal según malla EN 12464-1:2021: `p = 0.2 × 5^log10(d)` (`d` =
+ * dimensión mayor si largo/ancho ∈[0.5,2], si no la menor; `p`≤10 m —
+ * fuente: EN 12464-1, resumido en Fagerhult "Number of calculation points",
+ * verif. 2026-08-06). `n=round(d/p)` puntos, espaciado real `p'=d/n`, borde
+ * sin cubrir `p'/2` — reproduce los valores pequeños/no redondos que
+ * reporta DIALux evo (0.135/0.201/0.209 m), a diferencia del 5% fijo sin
+ * fuente que usaba antes. Pasadizos (`isCorridorLikeRoom`): 0 m —
+ * verificado en dos exportaciones reales de DIALux evo ("Zona marginal: 0.000 m").
+ */
 export function getRoomMarginalZone(room: Room): number {
     if (typeof room.marginalZone === 'number') {
         return Math.max(0, room.marginalZone);
+    }
+
+    if (isCorridorLikeRoom(room)) {
+        return 0;
     }
 
     if (room.vertices.length < 3) {
@@ -301,32 +314,36 @@ export function getRoomMarginalZone(room: Room): number {
 
     const xs = room.vertices.map((vertex) => vertex.x);
     const ys = room.vertices.map((vertex) => vertex.y);
-    const minDimension = Math.min(
-        Math.max(...xs) - Math.min(...xs),
-        Math.max(...ys) - Math.min(...ys),
-    );
-
-    return Number(
-        Math.min(0.2, Math.max(0.05, minDimension * 0.05)).toFixed(3),
-    );
-}
-
-/** Índice del local (k) a partir del bbox del recinto y la altura de montaje sobre el plano de trabajo. */
-export function calculateRoomIndexForRoom(
-    room: Room,
-    usefulPlaneHeight: number,
-): number {
-    if (room.vertices.length < 3) {
-        return 0;
+    const width = Math.max(...xs) - Math.min(...xs);
+    const depth = Math.max(...ys) - Math.min(...ys);
+    if (width <= 0 || depth <= 0) {
+        return 0.1;
     }
 
-    const xs = room.vertices.map((vertex) => vertex.x);
-    const ys = room.vertices.map((vertex) => vertex.y);
-    const length = Math.max(...xs) - Math.min(...xs);
-    const width = Math.max(...ys) - Math.min(...ys);
-    const mountingHeight = Math.max(0.3, room.height - usefulPlaneHeight);
+    const longer = Math.max(width, depth);
+    const shorter = Math.min(width, depth);
+    const ratio = longer / shorter;
+    const d = ratio >= 2 ? shorter : longer;
 
-    return calculateRoomIndex(length, width, mountingHeight);
+    const gridSpacing = Math.min(10, 0.2 * Math.pow(5, Math.log10(d)));
+    if (!(gridSpacing > 0)) {
+        return 0.1;
+    }
+
+    const pointCount = Math.max(1, Math.round(d / gridSpacing));
+    const fittedSpacing = d / pointCount;
+
+    return Number((fittedSpacing / 2).toFixed(3));
+}
+
+/**
+ * UGR cargado a mano para este ambiente — ver el doc-comment de
+ * `Room.manualUgr` (`types.ts`) para el porqué (método analítico de
+ * posición de Guth fuera de su rango de validez H/R≤2). `null` = sin
+ * override, se usa el UGR calculado tal cual.
+ */
+export function getRoomManualUgr(room: Room): number | null {
+    return typeof room.manualUgr === 'number' ? room.manualUgr : null;
 }
 
 export function buildRoomLightingInputs(
@@ -340,15 +357,7 @@ export function buildRoomLightingInputs(
     const detectedFixtureLumens = getDominantFixtureLumens(fixtures);
     const fixtureLumens =
         detectedFixtureLumens ?? getRoomFallbackFixtureLumens(room);
-    const roomIndex = calculateRoomIndexForRoom(room, usefulPlaneHeight);
-    const lumensRequired = calculateLumensRequired(area, illuminanceLux, {
-        roomIndex,
-        reflectances: {
-            ceiling: room.ceilingReflectance ?? 0.7,
-            wall: room.wallReflectance ?? 0.5,
-            floor: room.floorReflectance ?? 0.2,
-        },
-    });
+    const lumensRequired = calculateLumensRequired(area, illuminanceLux);
     const exactQuantity = calculateExactQuantity(lumensRequired, fixtureLumens);
     const roundedQuantity = calculateRoundedQuantity(exactQuantity);
 

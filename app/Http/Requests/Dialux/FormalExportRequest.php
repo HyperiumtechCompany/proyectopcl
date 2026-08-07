@@ -251,6 +251,7 @@ class FormalExportRequest extends FormRequest
             'document.ambientDetails.*.g2' => ['nullable', 'numeric'],
             'document.ambientDetails.*.uniformityTarget' => ['nullable', 'numeric'],
             'document.ambientDetails.*.ugr' => ['nullable', 'numeric'],
+            'document.ambientDetails.*.ugrIsManual' => ['nullable', 'boolean'],
             'document.ambientDetails.*.ugrLimit' => ['nullable', 'numeric'],
             'document.ambientDetails.*.interiorHeight' => ['nullable', 'numeric'],
             'document.ambientDetails.*.reflectionCeiling' => ['nullable', 'numeric'],

@@ -639,6 +639,11 @@ class ProductImportService
             'candela' => $candela,
             'provenance' => 'manufacturer',
             'tilt' => $tiltTable,
+            // Flujo contra el que la tabla de candelas está normalizada —
+            // sin esto, `candela()` (photometricInterpolation.ts) no puede
+            // reescalar la curva si el flujo del producto se edita después
+            // del import (mismo campo que `parseLdt()` ya escribe abajo).
+            'reference_lumens' => round($totalLumens, 1),
         ];
         $webJson = json_encode($webData);
         $photometricWeb = (strlen($webJson) < 512_000) ? $webData : null;

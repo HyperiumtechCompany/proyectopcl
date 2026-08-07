@@ -26,6 +26,17 @@ export interface UseDialuxCalculationWorkerResult {
     cancel: () => void;
 }
 
+/**
+ * `crypto.randomUUID` solo existe en contextos seguros (HTTPS o localhost)
+ * — sin él (ej. un dominio `.test` de Laragon servido por HTTP), llamarlo
+ * lanzaba de entrada y tumbaba el worker en TODO cálculo. Este ID solo
+ * correlaciona request/response con el worker, no necesita ser
+ * criptográficamente aleatorio — solo único dentro de esta sesión.
+ */
+function fallbackRequestId(): string {
+    return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface PendingRequest {
     resolve: (run: CalculationRun) => void;
     reject: (error: Error) => void;
@@ -125,7 +136,7 @@ export function useDialuxCalculationWorker(): UseDialuxCalculationWorkerResult {
             onProgress?: (completed: number, total: number) => void,
         ): Promise<CalculationRun> => {
             const worker = getWorker();
-            const requestId = crypto.randomUUID();
+            const requestId = crypto.randomUUID ? crypto.randomUUID() : fallbackRequestId();
             activeRequestIdRef.current = requestId;
 
             return new Promise<CalculationRun>((resolve, reject) => {

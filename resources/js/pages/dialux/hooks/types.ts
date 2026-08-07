@@ -93,6 +93,37 @@ export interface AmbientConfig {
     activity?: string;
     illuminanceLux?: number;
     /**
+     * Límite de UGR de ESTE sub-ambiente — mismo mecanismo que
+     * `illuminanceLux` arriba: sin esto, `ugrLimit` SIEMPRE se re-deriva de
+     * la actividad normativa elegida (`ambientSpaces.ts`), nunca se puede
+     * fijar a mano por ambiente — a diferencia de `illuminanceLux`, que sí
+     * podía sobreescribirse. Detectado 2026-08-07: un ambiente con
+     * iluminancia forzada a mano (200 lx en vez de los 300 lx de su propia
+     * actividad) quedaba con el límite UGR de esa MISMA actividad (22),
+     * sin forma de alinear ambos de forma consistente.
+     */
+    ugrLimit?: number | null;
+    /** Mismo mecanismo que `ugrLimit` arriba, para el objetivo de uniformidad (Uo). */
+    uniformityTarget?: number | null;
+    /**
+     * Altura del plano útil / zona marginal de ESTE sub-ambiente — mismo
+     * motivo que `outletUse` abajo: un recinto físico subdividido por
+     * paredes internas (ej. "Caseta de Control" + "SS.HH" dentro de un
+     * mismo `Room`) necesita que cada sub-ambiente tenga su propia altura
+     * (DIALux evo, para el mismo tipo de proyecto, usa 0.6 m para un
+     * vestíbulo y 1.8 m para un lavabo dentro del mismo recinto) — sin
+     * esto, ambos sub-ambientes comparten `Room.usefulPlaneHeight`/
+     * `marginalZone` y no hay forma de diferenciarlos.
+     */
+    usefulPlaneHeight?: number;
+    marginalZone?: number;
+    /**
+     * UGR ingresado a mano para ESTE sub-ambiente — ver `Room.manualUgr`
+     * para el porqué (método analítico fuera de su rango de validez
+     * documentado, H/R>2). `undefined`/`null` = usar el UGR calculado.
+     */
+    manualUgr?: number | null;
+    /**
      * Regla de tomacorrientes de ESTE sub-ambiente (delimitado por una
      * pared interna) — antes vivían como `Room.outletUse`/`outletDeviceType`/
      * `outletStartOffset`, campos únicos del recinto físico compartidos por
@@ -104,6 +135,19 @@ export interface AmbientConfig {
     outletUse?: 'aula' | 'comedor' | 'exterior' | 'none';
     outletDeviceType?: ElectricalDeviceType;
     outletStartOffset?: number;
+    /**
+     * Id de la pared que delimita ESTE sub-ambiente — ancla la clave
+     * `ambientConfigs['ambient-N']` a una pared concreta en vez de a un
+     * orden por área. Sin esto, `buildWallDefinedAmbientSpaces` asigna
+     * `ambient-N` por tamaño de región (mayor a menor); si la geometría
+     * cambia de forma que el orden de tamaño entre dos sub-ambientes se
+     * invierte, la configuración de un ambiente nombrado por el usuario
+     * (altura de plano útil, normativa) queda aplicada a la pared
+     * equivocada, en silencio. Se escribe la primera vez que se guarda algo
+     * de este sub-ambiente (`WallProps.tsx`) — auto-sana configs viejas sin
+     * este campo la próxima vez que se editen, sin script de migración.
+     */
+    wallId?: string;
 }
 
 export type CorridorType =
@@ -272,6 +316,19 @@ export interface Room {
     specificRequirements?: string | null;
     usefulPlaneHeight?: number | null;
     marginalZone?: number | null;
+    /**
+     * UGR cargado a mano, en vez del calculado por `glareCalculation.ts`.
+     * El método analítico de posición de Guth solo es válido para H/R≤2
+     * (documentado por el propio soporte de DIALux evo) — en recintos
+     * chicos con montaje alto, TODAS las luminarias pueden caer fuera de
+     * ese rango y el motor no tiene nada que evaluar (`ugr_not_evaluated`).
+     * DIALux evo resuelve ese mismo caso con su método tabular (tablas CIE
+     * 117 del fabricante), que esta plataforma no reproduce por falta de
+     * esos datos — este campo es la vía honesta para declarar el UGR de
+     * referencia sin fingir que se calculó por este motor. `null`/`undefined`
+     * = usar el valor calculado tal cual (comportamiento por defecto).
+     */
+    manualUgr?: number | null;
     norma?: number; // Nivel de lux requerido (EN 12464-1)
     fixtureFlux?: number; // LÃƒÂºmenes de la luminaria seleccionada (cÃƒÂ¡lculo teÃƒÂ³rico)
     /** Regla usada para calcular automáticamente los tomacorrientes. */

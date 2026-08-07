@@ -34,7 +34,11 @@ describe('roomLighting', () => {
         } satisfies Room;
 
         expect(getRoomUsefulPlaneHeight(corridor)).toBe(0);
-        expect(getRoomMarginalZone(corridor)).toBe(0.086);
+        // Zona marginal 0 en pasadizos/circulaciones — verificado contra dos
+        // exportaciones reales de DIALux evo para este tipo de ambiente
+        // ("Altura: 0.000 m, Zona marginal: 0.000 m" en ambas), ver el
+        // docstring de `getRoomMarginalZone`.
+        expect(getRoomMarginalZone(corridor)).toBe(0);
         expect(buildRoomLightingInputs(corridor, []).usefulPlaneHeight).toBe(0);
     });
 

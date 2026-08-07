@@ -1,7 +1,7 @@
 import type { CalculationConfig, CalculationRun, CalculationWarning } from '@/pages/dialux/domain/calculation/types';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { calculateLightingResult, LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
-import { buildRoomLightingInputs } from '@/pages/dialux/hooks/roomLighting';
+import { buildRoomLightingInputs, getRoomManualUgr } from '@/pages/dialux/hooks/roomLighting';
 import {
     normalizeScaleConfig,
     type DxfEntity,
@@ -109,6 +109,7 @@ function buildRequirementEvaluations(
     ugrLimit: number | null,
     result: LightingResult | null,
     source: string | undefined,
+    manualUgr: number | null,
 ): RequirementEvaluation[] {
     const evaluations: RequirementEvaluation[] = [
         {
@@ -139,22 +140,26 @@ function buildRequirementEvaluations(
     }
 
     if (ugrLimit !== null) {
+        // `manualUgr`: tiene prioridad sobre el calculado — cubre H/R>2
+        // (todas las luminarias excluidas, ver `glareCalculation.ts`).
+        // `source: 'manual'` deja declarado que no lo calculó este motor.
+        const effectiveUgr = manualUgr ?? result?.ugr ?? null;
+        const isManual = manualUgr !== null;
         evaluations.push({
             metric: 'ugr',
-            calculatedValue: result?.ugr ?? null,
+            calculatedValue: effectiveUgr,
             operator: '<=',
             requiredValue: ugrLimit,
             unit: 'UGR',
-            // `ugr_not_evaluated`: todas las luminarias quedaron excluidas de
-            // la suma de deslumbramiento (campo visual inferior o H/R>2 —
-            // ver `glareCalculation.ts`), así que el `ugr: 0` resultante no
-            // es un valor físico real. Sin este chequeo, `0 <= ugrLimit` es
-            // siempre verdadero y el ambiente se reportaría "Conforme" sin
-            // haberse evaluado el deslumbramiento en absoluto.
-            status: result === null || result.ugr_not_evaluated
-                ? 'not-evaluated'
-                : evaluateRequirementStatus(result.ugr <= ugrLimit, source),
-            source,
+            // `ugr_not_evaluated`: sin `manualUgr`, todas las luminarias
+            // quedaron excluidas (H/R>2) y `ugr: 0` no es un valor real —
+            // sin este chequeo, `0 <= ugrLimit` da "Conforme" sin evaluar nada.
+            status: isManual
+                ? evaluateRequirementStatus(effectiveUgr !== null && effectiveUgr <= ugrLimit, 'manual')
+                : result === null || result.ugr_not_evaluated
+                    ? 'not-evaluated'
+                    : evaluateRequirementStatus(result.ugr <= ugrLimit, source),
+            source: isManual ? 'manual' : source,
         });
     }
 
@@ -177,6 +182,7 @@ function buildAmbientMetrics(
     const inputs = buildRoomLightingInputs(ambient.room, ambient.fixtures);
     const uniformityTarget = ambient.room.uniformityTarget ?? null;
     const ugrLimit = ambient.room.ugrLimit ?? null;
+    const manualUgr = getRoomManualUgr(ambient.room);
     const g2 =
         result && result.max_lux > 0 ? result.min_lux / result.max_lux : null;
     const requirementEvaluations = buildRequirementEvaluations(
@@ -185,6 +191,7 @@ function buildAmbientMetrics(
         ugrLimit,
         result,
         buildRequirementSource(ambient.room),
+        manualUgr,
     );
     const complies =
         requirementEvaluations.length > 0 &&
@@ -225,7 +232,8 @@ function buildAmbientMetrics(
         maxLux: result?.max_lux ?? null,
         uniformity: result?.uniformity ?? null,
         g2,
-        ugr: result?.ugr ?? null,
+        ugr: manualUgr ?? result?.ugr ?? null,
+        ugrIsManual: manualUgr !== null,
         usefulPlaneHeight:
             result?.useful_plane_height ?? inputs.usefulPlaneHeight,
         marginalZone: result?.marginal_zone ?? inputs.marginalZone,

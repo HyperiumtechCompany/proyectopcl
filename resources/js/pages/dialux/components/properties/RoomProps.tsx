@@ -112,7 +112,9 @@ export const RoomProps: React.FC<{
 
             {isRecinto && <RoomConstructionSection room={room} onUpdate={onUpdate} />}
 
-            {isRecinto && <RoomSurfaceMaterialsSection room={room} onUpdate={onUpdate} />}
+            {(isRecinto || isAmbiente) && (
+                <RoomSurfaceMaterialsSection room={room} onUpdate={onUpdate} />
+            )}
 
             {isAmbiente && (
                 <RoomLightingSection

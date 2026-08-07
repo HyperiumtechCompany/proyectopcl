@@ -8,8 +8,9 @@ import React, { memo, startTransition, useCallback, useEffect, useMemo, useRef, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
 import { hashCalculationSnapshot } from '@/pages/dialux/domain/calculation/hashSnapshot';
+import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
-import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig, type CalculationRun } from '@/pages/dialux/domain/calculation/types';
+import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
@@ -434,14 +435,15 @@ export const EditorLayout = memo(function EditorLayout() {
         const scenes = project?.scenes ?? [];
         if (!project || !engine.ready || !scenes.some((scene) => scene.rooms.length > 0)) return;
 
-        // Panel "Terreno" · Mantenimiento (`ProyectoPanel.tsx`) — único campo
-        // de `siteSettings` que de verdad altera el resultado calculado
-        // (E ∝ MF). El resto (orientación, luz molesta) es metadata sin
-        // consumidor todavía, ver comentario de `ProjectSiteSettings`.
-        const calcConfig: CalculationConfig = {
-            ...DEFAULT_DIRECT_PREVIEW_CONFIG,
-            maintenanceFactor: project.siteSettings?.maintenanceFactor ?? DEFAULT_DIRECT_PREVIEW_CONFIG.maintenanceFactor,
-        };
+        // Config "de producción" (mantenimiento real del proyecto, malla
+        // adaptativa, exclusión de zona marginal e interreflexión iterativa
+        // convergida) — la MISMA que usa el recálculo de respaldo del
+        // export (`resolveCalculationRunForExport.ts`), para que el panel
+        // de resultados y el PDF nunca puedan divergir por usar configs
+        // distintas. Los tests/goldens que llaman al motor sin config
+        // explícito siguen en `DEFAULT_DIRECT_PREVIEW_CONFIG` (ver
+        // `productionCalculationConfig.ts`).
+        const calcConfig = buildProductionCalculationConfig(project);
 
         setCalculating(true);
         try {

@@ -528,6 +528,19 @@
                 ->keyBy('metric');
             $renderVerificationCell = static function (string $metric) use ($evaluationsByMetric): string {
                 $evaluation = $evaluationsByMetric->get($metric);
+                // Sin evaluación registrada para esta métrica = la actividad
+                // normativa seleccionada NO la regula (ej. UGR en
+                // estacionamientos, Uo en baños — ver `buildRequirementEvaluations`
+                // en `buildDialuxExportSnapshot.ts`, que directamente NO agrega
+                // una entrada en ese caso). Es un estado DISTINTO de "hay un
+                // límite pero el motor no pudo evaluarlo" (`not-evaluated`) —
+                // antes ambos casos caían en el mismo "No evaluado", igual que
+                // si el diseño tuviera un problema real sin tenerlo (el panel
+                // en vivo, ResultsPanel.tsx, ya distinguía "no regulado" de
+                // "no evaluado" — el PDF no).
+                if ($evaluation === null) {
+                    return '<span class="verification-status status-not-regulated">No regulado</span>';
+                }
                 $status = $evaluation['status'] ?? 'not-evaluated';
                 $label = match ($status) {
                     'pass' => 'Conforme',
@@ -606,6 +619,7 @@
                     <td>R<sub>UG, max</sub></td>
                     <td class="result-number">' .
                 $formatNumber($detail['ugr'] ?? null, 0) .
+                (!empty($detail['ugrIsManual']) ? ' <span style="font-size:7pt;color:#b45309;">(manual)</span>' : '') .
                 '</td>
                     <td class="result-number">&le; ' .
                 $formatNumber($detail['ugrLimit'] ?? null, 0) .

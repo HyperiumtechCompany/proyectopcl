@@ -6,6 +6,7 @@ import { computePatchDirectIlluminance, firstBounceIlluminance } from './firstBo
 import { evaluateUGR } from './glareCalculation';
 import { buildDefaultObservers, DEFAULT_UGR_EYE_HEIGHT, type GlareObserver } from './glareObserver';
 import { gatherRadiosityIlluminance, solveRadiosity } from './iterativeRadiosity';
+import { filterPointsOutsideMarginalZone } from './marginalZoneFilter';
 import { candela } from './photometricInterpolation';
 import { getRoomMarginalZone, getRoomUsefulPlaneHeight } from './roomLighting';
 import { buildRoomEnclosurePatches, type EnclosureReflectances } from './roomPatches';
@@ -271,10 +272,33 @@ export function calculateLightingResult(
     directIlluminanceBatch?: DirectIlluminanceBatchKernel,
     /** Factor de mantenimiento aplicado al resultado completo. Default 1 conserva los callers analíticos/legacy. */
     maintenanceFactor = 1,
+    /**
+     * Zona marginal ya calculada por el llamador (malla adaptativa,
+     * `hooks/adaptiveGridSpacing.ts` — mitad del espaciado real usado en
+     * ESTE cálculo). Default `undefined` conserva el comportamiento de
+     * siempre: `getRoomMarginalZone(room)`, una heurística desconectada del
+     * espaciado real de la malla (mismo patrón no disruptivo que el resto
+     * de parámetros de esta función).
+     */
+    marginalZoneOverride?: number,
+    /**
+     * Excluye del promedio/min/max/uniformidad reales los puntos que caen
+     * dentro de la zona marginal (`marginalZone`, arriba) — hasta esta
+     * bandera, la zona marginal solo se REPORTABA, nunca afectaba el
+     * cálculo. Default `undefined` conserva el comportamiento de siempre
+     * (incluido el golden de Fase 0). `grid_values`/`grid_active` (la malla
+     * completa, para isolux/contornos) nunca se filtran — igual que DIALux
+     * evo sigue coloreando la franja de borde en su isolux aunque la
+     * excluya de la estadística "Ē". Efecto colateral esperado: el UGR
+     * heredado (`fallbackLb = avg/π`, más abajo) también cambia un poco
+     * porque depende de `avg` — mismo criterio que la advertencia ya
+     * existente sobre `interreflection` cambiando el método de `Lb`.
+     */
+    excludeMarginalZoneFromStats?: boolean,
 ): LightingResult {
     const bbox = roomBBox(room);
     const usefulPlaneHeight = getRoomUsefulPlaneHeight(room);
-    const marginalZone = getRoomMarginalZone(room);
+    const marginalZone = marginalZoneOverride ?? getRoomMarginalZone(room);
     const enriched = fixtures.map((fixture) => ({
         ...fixture,
         z: fixture.z > 0 ? fixture.z : room.height - 0.1,
@@ -312,6 +336,22 @@ export function calculateLightingResult(
     const activeValues = rawValues.filter(
         (value): value is number => value !== null,
     );
+    // Fase: "zona marginal real" — excluye del promedio/min/max/uniformidad
+    // los puntos de la franja de borde, sin tocar `activeValues` (que sigue
+    // usándose para el caso "sin ningún punto calculado" de abajo) ni la
+    // malla completa reportada en `baseResult`.
+    const statsValues =
+        excludeMarginalZoneFromStats && marginalZone > 0
+            ? (() => {
+                  const filtered = filterPointsOutsideMarginalZone(
+                      grid.points,
+                      rawValues,
+                      room.vertices,
+                      marginalZone,
+                  );
+                  return filtered.length > 0 ? filtered : activeValues;
+              })()
+            : activeValues;
     const baseResult = {
         grid_rows: grid.rows,
         grid_cols: grid.cols,
@@ -348,7 +388,7 @@ export function calculateLightingResult(
     let min = Infinity;
     let max = -Infinity;
 
-    for (const value of activeValues) {
+    for (const value of statsValues) {
         sum += value;
         if (value < min) {
             min = value;
@@ -358,7 +398,7 @@ export function calculateLightingResult(
         }
     }
 
-    const avg = sum / activeValues.length;
+    const avg = sum / statsValues.length;
     const uniformity = avg > 0 ? min / avg : 0;
     const fallbackLb = avg / MATH_PI;
 

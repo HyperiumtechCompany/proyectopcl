@@ -1,0 +1,1312 @@
+{
+    "id": "2",
+    "name": "Modulo 22",
+    "created_at": "2026-08-03T14:59:01+00:00",
+    "updated_at": "2026-08-07T00:02:26+00:00",
+    "scenes": [
+        {
+            "id": "scene-default",
+            "name": "Planta Baja",
+            "doors": [
+                {
+                    "id": "bfc8890a-c0bc-4ebf-9924-902dd198ff3a",
+                    "width": 0.9,
+                    "height": 2.1,
+                    "wallId": "1a11e192-e210-4285-9414-eaed921a87e0",
+                    "centered": false,
+                    "doorType": "single",
+                    "openingAngle": 90,
+                    "hingeDirection": "right",
+                    "offsetAlongWall": 0,
+                    "openingDirection": "inward"
+                },
+                {
+                    "id": "11dad123-7236-435c-997a-cd885e468524",
+                    "width": 0.9,
+                    "height": 2,
+                    "wallId": "31efa5ea-87a2-462f-9cdc-459de1916bc7",
+                    "centered": false,
+                    "doorType": "single",
+                    "openingAngle": 90,
+                    "hingeDirection": "left",
+                    "offsetAlongWall": 0,
+                    "openingDirection": "outward"
+                }
+            ],
+            "rooms": [
+                {
+                    "id": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "name": "Modulo 22",
+                    "color": "rgba(56,189,248,0.25)",
+                    "norma": 500,
+                    "height": 4.67,
+                    "roomType": "room",
+                    "vertices": [
+                        {
+                            "x": 3538.1281595007927,
+                            "y": 1655.0304597567022
+                        },
+                        {
+                            "x": 3538.1281595007927,
+                            "y": 1652.500455517144
+                        },
+                        {
+                            "x": 3541.65816801871,
+                            "y": 1652.500455517144
+                        },
+                        {
+                            "x": 3541.65816801871,
+                            "y": 1655.0304572474656
+                        }
+                    ],
+                    "outletUse": "aula",
+                    "fixtureFlux": 4000,
+                    "normativeUse": "education",
+                    "fixtureLumens": 4000,
+                    "ambientConfigs": {
+                        "ambient-1": {
+                            "name": "Caseta de Control",
+                            "activity": "Guarderías",
+                            "illuminanceLux": 200,
+                            "normativeSection": "EDUCACIÓN",
+                            "normativeCategory": "EDUCACIÓN",
+                            "normativeStandard": "rne_peru",
+                            "usefulPlaneHeight": 0.6
+                        },
+                        "ambient-2": {
+                            "name": "SS.HH",
+                            "activity": "Baño",
+                            "illuminanceLux": 200,
+                            "normativeSection": "Zona privada",
+                            "normativeCategory": "VIVIENDA",
+                            "normativeStandard": "rne_peru",
+                            "usefulPlaneHeight": 1.8
+                        }
+                    },
+                    "illuminanceLux": 500,
+                    "wallReflectance": 0.5,
+                    "floorReflectance": 0.2,
+                    "outletDeviceType": "outlet_floor",
+                    "normativeStandard": "rne_peru",
+                    "ceilingReflectance": 0.7
+                },
+                {
+                    "id": "a299802f-8c45-4bc9-b4ed-32b085f624cc",
+                    "name": "Ventanilla de atencion",
+                    "color": "rgba(59, 130, 246, 0.4)",
+                    "norma": 100,
+                    "height": 4.67,
+                    "roomType": "corridor",
+                    "vertices": [
+                        {
+                            "x": 3537.7405944968555,
+                            "y": 1656.0418414689652
+                        },
+                        {
+                            "x": 3542.0706042939346,
+                            "y": 1656.0418414689652
+                        },
+                        {
+                            "x": 3542.0706042939346,
+                            "y": 1656.0418414689652
+                        },
+                        {
+                            "x": 3542.0706042939346,
+                            "y": 1655.039118508325
+                        },
+                        {
+                            "x": 3541.670603669843,
+                            "y": 1655.039118508325
+                        },
+                        {
+                            "x": 3538.1405951519255,
+                            "y": 1655.039118508325
+                        },
+                        {
+                            "x": 3537.7239865225224,
+                            "y": 1655.039118508325
+                        }
+                    ],
+                    "fixtureFlux": 4000,
+                    "fixtureLumens": 4000,
+                    "corridorConfig": {
+                        "type": "roof_only",
+                        "railingHeight": 1.05,
+                        "slabThickness": 0.2
+                    },
+                    "illuminanceLux": 100,
+                    "normativeSection": "Zona privada",
+                    "normativeActivity": "Patios, zonas abiertas",
+                    "normativeCategory": "VIVIENDA",
+                    "normativeStandard": "rne_peru"
+                }
+            ],
+            "walls": [
+                {
+                    "id": "31efa5ea-87a2-462f-9cdc-459de1916bc7",
+                    "height": 4.67,
+                    "material": "brick",
+                    "vertices": [
+                        {
+                            "x": 3541.380861125174,
+                            "y": 1654.9790081750466
+                        },
+                        {
+                            "x": 3540.680860607456,
+                            "y": 1654.9790081750466
+                        },
+                        {
+                            "x": 3540.680860607456,
+                            "y": 1654.869008658177
+                        },
+                        {
+                            "x": 3540.5508594060566,
+                            "y": 1654.869008658177
+                        },
+                        {
+                            "x": 3540.5508594060566,
+                            "y": 1652.6589251029975
+                        },
+                        {
+                            "x": 3541.3808611721765,
+                            "y": 1652.6589251029975
+                        },
+                        {
+                            "x": 3541.3808611721765,
+                            "y": 1652.7789227868273
+                        },
+                        {
+                            "x": 3541.5158609489863,
+                            "y": 1652.7789227868273
+                        },
+                        {
+                            "x": 3541.5158609489863,
+                            "y": 1654.7489286378252
+                        },
+                        {
+                            "x": 3541.3808611721765,
+                            "y": 1654.7489286378252
+                        },
+                        {
+                            "x": 3541.380861125174,
+                            "y": 1654.9790081750466
+                        }
+                    ],
+                    "wallType": "interior",
+                    "thickness": 0.13,
+                    "normativeUse": "housing",
+                    "illuminanceLux": 200,
+                    "mortarJointMax": 0.015,
+                    "mortarJointMin": 0.01,
+                    "normativeSection": "Zona privada",
+                    "normativeActivity": "Baño",
+                    "normativeCategory": "VIVIENDA",
+                    "normativeStandard": "rne_peru"
+                },
+                {
+                    "id": "1a11e192-e210-4285-9414-eaed921a87e0",
+                    "height": 4.67,
+                    "material": "brick",
+                    "vertices": [
+                        {
+                            "x": 3539.2864667986833,
+                            "y": 1655.0040080270746
+                        },
+                        {
+                            "x": 3538.435954697266,
+                            "y": 1655.0040080270746
+                        },
+                        {
+                            "x": 3538.435954697266,
+                            "y": 1654.979008787932
+                        },
+                        {
+                            "x": 3538.4109546337527,
+                            "y": 1654.979008787932
+                        },
+                        {
+                            "x": 3538.4109546337527,
+                            "y": 1654.748928637825
+                        },
+                        {
+                            "x": 3538.290852901433,
+                            "y": 1654.748928637825
+                        },
+                        {
+                            "x": 3538.290852901433,
+                            "y": 1652.778925296122
+                        },
+                        {
+                            "x": 3538.410852654258,
+                            "y": 1652.778925296122
+                        },
+                        {
+                            "x": 3538.410852654258,
+                            "y": 1652.6589250943396
+                        },
+                        {
+                            "x": 3540.390859158824,
+                            "y": 1652.6589250943396
+                        },
+                        {
+                            "x": 3540.390859158824,
+                            "y": 1654.8690086354911
+                        },
+                        {
+                            "x": 3539.3114668621974,
+                            "y": 1654.8690086354911
+                        },
+                        {
+                            "x": 3539.3114668621974,
+                            "y": 1654.979007963561
+                        },
+                        {
+                            "x": 3539.2864667751437,
+                            "y": 1654.979007963561
+                        },
+                        {
+                            "x": 3539.2864667986833,
+                            "y": 1655.0040080270746
+                        }
+                    ],
+                    "wallType": "interior",
+                    "thickness": 0.13,
+                    "normativeUse": "housing",
+                    "illuminanceLux": 200,
+                    "mortarJointMax": 0.015,
+                    "mortarJointMin": 0.01,
+                    "normativeSection": "EDUCACIÓN",
+                    "normativeActivity": "Guarderías",
+                    "normativeCategory": "EDUCACIÓN",
+                    "normativeStandard": "rne_peru"
+                }
+            ],
+            "visible": true,
+            "windows": [
+                {
+                    "id": "75426e69-5f65-4dbe-8d14-decd55400e68",
+                    "width": 1.2,
+                    "height": 1.1,
+                    "wallId": "1a11e192-e210-4285-9414-eaed921a87e0",
+                    "centered": false,
+                    "sillHeight": 0.9,
+                    "windowType": "fixed",
+                    "windowShape": "rectangular",
+                    "offsetAlongWall": 2.615899164381517
+                },
+                {
+                    "id": "f3c2cc8d-18eb-4a5c-b979-51ecea320f2e",
+                    "width": 0.8,
+                    "height": 1.1,
+                    "wallId": "31efa5ea-87a2-462f-9cdc-459de1916bc7",
+                    "centered": false,
+                    "sillHeight": 0.9,
+                    "windowType": "fixed",
+                    "windowShape": "rectangular",
+                    "offsetAlongWall": 3.561773275999485
+                }
+            ],
+            "canopies": [],
+            "fixtures": [
+                {
+                    "x": 3538.8106409653756,
+                    "y": 1655.540479988645,
+                    "z": 4.67,
+                    "id": "46178f19-e3a2-486d-b105-6e6ae1541cc3",
+                    "cct": 4000,
+                    "cri": 90,
+                    "name": "TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20) [1]",
+                    "brand": "Thorlux Lighting",
+                    "power": 14,
+                    "lumens": 1508,
+                    "roomId": "a299802f-8c45-4bc9-b4ed-32b085f624cc",
+                    "productId": 13,
+                    "dimensions": null,
+                    "efficiency": 1,
+                    "lightColor": "#f0f8ff",
+                    "reportData": {
+                        "polar": {
+                            "source": "photometric_web",
+                            "c_plane": 0
+                        },
+                        "version": "1.0",
+                        "warnings": [
+                            "El nombre del producto (\"TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)\") no coincide con el nombre interno del archivo fotométrico almacenado (\"TEGO IP65 FROSTED GLASS\"). El producto pudo renombrarse después de importar un archivo de otra variante — verifica flujo/potencia contra la ficha del fabricante."
+                        ],
+                        "technical_table": [
+                            {
+                                "label": "Fabricante",
+                                "value": "Thorlux Lighting"
+                            },
+                            {
+                                "label": "Producto",
+                                "value": "TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)"
+                            },
+                            {
+                                "label": "Codigo",
+                                "value": "TEG18046"
+                            },
+                            {
+                                "label": "P",
+                                "value": "14.0 W"
+                            },
+                            {
+                                "label": "Flujo luminoso",
+                                "value": "1508 lm"
+                            },
+                            {
+                                "label": "Rendimiento",
+                                "value": "80.3 lm/W"
+                            },
+                            {
+                                "label": "CCT",
+                                "value": "4000K"
+                            },
+                            {
+                                "label": "CRI",
+                                "value": "90"
+                            },
+                            {
+                                "label": "Imax",
+                                "value": "1857 cd"
+                            },
+                            {
+                                "label": "Haz 50%",
+                                "value": "20.0°"
+                            },
+                            {
+                                "label": "Origen fotometría",
+                                "value": "Archivo de fabricante (IES/LDT)"
+                            }
+                        ]
+                    },
+                    "fixtureType": "panel",
+                    "gridGroupId": "ac9906e5-144f-4868-865a-1630cfdadf91",
+                    "fixtureShape": "rectangular",
+                    "reportAssets": {
+                        "polar_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"520\" viewBox=\"0 0 320 260\">\n    <rect width=\"320\" height=\"260\" fill=\"#ffffff\"/>\n    <g transform=\"translate(0 -30)\">\n        <path d=\"M 200 160 A 40 40 0 1 0 120 160 A 40 40 0 1 0 200 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 240 160 A 80 80 0 1 0 80 160 A 80 80 0 1 0 240 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 280 160 A 120 120 0 1 0 40 160 A 120 120 0 1 0 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 40 160 L 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160 40 L 160 280\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 75 75 L 245 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 245 75 L 75 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160,280 L 170.13,275.73 L 178.33,263.96 L 183.35,247.16 L 184.91,228.45 L 183.4,210.18 L 180.13,194.87 L 175.89,182.7 L 171.87,174.14 L 168.49,168.49 L 166.05,165.07 L 164.34,163.04 L 163.2,161.85 L 162.33,161.09 L 161.64,160.6 L 161.08,160.29 L 160.63,160.11 L 160.33,160.03 L 160.03,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,159.99 L 160.01,159.99 L 160.01,159.99 L 160.02,159.98 L 160.02,159.97 L 160.03,159.96 L 160.03,159.94 L 160.04,159.92 L 160.04,159.9 L 160.03,159.88 L 160.02,159.86 L 160.01,159.85 L 160,159.86 L 160,159.86 L 159.99,159.85 L 159.98,159.86 L 159.97,159.88 L 159.96,159.9 L 159.96,159.92 L 159.97,159.94 L 159.97,159.96 L 159.98,159.97 L 159.98,159.98 L 159.99,159.99 L 159.99,159.99 L 159.99,159.99 L 159.99,160 L 159.99,160 L 159.99,160 L 159.99,160 L 159.99,160 L 159.97,160 L 159.67,160.03 L 159.37,160.11 L 158.92,160.29 L 158.36,160.6 L 157.67,161.09 L 156.8,161.85 L 155.66,163.04 L 153.95,165.07 L 151.51,168.49 L 148.13,174.14 L 144.11,182.7 L 139.87,194.87 L 136.6,210.18 L 135.09,228.45 L 136.65,247.16 L 141.67,263.96 L 149.87,275.73 L 160,280\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>\n    </g>\n    <text x=\"18\" y=\"22\" font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#0f172a\" font-weight=\"700\">CDL polar</text>\n    <text x=\"18\" y=\"38\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)</text>\n    <text x=\"18\" y=\"246\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">Imax 1,857 cd</text>\n</svg>"
+                    },
+                    "articleNumber": "TEG18046",
+                    "mountingHeight": 4.67,
+                    "photometricWeb": {
+                        "candela": [
+                            [
+                                1681.066,
+                                1627.476,
+                                1478.855,
+                                1264.058,
+                                1020.46,
+                                775.607,
+                                564.018,
+                                388.151,
+                                258.613,
+                                168.113,
+                                110.565,
+                                74.297,
+                                51.747,
+                                36.022,
+                                24.474,
+                                15.643,
+                                8.954,
+                                4.668,
+                                0.45,
+                                0.096,
+                                0.096,
+                                0.096,
+                                0.109,
+                                0.137,
+                                0.164,
+                                0.205,
+                                0.273,
+                                0.382,
+                                0.519,
+                                0.723,
+                                0.969,
+                                1.188,
+                                1.474,
+                                1.72,
+                                1.952,
+                                2.047,
+                                1.952
+                            ]
+                        ],
+                        "c_angles": [
+                            0
+                        ],
+                        "symmetry": 1,
+                        "provenance": "manufacturer",
+                        "gamma_angles": [
+                            0,
+                            5,
+                            10,
+                            15,
+                            20,
+                            25,
+                            30,
+                            35,
+                            40,
+                            45,
+                            50,
+                            55,
+                            60,
+                            65,
+                            70,
+                            75,
+                            80,
+                            85,
+                            90,
+                            95,
+                            100,
+                            105,
+                            110,
+                            115,
+                            120,
+                            125,
+                            130,
+                            135,
+                            140,
+                            145,
+                            150,
+                            155,
+                            160,
+                            165,
+                            170,
+                            175,
+                            180
+                        ],
+                        "polar_diagram": null,
+                        "schema_version": 2,
+                        "reference_lumens": 1365
+                    },
+                    "productSourceFormat": "ldt"
+                },
+                {
+                    "x": 3540.983949851082,
+                    "y": 1655.540479988645,
+                    "z": 4.67,
+                    "id": "d09573c9-e6e7-4eae-aa24-b50b6921ae00",
+                    "cct": 4000,
+                    "cri": 90,
+                    "name": "TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20) [2]",
+                    "brand": "Thorlux Lighting",
+                    "power": 14,
+                    "lumens": 1508,
+                    "roomId": "a299802f-8c45-4bc9-b4ed-32b085f624cc",
+                    "productId": 13,
+                    "dimensions": null,
+                    "efficiency": 1,
+                    "lightColor": "#f0f8ff",
+                    "reportData": {
+                        "polar": {
+                            "source": "photometric_web",
+                            "c_plane": 0
+                        },
+                        "version": "1.0",
+                        "warnings": [
+                            "El nombre del producto (\"TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)\") no coincide con el nombre interno del archivo fotométrico almacenado (\"TEGO IP65 FROSTED GLASS\"). El producto pudo renombrarse después de importar un archivo de otra variante — verifica flujo/potencia contra la ficha del fabricante."
+                        ],
+                        "technical_table": [
+                            {
+                                "label": "Fabricante",
+                                "value": "Thorlux Lighting"
+                            },
+                            {
+                                "label": "Producto",
+                                "value": "TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)"
+                            },
+                            {
+                                "label": "Codigo",
+                                "value": "TEG18046"
+                            },
+                            {
+                                "label": "P",
+                                "value": "14.0 W"
+                            },
+                            {
+                                "label": "Flujo luminoso",
+                                "value": "1508 lm"
+                            },
+                            {
+                                "label": "Rendimiento",
+                                "value": "80.3 lm/W"
+                            },
+                            {
+                                "label": "CCT",
+                                "value": "4000K"
+                            },
+                            {
+                                "label": "CRI",
+                                "value": "90"
+                            },
+                            {
+                                "label": "Imax",
+                                "value": "1857 cd"
+                            },
+                            {
+                                "label": "Haz 50%",
+                                "value": "20.0°"
+                            },
+                            {
+                                "label": "Origen fotometría",
+                                "value": "Archivo de fabricante (IES/LDT)"
+                            }
+                        ]
+                    },
+                    "fixtureType": "panel",
+                    "gridGroupId": "ac9906e5-144f-4868-865a-1630cfdadf91",
+                    "fixtureShape": "rectangular",
+                    "reportAssets": {
+                        "polar_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"520\" viewBox=\"0 0 320 260\">\n    <rect width=\"320\" height=\"260\" fill=\"#ffffff\"/>\n    <g transform=\"translate(0 -30)\">\n        <path d=\"M 200 160 A 40 40 0 1 0 120 160 A 40 40 0 1 0 200 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 240 160 A 80 80 0 1 0 80 160 A 80 80 0 1 0 240 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 280 160 A 120 120 0 1 0 40 160 A 120 120 0 1 0 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 40 160 L 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160 40 L 160 280\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 75 75 L 245 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 245 75 L 75 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160,280 L 170.13,275.73 L 178.33,263.96 L 183.35,247.16 L 184.91,228.45 L 183.4,210.18 L 180.13,194.87 L 175.89,182.7 L 171.87,174.14 L 168.49,168.49 L 166.05,165.07 L 164.34,163.04 L 163.2,161.85 L 162.33,161.09 L 161.64,160.6 L 161.08,160.29 L 160.63,160.11 L 160.33,160.03 L 160.03,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,160 L 160.01,159.99 L 160.01,159.99 L 160.01,159.99 L 160.02,159.98 L 160.02,159.97 L 160.03,159.96 L 160.03,159.94 L 160.04,159.92 L 160.04,159.9 L 160.03,159.88 L 160.02,159.86 L 160.01,159.85 L 160,159.86 L 160,159.86 L 159.99,159.85 L 159.98,159.86 L 159.97,159.88 L 159.96,159.9 L 159.96,159.92 L 159.97,159.94 L 159.97,159.96 L 159.98,159.97 L 159.98,159.98 L 159.99,159.99 L 159.99,159.99 L 159.99,159.99 L 159.99,160 L 159.99,160 L 159.99,160 L 159.99,160 L 159.99,160 L 159.97,160 L 159.67,160.03 L 159.37,160.11 L 158.92,160.29 L 158.36,160.6 L 157.67,161.09 L 156.8,161.85 L 155.66,163.04 L 153.95,165.07 L 151.51,168.49 L 148.13,174.14 L 144.11,182.7 L 139.87,194.87 L 136.6,210.18 L 135.09,228.45 L 136.65,247.16 L 141.67,263.96 L 149.87,275.73 L 160,280\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>\n    </g>\n    <text x=\"18\" y=\"22\" font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#0f172a\" font-weight=\"700\">CDL polar</text>\n    <text x=\"18\" y=\"38\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">TEGO IP65 FROSTED GLASS (1508 lm - ref. historica DIALux evo 2025-06-20)</text>\n    <text x=\"18\" y=\"246\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">Imax 1,857 cd</text>\n</svg>"
+                    },
+                    "articleNumber": "TEG18046",
+                    "mountingHeight": 4.67,
+                    "photometricWeb": {
+                        "candela": [
+                            [
+                                1681.066,
+                                1627.476,
+                                1478.855,
+                                1264.058,
+                                1020.46,
+                                775.607,
+                                564.018,
+                                388.151,
+                                258.613,
+                                168.113,
+                                110.565,
+                                74.297,
+                                51.747,
+                                36.022,
+                                24.474,
+                                15.643,
+                                8.954,
+                                4.668,
+                                0.45,
+                                0.096,
+                                0.096,
+                                0.096,
+                                0.109,
+                                0.137,
+                                0.164,
+                                0.205,
+                                0.273,
+                                0.382,
+                                0.519,
+                                0.723,
+                                0.969,
+                                1.188,
+                                1.474,
+                                1.72,
+                                1.952,
+                                2.047,
+                                1.952
+                            ]
+                        ],
+                        "c_angles": [
+                            0
+                        ],
+                        "symmetry": 1,
+                        "provenance": "manufacturer",
+                        "gamma_angles": [
+                            0,
+                            5,
+                            10,
+                            15,
+                            20,
+                            25,
+                            30,
+                            35,
+                            40,
+                            45,
+                            50,
+                            55,
+                            60,
+                            65,
+                            70,
+                            75,
+                            80,
+                            85,
+                            90,
+                            95,
+                            100,
+                            105,
+                            110,
+                            115,
+                            120,
+                            125,
+                            130,
+                            135,
+                            140,
+                            145,
+                            150,
+                            155,
+                            160,
+                            165,
+                            170,
+                            175,
+                            180
+                        ],
+                        "polar_diagram": null,
+                        "schema_version": 2,
+                        "reference_lumens": 1365
+                    },
+                    "productSourceFormat": "ldt"
+                },
+                {
+                    "x": 3539.3408560301286,
+                    "y": 1653.2451958275233,
+                    "z": 4.67,
+                    "id": "ab53cad9-9775-4e1e-bcd2-3c614ddf942b",
+                    "cct": 4000,
+                    "cri": 80,
+                    "name": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20) [1]",
+                    "brand": "LTS Licht & Leuchten",
+                    "power": 26,
+                    "lumens": 2580,
+                    "roomId": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "productId": 11,
+                    "efficiency": 0.992,
+                    "lightColor": "#f0f8ff",
+                    "reportData": {
+                        "polar": {
+                            "source": "photometric_web",
+                            "c_plane": 0
+                        },
+                        "version": "1.0",
+                        "warnings": [
+                            "Distribución fotométrica sintética (modelo coseno^n) derivada del ángulo de apertura declarado; no proviene de un archivo IES/LDT del fabricante."
+                        ],
+                        "technical_table": [
+                            {
+                                "label": "Fabricante",
+                                "value": "LTS Licht & Leuchten"
+                            },
+                            {
+                                "label": "Producto",
+                                "value": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)"
+                            },
+                            {
+                                "label": "Codigo",
+                                "value": "-"
+                            },
+                            {
+                                "label": "P",
+                                "value": "26.0 W"
+                            },
+                            {
+                                "label": "Flujo luminoso",
+                                "value": "2580 lm"
+                            },
+                            {
+                                "label": "Rendimiento",
+                                "value": "99.2 lm/W"
+                            },
+                            {
+                                "label": "CCT",
+                                "value": "4000K"
+                            },
+                            {
+                                "label": "CRI",
+                                "value": "80"
+                            },
+                            {
+                                "label": "Imax",
+                                "value": "1640 cd"
+                            },
+                            {
+                                "label": "Haz 50%",
+                                "value": "37.5°"
+                            },
+                            {
+                                "label": "Origen fotometría",
+                                "value": "Modelo sintético aproximado (no es dato de fabricante)"
+                            }
+                        ]
+                    },
+                    "fixtureType": "panel",
+                    "gridGroupId": "c829575c-ba26-4610-8481-a61e01c7e609",
+                    "fixtureShape": "rectangular",
+                    "reportAssets": {
+                        "polar_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"520\" viewBox=\"0 0 320 260\">\n    <rect width=\"320\" height=\"260\" fill=\"#ffffff\"/>\n    <g transform=\"translate(0 -30)\">\n        <path d=\"M 200 160 A 40 40 0 1 0 120 160 A 40 40 0 1 0 200 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 240 160 A 80 80 0 1 0 80 160 A 80 80 0 1 0 240 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 280 160 A 120 120 0 1 0 40 160 A 120 120 0 1 0 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 40 160 L 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160 40 L 160 280\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 75 75 L 245 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 245 75 L 75 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160,280 L 170.34,278.19 L 179.9,272.88 L 188,264.48 L 194.07,253.6 L 197.77,241.01 L 199,227.56 L 197.88,214.09 L 194.73,201.39 L 190.06,190.06 L 184.48,180.54 L 178.61,173.03 L 173.04,167.53 L 168.25,163.85 L 164.54,161.65 L 162.03,160.54 L 160.62,160.11 L 160.08,160.01 L 160,160 L 160,160 L 159.92,160.01 L 159.38,160.11 L 157.97,160.54 L 155.46,161.65 L 151.75,163.85 L 146.96,167.53 L 141.39,173.03 L 135.52,180.54 L 129.94,190.06 L 125.27,201.39 L 122.12,214.09 L 121,227.56 L 122.23,241.01 L 125.93,253.6 L 132,264.48 L 140.1,272.88 L 149.66,278.19 L 160,280\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>\n    </g>\n    <text x=\"18\" y=\"22\" font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#0f172a\" font-weight=\"700\">CDL polar</text>\n    <text x=\"18\" y=\"38\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)</text>\n    <text x=\"18\" y=\"246\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">Imax 1,640 cd</text>\n</svg>",
+                        "brand_logo_url": null,
+                        "product_photo_url": null
+                    },
+                    "mountingHeight": 4.67,
+                    "photometricWeb": {
+                        "candela": [
+                            [
+                                1640.15,
+                                1621.53,
+                                1566.66,
+                                1478.43,
+                                1361.43,
+                                1221.67,
+                                1066.18,
+                                902.54,
+                                738.42,
+                                581.02,
+                                436.69,
+                                310.47,
+                                205.83,
+                                124.41,
+                                66.02,
+                                28.66,
+                                8.67,
+                                1.1,
+                                0
+                            ]
+                        ],
+                        "c_angles": [
+                            0
+                        ],
+                        "provenance": "synthetic",
+                        "gamma_angles": [
+                            0,
+                            5,
+                            10,
+                            15,
+                            20,
+                            25,
+                            30,
+                            35,
+                            40,
+                            45,
+                            50,
+                            55,
+                            60,
+                            65,
+                            70,
+                            75,
+                            80,
+                            85,
+                            90
+                        ],
+                        "polar_diagram": null
+                    },
+                    "productSourceFormat": "manual"
+                },
+                {
+                    "x": 3539.3408560301286,
+                    "y": 1654.4177372938907,
+                    "z": 4.67,
+                    "id": "463eaa2f-e83f-4043-8ecc-719ab9ef02d8",
+                    "cct": 4000,
+                    "cri": 80,
+                    "name": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20) [2]",
+                    "brand": "LTS Licht & Leuchten",
+                    "power": 26,
+                    "lumens": 2580,
+                    "roomId": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "productId": 11,
+                    "efficiency": 0.992,
+                    "lightColor": "#f0f8ff",
+                    "reportData": {
+                        "polar": {
+                            "source": "photometric_web",
+                            "c_plane": 0
+                        },
+                        "version": "1.0",
+                        "warnings": [
+                            "Distribución fotométrica sintética (modelo coseno^n) derivada del ángulo de apertura declarado; no proviene de un archivo IES/LDT del fabricante."
+                        ],
+                        "technical_table": [
+                            {
+                                "label": "Fabricante",
+                                "value": "LTS Licht & Leuchten"
+                            },
+                            {
+                                "label": "Producto",
+                                "value": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)"
+                            },
+                            {
+                                "label": "Codigo",
+                                "value": "-"
+                            },
+                            {
+                                "label": "P",
+                                "value": "26.0 W"
+                            },
+                            {
+                                "label": "Flujo luminoso",
+                                "value": "2580 lm"
+                            },
+                            {
+                                "label": "Rendimiento",
+                                "value": "99.2 lm/W"
+                            },
+                            {
+                                "label": "CCT",
+                                "value": "4000K"
+                            },
+                            {
+                                "label": "CRI",
+                                "value": "80"
+                            },
+                            {
+                                "label": "Imax",
+                                "value": "1640 cd"
+                            },
+                            {
+                                "label": "Haz 50%",
+                                "value": "37.5°"
+                            },
+                            {
+                                "label": "Origen fotometría",
+                                "value": "Modelo sintético aproximado (no es dato de fabricante)"
+                            }
+                        ]
+                    },
+                    "fixtureType": "panel",
+                    "gridGroupId": "c829575c-ba26-4610-8481-a61e01c7e609",
+                    "fixtureShape": "rectangular",
+                    "reportAssets": {
+                        "polar_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"520\" viewBox=\"0 0 320 260\">\n    <rect width=\"320\" height=\"260\" fill=\"#ffffff\"/>\n    <g transform=\"translate(0 -30)\">\n        <path d=\"M 200 160 A 40 40 0 1 0 120 160 A 40 40 0 1 0 200 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 240 160 A 80 80 0 1 0 80 160 A 80 80 0 1 0 240 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 280 160 A 120 120 0 1 0 40 160 A 120 120 0 1 0 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 40 160 L 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160 40 L 160 280\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 75 75 L 245 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 245 75 L 75 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160,280 L 170.34,278.19 L 179.9,272.88 L 188,264.48 L 194.07,253.6 L 197.77,241.01 L 199,227.56 L 197.88,214.09 L 194.73,201.39 L 190.06,190.06 L 184.48,180.54 L 178.61,173.03 L 173.04,167.53 L 168.25,163.85 L 164.54,161.65 L 162.03,160.54 L 160.62,160.11 L 160.08,160.01 L 160,160 L 160,160 L 159.92,160.01 L 159.38,160.11 L 157.97,160.54 L 155.46,161.65 L 151.75,163.85 L 146.96,167.53 L 141.39,173.03 L 135.52,180.54 L 129.94,190.06 L 125.27,201.39 L 122.12,214.09 L 121,227.56 L 122.23,241.01 L 125.93,253.6 L 132,264.48 L 140.1,272.88 L 149.66,278.19 L 160,280\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>\n    </g>\n    <text x=\"18\" y=\"22\" font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#0f172a\" font-weight=\"700\">CDL polar</text>\n    <text x=\"18\" y=\"38\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)</text>\n    <text x=\"18\" y=\"246\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">Imax 1,640 cd</text>\n</svg>",
+                        "brand_logo_url": null,
+                        "product_photo_url": null
+                    },
+                    "mountingHeight": 4.67,
+                    "photometricWeb": {
+                        "candela": [
+                            [
+                                1640.15,
+                                1621.53,
+                                1566.66,
+                                1478.43,
+                                1361.43,
+                                1221.67,
+                                1066.18,
+                                902.54,
+                                738.42,
+                                581.02,
+                                436.69,
+                                310.47,
+                                205.83,
+                                124.41,
+                                66.02,
+                                28.66,
+                                8.67,
+                                1.1,
+                                0
+                            ]
+                        ],
+                        "c_angles": [
+                            0
+                        ],
+                        "provenance": "synthetic",
+                        "gamma_angles": [
+                            0,
+                            5,
+                            10,
+                            15,
+                            20,
+                            25,
+                            30,
+                            35,
+                            40,
+                            45,
+                            50,
+                            55,
+                            60,
+                            65,
+                            70,
+                            75,
+                            80,
+                            85,
+                            90
+                        ],
+                        "polar_diagram": null
+                    },
+                    "productSourceFormat": "manual"
+                },
+                {
+                    "x": 3541.0333601775214,
+                    "y": 1653.8189666390222,
+                    "z": 4.67,
+                    "id": "01ac4057-8efc-43d1-add4-ad63893e7233",
+                    "cct": 4000,
+                    "cri": 80,
+                    "name": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20) [1]",
+                    "brand": "LTS Licht & Leuchten",
+                    "power": 26,
+                    "lumens": 2580,
+                    "roomId": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "productId": 11,
+                    "efficiency": 0.992,
+                    "lightColor": "#f0f8ff",
+                    "reportData": {
+                        "polar": {
+                            "source": "photometric_web",
+                            "c_plane": 0
+                        },
+                        "version": "1.0",
+                        "warnings": [
+                            "El nombre del producto (\"FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)\") no coincide con el nombre interno del archivo fotométrico almacenado (\"FLIQ 400.3040.01_FLIQZ 400.05\"). El producto pudo renombrarse después de importar un archivo de otra variante — verifica flujo/potencia contra la ficha del fabricante."
+                        ],
+                        "technical_table": [
+                            {
+                                "label": "Fabricante",
+                                "value": "LTS Licht & Leuchten"
+                            },
+                            {
+                                "label": "Producto",
+                                "value": "FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)"
+                            },
+                            {
+                                "label": "Codigo",
+                                "value": "-"
+                            },
+                            {
+                                "label": "P",
+                                "value": "26.0 W"
+                            },
+                            {
+                                "label": "Flujo luminoso",
+                                "value": "2580 lm"
+                            },
+                            {
+                                "label": "Rendimiento",
+                                "value": "131.2 lm/W"
+                            },
+                            {
+                                "label": "CCT",
+                                "value": "4000K"
+                            },
+                            {
+                                "label": "CRI",
+                                "value": "80"
+                            },
+                            {
+                                "label": "Imax",
+                                "value": "1676 cd"
+                            },
+                            {
+                                "label": "Haz 50%",
+                                "value": "37.5°"
+                            },
+                            {
+                                "label": "Origen fotometría",
+                                "value": "Archivo de fabricante (IES/LDT)"
+                            }
+                        ]
+                    },
+                    "fixtureType": "panel",
+                    "gridGroupId": "74485bd3-74c7-4f3f-9e33-5ec7f9edcdc3",
+                    "fixtureShape": "rectangular",
+                    "reportAssets": {
+                        "polar_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"520\" viewBox=\"0 0 320 260\">\n    <rect width=\"320\" height=\"260\" fill=\"#ffffff\"/>\n    <g transform=\"translate(0 -30)\">\n        <path d=\"M 200 160 A 40 40 0 1 0 120 160 A 40 40 0 1 0 200 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 240 160 A 80 80 0 1 0 80 160 A 80 80 0 1 0 240 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 280 160 A 120 120 0 1 0 40 160 A 120 120 0 1 0 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 40 160 L 280 160\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160 40 L 160 280\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 75 75 L 245 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 245 75 L 75 245\" stroke=\"#d7dde6\" stroke-width=\"0.7\" fill=\"none\"/>\n        <path d=\"M 160,279.14 L 165.19,278.97 L 170.39,278.77 L 175.62,278.62 L 180.84,278.17 L 185.97,277.16 L 190.93,275.42 L 195.52,272.66 L 199.62,268.85 L 203.08,264 L 205.72,258.04 L 207.43,251.11 L 208.07,243.27 L 207.46,234.49 L 205.56,225.07 L 202.42,215.28 L 198.15,205.47 L 193.04,196.05 L 187.35,187.35 L 181.54,179.74 L 176,173.43 L 171.06,168.49 L 167.2,165.04 L 164.46,162.84 L 162.71,161.57 L 161.74,160.91 L 161.24,160.58 L 161.01,160.42 L 160.88,160.32 L 160.75,160.24 L 160.64,160.17 L 160.53,160.12 L 160.42,160.07 L 160.32,160.04 L 160.22,160.02 L 160.13,160.01 L 160.02,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 160,160 L 159.98,160 L 159.87,160.01 L 159.78,160.02 L 159.68,160.04 L 159.58,160.07 L 159.47,160.12 L 159.36,160.17 L 159.25,160.24 L 159.12,160.32 L 158.99,160.42 L 158.76,160.58 L 158.26,160.91 L 157.29,161.57 L 155.54,162.84 L 152.8,165.04 L 148.94,168.49 L 144,173.43 L 138.46,179.74 L 132.65,187.35 L 126.96,196.05 L 121.85,205.47 L 117.58,215.28 L 114.44,225.07 L 112.54,234.49 L 111.93,243.27 L 112.57,251.11 L 114.28,258.04 L 116.92,264 L 120.38,268.85 L 124.48,272.66 L 129.07,275.42 L 134.03,277.16 L 139.16,278.17 L 144.38,278.62 L 149.61,278.77 L 154.81,278.97 L 160,279.14\" stroke=\"#2563eb\" stroke-width=\"2.2\" fill=\"none\"/>\n    </g>\n    <text x=\"18\" y=\"22\" font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#0f172a\" font-weight=\"700\">CDL polar</text>\n    <text x=\"18\" y=\"38\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">FLIQ 400.3040.01_FLIQZ 400.24 (2580 lm - ref. historica DIALux evo 2025-06-20)</text>\n    <text x=\"18\" y=\"246\" font-family=\"Arial, sans-serif\" font-size=\"8\" fill=\"#64748b\">Imax 1,676 cd</text>\n</svg>",
+                        "brand_logo_url": null,
+                        "product_photo_url": null
+                    },
+                    "mountingHeight": 4.67,
+                    "photometricWeb": {
+                        "candela": [
+                            [
+                                2199.853,
+                                2198.829,
+                                2201.558,
+                                2209.267,
+                                2215.714,
+                                2215.816,
+                                2206.334,
+                                2181.194,
+                                2138.93,
+                                2078.52,
+                                1997.404,
+                                1896.64,
+                                1775.375,
+                                1630.983,
+                                1466.773,
+                                1286.701,
+                                1095.952,
+                                902.952,
+                                714.148,
+                                539.397,
+                                385.727,
+                                257.402,
+                                162.334,
+                                97.557,
+                                57.818,
+                                36.26,
+                                25.31,
+                                20.262,
+                                17.26,
+                                14.6,
+                                12.178,
+                                9.995,
+                                7.88,
+                                5.901,
+                                4.162,
+                                2.49,
+                                0.409,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ]
+                        ],
+                        "c_angles": [
+                            0
+                        ],
+                        "symmetry": 1,
+                        "provenance": "manufacturer",
+                        "gamma_angles": [
+                            0,
+                            2.5,
+                            5,
+                            7.5,
+                            10,
+                            12.5,
+                            15,
+                            17.5,
+                            20,
+                            22.5,
+                            25,
+                            27.5,
+                            30,
+                            32.5,
+                            35,
+                            37.5,
+                            40,
+                            42.5,
+                            45,
+                            47.5,
+                            50,
+                            52.5,
+                            55,
+                            57.5,
+                            60,
+                            62.5,
+                            65,
+                            67.5,
+                            70,
+                            72.5,
+                            75,
+                            77.5,
+                            80,
+                            82.5,
+                            85,
+                            87.5,
+                            90,
+                            92.5,
+                            95,
+                            97.5,
+                            100,
+                            102.5,
+                            105,
+                            107.5,
+                            110,
+                            112.5,
+                            115,
+                            117.5,
+                            120,
+                            122.5,
+                            125,
+                            127.5,
+                            130,
+                            132.5,
+                            135,
+                            137.5,
+                            140,
+                            142.5,
+                            145,
+                            147.5,
+                            150,
+                            152.5,
+                            155,
+                            157.5,
+                            160,
+                            162.5,
+                            165,
+                            167.5,
+                            170,
+                            172.5,
+                            175,
+                            177.5,
+                            180
+                        ],
+                        "polar_diagram": null,
+                        "schema_version": 2,
+                        "reference_lumens": 3411.1
+                    },
+                    "productSourceFormat": "ldt"
+                }
+            ],
+            "conductors": [
+                {
+                    "id": "c860faa2-a0a7-44d3-9326-f1ad9c2df910",
+                    "sourceId": "23581d98-a31a-437e-869c-f6275ebd6a94",
+                    "targetId": "c8cd3670-de4b-4fc4-bdca-6ba39272419a",
+                    "tubeSize": 20,
+                    "routeType": "wall_ceiling",
+                    "waypoints": [],
+                    "wireCount": 3,
+                    "wireLabel": "F+N+T",
+                    "sectionMm2": 2.5,
+                    "routeHeightM": 1.8,
+                    "conductorType": "THW-90"
+                }
+            ],
+            "floorIndex": 0,
+            "partitions": [],
+            "floorHeight": 2.7,
+            "scaleConfig": {
+                "unit": "m",
+                "factor": 1,
+                "displayUnit": "Metros (1 = 1m)",
+                "isCalibrated": true,
+                "calibrationFactor": 1.0000015989519957
+            },
+            "junctionBoxes": [],
+            "lightSwitches": [
+                {
+                    "x": 3539.83220069759,
+                    "y": 1654.7479539356416,
+                    "id": "f2e52f21-5a2b-4465-ba50-c58ab10c9078",
+                    "type": "single",
+                    "label": "S(a)",
+                    "mountingHeight": 1.4,
+                    "connectedFixtureIds": [
+                        "f62867db-b7ff-4d0b-a6e5-d69d043334a5",
+                        "839020f9-ceec-448f-96d3-512baf48609c",
+                        "babb2aea-3fdc-43ef-83c1-bb07d2bc2469"
+                    ]
+                },
+                {
+                    "x": 3540.672071665025,
+                    "y": 1654.5825302588075,
+                    "id": "fa5919e5-4c87-409d-87f8-58d66157e42c",
+                    "type": "single",
+                    "label": "S(a)",
+                    "mountingHeight": 1.4,
+                    "connectedFixtureIds": [
+                        "801fbd0e-20c2-42f5-b0f7-b50c2cdbcd2f",
+                        "5d20ccba-e3d5-47d6-9021-f51d160c3fa9"
+                    ]
+                }
+            ],
+            "floorElevation": 0,
+            "electricalDevices": [
+                {
+                    "x": 3537.04588247632,
+                    "y": 1655.7816621801885,
+                    "id": "c8cd3670-de4b-4fc4-bdca-6ba39272419a",
+                    "type": "sub_panel",
+                    "label": "TD-01",
+                    "properties": {
+                        "phases": "1O",
+                        "lengthM": 100,
+                        "voltage": "220V",
+                        "boxMaterial": "F.G. Liviano",
+                        "designFactor": 1.25,
+                        "connectionType": "star",
+                        "copperResistivity": 0.0175,
+                        "defaultPowerFactor": 0.9,
+                        "defaultDemandFactor": 1,
+                        "workingTemperatureC": 20,
+                        "upstreamVoltageDropV": 6.22
+                    },
+                    "mountingHeight": 1.8,
+                    "connectedDeviceIds": [],
+                    "connectedFixtureIds": [
+                        "b6dc19a0-3e71-4ed8-b9d4-fdc864c389f9",
+                        "9492d2a2-604c-4eb2-8671-e6c3019a2223",
+                        "839020f9-ceec-448f-96d3-512baf48609c",
+                        "9c01ade8-2ffc-4dc7-a502-c6a6ecf3b655",
+                        "babb2aea-3fdc-43ef-83c1-bb07d2bc2469",
+                        "49e6e64c-d90d-4575-861f-0da37d1c1fb4"
+                    ]
+                },
+                {
+                    "x": 3535.3902202203276,
+                    "y": 1655.325072254962,
+                    "id": "23581d98-a31a-437e-869c-f6275ebd6a94",
+                    "type": "main_panel",
+                    "label": "TG",
+                    "properties": {
+                        "phases": "3O",
+                        "lengthM": 100,
+                        "voltage": "380V",
+                        "boxMaterial": "F.G. Liviano",
+                        "designFactor": 1.25,
+                        "connectionType": "star",
+                        "copperResistivity": 0.0175,
+                        "defaultPowerFactor": 0.9,
+                        "defaultDemandFactor": 1,
+                        "workingTemperatureC": 20,
+                        "upstreamVoltageDropV": 0
+                    },
+                    "mountingHeight": 1.8,
+                    "connectedDeviceIds": [
+                        "c8cd3670-de4b-4fc4-bdca-6ba39272419a"
+                    ]
+                },
+                {
+                    "x": 3540.7164818663887,
+                    "y": 1653.9480988107596,
+                    "id": "3b44ec35-8e83-4a59-a85a-d3dc36526811",
+                    "type": "outlet_floor",
+                    "label": "T-01",
+                    "roomId": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "ambientId": "31efa5ea-87a2-462f-9cdc-459de1916bc7",
+                    "properties": {
+                        "boxSize": "100x55x50",
+                        "boxMaterial": "RECTO",
+                        "ratedPowerW": 180
+                    },
+                    "generatedBy": "outlet-rule",
+                    "mountingHeight": 0.4,
+                    "connectedDeviceIds": []
+                },
+                {
+                    "x": 3538.4794504926845,
+                    "y": 1654.0082610211616,
+                    "id": "2aea9b43-7536-435a-921c-15bf99a6d15e",
+                    "type": "outlet_floor",
+                    "label": "T-01",
+                    "roomId": "4e202684-f848-4475-afe2-7e38288ed372",
+                    "ambientId": "1a11e192-e210-4285-9414-eaed921a87e0",
+                    "properties": {
+                        "boxSize": "100x55x50",
+                        "boxMaterial": "RECTO",
+                        "ratedPowerW": 180
+                    },
+                    "generatedBy": "outlet-rule",
+                    "mountingHeight": 0.4,
+                    "connectedDeviceIds": []
+                }
+            ]
+        }
+    ]
+}
