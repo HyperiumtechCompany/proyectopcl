@@ -12,8 +12,8 @@ echo "📦 Instalando dependencias PHP..."
 composer install --no-dev --optimize-autoloader
 
 echo "🎨 Compilando assets..."
-NODE_OPTIONS="--max-old-space-size=3072" npm install --legacy-peer-deps
-NODE_OPTIONS="--max-old-space-size=3072" npm run build
+NODE_OPTIONS="--max-old-space-size=3072" npm ci --legacy-peer-deps
+npm run build
 
 echo "🗄️ Ejecutando migraciones..."
 php artisan migrate --force
