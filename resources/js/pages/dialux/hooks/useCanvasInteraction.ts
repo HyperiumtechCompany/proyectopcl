@@ -607,6 +607,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     angleSnapMode,
                     e.shiftKey,
                     referenceAngles,
+                    { x: rawX, y: rawY },
                 );
                 cx = finalPointCanvas.x;
                 cy = finalPointCanvas.y;
@@ -1076,6 +1077,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     angleSnapMode,
                     e.shiftKey,
                     referenceAngles,
+                    { x: rawX, y: rawY },
                 );
                 cx = finalPointCanvas.x;
                 cy = finalPointCanvas.y;

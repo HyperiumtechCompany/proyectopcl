@@ -18,6 +18,11 @@ interface Props {
         p2: CanvasPoint,
     ) => number;
     angleSnapMode?: 'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
+    /** Oculta el badge de texto (distancia/ángulo) cuando el input dinámico
+     * editable (DynamicInputOverlay) ya está mostrando el mismo dato — evita
+     * dos globitos superpuestos con la misma info. La guía punteada y el
+     * marcador del punto siguen visibles. */
+    hideLabel?: boolean;
 }
 
 function renderLabel(
@@ -92,6 +97,7 @@ export const OverlayPreviews = memo(function OverlayPreviews({
     screenPoint,
     measureCadDistanceFromScreen,
     angleSnapMode = 'free',
+    hideLabel = false,
 }: Props) {
     const screenRoomVertices = roomVertices.map(screenPoint);
     const screenRoomPreviewPoint = roomPreviewPoint
@@ -134,7 +140,8 @@ export const OverlayPreviews = memo(function OverlayPreviews({
                                 stroke="#22c55e"
                                 strokeWidth={2}
                             />
-                            {screenRoomVertices.length > 0 &&
+                            {!hideLabel &&
+                                screenRoomVertices.length > 0 &&
                                 renderLabel(
                                     screenRoomVertices[
                                         screenRoomVertices.length - 1
@@ -180,12 +187,17 @@ export const OverlayPreviews = memo(function OverlayPreviews({
                             stroke="#facc15"
                             strokeWidth={2}
                         />
-                        {renderLabel(
-                            screenWallPreview[screenWallPreview.length - 2],
-                            screenWallPreview[screenWallPreview.length - 1],
-                            measureCadDistanceFromScreen,
-                            angleSnapMode,
-                        )}
+                        {!hideLabel &&
+                            renderLabel(
+                                screenWallPreview[
+                                    screenWallPreview.length - 2
+                                ],
+                                screenWallPreview[
+                                    screenWallPreview.length - 1
+                                ],
+                                measureCadDistanceFromScreen,
+                                angleSnapMode,
+                            )}
                     </>
                 </>
             )}

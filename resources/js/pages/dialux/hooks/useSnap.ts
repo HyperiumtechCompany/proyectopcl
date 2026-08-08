@@ -343,12 +343,26 @@ export function useSnap(opts: SnapOptions) {
             mode: AngleSnapMode,
             shiftKey: boolean,
             guideAngles: number[] = [],
+            rawPoint?: CanvasPoint,
         ): CanvasPoint => {
             if (!prevPointM) return { x: cx, y: cy };
 
             const prevPoint = sceneToCanvas(prevPointM.x, prevPointM.y);
-            const dx = cx - prevPoint.x;
-            const dy = cy - prevPoint.y;
+
+            /**
+             * El ángulo se decide con el punto CRUDO del mouse, no con (cx,cy)
+             * — que puede venir ya desplazado unos px por el snap de posición
+             * (vértice/segmento cercano). En un tramo corto, ese desplazamiento
+             * de pocos px gira el ángulo calculado decenas de grados; y como
+             * ese ángulo coincide por definición con el segmento que causó el
+             * desplazamiento, el chequeo de tolerancia lo "confirmaba" igual,
+             * secuestrando el trazo aunque el mouse apuntara claramente hacia
+             * otro lado. Con el punto crudo, el snap de posición solo se honra
+             * cuando no compite con la dirección real del mouse.
+             */
+            const anglePoint = rawPoint ?? { x: cx, y: cy };
+            const dx = anglePoint.x - prevPoint.x;
+            const dy = anglePoint.y - prevPoint.y;
             const distance = Math.hypot(dx, dy);
 
             if (distance <= 5) return { x: cx, y: cy };
@@ -401,10 +415,12 @@ export function useSnap(opts: SnapOptions) {
             }
 
             const snappedAngleRad = (snappedAngleDeg * Math.PI) / 180;
-            
+
             // Proyección ortogonal (O-Track CAD logic)
             // En lugar de rotar el vector (que altera longitudes si se hace snap a puntos alejados),
-            // proyectamos el punto actual (cx, cy) sobre el vector direccional del ángulo.
+            // proyectamos el punto crudo del mouse (anglePoint, vía dx/dy) sobre el vector
+            // direccional del ángulo — así la distancia sigue al mouse real, no al punto
+            // reubicado por el snap de posición.
             const uX = Math.cos(snappedAngleRad);
             const uY = Math.sin(snappedAngleRad);
             

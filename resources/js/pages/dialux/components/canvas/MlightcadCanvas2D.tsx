@@ -1536,6 +1536,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             measureCadDistanceFromScreen
                         }
                         angleSnapMode={ui.angleSnapMode}
+                        hideLabel={dynInputVisible}
                     />
                     <OverlayRooms
                         rooms={scene?.rooms ?? []}
