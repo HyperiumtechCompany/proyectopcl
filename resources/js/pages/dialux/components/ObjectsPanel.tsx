@@ -36,7 +36,7 @@ export const ObjectsPanel: React.FC = () => {
 
     if (!scene) {
         return (
-            <p className="py-4 text-center text-[11px] text-gray-600">
+            <p className="py-4 text-center text-[11px] text-slate-400 dark:text-gray-500">
                 Sin escena activa
             </p>
         );
@@ -81,14 +81,14 @@ export const ObjectsPanel: React.FC = () => {
 
     return (
         <div className="space-y-1">
-            <p className="mb-2 text-[10px] font-semibold tracking-widest text-gray-500 uppercase">
+            <p className="mb-2 text-[10px] font-semibold tracking-widest text-slate-500 dark:text-gray-400 uppercase">
                 Escena · {totalItems} objetos
             </p>
 
             {/* ── Recintos ──────────────────────────────────────────────── */}
             <ObjectSection
                 label="Recintos"
-                icon={<Square size={9} className="text-blue-400" />}
+                icon={<Square size={9} className="text-blue-500 dark:text-blue-400" />}
                 items={regularRooms.map((r) => ({
                     id: r.id,
                     label: r.name,
@@ -100,14 +100,14 @@ export const ObjectsPanel: React.FC = () => {
                 onDelete={(id) => store.requestDelete(id)}
             />
 
-            {/* ── Paredes ───────────────────────────────────────────────── */}
+            {/* ── Ambientes (pasadizos) ─────────────────────────────────── */}
             <ObjectSection
                 label="Ambientes"
-                icon={<Square size={9} className="text-cyan-400" />}
+                icon={<Square size={9} className="text-cyan-500 dark:text-cyan-400" />}
                 items={corridorAmbients.map((r) => ({
                     id: r.id,
                     label: r.name,
-                    sublabel: `Pasadizo · ${r.vertices.length} vÃ©rt.`,
+                    sublabel: `Pasadizo · ${r.vertices.length} vért.`,
                     accent: 'cyan',
                 }))}
                 selectedId={selectedId}
@@ -117,7 +117,7 @@ export const ObjectsPanel: React.FC = () => {
 
             <ObjectSection
                 label="Paredes"
-                icon={<Minus size={9} className="text-slate-400" />}
+                icon={<Minus size={9} className="text-slate-500 dark:text-slate-400" />}
                 items={scene.walls.map((w) => {
                     const verts = w.vertices;
                     let len = 0;
@@ -159,7 +159,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Ventanas ──────────────────────────────────────────────── */}
             <ObjectSection
                 label="Ventanas"
-                icon={<AppWindow size={9} className="text-sky-400" />}
+                icon={<AppWindow size={9} className="text-sky-500 dark:text-sky-400" />}
                 items={scene.windows.map((w) => ({
                     id: w.id,
                     label: w.windowType === 'bathroom' ? `V.Baño ${w.id.slice(0, 6)}` : `Ventana ${w.id.slice(0, 6)}`,
@@ -174,7 +174,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Puertas ───────────────────────────────────────────────── */}
             <ObjectSection
                 label="Puertas"
-                icon={<DoorOpen size={9} className="text-emerald-400" />}
+                icon={<DoorOpen size={9} className="text-emerald-500 dark:text-emerald-400" />}
                 items={(scene.doors || []).map((d) => ({
                     id: d.id,
                     label: `Puerta ${d.doorType ?? 'simple'} ${d.id.slice(0, 6)}`,
@@ -189,7 +189,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Voladizos ─────────────────────────────────────────────── */}
             <ObjectSection
                 label="Voladizos"
-                icon={<Umbrella size={9} className="text-amber-400" />}
+                icon={<Umbrella size={9} className="text-amber-500 dark:text-amber-400" />}
                 items={scene.canopies.map((c) => {
                     const dx = c.x2 - c.x1;
                     const dy = c.y2 - c.y1;
@@ -218,7 +218,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Luminarias (alumbrado) ───────────────────────────────────── */}
             <ObjectSection
                 label="Luminarias"
-                icon={<Zap size={9} className="text-amber-400" />}
+                icon={<Zap size={9} className="text-amber-500 dark:text-amber-400" />}
                 items={scene.fixtures.map((f) => ({
                     id: f.id,
                     label: f.name,
@@ -233,7 +233,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Tomacorrientes ────────────────────────────────────────────── */}
             <ObjectSection
                 label="Tomacorrientes"
-                icon={<Plug size={9} className="text-green-400" />}
+                icon={<Plug size={9} className="text-green-500 dark:text-green-400" />}
                 items={outletDevices.map((d) => ({
                     id: d.id,
                     label: d.label || DEVICE_LABEL_BY_TYPE.get(d.type) || 'Toma',
@@ -248,7 +248,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Tableros y equipos (TG, TD, medidor, ATS, cajas, PAT, etc.) ── */}
             <ObjectSection
                 label="Tableros y equipos"
-                icon={<Boxes size={9} className="text-red-400" />}
+                icon={<Boxes size={9} className="text-red-500 dark:text-red-400" />}
                 items={panelAndEquipmentDevices.map((d) => ({
                     id: d.id,
                     label: d.label || DEVICE_LABEL_BY_TYPE.get(d.type) || d.type,
@@ -263,7 +263,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Interruptores ─────────────────────────────────────────────── */}
             <ObjectSection
                 label="Interruptores"
-                icon={<ToggleLeft size={9} className="text-orange-400" />}
+                icon={<ToggleLeft size={9} className="text-orange-500 dark:text-orange-400" />}
                 items={lightSwitches.map((s) => ({
                     id: s.id,
                     label: s.label || 'Interruptor',
@@ -278,7 +278,7 @@ export const ObjectsPanel: React.FC = () => {
             {/* ── Cableado (útil para encontrar cables sueltos/duplicados) ──── */}
             <ObjectSection
                 label="Cableado"
-                icon={<Cable size={9} className="text-teal-400" />}
+                icon={<Cable size={9} className="text-teal-500 dark:text-teal-400" />}
                 items={conductors.map((c) => {
                     const lengthM = calculateConductorLength(scene, c)?.totalLengthM;
                     return {
@@ -295,8 +295,8 @@ export const ObjectsPanel: React.FC = () => {
 
             {totalItems === 0 && (
                 <div className="px-2 py-6 text-center">
-                    <Square size={24} className="mx-auto mb-2 text-gray-700" />
-                    <p className="text-[10px] text-gray-600">
+                    <Square size={24} className="mx-auto mb-2 text-slate-300 dark:text-gray-700" />
+                    <p className="text-[10px] text-slate-400 dark:text-gray-500">
                         Usa las herramientas de la barra izquierda para comenzar
                         a diseñar
                     </p>
@@ -323,18 +323,18 @@ type Accent =
     | 'teal';
 
 const accentClasses: Record<Accent, { selected: string; dot: string }> = {
-    blue:    { selected: 'bg-blue-900/40 text-blue-200',       dot: 'text-blue-400' },
-    slate:   { selected: 'bg-slate-800/60 text-slate-200',     dot: 'text-slate-400' },
-    sky:     { selected: 'bg-sky-900/40 text-sky-200',         dot: 'text-sky-400' },
-    cyan:    { selected: 'bg-cyan-900/40 text-cyan-200',       dot: 'text-cyan-400' },
-    amber:   { selected: 'bg-amber-900/40 text-amber-200',     dot: 'text-amber-400' },
-    yellow:  { selected: 'bg-yellow-900/40 text-yellow-200',   dot: 'text-yellow-400' },
-    emerald: { selected: 'bg-emerald-900/40 text-emerald-200', dot: 'text-emerald-400' },
-    violet:  { selected: 'bg-violet-900/40 text-violet-200',   dot: 'text-violet-400' },
-    green:   { selected: 'bg-green-900/40 text-green-200',     dot: 'text-green-400' },
-    red:     { selected: 'bg-red-900/40 text-red-200',         dot: 'text-red-400' },
-    orange:  { selected: 'bg-orange-900/40 text-orange-200',   dot: 'text-orange-400' },
-    teal:    { selected: 'bg-teal-900/40 text-teal-200',       dot: 'text-teal-400' },
+    blue:    { selected: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200',       dot: 'text-blue-500 dark:text-blue-400' },
+    slate:   { selected: 'bg-slate-200 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200',   dot: 'text-slate-500 dark:text-slate-400' },
+    sky:     { selected: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',           dot: 'text-sky-500 dark:text-sky-400' },
+    cyan:    { selected: 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-200',       dot: 'text-cyan-500 dark:text-cyan-400' },
+    amber:   { selected: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',   dot: 'text-amber-500 dark:text-amber-400' },
+    yellow:  { selected: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200', dot: 'text-yellow-600 dark:text-yellow-400' },
+    emerald: { selected: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200', dot: 'text-emerald-500 dark:text-emerald-400' },
+    violet:  { selected: 'bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200',   dot: 'text-violet-500 dark:text-violet-400' },
+    green:   { selected: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200',   dot: 'text-green-500 dark:text-green-400' },
+    red:     { selected: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',           dot: 'text-red-500 dark:text-red-400' },
+    orange:  { selected: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200', dot: 'text-orange-500 dark:text-orange-400' },
+    teal:    { selected: 'bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-200',       dot: 'text-teal-500 dark:text-teal-400' },
 };
 
 interface ObjectItem {
@@ -366,10 +366,10 @@ const ObjectSection: React.FC<ObjectSectionProps> = ({
         <div className="mb-2">
             <div className="mb-1 flex items-center gap-1 px-1">
                 {icon}
-                <p className="text-[9px] font-medium tracking-wider text-gray-600 uppercase">
+                <p className="text-[9px] font-medium tracking-wider text-slate-500 dark:text-gray-400 uppercase">
                     {label}
                 </p>
-                <span className="ml-auto font-mono text-[9px] text-gray-700">
+                <span className="ml-auto font-mono text-[9px] text-slate-400 dark:text-gray-500">
                     {items.length}
                 </span>
             </div>
@@ -383,13 +383,13 @@ const ObjectSection: React.FC<ObjectSectionProps> = ({
                         className={`group flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors ${
                             isSelected
                                 ? acc.selected
-                                : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200'
+                                : 'text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-800/60 hover:text-slate-900 dark:hover:text-gray-100'
                         }`}
                     >
                         <span className="flex-1 truncate font-mono text-[11px]">
                             {item.label}
                         </span>
-                        <span className="shrink-0 font-mono text-[9px] text-gray-600">
+                        <span className={`shrink-0 font-mono text-[9px] ${isSelected ? '' : 'text-slate-400 dark:text-gray-500'}`}>
                             {item.sublabel}
                         </span>
                         <button
@@ -397,7 +397,7 @@ const ObjectSection: React.FC<ObjectSectionProps> = ({
                                 e.stopPropagation();
                                 onDelete(item.id);
                             }}
-                            className="ml-1 text-red-500/60 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-400"
+                            className="ml-1 text-red-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
                             title="Eliminar"
                         >
                             <Trash2 size={9} />

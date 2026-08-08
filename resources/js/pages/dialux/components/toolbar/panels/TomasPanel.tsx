@@ -77,7 +77,7 @@ export const TomasPanel: React.FC<{
                                 className={`flex h-14 flex-col items-center justify-center gap-1 rounded border px-2 py-1.5 text-[10px] transition-colors ${
                                     activeTool === WATER_HEATER_ITEM.tool
                                         ? WATER_HEATER_ITEM.activeClass
-                                        : 'border-gray-700/50 bg-gray-800/40 text-gray-400 hover:bg-gray-700/60 hover:text-gray-200'
+                                        : 'border-gray-300 dark:border-gray-700/50 bg-gray-200 dark:bg-gray-800/40 text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-700/60 hover:text-gray-800 dark:text-gray-800 dark:text-gray-200'
                                 }`}
                             >
                                 <span className={`text-[12px] font-bold ${WATER_HEATER_ITEM.symbolClass}`}>
@@ -116,7 +116,7 @@ export const TomasPanel: React.FC<{
                                 className={`rounded border px-1.5 py-1 text-center font-mono text-[9.5px] transition-colors ${
                                     activeTool === 'wire' && wireTemplate.wireLabel === item.value
                                         ? 'border-cyan-500/50 bg-cyan-600/20 text-cyan-200'
-                                        : 'border-gray-700/40 bg-gray-950/60 text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        : 'border-gray-300 dark:border-gray-700/40 bg-gray-300 dark:bg-gray-950/60 text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'
                                 }`}
                                 title={`${item.label}: ${item.count} conductores`}
                             >
@@ -124,7 +124,7 @@ export const TomasPanel: React.FC<{
                             </button>
                         ))}
                     </div>
-                    <p className="mt-2 text-[9px] text-gray-600">
+                    <p className="mt-2 text-[9px] text-gray-600 dark:text-gray-600">
                         Conecta un tomacorriente con otro, con una caja de paso o
                         directamente con el tablero. El cálculo de longitud de
                         cable está en el botón "Cálculo CT" de la barra superior.

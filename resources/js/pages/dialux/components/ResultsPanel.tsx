@@ -83,9 +83,9 @@ export function isRoomCompliant(row: ComplianceValues): boolean {
 }
 
 const coverageStyles = {
-    optimal: 'bg-emerald-950/60 text-emerald-300 border-emerald-800/70',
-    insufficient: 'bg-red-950/60 text-red-300 border-red-800/70',
-    excessive: 'bg-amber-950/60 text-amber-300 border-amber-800/70',
+    optimal: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70',
+    insufficient: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/70',
+    excessive: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70',
 };
 
 const coverageLabels = {
@@ -181,8 +181,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
     if (filteredRows.length === 0) {
         return (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-6 text-center">
-                <p className="text-base text-slate-400">
+            <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-300 dark:bg-slate-950/70 p-6 text-center">
+                <p className="text-base text-slate-600 dark:text-slate-400">
                     No hay resultados disponibles para mostrar.
                 </p>
             </div>
@@ -195,12 +195,12 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
         <div className="space-y-5 text-xs">
             <section
                 aria-label="Filtros e indicadores generales"
-                className="rounded-xl border border-slate-800 bg-slate-950/50 p-3"
+                className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/50 p-3"
             >
                 <div
                     className=" grid gap-2 lg:grid-cols-4 xl:grid-cols-[1fr_1.25fr_auto_repeat(4,0.8fr)] xl:items-center">
                     {/* Piso */}
-                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-800 bg-slate-900/70 px-3">
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-3">
                         <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                             <Layers3 size={13} className="text-cyan-400" />
                             Piso
@@ -209,7 +209,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                         <select
                             value={activeLevelId}
                             onChange={(event) => setSelectedLevelId(event.target.value)}
-                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-100 outline-none focus:ring-0">
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-0">
                             <option value="all">Todos los pisos</option>
 
                             {levels.map((level) => (
@@ -222,7 +222,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
 
                     {/* Recinto */}
-                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-800 bg-slate-900/70 px-3">
+                    <label className="flex h-14 flex-col justify-center rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-3">
                         <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                             <Building2 size={13} className="text-amber-400" />
                             Recinto
@@ -231,7 +231,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                         <select
                             value={activeRoomName}
                             onChange={(event) => setSelectedRoomName(event.target.value)}
-                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-100 outline-none focus:ring-0">
+                            className="h-6 border-0 bg-transparent p-0 text-sm font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-0">
                             <option value="all">Todos los recintos</option>
 
                             {roomNames.map((roomName) => (
@@ -251,22 +251,22 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                             setSelectedRoomName('all');
                         }}
                         disabled={activeLevelId === 'all' && activeRoomName === 'all'}
-                        className=" flex h-14 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900/70 px-4 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-40">
+                        className=" flex h-14 items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/70 px-4 text-xs font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:bg-slate-800 disabled:pointer-events-none disabled:opacity-40">
                         <RotateCcw size={14} />
                         Limpiar
                     </button>
 
 
                     {/* Ambientes */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
-                        <Building2 size={16} className="text-slate-400" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
+                        <Building2 size={16} className="text-slate-500 dark:text-slate-400" />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
                                 Ambientes
                             </p>
 
-                            <p className="text-xl font-semibold text-white tabular-nums">
+                            <p className="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
                                 {filteredRows.length}
                             </p>
                         </div>
@@ -274,15 +274,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
 
                     {/* Luminarias */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
-                        <Lightbulb size={16} className="text-amber-300" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
+                        <Lightbulb size={16} className="text-amber-500 dark:text-amber-400" />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
                                 Luminarias
                             </p>
 
-                            <p className="text-xl font-semibold text-amber-300 tabular-nums">
+                            <p className="text-xl font-bold text-amber-600 dark:text-amber-300 tabular-nums">
                                 {filteredRows.reduce(
                                     (sum, row) => sum + row.fixtureCount,
                                     0
@@ -293,15 +293,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
 
                     {/* Lux promedio */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
-                        <Gauge size={16} className="text-cyan-300" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
+                        <Gauge size={16} className="text-cyan-500 dark:text-cyan-400" />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
                                 Lux promedio
                             </p>
 
-                            <p className="text-xl font-semibold text-cyan-300 tabular-nums">
+                            <p className="text-xl font-bold text-cyan-700 dark:text-cyan-300 tabular-nums">
                                 {filteredRows.length
                                     ? Math.round(
                                         filteredRows.reduce(
@@ -316,15 +316,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
 
                     {/* Cumplen */}
-                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3">
-                        <BadgeCheck size={16} className="text-emerald-300" />
+                    <div className="flex h-14 items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3">
+                        <BadgeCheck size={16} className="text-emerald-500 dark:text-emerald-400" />
 
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
                                 Cumplen
                             </p>
 
-                            <p className="text-xl font-semibold text-emerald-300 tabular-nums">
+                            <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
                                 {compliantRooms}/{filteredRows.length}
                             </p>
                         </div>
@@ -333,14 +333,14 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
             </section>
 
 
-            <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70 shadow-2xl">
-                <div className="flex items-start gap-3 border-b border-slate-800 px-4 py-3 sm:px-5 sm:py-4">
-                    <TableProperties size={17} className="mt-0.5 shrink-0 text-cyan-300" />
+            <section className="overflow-hidden rounded-2xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 shadow-sm dark:shadow-2xl">
+                <div className="flex items-start gap-3 border-b border-slate-300 dark:border-slate-800 px-4 py-3 sm:px-5 sm:py-4">
+                    <TableProperties size={17} className="mt-0.5 shrink-0 text-cyan-500 dark:text-cyan-300" />
                     <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-white">
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
                             Resultado por ambiente
                         </h3>
-                        <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-slate-400">
+                        <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-slate-600 dark:text-slate-400">
                             El calculo de luminarias y el isolux se resuelven con
                             el area del ambiente derivado, mientras que la normativa
                             aplicada proviene del recinto.
@@ -379,8 +379,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
 
                 <div className="max-h-[58vh] overflow-auto overscroll-contain">
                     <table className="w-full min-w-[1280px] table-fixed text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-950/95 text-center backdrop-blur">
-                            <tr className="border-b border-slate-800 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                        <thead className="sticky top-0 bg-slate-100 dark:bg-slate-950/95 text-center backdrop-blur">
+                            <tr className="border-b border-slate-300 dark:border-slate-800 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600 dark:text-slate-500">
                                 <th className="w-56 px-3 py-3">Ambiente</th>
                                 <th className="w-20 px-2 py-3">Área</th>
                                 <th className="w-28 px-2 py-3">Aplicación</th>
@@ -416,10 +416,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                 return (
                                     <React.Fragment key={`${row.levelId}-${row.id}`}>
                                         {showLevelHeader && (
-                                            <tr className="border-y border-cyan-900/50 bg-cyan-950/30">
+                                            <tr className="border-y border-cyan-200 dark:border-cyan-900/50 bg-cyan-50 dark:bg-cyan-950/30">
                                                 <td
                                                     colSpan={14}
-                                                    className="px-4 py-2 text-left text-xs font-semibold tracking-wide text-cyan-200">
+                                                    className="px-4 py-2 text-left text-xs font-semibold tracking-wide text-cyan-800 dark:text-cyan-200">
                                                     <span className="inline-flex items-center gap-2">
                                                         <Layers3 size={13} />
                                                         {row.levelName}
@@ -427,15 +427,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                 </td>
                                             </tr>
                                         )}
-                                        <tr className="border-b border-slate-800/70 text-center text-xs text-slate-200 transition-colors hover:bg-slate-900/60">
+                                        <tr className="border-b border-slate-200 dark:border-slate-800/70 text-center text-xs text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/60">
                                             <td className="px-3 py-3">
                                                 <div className="flex items-start gap-2 text-left">
                                                     <Lightbulb
                                                         size={15}
-                                                        className="mt-0.5 text-amber-300"
+                                                        className="mt-0.5 text-amber-500 dark:text-amber-300"
                                                     />
                                                     <div className="min-w-0">
-                                                        <p className="leading-snug font-semibold text-white">
+                                                        <p className="leading-snug font-semibold text-slate-900 dark:text-white">
                                                             {row.roomName}
                                                         </p>
                                                         <p className="mt-0.5 leading-snug text-slate-500">
@@ -511,7 +511,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                     <span
                                                         className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${compliant
                                                             ? coverageStyles.optimal
-                                                            : 'border-red-800/70 bg-red-950/60 text-red-300'
+                                                            : 'border-red-300 bg-red-50 text-red-700 dark:border-red-800/70 dark:bg-red-950/60 dark:text-red-300'
                                                             }`}>
                                                         {compliant
                                                             ? 'Conforme'
@@ -524,7 +524,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ rooms, calculationRu
                                                     Cobertura: {coverageLabels[row.coverage]}
                                                 </p>
                                                 {row.fixtureCount < row.roundedQuantity && (
-                                                    <p className="mt-1.5 leading-snug font-semibold text-amber-400">
+                                                    <p className="mt-1.5 leading-snug font-semibold text-amber-600 dark:text-amber-400">
                                                         ≈{row.roundedQuantity - row.fixtureCount}{' '}
                                                         luminaria(s) más (estimación método de
                                                         lúmenes) — no es el resultado del cálculo

@@ -93,7 +93,7 @@ export const StairConfigPanel: React.FC<{
     const totalHeight = (totalSteps * st.riserHeight).toFixed(2);
 
     return (
-        <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
+        <div className="my-2 space-y-1 border-t border-gray-300 dark:border-gray-800/80 pt-2">
             <p className="mb-1.5 text-[10px] font-semibold text-orange-400">
                 Configuración de Escalera
             </p>
@@ -184,7 +184,7 @@ export const StairConfigPanel: React.FC<{
                         checked={st.hasBaseSlab !== false}
                         onChange={(e) => updateSt({ hasBaseSlab: e.target.checked })}
                     />
-                    <span className="text-[9px] text-gray-300">Base sólida bajo escalones</span>
+                    <span className="text-[9px] text-gray-700 dark:text-gray-700 dark:text-gray-300">Base sólida bajo escalones</span>
                 </label>
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input
@@ -193,7 +193,7 @@ export const StairConfigPanel: React.FC<{
                         checked={st.isInterFloor === true}
                         onChange={(e) => updateSt({ isInterFloor: e.target.checked })}
                     />
-                    <span className="text-[9px] text-gray-300">Conecta con piso superior</span>
+                    <span className="text-[9px] text-gray-700 dark:text-gray-700 dark:text-gray-300">Conecta con piso superior</span>
                 </label>
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input
@@ -202,7 +202,7 @@ export const StairConfigPanel: React.FC<{
                         checked={st.showRailings === true}
                         onChange={(e) => updateSt({ showRailings: e.target.checked })}
                     />
-                    <span className="text-[9px] text-gray-300">Mostrar pasamanos</span>
+                    <span className="text-[9px] text-gray-700 dark:text-gray-700 dark:text-gray-300">Mostrar pasamanos</span>
                 </label>
             </div>
 
@@ -223,7 +223,7 @@ export const StairConfigPanel: React.FC<{
                 </div>
 
                 {!hasFlights && (
-                    <p className="text-[8px] text-gray-500 px-0.5 leading-tight">
+                    <p className="text-[8px] text-gray-500 dark:text-gray-500 px-0.5 leading-tight">
                         {st.stepCount} escalones · {DIRECTION_LABELS[st.orientation]} · sin descanso
                     </p>
                 )}

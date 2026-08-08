@@ -86,12 +86,12 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto border-slate-800 bg-[#090b10] text-slate-100 sm:max-w-3xl">
+            <DialogContent className="max-h-[90vh] overflow-y-auto border-slate-300 dark:border-slate-800 bg-gray-100 dark:bg-[#090b10] text-slate-900 dark:text-slate-100 sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle className="text-lg font-semibold text-white">
                         Exportar planos DXF por nivel
                     </DialogTitle>
-                    <DialogDescription className="text-slate-400">
+                    <DialogDescription className="text-slate-600 dark:text-slate-400">
                         Elige qué niveles y especialidades exportar. Cada nivel genera hasta dos láminas
                         (alumbrado y tomacorrientes), cada una en su propio marco con cajetín y leyenda.
                     </DialogDescription>
@@ -100,17 +100,17 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                 <div className="grid gap-4 sm:grid-cols-2">
                     {/* ── Niveles ─────────────────────────────────────────────── */}
                     <section>
-                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                             Niveles
                         </h3>
-                        <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950/60 p-2">
+                        <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-2">
                             {scenesByFloor.length === 0 && (
                                 <p className="px-1 py-1 text-xs text-slate-500">Sin niveles en el proyecto.</p>
                             )}
                             {scenesByFloor.map((scene) => (
                                 <label
                                     key={scene.id}
-                                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800/60"
+                                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-800/60"
                                 >
                                     <input
                                         type="checkbox"
@@ -126,11 +126,11 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
                     {/* ── Especialidades ──────────────────────────────────────── */}
                     <section>
-                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                             Especialidades
                         </h3>
-                        <div className="space-y-1 rounded-lg border border-slate-700 bg-slate-950/60 p-2">
-                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800/60">
+                        <div className="space-y-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-2">
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-800/60">
                                 <input
                                     type="checkbox"
                                     checked={options.disciplines.lighting}
@@ -141,7 +141,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                 />
                                 Alumbrado
                             </label>
-                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800/60">
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-800/60">
                                 <input
                                     type="checkbox"
                                     checked={options.disciplines.outlets}
@@ -156,7 +156,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
                         {isMultiLevel && (
                             <div className="mt-2">
-                                <label htmlFor="dxf-base-plan-policy" className="mb-1 block text-[11px] text-slate-400">
+                                <label htmlFor="dxf-base-plan-policy" className="mb-1 block text-[11px] text-slate-600 dark:text-slate-400">
                                     Fondo CAD compartido entre niveles
                                 </label>
                                 <select
@@ -165,7 +165,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                     onChange={(e) => setOptions((prev) => ({
                                         ...prev, basePlanPolicy: e.target.value as DxfBasePlanPolicyMode,
                                     }))}
-                                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                                 >
                                     <option value="active-scene-only">Solo en el nivel activo</option>
                                     <option value="shared-all-levels">Repetir en todos los niveles</option>
@@ -178,16 +178,16 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
                     {/* ── Papel y escala ──────────────────────────────────────── */}
                     <section>
-                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                             Papel y escala
                         </h3>
-                        <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950/60 p-2">
+                        <div className="space-y-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-2">
                             <div className="flex gap-2">
                                 <select
                                     aria-label="Formato de papel"
                                     value={options.paperFormat}
                                     onChange={(e) => setOptions((prev) => ({ ...prev, paperFormat: e.target.value as DxfPaperFormat }))}
-                                    className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                                    className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                                 >
                                     {PAPER_FORMATS.map((format) => (
                                         <option key={format} value={format}>{format}</option>
@@ -197,19 +197,19 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                     aria-label="Orientación de papel"
                                     value={options.paperOrientation}
                                     onChange={(e) => setOptions((prev) => ({ ...prev, paperOrientation: e.target.value as DxfPaperOrientation }))}
-                                    className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                                    className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                                 >
                                     <option value="landscape">Horizontal</option>
                                     <option value="portrait">Vertical</option>
                                 </select>
                             </div>
 
-                            <div className="flex rounded-lg border border-slate-700 bg-slate-950/40 p-0.5 text-xs">
+                            <div className="flex rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/40 p-0.5 text-xs">
                                 <button
                                     type="button"
                                     onClick={() => setOptions((prev) => ({ ...prev, scaleMode: 'auto' }))}
                                     className={`flex-1 rounded-md px-2 py-1.5 font-medium transition-colors ${
-                                        options.scaleMode === 'auto' ? 'bg-cyan-600 text-slate-950' : 'text-slate-400 hover:text-slate-200'
+                                        options.scaleMode === 'auto' ? 'bg-cyan-600 text-slate-950' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                     }`}
                                 >
                                     Escala automática
@@ -218,7 +218,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                     type="button"
                                     onClick={() => setOptions((prev) => ({ ...prev, scaleMode: 'manual' }))}
                                     className={`flex-1 rounded-md px-2 py-1.5 font-medium transition-colors ${
-                                        options.scaleMode === 'manual' ? 'bg-amber-600 text-slate-950' : 'text-slate-400 hover:text-slate-200'
+                                        options.scaleMode === 'manual' ? 'bg-amber-600 text-slate-950' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                     }`}
                                 >
                                     Escala manual
@@ -230,7 +230,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                     aria-label="Escala manual"
                                     value={options.manualScaleDenominator}
                                     onChange={(e) => setOptions((prev) => ({ ...prev, manualScaleDenominator: Number(e.target.value) }))}
-                                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-amber-500"
+                                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-amber-500"
                                 >
                                     {ALLOWED_SCALE_DENOMINATORS.map((denominator) => (
                                         <option key={denominator} value={denominator}>1:{denominator}</option>
@@ -242,11 +242,11 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
                     {/* ── Otras opciones ──────────────────────────────────────── */}
                     <section>
-                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                             Otras opciones
                         </h3>
-                        <div className="space-y-1 rounded-lg border border-slate-700 bg-slate-950/60 p-2">
-                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800/60">
+                        <div className="space-y-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-2">
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-800/60">
                                 <input
                                     type="checkbox"
                                     checked={options.includeCadBase}
@@ -255,7 +255,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                                 />
                                 Incluir fondo CAD importado
                             </label>
-                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800/60">
+                            <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:bg-slate-800/60">
                                 <input
                                     type="checkbox"
                                     checked={options.includeEmptySheets}
@@ -270,7 +270,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
 
                 {/* ── Cajetín ──────────────────────────────────────────────────── */}
                 <section>
-                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                         Cajetín
                     </h3>
                     <div className="grid grid-cols-3 gap-2">
@@ -279,31 +279,31 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                             placeholder="Dibujado por"
                             value={options.drawnBy}
                             onChange={(e) => setOptions((prev) => ({ ...prev, drawnBy: e.target.value }))}
-                            className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                         />
                         <input
                             type="text"
                             placeholder="Revisado por"
                             value={options.reviewedBy}
                             onChange={(e) => setOptions((prev) => ({ ...prev, reviewedBy: e.target.value }))}
-                            className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                         />
                         <input
                             type="text"
                             placeholder="Revisión (ej. A)"
                             value={options.revision}
                             onChange={(e) => setOptions((prev) => ({ ...prev, revision: e.target.value }))}
-                            className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
                         />
                     </div>
                 </section>
 
                 {/* ── Vista previa ─────────────────────────────────────────────── */}
                 <section>
-                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-300 uppercase">
                         Vista previa ({preview?.sheets.length ?? 0} lámina{preview?.sheets.length === 1 ? '' : 's'})
                     </h3>
-                    <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950/60 p-2">
+                    <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-2">
                         {(!preview || preview.sheets.length === 0) && (
                             <p className="px-1 py-1 text-xs text-slate-500">
                                 Ninguna lámina se generaría con esta selección.
@@ -312,9 +312,9 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                         {preview?.sheets.map((sheet) => (
                             <div
                                 key={`${sheet.sceneId}-${sheet.discipline}`}
-                                className="flex items-center justify-between rounded px-1.5 py-1 text-xs text-slate-300"
+                                className="flex items-center justify-between rounded px-1.5 py-1 text-xs text-slate-700 dark:text-slate-300"
                             >
-                                <span className="font-mono text-slate-200">
+                                <span className="font-mono text-slate-800 dark:text-slate-200">
                                     {sheet.levelName} — {DISCIPLINE_LABEL_ES[sheet.discipline]}
                                 </span>
                                 <span className="text-slate-500">
@@ -349,7 +349,7 @@ export const DxfExportDialog: React.FC<DxfExportDialogProps> = ({ open, onOpenCh
                         type="button"
                         onClick={() => onOpenChange(false)}
                         disabled={isExporting}
-                        className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         Cancelar
                     </button>

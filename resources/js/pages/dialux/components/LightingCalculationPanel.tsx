@@ -85,23 +85,23 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
     // ─── PASO 1: INPUTS ───────────────────────────────────────────────────────
     if (step === 'inputs') {
         return (
-            <div className="space-y-4 p-4 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-700">
+            <div className="space-y-4 p-4 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-300 dark:border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
                     <Zap className="w-5 h-5 text-amber-400" />
                     <h3 className="font-semibold text-white">Cálculo de Iluminación</h3>
                 </div>
                 
                 {/* Info del Recinto */}
-                <div className="bg-slate-800/50 p-3 rounded border border-slate-700/50">
-                    <p className="text-xs text-slate-400 mb-1">RECINTO</p>
+                <div className="bg-slate-200 dark:bg-slate-800/50 p-3 rounded border border-slate-300 dark:border-slate-700/50">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">RECINTO</p>
                     <p className="font-mono text-sm text-cyan-400">{roomName}</p>
-                    <p className="text-xs text-slate-400 mt-2">ÁREA</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">ÁREA</p>
                     <p className="font-mono text-sm text-green-400">{areaM2.toFixed(2)} m²</p>
                 </div>
                 
                 {/* Seleccionar Norma */}
                 <div>
-                    <label className="block text-xs text-slate-400 mb-2 uppercase tracking-wider">
+                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
                         Norma de Iluminación (EN 12464-1)
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -112,7 +112,7 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                                 className={`py-2 px-3 rounded border transition-all text-sm font-semibold ${
                                     normaLux === norm
                                         ? 'bg-blue-600 border-blue-400 text-white'
-                                        : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                                        : 'bg-slate-700 border-slate-600 text-slate-700 dark:text-slate-300 hover:border-slate-500'
                                 }`}
                             >
                                 {norm} lx
@@ -123,7 +123,7 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                 
                 {/* Tipo de Luminaria */}
                 <div>
-                    <label className="block text-xs text-slate-400 mb-2 uppercase tracking-wider">
+                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
                         Tipo de Luminaria
                     </label>
                     <input
@@ -137,7 +137,7 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                 
                 {/* Lúmenes del Foco */}
                 <div>
-                    <label className="block text-xs text-slate-400 mb-2 uppercase tracking-wider">
+                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
                         Lúmenes del Foco (lm)
                     </label>
                     <input
@@ -180,16 +180,16 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
     // ─── PASO 2: REVISAR CÁLCULOS ─────────────────────────────────────────────
     if (step === 'review') {
         return (
-            <div className="space-y-4 p-4 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-700 overflow-y-auto max-h-96">
+            <div className="space-y-4 p-4 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 overflow-y-auto max-h-96">
                 <div className="flex items-center gap-2 mb-4">
                     <TrendingUp className="w-5 h-5 text-emerald-400" />
                     <h3 className="font-semibold text-white">Resultados del Cálculo</h3>
                 </div>
                 
                 {/* Resumen de Cálculos */}
-                <div className="bg-slate-800/50 border border-slate-700 rounded p-3 space-y-3">
+                <div className="bg-slate-200 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded p-3 space-y-3">
                     <div>
-                        <p className="text-xs text-slate-400 uppercase mb-1">Lúmenes Requeridos</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 uppercase mb-1">Lúmenes Requeridos</p>
                         <p className="text-xl font-bold text-cyan-400">
                             {lumensRequired.toLocaleString('es-PE', { maximumFractionDigits: 0 })} lm
                         </p>
@@ -198,17 +198,17 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                         </p>
                     </div>
                     
-                    <div className="border-t border-slate-700 pt-3">
-                        <p className="text-xs text-slate-400 uppercase mb-1">Cantidad de Luminarias</p>
+                    <div className="border-t border-slate-300 dark:border-slate-700 pt-3">
+                        <p className="text-xs text-slate-600 dark:text-slate-400 uppercase mb-1">Cantidad de Luminarias</p>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-slate-700 p-2 rounded">
-                                <p className="text-xs text-slate-400">Exacta</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Exacta</p>
                                 <p className="text-lg font-mono text-blue-400">
                                     {exactQuantity.toFixed(2)}
                                 </p>
                             </div>
                             <div className="bg-slate-700 p-2 rounded">
-                                <p className="text-xs text-slate-400">Redondeada</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Redondeada</p>
                                 <p className="text-lg font-mono text-green-400 font-bold">
                                     {roundedQuantity}
                                 </p>
@@ -216,17 +216,17 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                         </div>
                     </div>
                     
-                    <div className="border-t border-slate-700 pt-3">
-                        <p className="text-xs text-slate-400 uppercase mb-1">Métricas</p>
+                    <div className="border-t border-slate-300 dark:border-slate-700 pt-3">
+                        <p className="text-xs text-slate-600 dark:text-slate-400 uppercase mb-1">Métricas</p>
                         <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
-                                <span className="text-slate-400">Uniformidad Est.:</span>
+                                <span className="text-slate-600 dark:text-slate-400">Uniformidad Est.:</span>
                                 <span className="text-white font-mono">
                                     {(uniformity * 100).toFixed(1)}%
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-slate-400">Cobertura:</span>
+                                <span className="text-slate-600 dark:text-slate-400">Cobertura:</span>
                                 <span className={`font-semibold flex items-center gap-1 ${
                                     coverage === 'optimal' ? 'text-emerald-400' :
                                     coverage === 'insufficient' ? 'text-amber-400' : 'text-orange-400'
@@ -240,8 +240,8 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                         </div>
                     </div>
                     
-                    <div className="border-t border-slate-700 pt-3">
-                        <label className="text-xs text-slate-400 uppercase mb-2 block">
+                    <div className="border-t border-slate-300 dark:border-slate-700 pt-3">
+                        <label className="text-xs text-slate-600 dark:text-slate-400 uppercase mb-2 block">
                             Cantidad Recomendada (tu decisión)
                         </label>
                         <input
@@ -281,7 +281,7 @@ export const LightingCalculationPanel: React.FC<LightingCalculationPanelProps> =
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                 <h3 className="font-semibold text-emerald-400">Cálculo Completado</h3>
             </div>
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
                 Se guardó el cálculo con {recommendedQuantity} luminaria{recommendedQuantity !== 1 ? 's' : ''}.
             </p>
             <button

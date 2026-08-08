@@ -723,13 +723,13 @@ export const EditorLayout = memo(function EditorLayout() {
     ]);
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-[#0d0f14] text-gray-200 select-none">
-            <header id="dialux-header" className="sticky top-0 z-50 flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-800/60 bg-[#161820] px-2 sm:gap-3 sm:px-4">
+        <div className="flex h-full flex-col overflow-hidden bg-gray-50 dark:bg-[#0d0f14] text-gray-800 dark:text-gray-800 dark:text-gray-200 select-none">
+            <header id="dialux-header" className="sticky top-0 z-50 flex h-11 shrink-0 items-center gap-1.5 overflow-x-hidden border-b border-gray-300 dark:border-gray-800/60 bg-white dark:bg-[#161820] px-2 sm:gap-3 sm:px-4">
                 <Link
                     id="dialux-btn-back-to-list"
                     href="/dialux"
                     title="Volver a mis proyectos"
-                    className="flex items-center gap-1.5 rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200"
+                    className="flex items-center gap-1.5 rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200"
                 >
                     <ArrowLeft size={13} />
                     Proyectos
@@ -742,7 +742,7 @@ export const EditorLayout = memo(function EditorLayout() {
                     </span>
                 </div>
 
-                <span className="hidden max-w-28 truncate text-xs text-gray-500 md:block">
+                <span className="hidden max-w-28 truncate text-xs text-gray-500 dark:text-gray-500 md:block">
                     {projectName}
                 </span>
 
@@ -762,7 +762,7 @@ export const EditorLayout = memo(function EditorLayout() {
                             title="Gestionar pisos"
                             className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-semibold transition-all ${showFloorPanel
                                 ? 'border-amber-600/60 bg-amber-950/60 text-amber-300'
-                                : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
+                                : 'border-slate-300 dark:border-slate-700/60 bg-slate-200 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:border-amber-700/40 hover:text-amber-300'
                                 }`}
                         >
                             <span className="text-amber-400">⬛</span>
@@ -775,7 +775,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                     : '—'}
                             </span>
                             {floorsSorted.length > 1 && (
-                                <span className="ml-0.5 rounded bg-slate-700/60 px-1 text-[9px] text-slate-400">
+                                <span className="ml-0.5 rounded bg-slate-700/60 px-1 text-[9px] text-slate-600 dark:text-slate-400">
                                     {floorsSorted.length}
                                 </span>
                             )}
@@ -792,7 +792,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                 hideHeader
                                 width="md"
                             >
-                                <div className="border-b border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
+                                <div className="border-b border-slate-300 dark:border-slate-700/40 px-3 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">
                                     Pisos del Proyecto
                                 </div>
                                 <div className="max-h-52 overflow-y-auto py-1">
@@ -801,7 +801,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                             key={floor.id}
                                             className={`flex w-full items-center gap-1 px-2 py-1 text-[11px] transition-colors ${floor.id === activeSceneId
                                                 ? 'bg-amber-900/30'
-                                                : 'hover:bg-slate-800/60'
+                                                : 'hover:bg-slate-200 dark:bg-slate-800/60'
                                                 }`}
                                         >
                                             {/* Eye toggle */}
@@ -818,7 +818,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                             {/* Floor selector */}
                                             <button
                                                 onClick={() => { setActiveScene(floor.id); setShowFloorPanel(false); }}
-                                                className={`flex flex-1 items-center gap-2 text-left ${floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-400 hover:text-slate-100'
+                                                className={`flex flex-1 items-center gap-2 text-left ${floor.id === activeSceneId ? 'text-amber-300' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
                                                     } ${(floor.visible ?? true) ? '' : 'opacity-40'}`}
                                             >
                                                 <span className="font-mono text-[9px] w-6 text-center text-slate-500">
@@ -835,13 +835,13 @@ export const EditorLayout = memo(function EditorLayout() {
                                         </div>
                                     ))}
                                 </div>
-                                <div className="border-t border-slate-700/40 p-1.5 space-y-1">
+                                <div className="border-t border-slate-300 dark:border-slate-700/40 p-1.5 space-y-1">
                                     {/* Ver todos los pisos toggle */}
                                     <button
                                         onClick={toggleAllFloors}
                                         className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors ${showAllFloors
                                             ? 'bg-cyan-900/40 text-cyan-300'
-                                            : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-100'
+                                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100'
                                             }`}
                                         title={showAllFloors ? 'Mostrar solo piso activo' : 'Ver todos los pisos superpuestos'}
                                     >
@@ -865,7 +865,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                                     }
                                                 }}
                                                 aria-label="Nombre del piso"
-                                                className="min-w-0 flex-1 rounded border border-amber-700/60 bg-slate-950 px-2 py-1 text-[10px] text-slate-100 outline-none focus:border-amber-400"
+                                                className="min-w-0 flex-1 rounded border border-amber-700/60 bg-slate-300 dark:bg-slate-950 px-2 py-1 text-[10px] text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400"
                                             />
                                             <button
                                                 type="submit"
@@ -878,7 +878,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                                 type="button"
                                                 onClick={() => setEditingFloorName(false)}
                                                 title="Cancelar edición"
-                                                className="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-slate-200">
+                                                className="rounded p-1 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 hover:text-slate-800 dark:text-slate-200">
                                                 <X size={12} />
                                             </button>
                                         </form>
@@ -887,14 +887,14 @@ export const EditorLayout = memo(function EditorLayout() {
                                             type="button"
                                             onClick={handleStartFloorNameEdit}
                                             disabled={!activeScene}
-                                            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-slate-100 disabled:opacity-30"
+                                            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100 disabled:opacity-30"
                                             title="Editar nombre del piso activo">
                                             <Pencil size={11} />
                                             Editar nombre
                                         </button>
                                     )}
                                     {activeScene && (
-                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-400">
+                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400">
                                             <span>Altura piso–techo</span>
                                             <span className="flex items-center gap-1">
                                                 <input
@@ -916,14 +916,14 @@ export const EditorLayout = memo(function EditorLayout() {
                                                         }
                                                     }}
                                                     aria-label="Altura piso a techo"
-                                                    className="w-16 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-right font-mono text-[10px] text-cyan-300 outline-none focus:border-cyan-500"
+                                                    className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-1.5 py-1 text-right font-mono text-[10px] text-cyan-300 outline-none focus:border-cyan-500"
                                                 />
                                                 <span>m</span>
                                             </span>
                                         </label>
                                     )}
                                     {activeScene && floorsSorted.length > 1 && (
-                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-400">
+                                        <label className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400">
                                             <span>Copiar plano de</span>
                                             <select
                                                 value=""
@@ -934,7 +934,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                                     event.target.value = '';
                                                 }}
                                                 aria-label="Copiar plano de otro piso"
-                                                className="min-w-0 max-w-28 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-[10px] text-cyan-300 outline-none focus:border-cyan-500 disabled:opacity-50"
+                                                className="min-w-0 max-w-28 rounded border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950 px-1.5 py-1 text-[10px] text-cyan-300 outline-none focus:border-cyan-500 disabled:opacity-50"
                                             >
                                                 <option value="">
                                                     {isReusingFloorPlan ? 'Copiando…' : 'Elegir piso…'}
@@ -952,21 +952,21 @@ export const EditorLayout = memo(function EditorLayout() {
                                     <div className="grid grid-cols-2 gap-1">
                                         <button
                                             onClick={() => { handleAddFloorAbove(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
                                             title="Agregar piso arriba"
                                         >
                                             <span>↑</span> Piso arriba
                                         </button>
                                         <button
                                             onClick={() => { handleAddBasement(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
                                             title="Agregar sótano"
                                         >
                                             <span>↓</span> Sótano
                                         </button>
                                         <button
                                             onClick={() => { handleDuplicateFloor(); setShowFloorPanel(false); }}
-                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-100"
+                                            className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-slate-600 dark:text-slate-400 hover:bg-slate-700/50 hover:text-slate-900 dark:text-slate-100"
                                             title="Duplicar piso activo"
                                         >
                                             <span>⧉</span> Duplicar
@@ -991,7 +991,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={() => undo()}
                         disabled={!historyCanUndo}
                         title="Deshacer (Ctrl+Z)"
-                        className="rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                         ↶
                     </button>
@@ -999,7 +999,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={() => redo()}
                         disabled={!historyCanRedo}
                         title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
-                        className="rounded border border-gray-700/60 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="rounded border border-gray-300 dark:border-gray-700/60 px-2 py-1 text-xs text-slate-600 dark:text-gray-400 transition-colors hover:border-slate-400 dark:hover:border-gray-600 hover:text-slate-800 dark:hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                         ↷
                     </button>
@@ -1010,8 +1010,8 @@ export const EditorLayout = memo(function EditorLayout() {
                 <button
                     onClick={toggle3DView}
                     className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all ${show3DView
-                        ? 'bg-purple-700/80 text-purple-200'
-                        : 'bg-cyan-700/80 text-cyan-200 hover:bg-cyan-600/80'
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-700/80 dark:text-purple-200'
+                        : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-700/80 dark:text-cyan-200 dark:hover:bg-cyan-600/80'
                         }`}
                     title={
                         show3DView ? 'Cambiar a vista 2D' : 'Cambiar a vista 3D'
@@ -1024,7 +1024,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         onClick={toggleRoof}
                         className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-all ${showRoof
                             ? 'bg-slate-700 text-slate-100'
-                            : 'bg-slate-900/70 text-slate-400 hover:bg-slate-800'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:bg-slate-800'
                             }`}
                         title={showRoof ? 'Ocultar techo 3D' : 'Mostrar techo 3D'}
                     >
@@ -1072,7 +1072,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         id="dialux-btn-calculo-ct"
                         onClick={() => setShowWireCalc(true)}
                         disabled={!activeScene}
-                        className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
+                        className="flex items-center gap-1.5 rounded border border-cyan-200 dark:border-cyan-700/40 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-700 dark:text-cyan-100 transition-all hover:bg-cyan-100 dark:hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
                         title={selectedRoom ? `Cálculo CT — ${selectedRoom.name}` : 'Selecciona un ambiente, una luminaria o un cable (en el panel Objetos) para ver su Cálculo CT'}
                     >
                         <Calculator size={13} />
@@ -1085,7 +1085,7 @@ export const EditorLayout = memo(function EditorLayout() {
                             ref={exportBtnRef}
                             onClick={() => setShowExportMenu((prev) => !prev)}
                             disabled={!project}
-                            className="flex items-center gap-1.5 rounded border border-cyan-700/40 bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-100 transition-all hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
+                            className="flex items-center gap-1.5 rounded border border-cyan-200 dark:border-cyan-700/40 bg-cyan-50 dark:bg-cyan-950/60 px-2 py-1.5 text-xs text-cyan-700 dark:text-cyan-100 transition-all hover:bg-cyan-100 dark:hover:bg-cyan-900/70 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3"
                             title="Exportar proyecto">
                             <Download size={13} />
                             <span className="hidden sm:inline">
@@ -1113,7 +1113,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                         handleExportPdf();
                                     }}
                                     disabled={!project || isExporting}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 dark:text-slate-100 transition hover:bg-cyan-900/50 disabled:cursor-not-allowed disabled:opacity-40">
                                     <FileText size={13} />
                                     Exportar PDF
                                 </button>
@@ -1125,7 +1125,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                         setShowDxfExportDialog(true);
                                     }}
                                     disabled={!project}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-900 dark:text-slate-100 transition hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-40">
                                     <FileCode size={13} />
                                     Exportar DXF
                                 </button>
@@ -1157,7 +1157,7 @@ export const EditorLayout = memo(function EditorLayout() {
                         className="relative flex h-full w-full flex-1 flex-col overflow-hidden"
                         style={{ display: show3DView ? 'none' : 'flex' }}>
                         <MlightcadCanvas2D isVisible={!show3DView} />
-                        <div className="pointer-events-none absolute top-1 left-1 rounded border border-cyan-900/30 bg-slate-900/60 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-cyan-800">
+                        <div className="pointer-events-none absolute top-1 left-1 rounded border border-cyan-900/30 bg-slate-200 dark:bg-slate-900/60 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-cyan-800">
                             2D - mlightcad
                         </div>
                         <MlightcadLayerPanel />
@@ -1184,12 +1184,12 @@ export const EditorLayout = memo(function EditorLayout() {
             <DxfExportDialog open={showDxfExportDialog} onOpenChange={setShowDxfExportDialog} />
 
             <Dialog open={resultsModalOpen} onOpenChange={setResultsModalOpen}>
-                <DialogContent className="flex h-[96dvh] w-[calc(100vw-1rem)] max-w-[1600px] flex-col gap-0 overflow-hidden border-slate-800 bg-[#090b10] p-0 text-slate-100 sm:h-[94dvh] sm:w-[96vw] sm:max-w-[1600px]">
-                    <DialogHeader className="shrink-0 border-b border-slate-800/80 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5">
-                        <DialogTitle className="text-base font-semibold tracking-tight text-white sm:text-lg">
+                <DialogContent className="flex h-[96dvh] w-[calc(100vw-1rem)] max-w-[1600px] flex-col gap-0 overflow-hidden border-slate-300 dark:border-slate-800 bg-gray-100 dark:bg-[#090b10] p-0 text-slate-900 dark:text-slate-100 sm:h-[94dvh] sm:w-[96vw] sm:max-w-[1600px]">
+                    <DialogHeader className="shrink-0 border-b border-slate-300 dark:border-slate-800/80 px-4 py-4 pr-12 text-left sm:px-6 sm:py-5">
+                        <DialogTitle className="text-base font-semibold tracking-tight text-slate-900 dark:text-white sm:text-lg">
                             Resultados de iluminacion por recinto
                         </DialogTitle>
-                        <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-400 sm:text-sm">
+                        <DialogDescription className="max-w-3xl text-xs leading-relaxed text-slate-600 dark:text-slate-400 sm:text-sm">
                             Se captura la luminaria insertada en cada espacio y
                             se resume el calculo en una tabla.
                         </DialogDescription>

@@ -429,7 +429,11 @@ export const useEditorStore = create<EditorState>()(
             selectedFixtureIds: [],
             fixtureTemplate: {
                 fixtureType: 'recessed',
-                fixtureShape: 'round',
+                // 'rectangular' es el default seguro hasta que el usuario elija
+                // un producto real del catálogo — 'round' aquí hacía que toda
+                // luminaria colocada sin producto seleccionado se dibujara como
+                // círculo, aunque terminara siendo un panel/lineal.
+                fixtureShape: 'rectangular',
                 lumens: 4000,
                 efficiency: 0.8,
                 lightColor: '#fff5e1',

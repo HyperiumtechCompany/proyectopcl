@@ -202,7 +202,7 @@ export function RoomLightingSection({
                 step={0.005}
                 onChange={(value) => onUpdate({ marginalZone: value })}
             />
-            <div className="border-b border-gray-800/40 pb-1.5">
+            <div className="border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                         type="checkbox"
@@ -216,7 +216,7 @@ export function RoomLightingSection({
                             })
                         }
                     />
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-500">
                         UGR manual (reemplaza al calculado)
                     </span>
                 </label>
@@ -232,7 +232,7 @@ export function RoomLightingSection({
                         />
                     </div>
                 )}
-                <p className="mt-1 text-[9px] text-gray-600">
+                <p className="mt-1 text-[9px] text-gray-600 dark:text-gray-600">
                     Solo cuando el motor no puede evaluar (todas las
                     luminarias fuera del rango H/R≤2, "No evaluado") —
                     declara aquí el valor de referencia (ej. de un informe
@@ -279,8 +279,8 @@ export function RoomLightingSection({
                 label="Cant. simetría"
                 value={`${inputs.roundedQuantity}`}
             />
-            <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
-                <span className="text-[10px] text-gray-500">
+            <div className="flex items-center justify-between border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
+                <span className="text-[10px] text-gray-500 dark:text-gray-500">
                     Cumple normativa
                 </span>
                 {fixturesInRoom.length >= inputs.roundedQuantity ? (
@@ -294,7 +294,7 @@ export function RoomLightingSection({
                     </span>
                 )}
             </div>
-            <p className="pt-1 text-[9px] text-gray-600">
+            <p className="pt-1 text-[9px] text-gray-600 dark:text-gray-600">
                 Botón "Cálculo CT" disponible en la barra superior (junto a
                 Calcular) cuando este ambiente está seleccionado.
             </p>

@@ -157,7 +157,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
     return (
         <div className="flex flex-col gap-2 text-xs">
             {renderArchitectureTabs && (
-                <div className="mb-1 grid grid-cols-3 gap-1 rounded border border-gray-800 bg-gray-950/30 p-1">
+                <div className="mb-1 grid grid-cols-3 gap-1 rounded border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-950/30 p-1">
                     {[
                         {
                             id: 'corridors' as const,
@@ -181,8 +181,8 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                             onClick={() => setArchitectureTab(tab.id)}
                             className={`min-w-0 rounded px-1.5 py-1 text-[9px] transition-colors ${
                                 architectureTab === tab.id
-                                    ? 'bg-cyan-900/40 text-cyan-200 ring-1 ring-cyan-600/30'
-                                    : 'text-gray-500 hover:bg-gray-800/70 hover:text-gray-200'
+                                    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-500 dark:bg-cyan-900/40 dark:text-cyan-200 dark:ring-cyan-600/30'
+                                    : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-gray-500 dark:hover:bg-gray-800/70 dark:hover:text-gray-200'
                             }`}
                         >
                             <span className="block truncate">{tab.label}</span>
@@ -212,12 +212,12 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 onClick={() => setCorridor(item.template)}
                                 className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-cyan-900/30 text-cyan-300 ring-1 ring-cyan-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-500 dark:bg-cyan-900/30 dark:text-cyan-300 dark:ring-cyan-600/30'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
                                 <span
-                                    className={`shrink-0 ${isActive ? 'text-cyan-400' : 'text-gray-500'}`}
+                                    className={`shrink-0 ${isActive ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-gray-500'}`}
                                 >
                                     {item.icon}
                                 </span>
@@ -225,12 +225,12 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     <p className="truncate text-[11px] leading-tight">
                                         {item.label}
                                     </p>
-                                    <p className="truncate text-[9px] leading-none text-gray-600">
+                                    <p className="truncate text-[9px] leading-none text-slate-400 dark:text-gray-500">
                                         {item.description}
                                     </p>
                                 </div>
                                 {isActive && (
-                                    <span className="shrink-0 rounded bg-cyan-900/50 px-1 py-0.5 text-[8px] text-cyan-400">
+                                    <span className="shrink-0 rounded bg-cyan-100 dark:bg-cyan-900/50 px-1 py-0.5 text-[8px] text-cyan-600 dark:text-cyan-400">
                                         ●
                                     </span>
                                 )}
@@ -241,7 +241,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
             )}
 
             {shouldShowCorridors && (shouldShowWindows || shouldShowDoors) && (
-                <div className="my-1 border-t border-gray-700/40" />
+                <div className="my-1 border-t border-gray-300 dark:border-gray-700/40" />
             )}
             {/* ── Luminarias ── */}
             {showFixtures && (
@@ -257,7 +257,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
 
             {/* ── Interruptores ── */}
             {showFixtures && showSwitches && (
-                <div className="my-1 border-t border-gray-700/40" />
+                <div className="my-1 border-t border-gray-300 dark:border-gray-700/40" />
             )}
             {showSwitches && (
                 <div className="space-y-0.5">
@@ -273,19 +273,19 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 onClick={() => setSwitch(item)}
                                 className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-violet-900/30 text-violet-300 ring-1 ring-violet-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-500 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-600/30'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
-                                <span className={`shrink-0 font-bold text-[11px] w-8 text-center ${isActive ? 'text-violet-300' : 'text-gray-500'}`}>
+                                <span className={`shrink-0 font-bold text-[11px] w-8 text-center ${isActive ? 'text-violet-600 dark:text-violet-300' : 'text-slate-400 dark:text-gray-500'}`}>
                                     {item.switchLabel}
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate text-[11px] leading-tight">{item.label}</p>
-                                    <p className="text-[9px] leading-none text-gray-600">{item.description}</p>
+                                    <p className="text-[9px] leading-none text-slate-400 dark:text-gray-500">{item.description}</p>
                                 </div>
                                 {isActive && (
-                                    <span className="shrink-0 rounded bg-violet-900/50 px-1 py-0.5 text-[8px] text-violet-400">●</span>
+                                    <span className="shrink-0 rounded bg-violet-100 dark:bg-violet-900/50 px-1 py-0.5 text-[8px] text-violet-600 dark:text-violet-400">●</span>
                                 )}
                             </button>
                         );
@@ -295,7 +295,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
 
             {/* ── Cajas de pase ── */}
             {showSwitches && showJunctionBoxes && (
-                <div className="my-1 border-t border-gray-700/40" />
+                <div className="my-1 border-t border-gray-300 dark:border-gray-700/40" />
             )}
             {showJunctionBoxes && (
                 <div className="space-y-0.5">
@@ -311,19 +311,19 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 onClick={() => setJunctionBox(item)}
                                 className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-orange-900/30 text-orange-300 ring-1 ring-orange-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-500 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-600/30'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
-                                <span className={`shrink-0 ${isActive ? 'text-orange-400' : 'text-gray-500'}`}>
+                                <span className={`shrink-0 ${isActive ? 'text-orange-600 dark:text-orange-400' : 'text-slate-400 dark:text-gray-500'}`}>
                                     {item.icon}
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate text-[11px] leading-tight">{item.label}</p>
-                                    <p className="text-[9px] leading-none text-gray-600">{item.description}</p>
+                                    <p className="text-[9px] leading-none text-slate-400 dark:text-gray-500">{item.description}</p>
                                 </div>
                                 {isActive && (
-                                    <span className="shrink-0 rounded bg-orange-900/50 px-1 py-0.5 text-[8px] text-orange-400">●</span>
+                                    <span className="shrink-0 rounded bg-orange-100 dark:bg-orange-900/50 px-1 py-0.5 text-[8px] text-orange-600 dark:text-orange-400">●</span>
                                 )}
                             </button>
                         );
@@ -333,7 +333,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
 
             {/* ── Ventanas ── */}
             {(showFixtures || showSwitches || showJunctionBoxes) && shouldShowWindows && (
-                <div className="my-1 border-t border-gray-700/40" />
+                <div className="my-1 border-t border-gray-300 dark:border-gray-700/40" />
             )}
 
             {shouldShowWindows && (
@@ -353,12 +353,12 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 onClick={() => setWindow(item.template)}
                                 className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-sky-900/30 text-sky-300 ring-1 ring-sky-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-500 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-600/30'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
                                 <span
-                                    className={`shrink-0 ${isActive ? 'text-sky-400' : 'text-gray-500'}`}
+                                    className={`shrink-0 ${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-gray-500'}`}
                                 >
                                     {item.icon}
                                 </span>
@@ -366,13 +366,13 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     <p className="truncate text-[11px] leading-tight">
                                         {item.label}
                                     </p>
-                                    <p className="text-[9px] leading-none text-gray-600">
+                                    <p className="text-[9px] leading-none text-slate-400 dark:text-gray-500">
                                         {item.material} · {item.template.width}×
                                         {item.template.height}m
                                     </p>
                                 </div>
                                 {isActive && (
-                                    <span className="shrink-0 rounded bg-sky-900/50 px-1 py-0.5 text-[8px] text-sky-400">
+                                    <span className="shrink-0 rounded bg-sky-100 dark:bg-sky-900/50 px-1 py-0.5 text-[8px] text-sky-600 dark:text-sky-400">
                                         ●
                                     </span>
                                 )}
@@ -384,7 +384,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
 
             {/* ── Puertas ── */}
             {shouldShowWindows && shouldShowDoors && (
-                <div className="my-1 border-t border-gray-700/40" />
+                <div className="my-1 border-t border-gray-300 dark:border-gray-700/40" />
             )}
 
             {shouldShowDoors && (
@@ -404,12 +404,12 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                 onClick={() => setDoor(item.template)}
                                 className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-all duration-150 ${
                                     isActive
-                                        ? 'bg-emerald-900/30 text-emerald-300 ring-1 ring-emerald-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-600/30'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-100'
                                 }`}
                             >
                                 <span
-                                    className={`shrink-0 ${isActive ? 'text-emerald-400' : 'text-gray-500'}`}
+                                    className={`shrink-0 ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-gray-500'}`}
                                 >
                                     {item.icon}
                                 </span>
@@ -417,7 +417,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     <p className="truncate text-[11px] leading-tight">
                                         {item.label}
                                     </p>
-                                    <p className="text-[9px] leading-none text-gray-600">
+                                    <p className="text-[9px] leading-none text-slate-400 dark:text-gray-500">
                                         {item.template.width}×
                                         {item.template.height}m ·{' '}
                                         {item.template.openingDirection ===
@@ -427,7 +427,7 @@ export const CatalogPanel: React.FC<CatalogPanelProps> = ({
                                     </p>
                                 </div>
                                 {isActive && (
-                                    <span className="shrink-0 rounded bg-emerald-900/50 px-1 py-0.5 text-[8px] text-emerald-400">
+                                    <span className="shrink-0 rounded bg-emerald-100 dark:bg-emerald-900/50 px-1 py-0.5 text-[8px] text-emerald-600 dark:text-emerald-400">
                                         ●
                                     </span>
                                 )}

@@ -65,21 +65,21 @@ export const MlightcadLayerPanel: React.FC = () => {
 
     if (!isOpen) {
         return (
-            <button type="button" onClick={() => setIsOpen(true)} title="Capas nativas del archivo CAD" className="absolute bottom-16 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/60 bg-slate-900/90 text-slate-400 shadow-lg backdrop-blur-sm transition-all hover:border-cyan-700/60 hover:text-cyan-300">
+            <button type="button" onClick={() => setIsOpen(true)} title="Capas nativas del archivo CAD" className="absolute bottom-16 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700/60 bg-slate-200 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 shadow-lg backdrop-blur-sm transition-all hover:border-cyan-700/60 hover:text-cyan-300">
                 <Layers size={14} />
             </button>
         );
     }
 
     return (
-        <div className="absolute bottom-16 left-3 z-40 flex max-h-80 w-64 flex-col overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/95 shadow-2xl backdrop-blur">
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-800/60 px-3 py-2">
+        <div className="absolute bottom-16 left-3 z-40 flex max-h-80 w-64 flex-col overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700/70 bg-slate-200 dark:bg-slate-900/95 shadow-2xl backdrop-blur">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 dark:border-slate-800/60 px-3 py-2">
                 <div className="flex items-center gap-2">
                     <Layers size={12} className="text-cyan-500" />
-                    <span className="text-[11px] font-semibold tracking-wide text-slate-200">Capas del archivo CAD</span>
+                    <span className="text-[11px] font-semibold tracking-wide text-slate-800 dark:text-slate-200">Capas del archivo CAD</span>
                     <span className="font-mono text-[9px] text-slate-500">({layers.length})</span>
                 </div>
-                <button type="button" onClick={() => setIsOpen(false)} className="rounded p-0.5 text-slate-600 transition-colors hover:text-slate-300"><X size={12} /></button>
+                <button type="button" onClick={() => setIsOpen(false)} className="rounded p-0.5 text-slate-600 transition-colors hover:text-slate-700 dark:text-slate-300"><X size={12} /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -89,15 +89,15 @@ export const MlightcadLayerPanel: React.FC = () => {
                         <p className="text-[10px] text-slate-600">El archivo no expone capas editables.</p>
                     </div>
                 ) : layers.map((layer, index) => (
-                    <button key={`${layer.name}-${index}`} type="button" onClick={() => toggleLayer(index)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-slate-800/50">
+                    <button key={`${layer.name}-${index}`} type="button" onClick={() => toggleLayer(index)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-slate-200 dark:bg-slate-800/50">
                         <span className="h-3 w-3 shrink-0 rounded-sm border border-white/10" style={{ backgroundColor: layer.color }} />
-                        <span className={`min-w-0 flex-1 truncate font-mono text-[11px] ${layer.isVisible ? 'text-slate-300' : 'text-slate-600 line-through'}`}>{layer.name}</span>
+                        <span className={`min-w-0 flex-1 truncate font-mono text-[11px] ${layer.isVisible ? 'text-slate-700 dark:text-slate-300' : 'text-slate-600 line-through'}`}>{layer.name}</span>
                         {layer.isVisible ? <Eye size={11} className="text-slate-500" /> : <EyeOff size={11} className="text-slate-700" />}
                     </button>
                 ))}
             </div>
 
-            {engine.activeDoc && <div className="shrink-0 border-t border-slate-800/60 px-3 py-1.5"><p className="truncate font-mono text-[9px] text-slate-600">{engine.fileName}</p></div>}
+            {engine.activeDoc && <div className="shrink-0 border-t border-slate-300 dark:border-slate-800/60 px-3 py-1.5"><p className="truncate font-mono text-[9px] text-slate-600">{engine.fileName}</p></div>}
         </div>
     );
 };

@@ -38,6 +38,63 @@ export function polygonBBox(vertices: Vertex[]): BBox {
     return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
 
+/**
+ * Centroide real de un polígono (ponderado por área, fórmula del shoelace) —
+ * a diferencia del centro del bounding box, coincide con el "centro de masa"
+ * visual del recinto incluso cuando no es un rectángulo (forma en L, recortes,
+ * ambientes irregulares). Para un rectángulo recto da el mismo resultado que
+ * el centro del bbox; para cualquier otra forma, no.
+ * Fallback: si el área sale ~0 (polígono degenerado/colineal), promedia vértices.
+ */
+export function polygonCentroid(vertices: Vertex[]): Vertex {
+    if (vertices.length === 0) return { x: 0, y: 0 };
+    if (vertices.length < 3) {
+        const n = vertices.length;
+        return {
+            x: vertices.reduce((s, v) => s + v.x, 0) / n,
+            y: vertices.reduce((s, v) => s + v.y, 0) / n,
+        };
+    }
+
+    let area = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const a = vertices[i];
+        const b = vertices[(i + 1) % vertices.length];
+        const cross = a.x * b.y - b.x * a.y;
+        area += cross;
+        cx += (a.x + b.x) * cross;
+        cy += (a.y + b.y) * cross;
+    }
+    area /= 2;
+
+    if (Math.abs(area) < 1e-9) {
+        const n = vertices.length;
+        return {
+            x: vertices.reduce((s, v) => s + v.x, 0) / n,
+            y: vertices.reduce((s, v) => s + v.y, 0) / n,
+        };
+    }
+
+    return { x: cx / (6 * area), y: cy / (6 * area) };
+}
+
+/** Ray casting estándar — true si `point` cae dentro del polígono `vertices`. */
+export function isPointInPolygon(point: Vertex, vertices: Vertex[]): boolean {
+    let inside = false;
+    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+        const vi = vertices[i];
+        const vj = vertices[j];
+        const intersects =
+            vi.y > point.y !== vj.y > point.y &&
+            point.x <
+                ((vj.x - vi.x) * (point.y - vi.y)) / (vj.y - vi.y) + vi.x;
+        if (intersects) inside = !inside;
+    }
+    return inside;
+}
+
 // ─── Posiciones de grilla centrada ────────────────────────────────────────────
 
 /**
@@ -69,18 +126,64 @@ export function calculateFixtureGridPositions(
     const marginY = W / (2 * safeRows);
     const spacingY = W / safeRows;
 
+    /**
+     * La grilla se calcula relativa al bbox (funciona bien para cualquier
+     * rectángulo recto), pero se recentra sobre el centroide REAL del
+     * polígono en vez del centro del bbox — para un rectángulo da lo mismo
+     * (shift = 0), pero para una forma en L o cualquier recinto irregular
+     * el centro del bbox puede caer sobre área que no es del recinto.
+     */
+    const isRectBbox = roomVertices.length <= 4;
+    const centroid = isRectBbox
+        ? { x: bbox.minX + L / 2, y: bbox.minY + W / 2 }
+        : polygonCentroid(roomVertices);
+    const bboxCenter = { x: bbox.minX + L / 2, y: bbox.minY + W / 2 };
+    const shift = { x: centroid.x - bboxCenter.x, y: centroid.y - bboxCenter.y };
+
     const positions: Vertex[] = [];
 
     for (let i = 0; i < safeRows; i++) {
         for (let j = 0; j < safeCols; j++) {
-            positions.push({
-                x: bbox.minX + marginX + j * spacingX,
-                y: bbox.minY + marginY + i * spacingY,
-            });
+            const raw = {
+                x: bbox.minX + marginX + j * spacingX + shift.x,
+                y: bbox.minY + marginY + i * spacingY + shift.y,
+            };
+            positions.push(
+                roomVertices.length > 4
+                    ? clampInsidePolygon(raw, roomVertices, centroid)
+                    : raw,
+            );
         }
     }
 
     return positions;
+}
+
+/**
+ * Si `point` cae fuera del polígono (recinto no rectangular, ej. forma en L),
+ * lo desplaza en línea recta hacia el centroide hasta quedar dentro — evita
+ * colocar luminarias sobre un área que visualmente no pertenece al recinto.
+ * Si ni el propio centroide está dentro (polígono muy cóncavo), lo deja ahí:
+ * es la mejor aproximación posible sin un algoritmo de empaquetado completo.
+ */
+function clampInsidePolygon(
+    point: Vertex,
+    vertices: Vertex[],
+    centroid: Vertex,
+): Vertex {
+    if (isPointInPolygon(point, vertices)) return point;
+    if (!isPointInPolygon(centroid, vertices)) return centroid;
+
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const candidate = {
+            x: point.x + (centroid.x - point.x) * t,
+            y: point.y + (centroid.y - point.y) * t,
+        };
+        if (isPointInPolygon(candidate, vertices)) return candidate;
+    }
+    return centroid;
 }
 
 // ─── Centrado de objetos sobre paredes ───────────────────────────────────────
@@ -218,7 +321,7 @@ export function buildFixtureGridObjects(
         power:        tmpl.power,
         efficiency:   tmpl.efficiency  ?? 0.8,
         fixtureType:  tmpl.fixtureType ?? 'recessed',
-        fixtureShape: tmpl.fixtureShape ?? 'round',
+        fixtureShape: tmpl.fixtureShape ?? 'rectangular',
         lightColor:   tmpl.lightColor  ?? '#fff5e1',
         brand:         tmpl.brand,
         articleNumber: tmpl.articleNumber,

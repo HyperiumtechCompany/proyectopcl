@@ -49,20 +49,20 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                         <div className="relative">
                             <Search
                                 size={14}
-                                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-600 dark:text-slate-400 dark:text-slate-500"
                             />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Buscar luminaria, código…"
-                                className="h-10 w-full rounded-lg border border-slate-300 bg-white pr-10 pl-9 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                className="h-10 w-full rounded-lg border border-slate-300 bg-white pr-10 pl-9 text-sm text-slate-900 placeholder:text-slate-600 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-slate-900 dark:placeholder:text-slate-600"
                             />
                             {search && (
                                 <button
                                     type="button"
                                     onClick={() => setSearch('')}
-                                    className="absolute top-1/2 right-3 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                    className="absolute top-1/2 right-3 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                                 >
                                     <X size={14} />
                                 </button>
@@ -79,7 +79,7 @@ export const ImportLuminairesModal: React.FC<ImportLuminairesModalProps> = ({
                                     className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                                         brand === b
                                             ? 'border-cyan-500 bg-cyan-50 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-200'
-                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200'
+                                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200'
                                     }`}
                                 >
                                     {b}

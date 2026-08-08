@@ -70,8 +70,8 @@ export function RoomFixtureGridSection({
     const generationGrid = gridCountMismatch ? suggestedGrid : { rows: gridRows, columns: gridCols };
 
     return (
-        <div className="mt-4 border-t border-gray-800/80 pt-3">
-            <div className="flex items-center gap-2 text-emerald-500">
+        <div className="mt-4 border-t border-gray-300 dark:border-gray-800/80 pt-3">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500">
                 <Zap size={12} />
                 <p className="text-[10px] font-semibold uppercase">Generar Grilla de Focos</p>
             </div>
@@ -81,23 +81,23 @@ export function RoomFixtureGridSection({
                     toolBeforeGridPickerRef.current = store.ui.activeTool;
                     setShowGridFixturePicker(true);
                 }}
-                className="mt-2 flex w-full items-center gap-2 rounded border border-purple-700/30 bg-purple-950/30 px-2 py-1.5 text-left transition-colors hover:bg-purple-900/30"
+                className="mt-2 flex w-full items-center gap-2 rounded border border-purple-300 bg-purple-50 px-2 py-1.5 text-left transition-colors hover:bg-purple-100 dark:border-purple-700/30 dark:bg-purple-950/30 dark:hover:bg-purple-900/30"
                 title="Elegir el tipo de foco a instalar en esta grilla"
             >
-                <Layers size={12} className="shrink-0 text-purple-300" />
+                <Layers size={12} className="shrink-0 text-purple-600 dark:text-purple-300" />
                 <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[10px] text-purple-200">{gridFixture.name ?? 'Foco genérico'}</span>
-                    <span className="block text-[9px] leading-none text-gray-500">{gridFixtureLumens.toLocaleString()} lm</span>
+                    <span className="block truncate text-[10px] text-purple-900 dark:text-purple-200">{gridFixture.name ?? 'Foco genérico'}</span>
+                    <span className="block text-[9px] leading-none text-slate-500 dark:text-gray-500">{gridFixtureLumens.toLocaleString()} lm</span>
                 </span>
-                <span className="shrink-0 text-[9px] text-purple-400">Cambiar</span>
+                <span className="shrink-0 text-[9px] text-purple-600 dark:text-purple-400">Cambiar</span>
             </button>
             <div className="mt-2 grid grid-cols-2 gap-2">
                 <EditField label="Filas" value={gridRows} min={1} max={20} step={1} onChange={setGridRows} />
                 <EditField label="Columnas" value={gridCols} min={1} max={20} step={1} onChange={setGridCols} />
             </div>
             {gridCountMismatch && (
-                <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
-                    <span className="text-[9px] leading-snug text-amber-400">
+                <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5">
+                    <span className="text-[9px] leading-snug text-amber-700 dark:text-amber-400">
                         {gridRows}×{gridCols} = {gridRows * gridCols}; el cálculo recomienda {gridRoundedQuantity} con "
                         {gridFixture.name ?? 'este foco'}" ({gridFixtureLumens.toLocaleString()} lm)
                     </span>

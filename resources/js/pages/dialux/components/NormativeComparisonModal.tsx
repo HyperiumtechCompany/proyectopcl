@@ -35,7 +35,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
         const cfg = {
             mandatory:   { label: 'Obligatoria', cls: 'bg-red-950/60 text-red-300 border-red-800/50' },
             recommended: { label: 'Recomendada', cls: 'bg-blue-950/60 text-blue-300 border-blue-800/50' },
-            reference:   { label: 'Referencia',  cls: 'bg-slate-800/60 text-slate-400 border-slate-700/50' },
+            reference:   { label: 'Referencia',  cls: 'bg-slate-200 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700/50' },
         }[legalStatus];
         return (
             <div className="space-y-0.5">
@@ -49,21 +49,21 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
-            <div className="relative mx-4 w-full max-w-2xl rounded-2xl border border-slate-700/60 bg-[#0f1117] shadow-2xl">
+            <div className="relative mx-4 w-full max-w-2xl rounded-2xl border border-slate-300 dark:border-slate-700/60 bg-[#0f1117] shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+                <div className="flex items-center justify-between border-b border-slate-300 dark:border-slate-800 px-5 py-4">
                     <div className="flex items-center gap-2.5">
                         <Scale size={16} className="text-blue-400" />
                         <div>
                             <h2 className="text-sm font-bold text-white">Comparación Normativa</h2>
                             <p className="text-[10px] text-slate-500">
-                                Actividad: <span className="text-slate-300">{activitySearchText}</span>
+                                Actividad: <span className="text-slate-700 dark:text-slate-300">{activitySearchText}</span>
                             </p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+                        className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 hover:text-slate-700 dark:text-slate-300"
                     >
                         <X size={15} />
                     </button>
@@ -73,8 +73,8 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                 <div className="overflow-x-auto p-5">
                     <table className="w-full text-left text-xs">
                         <thead>
-                            <tr className="border-b border-slate-800">
-                                <th className="pb-3 pr-3 font-semibold text-slate-400">Parámetro</th>
+                            <tr className="border-b border-slate-300 dark:border-slate-800">
+                                <th className="pb-3 pr-3 font-semibold text-slate-600 dark:text-slate-400">Parámetro</th>
                                 {comparison.map((entry) => (
                                     <th key={entry.standard} className="pb-3 px-2 text-center">
                                         {legalBadge(entry.legalStatus, entry.standard)}
@@ -87,7 +87,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
                             <tr>
-                                <td className="py-2.5 pr-3 text-slate-400">Iluminancia (Em)</td>
+                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">Iluminancia (Em)</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center">
                                         {entry.illuminanceLux > 0 ? (
@@ -105,7 +105,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 ))}
                             </tr>
                             <tr>
-                                <td className="py-2.5 pr-3 text-slate-400">UGR máximo</td>
+                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">UGR máximo</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.ugr !== null ? (
@@ -117,7 +117,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 ))}
                             </tr>
                             <tr>
-                                <td className="py-2.5 pr-3 text-slate-400">Uniformidad (Uo)</td>
+                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">Uniformidad (Uo)</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.uniformity !== null ? (
@@ -129,7 +129,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 ))}
                             </tr>
                             <tr>
-                                <td className="py-2.5 pr-3 text-slate-400">IRC (Ra)</td>
+                                <td className="py-2.5 pr-3 text-slate-600 dark:text-slate-400">IRC (Ra)</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center font-mono">
                                         {entry.ra !== null ? (
@@ -141,7 +141,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                                 ))}
                             </tr>
                             <tr>
-                                <td className="py-2.5 pr-3 align-top text-slate-400">Requisitos especiales</td>
+                                <td className="py-2.5 pr-3 align-top text-slate-600 dark:text-slate-400">Requisitos especiales</td>
                                 {comparison.map((entry) => (
                                     <td key={entry.standard} className="px-2 py-2.5 text-center">
                                         {entry.specificRequirements ? (
@@ -170,7 +170,7 @@ export const NormativeComparisonModal: React.FC<NormativeComparisonModalProps> =
                 )}
 
                 {/* Disclaimers */}
-                <div className="border-t border-slate-800/60 px-5 py-3">
+                <div className="border-t border-slate-300 dark:border-slate-800/60 px-5 py-3">
                     <p className="text-[8.5px] leading-relaxed text-slate-700">
                         Los valores mostrados son parámetros técnicos fácticos extraídos de normas de dominio público.
                         EN 12464-1:2021 (CEN/TC 169) · IES HB-10-17 (Illuminating Engineering Society) · RNE EM.010 (MVCS Perú).

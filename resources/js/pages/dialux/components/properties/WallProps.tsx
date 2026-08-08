@@ -226,14 +226,14 @@ const WallInteriorLightingSection: React.FC<{
     };
 
     return (
-        <div className="mt-3 space-y-2.5 border-t border-gray-700/50 pt-3">
+        <div className="mt-3 space-y-2.5 border-t border-gray-300 dark:border-gray-700/50 pt-3">
             <div className="flex items-center gap-2">
                 <Zap size={12} className="text-yellow-400" />
-                <p className="text-[10px] font-semibold tracking-widest text-gray-500 uppercase">
+                <p className="text-[10px] font-semibold tracking-widest text-gray-500 dark:text-gray-500 uppercase">
                     Normativa del ambiente
                 </p>
             </div>
-            <p className="text-[9px] leading-snug text-gray-600">
+            <p className="text-[9px] leading-snug text-gray-600 dark:text-gray-600">
                 Parámetros y verificación normativa del ambiente seleccionado.
             </p>
 
@@ -345,7 +345,7 @@ const WallInteriorLightingSection: React.FC<{
                 }}
             />
 
-            <div className="border-b border-gray-800/40 pb-1.5">
+            <div className="border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                         type="checkbox"
@@ -359,7 +359,7 @@ const WallInteriorLightingSection: React.FC<{
                             })
                         }
                     />
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-500">
                         Límite UGR manual (anula el de la actividad)
                     </span>
                 </label>
@@ -377,14 +377,14 @@ const WallInteriorLightingSection: React.FC<{
                         />
                     </div>
                 )}
-                <p className="mt-1 text-[9px] text-gray-600">
+                <p className="mt-1 text-[9px] text-gray-600 dark:text-gray-600">
                     Igual que Iluminancia: la actividad "{normativeActivity ??
                         '—'}" trae su propio límite — si tu iluminancia ya
                     está sobreescrita a mano, alineá el límite UGR también.
                 </p>
             </div>
 
-            <div className="border-b border-gray-800/40 pb-1.5">
+            <div className="border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input
                         type="checkbox"
@@ -398,7 +398,7 @@ const WallInteriorLightingSection: React.FC<{
                             })
                         }
                     />
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-500">
                         Objetivo Uo manual (anula el de la actividad)
                     </span>
                 </label>
@@ -416,7 +416,7 @@ const WallInteriorLightingSection: React.FC<{
                         />
                     </div>
                 )}
-                <p className="mt-1 text-[9px] text-gray-600">
+                <p className="mt-1 text-[9px] text-gray-600 dark:text-gray-600">
                     Mismo caso que el límite UGR de arriba, para Uo.
                 </p>
             </div>
@@ -452,7 +452,7 @@ const WallInteriorLightingSection: React.FC<{
                     ? getRoomManualUgr(ambientRoom)
                     : (ambientConfig?.manualUgr ?? null);
                 return (
-                    <div className="border-b border-gray-800/40 pb-1.5">
+                    <div className="border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
                         <label className="flex cursor-pointer items-center gap-1.5">
                             <input
                                 type="checkbox"
@@ -466,7 +466,7 @@ const WallInteriorLightingSection: React.FC<{
                                     })
                                 }
                             />
-                            <span className="text-[10px] text-gray-500">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-500">
                                 UGR manual (reemplaza al calculado)
                             </span>
                         </label>
@@ -484,7 +484,7 @@ const WallInteriorLightingSection: React.FC<{
                                 />
                             </div>
                         )}
-                        <p className="mt-1 text-[9px] text-gray-600">
+                        <p className="mt-1 text-[9px] text-gray-600 dark:text-gray-600">
                             Solo cuando el motor no puede evaluar (H/R≤2, "No
                             evaluado") — declara aquí el valor de referencia.
                         </p>
@@ -548,7 +548,7 @@ const WallInteriorLightingSection: React.FC<{
             />
             <SelectField
                 label="Forma foco"
-                value={wall.fixtureShape ?? 'round'}
+                value={wall.fixtureShape ?? 'rectangular'}
                 options={[
                     { value: 'round', label: 'Redonda' },
                     { value: 'square', label: 'Cuadrada' },
@@ -561,7 +561,7 @@ const WallInteriorLightingSection: React.FC<{
             />
 
             {SHOW_WALL_FIXTURE_GRID && (
-                <div className="mt-3 border-t border-gray-700/50 pt-2">
+                <div className="mt-3 border-t border-gray-300 dark:border-gray-700/50 pt-2">
                     <div className="mb-2 flex items-center gap-2 text-emerald-500">
                         <Grid size={12} />
                         <p className="text-[10px] font-semibold uppercase">
@@ -614,7 +614,7 @@ const WallInteriorLightingSection: React.FC<{
                         <Grid size={11} />
                         Generar en Pared {wallGridRows}×{wallGridCols}
                     </button>
-                    <p className="mt-1 text-[9px] leading-snug text-gray-500">
+                    <p className="mt-1 text-[9px] leading-snug text-gray-500 dark:text-gray-500">
                         Genera una grilla de focos pegada a la superficie de
                         esta pared (ej. apliques).
                     </p>
@@ -836,7 +836,7 @@ export const WallProps: React.FC<{
 
     return (
         <SectionWrapper
-            icon={<Minus size={12} className="text-slate-400" />}
+            icon={<Minus size={12} className="text-slate-600 dark:text-slate-400" />}
             label={ambientMatch ? 'Ambiente • Pared' : 'Pared'}
         >
             {/* Orden solicitado: área (del ambiente que delimita esta pared,
@@ -909,7 +909,7 @@ export const WallProps: React.FC<{
             {/* Sección de ambiente (grilla de focos) */}
             {ambientMatch && (
                 <>
-                    <div className="my-1 border-t border-gray-700/50 pt-1">
+                    <div className="my-1 border-t border-gray-300 dark:border-gray-700/50 pt-1">
                         <p className="mb-1 text-[10px] font-semibold text-cyan-500">
                             Ambiente: {ambientMatch.name}
                         </p>
@@ -945,7 +945,7 @@ export const WallProps: React.FC<{
                             </button>
                         )}
                     </div>
-                    <div className="my-2 space-y-1 border-t border-gray-800/80 pt-2">
+                    <div className="my-2 space-y-1 border-t border-gray-300 dark:border-gray-800/80 pt-2">
                         <div className="flex items-center gap-2 text-emerald-500">
                             <Grid size={12} />
                             <p className="text-[10px] font-semibold uppercase">
@@ -970,7 +970,7 @@ export const WallProps: React.FC<{
                                 <span className="block truncate text-[10px] text-purple-200">
                                     {ceilingFixture.name ?? 'Foco genérico'}
                                 </span>
-                                <span className="block text-[9px] leading-none text-gray-500">
+                                <span className="block text-[9px] leading-none text-gray-500 dark:text-gray-500">
                                     {ceilingFixtureLumens.toLocaleString()} lm
                                 </span>
                             </span>
@@ -1085,13 +1085,13 @@ export const WallProps: React.FC<{
                             Generar en Techo de Ambiente {ceilingGridRows}x
                             {ceilingGridCols}
                         </button>
-                        <p className="mt-1 text-[9px] leading-snug text-gray-500">
+                        <p className="mt-1 text-[9px] leading-snug text-gray-500 dark:text-gray-500">
                             Genera luminarias en el área de techo delimitada por
                             esta pared.
                         </p>
                     </div>
 
-                    <div className="my-2 space-y-2 border-t border-gray-800/80 pt-3">
+                    <div className="my-2 space-y-2 border-t border-gray-300 dark:border-gray-800/80 pt-3">
                         <div className="flex items-center gap-2 text-emerald-400">
                             <PlugZap size={12} />
                             <p className="text-[10px] font-semibold uppercase">
@@ -1238,7 +1238,7 @@ export const WallProps: React.FC<{
                                 ambiente
                             </button>
                         )}
-                        <p className="text-[9px] leading-snug text-gray-500">
+                        <p className="text-[9px] leading-snug text-gray-500 dark:text-gray-500">
                             Los puntos generados aparecerán sobre el perímetro
                             del ambiente en la vista 2D.
                         </p>

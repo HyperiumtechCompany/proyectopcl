@@ -256,7 +256,7 @@ export function CtPanelOutputsDialog({
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {outletValidations.map(validation => (
-                                            <tr key={validation.roomId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
+                                            <tr key={validation.roomId} className="hover:bg-slate-50/50 dark:hover:bg-slate-200 dark:bg-slate-900/20">
                                                 <td className="px-3 py-2 font-medium">{validation.roomName}</td>
                                                 <td className="px-3 py-2 font-mono text-slate-500">{validation.outletUse === 'exterior' ? `${validation.perimeter.toFixed(2)} m` : `${validation.area.toFixed(2)} m²`}</td>
                                                 <td className="px-3 py-2 capitalize">{validation.outletUse}</td>

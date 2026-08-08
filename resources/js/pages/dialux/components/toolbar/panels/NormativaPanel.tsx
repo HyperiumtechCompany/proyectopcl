@@ -67,36 +67,36 @@ export const NormativaPanel: React.FC<NormativaPanelProps> = ({
                                 setSelectedKey(standard.key);
                                 setApplied(false);
                             }}
-                            className={`flex items-start gap-2 rounded px-2.5 py-2 text-left transition-colors ${selectedKey === standard.key ? 'bg-emerald-900/25 ring-1 ring-emerald-700/40' : 'hover:bg-gray-700/40'}`}
+                            className={`flex items-start gap-2 rounded px-2.5 py-2 text-left transition-colors ${selectedKey === standard.key ? 'bg-emerald-50 dark:bg-emerald-900/25 ring-1 ring-emerald-300 dark:ring-emerald-700/40' : 'hover:bg-slate-200 dark:hover:bg-gray-700/40'}`}
                         >
                             <div
-                                className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${selectedKey === standard.key ? 'bg-emerald-400' : 'bg-gray-600'}`}
+                                className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${selectedKey === standard.key ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-slate-300 dark:bg-gray-600'}`}
                             />
                             <div>
                                 <p
-                                    className={`text-[11px] font-semibold ${selectedKey === standard.key ? 'text-emerald-300' : 'text-gray-300'}`}
+                                    className={`text-[11px] font-semibold ${selectedKey === standard.key ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-gray-300'}`}
                                 >
                                     {standard.label}
                                 </p>
-                                <p className="text-[9.5px] leading-snug text-gray-500">
+                                <p className="text-[9.5px] leading-snug text-slate-500 dark:text-gray-500">
                                     {standard.region}
                                 </p>
                             </div>
                             {selectedKey === standard.key && (
                                 <CheckCircle2
                                     size={12}
-                                    className="mt-0.5 ml-auto shrink-0 text-emerald-400"
+                                    className="mt-0.5 ml-auto shrink-0 text-emerald-600 dark:text-emerald-400"
                                 />
                             )}
                         </button>
                     ))}
                 </div>
-                <p className="mt-2 px-1 text-[9.5px] leading-snug text-gray-600">
+                <p className="mt-2 px-1 text-[9.5px] leading-snug text-slate-600 dark:text-gray-400">
                     {selectedStandard.fullName}
                 </p>
             </PanelCard>
 
-            <div className="rounded-lg border border-blue-800/40 bg-blue-950/20 px-2.5 py-2 text-[9.5px] leading-snug text-blue-200/80">
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-2 text-[9.5px] leading-snug text-blue-800 dark:text-blue-200/80">
                 Aquí se define únicamente la norma general. El área, la
                 subsección, la aplicación y los lux se configuran en las
                 propiedades de cada ambiente.

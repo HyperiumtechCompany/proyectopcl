@@ -8,10 +8,7 @@ import type {
     LightSwitch,
 } from '@/pages/dialux/hooks/useEditorStore';
 import { CONDUCTOR_WIRE_OPTIONS } from '@/pages/dialux/hooks/types';
-import {
-    LUMINAIRE_BRANDS,
-    type LuminaireBrand,
-} from '../../constants';
+
 import { CatalogPanel } from '../../CatalogPanel';
 import { ChipFilter } from '../panelControls';
 import { PanelCard, PanelTabs, PanelToolBtn } from '../primitives';
@@ -75,7 +72,7 @@ export const LuzPanel: React.FC<{
     onOpenImportModal,
     onSetElecDevice,
 }) => {
-    const [brand, setBrand] = useState<LuminaireBrand>('Todas');
+
     const [activeSection, setActiveSection] =
         useState<InsertSection>('luminaires');
 
@@ -107,7 +104,7 @@ export const LuzPanel: React.FC<{
             className={`flex h-14 flex-col items-center justify-center gap-1 rounded border px-2 py-1.5 text-[10px] transition-colors ${
                 activeTool === item.tool
                     ? item.activeClass
-                    : 'border-gray-700/50 bg-gray-800/40 text-gray-400 hover:bg-gray-700/60 hover:text-gray-200'
+                    : 'border-slate-200 dark:border-gray-700/50 bg-slate-50 dark:bg-gray-800/40 text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/60 hover:text-slate-800 dark:hover:text-gray-200'
             }`}
         >
             <span className={`text-[12px] font-bold ${item.symbolClass}`}>
@@ -153,8 +150,8 @@ export const LuzPanel: React.FC<{
                                 />
                             </div>
                             {activeTool === 'fixture-grid' && (
-                                <div className="mt-2 grid grid-cols-2 gap-2 rounded border border-gray-700/40 bg-gray-900/40 p-2">
-                                    <label className="space-y-1 text-[10px] text-gray-500">
+                                <div className="mt-2 grid grid-cols-2 gap-2 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 p-2">
+                                    <label className="space-y-1 text-[10px] text-gray-500 dark:text-gray-500">
                                         <span>Filas</span>
                                         <input
                                             type="number"
@@ -164,10 +161,10 @@ export const LuzPanel: React.FC<{
                                             onChange={(e) =>
                                                 onSetRows(Number(e.target.value))
                                             }
-                                            className="h-7 w-full rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                                         />
                                     </label>
-                                    <label className="space-y-1 text-[10px] text-gray-500">
+                                    <label className="space-y-1 text-[10px] text-gray-500 dark:text-gray-500">
                                         <span>Columnas</span>
                                         <input
                                             type="number"
@@ -177,7 +174,7 @@ export const LuzPanel: React.FC<{
                                             onChange={(e) =>
                                                 onSetCols(Number(e.target.value))
                                             }
-                                            className="h-7 w-full rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                                     />
                                 </label>
                             </div>
@@ -188,20 +185,16 @@ export const LuzPanel: React.FC<{
                         <button
                             type="button"
                             onClick={() => onOpenImportModal?.()}
-                            className="mb-2 flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-amber-700/50 bg-amber-950/20 py-1.5 text-[10px] font-medium text-amber-300 transition-colors hover:bg-amber-900/30"
+                            className="mb-2 flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-amber-300 bg-amber-50 py-1.5 text-[10px] font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
                             title="Importar un archivo IES/LDT, crear una luminaria propia, o eliminar/compartir las tuyas"
                         >
                             <Upload size={12} />
                             Importar / crear / eliminar luminarias
                         </button>
-                        <ChipFilter
-                            options={LUMINAIRE_BRANDS}
-                            active={brand}
-                            onChange={setBrand}
-                        />
+
                         <CatalogPanel
                             filterCategory="luminaires"
-                            filterBrand={brand}
+
                             variant="compact-grid"
                             fixtureItemsPerPage={15}
                         />
@@ -233,10 +226,10 @@ export const LuzPanel: React.FC<{
                                     activeTool === 'switch' &&
                                     switchTemplate.type === item.type
                                         ? 'bg-cyan-600/25 text-cyan-200 ring-1 ring-cyan-600/30'
-                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                        : 'text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
                                 }`}
                             >
-                                <span className="w-8 shrink-0 font-mono text-[10px] text-gray-500">
+                                <span className="w-8 shrink-0 font-mono text-[10px] text-slate-400 dark:text-gray-500">
                                     {item.label}
                                 </span>
                                 <span className="truncate text-[11px]">
@@ -276,8 +269,8 @@ export const LuzPanel: React.FC<{
                                                 activeTool === 'wire' &&
                                                 wireTemplate.wireLabel ===
                                                     item.value
-                                                    ? 'border-cyan-500/50 bg-cyan-600/20 text-cyan-200'
-                                                    : 'border-gray-700/40 bg-gray-950/60 text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                                                    ? 'border-cyan-500/50 bg-cyan-600/20 text-cyan-700 dark:text-cyan-200'
+                                                    : 'border-slate-200 dark:border-gray-700/40 bg-slate-50 dark:bg-gray-950/60 text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:text-slate-900 dark:hover:text-gray-100'
                                             }`}
                                             title={`${item.label}: ${item.count} conductores`}
                                         >
@@ -286,7 +279,7 @@ export const LuzPanel: React.FC<{
                                     ),
                                 )}
                             </div>
-                            <p className="mt-2 text-[9px] text-gray-600">
+                            <p className="mt-2 text-[9px] text-slate-500 dark:text-gray-500">
                                 El cálculo de longitud de cable está en el botón "Cálculo CT" de la barra superior (selecciona un ambiente primero).
                             </p>
                 </PanelCard>
@@ -294,7 +287,7 @@ export const LuzPanel: React.FC<{
 
             {activeSection === 'equipment' && (
                 <PanelCard title="Equipos electricos">
-                            <p className="mb-2 text-[9.5px] leading-relaxed text-gray-500">
+                            <p className="mb-2 text-[9.5px] leading-relaxed text-slate-500 dark:text-gray-500">
                                 Insertar en plano. Clic = colocar libre. Clic
                                 cerca de pared = anclar.
                             </p>

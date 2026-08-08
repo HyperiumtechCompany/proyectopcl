@@ -120,8 +120,8 @@ export const ExportacionPanel: React.FC<{
                 <FilePlus size={13} />
                 <span className="text-[11px]">Nuevo documento</span>
             </Button>
-            <div className="rounded border border-gray-700/40 bg-gray-900/40 px-2 py-1.5 text-[10.5px]">
-                <span className="text-gray-500">Estado: </span>
+            <div className="rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 px-2 py-1.5 text-[10.5px]">
+                <span className="text-gray-500 dark:text-gray-500">Estado: </span>
                 <span className="font-mono text-cyan-300">
                     {hasCadDoc
                         ? (fileName ?? 'Documento activo')
@@ -152,8 +152,8 @@ export const ExportacionPanel: React.FC<{
         </PanelCard>
 
         <PanelCard title="Escala y calibración">
-            <div className="mb-2 flex items-center justify-between rounded border border-gray-700/40 bg-gray-900/40 px-2 py-1.5">
-                <span className="text-[10px] text-gray-500">Escala actual</span>
+            <div className="mb-2 flex items-center justify-between rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 px-2 py-1.5">
+                <span className="text-[10px] text-gray-500 dark:text-gray-500">Escala actual</span>
                 <span className="font-mono text-[11px] text-cyan-300">
                     {scaleConfig?.displayUnit ?? '—'}
                 </span>
@@ -171,7 +171,7 @@ export const ExportacionPanel: React.FC<{
                 <Button
                     variant="outline"
                     size="sm"
-                    className={`justify-center gap-1 border-gray-700 bg-gray-800/40 text-[10.5px] text-gray-200 hover:bg-gray-700/60 ${
+                    className={`justify-center gap-1 border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-800/40 text-[10.5px] text-gray-800 dark:text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:bg-gray-700/60 ${
                         activeTool === 'calibrate'
                             ? 'border-amber-600/60 bg-amber-900/30 text-amber-200'
                             : ''
@@ -184,7 +184,7 @@ export const ExportacionPanel: React.FC<{
                 <Button
                     variant="outline"
                     size="sm"
-                    className="justify-center gap-1 border-gray-700 bg-gray-800/40 text-[10.5px] text-gray-200 hover:bg-gray-700/60"
+                    className="justify-center gap-1 border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-800/40 text-[10.5px] text-gray-800 dark:text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:bg-gray-700/60"
                     onClick={onResetCalibration}
                 >
                     <RotateCcw size={11} />
@@ -196,7 +196,7 @@ export const ExportacionPanel: React.FC<{
         <PanelCard title="Exportar reporte">
             <Button
                 variant="outline"
-                className="mb-2 w-full justify-start gap-2 border-gray-700 bg-gray-800/40 text-gray-200 hover:bg-gray-700/60"
+                className="mb-2 w-full justify-start gap-2 border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-800/40 text-gray-800 dark:text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:bg-gray-700/60"
                 onClick={() =>
                     document.getElementById('dialux-btn-export-pdf')?.click()
                 }

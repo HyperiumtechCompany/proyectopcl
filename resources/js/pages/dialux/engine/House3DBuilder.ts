@@ -3200,7 +3200,7 @@ export class House3DBuilder {
 
         // ── Cuerpo 3D de la luminaria ──────────────────────────────────────
         let body: Mesh;
-        const shape = fixture.fixtureShape ?? 'round';
+        const shape = fixture.fixtureShape ?? 'rectangular';
 
         const makeBody = (name: string, props: FixtureBodyOptions) => {
             const w =

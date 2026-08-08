@@ -136,7 +136,7 @@ export const FixtureProps: React.FC<{
             />
             <SelectField
                 label="Forma"
-                value={fixture.fixtureShape ?? 'round'}
+                value={fixture.fixtureShape ?? 'rectangular'}
                 options={[
                     { value: 'round', label: 'Redonda' },
                     { value: 'square', label: 'Cuadrada' },
@@ -147,15 +147,15 @@ export const FixtureProps: React.FC<{
                     onUpdate({ fixtureShape: value as Fixture['fixtureShape'] })
                 }
             />
-            <div className="flex items-center justify-between border-b border-gray-800/40 pb-1.5">
-                <span className="text-[10px] text-gray-500">Color luz</span>
+            <div className="flex items-center justify-between border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
+                <span className="text-[10px] text-gray-500 dark:text-gray-500">Color luz</span>
                 <input
                     type="color"
                     value={fixture.lightColor ?? '#fff5e1'}
                     onChange={(event) =>
                         onUpdate({ lightColor: event.target.value })
                     }
-                    className="h-5 w-8 cursor-pointer rounded border border-gray-700/50 bg-transparent"
+                    className="h-5 w-8 cursor-pointer rounded border border-gray-300 dark:border-gray-700/50 bg-transparent"
                 />
             </div>
 

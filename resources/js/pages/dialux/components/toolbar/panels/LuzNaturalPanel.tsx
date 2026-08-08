@@ -59,7 +59,7 @@ export const LuzNaturalPanel: React.FC = () => {
     return (
         <div className="flex flex-col gap-2.5">
             <PanelCard title="Daylight Factor — cielo cubierto CIE">
-                <p className="mb-2 text-[9.5px] leading-snug text-gray-500">
+                <p className="mb-2 text-[9.5px] leading-snug text-gray-500 dark:text-gray-500">
                     Componente de cielo (SC) + reflejada interna (IRC) bajo el cielo cubierto estándar (CIE Standard
                     Overcast Sky) — no depende de fecha, hora ni orientación del edificio (ver
                     `hooks/cieOvercastSky.ts`). Asigna vidrio a las ventanas (panel "Ventana") y reflectancia de
@@ -74,7 +74,7 @@ export const LuzNaturalPanel: React.FC = () => {
                     {isCalculating ? <Loader2 size={13} className="animate-spin" /> : <Sun size={13} />}
                     {isCalculating ? 'Calculando...' : 'Calcular Daylight Factor'}
                 </button>
-                <p className="mt-2 text-[9.5px] leading-snug text-gray-600">
+                <p className="mt-2 text-[9.5px] leading-snug text-gray-600 dark:text-gray-600">
                     Componente reflejada externa (ERC) no modelada en este ciclo — sin geometría de obstrucción/terreno
                     exterior, el resultado es una cota inferior conservadora del DF real, nunca un falso "cumple".
                 </p>
@@ -83,7 +83,7 @@ export const LuzNaturalPanel: React.FC = () => {
             {resultsByRoom && (
                 <PanelCard title={`Resultados (${rooms.length} recinto${rooms.length === 1 ? '' : 's'})`}>
                     {rooms.length === 0 ? (
-                        <p className="text-[10px] text-gray-500">Este nivel no tiene ambientes.</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-500">Este nivel no tiene ambientes.</p>
                     ) : (
                         <div className="flex flex-col gap-2">
                             {rooms.map((room) => {
@@ -92,9 +92,9 @@ export const LuzNaturalPanel: React.FC = () => {
                                     return null;
                                 }
                                 return (
-                                    <div key={room.id} className="rounded border border-gray-700/30 p-2">
-                                        <p className="mb-1 text-[11px] font-semibold text-gray-200">{room.name}</p>
-                                        <p className="font-mono text-[10px] text-gray-300">
+                                    <div key={room.id} className="rounded border border-gray-300 dark:border-gray-700/30 p-2">
+                                        <p className="mb-1 text-[11px] font-semibold text-gray-800 dark:text-gray-800 dark:text-gray-200">{room.name}</p>
+                                        <p className="font-mono text-[10px] text-gray-700 dark:text-gray-700 dark:text-gray-300">
                                             avg {result.avg_df.toFixed(2)}% · min {result.min_df.toFixed(2)}% · max {result.max_df.toFixed(2)}%
                                         </p>
                                         {result.warnings.map((warning) => (

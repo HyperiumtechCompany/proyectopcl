@@ -95,11 +95,11 @@ export const MlightcadCommandLine: React.FC = () => {
     const quickCmds = ['zoom', 'pan', 'select', 'line', 'pline', 'circle', 'arc'];
 
     return (
-        <div className="flex flex-col bg-[#0a0c10] border-t border-slate-800/80 shrink-0 select-none"
+        <div className="flex flex-col bg-gray-50 dark:bg-[#0a0c10] border-t border-slate-300 dark:border-slate-800/80 shrink-0 select-none"
              style={{ height: expanded ? '140px' : '32px', transition: 'height 0.2s ease' }}>
 
             {/* ── Header ──────────────────────────────────────────────────── */}
-            <div className="flex items-center h-8 px-2 border-b border-slate-800/60 shrink-0 gap-2">
+            <div className="flex items-center h-8 px-2 border-b border-slate-300 dark:border-slate-800/60 shrink-0 gap-2">
                 <Terminal size={11} className="text-cyan-600" />
                 <span className="text-[10px] text-cyan-700 font-mono font-semibold tracking-widest uppercase">
                     Command
@@ -111,7 +111,7 @@ export const MlightcadCommandLine: React.FC = () => {
                         {quickCmds.map(cmd => (
                             <button key={cmd}
                                 onClick={() => executeCommand(cmd)}
-                                className="px-2 py-0.5 text-[9px] font-mono rounded bg-slate-800/60 text-slate-500 hover:text-cyan-300 hover:bg-slate-700/60 transition-colors border border-slate-700/40 shrink-0">
+                                className="px-2 py-0.5 text-[9px] font-mono rounded bg-slate-200 dark:bg-slate-800/60 text-slate-500 hover:text-cyan-300 hover:bg-slate-700/60 transition-colors border border-slate-300 dark:border-slate-700/40 shrink-0">
                                 {cmd.toUpperCase()}
                             </button>
                         ))}
@@ -122,7 +122,7 @@ export const MlightcadCommandLine: React.FC = () => {
 
                 <button
                     onClick={() => setExpanded(e => !e)}
-                    className="text-slate-600 hover:text-slate-300 transition-colors p-0.5 rounded"
+                    className="text-slate-600 hover:text-slate-700 dark:text-slate-300 transition-colors p-0.5 rounded"
                     title={expanded ? 'Colapsar consola' : 'Expandir consola'}
                 >
                     {expanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
@@ -148,7 +148,7 @@ export const MlightcadCommandLine: React.FC = () => {
                     </div>
 
                     {/* ── Input ──────────────────────────────────────────────── */}
-                    <div className="flex items-center border-t border-slate-800/60 px-2 h-8 shrink-0 gap-2">
+                    <div className="flex items-center border-t border-slate-300 dark:border-slate-800/60 px-2 h-8 shrink-0 gap-2">
                         <span className="text-cyan-600 font-mono text-[11px] shrink-0">Command:</span>
                         <input
                             ref={inputRef}

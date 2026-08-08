@@ -70,7 +70,7 @@ export const DynamicInputOverlay: React.FC<Props> = ({
             className="pointer-events-none absolute z-20"
             style={{ left: anchorScreen.x + 14, top: anchorScreen.y + 14 }}
         >
-            <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800/95 px-2 py-1 shadow-lg">
+            <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-slate-600 bg-slate-200 dark:bg-slate-800/95 px-2 py-1 shadow-lg">
                 <input
                     ref={distanceRef}
                     type="text"

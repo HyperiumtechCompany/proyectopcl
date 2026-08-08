@@ -547,7 +547,10 @@ export interface Fixture {
         | 'panel'
         | 'tube';
     fixtureShape?: 'round' | 'square' | 'rectangular' | 'cylindrical';
-    dimensions?: { length: number; width: number; height: number }; // En metros
+    /** radius: solo para fixtureShape 'round'/'cylindrical' — diámetro real
+     * del producto. Cuando está presente tiene prioridad sobre length/width
+     * al dibujar el símbolo en 2D (ver OverlayFixtures.getScreenHalfDims). */
+    dimensions?: { length: number; width: number; height: number; radius?: number }; // En metros
     brand?: string;
     articleNumber?: string;
     productId?: number;

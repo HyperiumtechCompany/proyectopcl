@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildFixtureGridObjects, estimatePhotometricFixtureQuantity, suggestFixtureGridSize } from './fixtureGrid';
+import {
+    buildFixtureGridObjects,
+    calculateFixtureGridPositions,
+    estimatePhotometricFixtureQuantity,
+    isPointInPolygon,
+    polygonCentroid,
+    suggestFixtureGridSize,
+} from './fixtureGrid';
 
 describe('estimatePhotometricFixtureQuantity', () => {
     it('ajusta la recomendación con el resultado punto-a-punto', () => {
@@ -50,6 +57,40 @@ describe('suggestFixtureGridSize', () => {
 
         expect(fixtures.every((fixture) => fixture.photometricWeb === photometricWeb)).toBe(true);
         expect(fixtures.every((fixture) => fixture.dimensions === dimensions)).toBe(true);
+    });
+});
+
+describe('polygonCentroid / isPointInPolygon (formas irregulares)', () => {
+    // Forma en L: cuadrado de 4x4 con un cuadrante de 2x2 recortado arriba-derecha.
+    const lShape = [
+        { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 },
+        { x: 2, y: 2 }, { x: 2, y: 4 }, { x: 0, y: 4 },
+    ];
+
+    it('el centroide real no coincide con el centro del bounding box', () => {
+        const centroid = polygonCentroid(lShape);
+        // Centro del bbox sería (2,2) — cae justo en el recorte.
+        expect(centroid.x).toBeCloseTo(1.667, 2);
+        expect(centroid.y).toBeCloseTo(1.667, 2);
+    });
+
+    it('detecta correctamente puntos dentro y fuera del recorte', () => {
+        expect(isPointInPolygon({ x: 1, y: 1 }, lShape)).toBe(true);
+        expect(isPointInPolygon({ x: 3, y: 3 }, lShape)).toBe(false); // en el recorte
+    });
+
+    it('calculateFixtureGridPositions nunca coloca luminarias fuera del recinto en forma L', () => {
+        const positions = calculateFixtureGridPositions(lShape, 2, 2);
+        expect(positions).toHaveLength(4);
+        positions.forEach((p) => {
+            expect(isPointInPolygon(p, lShape)).toBe(true);
+        });
+    });
+
+    it('centra un único punto sobre el centroide real, no el del bbox', () => {
+        const [single] = calculateFixtureGridPositions(lShape, 1, 1);
+        expect(single.x).toBeCloseTo(1.667, 2);
+        expect(single.y).toBeCloseTo(1.667, 2);
     });
 });
 

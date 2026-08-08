@@ -53,7 +53,7 @@ function statusColor(status: ComplianceStatus): string {
         case 'compliant':    return 'text-emerald-400';
         case 'warning':      return 'text-amber-400';
         case 'non_compliant': return 'text-red-400';
-        case 'needs_review': return 'text-slate-400';
+        case 'needs_review': return 'text-slate-600 dark:text-slate-400';
     }
 }
 
@@ -62,7 +62,7 @@ function statusIcon(status: ComplianceStatus) {
         case 'compliant':    return <CheckCircle2 size={13} className="text-emerald-400" />;
         case 'warning':      return <AlertTriangle size={13} className="text-amber-400" />;
         case 'non_compliant': return <XCircle size={13} className="text-red-400" />;
-        case 'needs_review': return <Info size={13} className="text-slate-400" />;
+        case 'needs_review': return <Info size={13} className="text-slate-600 dark:text-slate-400" />;
     }
 }
 
@@ -70,7 +70,7 @@ function legalBadge(status: 'mandatory' | 'recommended' | 'reference') {
     const cfg = {
         mandatory:   { label: 'Obligatoria', cls: 'bg-red-950/60 text-red-300 border-red-800/50' },
         recommended: { label: 'Recomendada', cls: 'bg-blue-950/60 text-blue-300 border-blue-800/50' },
-        reference:   { label: 'Referencia',  cls: 'bg-slate-800/60 text-slate-400 border-slate-700/50' },
+        reference:   { label: 'Referencia',  cls: 'bg-slate-200 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700/50' },
     }[status];
     return (
         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${cfg.cls}`}>
@@ -95,13 +95,13 @@ function Stepper({ current, total }: { current: WizardStep; total: number }) {
                                 'flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold transition-all',
                                 active  ? 'bg-blue-500 text-white shadow shadow-blue-500/40'  : '',
                                 done    ? 'bg-emerald-600 text-white'  : '',
-                                !active && !done ? 'bg-slate-800 text-slate-500' : '',
+                                !active && !done ? 'bg-slate-200 dark:bg-slate-800 text-slate-500' : '',
                             ].join(' ')}
                         >
                             {done ? '✓' : step}
                         </div>
                         {i < total - 1 && (
-                            <div className={`h-px flex-1 transition-colors ${done ? 'bg-emerald-700' : 'bg-slate-800'}`} />
+                            <div className={`h-px flex-1 transition-colors ${done ? 'bg-emerald-700' : 'bg-slate-200 dark:bg-slate-800'}`} />
                         )}
                     </React.Fragment>
                 );
@@ -121,7 +121,7 @@ function StepLocation({
 }) {
     return (
         <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <Globe size={13} className="text-blue-400" />
                 Selecciona el país del proyecto
             </div>
@@ -143,7 +143,7 @@ function StepLocation({
                                     'flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all',
                                     isSelected
                                         ? 'border-blue-600/60 bg-blue-950/50 text-blue-200'
-                                        : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-300',
+                                        : 'border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:border-slate-700 hover:text-slate-700 dark:text-slate-300',
                                 ].join(' ')}
                             >
                                 <span className="text-base">{country.flag}</span>
@@ -171,7 +171,7 @@ function StepInstallationType({
     const types = getInstallationTypes();
     return (
         <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <Building2 size={13} className="text-blue-400" />
                 Tipo de instalación
             </div>
@@ -190,7 +190,7 @@ function StepInstallationType({
                                 'flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-all',
                                 isSelected
                                     ? 'border-blue-600/60 bg-blue-950/50 text-blue-200'
-                                    : 'border-slate-800 bg-slate-900/40 text-slate-500 hover:border-slate-700 hover:text-slate-400',
+                                    : 'border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/40 text-slate-500 hover:border-slate-300 dark:border-slate-700 hover:text-slate-600 dark:text-slate-400',
                             ].join(' ')}
                         >
                             <span className="text-lg leading-none">{t.icon}</span>
@@ -219,7 +219,7 @@ function StepNormativeRecommendation({
 
     return (
         <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <BookOpen size={13} className="text-blue-400" />
                 Normas aplicables
             </div>
@@ -240,7 +240,7 @@ function StepNormativeRecommendation({
                                 'w-full rounded-lg border p-3 text-left transition-all',
                                 isSelected
                                     ? 'border-blue-600/60 bg-blue-950/40'
-                                    : 'border-slate-800 bg-slate-900/40 hover:border-slate-700',
+                                    : 'border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/40 hover:border-slate-300 dark:border-slate-700',
                             ].join(' ')}
                         >
                             <div className="flex items-start justify-between gap-2">
@@ -334,7 +334,7 @@ function StepAmbientSummary({
 
     if (rooms.length === 0) {
         return (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-center">
+            <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/40 p-4 text-center">
                 <Layers3 size={24} className="mx-auto mb-2 text-slate-700" />
                 <p className="text-xs text-slate-500">
                     No hay recintos en el proyecto.<br />
@@ -347,7 +347,7 @@ function StepAmbientSummary({
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <Layers3 size={13} className="text-blue-400" />
                     Resumen por ambiente
                 </div>
@@ -366,11 +366,11 @@ function StepAmbientSummary({
                     return (
                         <div
                             key={room.id}
-                            className="flex items-center gap-2 rounded-lg border border-slate-800/70 bg-slate-900/40 px-3 py-2"
+                            className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-800/70 bg-slate-200 dark:bg-slate-900/40 px-3 py-2"
                         >
                             {statusIcon(overallStatus)}
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-[11px] font-medium text-slate-300">
+                                <p className="truncate text-[11px] font-medium text-slate-700 dark:text-slate-300">
                                     {room.name}
                                 </p>
                                 <p className="text-[9px] text-slate-600">
@@ -492,7 +492,7 @@ export const NormativeWizardPanel: React.FC = () => {
             <div className="space-y-3">
                 <button
                     onClick={() => setShowComplianceDetail(false)}
-                    className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300"
+                    className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-700 dark:text-slate-300"
                 >
                     ← Volver al wizard
                 </button>
@@ -504,7 +504,7 @@ export const NormativeWizardPanel: React.FC = () => {
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2 border-b border-slate-300 dark:border-slate-800 pb-3">
                 <ScrollText size={14} className="text-blue-400" />
                 <div>
                     <h3 className="text-xs font-semibold text-white">Normativas del Proyecto</h3>
@@ -552,11 +552,11 @@ export const NormativeWizardPanel: React.FC = () => {
             </div>
 
             {/* Navegación */}
-            <div className="flex items-center justify-between border-t border-slate-800 pt-3">
+            <div className="flex items-center justify-between border-t border-slate-300 dark:border-slate-800 pt-3">
                 <button
                     onClick={() => setStep((s) => Math.max(1, s - 1) as WizardStep)}
                     disabled={step === 1}
-                    className="text-[10px] text-slate-500 hover:text-slate-300 disabled:opacity-30"
+                    className="text-[10px] text-slate-500 hover:text-slate-700 dark:text-slate-300 disabled:opacity-30"
                 >
                     ← Atrás
                 </button>
@@ -579,7 +579,7 @@ export const NormativeWizardPanel: React.FC = () => {
                 ) : (
                     <button
                         onClick={() => setStep(1)}
-                        className="flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] text-slate-400 hover:text-slate-200"
+                        className="flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200"
                     >
                         Reconfigurar
                     </button>

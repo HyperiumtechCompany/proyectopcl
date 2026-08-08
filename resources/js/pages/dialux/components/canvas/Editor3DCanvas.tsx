@@ -147,7 +147,7 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                     power: t.power,
                     efficiency: t.efficiency ?? 0.8,
                     fixtureType,
-                    fixtureShape: t.fixtureShape ?? 'round',
+                    fixtureShape: t.fixtureShape ?? 'rectangular',
                     brand: t.brand,
                     articleNumber: t.articleNumber,
                     productId: t.productId,
@@ -253,7 +253,7 @@ export const Editor3DCanvas = memo(function Editor3DCanvas({
                 onDoubleClick={handleDoubleClick}
             />
 
-            <div className="pointer-events-none absolute right-3 bottom-3 space-y-0.5 text-right font-mono text-[9px] text-gray-600">
+            <div className="pointer-events-none absolute right-3 bottom-3 space-y-0.5 text-right font-mono text-[9px] text-gray-600 dark:text-gray-600">
                 <div>{'Arrastrar -> orbitar'}</div>
                 <div>{'Derecho -> pan'}</div>
                 <div>{'Rueda -> zoom'}</div>

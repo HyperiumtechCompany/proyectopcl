@@ -37,6 +37,10 @@ class StoreManualProductRequest extends FormRequest
             'dimensions.length' => ['nullable', 'numeric', 'min:0'],
             'dimensions.width' => ['nullable', 'numeric', 'min:0'],
             'dimensions.height' => ['nullable', 'numeric', 'min:0'],
+            // Radio real del producto — solo aplica a fixture_shape
+            // 'round'/'cylindrical'; para esos casos manda sobre length/width
+            // al dibujar el símbolo (ver OverlayFixtures en el frontend).
+            'dimensions.radius' => ['nullable', 'numeric', 'min:0'],
             'product_image' => ['nullable', 'image', 'max:4096'],
             'brand_logo' => ['nullable', 'image', 'max:2048'],
         ];

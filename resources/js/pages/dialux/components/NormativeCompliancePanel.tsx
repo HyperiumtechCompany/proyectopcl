@@ -46,7 +46,7 @@ function statusIcon(status: ComplianceStatus, size = 13) {
         case 'compliant':    return <CheckCircle2 size={size} className="text-emerald-400" />;
         case 'warning':      return <AlertTriangle size={size} className="text-amber-400" />;
         case 'non_compliant': return <XCircle size={size} className="text-red-400" />;
-        case 'needs_review': return <Info size={size} className="text-slate-400" />;
+        case 'needs_review': return <Info size={size} className="text-slate-600 dark:text-slate-400" />;
     }
 }
 
@@ -64,7 +64,7 @@ function statusBadgeCls(status: ComplianceStatus): string {
         case 'compliant':    return 'bg-emerald-950/60 text-emerald-300 border-emerald-800/50';
         case 'warning':      return 'bg-amber-950/60 text-amber-300 border-amber-800/50';
         case 'non_compliant': return 'bg-red-950/60 text-red-300 border-red-800/50';
-        case 'needs_review': return 'bg-slate-800/60 text-slate-400 border-slate-700/50';
+        case 'needs_review': return 'bg-slate-200 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700/50';
     }
 }
 
@@ -101,13 +101,13 @@ function KpiCards({ rows }: { rows: RoomComplianceRow[] }) {
         { label: 'Cumplen',   value: compliant,    cls: 'text-emerald-400' },
         { label: 'Aviso',     value: warnings,     cls: 'text-amber-400' },
         { label: 'No cumplen',value: nonCompliant, cls: 'text-red-400' },
-        { label: 'Revisar',   value: needsReview,  cls: 'text-slate-400' },
+        { label: 'Revisar',   value: needsReview,  cls: 'text-slate-600 dark:text-slate-400' },
     ];
 
     return (
         <div className="grid grid-cols-5 gap-1.5">
             {cards.map((c) => (
-                <div key={c.label} className="rounded-lg border border-slate-800 bg-slate-900/50 p-2 text-center">
+                <div key={c.label} className="rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/50 p-2 text-center">
                     <p className={`text-base font-bold ${c.cls}`}>{c.value}</p>
                     <p className="text-[8px] text-slate-600 leading-tight">{c.label}</p>
                 </div>
@@ -120,12 +120,12 @@ function KpiCards({ rows }: { rows: RoomComplianceRow[] }) {
 
 function RoomParamDetails({ params }: { params: ComplianceResult[] }) {
     return (
-        <div className="mt-2 space-y-1 rounded-lg bg-slate-950/50 p-2">
+        <div className="mt-2 space-y-1 rounded-lg bg-slate-300 dark:bg-slate-950/50 p-2">
             {params.map((p) => (
                 <div key={p.parameterId} className="flex items-center gap-2">
                     {statusIcon(p.status, 11)}
                     <span className="w-36 text-[9px] text-slate-500">{p.parameterName}</span>
-                    <span className="font-mono text-[9px] text-slate-300">
+                    <span className="font-mono text-[9px] text-slate-700 dark:text-slate-300">
                         {p.calculatedValue !== null ? p.calculatedValue.toFixed(p.unit === 'lux' ? 0 : 3) : '—'}
                         {p.unit === 'lux' ? ' lx' : ''}
                         {p.requiredValue !== null ? (
@@ -190,7 +190,7 @@ export const NormativeCompliancePanel: React.FC = () => {
 
     if (!scene || scene.rooms.length === 0) {
         return (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 text-center">
+            <div className="rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-200 dark:bg-slate-900/40 p-5 text-center">
                 <Scale size={24} className="mx-auto mb-2 text-slate-700" />
                 <p className="text-xs text-slate-500">
                     No hay recintos para validar.<br />
@@ -229,7 +229,7 @@ export const NormativeCompliancePanel: React.FC = () => {
                             'rounded-full border px-2 py-0.5 text-[9px] font-semibold transition-colors',
                             filterStatus === f.key
                                 ? 'border-blue-600/50 bg-blue-950/60 text-blue-300'
-                                : 'border-slate-800 text-slate-500 hover:text-slate-400',
+                                : 'border-slate-300 dark:border-slate-800 text-slate-500 hover:text-slate-600 dark:text-slate-400',
                         ].join(' ')}
                     >
                         {f.label}
@@ -251,15 +251,15 @@ export const NormativeCompliancePanel: React.FC = () => {
                     return (
                         <div
                             key={room.id}
-                            className="rounded-lg border border-slate-800/70 bg-slate-900/40 overflow-hidden"
+                            className="rounded-lg border border-slate-300 dark:border-slate-800/70 bg-slate-200 dark:bg-slate-900/40 overflow-hidden"
                         >
                             <button
                                 onClick={() => setExpandedRoomId(isExpanded ? null : room.id)}
-                                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/30 transition-colors"
+                                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-200 dark:bg-slate-800/30 transition-colors"
                             >
                                 {statusIcon(overallStatus)}
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-[11px] font-semibold text-slate-200">
+                                    <p className="truncate text-[11px] font-semibold text-slate-800 dark:text-slate-200">
                                         {room.name}
                                     </p>
                                     <p className="text-[9px] text-slate-600">
@@ -278,7 +278,7 @@ export const NormativeCompliancePanel: React.FC = () => {
                                                 setComparisonActivity(activityLabel);
                                             }}
                                             title="Comparar entre normas"
-                                            className="rounded p-0.5 text-slate-600 hover:text-slate-400"
+                                            className="rounded p-0.5 text-slate-600 hover:text-slate-600 dark:text-slate-400"
                                         >
                                             <Scale size={11} />
                                         </button>
@@ -313,7 +313,7 @@ export const NormativeCompliancePanel: React.FC = () => {
             )}
 
             {/* Nota de trazabilidad */}
-            <div className="rounded-lg border border-slate-800/50 bg-slate-900/30 p-2.5">
+            <div className="rounded-lg border border-slate-300 dark:border-slate-800/50 bg-slate-200 dark:bg-slate-900/30 p-2.5">
                 <p className="text-[9px] leading-relaxed text-slate-600">
                     <span className="font-semibold text-slate-500">Nota: </span>
                     Los valores de cumplimiento se calculan comparando los resultados del motor lumínico

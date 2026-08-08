@@ -59,28 +59,28 @@ export function LegendPanel() {
 
     return (
         <div className="flex flex-col gap-3">
-            <section className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/50">
-                <div className="border-b border-slate-800 px-2.5 py-2">
-                    <p className="text-[10px] font-semibold tracking-wider text-slate-200 uppercase">Simbología eléctrica</p>
+            <section className="overflow-hidden rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/50">
+                <div className="border-b border-slate-300 dark:border-slate-800 px-2.5 py-2">
+                    <p className="text-[10px] font-semibold tracking-wider text-slate-700 dark:text-slate-200 uppercase">Simbología eléctrica</p>
                     <p className="mt-0.5 text-[9px] text-slate-500">Se abre automáticamente al usar herramientas eléctricas.</p>
                 </div>
-                <div className="grid grid-cols-1 gap-px bg-slate-800/70">
+                <div className="grid grid-cols-1 gap-px bg-slate-100 dark:bg-slate-800/70">
                     {ELECTRICAL_LEGEND_ITEMS.map((item) => (
-                        <div key={`${item.group}-${item.code}`} className="flex items-center gap-2 bg-slate-950/90 px-2 py-1.5">
+                        <div key={`${item.group}-${item.code}`} className="flex items-center gap-2 bg-white dark:bg-slate-950/90 px-2 py-1.5">
                             <span className="flex h-5 w-8 shrink-0 items-center justify-center rounded border border-current font-mono text-[9px] font-bold" style={{ color: item.color }}>
                                 {item.code}
                             </span>
-                            <span className="text-[9px] leading-tight text-slate-300">{item.label}</span>
+                            <span className="text-[9px] leading-tight text-slate-700 dark:text-slate-300">{item.label}</span>
                         </div>
                     ))}
                 </div>
             </section>
 
-            <section className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/50">
-                <div className="flex items-center gap-2 border-b border-slate-800 px-2.5 py-2">
-                    <Layers3 className="h-3.5 w-3.5 text-cyan-400" />
+            <section className="overflow-hidden rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/50">
+                <div className="flex items-center gap-2 border-b border-slate-300 dark:border-slate-800 px-2.5 py-2">
+                    <Layers3 className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400" />
                     <div>
-                        <p className="text-[10px] font-semibold tracking-wider text-slate-200 uppercase">Visibilidad del plano</p>
+                        <p className="text-[10px] font-semibold tracking-wider text-slate-700 dark:text-slate-200 uppercase">Visibilidad del plano</p>
                         <p className="text-[9px] text-slate-500">Clic en un elemento para seleccionarlo; usa el ojo para ocultarlo.</p>
                     </div>
                 </div>
@@ -90,13 +90,13 @@ export function LegendPanel() {
                         const groupUnits = units[group.key];
                         return (
                             <details key={group.key} className="group/layer" open={groupUnits.length > 0 && groupUnits.length <= 6}>
-                                <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-2 hover:bg-slate-900">
+                                <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-2 hover:bg-slate-200 dark:bg-slate-900">
                                     <span className="h-2.5 w-2.5 rounded-sm border border-white/10" style={{ backgroundColor: group.color }} />
-                                    <span className={`min-w-0 flex-1 truncate text-[10px] ${groupVisible ? 'text-slate-300' : 'text-slate-600 line-through'}`}>{group.label}</span>
+                                    <span className={`min-w-0 flex-1 truncate text-[10px] ${groupVisible ? 'text-slate-700 dark:text-slate-300' : 'text-slate-600 line-through'}`}>{group.label}</span>
                                     {groupUnits.length > 0 && <span className="font-mono text-[8px] text-slate-600">{groupUnits.length}</span>}
                                     <button
                                         type="button"
-                                        className="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-white"
+                                        className="rounded p-1 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 hover:text-white"
                                         onClick={(event) => { event.preventDefault(); store.toggleElectricalLayer(group.key); }}
                                         title={groupVisible ? `Ocultar ${group.label}` : `Mostrar ${group.label}`}
                                     >
@@ -104,14 +104,14 @@ export function LegendPanel() {
                                     </button>
                                 </summary>
                                 {groupUnits.length > 0 && (
-                                    <div className="border-t border-slate-800/60 bg-black/20 py-1">
+                                    <div className="border-t border-slate-300 dark:border-slate-800/60 bg-black/20 py-1">
                                         {groupUnits.map((unit) => {
                                             const visible = !hiddenIds.has(unit.id);
                                             const selected = store.ui.selectedId === unit.id;
                                             return (
                                                 <div
                                                     key={unit.id}
-                                                    className={`flex w-full items-center gap-1 px-3 py-0.5 ${selected ? 'bg-cyan-500/10' : 'hover:bg-slate-900'}`}
+                                                    className={`flex w-full items-center gap-1 px-3 py-0.5 ${selected ? 'bg-cyan-500/10' : 'hover:bg-slate-200 dark:bg-slate-900'}`}
                                                 >
                                                     <button
                                                         type="button"
@@ -121,12 +121,12 @@ export function LegendPanel() {
                                                         title={visible && groupVisible ? `Seleccionar ${unit.label}` : `${unit.label} está oculto`}
                                                     >
                                                         <MousePointer2 size={9} className={selected ? 'text-cyan-400' : 'text-slate-600'} />
-                                                        <span className={`min-w-0 flex-1 truncate text-[9px] ${selected ? 'font-medium text-cyan-300' : visible && groupVisible ? 'text-slate-400' : 'text-slate-700 line-through'}`}>{unit.label}</span>
+                                                        <span className={`min-w-0 flex-1 truncate text-[9px] ${selected ? 'font-medium text-cyan-300' : visible && groupVisible ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 line-through'}`}>{unit.label}</span>
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => store.toggleElectricalItemVisibility(unit.id)}
-                                                        className="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-white"
+                                                        className="rounded p-1 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 hover:text-white"
                                                         title={visible ? `Ocultar ${unit.label}` : `Mostrar ${unit.label}`}
                                                     >
                                                         {visible ? <Eye size={10} /> : <EyeOff size={10} className="text-slate-700" />}

@@ -210,14 +210,14 @@ export const DoorProps: React.FC<{
         />
 
         {/* ── Controles de apertura ── */}
-        <div className="my-2 space-y-1.5 border-t border-gray-800/60 pt-2">
+        <div className="my-2 space-y-1.5 border-t border-gray-300 dark:border-gray-800/60 pt-2">
             <p className="text-[9px] font-semibold tracking-wider text-emerald-400/80 uppercase">
                 Apertura
             </p>
 
             {/* Dirección: inward / outward */}
-            <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-                <span className="text-[10px] text-gray-500">Dirección</span>
+            <div className="flex items-center justify-between gap-2 border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
+                <span className="text-[10px] text-gray-500 dark:text-gray-500">Dirección</span>
                 <div className="flex gap-1">
                     {(['inward', 'outward'] as const).map((dir) => (
                         <button
@@ -227,7 +227,7 @@ export const DoorProps: React.FC<{
                             className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                                 (door.openingDirection ?? 'inward') === dir
                                     ? 'bg-emerald-700/60 text-emerald-200 ring-1 ring-emerald-500/40'
-                                    : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'
+                                    : 'bg-gray-200 dark:bg-gray-800/60 text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                             }`}
                         >
                             {dir === 'inward' ? '→ Adentro' : '← Afuera'}
@@ -237,8 +237,8 @@ export const DoorProps: React.FC<{
             </div>
 
             {/* Bisagra: left / right */}
-            <div className="flex items-center justify-between gap-2 border-b border-gray-800/40 pb-1.5">
-                <span className="text-[10px] text-gray-500">Bisagra</span>
+            <div className="flex items-center justify-between gap-2 border-b border-gray-300 dark:border-gray-800/40 pb-1.5">
+                <span className="text-[10px] text-gray-500 dark:text-gray-500">Bisagra</span>
                 <div className="flex gap-1">
                     {(['left', 'right'] as const).map((side) => (
                         <button
@@ -248,7 +248,7 @@ export const DoorProps: React.FC<{
                             className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                                 (door.hingeDirection ?? 'left') === side
                                     ? 'bg-emerald-700/60 text-emerald-200 ring-1 ring-emerald-500/40'
-                                    : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'
+                                    : 'bg-gray-200 dark:bg-gray-800/60 text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                             }`}
                         >
                             {side === 'left' ? '⊢ Izq.' : 'Der. ⊣'}

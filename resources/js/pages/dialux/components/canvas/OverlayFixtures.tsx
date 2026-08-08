@@ -37,6 +37,18 @@ function getScreenHalfDims(
 ): { hw: number; hh: number } {
     const origin = { x: fx.x, y: fx.y };
 
+    // Productos redondos/cilíndricos con radio propio: el radio manda sobre
+    // length/width (que para estos productos suele ser solo una caja
+    // contenedora aproximada, no la medida real del producto).
+    const isRoundish = fx.fixtureShape === 'round' || fx.fixtureShape === 'cylindrical';
+    if (isRoundish && fx.dimensions?.radius) {
+        const r = fx.dimensions.radius;
+        return {
+            hw: Math.max(MIN_HALF_PX, screenDistance(r, 0, origin)),
+            hh: Math.max(MIN_HALF_PX, screenDistance(r, 0, origin)),
+        };
+    }
+
     if (fx.dimensions) {
         // Use real physical size from catalog/user-defined dimensions.
         // length → along X axis (width on plan), width → along Y axis (depth on plan).
@@ -48,15 +60,17 @@ function getScreenHalfDims(
         };
     }
 
-    // Fallback sizes when no physical dimensions are stored.
-    const shape = fx.fixtureShape ?? 'round';
+    // Fallback sizes when no physical dimensions are stored. 'rectangular' es
+    // el default seguro (no 'round'): asumir redondo sin evidencia dibujaba
+    // como círculo productos que en realidad son paneles/lineales.
+    const shape = fx.fixtureShape ?? 'rectangular';
     const basePhys: Record<string, { hw: number; hh: number }> = {
         round:       { hw: 0.10, hh: 0.10 },
         square:      { hw: 0.15, hh: 0.15 },
         rectangular: { hw: 0.30, hh: 0.15 },
         cylindrical: { hw: 0.60, hh: 0.06 },
     };
-    const p = basePhys[shape] ?? basePhys.round;
+    const p = basePhys[shape] ?? basePhys.rectangular;
     return {
         hw: Math.max(MIN_HALF_PX, screenDistance(p.hw, 0, origin)),
         hh: Math.max(MIN_HALF_PX, screenDistance(p.hh, 0, origin)),
@@ -105,7 +119,7 @@ function CadFixtureBody({
 }) {
     const sw = isSelected ? 2.0 : 1.5;
     const sym = fx.catalogSymbol ?? '';
-    const shape = fx.fixtureShape ?? 'round';
+    const shape = fx.fixtureShape ?? 'rectangular';
 
     // ── Circle-based symbols ─────────────────────────────────────────────────
     if (sym === 'circle_black') {
@@ -201,7 +215,7 @@ export const OverlayFixtures = memo(function OverlayFixtures({
                 const { hw, hh } = getScreenHalfDims(fx, screenDistance);
                 const stroke    = getStrokeColor(fx, isSelected);
                 const glowColor = getGlowColor(fx);
-                const shape     = fx.fixtureShape ?? 'round';
+                const shape     = fx.fixtureShape ?? 'rectangular';
                 const isRound   = shape === 'round';
                 const filterId  = isRound ? 'glow-fix-r' : 'glow-fix-p';
                 const labelY    = safeNum(fp.y + hh + Math.max(10, 10 * zoom));

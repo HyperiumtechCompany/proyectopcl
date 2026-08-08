@@ -113,11 +113,11 @@ export const VistaPanel: React.FC<{
             type="button"
             disabled
             title="Grilla nativa no soportada"
-            className="flex h-9 w-full cursor-not-allowed items-center gap-2.5 rounded bg-gray-800/60 px-2 text-gray-500"
+            className="flex h-9 w-full cursor-not-allowed items-center gap-2.5 rounded bg-gray-200 dark:bg-gray-800/60 px-2 text-gray-500 dark:text-gray-500"
         >
             <Grid size={13} />
             <span className="text-[11px]">Grilla</span>
-            <span className="ml-auto rounded bg-gray-700/50 px-1.5 py-0.5 text-[9px] text-gray-400">
+            <span className="ml-auto rounded bg-gray-300 dark:bg-gray-700/50 px-1.5 py-0.5 text-[9px] text-gray-600 dark:text-gray-600 dark:text-gray-400">
                 N/D
             </span>
         </button>
@@ -128,7 +128,7 @@ export const VistaPanel: React.FC<{
             className={`flex h-9 w-full items-center gap-2.5 rounded px-2 text-left transition-colors ${
                 showIsolux
                     ? 'bg-yellow-900/20 text-yellow-400'
-                    : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                    : 'text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'
             }`}
         >
             <Layers size={13} />
@@ -137,7 +137,7 @@ export const VistaPanel: React.FC<{
                 className={`ml-auto rounded px-1.5 py-0.5 text-[9px] ${
                     showIsolux
                         ? 'bg-yellow-900/40 text-yellow-400'
-                        : 'bg-gray-700/50 text-gray-600'
+                        : 'bg-gray-300 dark:bg-gray-700/50 text-gray-600 dark:text-gray-600'
                 }`}
             >
                 {showIsolux ? 'ON' : 'OFF'}
@@ -149,7 +149,7 @@ export const VistaPanel: React.FC<{
             type="button"
             id="dialux-reset-view"
             onClick={onResetView}
-            className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-left text-gray-400 transition-colors hover:bg-gray-700/50 hover:text-gray-100"
+            className="flex h-9 w-full items-center gap-2.5 rounded px-2 text-left text-gray-600 dark:text-gray-600 dark:text-gray-400 transition-colors hover:bg-gray-300 dark:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100"
         >
             <RotateCcw size={13} />
             <span className="text-[11px]">Resetear vista</span>

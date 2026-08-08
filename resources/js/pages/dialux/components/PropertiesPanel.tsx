@@ -26,7 +26,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     if (!selectedId && selectedFixtureIds.length === 0) {
         return (
             <div className="px-2 py-6 text-center">
-                <p className="text-[10px] text-gray-600">
+                <p className="text-[10px] text-slate-400 dark:text-gray-500">
                     Selecciona un objeto para ver sus propiedades
                 </p>
             </div>
@@ -216,5 +216,5 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
         );
     }
 
-    return <p className="text-[10px] text-gray-600">Objeto no encontrado</p>;
+    return <p className="text-[10px] text-slate-400 dark:text-gray-500">Objeto no encontrado</p>;
 });

@@ -32,17 +32,17 @@ function StandardBadge({ evaluation }: { evaluation: EmergencyRequirementEvaluat
         ) : evaluation.status === 'fail' ? (
             <XCircle size={12} className="text-red-400" />
         ) : (
-            <AlertTriangle size={12} className="text-gray-500" />
+            <AlertTriangle size={12} className="text-gray-500 dark:text-gray-500" />
         );
 
     return (
-        <div className="flex items-start gap-1.5 rounded border border-gray-700/40 bg-gray-900/40 px-2 py-1.5">
+        <div className="flex items-start gap-1.5 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 px-2 py-1.5">
             {icon}
             <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold text-gray-200">
+                <p className="text-[10px] font-semibold text-gray-800 dark:text-gray-800 dark:text-gray-200">
                     {evaluation.source} {evaluation.mandatory ? '(obligatoria en Perú)' : '(referencia)'}
                 </p>
-                <p className="text-[9.5px] text-gray-500">
+                <p className="text-[9.5px] text-gray-500 dark:text-gray-500">
                     {evaluation.status === 'not-evaluated'
                         ? `Requiere ${evaluation.requiredLux} lx — aún no calculado`
                         : `${evaluation.calculatedLux?.toFixed(1)} lx (mínimo) — requiere ≥${evaluation.requiredLux} lx`}
@@ -105,7 +105,7 @@ export const EmergenciaPanel: React.FC = () => {
                         />
                     ))}
                 </div>
-                <p className="mt-2 text-[9.5px] leading-snug text-gray-600">
+                <p className="mt-2 text-[9.5px] leading-snug text-gray-600 dark:text-gray-600">
                     Se dibujan como un polígono único, igual que un pasadizo — sin
                     subdivisión por muros interiores.
                 </p>
@@ -113,7 +113,7 @@ export const EmergenciaPanel: React.FC = () => {
 
             <PanelCard title={`Ambientes de emergencia (${emergencyRooms.length})`}>
                 {emergencyRooms.length === 0 ? (
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-500">
                         Ningún ambiente marcado todavía. Usa las herramientas de arriba
                         para dibujar una ruta de evacuación o un área antipánico.
                     </p>
@@ -126,10 +126,10 @@ export const EmergenciaPanel: React.FC = () => {
                                 minLux,
                             );
                             return (
-                                <div key={room.id} className="rounded border border-gray-700/30 p-2">
-                                    <p className="mb-1.5 text-[11px] font-semibold text-gray-200">
+                                <div key={room.id} className="rounded border border-gray-300 dark:border-gray-700/30 p-2">
+                                    <p className="mb-1.5 text-[11px] font-semibold text-gray-800 dark:text-gray-800 dark:text-gray-200">
                                         {room.name}{' '}
-                                        <span className="font-normal text-gray-500">
+                                        <span className="font-normal text-gray-500 dark:text-gray-500">
                                             ({room.roomType === 'evacuation-route' ? 'ruta de evacuación' : 'área antipánico'})
                                         </span>
                                     </p>
@@ -164,7 +164,7 @@ export const EmergenciaPanel: React.FC = () => {
                 >
                     {isExporting ? 'Generando...' : 'Exportar informe de emergencia'}
                 </button>
-                <p className="mt-1.5 text-[9.5px] leading-snug text-gray-600">
+                <p className="mt-1.5 text-[9.5px] leading-snug text-gray-600 dark:text-gray-600">
                     A.130 y EN 1838 se evalúan y muestran siempre por separado, nunca
                     fusionados en un solo número — ver `emergencyCompliance.ts`.
                 </p>

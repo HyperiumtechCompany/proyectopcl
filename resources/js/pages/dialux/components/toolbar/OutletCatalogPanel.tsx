@@ -210,7 +210,7 @@ export function OutletCatalogPanel({
             {showForm && (
                 <form
                     onSubmit={submitForm}
-                    className="mb-2 flex flex-col gap-1.5 rounded border border-gray-700/40 bg-gray-900/40 p-2"
+                    className="mb-2 flex flex-col gap-1.5 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 p-2"
                 >
                     <input
                         type="text"
@@ -218,7 +218,7 @@ export function OutletCatalogPanel({
                         placeholder="Nombre *"
                         value={form.name}
                         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                        className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                        className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                     />
                     <div className="grid grid-cols-2 gap-1.5">
                         <input
@@ -226,14 +226,14 @@ export function OutletCatalogPanel({
                             placeholder="Marca"
                             value={form.manufacturer}
                             onChange={(e) => setForm((f) => ({ ...f, manufacturer: e.target.value }))}
-                            className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                            className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                         />
                         <input
                             type="text"
                             placeholder="Modelo / código"
                             value={form.catalog_number}
                             onChange={(e) => setForm((f) => ({ ...f, catalog_number: e.target.value }))}
-                            className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                            className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                         />
                     </div>
                     <select
@@ -241,7 +241,7 @@ export function OutletCatalogPanel({
                         onChange={(e) =>
                             setForm((f) => ({ ...f, device_type: e.target.value as ElectricalDeviceType }))
                         }
-                        className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                        className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                     >
                         {DEVICE_TYPE_OPTIONS.map((item) => (
                             <option key={item.type} value={item.type}>
@@ -258,17 +258,17 @@ export function OutletCatalogPanel({
                             placeholder="Potencia (W) *"
                             value={form.rated_power_w}
                             onChange={(e) => setForm((f) => ({ ...f, rated_power_w: e.target.value }))}
-                            className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                            className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                         />
                         <input
                             type="text"
                             placeholder="IP (ej. IP65)"
                             value={form.ip_rating}
                             onChange={(e) => setForm((f) => ({ ...f, ip_rating: e.target.value }))}
-                            className="h-7 rounded border border-gray-700 bg-gray-950 px-2 text-[11px] text-gray-200 outline-none focus:border-cyan-500/50"
+                            className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                         />
                     </div>
-                    <label className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <label className="flex items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-600 dark:text-gray-400">
                         <input
                             type="checkbox"
                             checked={form.is_global}
@@ -290,10 +290,10 @@ export function OutletCatalogPanel({
                 <ChipFilter options={brands} active={brand} onChange={setBrand} />
             )}
 
-            {loading && <p className="py-2 text-center text-[10px] text-gray-600">Cargando…</p>}
+            {loading && <p className="py-2 text-center text-[10px] text-gray-600 dark:text-gray-600">Cargando…</p>}
 
             {!loading && filteredProducts.length === 0 && (
-                <p className="py-2 text-center text-[10px] text-gray-600">
+                <p className="py-2 text-center text-[10px] text-gray-600 dark:text-gray-600">
                     No hay tomacorrientes en el catálogo todavía.
                 </p>
             )}
@@ -311,11 +311,11 @@ export function OutletCatalogPanel({
                             className={`flex flex-col gap-1 rounded border p-1.5 text-left transition-colors ${
                                 isActive
                                     ? (item?.activeClass ?? 'border-cyan-500 bg-cyan-900/40 text-cyan-200')
-                                    : 'border-gray-700/50 bg-gray-800/40 text-gray-300 hover:bg-gray-700/60'
+                                    : 'border-gray-300 dark:border-gray-700/50 bg-gray-200 dark:bg-gray-800/40 text-gray-700 dark:text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:bg-gray-700/60'
                             }`}
                         >
                             <div className="flex items-center justify-between gap-1">
-                                <span className={`text-[11px] font-bold ${item?.symbolClass ?? 'text-gray-400'}`}>
+                                <span className={`text-[11px] font-bold ${item?.symbolClass ?? 'text-gray-600 dark:text-gray-600 dark:text-gray-400'}`}>
                                     {item?.symbol ?? '?'}
                                 </span>
                                 <div className="flex items-center gap-1">
@@ -326,7 +326,7 @@ export function OutletCatalogPanel({
                                                 tabIndex={0}
                                                 onClick={(e) => toggleShare(product, e)}
                                                 title={product.is_global ? 'Compartido' : 'Compartir'}
-                                                className={product.is_global ? 'text-emerald-400' : 'text-gray-600 hover:text-gray-300'}
+                                                className={product.is_global ? 'text-emerald-400' : 'text-gray-600 dark:text-gray-600 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'}
                                             >
                                                 {product.is_global ? <Globe size={11} /> : <Share2 size={11} />}
                                             </span>
@@ -335,7 +335,7 @@ export function OutletCatalogPanel({
                                                 tabIndex={0}
                                                 onClick={(e) => deleteProduct(product, e)}
                                                 title="Eliminar"
-                                                className="text-gray-600 hover:text-red-400"
+                                                className="text-gray-600 dark:text-gray-600 hover:text-red-400"
                                             >
                                                 <Trash2 size={11} />
                                             </span>
@@ -344,7 +344,7 @@ export function OutletCatalogPanel({
                                 </div>
                             </div>
                             <span className="truncate text-[10px] font-medium">{product.name}</span>
-                            <span className="truncate text-[9px] text-gray-500">
+                            <span className="truncate text-[9px] text-gray-500 dark:text-gray-500">
                                 {product.manufacturer ?? 'Genérico'} · {product.rated_power_w} W
                             </span>
                         </button>

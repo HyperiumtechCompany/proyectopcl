@@ -169,19 +169,19 @@ export const FloatingPanelPortal: React.FC<FloatingPanelPortalProps> = ({
             ref={panelRef}
             id="dialux-floating-panel"
             style={style}
-            className={`flex flex-col rounded-lg border border-gray-700/60 bg-[#191c2c] shadow-2xl ring-1 ring-black/50 ${dropdown ? 'overflow-visible' : 'overflow-hidden'}`}
+            className={`flex flex-col rounded-lg border border-slate-200 dark:border-gray-700/60 bg-white dark:bg-[#191c2c] shadow-2xl ring-1 ring-black/10 dark:ring-black/50 ${dropdown ? 'overflow-visible' : 'overflow-hidden'}`}
         >
             {/* Header (optional for compact dropdowns) */}
             {!hideHeader && (
-                <div className="flex shrink-0 items-center justify-between border-b border-gray-700/50 bg-[#1e2236] px-3 py-2">
-                    <div className="flex items-center gap-2 text-gray-200">
-                        <span className="text-gray-400">{icon}</span>
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-gray-700/50 bg-slate-50 dark:bg-[#1e2236] px-3 py-2">
+                    <div className="flex items-center gap-2 text-slate-800 dark:text-gray-200">
+                        <span className="text-slate-500 dark:text-gray-400">{icon}</span>
                         <span className="text-[11.5px] font-bold tracking-wide">{title}</span>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-5 w-5 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-600/40 hover:text-gray-300"
+                        className="flex h-5 w-5 items-center justify-center rounded text-slate-400 dark:text-gray-500 transition-colors hover:bg-slate-200 dark:hover:bg-gray-600/40 hover:text-slate-700 dark:hover:text-gray-300"
                     >
                         <X size={10} />
                     </button>

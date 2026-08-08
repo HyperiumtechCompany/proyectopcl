@@ -50,7 +50,21 @@ export async function buildDialuxExportAssets(
     // por producto que consumen las fichas de producto del documento formal.
     try {
         const enriched = await enrichProducts(snapshot);
-        assets.push(...enriched.assets);
+        // El diagrama polar (CDL) llega como SVG inline (kind: 'vector').
+        // Igual que el resto de gráficos del informe (ver comentario más abajo,
+        // "El SVG inline en dompdf es experimental..."), dompdf no lo
+        // renderiza — la ficha de producto mostraba "Grafico no disponible"
+        // aunque el SVG estuviera correctamente guardado en la base de datos.
+        // Se rasteriza aquí igual que las capturas de plano/isolux, en vez de
+        // empujarlo tal cual al array de assets.
+        for (const asset of enriched.assets) {
+            if (asset.kind === 'vector') {
+                const bitmap = await svgToBitmapAsset(asset);
+                pushAsset(bitmap ?? asset);
+            } else {
+                pushAsset(asset);
+            }
+        }
         // Fase 15: warnings trazables (productId + causa) cuando un fixture
         // se queda sin CDL a pesar de agotar catálogo remoto y datos locales
         // — se anexan a `globalWarnings` (mismo array que ya renderiza

@@ -352,7 +352,7 @@ export const Toolbar: React.FC = () => {
                 icon: <BookOpen size={15} />,
                 label: 'Proy.',
                 hasActive: projectName.length > 0,
-                accentColor: 'text-violet-400',
+                accentColor: 'text-violet-600 dark:text-violet-400',
             },
             {
                 id: 'normativa' as PanelId,
@@ -360,7 +360,7 @@ export const Toolbar: React.FC = () => {
                 icon: <Scale size={15} />,
                 label: 'Norm.',
                 hasActive: false,
-                accentColor: 'text-emerald-400',
+                accentColor: 'text-emerald-600 dark:text-emerald-400',
             },
             {
                 id: 'emergencia' as PanelId,
@@ -368,7 +368,7 @@ export const Toolbar: React.FC = () => {
                 icon: <AlertTriangle size={15} />,
                 label: 'Emerg.',
                 hasActive: ['evacuation-route', 'antipanic-area'].includes(store.ui.activeTool),
-                accentColor: 'text-amber-400',
+                accentColor: 'text-amber-600 dark:text-amber-400',
             },
             {
                 id: 'luznatural' as PanelId,
@@ -376,7 +376,7 @@ export const Toolbar: React.FC = () => {
                 icon: <Sun size={15} />,
                 label: 'Sol',
                 hasActive: false,
-                accentColor: 'text-yellow-300',
+                accentColor: 'text-amber-500 dark:text-yellow-300',
             },
             {
                 id: 'construccion' as PanelId,
@@ -419,7 +419,7 @@ export const Toolbar: React.FC = () => {
                 hasActive:
                     activeTool.startsWith('elec-outlet-') ||
                     activeTool === 'elec-water-heater',
-                accentColor: 'text-green-400',
+                accentColor: 'text-emerald-600 dark:text-green-400',
             },
             {
                 id: 'medir' as PanelId,
@@ -441,7 +441,7 @@ export const Toolbar: React.FC = () => {
                 icon: <Eye size={15} />,
                 label: 'Vista',
                 hasActive: showGrid || showIsolux,
-                accentColor: showIsolux ? 'text-yellow-400' : undefined,
+                accentColor: showIsolux ? 'text-amber-500 dark:text-yellow-400' : undefined,
             },
         ],
         [activeTool, hasCadDoc, projectName.length, refs, showGrid, showIsolux],
@@ -491,10 +491,10 @@ export const Toolbar: React.FC = () => {
             {/* ── Sidebar rail ── */}
             <aside
                 id="dialux-toolbar"
-                className="relative z-40 flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-gray-800/70 bg-[#12141e] py-2 md:w-14"
+                className="relative z-40 flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-x-visible overflow-y-auto border-r border-slate-200 dark:border-gray-800/70 bg-slate-50 dark:bg-[#12141e] py-2 md:w-14"
             >
                 {/* ── Quick-access native tools ── */}
-                <span className="mt-1 mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-gray-700 uppercase">
+                <span className="mt-1 mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 dark:text-gray-500 uppercase">
                     Rápido
                 </span>
                 <div className="flex w-full flex-col items-center gap-0.5 px-1.5">
@@ -531,7 +531,7 @@ export const Toolbar: React.FC = () => {
                 <Sep />
 
                 {/* ── Configuración ── */}
-                <span className="mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-gray-700 uppercase">
+                <span className="mb-0.5 px-1 text-[8px] font-bold tracking-[0.2em] text-slate-400 dark:text-gray-500 uppercase">
                     Config
                 </span>
                 <div className="flex w-full flex-col items-center gap-1.5 px-1.5">
@@ -593,7 +593,7 @@ export const Toolbar: React.FC = () => {
                         label="Editar"
                         isOpen={openPanel === 'editar'}
                         onClick={() => togglePanel('editar')}
-                        accentColor="text-red-400"
+                        accentColor="text-red-500 dark:text-red-400"
                     />
                 </div>
 
@@ -860,7 +860,7 @@ export const Toolbar: React.FC = () => {
                 }}
             >
                 <DialogContent
-                    className="border-gray-800 bg-[#161820] text-gray-100 sm:max-w-md"
+                    className="border-gray-300 dark:border-gray-800 bg-white dark:bg-[#161820] text-gray-100 sm:max-w-md"
                     onPointerDownOutside={(e) => {
                         if (detectedScale && !scaleConfirmed)
                             e.preventDefault();
@@ -874,7 +874,7 @@ export const Toolbar: React.FC = () => {
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-cyan-400">
                             <Upload size={20} /> Importar Plano CAD
                         </DialogTitle>
-                        <DialogDescription className="text-gray-400">
+                        <DialogDescription className="text-gray-600 dark:text-gray-600 dark:text-gray-400">
                             Configura la escala y unidades para{' '}
                             <span className="font-mono text-cyan-200">
                                 {pendingFile?.name}
@@ -946,7 +946,7 @@ export const Toolbar: React.FC = () => {
                                         ),
                                     );
                                 }}
-                                className="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200 outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                className="w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-cyan-500/50"
                             >
                                 <option value="mm">Milímetros (mm)</option>
                                 <option value="cm">Centímetros (cm)</option>
@@ -954,18 +954,18 @@ export const Toolbar: React.FC = () => {
                             </select>
                         </div>
 
-                        <div className="rounded-lg border border-gray-700 bg-gray-800/30 p-4">
-                            <h4 className="mb-1 text-xs font-bold tracking-wider text-gray-400 uppercase">
+                        <div className="rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-800/30 p-4">
+                            <h4 className="mb-1 text-xs font-bold tracking-wider text-gray-600 dark:text-gray-600 dark:text-gray-400 uppercase">
                                 Calibración manual
                             </h4>
-                            <p className="mb-3 text-[11px] text-gray-500">
+                            <p className="mb-3 text-[11px] text-gray-500 dark:text-gray-500">
                                 Mide una distancia conocida en el plano para
                                 calibrar la escala.
                             </p>
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                className="gap-2 bg-gray-700 hover:bg-gray-600"
+                                className="gap-2 bg-gray-300 dark:bg-gray-700 hover:bg-gray-600"
                                 onClick={() => {
                                     setScaleConfirmed(true);
                                     store.setTool('calibrate');

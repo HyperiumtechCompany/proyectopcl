@@ -81,7 +81,7 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Eléctrico — ${project.name}`} />
 
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-950 px-4 py-5 text-slate-100 sm:px-6">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 dark:bg-slate-950 px-4 py-5 text-slate-900 dark:text-slate-100 sm:px-6">
                 <div className="mx-auto w-full max-w-8xl">
                     {/* Header */}
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

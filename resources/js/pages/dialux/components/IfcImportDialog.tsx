@@ -71,10 +71,10 @@ export const IfcImportDialog: React.FC<IfcImportDialogProps> = ({ open, preview,
 
     return (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70">
-            <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl border border-cyan-600/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl border border-cyan-600/30 bg-slate-200 dark:bg-slate-900 p-5 shadow-2xl">
                 <div className="mb-4">
                     <p className="text-sm font-semibold text-cyan-300">Importar IFC — estructura detectada</p>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                         Revisa los niveles y espacios detectados antes de importar. Cada espacio se mapea a un
                         recinto real (geometría + altura); su `GlobalId` IFC se conserva.
                     </p>
@@ -89,8 +89,8 @@ export const IfcImportDialog: React.FC<IfcImportDialogProps> = ({ open, preview,
                         const checked = effectiveSelection.storeys.has(storey.expressId);
                         const selectedSpaces = effectiveSelection.storeys.get(storey.expressId) ?? new Set();
                         return (
-                            <div key={storey.expressId} className="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-                                <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                            <div key={storey.expressId} className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-950/60 p-3">
+                                <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
                                     <input type="checkbox" checked={checked} onChange={() => toggleStorey(storey.expressId, spaceIds)} />
                                     {storey.name ?? `Nivel ${storey.expressId}`}
                                     <span className="font-normal text-slate-500">({storey.spaces.length} espacio{storey.spaces.length === 1 ? '' : 's'})</span>
@@ -98,7 +98,7 @@ export const IfcImportDialog: React.FC<IfcImportDialogProps> = ({ open, preview,
                                 {checked && (
                                     <div className="mt-2 ml-6 space-y-1">
                                         {storey.spaces.map((space) => (
-                                            <label key={space.expressId} className="flex items-center gap-2 text-xs text-slate-300">
+                                            <label key={space.expressId} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedSpaces.has(space.expressId)}
@@ -130,7 +130,7 @@ export const IfcImportDialog: React.FC<IfcImportDialogProps> = ({ open, preview,
                         <button
                             type="button"
                             onClick={onCancel}
-                            className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-800"
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:bg-slate-800"
                         >
                             Cancelar
                         </button>

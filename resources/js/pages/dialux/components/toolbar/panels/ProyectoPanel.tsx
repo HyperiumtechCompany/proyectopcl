@@ -78,8 +78,8 @@ import {
 } from '../primitives';
 
 const fieldInputClass =
-    'w-full rounded border border-gray-700/60 bg-gray-900/70 px-2 py-1.5 text-[11px] text-gray-200 placeholder-gray-600 transition-colors outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30';
-const fieldLabelClass = 'mb-1 block text-[9px] tracking-wider text-gray-600 uppercase';
+    'w-full rounded border border-slate-200 dark:border-gray-700/60 bg-white dark:bg-gray-900/70 px-2 py-1.5 text-[11px] text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-600 transition-colors outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30';
+const fieldLabelClass = 'mb-1 block text-[9px] tracking-wider text-slate-500 dark:text-gray-500 uppercase';
 
 /** `''` en el `<select>` (sin elegir) se guarda como `undefined`, no como cadena vacía. */
 function parseOptionalNumberInput(raw: string): number | undefined {
@@ -121,7 +121,7 @@ function TerrenoSections() {
                     onChange={(e) => update({ maintenanceFactor: parseOptionalNumberInput(e.target.value) })}
                     className={fieldInputClass}
                 />
-                <p className="mt-1.5 text-[9.5px] leading-snug text-gray-500">
+                <p className="mt-1.5 text-[9.5px] leading-snug text-slate-500 dark:text-gray-500">
                     Afecta el cálculo real de todos los ambientes de este proyecto (E ∝ MF). Default 0.80.
                 </p>
                 <label className={`mt-2 ${fieldLabelClass}`}>Método (referencia)</label>
@@ -138,7 +138,7 @@ function TerrenoSections() {
                     <option value="iesna">IESNA</option>
                     <option value="jieg_001">JIEG-001 (simplificado)</option>
                 </select>
-                <p className="mt-1.5 text-[9.5px] leading-snug text-gray-600">
+                <p className="mt-1.5 text-[9.5px] leading-snug text-slate-400 dark:text-gray-500">
                     Solo documental — no cambia cómo se calcula el MF de arriba.
                 </p>
             </PanelCard>
@@ -242,7 +242,7 @@ export const ProyectoPanel: React.FC<{
             />
         </PanelCard>
         <PanelCard title="Uso del nombre">
-            <p className="text-[9.5px] leading-snug text-gray-500">
+            <p className="text-[9.5px] leading-snug text-slate-500 dark:text-gray-500">
                 El nombre aparece en el encabezado del reporte PDF y como título
                 del proyecto.
             </p>
@@ -251,7 +251,7 @@ export const ProyectoPanel: React.FC<{
         <TerrenoSections />
 
         <PanelCard title="Módulo eléctrico" tone="accent">
-            <p className="mb-1.5 text-[9.5px] leading-snug text-gray-500">
+            <p className="mb-1.5 text-[9.5px] leading-snug text-slate-500 dark:text-gray-500">
                 Cálculo de luminarias, tomacorrientes, circuitos, tableros por
                 piso, alimentadores y metrados con exportación a Excel.
             </p>

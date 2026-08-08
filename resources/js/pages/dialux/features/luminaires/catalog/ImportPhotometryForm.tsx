@@ -64,13 +64,13 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
     return (
         <form
             onSubmit={submitProductImport}
-            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-100"
+            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-300 dark:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-200 dark:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-900 dark:text-slate-100"
         >
             <div className="flex items-center justify-between gap-2">
                 <p className="text-[9px] text-amber-300/80">Importacion IES/LDT/GLDF</p>
-                {isLoadingProducts && <span className="text-[8px] text-gray-500">Cargando...</span>}
+                {isLoadingProducts && <span className="text-[8px] text-gray-500 dark:text-gray-500">Cargando...</span>}
             </div>
-            <label className="mt-1.5 flex w-full cursor-pointer items-center justify-center gap-1 rounded border border-amber-700/30 bg-gray-950/30 px-2 py-1 text-[9px] text-amber-100 hover:bg-amber-900/20">
+            <label className="mt-1.5 flex w-full cursor-pointer items-center justify-center gap-1 rounded border border-amber-700/30 bg-gray-300 dark:bg-gray-950/30 px-2 py-1 text-[9px] text-amber-100 hover:bg-amber-900/20">
                 <Upload size={9} />
                 <span className="truncate">{selectedFile ? selectedFile.name : 'Seleccionar archivo .ies / .ldt / .gldf'}</span>
                 <input
@@ -90,18 +90,18 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
                     value={productName}
                     onChange={(event) => setProductName(event.target.value)}
                     placeholder="Nombre del producto (opcional)"
-                    className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                    className="rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[9px] text-gray-800 dark:text-gray-800 dark:text-gray-200 placeholder:text-gray-600 dark:text-gray-600 focus:border-amber-600 focus:outline-none"
                 />
                 <input
                     type="text"
                     value={manufacturerName}
                     onChange={(event) => setManufacturerName(event.target.value)}
                     placeholder="Marca / fabricante (opcional)"
-                    className="rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-amber-600 focus:outline-none"
+                    className="rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[9px] text-gray-800 dark:text-gray-800 dark:text-gray-200 placeholder:text-gray-600 dark:text-gray-600 focus:border-amber-600 focus:outline-none"
                 />
             </div>
             <div className="mt-1.5 grid grid-cols-2 gap-1">
-                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[8px] text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
+                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[8px] text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
                     <span className="truncate">{productImage ? productImage.name : 'Imagen producto'}</span>
                     <input
                         type="file"
@@ -110,7 +110,7 @@ export function ImportPhotometryForm({ isLoadingProducts, onImported }: ImportPh
                         onChange={(event) => setProductImage(event.target.files?.[0] ?? null)}
                     />
                 </label>
-                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-700/70 bg-gray-950/40 px-2 py-1 text-[8px] text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
+                <label className="flex cursor-pointer items-center justify-center gap-1 rounded border border-gray-300 dark:border-gray-700/70 bg-gray-300 dark:bg-gray-950/40 px-2 py-1 text-[8px] text-gray-600 dark:text-gray-600 dark:text-gray-400 hover:border-amber-700/50 hover:text-amber-100">
                     <span className="truncate">{brandLogo ? brandLogo.name : 'Logo marca'}</span>
                     <input
                         type="file"

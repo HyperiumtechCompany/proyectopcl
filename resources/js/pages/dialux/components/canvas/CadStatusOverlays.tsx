@@ -32,14 +32,14 @@ export function CadStatusOverlays({
             {/* ── Overlay de carga ── */}
             {isLoading && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="flex min-w-65 flex-col items-center gap-4 rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl">
+                    <div className="flex min-w-65 flex-col items-center gap-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 p-6 shadow-2xl">
                         <div className="relative h-12 w-12">
-                            <div className="absolute inset-0 rounded-full border-4 border-slate-700" />
+                            <div className="absolute inset-0 rounded-full border-4 border-slate-300 dark:border-slate-700" />
                             <div className="absolute inset-0 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
                         </div>
                         <div className="text-center">
-                            <p className="text-sm font-semibold text-slate-200">Procesando archivo CAD</p>
-                            <p className="mt-1 font-mono text-xs text-slate-400">{fileName}</p>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Procesando archivo CAD</p>
+                            <p className="mt-1 font-mono text-xs text-slate-600 dark:text-slate-400">{fileName}</p>
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-slate-700">
                             <div className="h-1.5 rounded-full bg-cyan-500 transition-all" style={{ width: `${loadProgress}%` }} />
@@ -58,7 +58,7 @@ export function CadStatusOverlays({
 
             {/* ── Badge de documento activo ── */}
             {activeDoc && !isLoading && (
-                <div className="absolute top-3 right-3 z-30 flex items-center gap-2 rounded-lg border border-cyan-900/60 bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-2 rounded-lg border border-cyan-900/60 bg-slate-200 dark:bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
                     <span className="font-mono text-cyan-300">{fileName}</span>
                     <button
@@ -72,7 +72,7 @@ export function CadStatusOverlays({
 
             {/* ── Badge de calibración activa ── */}
             {isCalibrated && calibrationFactor !== 1 && (
-                <div className="absolute top-14 right-3 z-30 flex items-center gap-2 rounded-lg border border-amber-900/60 bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
+                <div className="absolute top-14 right-3 z-30 flex items-center gap-2 rounded-lg border border-amber-900/60 bg-slate-200 dark:bg-slate-900/85 px-3 py-1.5 text-xs shadow-xl backdrop-blur">
                     <div className="text-amber-400">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z" />

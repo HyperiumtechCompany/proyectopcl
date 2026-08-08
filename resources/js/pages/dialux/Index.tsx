@@ -89,7 +89,7 @@ export default function DialuxIndex({ proyectos }: PageProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="DIAlux" />
 
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-950 px-4 py-6 text-slate-100 sm:px-6">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 dark:bg-slate-950 px-4 py-6 text-slate-900 dark:text-slate-100 sm:px-6">
                 <div className="mx-auto w-full max-w-8xl">
                     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">

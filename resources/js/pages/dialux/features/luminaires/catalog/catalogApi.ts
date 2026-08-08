@@ -37,7 +37,7 @@ export interface ImportedLuminaireProduct {
     report_assets?: {
         polar_svg?: string | null;
     } | null;
-    dimensions?: { length: number; width: number; height: number } | null;
+    dimensions?: { length: number; width: number; height: number; radius?: number } | null;
 }
 
 export type PhotometricWeb = NonNullable<Fixture['photometricWeb']>;
@@ -52,6 +52,10 @@ export interface ManualLuminairePayload {
     cri_ra?: number;
     beam_angle_50?: number;
     photometric_table?: Array<{ gamma: number; candela: number }>;
+    fixture_type?: string;
+    fixture_shape?: string;
+    /** radius solo aplica cuando fixture_shape es 'round'/'cylindrical'. */
+    dimensions?: { length?: number; width?: number; height?: number; radius?: number };
 }
 
 /** Mensaje de error legible extraído de una respuesta de validación de Laravel (422) o de un mensaje genérico. */

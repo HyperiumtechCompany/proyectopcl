@@ -56,7 +56,7 @@ export function RoomOutletsSection({
     };
 
     return (
-        <SectionWrapper icon={<PlugZap size={12} className="text-emerald-400" />} label="Tomacorrientes por ambiente">
+        <SectionWrapper icon={<PlugZap size={12} className="text-emerald-600 dark:text-emerald-400" />} label="Tomacorrientes por ambiente">
             <SelectField
                 label="Uso"
                 value={outletUse}

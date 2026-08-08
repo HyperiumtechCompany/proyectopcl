@@ -110,7 +110,7 @@ const WALL_TYPE_OPTIONS: Array<{
     label: string;
     color: string;
 }> = [
-    { value: 'interior', label: 'Interior', color: 'text-slate-300' },
+    { value: 'interior', label: 'Interior', color: 'text-slate-700 dark:text-slate-300' },
     { value: 'exterior', label: 'Exterior', color: 'text-blue-400' },
     { value: 'cerco', label: 'Cerco', color: 'text-amber-400' },
 ];
@@ -207,15 +207,15 @@ export const ConstruccionPanel: React.FC<{
                                     onClick={() => onSetRoomType(opt.value)}
                                     className={`rounded border px-2 py-1.5 text-[10px] font-semibold transition-colors ${
                                         roomTypeTemplate === opt.value
-                                            ? `border-gray-500 bg-gray-700 ${opt.color}`
-                                            : 'border-gray-700/50 bg-gray-900/50 text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+                                            ? `border-gray-500 bg-gray-300 dark:bg-gray-700 ${opt.color}`
+                                            : 'border-gray-300 dark:border-gray-700/50 bg-gray-200 dark:bg-gray-900/50 text-gray-500 dark:text-gray-500 hover:bg-gray-200 dark:bg-gray-800 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                                     }`}
                                 >
                                     {opt.label}
                                 </button>
                             ))}
                         </div>
-                        <p className="mt-2 text-[9.5px] leading-snug text-gray-600">
+                        <p className="mt-2 text-[9.5px] leading-snug text-gray-600 dark:text-gray-600">
                             {roomTypeTemplate === 'room'
                                 ? 'Recinto: solo geometria constructiva.'
                                 : 'Ambiente: participa en normativa e iluminacion.'}
@@ -251,8 +251,8 @@ export const ConstruccionPanel: React.FC<{
                                     onClick={() => onSetWallType(opt.value)}
                                     className={`rounded border px-2 py-1.5 text-[9px] font-semibold transition-colors ${
                                         wallTypeTemplate === opt.value
-                                            ? `border-gray-500 bg-gray-700 ${opt.color}`
-                                            : 'border-gray-700/50 bg-gray-900/50 text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+                                            ? `border-gray-500 bg-gray-300 dark:bg-gray-700 ${opt.color}`
+                                            : 'border-gray-300 dark:border-gray-700/50 bg-gray-200 dark:bg-gray-900/50 text-gray-500 dark:text-gray-500 hover:bg-gray-200 dark:bg-gray-800 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                                     }`}
                                 >
                                     {opt.label}
@@ -309,7 +309,7 @@ export const ConstruccionPanel: React.FC<{
                         onChange={onSetAngleSnap}
                     />
                     <PanelCard title="Flujo recomendado">
-                        <ol className="list-none space-y-1.5 text-[10px] leading-relaxed text-gray-400">
+                        <ol className="list-none space-y-1.5 text-[10px] leading-relaxed text-gray-600 dark:text-gray-600 dark:text-gray-400">
                             {[
                                 'Dibuja recintos o muros.',
                                 'Inserta ventanas, puertas y voladizos.',

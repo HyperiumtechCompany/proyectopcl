@@ -766,7 +766,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     power: t.power,
                     efficiency: t.efficiency ?? 0.8,
                     fixtureType,
-                    fixtureShape: t.fixtureShape ?? 'round',
+                    fixtureShape: t.fixtureShape ?? 'rectangular',
                     brand: t.brand,
                     articleNumber: t.articleNumber,
                     productId: t.productId,
@@ -942,6 +942,19 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             window.addEventListener('keydown', handler, true);
             return () => window.removeEventListener('keydown', handler, true);
         }, [undoLastDraftVertex]);
+
+        // Espejo en React state del trazo abandonado al cambiar de herramienta.
+        // useCanvasInteraction ya limpia su ref interno (stateRef) al cambiar
+        // activeTool, pero lo que se ve en pantalla es este state — sin esto,
+        // el dibujo a medias quedaba visible aunque internamente ya no
+        // existiera, confundiendo al usuario (y potencialmente al cliente).
+        useEffect(() => {
+            setRoomVertices([]);
+            setRoomPreviewPt(null);
+            setWallPreview(null);
+            setCanopyPreview(null);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [ui.activeTool]);
 
         // ── Input dinámico (distancia + ángulo tecleados) ───────────────────────
         // Solo aplica a recinto/muro con al menos un vértice ya colocado: son
@@ -1380,7 +1393,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         return (
             <div
                 ref={wrapperRef}
-                className="relative h-full w-full flex-1 overflow-hidden bg-[#0d0f14]"
+                className="relative h-full w-full flex-1 overflow-hidden bg-gray-50 dark:bg-[#0d0f14]"
             >
                 <style>{`
                 #cad-engine-container { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; }

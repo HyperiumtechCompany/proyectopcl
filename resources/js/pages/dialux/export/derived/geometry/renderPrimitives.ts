@@ -57,7 +57,7 @@ export function renderFixtureSymbol(
     const accent = options.accent ?? '#fbbf24';
     const fill = options.fill ?? '#fbbf24';
     const fillOpacity = (options.fillOpacity ?? 0.22).toFixed(2);
-    const shape = fixture.fixtureShape ?? 'round';
+    const shape = fixture.fixtureShape ?? 'rectangular';
     const radius = 11 * scale;
     const width = shape === 'rectangular' ? 28 * scale : 22 * scale;
     const rxCylindrical = 8 * scale;

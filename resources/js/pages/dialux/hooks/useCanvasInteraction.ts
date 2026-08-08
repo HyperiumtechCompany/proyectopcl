@@ -272,6 +272,35 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         if (activeTool !== 'measure-area') {
             stateRef.current.measureAreaVertices = [];
         }
+        // Trazo de room/corridor/stair (polígono) inconcluso al cambiar de
+        // herramienta: sin esto, el usuario que se confunde y cambia de
+        // herramienta a mitad de un trazo se queda con vértices "fantasma"
+        // en el estado interno — el próximo trazo con esa misma herramienta
+        // arrastra esos vértices viejos, y el dibujo abandonado seguía
+        // visible en el canvas hasta recargar.
+        if (
+            activeTool !== 'room' &&
+            activeTool !== 'corridor' &&
+            activeTool !== 'stair'
+        ) {
+            stateRef.current.roomVertices = [];
+            stateRef.current.previewPoint = null;
+        }
+        if (!isWallTool(activeTool)) {
+            stateRef.current.wallVertices = [];
+        }
+        if (activeTool !== 'canopy') {
+            stateRef.current.wallStart = null;
+        }
+        if (
+            activeTool !== 'room' &&
+            activeTool !== 'corridor' &&
+            activeTool !== 'stair' &&
+            !isWallTool(activeTool) &&
+            activeTool !== 'canopy'
+        ) {
+            stateRef.current.isDrawing = false;
+        }
         // La limpieza solo debe ejecutarse al cambiar de herramienta; el callback
         // llega inline desde el canvas y cambia de identidad en cada render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -577,7 +606,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 'select',
                 'pan',
             ];
-            const shouldSnap = !noSnapTools.includes(activeTool);
+            // Alt mantenido = override temporal que desactiva TODO snap (posición
+            // y ángulo), igual que Shift fuerza ortogonal. Es la salida rápida
+            // para cuando el asistido "no deja" avanzar hacia donde el usuario
+            // realmente apunta — sin necesidad de cambiar de modo angular.
+            const shouldSnap = !noSnapTools.includes(activeTool) && !e.altKey;
 
             const cadOsnapPoint = shouldSnap
                 ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
@@ -1047,7 +1080,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 'select',
                 'pan',
             ];
-            const shouldSnap = !noSnapTools.includes(activeTool);
+            // Alt mantenido = override temporal que desactiva TODO snap (posición
+            // y ángulo), igual que Shift fuerza ortogonal. Es la salida rápida
+            // para cuando el asistido "no deja" avanzar hacia donde el usuario
+            // realmente apunta — sin necesidad de cambiar de modo angular.
+            const shouldSnap = !noSnapTools.includes(activeTool) && !e.altKey;
 
             const cadOsnapPoint = shouldSnap
                 ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)

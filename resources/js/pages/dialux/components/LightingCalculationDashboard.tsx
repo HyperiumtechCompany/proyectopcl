@@ -143,9 +143,9 @@ Generado por: Dialux Professional Lighting Calculator
     };
 
     return (
-        <div className="space-y-6 p-6 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-700 min-h-screen">
+        <div className="space-y-6 p-6 bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 min-h-screen">
             {/* Encabezado */}
-            <div className="border-b border-slate-700 pb-6">
+            <div className="border-b border-slate-300 dark:border-slate-700 pb-6">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         <BarChart3 className="w-8 h-8 text-amber-400" />
@@ -153,7 +153,7 @@ Generado por: Dialux Professional Lighting Calculator
                             <h1 className="text-3xl font-bold text-white">
                                 Dashboard de Iluminación
                             </h1>
-                            <p className="text-sm text-slate-400">{projectName}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">{projectName}</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
@@ -180,7 +180,7 @@ Generado por: Dialux Professional Lighting Calculator
                             className={`px-4 py-2 rounded text-sm font-semibold transition-all ${
                                 viewMode === mode
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                    : 'bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-600'
                             }`}
                         >
                             {label}
@@ -195,25 +195,25 @@ Generado por: Dialux Professional Lighting Calculator
                     {/* Tarjetas de Resumen */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="bg-slate-700/50 p-4 rounded border border-slate-600">
-                            <p className="text-slate-400 text-xs uppercase mb-2">Recintos</p>
+                            <p className="text-slate-600 dark:text-slate-400 text-xs uppercase mb-2">Recintos</p>
                             <p className="text-4xl font-bold text-cyan-400">
                                 {calculations.length}
                             </p>
                         </div>
                         <div className="bg-slate-700/50 p-4 rounded border border-slate-600">
-                            <p className="text-slate-400 text-xs uppercase mb-2">
+                            <p className="text-slate-600 dark:text-slate-400 text-xs uppercase mb-2">
                                 Luminarias Total
                             </p>
                             <p className="text-4xl font-bold text-emerald-400">{totalFixtures}</p>
                         </div>
                         <div className="bg-slate-700/50 p-4 rounded border border-slate-600">
-                            <p className="text-slate-400 text-xs uppercase mb-2">Lúmenes</p>
+                            <p className="text-slate-600 dark:text-slate-400 text-xs uppercase mb-2">Lúmenes</p>
                             <p className="text-3xl font-bold text-amber-400">
                                 {(totalLumens / 1000).toFixed(1)}k
                             </p>
                         </div>
                         <div className="bg-slate-700/50 p-4 rounded border border-slate-600">
-                            <p className="text-slate-400 text-xs uppercase mb-2">Óptimos</p>
+                            <p className="text-slate-600 dark:text-slate-400 text-xs uppercase mb-2">Óptimos</p>
                             <p className="text-4xl font-bold text-blue-400">
                                 {calculations.filter((c) => c.coverage === 'optimal').length}
                             </p>
@@ -223,7 +223,7 @@ Generado por: Dialux Professional Lighting Calculator
                     {/* Selección de Recinto */}
                     {calculations.length > 0 && (
                         <div className="bg-slate-700/30 border border-slate-600 rounded p-4">
-                            <p className="text-slate-400 text-xs uppercase mb-3 tracking-wider">
+                            <p className="text-slate-600 dark:text-slate-400 text-xs uppercase mb-3 tracking-wider">
                                 Filtrar por Recinto
                             </p>
                             <div className="flex flex-wrap gap-2">
@@ -232,7 +232,7 @@ Generado por: Dialux Professional Lighting Calculator
                                     className={`px-3 py-1 rounded text-sm transition-all ${
                                         selectedRoom === null
                                             ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                                            : 'bg-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-500'
                                     }`}
                                 >
                                     Todos
@@ -244,7 +244,7 @@ Generado por: Dialux Professional Lighting Calculator
                                         className={`px-3 py-1 rounded text-sm transition-all flex items-center gap-1 ${
                                             selectedRoom === calc.roomId
                                                 ? 'bg-blue-600 text-white'
-                                                : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                                                : 'bg-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-500'
                                         }`}
                                     >
                                         <Home size={14} />
@@ -267,7 +267,7 @@ Generado por: Dialux Professional Lighting Calculator
                                         <h4 className="font-semibold text-white text-lg mb-1">
                                             {calc.name}
                                         </h4>
-                                        <p className="text-xs text-slate-400">
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">
                                             {calc.fixtureType} • {calc.area.toFixed(2)} m² •{' '}
                                             {calc.normaLux} lux
                                         </p>
@@ -284,25 +284,25 @@ Generado por: Dialux Professional Lighting Calculator
                                 </div>
                                 <div className="grid grid-cols-4 gap-2 text-xs">
                                     <div>
-                                        <p className="text-slate-400">Lm Req.</p>
+                                        <p className="text-slate-600 dark:text-slate-400">Lm Req.</p>
                                         <p className="font-mono text-amber-400">
                                             {calc.lumensRequired.toLocaleString('es-PE')}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-slate-400">Exacta</p>
+                                        <p className="text-slate-600 dark:text-slate-400">Exacta</p>
                                         <p className="font-mono text-blue-400">
                                             {calc.exactQuantity.toFixed(2)}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-slate-400">Uniformidad</p>
-                                        <p className="font-mono text-slate-300">
+                                        <p className="text-slate-600 dark:text-slate-400">Uniformidad</p>
+                                        <p className="font-mono text-slate-700 dark:text-slate-300">
                                             {((calc.uniformityEstimate || 0) * 100).toFixed(0)}%
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-slate-400">Estado</p>
+                                        <p className="text-slate-600 dark:text-slate-400">Estado</p>
                                         <p
                                             className={`font-semibold ${
                                                 calc.coverage === 'optimal'
@@ -329,7 +329,7 @@ Generado por: Dialux Professional Lighting Calculator
 
             {viewMode === 'report' && (
                 <div className="bg-slate-700/30 border border-slate-600 rounded p-4">
-                    <p className="text-slate-400 text-sm mb-4">
+                    <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
                         ✓ Reporte exportable en formato texto (.txt)
                     </p>
                     <button
@@ -346,7 +346,7 @@ Generado por: Dialux Professional Lighting Calculator
             {calculations.length === 0 && (
                 <div className="text-center py-12 bg-slate-700/20 border border-dashed border-slate-600 rounded">
                     <Lightbulb className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-                    <p className="text-slate-400 mb-4">
+                    <p className="text-slate-600 dark:text-slate-400 mb-4">
                         No hay cálculos aún. Crea el primero seleccionando un recinto.
                     </p>
                     <button

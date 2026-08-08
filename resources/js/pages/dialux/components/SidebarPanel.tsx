@@ -33,7 +33,7 @@ export const SidebarPanel: React.FC = () => {
                                 'relative flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10px] font-medium tracking-wide transition-colors duration-150',
                                 isActive
                                     ? 'text-blue-600 dark:text-blue-400'
-                                    : 'text-slate-500 hover:text-slate-800 dark:text-gray-600 dark:hover:text-gray-400',
+                                    : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-200',
                             ].join(' ')}
                         >
                             <Icon size={10} />
