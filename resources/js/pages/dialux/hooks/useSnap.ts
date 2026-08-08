@@ -32,7 +32,16 @@ interface SegmentCandidate {
 
 export function useSnap(opts: SnapOptions) {
     const { dxfEntities, walls, sceneToCanvas, extraVerticesScene = [], zoom = 1 } = opts;
-    const SMART_SNAP_MAX_DELTA_DEG = 12;
+    /**
+     * Tolerancia de captura del modo "Inteligente" (smart).
+     * Baja a propósito (antes 12°): el set de ángulos candidato de este modo
+     * combina 8 fijos (cada 45°) + hasta 8 guía dinámicos del muro/segmento
+     * vecino. Con una tolerancia amplia, los candidatos se solapan y cubren
+     * ~todo el círculo, dejando cero grados "libres" para trazar formas
+     * irregulares (terrenos con ángulos peculiares). 6° deja margen real
+     * entre candidatos sin perder la asistencia en ángulos intencionales.
+     */
+    const SMART_SNAP_MAX_DELTA_DEG = 6;
 
     /**
      * Factor de reducción de snap adaptativo al zoom.
@@ -100,7 +109,6 @@ export function useSnap(opts: SnapOptions) {
                     for (const [vx, vy] of ent.vertices) checkPoint(vx, vy);
                 } else if (
                     ent.type === 'rectangle' ||
-                    ent.type === 'text' ||
                     ent.type === 'point'
                 ) {
                     checkPoint(ent.x, ent.y);
@@ -357,9 +365,12 @@ export function useSnap(opts: SnapOptions) {
                     180, 210, 225, 240, 270, 300, 315, 330,
                 ];
             } else if (mode === 'smart') {
+                // Base ligera (cardinales + 45°) — la densidad de 15° queda
+                // reservada al modo "diagonal" dedicado. Lo "inteligente" de
+                // este modo son los guideAngles: ángulos reales tomados del
+                // muro/segmento vecino, no una rejilla arbitraria.
                 targetAngles = [
-                    0, 30, 45, 60, 90, 120, 135, 150,
-                    180, 210, 225, 240, 270, 300, 315, 330,
+                    0, 45, 90, 135, 180, 225, 270, 315,
                     ...guideAngles,
                 ];
             } else {

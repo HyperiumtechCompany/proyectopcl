@@ -433,6 +433,106 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         [getGuideAngles],
     );
 
+    /**
+     * Confirma un vértice de recinto/muro en un punto ya resuelto (screen px).
+     * Extraído de onMouseDown para poder reutilizarlo desde el input dinámico
+     * (distancia+ángulo tecleados) sin duplicar el cierre de polígono ni el
+     * umbral adaptativo al zoom. Devuelve true si la herramienta activa era
+     * room/corridor/stair/wall (el punto fue consumido).
+     */
+    const commitDrawVertex = useCallback(
+        (
+            cx: number,
+            cy: number,
+            setRoomVertices: (v: CanvasPoint[]) => void,
+            setWallPreview: (p: CanvasPoint[] | null) => void,
+        ): boolean => {
+            const s = stateRef.current;
+
+            if (
+                activeTool === 'room' ||
+                activeTool === 'corridor' ||
+                activeTool === 'stair'
+            ) {
+                if (s.roomVertices.length > 2) {
+                    const first = sceneToCanvas(
+                        s.roomVertices[0].x,
+                        s.roomVertices[0].y,
+                    );
+                    if (
+                        Math.hypot(first.x - cx, first.y - cy) <
+                        closeThresholdPx
+                    ) {
+                        onAddRoom(s.roomVertices);
+                        stateRef.current = {
+                            ...s,
+                            isDrawing: false,
+                            roomVertices: [],
+                            previewPoint: null,
+                        };
+                        setRoomVertices([]);
+                        return true;
+                    }
+                }
+                s.isDrawing = true;
+                const scenePoint = canvasToScene(cx, cy);
+                s.roomVertices.push(scenePoint);
+                s.previewPoint = scenePoint;
+                setRoomVertices([...s.roomVertices]);
+                return true;
+            }
+
+            if (isWallTool(activeTool)) {
+                if (!s.wallVertices) s.wallVertices = [];
+                const newPoint = canvasToScene(cx, cy);
+                if (s.wallVertices.length > 0) {
+                    const first = sceneToCanvas(
+                        s.wallVertices[0].x,
+                        s.wallVertices[0].y,
+                    );
+                    const newPointScreen = sceneToCanvas(
+                        newPoint.x,
+                        newPoint.y,
+                    );
+                    const dist = Math.hypot(
+                        newPointScreen.x - first.x,
+                        newPointScreen.y - first.y,
+                    );
+                    if (dist < closeThresholdPx) {
+                        onAddWall([...s.wallVertices, s.wallVertices[0]]);
+                        s.wallVertices = [];
+                        s.isDrawing = false;
+                        setWallPreview(null);
+                        return true;
+                    }
+                }
+                s.wallVertices.push(newPoint);
+                s.isDrawing = true;
+                return true;
+            }
+
+            return false;
+        },
+        [
+            activeTool,
+            closeThresholdPx,
+            sceneToCanvas,
+            canvasToScene,
+            onAddRoom,
+            onAddWall,
+        ],
+    );
+
+    /**
+     * Último punto confirmado del trazo en curso (metros de escena), para el
+     * input dinámico (distancia+ángulo). null si no hay trazo activo para la
+     * herramienta actual.
+     */
+    const getDraftPrevPoint = useCallback(
+        (): CanvasPoint | null => getPrevPointM(activeTool, stateRef.current),
+        [activeTool],
+    );
+
     // ─────────────────────────────────────────────────────────────────────────
     // Mouse Down
     // ─────────────────────────────────────────────────────────────────────────
@@ -613,67 +713,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-            if (
-                activeTool === 'room' ||
-                activeTool === 'corridor' ||
-                activeTool === 'stair'
-            ) {
-                if (s.roomVertices.length > 2) {
-                    const first = sceneToCanvas(
-                        s.roomVertices[0].x,
-                        s.roomVertices[0].y,
-                    );
-                    // Umbral adaptativo al zoom: evita cierre prematuro en muros cortos
-                    if (
-                        Math.hypot(first.x - cx, first.y - cy) <
-                        closeThresholdPx
-                    ) {
-                        onAddRoom(s.roomVertices);
-                        stateRef.current = {
-                            ...s,
-                            isDrawing: false,
-                            roomVertices: [],
-                            previewPoint: null,
-                        };
-                        setRoomVertices([]);
-                        return;
-                    }
-                }
-                s.isDrawing = true;
-                const scenePoint = canvasToScene(cx, cy);
-                s.roomVertices.push(scenePoint);
-                s.previewPoint = scenePoint;
-                setRoomVertices([...s.roomVertices]);
-                return;
-            }
-
-            if (isWallTool(activeTool)) {
-                if (!s.wallVertices) s.wallVertices = [];
-                const newPoint = canvasToScene(cx, cy);
-                if (s.wallVertices.length > 0) {
-                    const first = sceneToCanvas(
-                        s.wallVertices[0].x,
-                        s.wallVertices[0].y,
-                    );
-                    const newPointScreen = sceneToCanvas(
-                        newPoint.x,
-                        newPoint.y,
-                    );
-                    const dist = Math.hypot(
-                        newPointScreen.x - first.x,
-                        newPointScreen.y - first.y,
-                    );
-                    // Umbral adaptativo al zoom igual que para rooms
-                    if (dist < closeThresholdPx) {
-                        onAddWall([...s.wallVertices, s.wallVertices[0]]);
-                        s.wallVertices = [];
-                        s.isDrawing = false;
-                        setWallPreview(null);
-                        return;
-                    }
-                }
-                s.wallVertices.push(newPoint);
-                s.isDrawing = true;
+            if (commitDrawVertex(cx, cy, setRoomVertices, setWallPreview)) {
                 return;
             }
 
@@ -1504,5 +1544,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onDoubleClick: handleDoubleClick,
         isDragging: () => stateRef.current.isDragging,
         undoLastDraftVertex,
+        commitDrawVertex,
+        getDraftPrevPoint,
     };
 }

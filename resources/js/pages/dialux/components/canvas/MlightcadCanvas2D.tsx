@@ -90,6 +90,7 @@ import { OverlayCanopies } from './OverlayCanopies';
 import { OverlayDoors } from './OverlayDoors';
 import { OverlayElectricalDevices } from './OverlayElectricalDevices';
 import { OverlayFixtures } from './OverlayFixtures';
+import { DynamicInputOverlay } from './DynamicInputOverlay';
 import { OverlayLightSwitches } from './OverlayLightSwitches';
 import { OverlayMeasureArea } from './OverlayMeasureArea';
 import { OverlayMeasureDistance } from './OverlayMeasureDistance';
@@ -341,6 +342,8 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onDoubleClick,
             isDragging: isDraggingFn,
             undoLastDraftVertex,
+            commitDrawVertex,
+            getDraftPrevPoint,
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
@@ -939,6 +942,74 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             window.addEventListener('keydown', handler, true);
             return () => window.removeEventListener('keydown', handler, true);
         }, [undoLastDraftVertex]);
+
+        // ── Input dinámico (distancia + ángulo tecleados) ───────────────────────
+        // Solo aplica a recinto/muro con al menos un vértice ya colocado: son
+        // las herramientas de polígono donde el snap angular puede no alcanzar
+        // para trazar un ángulo irregular (terreno con forma peculiar). El
+        // valor tecleado se aplica tal cual, sin pasar por el snap.
+        const isDynInputTool =
+            ui.activeTool === 'room' ||
+            ui.activeTool === 'corridor' ||
+            ui.activeTool === 'stair' ||
+            ui.activeTool === 'wall' ||
+            ui.activeTool === 'education-wall';
+        const dynInputPrevScene = isDynInputTool ? getDraftPrevPoint() : null;
+        const dynInputPreviewScene = isDynInputTool
+            ? ui.activeTool === 'wall' || ui.activeTool === 'education-wall'
+                ? (wallPreview?.length ? wallPreview[wallPreview.length - 1] : null)
+                : roomPreviewPt
+            : null;
+        const dynInputVisible = Boolean(
+            dynInputPrevScene && dynInputPreviewScene,
+        );
+        const dynInputPrevScreen = dynInputPrevScene
+            ? screenPoint(dynInputPrevScene)
+            : null;
+        const dynInputPreviewScreen = dynInputPreviewScene
+            ? screenPoint(dynInputPreviewScene)
+            : null;
+        let dynInputLiveDistanceM = 0;
+        let dynInputLiveAngleDeg = 0;
+        if (dynInputPrevScreen && dynInputPreviewScreen) {
+            dynInputLiveDistanceM = measureCadDistanceFromScreen(
+                dynInputPrevScreen,
+                dynInputPreviewScreen,
+            );
+            const dx = dynInputPreviewScreen.x - dynInputPrevScreen.x;
+            const dy = dynInputPreviewScreen.y - dynInputPrevScreen.y;
+            dynInputLiveAngleDeg =
+                (((Math.atan2(dy, dx) * 180) / Math.PI) + 360) % 360;
+        }
+        const handleDynamicInputCommit = useCallback(
+            (distanceM: number, angleDeg: number) => {
+                const prevScene = getDraftPrevPoint();
+                if (!prevScene) return;
+                const prevScreen = screenPoint(prevScene);
+                const refScreen = screenPoint({
+                    x: prevScene.x + 1,
+                    y: prevScene.y,
+                });
+                const pxPerMeter =
+                    Math.hypot(
+                        refScreen.x - prevScreen.x,
+                        refScreen.y - prevScreen.y,
+                    ) || 1;
+                const angleRad = (angleDeg * Math.PI) / 180;
+                const distancePx = distanceM * pxPerMeter;
+                const targetScreen = {
+                    x: prevScreen.x + distancePx * Math.cos(angleRad),
+                    y: prevScreen.y + distancePx * Math.sin(angleRad),
+                };
+                commitDrawVertex(
+                    targetScreen.x,
+                    targetScreen.y,
+                    setRoomVertices,
+                    setWallPreview,
+                );
+            },
+            [getDraftPrevPoint, screenPoint, commitDrawVertex],
+        );
 
         // ── Manija de rotación (luminaria / interruptor / dispositivo único) ────
         const rotateKind: 'fixture' | 'switch' | 'device' | null =
@@ -1632,6 +1703,14 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         onRotate={handleRotate}
                     />
                 </svg>
+
+                <DynamicInputOverlay
+                    visible={dynInputVisible}
+                    anchorScreen={dynInputPreviewScreen}
+                    liveDistanceM={dynInputLiveDistanceM}
+                    liveAngleDeg={dynInputLiveAngleDeg}
+                    onCommit={handleDynamicInputCommit}
+                />
 
                 <CalibrationDialog
                     key={
