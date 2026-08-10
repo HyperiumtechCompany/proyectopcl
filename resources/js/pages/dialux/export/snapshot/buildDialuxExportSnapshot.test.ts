@@ -299,3 +299,70 @@ describe('buildDialuxExportSnapshot — Fase 11 (resultados profesionales: proce
         expect(ambientB.metrics.provenance.configSummary).toBeUndefined();
     });
 });
+
+/**
+ * Regresión del hallazgo bloqueante §-9.4 (plan_cierre_brecha_paridad_dialux_evo.md):
+ * el PDF (esta función) no evaluaba Ra/CRI, mientras el panel interactivo
+ * (`normativeEngine.ts`) sí — un ambiente con una luminaria de Ra insuficiente
+ * podía exportarse como "Cumple" en el documento entregado. Usa una actividad
+ * REAL de `normativaData.ts` (EN 12464-1 "Vestibulos de entrada", Ra >= 60),
+ * no un valor inventado en el test.
+ */
+describe('buildDialuxExportSnapshot — evaluación de Ra/CRI (paridad con el panel interactivo)', () => {
+    it('luminaria instalada con CRI por debajo del mínimo de la actividad: la fila "ra" falla y el ambiente NO cumple', () => {
+        const room = buildRoom({
+            normativeStandard: 'en_12464',
+            normativeActivity: 'Vestibulos de entrada',
+            illuminanceLux: 100,
+            norma: 100,
+        });
+        const project = buildProjectWithRoom(room);
+        project.scenes[0]!.fixtures[0]!.cri = 50; // por debajo del Ra >= 60 exigido
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom: {},
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const ambient = snapshot.ambients[0]!;
+        const ra = ambient.metrics.requirementEvaluations.find((e) => e.metric === 'ra')!;
+
+        expect(ra).toBeDefined();
+        expect(ra.requiredValue).toBe(60);
+        expect(ra.calculatedValue).toBe(50);
+        expect(ra.status).toBe('fail');
+        expect(ambient.metrics.ra).toBe(50);
+        expect(ambient.metrics.raRequired).toBe(60);
+        // Antes de esta corrección, `complies` no consideraba Ra en absoluto
+        // y este ambiente hubiera dado "Cumple" pese al CRI insuficiente.
+        expect(ambient.metrics.complies).toBe(false);
+    });
+
+    it('luminaria instalada con CRI suficiente: la fila "ra" pasa', () => {
+        const room = buildRoom({
+            normativeStandard: 'en_12464',
+            normativeActivity: 'Vestibulos de entrada',
+            illuminanceLux: 100,
+            norma: 100,
+        });
+        const project = buildProjectWithRoom(room);
+        project.scenes[0]!.fixtures[0]!.cri = 80;
+
+        const snapshot = buildDialuxExportSnapshot({
+            project,
+            activeSceneId: 'scene-1',
+            resultsByRoom: {},
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const ambient = snapshot.ambients[0]!;
+        const ra = ambient.metrics.requirementEvaluations.find((e) => e.metric === 'ra')!;
+        expect(ra.status).toBe('pass');
+    });
+});

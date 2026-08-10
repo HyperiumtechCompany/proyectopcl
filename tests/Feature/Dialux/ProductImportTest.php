@@ -26,6 +26,7 @@ test('authenticated users can import an ies luminaire product', function () {
         '[WATTS] 40',
         'TILT=NONE',
         '1 4000 1 3 1 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 45 90',
         '0',
         '1200 800 100',
@@ -155,6 +156,78 @@ test('ldt with one c plane skips reduction factors before photometric angles', f
         ->and(array_map('floatval', $web['gamma_angles']))->toBe([0.0, 45.0, 90.0])
         ->and(array_map('floatval', $web['candela'][0]))->toBe([1000.0, 500.0, 0.0])
         ->and((float) $web['reference_lumens'])->toBe(2000.0);
+});
+
+/**
+ * Regresión de un bug real encontrado al importar archivos LDT reales de
+ * fabricante simétricos con múltiples planos C (LEDVANCE, Zumtobel): el
+ * archivo declara `Mc` planos C (ej. 24, a 15° de paso) pero, al ser
+ * simétrico (`symmetry` 2-4), solo trae datos de candela para el
+ * cuarto/mitad no redundante (ej. 7 planos, 0°-90°) — el resto se completa
+ * por reflejo en el consumidor. Antes de este fix, `photometric_web.c_angles`
+ * quedaba con los `Mc` ángulos DECLARADOS (24) mientras `candela` solo tenía
+ * las filas reales (7) — un descalce de longitud que corrompía en silencio
+ * `candelaFromPhotometricWeb()` (TS) para cualquier azimut fuera de los
+ * primeros planos, y además disparaba un falso positivo de "flujo
+ * inconsistente" en `checkFluxConsistency()` porque `estimateLumens()`
+ * integraba solo el cuarto de esfera presente y lo reportaba como el total.
+ */
+test('ldt with declared symmetry and fewer real c-plane rows than declared: c_angles matches candela, no false flux warning', function () {
+    Storage::fake();
+
+    $user = User::factory()->create();
+    $lines = array_fill(0, 33, '');
+    $lines[0] = 'ACME Lighting';
+    $lines[2] = '4';   // symmetry = 4 (cuarto de simetría)
+    $lines[3] = '8';   // Mc declarado (grilla completa 0-315° a 45°)
+    $lines[4] = '45';  // Dc
+    $lines[5] = '3';   // Ng
+    $lines[6] = '45';  // Dg
+    $lines[8] = 'Panel Simetrico';
+    $lines[9] = 'SYM-8';
+    $lines[12] = '0.6 0.6 0.05';
+    $lines[14] = '1';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '5000';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '40';
+    // Solo 3 planos reales (C=0°,45°,90° — el cuarto no redundante bajo
+    // symmetry=4), aunque Mc=8 declara la grilla completa hasta 315°.
+    // Valores (cd/klm) elegidos para que, integrados sobre el cuarto de
+    // esfera y multiplicados ×4 por la simetría, se acerquen al flujo
+    // declarado (5000 lm) — verificado numéricamente, no a ojo.
+    $lines[] = '340 255 85';
+    $lines[] = '326 241 79';
+    $lines[] = '283 198 57';
+
+    $file = UploadedFile::fake()->createWithContent('symmetric-panel.ldt', implode("\n", $lines));
+
+    $this->actingAs($user)->post(route('dialux.products.import'), [
+        'file' => $file,
+        'normative_standard' => 'universal',
+    ])->assertCreated();
+
+    $product = LuminaireProduct::query()->firstOrFail();
+    $web = $product->photometric_web;
+
+    // Invariante clave: `c_angles` debe tener la MISMA longitud que
+    // `candela` (una fila por ángulo), nunca la del `Mc` declarado.
+    expect(count($web['c_angles']))->toBe(count($web['candela']))
+        ->and(array_map('floatval', $web['c_angles']))->toBe([0.0, 45.0, 90.0]);
+
+    // Sin el fix, `estimateLumens()` integraba solo el cuarto de esfera
+    // presente (0°-90°) y lo comparaba contra el flujo declarado como si
+    // fuera el total — disparando este warning aunque el archivo sea
+    // perfectamente consistente.
+    expect(collect($product->report_data['warnings'] ?? [])
+        ->contains(fn ($w) => str_contains($w, 'difiere del flujo integrado')))->toBeFalse();
+
+    // La advertencia informativa de simetría sí debe aparecer (es honesta,
+    // no un error) — y NO debe sonar como si el archivo estuviera incompleto.
+    expect(collect($product->report_data['warnings'] ?? [])
+        ->contains(fn ($w) => str_contains($w, 'esperable para una luminaria simétrica')))->toBeTrue();
 });
 
 test('authenticated users can import an extended ldt luminaire product without shifting photometric fields', function () {
@@ -509,6 +582,7 @@ test('ies import tags photometric provenance as manufacturer and reports it expl
         '[WATTS] 40',
         'TILT=NONE',
         '1 4000 1 3 1 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 45 90',
         '0',
         '1200 800 100',
@@ -675,6 +749,7 @@ test('ies import warns when vertical angles are not monotonically increasing', f
         '[LUMINAIRE] Panel Malformado',
         'TILT=NONE',
         '1 4000 1 3 1 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 90 45',
         '0',
         '1200 100 800',
@@ -699,6 +774,7 @@ test('ies import warns when the candela matrix does not match the declared dimen
         '[LUMINAIRE] Panel Matriz Incompleta',
         'TILT=NONE',
         '1 4000 1 3 2 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 45 90',
         '0 90',
         '1200 800 100',
@@ -723,6 +799,7 @@ test('ies import warns when declared flux differs greatly from the integrated fl
         '[LUMINAIRE] Panel Flujo Inconsistente',
         'TILT=NONE',
         '1 100000 1 3 1 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 45 90',
         '0',
         '1200 800 100',
@@ -738,6 +815,58 @@ test('ies import warns when declared flux differs greatly from the integrated fl
         ->contains(fn ($w) => str_contains($w, 'difiere del flujo integrado')))->toBeTrue();
 });
 
+/**
+ * Regresión de un bug real encontrado al importar un archivo IES real de
+ * fabricante (Dialight, campana industrial): `parseIes()` nunca saltaba la
+ * línea de 3 campos obligatoria de LM-63 (ballast factor, ballast-lamp
+ * photometric factor, input watts) entre la línea de 10 campos y los
+ * ángulos verticales — TODOS los ángulos/candela quedaban desplazados 3
+ * posiciones. Los demás tests de este archivo no lo detectaban porque sus
+ * fixtures, escritos a mano, ya omitían esa línea (coincidiendo por
+ * casualidad con el bug). Este test usa la estructura LM-63 real completa,
+ * con potencia declarada SOLO en la línea de ballast (sin keyword
+ * `[WATTS]`), como en el archivo real que expuso el bug.
+ */
+test('ies import correctly skips the mandatory ballast-factor line before reading angles', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+    $file = UploadedFile::fake()->createWithContent('highbay.ies', implode("\n", [
+        'IESNA:LM-63-2002',
+        '[MANUFAC] Test Lighting',
+        '[LUMINAIRE] Campana industrial',
+        'TILT=NONE',
+        '1 -1 1 3 2 1 2 0.6 0.6 0.05',
+        '1 1 163',
+        '0 45 90',
+        '0 180',
+        '1200 800 100',
+        '1100 700 90',
+    ]));
+
+    $this->actingAs($user)
+        ->post(route('dialux.products.import'), ['file' => $file, 'normative_standard' => 'universal'])
+        ->assertCreated();
+
+    $product = LuminaireProduct::query()->firstOrFail();
+
+    // Sin el fix, gamma_angles hubiera arrancado con [1, 1, 163] (la línea
+    // de ballast) en vez de los ángulos reales — y ya no sería
+    // monotónicamente creciente.
+    expect(array_map('floatval', $product->photometric_web['gamma_angles']))->toBe([0.0, 45.0, 90.0])
+        ->and(array_map('floatval', $product->photometric_web['c_angles']))->toBe([0.0, 180.0])
+        ->and(array_map('floatval', $product->photometric_web['candela'][0]))->toBe([1200.0, 800.0, 100.0])
+        ->and(array_map('floatval', $product->photometric_web['candela'][1]))->toBe([1100.0, 700.0, 90.0]);
+
+    // `inputWatts` (163, línea de ballast) se usa como respaldo de potencia
+    // porque el archivo no declara `[WATTS]`/`[WATTAGE]` — patrón real de
+    // fabricante (Dialight declara la potencia solo en `[_ELECTRICALS]`,
+    // texto libre que este parser no intenta extraer).
+    expect((float) $product->power_watts)->toBe(163.0);
+
+    expect(collect($product->report_data['warnings'] ?? [])
+        ->contains(fn ($w) => str_contains($w, 'no son monotónicamente crecientes')))->toBeFalse();
+});
+
 test('ies TILT=INCLUDE is parsed without corrupting the photometric matrix', function () {
     Storage::fake();
     $user = User::factory()->create();
@@ -751,6 +880,7 @@ test('ies TILT=INCLUDE is parsed without corrupting the photometric matrix', fun
         '0 90',
         '1.0 0.9',
         '1 4000 1 3 1 1 2 0.6 0.6 0.05',
+        '1 1 40',
         '0 45 90',
         '0',
         '1200 800 100',

@@ -153,4 +153,54 @@ describe('buildFixedPageSeeds — trazabilidad de motor/config/warnings (Fase 13
         expect(warningsNote).toBeDefined();
         expect(warningsNote).toMatch(/no permite más de un rebote/);
     });
+
+    /**
+     * Regresión de auditoría `dialux-calc-reviewer`
+     * (`planes/plan_cierre_brecha_paridad_dialux_evo.md`): `buildEngineNote`
+     * tomaba la procedencia del PRIMER ambiente con `snapshotHash` y la
+     * mostraba como si aplicara a todo el informe, incluso cuando otro
+     * ambiente cayó al cálculo de respaldo (sin oclusión/reflectancia/UGR de
+     * Guth) por no estar cubierto por el `calculationRun`.
+     */
+    it('con un ambiente fuera del calculationRun (cálculo de respaldo): la nota de motor advierte procedencia mixta, no oculta la diferencia', async () => {
+        const roomA = buildRoom({ id: 'room-a' });
+        const roomB = buildRoom({ id: 'room-b' });
+
+        const projectForRun = buildProjectWithRoom(roomA);
+        const { resultsByRoom, run } = await runProjectLightingCalculation(projectForRun);
+
+        const fullProject = buildProjectWithRoom(roomA);
+        fullProject.scenes[0]!.rooms.push(roomB);
+        fullProject.scenes[0]!.fixtures.push({
+            id: 'fixture-2',
+            name: 'Panel LED B',
+            x: 2.5,
+            y: 2,
+            z: 2.9,
+            lumens: 4000,
+            efficiency: 0.8,
+            fixtureType: 'panel',
+            lightColor: '#fff5e1',
+            roomId: `${roomB.id}::ambient-1`,
+        });
+
+        const snapshot = buildDialuxExportSnapshot({
+            project: fullProject,
+            activeSceneId: 'scene-1',
+            resultsByRoom,
+            calculationRun: run,
+            dxfEntities: null,
+            dxfExtents: null,
+            visualConfig,
+        });
+
+        const luminaires = buildLuminaireList(snapshot);
+        const seeds = buildFixedPageSeeds(snapshot, luminaires, []);
+        const observations = seeds.find((seed) => seed.kind === 'preliminary-observations')!;
+        const engineNote = observations.notes.find((note) => note.startsWith('Motor de calculo'));
+
+        expect(engineNote).toBeDefined();
+        expect(engineNote).toMatch(/ADVERTENCIA/);
+        expect(engineNote).toMatch(/no todos los ambientes/);
+    });
 });

@@ -1,5 +1,17 @@
 /**
  * useLightingEngine - Motor de calculo luminico en JavaScript puro.
+ *
+ * `calculate()` no tiene ningún llamador (auditoría `dialux-calc-reviewer`,
+ * ver `planes/plan_cierre_brecha_paridad_dialux_evo.md`) — el único sitio
+ * que lo invocaba (`EditorLayout.tsx`, respaldo cuando el Web Worker de
+ * cálculo fallaba) fue migrado a `runDirectPreviewEngine()` porque este
+ * método llama a `calculateLightingResult(room, fixtures)` SIN oclusión, sin
+ * reflectancia/interreflexión, sin UGR de Guth (usa el UGR heredado, que
+ * subestima el deslumbramiento en ángulos oblicuos por faltarle el escorzo
+ * `cosγ` — ver `hooks/glareCalculation.ts`) y sin factor de mantenimiento.
+ * NO reconectar este método a la UI sin resolver esas cuatro omisiones
+ * primero — usar `runDirectPreviewEngine()` con
+ * `buildProductionCalculationConfig()` en su lugar.
  */
 
 import { useCallback, useState } from 'react';

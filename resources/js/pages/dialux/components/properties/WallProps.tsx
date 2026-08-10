@@ -895,13 +895,26 @@ export const WallProps: React.FC<{
                     onChange={(value) => onUpdate({ postSpacing: value })}
                 />
             )}
+            {/*
+             * Auditoría `dialux-normativa-auditor`: `preset.minThickness`/
+             * `minHeight` (`hooks/wallNorms.ts::PERU_WALL_PRESETS`) son
+             * "mínimo operativo" que esta app adoptó — NUNCA se citó un
+             * artículo de RNE E.070/E.080 en el código (registrado como
+             * `pending-confirmation` en
+             * `.claude/skills/normativa-dialux/references/normativa.md`
+             * §5b). "✅ Cumple" sugería una verificación normativa que no
+             * existe — un valor "conforme" sin fuente normativa que lo
+             * sostenga es exactamente el patrón que este proyecto trata
+             * como bloqueante en otros lugares (ver
+             * `planes/plan_cierre_brecha_paridad_dialux_evo.md`).
+             */}
             <PropField
-                label="Estado"
+                label="Mínimo operativo"
                 value={
                     wall.thickness >= preset.minThickness &&
                     wall.height >= preset.minHeight
-                        ? '✅ Cumple'
-                        : '⚠️ Revisar mínimos'
+                        ? '✅ Sobre el mínimo operativo de la app'
+                        : '⚠️ Bajo el mínimo operativo de la app'
                 }
                 mono={false}
             />

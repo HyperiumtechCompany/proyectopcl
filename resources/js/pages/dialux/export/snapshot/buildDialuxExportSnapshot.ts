@@ -16,8 +16,13 @@ import type {
     DialuxExportSnapshot,
     DialuxExportVisualConfig,
     DialuxSceneComparisonSummary,
-    RequirementEvaluation,
 } from '../domain/types';
+import {
+    buildRequirementEvaluations,
+    buildRequirementSource,
+    resolveRaCalculated,
+    resolveRaRequired,
+} from './requirementEvaluations';
 
 const LIGHTING_ENGINE_NAME = 'lightingEngineCore';
 
@@ -59,113 +64,6 @@ function sortScenesByFloor(project: Project): Project['scenes'] {
     });
 }
 
-/**
- * Trazabilidad de origen de los requisitos: la norma/categoría que el usuario
- * ya asignó al ambiente en el editor (ver [[dialux-normativa-fuente-unica]]),
- * no un valor inventado en el reporte.
- */
-function buildRequirementSource(room: {
-    normativeStandard?: string;
-    normativeLabel?: string;
-    normativeCategory?: string;
-}): string | undefined {
-    const label = room.normativeLabel ?? room.normativeCategory;
-
-    if (!room.normativeStandard && !label) {
-        return undefined;
-    }
-
-    return [room.normativeStandard, label].filter(Boolean).join(' · ');
-}
-
-/**
- * Decide `pass`/`fail` solo cuando existe una fuente normativa citada
- * (`source`). Sin fuente, el ambiente no tiene `normativeStandard` ni
- * `normativeLabel`/`normativeCategory` asignados (ver `buildRequirementSource`),
- * así que el valor comparado no está vinculado a ninguna norma real — afirmar
- * "cumple"/"no cumple" en ese caso presentaría un juicio normativo sin
- * respaldo (hallazgo de Fase 6, planes/plan_agentes_skills_revision_normativa_dialux.md).
- * `not-evaluated` en este caso significa "sin norma configurada", no "sin
- * cálculo" — el valor calculado se sigue mostrando para no ocultar el dato.
- */
-function evaluateRequirementStatus(passes: boolean, source: string | undefined): RequirementEvaluation['status'] {
-    if (!source) {
-        return 'not-evaluated';
-    }
-    return passes ? 'pass' : 'fail';
-}
-
-/**
- * `uniformityTarget`/`ugrLimit` en `null` significa que la actividad
- * normativa seleccionada NO regula ese parámetro (ej. UGR en
- * estacionamientos, Uo en baños — ver `normativaData.ts`) — en ese caso NO
- * se agrega ninguna fila para esa métrica (nunca se compara contra un
- * límite genérico inventado, y el PDF ni siquiera la menciona en vez de
- * mostrarla como "conforme" sin haber evaluado nada real).
- */
-function buildRequirementEvaluations(
-    inputs: { illuminanceLux: number },
-    uniformityTarget: number | null,
-    ugrLimit: number | null,
-    result: LightingResult | null,
-    source: string | undefined,
-    manualUgr: number | null,
-): RequirementEvaluation[] {
-    const evaluations: RequirementEvaluation[] = [
-        {
-            metric: 'illuminance',
-            calculatedValue: result?.avg_lux ?? null,
-            operator: '>=',
-            requiredValue: inputs.illuminanceLux,
-            unit: 'lx',
-            status: result === null
-                ? 'not-evaluated'
-                : evaluateRequirementStatus(result.avg_lux >= inputs.illuminanceLux, source),
-            source,
-        },
-    ];
-
-    if (uniformityTarget !== null) {
-        evaluations.push({
-            metric: 'uniformity',
-            calculatedValue: result?.uniformity ?? null,
-            operator: '>=',
-            requiredValue: uniformityTarget,
-            unit: 'ratio',
-            status: result === null
-                ? 'not-evaluated'
-                : evaluateRequirementStatus(result.uniformity >= uniformityTarget, source),
-            source,
-        });
-    }
-
-    if (ugrLimit !== null) {
-        // `manualUgr`: tiene prioridad sobre el calculado — cubre H/R>2
-        // (todas las luminarias excluidas, ver `glareCalculation.ts`).
-        // `source: 'manual'` deja declarado que no lo calculó este motor.
-        const effectiveUgr = manualUgr ?? result?.ugr ?? null;
-        const isManual = manualUgr !== null;
-        evaluations.push({
-            metric: 'ugr',
-            calculatedValue: effectiveUgr,
-            operator: '<=',
-            requiredValue: ugrLimit,
-            unit: 'UGR',
-            // `ugr_not_evaluated`: sin `manualUgr`, todas las luminarias
-            // quedaron excluidas (H/R>2) y `ugr: 0` no es un valor real —
-            // sin este chequeo, `0 <= ugrLimit` da "Conforme" sin evaluar nada.
-            status: isManual
-                ? evaluateRequirementStatus(effectiveUgr !== null && effectiveUgr <= ugrLimit, 'manual')
-                : result === null || result.ugr_not_evaluated
-                    ? 'not-evaluated'
-                    : evaluateRequirementStatus(result.ugr <= ugrLimit, source),
-            source: isManual ? 'manual' : source,
-        });
-    }
-
-    return evaluations;
-}
-
 function buildAmbientMetrics(
     ambient: DialuxAmbientExport,
     result: LightingResult | null,
@@ -183,6 +81,8 @@ function buildAmbientMetrics(
     const uniformityTarget = ambient.room.uniformityTarget ?? null;
     const ugrLimit = ambient.room.ugrLimit ?? null;
     const manualUgr = getRoomManualUgr(ambient.room);
+    const raRequired = resolveRaRequired(ambient.room);
+    const raCalculated = resolveRaCalculated(ambient.fixtures);
     const g2 =
         result && result.max_lux > 0 ? result.min_lux / result.max_lux : null;
     const requirementEvaluations = buildRequirementEvaluations(
@@ -192,6 +92,8 @@ function buildAmbientMetrics(
         result,
         buildRequirementSource(ambient.room),
         manualUgr,
+        raRequired,
+        raCalculated,
     );
     const complies =
         requirementEvaluations.length > 0 &&
@@ -239,6 +141,8 @@ function buildAmbientMetrics(
         marginalZone: result?.marginal_zone ?? inputs.marginalZone,
         uniformityTarget,
         ugrLimit,
+        ra: raCalculated,
+        raRequired,
         complies,
         requirementEvaluations,
         provenance,

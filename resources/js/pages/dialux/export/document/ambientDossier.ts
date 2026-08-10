@@ -109,6 +109,11 @@ export function buildAmbientDetails(
                 rawArea > 0 ? Math.sqrt(ambient.metrics.area / rawArea) : 1;
             const perimeter = polygonPerimeter(rawVertices) * scaleRatio;
             const marginal = ambient.metrics.marginalZone;
+            // Ver comentario junto a `reflectionCeiling` más abajo: el motor
+            // no usó ninguna reflectancia real para este ambiente.
+            const hasMissingMaterialReflectance = ambient.metrics.warnings.some(
+                (warning) => warning.code === 'object-without-material-reflectance',
+            );
             const usefulArea = Math.min(
                 ambient.metrics.area,
                 Math.max(
@@ -159,6 +164,8 @@ export function buildAmbientDetails(
                         : Number(ambient.metrics.ugr.toFixed(2)),
                 ugrIsManual: ambient.metrics.ugrIsManual,
                 ugrLimit: ambient.metrics.ugrLimit,
+                ra: ambient.metrics.ra,
+                raRequired: ambient.metrics.raRequired,
                 interiorHeight: Number(ambient.room.height.toFixed(3)),
                 // Mismo criterio de resolución que el motor de cálculo real
                 // (`roomLighting.ts` — reflectancias por ambiente, 0-1 ??
@@ -166,18 +173,36 @@ export function buildAmbientDetails(
                 // desconectado de lo que el motor realmente usó para
                 // interreflexión, y mostrarlo hacía que el PDF reportara
                 // "70/50/20" fijo aunque el recinto tuviera otro valor.
-                reflectionCeiling: Math.round(
-                    (ambient.room.ceilingReflectance ??
-                        DEFAULT_REFLECTANCE_CEILING / 100) * 100,
-                ),
-                reflectionWall: Math.round(
-                    (ambient.room.wallReflectance ??
-                        DEFAULT_REFLECTANCE_WALL / 100) * 100,
-                ),
-                reflectionFloor: Math.round(
-                    (ambient.room.floorReflectance ??
-                        DEFAULT_REFLECTANCE_FLOOR / 100) * 100,
-                ),
+                //
+                // `materialReflectanceMissing`: cuando el motor emitió
+                // `object-without-material-reflectance` para este ambiente
+                // (`resolveSurfaceReflectances()` en
+                // `runDirectPreviewEngineAdapters.ts` — ningún valor de
+                // reflectancia asignado), el cálculo real corrió en luz 100%
+                // directa, sin ninguna reflexión. Mostrar igual "70%/50%/20%"
+                // en la tabla de resumen en ese caso es engañoso: parece un
+                // dato usado en el cálculo cuando es solo el valor de reserva
+                // de visualización (`DEFAULT_REFLECTANCE_*`). Confirmado como
+                // causa real de discrepancia frente a DIALux evo — ver
+                // `planes/plan_cierre_brecha_paridad_dialux_evo.md` §2.1/§5.3.
+                reflectionCeiling: hasMissingMaterialReflectance
+                    ? null
+                    : Math.round(
+                          (ambient.room.ceilingReflectance ??
+                              DEFAULT_REFLECTANCE_CEILING / 100) * 100,
+                      ),
+                reflectionWall: hasMissingMaterialReflectance
+                    ? null
+                    : Math.round(
+                          (ambient.room.wallReflectance ??
+                              DEFAULT_REFLECTANCE_WALL / 100) * 100,
+                      ),
+                reflectionFloor: hasMissingMaterialReflectance
+                    ? null
+                    : Math.round(
+                          (ambient.room.floorReflectance ??
+                              DEFAULT_REFLECTANCE_FLOOR / 100) * 100,
+                      ),
                 // `siteSettings.maintenanceFactor` (panel "Terreno" ·
                 // Mantenimiento) es el override real que también alimenta el
                 // cálculo — `projectPhotometricDefaults.maintenanceFactor`

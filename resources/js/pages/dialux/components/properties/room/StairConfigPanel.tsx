@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { Room, StairConfig, StairFlight } from '@/pages/dialux/hooks/types';
+import { getStairPreset, validateStairConfig } from '@/pages/dialux/hooks/stairNorms';
 import { EditField, PropField, SelectField } from '../PropertyFields';
 
 /**
@@ -92,6 +93,14 @@ export const StairConfigPanel: React.FC<{
         : st.stepCount;
     const totalHeight = (totalSteps * st.riserHeight).toFixed(2);
 
+    // Validación contra la norma seleccionada en "Uso Normativo" — antes de esto,
+    // el selector no tenía ningún efecto sobre las advertencias mostradas
+    // (ver planes/plan_cierre_brecha_paridad_dialux_evo.md, hallazgo bloqueante §-9.3).
+    const normWarnings = useMemo(
+        () => validateStairConfig(st, st.normativeUse),
+        [st],
+    );
+
     return (
         <div className="my-2 space-y-1 border-t border-gray-300 dark:border-gray-800/80 pt-2">
             <p className="mb-1.5 text-[10px] font-semibold text-orange-400">
@@ -173,6 +182,20 @@ export const StairConfigPanel: React.FC<{
                 label="Altura total"
                 value={`${(parseFloat(totalHeight) + (st.startElevation ?? 0)).toFixed(2)} m · ${totalSteps} esc. · Dir: ${DIRECTION_LABELS[effectiveOrientation]}`}
             />
+
+            {normWarnings.length > 0 ? (
+                <div className="mt-1 space-y-1 rounded bg-amber-950/40 px-2 py-1.5">
+                    {normWarnings.map((msg, i) => (
+                        <p key={i} className="text-[9px] leading-snug text-amber-400">
+                            ⚠️ {msg}
+                        </p>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-[9px] leading-snug text-emerald-500">
+                    ✅ Cumple los mínimos de {getStairPreset(st.normativeUse).label}
+                </p>
+            )}
 
             {/* ── Opciones 3D ────────────────────────────────────────── */}
             <div className="mt-1.5 flex flex-col gap-0.5 rounded border border-orange-900/40 bg-orange-950/20 p-1.5">

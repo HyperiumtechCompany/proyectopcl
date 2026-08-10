@@ -563,7 +563,7 @@ class ProductImportService
             $warnings[] = "IES: TILT={$tiltType} (archivo externo) no soportado; se ignora y se asume TILT=NONE.";
         }
 
-        if (count($numbers) < 10) {
+        if (count($numbers) < 13) {
             $warnings[] = 'IES: datos de configuración insuficientes';
 
             return $this->keywordsToProductData($keywords, $formatVersion);
@@ -575,7 +575,22 @@ class ProductImportService
 
         $numV = max(1, (int) $numV);
         $numH = max(1, (int) $numH);
-        $ni = 10;
+
+        // LM-63 exige una línea adicional de 3 campos justo después de la
+        // línea de 10 campos, ANTES de los ángulos verticales: <ballast
+        // factor> <ballast-lamp photometric factor> <input watts> — nunca se
+        // saltaba, así que los ángulos verticales/horizontales y la matriz de
+        // candela quedaban desplazados 3 posiciones en TODO archivo IES real
+        // (los 3 fixtures de test que validaban este parser la omitían, por
+        // eso no se detectó hasta importar un archivo real de fabricante —
+        // ver planes/plan_cierre_brecha_paridad_dialux_evo.md). `inputWatts`
+        // se usa como respaldo de potencia cuando el archivo no declara
+        // `[WATTS]`/`[WATTAGE]` (muchos archivos reales solo la declaran acá,
+        // como texto libre en `[_ELECTRICALS]`, no como keyword aparte).
+        $ballastFactor = $numbers[10];
+        $ballastLampPhotometricFactor = $numbers[11];
+        $inputWatts = $numbers[12];
+        $ni = 13;
 
         // Ángulos verticales
         $vAngles = array_slice($numbers, $ni, $numV);
@@ -614,7 +629,13 @@ class ProductImportService
         $maxCandela = max(0.0, ...array_merge(...$candela));
         [$beam50, $beam10] = $this->computeBeamAngles($candela[0] ?? [], $vAngles, $maxCandela);
 
-        $watts = (float) ($keywords['WATTS'] ?? $keywords['WATTAGE'] ?? 0);
+        // El campo numérico `inputWatts` (línea de ballast, LM-63) es la
+        // fuente estándar de potencia — `[WATTS]`/`[WATTAGE]` son keywords no
+        // estándar que algunas herramientas agregan además, y tienen
+        // prioridad cuando están (más explícitos), pero muchos archivos
+        // reales de fabricante solo declaran la potencia en texto libre
+        // (ej. `[_ELECTRICALS] 120VAC, 1.70A, 163W`) y nunca como keyword.
+        $watts = (float) ($keywords['WATTS'] ?? $keywords['WATTAGE'] ?? $inputWatts ?? 0);
         $efficiencyLmW = ($watts > 0) ? round($totalLumens / $watts, 1) : 0.0;
 
         $photometricSummary = [
@@ -725,7 +746,17 @@ class ProductImportService
         $scale = ($lumens > 0) ? $lumens / 1000.0 : 1.0; // cd/klm → cd
         $planeCount = max(1, min($numC, intdiv(count($remaining), $numG) ?: $numC));
         if ($planeCount < $numC) {
-            $warnings[] = "LDT: se declararon {$numC} planos C pero solo se pudieron parsear {$planeCount} (datos insuficientes en el archivo).";
+            // `symmetry` (código EULUMDAT: 0=asimétrica, 1=rotacional,
+            // 2/3=mitad, 4=cuarto) explica por qué el archivo trae MENOS
+            // planos de los declarados en `numC` sin ser un archivo
+            // incompleto: una luminaria simétrica solo necesita publicar el
+            // cuarto/mitad de la solución angular, y el consumidor (motor de
+            // cálculo, `foldAzimuthToCRange()`) refleja el resto. Con
+            // symmetry=0 (asimétrica) sí sería una señal real de datos
+            // faltantes — no hay reflejo posible que la justifique.
+            $warnings[] = $symmetry > 0
+                ? "LDT: el archivo declara {$numC} planos C pero solo trae {$planeCount} — esperable para una luminaria simétrica (symmetry={$symmetry}), el resto se completa por reflejo."
+                : "LDT: se declararon {$numC} planos C pero solo se pudieron parsear {$planeCount} (symmetry=0, asimétrica — sí indica datos insuficientes en el archivo).";
         }
         $incompletePlaneWarned = false;
         for ($c = 0; $c < $planeCount; $c++) {
@@ -740,6 +771,16 @@ class ProductImportService
             $candela[] = array_map(fn ($v) => $v * $scale, $plane);
             $ni += $numG;
         }
+
+        // `$cAngles` venía de la grilla angular COMPLETA que el archivo
+        // declara (`numC` planos), pero `$candela` solo tiene `$planeCount`
+        // filas reales (ver warning arriba) — sin truncar aquí, `c_angles`
+        // y `candela` quedaban con longitudes distintas en `photometric_web`,
+        // y el consumidor (`candelaFromPhotometricWeb()`, que asume
+        // `c_angles[i]` ↔ `candela[i]` 1 a 1) leía `candela[i]` indefinido
+        // para cualquier plano más allá de `$planeCount` — silenciosamente
+        // mal interpolado (fallback a `candela[0]`), no un error visible.
+        $cAngles = array_slice($cAngles, 0, $planeCount);
 
         $this->checkAngleMonotonic($cAngles, 'C (LDT)', $warnings);
         $this->checkAngleMonotonic($gAngles, 'gamma (LDT)', $warnings);
@@ -1013,6 +1054,38 @@ class ProductImportService
         }
     }
 
+    /**
+     * Los fabricantes publican solo un cuarto o una mitad de la solución
+     * fotométrica cuando la luminaria es simétrica (mismo criterio que
+     * `foldAzimuthToCRange()` en `photometricInterpolation.ts` — MISMOS
+     * umbrales, para que el parser y el motor de cálculo interpreten la
+     * simetría de la misma forma). Sin este factor, `estimateLumens()`
+     * integraba solo el cuarto/mitad de esfera realmente presente en el
+     * archivo y lo reportaba como si fuera el total — infravalorando el
+     * flujo real hasta ~4x y disparando falsos positivos de "flujo
+     * inconsistente" para CUALQUIER luminaria simétrica de múltiples planos
+     * C (paneles cuadrados, luminarias lineales — un caso extremadamente
+     * común, a diferencia de las dos luminarias de un solo plano ya
+     * validadas en este catálogo). Confirmado con dos archivos reales de
+     * fabricante (LEDVANCE, Zumtobel): sin este factor, ambos reportaban
+     * ~27% del flujo declarado; con él, ~108%, dentro de tolerancia normal.
+     */
+    private function azimuthCoverageMultiplier(array $hAngles): float
+    {
+        if (count($hAngles) <= 1) {
+            return 1.0; // ya se asume barrido completo de 360° más abajo (`dPhi = 360.0`).
+        }
+        $maxH = max($hAngles);
+        if ($maxH <= 90.01) {
+            return 4.0;
+        }
+        if ($maxH <= 180.01) {
+            return 2.0;
+        }
+
+        return 1.0;
+    }
+
     /** Estima lúmenes totales integrando la esfera de candelas. */
     private function estimateLumens(array $candela, array $vAngles, array $hAngles): float
     {
@@ -1035,7 +1108,7 @@ class ProductImportService
             }
         }
 
-        return max(0.0, $total);
+        return max(0.0, $total) * $this->azimuthCoverageMultiplier($hAngles);
     }
 
     /** Calcula ángulos de haz al 50% y 10% del Imax en el plano C0. */

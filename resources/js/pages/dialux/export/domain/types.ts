@@ -78,6 +78,10 @@ export interface DialuxAmbientMetrics {
     marginalZone: number;
     uniformityTarget: number | null;
     ugrLimit: number | null;
+    /** Peor Ra/CRI entre las luminarias instaladas en el ambiente; `null` si ninguna declara CRI. */
+    ra: number | null;
+    /** Ra mínimo exigido por la actividad normativa asignada; `null` si no aplica o no hay actividad asignada. */
+    raRequired: number | null;
     complies: boolean;
     requirementEvaluations: RequirementEvaluation[];
     provenance: CalculationProvenance;
@@ -425,10 +429,15 @@ export interface DialuxAmbientDetail {
     /** `true` cuando `ugr` viene de `Room.manualUgr`/`AmbientConfig.manualUgr` (cargado a mano) en vez del motor de posición de Guth — ver doc-comment de `Room.manualUgr`. */
     ugrIsManual: boolean;
     ugrLimit: number | null;
+    /** Peor Ra/CRI entre las luminarias instaladas en el ambiente; `null` si ninguna declara CRI. */
+    ra: number | null;
+    /** Ra mínimo exigido por la actividad normativa asignada; `null` si no aplica o no hay actividad asignada. */
+    raRequired: number | null;
     interiorHeight: number;
-    reflectionCeiling: number;
-    reflectionWall: number;
-    reflectionFloor: number;
+    /** `null` cuando el motor NO usó ninguna reflectancia real para este ambiente (warning `object-without-material-reflectance` — el cálculo corrió en luz 100% directa). Nunca mostrar un valor numérico de reserva en ese caso: ver `ambientDossier.ts`. */
+    reflectionCeiling: number | null;
+    reflectionWall: number | null;
+    reflectionFloor: number | null;
     maintenanceFactor: number;
     usefulPlaneHeight: number;
     marginalZone: number;

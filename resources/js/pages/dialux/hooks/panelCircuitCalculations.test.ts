@@ -600,12 +600,15 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(result.phaseCurrentS).toBeCloseTo(result.currentA);
         expect(result.admissibleCableCurrentA).toBeCloseTo(14.4);
         expect(result.capacityConforms).toBe(true);
+        // Sin el `* powerFactor` (auditoría `dialux-electrical-reviewer`):
+        // `result.phaseCurrentS` YA es corriente real (`circuitCurrent()` ya
+        // dividió entre `powerFactor` para obtenerla) — multiplicarla otra
+        // vez por 0.8 aquí contaba el factor de potencia dos veces.
         const expectedDropV =
             (2 *
                 result.phaseCurrentS *
                 0.0175 *
-                result.lengthM *
-                0.8) /
+                result.lengthM) /
                 4 +
             6.22;
         expect(result.voltageDropV).toBeCloseTo(expectedDropV, 8);

@@ -630,6 +630,20 @@
                     <td></td>
                 </tr>
                 <tr>
+                    <td><strong>Reproducci&oacute;n crom&aacute;tica</strong></td>
+                    <td>R<sub>a</sub></td>
+                    <td class="result-number">' .
+                $formatNumber($detail['ra'] ?? null, 0) .
+                '</td>
+                    <td class="result-number">' .
+                (($detail['raRequired'] ?? null) !== null ? '&ge; ' . $formatNumber($detail['raRequired'], 0) : '-') .
+                '</td>
+                    <td class="result-check">' .
+                $renderVerificationCell('ra') .
+                '</td>
+                    <td></td>
+                </tr>
+                <tr>
                     <td><strong>Valores de consumo</strong></td>
                     <td>Consumo</td>
                     <td class="result-number">' .
@@ -1287,9 +1301,13 @@ Valores calculados desde los resultados almacenados del ambiente.<br>
                             <tr>
                                 <td class="metric-label">Grado de reflexi&oacute;n (Techo / Paredes / Suelo)</td>
                                 <td class="metric-value">
-                                    {{ $detail['reflectionCeiling'] ?? 70 }}% /
-                                    {{ $detail['reflectionWall'] ?? 50 }}% /
-                                    {{ $detail['reflectionFloor'] ?? 20 }}%
+                                    @if (is_null($detail['reflectionCeiling'] ?? null) || is_null($detail['reflectionWall'] ?? null) || is_null($detail['reflectionFloor'] ?? null))
+                                        No asignado (no usado en el c&aacute;lculo)
+                                    @else
+                                        {{ $detail['reflectionCeiling'] }}% /
+                                        {{ $detail['reflectionWall'] }}% /
+                                        {{ $detail['reflectionFloor'] }}%
+                                    @endif
                                 </td>
                             </tr>
                             <tr>

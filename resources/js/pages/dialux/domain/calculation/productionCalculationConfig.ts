@@ -49,6 +49,29 @@ import { DEFAULT_DIRECT_PREVIEW_CONFIG, type CalculationConfig } from './types';
  * documenta que 60-150 iteraciones alcanzan incluso reflectancias 0.9-0.95
  * a tolerancia 1e-6, y que el costo computacional es trivial hasta el techo
  * `MAX_SAFE_BOUNCES = 300`) UNA VEZ resuelta la subdivisión de parches.
+ *
+ * CONTRAEVIDENCIA (2026-08-09, `planes/plan_cierre_brecha_paridad_dialux_evo.md`
+ * §-3, `__benchmarks__/dialuxEvoParity/dialuxEvoParity.test.ts` caso
+ * `sshh-vs-bano`): el experimento de arriba se hizo SIEMPRE con fotometría
+ * aproximada (Lambertiana) para la luminaria, porque no había archivo
+ * IES/LDT real disponible. Al conseguir el .ldt real de fábrica de una
+ * luminaria (Thorlux TEG18046, misma referencia de artículo que un ambiente
+ * real de `MODULO I_Informe.pdf`) y repetir la comparación con esa variable
+ * corregida, el resultado se INVIRTIÓ: `first-bounce` da 87.9 lx (error
+ * 38.9%) contra la referencia de 144 lx, e `iterative` (maxBounces=30) da
+ * 111.0 lx (error 22.9%) — `iterative` quedó MÁS cerca de DIALux evo, no
+ * más lejos. Esto es un solo caso nuevo (no reemplaza el anterior, lo
+ * contradice) y NO es evidencia suficiente para cambiar el default de esta
+ * función — el propio plan (§7) prohíbe ajustar sobre un solo caso. Pero sí
+ * es evidencia de que la conclusión "`iterative` empeora frente a DIALux
+ * evo" pudo haber sido, en parte o del todo, un artefacto de comparar con
+ * fotometría Lambertiana en AMBOS experimentos originales (SS.HH 2.15 m²
+ * arriba), no una propiedad real del solver de radiosidad. Antes de tocar
+ * este default: repetir el experimento con fotometría real en 3-4 casos
+ * más (idealmente incluyendo una reproducción del caso SS.HH 2.15 m²/4.67 m
+ * original con su luminaria real, si se puede identificar) y solo entonces
+ * decidir con una muestra, no con un caso aislado en cualquiera de las dos
+ * direcciones.
  */
 export function buildProductionCalculationConfig(project: Project): CalculationConfig {
     return {

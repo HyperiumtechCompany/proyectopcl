@@ -7,14 +7,13 @@ import { AlertTriangle, ArrowLeft, Calculator, Check, ChevronDown, Download, Eye
 import React, { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildCalculationSnapshot } from '@/pages/dialux/domain/calculation/buildCalculationSnapshot';
-import { hashCalculationSnapshot } from '@/pages/dialux/domain/calculation/hashSnapshot';
 import { buildProductionCalculationConfig } from '@/pages/dialux/domain/calculation/productionCalculationConfig';
+import { runDirectPreviewEngine } from '@/pages/dialux/domain/calculation/runDirectPreviewEngine';
 import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/staleness';
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
-import { LIGHTING_ENGINE_VERSION } from '@/pages/dialux/hooks/lightingEngineCore';
 import { useDialuxCalculationWorker } from '@/pages/dialux/hooks/useDialuxCalculationWorker';
 import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux/hooks/useEditorStore';
@@ -467,43 +466,26 @@ export const EditorLayout = memo(function EditorLayout() {
                 // puro, con el mismo resultado.
                 run = await calcWorker.calculate(snapshot, calcConfig);
             } catch (workerError) {
+                // Auditoría `dialux-calc-reviewer`: esto ANTES construía el
+                // resultado a mano con `engine.calculate(room, fixtures)`
+                // (sin oclusión, sin reflectancia, sin UGR de Guth, sin
+                // factor de mantenimiento — el "motor síncrono simplificado")
+                // pero etiquetaba el `CalculationRun` con `calcConfig`, la
+                // config de PRODUCCIÓN, como si esos cuatro efectos sí se
+                // hubieran aplicado. Eso hacía que `isCalculationRunStale`
+                // (compara `run.config` contra `buildProductionCalculationConfig`)
+                // nunca detectara la degradación, y que el PDF exportado
+                // pudiera heredar y mostrar esa config como si fuera real.
+                // `runDirectPreviewEngine` es la MISMA función que el worker
+                // llama internamente (el worker solo la offloadea a otro
+                // hilo) — llamarla aquí en el hilo principal da exactamente
+                // el mismo resultado que el worker habría dado, sin
+                // duplicar ni degradar la lógica de cálculo.
                 console.warn(
-                    '[Dialux] El worker de cálculo falló, se usa el motor síncrono de respaldo en el hilo principal.',
+                    '[Dialux] El worker de cálculo falló, se recalcula en el hilo principal con el mismo motor y la misma config de producción (sin offloading, no una versión degradada).',
                     workerError,
                 );
-                const fallbackStartedAt = new Date().toISOString();
-                const fallbackSurfaces: CalculationRun['surfaces'] = [];
-                for (const { scene, ambients } of ambientsByScene) {
-                    for (const ambient of ambients) {
-                        fallbackSurfaces.push({
-                            objectId: ambient.room.id,
-                            objectName: ambient.name,
-                            levelId: scene.id,
-                            result: await engine.calculate(ambient.room, ambient.fixtures),
-                        });
-                    }
-                }
-                // Fase 13 (§11: "invalidar si stale"): incluso el camino de
-                // respaldo produce un `CalculationRun` real (con hash), para
-                // que `lastCalculationRun`/`isCalculationRunStale` funcionen
-                // igual sin importar qué camino haya calculado el resultado.
-                run = {
-                    id: `run-fallback-${Date.now()}`,
-                    engineVersion: LIGHTING_ENGINE_VERSION,
-                    snapshotHash: await hashCalculationSnapshot(snapshot),
-                    status: 'completed',
-                    // El motor síncrono de respaldo (`engine.calculate`, más
-                    // simple) no recibe `maintenanceFactor` — solo se
-                    // etiqueta con la config resuelta para que el registro
-                    // del cálculo no muestre un valor distinto al que el
-                    // usuario configuró, aunque este camino no lo aplique.
-                    config: calcConfig,
-                    startedAt: fallbackStartedAt,
-                    completedAt: new Date().toISOString(),
-                    durationMs: 0,
-                    warnings: [],
-                    surfaces: fallbackSurfaces,
-                };
+                run = await runDirectPreviewEngine(snapshot, calcConfig);
             }
 
             setLastCalculationRun(run);

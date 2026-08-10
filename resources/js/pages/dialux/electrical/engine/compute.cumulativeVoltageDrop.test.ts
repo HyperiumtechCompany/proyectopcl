@@ -175,4 +175,44 @@ describe('cumulativeVoltageDropPct — cascada tablero → tablero', () => {
         const manualCircuitDrop = voltageDropPct(circuit.designCurrentA, 20, 2.5, 220, 1, 'cobre');
         expect(circuit.voltageDropPct).toBeCloseTo(manualCircuitDrop, 6);
     });
+
+    /**
+     * Regresión de auditoría `dialux-electrical-reviewer`: un tablero puede
+     * declarar `parentPanelId` (combo "Alimentado por" de `PanelsTab.tsx`)
+     * sin que exista un `Feeder` modelado para ese tramo (sección
+     * "Alimentadores", independiente) — el usuario cambia el combo pero no
+     * va también a crear la fila del alimentador correspondiente. Antes de
+     * este test, `cumulativeDropAtPanel` saltaba ese tramo sumando 0% en
+     * silencio, sin advertir ni en el circuito ni en el tablero — la caída
+     * acumulada quedaba subestimada sin que nada lo indicara.
+     */
+    it('tablero con parentPanelId declarado pero SIN Feeder para ese tramo: advierte y NO acumula ese tramo (subestimación visible, no oculta)', () => {
+        const fullDoc = buildThreeTierDoc();
+        const docMissingFeeder: ElectricalDocument = {
+            ...fullDoc,
+            // Se deja "tp" alimentado por "tg" (parentPanelId intacto) pero
+            // se elimina el alimentador tg->tp — exactamente el escenario
+            // reportado.
+            feeders: fullDoc.feeders.filter((f) => f.id !== 'f-tg-tp'),
+        };
+
+        const fullResult = computeElectricalDerived(fullDoc, CATALOGS);
+        const missingResult = computeElectricalDerived(docMissingFeeder, CATALOGS);
+
+        const fullCircuit = fullResult.circuits[0]!;
+        const missingCircuit = missingResult.circuits[0]!;
+
+        // El tramo tg->tp ya no se acumula: el total baja respecto al caso completo.
+        expect(missingCircuit.cumulativeVoltageDropPct).toBeLessThan(fullCircuit.cumulativeVoltageDropPct);
+
+        // El tablero "tp" (el que declara el padre sin alimentador modelado)
+        // debe advertir explícitamente — este es el fix: antes no había
+        // ningún warning en absoluto para este caso.
+        const tpPanel = missingResult.panels.find((p) => p.panelId === 'tp')!;
+        expect(tpPanel.warnings.some((w) => w.includes('no hay ningún alimentador modelado'))).toBe(true);
+
+        // El caso completo (con el alimentador) NUNCA debe mostrar esta advertencia.
+        const tpPanelFull = fullResult.panels.find((p) => p.panelId === 'tp')!;
+        expect(tpPanelFull.warnings.some((w) => w.includes('no hay ningún alimentador modelado'))).toBe(false);
+    });
 });

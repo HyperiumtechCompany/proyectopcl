@@ -15,19 +15,44 @@ import type { PageSeed } from './pageSeed';
 
 /**
  * Fase 13 (§11: "mostrar engineVersion, modo y warnings") — motor + resumen
- * de configuración desde la procedencia de CUALQUIER ambiente que haya
- * pasado por un `CalculationRun` real (todos comparten el mismo run en una
- * misma exportación). `null` cuando ningún ambiente tiene procedencia
- * (snapshot construido sin `calculationRun`, ej. tests legacy) — no se
- * inventa un motor genérico.
+ * de configuración desde la procedencia de los ambientes que hayan pasado
+ * por un `CalculationRun` real. `null` cuando NINGÚN ambiente tiene
+ * procedencia (snapshot construido sin `calculationRun`, ej. tests legacy)
+ * — no se inventa un motor genérico.
+ *
+ * Auditoría `dialux-calc-reviewer`: antes se tomaba la procedencia del
+ * PRIMER ambiente con `snapshotHash` y se imprimía como si aplicara a todo
+ * el informe. Cuando un ambiente cae al fallback directo de
+ * `buildDialuxExportSnapshot.ts` (porque `resultsByRoom`/`calculationRun`
+ * no lo cubrían — ver el comentario de esa función), ese ambiente calculó
+ * con oclusión/reflectancia/UGR de Guth desactivados, distinto al resto.
+ * Si eso ocurre, esta nota ahora lo dice explícitamente en vez de mostrar
+ * silenciosamente la config del primer ambiente "bueno" como si fuera
+ * universal.
  */
 function buildEngineNote(snapshot: DialuxExportSnapshot): string | null {
-    const provenance = snapshot.ambients.find((ambient) => ambient.metrics.provenance.snapshotHash)?.metrics.provenance;
-    if (!provenance) {
+    const provenances = snapshot.ambients
+        .map((ambient) => ambient.metrics.provenance)
+        .filter((provenance): provenance is typeof provenance & { snapshotHash: string } => Boolean(provenance.snapshotHash));
+    if (provenances.length === 0) {
         return null;
     }
-    const configPart = provenance.configSummary ? ` — ${provenance.configSummary}` : '';
-    return `Motor de calculo: ${provenance.engineVersion}${configPart}.`;
+
+    const first = provenances[0]!;
+    const configPart = first.configSummary ? ` — ${first.configSummary}` : '';
+    const ambientsWithoutThisRun = snapshot.ambients.length - provenances.length;
+    const hasMixedConfig = provenances.some(
+        (provenance) => provenance.engineVersion !== first.engineVersion || provenance.configSummary !== first.configSummary,
+    );
+
+    if (hasMixedConfig || ambientsWithoutThisRun > 0) {
+        return (
+            `Motor de calculo: ${first.engineVersion}${configPart} — ADVERTENCIA: no todos los ambientes de este informe ` +
+            'se calcularon con el mismo motor/configuracion (revisar advertencias por ambiente antes de usar esta nota como valida para todo el documento).'
+        );
+    }
+
+    return `Motor de calculo: ${first.engineVersion}${configPart}.`;
 }
 
 /** Fase 13: advertencias del motor SIN ambiente asociado (`CalculationRun.warnings` con `objectId: null`). */

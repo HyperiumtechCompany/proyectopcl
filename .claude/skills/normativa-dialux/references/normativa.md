@@ -75,16 +75,35 @@ Columnas:
 
 ## 5. Alumbrado de emergencia y rutas de evacuación (dominio: luminotécnico / geometría)
 
+> **Actualizado por `dialux-normativa-auditor`** tras detectar que esta sección había quedado desactualizada respecto al código (edición de EN 1838 corregida de 2019 a 2013 en `normativeEngine.ts`/`normativaData.ts`, y una norma peruana obligatoria nueva — RNE A.130 — agregada como fuente real, sin que este documento lo reflejara). Ver también §7, que tenía el mismo problema (tabla de `NORMATIVE_STANDARDS_META` con 6 normas cuando el código ya define 7).
+
 | id | fuente | edición_conocida | en_código | tipoProyecto | valor_referencial | estado | verificado_por |
 |---|---|---|---|---|---|---|---|
-| emergencia-eje-ruta | EN 1838 | 2019 | `hooks/normativaData.ts:1090-1100` | todos | 1 lx en el eje central de la ruta de evacuación (ancho ≤ 2 m); Ra 40; uniformidad Emax:Emin ≤ 40:1; 50 % del nivel en 5 s y 100 % en 60 s; autonomía mínima 1 hora | pending-confirmation | |
-| emergencia-escaleras | EN 1838 | 2019 | `hooks/normativaData.ts:1101-1109` | todos | 1 lx en todo el ancho del tramo de escalera (no solo el eje) | pending-confirmation | |
-| emergencia-puntos-seguridad | EN 1838 | 2019 | `hooks/normativaData.ts:1110-1118` | todos | 5 lx dentro de un radio de 2 m de alarmas/extintores/primeros auxilios, a nivel de suelo | pending-confirmation | |
-| emergencia-area-antipanico | EN 1838 | 2019 | `hooks/normativaData.ts:1121-1133` | todos | 0.5 lx en el núcleo de áreas ≥ 60 m² (excluyendo banda perimetral de 0.5 m) | pending-confirmation | |
-| emergencia-tarea-alto-riesgo | EN 1838 | 2019 | `hooks/normativaData.ts:1135-1147` | todos | 15 lx (o el mayor entre eso y 10 % del nivel normal de la tarea); Uo 0.1; disponibilidad instantánea, sin demora | pending-confirmation | |
-| emergencia-autonomia-minima | EN 1838 | 2019 | incluida en las filas anteriores (`requisitos_especificos`) | todos | 1 hora de autonomía mínima | pending-confirmation | |
+| emergencia-eje-ruta | EN 1838 | 2013 (edición 2019 citada antes en este documento no existe en el catálogo público CEN/BSI; 2013 fue retirada 18-dic-2024, sustituida por 2024 aún no verificada aquí) | `hooks/normativaData.ts:1114-1146` | todos | 1 lx en el eje central de la ruta de evacuación (ancho <= 2 m); Ra 40; uniformidad Emax:Emin <= 40:1; 50% del nivel en 5 s y 100% en 60 s; autonomía mínima 1 hora | pending-confirmation | |
+| emergencia-escaleras | EN 1838 | 2013 | `hooks/normativaData.ts:1127-1135` | todos | 1 lx en todo el ancho del tramo de escalera (no solo el eje) | pending-confirmation | |
+| emergencia-puntos-seguridad | EN 1838 | 2013 | `hooks/normativaData.ts:1136-1144` | todos | 5 lx dentro de un radio de 2 m de alarmas/extintores/primeros auxilios, a nivel de suelo | pending-confirmation | |
+| emergencia-area-antipanico | EN 1838 | 2013 | `hooks/normativaData.ts:1147-1160` | todos | 0.5 lx en el núcleo de áreas >= 60 m2 (excluyendo banda perimetral de 0.5 m) | pending-confirmation | |
+| emergencia-tarea-alto-riesgo | EN 1838 | 2013 | `hooks/normativaData.ts:1161-1175` | todos | 15 lx (o el mayor entre eso y 10% del nivel normal de la tarea); Uo 0.1; disponibilidad instantánea, sin demora | pending-confirmation | |
+| emergencia-autonomia-minima | EN 1838 | 2013 | incluida en las filas anteriores (`requisitos_especificos`) | todos | 1 hora de autonomía mínima | pending-confirmation | |
+| emergencia-evacuacion-a130 | RNE A.130 (D.S. N°017-2012-VIVIENDA), Art. 40 | 2012 | `hooks/normativaData.ts:1189-1203`, `domain/calculation/emergencyCompliance.ts` (líneas 37, 41, 73) | todos | 10 lx a nivel de suelo en medios de evacuación; autonomía mínima 1.5 h; transferencia automática en máx. 10 s; conexión según CNE Tomo V Art. 7.1.2.1 (artículo puntual no verificado) | pending-confirmation | |
+| emergencia-senalizacion-a130 | RNE A.130 (D.S. N°017-2012-VIVIENDA), Art. 39/41 | 2012 | `hooks/normativaData.ts:1205-1217` | todos | 50 lx sobre el propio letrero de señalización de salida (no sobre la ruta de circulación); señalización según NTP 399.010-1 | pending-confirmation | |
 
-**Nota**: a diferencia de la versión anterior de este documento, los valores de emergencia ya no son una estimación de memoria — provienen de un catálogo (`en1838Regulations`) que ya cita explícitamente EN 1838:2019 con requisitos de tiempo y uniformidad detallados. Esto reduce el riesgo de invención, pero sigue sin confirmación de que esta sea la norma aplicable/vigente para este proyecto específico en su jurisdicción.
+**Nota — jerarquía correcta entre EN 1838 y RNE A.130 (Fase 14 del plan maestro, §11)**: RNE A.130 es la fuente OBLIGATORIA para alumbrado de emergencia en proyectos peruanos (`NORMATIVE_STANDARDS_META.rne_a130.legalStatus === 'mandatory'`) — RNE EM.010 (`rne_peru`) no trata este tema en absoluto (verificado por texto completo del documento oficial, según el propio comentario del código). EN 1838 NO tiene adopción legal en Perú; el código la ofrece solo como referencia complementaria de buena práctica para conceptos que A.130 no define (áreas antipánico, relación de uniformidad 40:1, curva de respuesta 50%@5s/100%@60s). El módulo `domain/calculation/emergencyCompliance.ts` (con su propio test `emergencyCompliance.test.ts`) evalúa ambos estándares SIEMPRE por separado, nunca fusionados en un solo número — a diferencia de `findMostStrictNorm()` en `normativeEngine.ts`, que sí fusiona para el alumbrado normal (no de emergencia). Este es un mecanismo de evaluación normativa adicional a los descritos en `.claude/agents/dialux-normativa-auditor.md` — ningún agente debe asumir que esa lista es exhaustiva sin volver a verificar contra el código.
+
+**Hallazgo de trazabilidad cruzada (bloqueante, agregado por `dialux-normativa-auditor`)**: `hooks/ambientSpaces.ts::deriveSceneAmbientSpaces()` (linea ~1019-1021) filtra unicamente `room.roomType !== 'corridor'` — no excluye `evacuation-route` ni `antipanic-area` — asi que estos ambientes de emergencia tambien se procesan como ambientes normales en el informe PDF general (`export/snapshot/buildDialuxExportSnapshot.ts`), con su propio `RequirementEvaluation`/`complies` basado en el catalogo de iluminancia GENERAL (`room.normativeStandard`/`normativeCategory`/`normativeActivity`, tipicamente sin asignar para este tipo de ambiente porque `RoomLightingSection.tsx` no se renderiza para estos `roomType`), mientras que el informe de emergencia dedicado (`buildDialuxEmergencyDocument.ts`) evalua el mismo ambiente correctamente contra A.130/EN 1838. Hoy esto no produce una falsa cifra "Cumple" en el informe general porque `evaluateRequirementStatus()` devuelve `not-evaluated` sin `source` (verificado vigente en esta misma sesion) — pero si puede mostrar el mismo ambiente fisico con estados distintos en dos documentos PDF distintos del mismo proyecto (uno "Revisar" en el informe general, otro "Cumple"/"No cumple" en el informe de emergencia), sin ninguna nota cruzada que explique por que. Recomendacion: excluir explicitamente `evacuation-route` y `antipanic-area` de `deriveSceneAmbientSpaces()` (mismo tratamiento que `corridor`), o anotar en el informe general que ese ambiente tiene una evaluacion normativa separada.
+
+## 5b. Espesores y alturas mínimas de muro (dominio: geometría)
+
+> Agregado por `dialux-normativa-auditor` al cerrar el hallazgo de `dialux-calc-reviewer` sobre `WallProps.tsx:898-907` (ver sesión de revisión). Estas filas siguen el proceso de mantenimiento "A. Reconciliación con el código" de `SKILL.md`: no requieren especialista todavía, solo dejan trazabilidad de que el valor YA existe en el código, sin que eso implique que la cita normativa esté verificada.
+
+| id | fuente | edición_conocida | en_código | tipoProyecto | valor_referencial | estado | verificado_por |
+|---|---|---|---|---|---|---|---|
+| muro-vivienda-ladrillo | RNE E.070 (Albañilería) — candidata, sin artículo citado en el código | no confirmada | `hooks/wallNorms.ts:27-42` (`PERU_WALL_PRESETS.brick.housing`) | vivienda | minThickness 0.12 m, minHeight 2.3 m — el propio código lo declara "mínimo operativo... como referencia práctica", no una cita de artículo | pending-confirmation | |
+| muro-educacion-ladrillo | RNE E.070 (Albañilería) — candidata, sin artículo citado en el código | no confirmada | `hooks/wallNorms.ts:44-58` (`PERU_WALL_PRESETS.brick.education`) | educacion | minThickness 0.13 m, minHeight 2.4 m | pending-confirmation | |
+| muro-vivienda-adobe | RNE E.080 (Diseño y Construcción con Tierra Reforzada) — candidata, sin artículo citado en el código | no confirmada | `hooks/wallNorms.ts:77-91` (`PERU_WALL_PRESETS.adobe.housing`) | vivienda | minThickness 0.40 m, minHeight 2.3 m — el propio código lo declara "mínimo operativo adoptado por la app" | pending-confirmation | |
+| muro-educacion-adobe | RNE E.080 — candidata, sin artículo citado en el código | no confirmada | `hooks/wallNorms.ts:93-107` (`PERU_WALL_PRESETS.adobe.education`) | educacion | minThickness 0.40 m, minHeight 2.4 m | pending-confirmation | |
+
+**Nota — origen del hallazgo `bloqueante`**: `components/properties/WallProps.tsx:898-907` muestra un badge "✅ Cumple" / "⚠️ Revisar mínimos" comparando `wall.thickness`/`wall.height` contra estos mismos presets, sin mostrar en la UI ninguna cita de artículo E.070/E.080 (porque el propio código no la tiene). Es un caso confirmado de valor "cumple" sin fuente normativa que lo sostenga — ver `.claude/agents/dialux-normativa-auditor.md`, hallazgo de la sesión que agregó esta sección. Confirmado además que estos valores de muro NO alimentan ningún cálculo eléctrico/geométrico downstream; su único efecto es el badge mostrado al usuario.
 
 ## 6. Clasificación de tipos de proyecto usados en esta tabla
 
@@ -98,22 +117,25 @@ Columnas:
 
 **Nota de vocabulario**: el código usa `installation_category: 'residencial'|'educativa'|'industrial'` (ver `database/seeders/DialuxElectricalCatalogSeeder.php`) para el dominio eléctrico, no exactamente estas mismas palabras. Mapeo: `vivienda↔residencial`, `educacion↔educativa`, `industrial↔industrial` (ya documentado en `.claude/agents/dialux-electrical-reviewer.md`).
 
+**Discrepancia detectada, sin resolver (agregada por `dialux-normativa-auditor`)**: `hooks/stairNorms.ts` (líneas 5, 77-78) y `components/properties/room/RoomConstructionSection.tsx:37` etiquetan el perfil "vivienda" citando **RNE A.010** ("Condiciones Generales de Diseño"), mientras que esta misma tabla (fila `vivienda` arriba) usa **RNE A.020** ("Vivienda") como norma de referencia general para ese `tipoProyecto`. No se puede descartar que ambas citas sean correctas para aspectos distintos (A.010 regula condiciones generales de diseño — incluyendo escaleras — aplicables a toda edificación, mientras A.020 sería la norma específica de uso residencial), pero el sistema no documenta ese matiz en ningún lado, y el mismo patrón "A.010 = vivienda" se repite en `components/properties/room/StairConfigPanel.tsx:106` y en un comentario de `hooks/types.ts:211-217`. No resolver por criterio propio de ningún agente; requiere confirmación de un especialista sobre cuál artículo del RNE aplica realmente a cada caso (escaleras vs. perfil general de vivienda).
+
 **Pendiente para fases futuras** (no bloquea el incremento actual): granularidad adicional por subtipo dentro de cada tipoProyecto, y cobertura de tipologías no listadas aún (salud, comercio, oficinas — ya existen parcialmente en `hooks/normativeEngine.ts` como categorías de actividad, aunque sin perfil normativo completo propio en este plan).
 
 ## 7. Catálogo de normas ya citado en código (referencia cruzada)
 
-`hooks/normativeEngine.ts::NORMATIVE_STANDARDS_META` ya mantiene, para seis normas, una ficha con fuente, versión, año, autoridad y estado legal. Esta tabla es más rigurosa que las estimaciones de las secciones 1-5 y debe consultarse en paralelo:
+`hooks/normativeEngine.ts::NORMATIVE_STANDARDS_META` ya mantiene, para siete normas, una ficha con fuente, versión, año, autoridad y estado legal. Esta tabla es más rigurosa que las estimaciones de las secciones 1-5 y debe consultarse en paralelo:
 
 | id interno | fuente citada | año | autoridad | estado legal (`legalStatus`) | catálogo de valores cargado |
 |---|---|---|---|---|---|
 | `en_12464` | EN 12464-1:2021 | 2021 | CEN/TC 169 | `recommended` | Sí (`en12464Regulations`) |
 | `ies_na` | IES HB-10-17 | 2017 | Illuminating Engineering Society | `recommended` | Sí (`iesnaRegulations`) |
 | `rne_peru` | RNE EM.010 (D.S. N°006-2014-V) | 2014 | MVCS Perú | `mandatory` | Sí (`rnePeruRegulations`) |
-| `en_1838` | EN 1838:2019 | 2019 | CEN/TC 169 | `mandatory` | Sí (`en1838Regulations`) |
+| `en_1838` | EN 1838:2013 (corregido — la edición "2019" citada antes en este documento y en `NORMATIVE_STANDARDS_META` no existe en el catálogo público CEN/BSI; 2013 fue retirada 18-dic-2024, sustituida por 2024 aún no verificada) | 2013 | CEN/TC 169 | `mandatory` (obligatoria SOLO en su propia jurisdicción europea, NO en Perú — ver `rne_a130` abajo para la fuente peruana real) | Sí (`en1838Regulations`) |
+| `rne_a130` | RNE A.130 (D.S. N°017-2012-VIVIENDA), Arts. 39-41 | 2012 | MVCS Perú | `mandatory` | Sí (`a130Regulations`) — **norma agregada por Fase 14 del plan maestro, ausente de esta tabla hasta que `dialux-normativa-auditor` la detectó en esta sesión**; es la fuente OBLIGATORIA real para alumbrado de emergencia en Perú (`rne_peru`/EM.010 no trata este tema en absoluto) |
 | `nfpa101` | NFPA 101:2021 | 2021 | NFPA | `reference` | **No** — catálogo vacío (`getNormData` retorna `[]`), pese a `active: true` en la metadata (inconsistencia señalada en `.claude/agents/dialux-normativa-auditor.md`) |
 | `ds024` | DS-024-2016-EM | 2016 | MEM Perú | `mandatory` | **No** — catálogo vacío, misma inconsistencia que `nfpa101` |
 
-Ningún agente debe citar `nfpa101` o `ds024` como fuente de un valor numérico real: su metadata existe, pero no tienen datos de actividad cargados todavía.
+Ningún agente debe citar `nfpa101` o `ds024` como fuente de un valor numérico real: su metadata existe, pero no tienen datos de actividad cargados todavía. El catálogo de `NORMATIVE_STANDARDS_META` en el código ya define **siete** normas (no seis, como decía la versión anterior de esta tabla) — verificar contra el código en cada revisión en vez de confiar en el conteo de esta tabla.
 
 ## 8. Registro de confirmaciones
 
@@ -125,6 +147,6 @@ Ningún agente debe citar `nfpa101` o `ds024` como fuente de un valor numérico 
 
 Ver el proceso completo, con pasos accionables, en `.claude/skills/normativa-dialux/SKILL.md` sección "Mantenimiento continuo". Resumen:
 
-- **Cadencia de revisión de ediciones**: anual, o inmediatamente si alguien del equipo detecta que una norma citada aquí (EN 12464-1:2021, RNE EM.010 D.S. N°006-2014-V, EN 1838:2019, IES HB-10-17, NFPA 101:2021, DS-024-2016-EM) fue reemplazada por una edición nueva.
+- **Cadencia de revisión de ediciones**: anual, o inmediatamente si alguien del equipo detecta que una norma citada aquí (EN 12464-1:2021, RNE EM.010 D.S. N°006-2014-V, EN 1838:2013, RNE A.130 D.S. N°017-2012-VIVIENDA, IES HB-10-17, NFPA 101:2021, DS-024-2016-EM) fue reemplazada por una edición nueva.
 - **Agregar un tipo de proyecto nuevo** (salud, comercio, oficinas...): agregar una fila a la tabla de la sección 6 y, si corresponde, filas nuevas en las secciones 1-5 con su propio `tipoProyecto`. No requiere tocar ningún agente.
 - **Agregar un dominio de revisión nuevo** (exteriores, vial, IFC...): ver `.claude/skills/revisar-dialux/SKILL.md` sección "Agregar un dominio nuevo".

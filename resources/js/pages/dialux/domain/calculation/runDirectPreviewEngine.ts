@@ -230,6 +230,29 @@ export async function runDirectPreviewEngine(
                     message: `"${object.name}" no tiene reflectancias de superficie definidas — no se calcula ${config.interreflection === 'iterative' ? 'interreflexión' : 'primera reflexión'} para este ambiente.`,
                     objectId: object.id,
                 });
+            } else if (material) {
+                // Auditoría `dialux-calc-reviewer`: `resolveMaterialId()`
+                // (`buildCalculationSnapshot.ts`) crea un material en cuanto
+                // el usuario asigna reflectancia a UNA superficie —
+                // `RoomSurfaceMaterialsSection.tsx` permite asignar
+                // techo/pared/piso de forma independiente, cada uno con su
+                // propio "Sin asignar" (`null`). `resolveSurfaceReflectances`
+                // (`runDirectPreviewEngineAdapters.ts`) convierte cada `null`
+                // individual en `0` (negro absoluto) para poder calcular —
+                // sin este warning, un usuario que solo asignó reflectancia
+                // de techo obtenía pared/piso en 0% en silencio, sin que
+                // nada en el PDF o la UI lo indicara.
+                const missingSurfaces: string[] = [];
+                if (material.ceilingReflectance == null) missingSurfaces.push('techo');
+                if (material.wallReflectance == null) missingSurfaces.push('pared');
+                if (material.floorReflectance == null) missingSurfaces.push('piso');
+                if (missingSurfaces.length > 0) {
+                    warnings.push({
+                        code: 'object-with-partial-material-reflectance',
+                        message: `"${object.name}" tiene reflectancia definida solo para algunas superficies — ${missingSurfaces.join('/')} se asume(n) 0% (negro) para calcular ${config.interreflection === 'iterative' ? 'interreflexión' : 'primera reflexión'}, no un valor por defecto razonable. Asignar reflectancia real a esas superficies para un cálculo más representativo.`,
+                        objectId: object.id,
+                    });
+                }
             }
         }
 

@@ -413,6 +413,18 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
     });
 
     // ── Tableros (árbol por parentPanelId) ──────────────────────────────────
+    // Auditoría `dialux-electrical-reviewer`: un tablero puede declarar
+    // `parentPanelId` (combo "Alimentado por" de `PanelsTab.tsx`) sin que
+    // exista un `Feeder` modelado para ese tramo (sección "Alimentadores",
+    // independiente) — antes de este fix, `cumulativeDropAtPanel` saltaba
+    // ese tramo sumando 0% en silencio, sin ningún warning ni en el
+    // circuito ni en el tablero, subestimando la caída acumulada real sin
+    // que nada lo indicara. Se construye desde `doc.feeders` (el documento
+    // crudo), no desde `feeders`/`FeederResult` — ese array todavía no
+    // existe en este punto del cálculo, y para esta verificación basta con
+    // saber que el alimentador FUE declarado, no su resultado numérico.
+    const declaredFeederEdges = new Set(doc.feeders.map((feeder) => `${feeder.fromPanelId}->${feeder.toPanelId}`));
+
     const childrenByParent = new Map<string, Panel[]>();
     const panelWarnings = new Map<string, string[]>();
     for (const panel of doc.panels) {
@@ -424,6 +436,11 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
                 const list = childrenByParent.get(panel.parentPanelId) ?? [];
                 list.push(panel);
                 childrenByParent.set(panel.parentPanelId, list);
+                if (!declaredFeederEdges.has(`${panel.parentPanelId}->${panel.id}`)) {
+                    panelWarnings.get(panel.id)?.push(
+                        `El tablero "${panel.id}" declara alimentarse desde "${panel.parentPanelId}" pero no hay ningún alimentador modelado para ese tramo (sección "Alimentadores") — la caída de tensión acumulada de este tablero y de sus circuitos NO incluye ese tramo, y puede estar subestimada.`,
+                    );
+                }
             }
         }
     }

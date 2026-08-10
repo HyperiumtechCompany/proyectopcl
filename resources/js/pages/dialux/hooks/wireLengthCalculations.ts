@@ -860,13 +860,28 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             // sumar lo que ya cayó aguas arriba — eso se resuelve en la
             // "Pasada 2", después de conocer el árbol completo de tableros,
             // para poder encadenar padre→hijo en vez de leer un número fijo).
+            //
+            // Auditoría `dialux-electrical-reviewer`: esta fórmula multiplicaba
+            // por `powerFactor` además de usar `maximumPhaseCurrent` — pero
+            // `maximumPhaseCurrent` viene de `currentA = circuitCurrent(P, V,
+            // phases, powerFactor)` (línea de arriba), que YA divide entre
+            // `powerFactor` para obtener la corriente REAL (I = P/(V·cosφ)).
+            // Multiplicar otra vez por `powerFactor` aquí contaba el factor de
+            // potencia dos veces, subestimando la caída ~10-30% según el fp
+            // configurado — confirmado numéricamente contra
+            // `engine/formulas.ts::voltageDropPct` (que NO tiene este término,
+            // porque su `currentA` de entrada ya es corriente real, igual que
+            // aquí). El modelo de caída de tensión resistiva pura (ΔV=k·ρ·L·I/S)
+            // no lleva ningún término de `cosφ` adicional cuando I ya es la
+            // corriente real — ese factor solo aparecería en el término
+            // reactivo (X·sinφ) de la fórmula completa con impedancia, que
+            // este modelo no calcula (ni antes ni después de este fix).
             const circuitOwnDropV =
                 sectionMm2 > 0
                     ? (phases === 1 ? 2 : Math.sqrt(3)) *
                       maximumPhaseCurrent *
                       copperResistivity *
-                      lengthM *
-                      powerFactor /
+                      lengthM /
                       sectionMm2
                     : Number.POSITIVE_INFINITY;
             const maxVoltageDropPct =
@@ -1057,12 +1072,15 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
         const nominalCableCurrentA = defaultNominalCableCurrent(section);
         const admissibleCableCurrentA =
             nominalCableCurrentA * circuit.groupingFactor * circuit.temperatureFactor;
+        // Mismo fix que `circuitOwnDropV` arriba: `maxPhaseCurrent` ya es
+        // corriente real (`circuitCurrent()` ya dividió entre `powerFactor`),
+        // así que no se vuelve a multiplicar por `circuit.powerFactor` aquí
+        // — ver el comentario extenso en `circuitOwnDropV` para el porqué.
         const circuitVoltageDropV =
             ((circuit.phases === 1 ? 2 : Math.sqrt(3)) *
                 maxPhaseCurrent *
                 circuit.copperResistivity *
-                circuit.lengthM *
-                circuit.powerFactor) /
+                circuit.lengthM) /
             section;
         const voltageDropV = circuitVoltageDropV + circuit.upstreamVoltageDropV;
         const voltageDropPct =
