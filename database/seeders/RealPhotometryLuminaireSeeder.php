@@ -87,6 +87,28 @@ class RealPhotometryLuminaireSeeder extends Seeder
                 'is_global' => true,
             ],
         );
+
+        // SUSTITUTO de GF19140 ("G4 LED Plain - 22W - SMART - Corridor Lens"),
+        // no el producto original — Thorlux gatea sus datasheets/IES/LDT
+        // detrás de un login que no tenemos, y el artículo GF19140 ya no
+        // existe en DIALux Luminaire Finder (confirmado, no es un fallo de
+        // red — ver planes/plan_cierre_brecha_paridad_dialux_evo.md §-15).
+        // Mismo fabricante (Thorlux), misma familia de óptica asimétrica
+        // "corridor" (no una Lambertiana genérica), specs cercanas (2980 lm
+        // vs. 2580 lm declarados, 27 W vs. 26 W — ~15% más flujo, no
+        // idéntico). Se usa donde antes se usaba la aproximación Lambertiana
+        // de GF19140 (ambiente "Guarderías"/"Caseta de control" del
+        // benchmark Pozuzo) — NO se reimporta bajo el artículo GF19140 para
+        // no aparentar ser el producto original.
+        $this->importIfMissing(
+            articleNumber: 'RC18820',
+            fileName: 'Thorlux-RC18820.ldt',
+            overrides: [
+                'manufacturer' => 'Thorlux Lighting',
+                'article_number' => 'RC18820',
+                'is_global' => true,
+            ],
+        );
     }
 
     /**

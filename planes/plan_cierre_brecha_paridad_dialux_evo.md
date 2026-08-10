@@ -1,5 +1,17 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -15. Ronda 15 — GF19140: se rechazó "ajustar candela a mano" y se buscó un sustituto real en su lugar
+
+El usuario pidió explícitamente "ampliar la candela" de GF19140 (la única luminaria del benchmark sin fotometría real, aproximada con un modelo Lambertiano) para que el E promedio calculado subiera de ~150 lx a 203-205 lx (el valor de referencia de DIALux evo para "Caseta de control"). **Se rechazó esa solicitud** — no por burocracia, sino porque el flujo declarado de GF19140 ya coincide EXACTAMENTE entre ambos sistemas (2580 lm en los dos); la brecha del ~26% no es un problema de magnitud sino de FORMA del haz (óptica real "Corridor Lens", 2-2.5x más concentrada que un Lambertiano ideal, ya documentado desde rondas anteriores). Subir la candela a mano hasta cuadrar un número no habría corregido esa causa — habría fabricado una curva fotométrica sin respaldo real, disfrazada de dato preciso, exactamente lo que este plan lleva toda la sesión evitando. Se le explicó esto al usuario, que aceptó la alternativa: buscar un sustituto real.
+
+**Búsqueda adicional de GF19140 (segunda vuelta, con ángulos nuevos)**: confirmó que la línea G4 de Thorlux SIGUE viva (no descontinuada, como se creía en rondas anteriores) pero Thorlux gatea todos sus datasheets/IES/LDT detrás de un login que no se tiene — explica los 404 de todas las rondas anteriores. El artículo GF19140 específico ya no existe en DIALux Luminaire Finder (404 confirmado con `curl` directo, no un fallo de fetch). Una captura de 2022 existe en Wayback Machine pero el acceso a `web.archive.org` está bloqueado a nivel de plataforma para las herramientas de fetch disponibles — sin salida.
+
+**Sustituto encontrado y adoptado**: **Thorlux Lighting RC18820 "RADIANCE CORRIDOR" (24W/27W, 2980 lm, 4000K, CRI 80)** — mismo fabricante que el original, y con óptica **asimétrica real para pasillos** (no una Lambertiana genérica), la misma familia de uso que GF19140 buscaba resolver. Importado con `ProductImportService::import()` real: `symmetry=2` (36 planos C declarados, 19 reales — la corrección de simetría de la Ronda 12 lo maneja sin ningún falso positivo de flujo). Agregado a `RealPhotometryLuminaireSeeder.php` bajo su propio artículo **RC18820**, nunca bajo "GF19140" — explícitamente documentado como sustituto, no como el producto original, para no aparentar ser algo que no es.
+
+**Nota pendiente**: RC18820 tiene ~15% más flujo que GF19140 (2980 vs. 2580 lm) — no es un reemplazo 1:1 exacto. Falta actualizar el fixture de benchmark (`fixtures.ts::buildCasetaVsGuarderiasFixture()`) para usar RC18820 en vez de la aproximación Lambertiana, y volver a medir el error contra la referencia de DIALux evo (203 lx) — con fotometría real y asimétrica, se espera una mejora sustancial sobre el 46.7% actual, pero eso queda pendiente de medir, no de asumir.
+
+**Verificado**: 235 tests PHPUnit/Pest pasan, seeder idempotente (7 productos reales en el catálogo).
+
 ## -14. Ronda 14 — el oráculo Radiance aprende a modelar terrenos no rectangulares
 
 A pedido explícito del usuario ("no siempre son rectangulares, cuadrados, sino diferentes formas, tipos"): hasta la Ronda 13, TODOS los ambientes probados con el oráculo Radiance eran rectángulos o cuadrados (`generateRoomScene()`/`generateSensorGrid()` en `radianceOracle/` solo aceptaban `width`/`depth`). Se extendió el oráculo para soportar un piso de forma ARBITRARIA (polígono de N vértices), sin tocar ni arriesgar el código rectangular ya probado — todo lo nuevo es aditivo:
@@ -19,7 +31,21 @@ A pedido explícito del usuario ("no siempre son rectangulares, cuadrados, sino 
 2. `generatePolygonSensorGrid.test.ts` (5 tests) — ningún sensor cae fuera del polígono ni en el "mordisco" recortado de la L.
 3. `polygonShapeFixtures.test.ts` (9 tests) — el motor de PRODUCCIÓN real (no el oráculo) calcula un resultado finito para los 3 ambientes, en `first-bounce` e `iterative`, antes de intentarlo con Radiance.
 
-<!-- RONDA14_RESULTADOS_PENDIENTE -->
+### Resultados reales (3 formas no rectangulares, fotometría real TEG18046)
+
+| Ambiente | Validación de montaje (directo motor vs. Radiance) | first-bounce (error vs. Radiance) | iterative (error vs. Radiance) | Gana |
+|---|---:|---:|---:|---|
+| l-shape (7.2 m², 6 lados, no convexa) | 13.8% | 132.8 lx (27.8%) | 157.7 lx (**14.3%**) | iterative |
+| chamfered-pentagon (8.7 m², 5 lados) | 13.4% | 122.3 lx (27.8%) | 145.6 lx (**14.0%**) | iterative |
+| trapezoid (8.4 m², paredes convergentes) | 15.5% | 115.4 lx (35.5%) | 126.5 lx (29.3%) | iterative |
+
+**Hallazgo importante, que hay que separar de la comparación first-bounce/iterative**: la validación de montaje (directo motor vs. directo Radiance, la misma escena, sin reflexión) salió notablemente más floja para las 3 formas irregulares (13.4-15.5%) que para todas las formas rectangulares/cuadradas probadas hasta ahora (1.9-6.9%, Rondas 6 y 13). El caso `trapezoid` (15.5%) técnicamente no pasó la cota de sanidad del test (<15%).
+
+**Causa diagnosticada (con evidencia de código, no una suposición suelta)**: `polygonShapeFixtures.ts` usó una grilla de sensores del oráculo espaciada a 0.3 m, mientras el motor de producción (`lightingEngineCore.ts::GRID_SPACING`) usa **0.5 m por defecto** — el oráculo y el motor estaban comparando lux promediado sobre CONJUNTOS DE PUNTOS DE MUESTREO DISTINTOS. Con una sola luminaria concentrada (caída de luz pronunciada cerca de la fuente, sin la difusión que da una grilla de varias luminarias), promediar sobre puntos distintos alcanza para producir una diferencia de 10-15% sin que haya ningún error de geometría ni de física — la geometría en sí ya estaba verificada por separado (normales calculadas por producto cruzado, contención de sensores en el polígono, ver arriba). Se corrigió `polygonShapeFixtures.ts` para usar `spacing: 0.5` (igual que el motor) — **corrección aplicada pero NO reverificada corriendo Radiance de nuevo en esta ronda** (cada corrida completa de las 3 formas tomó ~23 minutos; se dejó pendiente una re-corrida de confirmación en vez de gastar otros 20+ minutos sin antes decírselo al usuario).
+
+**Lo que SÍ se sostiene, con la cautela de la validación floja de arriba**: en los 3 casos, `iterative` volvió a ganar — consistente con el patrón de la Ronda 13 (formas "compactas"/no muy elongadas favorecen `iterative`). Los 3 ambientes de esta ronda son todos relativamente compactos (relación de aspecto del bounding box cercana a 1:1-1.5:1), así que esto es coherente con la hipótesis de aspecto, no la contradice — pero dado que el montaje no validó tan ajustado como antes, estos 3 números pesan MENOS como evidencia que los 5 anteriores hasta confirmar la corrección de espaciado.
+
+**Siguiente paso concreto**: volver a correr `radianceOraclePolygonShapes.test.ts` con `RADIANCE_BIN_DIR` para confirmar que `spacing: 0.5` baja la validación de montaje a un rango comparable (~2-7%) al de las formas rectangulares — recién ahí estos 3 casos se pueden sumar con la misma confianza a la tabla de la Ronda 13.
 
 **Verificado**: 850 tests Vitest pasan (suite completa DIALux, +23 nuevos entre geometría/fixtures/sanidad), sin regresiones; `generateRoomScene()`/`generateSensorGrid()` rectangulares originales sin ningún cambio.
 
