@@ -1,5 +1,42 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -20. Ronda 20 — "el mismo producto da lúmenes distintos": no es un bug, es catálogo duplicado sin aviso; agregada advertencia de duplicado en el import
+
+A pregunta directa del usuario ("si es el mismo producto, ¿por qué uno da más lúmenes que otro?"), se verificó en producción (vía tinker) que existen DOS `LuminaireProduct` con `catalog_number = TEG18046`:
+
+| | id=9 (usado por el fixture real de Baño en Pozuzo) | id=10 (creado hoy, 2026-08-10) |
+|---|---|---|
+| `total_lumens` / `power_watts` | 1508 lm / 14 W | 1365 lm / 17 W (valores crudos del fabricante) |
+| `photometric_web.reference_lumens` | 1365 (el valor real queda preservado) | 1365 |
+| `report_assets`/`report_data`/`source_file_path` | todos `null` | completos (SVG polar real, ficha técnica, LDT fuente) |
+| Origen | creado a mano en una ronda anterior (no via `ProductImportService::import()` — le faltan todos los campos que ese pipeline genera) | import real vía el pipeline normal |
+
+**No es un bug de cálculo**: la curva angular real (`photometric_web.candela`) es la MISMA en ambos registros — solo difiere la magnitud total declarada. El id=9 fue creado deliberadamente para igualar un valor histórico que el propio DIALux evo reportó para este producto en una exportación real y fechada (documentado en el nombre del producto), usando el mecanismo de `candelaScale` ya existente (`ProductImportService::withReportPayload()`, línea ~1183: `candelaScale = total_lumens / photometric_web.reference_lumens`) — el mismo mecanismo de las Rondas 3/8. El valor real (1365) nunca se perdió, quedó guardado en `reference_lumens`.
+
+**El problema real**: el catálogo permitía crear un segundo producto con el mismo `catalog_number` sin ningún aviso — eso es lo que genera la confusión ("¿por qué el mismo código da datos distintos?"), no una falla de física.
+
+**Corregido**: `ProductImportService::import()` ahora advierte (no bloquea) cuando el `catalog_number` del archivo importado ya existe en el catálogo, listando los productos en conflicto (id, nombre, lumens, watts) para que quede visible en `report_data.warnings` y en la respuesta JSON del import. 2 tests de regresión nuevos (`ProductImportTest.php`) — uno confirma el aviso ante duplicado real, otro confirma que un `catalog_number` sin precedente NO dispara aviso falso. 239 tests PHP pasan (4812 aserciones), sin regresiones.
+
+**No se tocó** el fixture real de Baño (sigue usando id=9) ni se decidió cuál de los dos productos debería usarse en adelante — ese es un juicio de negocio (¿priorizar comparabilidad con el histórico de evo, o el dato crudo del fabricante?) que le corresponde al usuario, no algo para resolver bajo presión de un deploy de 10 minutos.
+
+## -19. Ronda 19 — re-corrida del oráculo Radiance en formas no rectangulares: el fix de spacing NO resolvió el error; hallazgo real sin cerrar (no bloquea Pozuzo hoy)
+
+Se instaló Radiance fresco (no se encontró la instalación previa en esta máquina; se reinstaló portable desde el release oficial de LBNL-ETA) y se re-corrió `radianceOraclePolygonShapes.test.ts` con el fix de `spacing: 0.3 → 0.5` de la Ronda 14 ya aplicado.
+
+**Resultado: el error subió, no bajó.** Antes del fix (Ronda 14, con `spacing: 0.3`): 13.4-15.5%. Después del fix (`spacing: 0.5`, igual al de producción): **23.2% (L-shape), 26.1% (pentágono achaflanado), 15.4% (trapezoide)** — los 3 casos ahora fallan la aserción de montaje (`< 15%`). Esto descarta que el spacing fuera la causa real: si lo fuera, alinear el spacing del oráculo con el de producción debía ACERCAR los números, no alejarlos.
+
+### Hipótesis investigada y DESCARTADA: fallback a bounding box en `ambientSpaces.ts`
+
+Los logs mostraban `[ambientSpaces] buildRegionPolygon: open chain detected after 3 verts` en cada shape — inicialmente se sospechó que el motor de producción caía a un rectángulo delimitador (bounding box) en vez de usar la forma poligonal real al fallar la reconstrucción raster. **Se seleccionó código y se descartó**: en `deriveAmbientSpaces()` (`hooks/ambientSpaces.ts` línea ~870), cuando `regions.length <= 1` (el caso de un ambiente único sin muros internos que lo subdividan — exactamente el caso de los fixtures de este test), el camino usa `{...room}` — el room ORIGINAL con sus `vertices` reales, nunca el resultado de `buildRegionPolygon`. El área también cae a `polygonArea(room.vertices)` (polígono real), no a un bounding box. La detección raster (`buildRasterRegions`/`buildRegionPolygon`) solo importa cuando SÍ hay muros internos dividiendo el room en sub-ambientes (caso Guarderías+Baño) — para un ambiente único de forma arbitraria, el warning es ruido interno sin efecto en el resultado. **Conclusión: NO es la causa.**
+
+### Estado real: causa sin identificar todavía
+
+El error de validación directa (sin reflexión, solo visibilidad+inverso-cuadrado+coseno — la física más simple posible) no debería divergir 15-26% entre el oráculo y el motor si ambos modelan la MISMA geometría/sensor grid. Eso apunta a un desalineamiento real entre lo que arma `generatePolygonRoomScene.ts`/`generatePolygonSensorGrid.ts` (el oráculo, en `__benchmarks__`, código de investigación) y lo que arma `buildGrid`/`pointInPolygon`/`filterPointsOutsideMarginalZone` (el motor real, en `hooks/lightingEngineCore.ts` + `hooks/marginalZoneFilter.ts`) para formas de más de 4 vértices — sin identificar aún si el desalineamiento está del lado del oráculo (posible bug de winding/normales en el escenario Radiance para el corner cóncavo de la L, aunque el pentágono/trapezoide convexos también fallan) o del lado del motor real. **No se investigó más a fondo esta ronda por límite de tiempo** — queda como próximo paso explícito antes de confiar en el motor para cualquier ambiente no rectangular en producción.
+
+### Por qué esto NO bloquea el deploy de hoy
+
+Los dos ambientes reales del proyecto Pozuzo (Guarderías, Baño) son ambos rectángulos de 4 vértices (`room.vertices` con 4 puntos, confirmado vía tinker en producción) — el código de formas rectangulares (`generateRoomScene.ts`, ya validado en Rondas 6/13 con 1.9-6.9% de error) es el que efectivamente corre para ellos, no el código poligonal nuevo. Este hallazgo es un riesgo real pero FUTURO: aplica a cualquier proyecto con ambientes en L, pentagonales, trapezoidales, etc. — exactamente lo que se pidió empezar a testear. **No se debe presentar/vender el sistema como validado para formas no rectangulares hasta cerrar esta investigación.**
+
 ## -18. Ronda 18 — bug real encontrado y corregido: "Gráfico no disponible" en la sub-sección "Lista de luminarias" por ambiente
 
 A pedido de revisar el "encuadre" (diseño general del PDF: títulos, tablas, espaciado), se investigó por qué las tarjetas de producto del PDF exportado muestran "Gráfico no disponible" (logo/foto/diagrama polar) en vez de los gráficos reales — mientras que el PDF de referencia (MODULO I, DIALux evo) sí los muestra.

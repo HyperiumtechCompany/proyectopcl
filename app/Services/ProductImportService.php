@@ -157,6 +157,28 @@ class ProductImportService
         // Aplicar overrides del usuario
         $data = array_merge($parsed, array_filter($overrides, fn ($v) => $v !== null));
 
+        // Duplicado de catálogo: si ya existe un producto con el mismo
+        // `catalog_number`, importar este segundo no es un error (puede ser
+        // una revisión legítima del fabricante, o una recalibración
+        // deliberada del flujo declarado — ver LuminaireProduct id=9 vs
+        // id=10 de TEG18046, `planes/plan_cierre_brecha_paridad_dialux_evo.md`
+        // Ronda 19), pero dejarlo pasar en silencio es lo que después
+        // confunde: dos fixtures colocados con el "mismo" código de catálogo
+        // terminan con flujo/potencia distintos sin que quede rastro de por
+        // qué. Solo advierte — nunca bloquea el import.
+        $catalogNumber = is_string($data['catalog_number'] ?? null) ? trim($data['catalog_number']) : null;
+        if ($catalogNumber !== null && $catalogNumber !== '') {
+            $existing = LuminaireProduct::query()
+                ->where('catalog_number', $catalogNumber)
+                ->get(['id', 'name', 'total_lumens', 'power_watts']);
+            if ($existing->isNotEmpty()) {
+                $conflicts = $existing
+                    ->map(fn ($p) => "#{$p->id} \"{$p->name}\" ({$p->total_lumens} lm / {$p->power_watts} W)")
+                    ->implode('; ');
+                $warnings[] = "Ya existe(n) {$existing->count()} producto(s) con el código de catálogo \"{$catalogNumber}\": {$conflicts}. Si es el mismo modelo físico, verifica que los valores de flujo/potencia coincidan o que la diferencia esté documentada — dos entradas con el mismo código y datos distintos generan resultados que no se pueden comparar entre sí.";
+            }
+        }
+
         // Asegurar campos obligatorios
         $data['source_format'] = $sourceFormat;
         $data['source_file_path'] = $storagePath;

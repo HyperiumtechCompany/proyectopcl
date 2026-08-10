@@ -124,6 +124,94 @@ test('authenticated users can import an ldt luminaire product with report data',
         ->and($product->report_assets['polar_svg'])->toContain('CDL polar');
 });
 
+test('importing a second product with the same catalog_number warns about the duplicate instead of failing silently', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+
+    LuminaireProduct::query()->create([
+        'catalog_number' => 'TEG18046',
+        'name' => 'TEGO IP65 FROSTED GLASS (variante previa)',
+        'source_format' => 'manual',
+        'total_lumens' => 1508,
+        'power_watts' => 14,
+    ]);
+
+    $lines = array_fill(0, 33, '');
+    $lines[0] = 'Thorlux Lighting';
+    $lines[2] = '0';
+    $lines[3] = '2';
+    $lines[4] = '90';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'TEGO IP65 FROSTED GLASS';
+    $lines[9] = 'TEG18046';
+    $lines[12] = '0.2 0.2 0.08';
+    $lines[14] = '0.72';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '1.365';
+    $lines[29] = '4000';
+    $lines[30] = '90';
+    $lines[31] = '17';
+    $lines[] = '900 600 80';
+    $lines[] = '860 580 75';
+
+    $file = UploadedFile::fake()->createWithContent('teg18046.ldt', implode("\n", $lines));
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('dialux.products.import'), [
+            'file' => $file,
+            'normative_standard' => 'universal',
+        ]);
+
+    $response->assertCreated();
+
+    expect(collect($response->json('warnings'))
+        ->contains(fn ($w) => str_contains($w, 'TEG18046') && str_contains($w, 'código de catálogo')))->toBeTrue();
+
+    expect(LuminaireProduct::query()->where('catalog_number', 'TEG18046')->count())->toBe(2);
+});
+
+test('importing a product with a catalog_number that has no prior match does not warn about duplicates', function () {
+    Storage::fake();
+    $user = User::factory()->create();
+
+    $lines = array_fill(0, 33, '');
+    $lines[0] = 'Regiolux';
+    $lines[2] = '0';
+    $lines[3] = '2';
+    $lines[4] = '90';
+    $lines[5] = '3';
+    $lines[6] = '45';
+    $lines[8] = 'Downlight Opal';
+    $lines[9] = 'UNICO-21W';
+    $lines[12] = '0.2 0.2 0.08';
+    $lines[14] = '0.72';
+    $lines[26] = '1';
+    $lines[27] = 'LED';
+    $lines[28] = '2.014';
+    $lines[29] = '4000';
+    $lines[30] = '80';
+    $lines[31] = '21';
+    $lines[] = '900 600 80';
+    $lines[] = '860 580 75';
+
+    $file = UploadedFile::fake()->createWithContent('unico.ldt', implode("\n", $lines));
+
+    $response = $this
+        ->actingAs($user)
+        ->post(route('dialux.products.import'), [
+            'file' => $file,
+            'normative_standard' => 'universal',
+        ]);
+
+    $response->assertCreated();
+
+    expect(collect($response->json('warnings'))
+        ->contains(fn ($w) => str_contains($w, 'código de catálogo')))->toBeFalse();
+});
+
 test('ldt with one c plane skips reduction factors before photometric angles', function () {
     Storage::fake();
 
