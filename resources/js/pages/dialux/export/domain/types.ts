@@ -439,6 +439,8 @@ export interface DialuxAmbientDetail {
     reflectionWall: number | null;
     reflectionFloor: number | null;
     maintenanceFactor: number;
+    /** Horas de operación diarias asumidas para "Consumo (kWh/a)" — ver `ProjectSiteSettings.dailyOperatingHours`. Default 8. */
+    dailyOperatingHours: number;
     usefulPlaneHeight: number;
     marginalZone: number;
     calculationIndex: string;

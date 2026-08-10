@@ -1346,6 +1346,159 @@ test('formal dialux blade renders calculated local and calculation object values
         ->and(substr_count($planeRows[3], '<td'))->toBe(5);
 });
 
+test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the ambient declares it', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => [
+                'title' => 'Proyecto Demo',
+                'subtitle' => 'Planta Baja',
+            ],
+            'footer' => [
+                'left' => 'DIAlux Web',
+                'right' => '2026-04-21',
+            ],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => ['totalLumens' => 0, 'totalPowerWatts' => 0, 'overallEfficiency' => 0],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-results-room-1::ambient-1',
+                'kind' => 'ambient-results',
+                'sectionId' => 'ambient-results:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resultados',
+                'subtitle' => 'GUARDIANIA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'GUARDIANIA',
+                    'activity' => null,
+                    'area' => 3.28,
+                    'targetLux' => 500,
+                    'avgLux' => 540.25,
+                    'minLux' => 332.1,
+                    'maxLux' => 688.9,
+                    'uniformity' => 0.615,
+                    'g2' => 0.482,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18.2,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 1,
+                    'totalPowerWatts' => 40,
+                    'dailyOperatingHours' => 4,
+                    'lumensRequired' => 2072.9,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 0.52,
+                    'roundedQuantity' => 1,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    // Consumo = 40 W * 4 h/dia * 365 / 1000 = 58.4 kWh/a (NO el resultado con el default de 8h, que sería 116.8).
+    $view->assertSee('58 kWh/a', false);
+    $view->assertDontSee('117 kWh/a');
+    $view->assertSee('jornada referencial de 4 h', false);
+});
+
+test('formal dialux blade Consumo defaults to 8h/dia when the ambient does not declare dailyOperatingHours', function () {
+    $view = $this->view('dialux.export.formal-pdf', [
+        'document' => [
+            'title' => 'Proyecto Demo · Reporte DIAlux',
+            'subtitle' => 'Planta Baja',
+            'generatedAt' => '2026-04-21T10:00:00Z',
+            'header' => [
+                'title' => 'Proyecto Demo',
+                'subtitle' => 'Planta Baja',
+            ],
+            'footer' => [
+                'left' => 'DIAlux Web',
+                'right' => '2026-04-21',
+            ],
+            'metadata' => [],
+            'luminaires' => [],
+            'luminaireTotals' => ['totalLumens' => 0, 'totalPowerWatts' => 0, 'overallEfficiency' => 0],
+            'ambientDetails' => [],
+        ],
+        'pages' => [
+            [
+                'id' => 'page-ambient-results-room-1::ambient-1',
+                'kind' => 'ambient-results',
+                'sectionId' => 'ambient-results:room-1::ambient-1',
+                'pageNumber' => 1,
+                'title' => 'Resultados',
+                'subtitle' => 'GUARDIANIA',
+                'assets' => [],
+                'notes' => [],
+                'roomId' => 'room-1',
+                'ambientDetail' => [
+                    'ambientId' => 'room-1::ambient-1',
+                    'roomId' => 'room-1',
+                    'roomName' => 'Modulo XIV',
+                    'ambientName' => 'GUARDIANIA',
+                    'activity' => null,
+                    'area' => 3.28,
+                    'targetLux' => 500,
+                    'avgLux' => 540.25,
+                    'minLux' => 332.1,
+                    'maxLux' => 688.9,
+                    'uniformity' => 0.615,
+                    'g2' => 0.482,
+                    'uniformityTarget' => 0.4,
+                    'ugr' => 18.2,
+                    'ugrLimit' => 22,
+                    'usefulPlaneHeight' => 0.8,
+                    'marginalZone' => 0.2,
+                    'calculationIndex' => 'WP1',
+                    'fixtureCount' => 1,
+                    'totalPowerWatts' => 40,
+                    // Sin 'dailyOperatingHours' — debe caer al default de 8h.
+                    'lumensRequired' => 2072.9,
+                    'fixtureLumens' => 4000,
+                    'exactQuantity' => 0.52,
+                    'roundedQuantity' => 1,
+                    'coverage' => 'Optimal',
+                    'complianceLabel' => 'Cumple',
+                    'planAssetId' => null,
+                    'isoluxAssetId' => null,
+                    'luminaires' => [],
+                    'fixturePositions' => [],
+                ],
+            ],
+        ],
+        'coverAsset' => null,
+        'tocPages' => [],
+        'contentPages' => [],
+        'tocChunks' => [],
+    ]);
+
+    // Consumo = 40 W * 8 h/dia * 365 / 1000 = 116.8 kWh/a.
+    $view->assertSee('117 kWh/a', false);
+    $view->assertSee('jornada referencial de 8 h', false);
+});
+
 test('formal dialux blade renders engine version, calculation date and warnings for an ambient (Fase 13)', function () {
     $view = $this->view('dialux.export.formal-pdf', [
         'document' => [

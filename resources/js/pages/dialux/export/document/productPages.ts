@@ -175,8 +175,18 @@ export function buildAmbientLuminaireList(
             roomName: ambient.roomName,
             ambientName: ambient.name,
             quantity: 1,
+            cct: fixture.cct ?? null,
+            cri: fixture.cri ?? null,
+            description: fixture.description ?? null,
+            applications: fixture.applications ?? null,
             reportData: fixture.reportData ?? null,
             reportAssets: fixture.reportAssets ?? null,
+            ugrTable: fixture.ugrTable ?? null,
+            ugrDiagramValue: fixture.ugrDiagramValue ?? null,
+            polarDiagramAssetId: fixture.polarDiagramAssetId ?? null,
+            productPhotoAssetId: fixture.productPhotoAssetId ?? null,
+            brandLogoAssetId: fixture.brandLogoAssetId ?? null,
+            lineDrawingAssetId: fixture.lineDrawingAssetId ?? null,
         });
     }
 

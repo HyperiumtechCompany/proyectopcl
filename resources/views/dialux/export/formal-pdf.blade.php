@@ -518,9 +518,10 @@
                 $usefulPowerDensity !== null && ($referenceLux ?? 0) > 0
                     ? $usefulPowerDensity / ((float) $referenceLux / 100)
                     : null;
+            $dailyOperatingHours = (float) ($detail['dailyOperatingHours'] ?? 8);
             $consumption =
                 ($detail['totalPowerWatts'] ?? null) !== null
-                    ? ((float) $detail['totalPowerWatts'] * 8 * 365) / 1000
+                    ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
                     : null;
 
             // Estado real por métrica (RequirementEvaluation), no un check decorativo fijo.
@@ -677,7 +678,11 @@
         <div class="ambient-note">
             (1)
 Valores calculados desde los resultados almacenados del ambiente.<br>
-            (2) Consumo estimado para una jornada referencial de 8 h/d&iacute;a.
+            (2) Consumo estimado para una jornada referencial de ' .
+                rtrim(rtrim(number_format($dailyOperatingHours, 1, '.', ''), '0'), '.') .
+                ' h/d&iacute;a (promedio simple P&times;horas&times;365 &mdash; no reproduce la evaluaci&oacute;n
+            energ&eacute;tica horaria de DIALux evo, que considera autonom&iacute;a de luz diurna, orientaci&oacute;n
+            real y atenuaci&oacute;n por escena).
         </div>' . $renderAmbientProvenance($detail);
         };
 

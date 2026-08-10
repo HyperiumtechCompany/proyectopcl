@@ -1,5 +1,85 @@
 # Plan de cierre de brecha de paridad con DIALux evo (benchmark Pozuzo vs. MÓDULO I)
 
+## -18. Ronda 18 — bug real encontrado y corregido: "Gráfico no disponible" en la sub-sección "Lista de luminarias" por ambiente
+
+A pedido de revisar el "encuadre" (diseño general del PDF: títulos, tablas, espaciado), se investigó por qué las tarjetas de producto del PDF exportado muestran "Gráfico no disponible" (logo/foto/diagrama polar) en vez de los gráficos reales — mientras que el PDF de referencia (MODULO I, DIALux evo) sí los muestra.
+
+### Causa raíz confirmada: `buildAmbientLuminaireList` nunca copiaba los IDs de asset
+
+El pipeline completo se rastreó de punta a punta: `enrichProducts.ts` (fetch de `report_assets.polar_svg` del catálogo + fallback local `fixture.reportAssets` + fallback generado desde `photometricWeb`) → `buildDialuxFormalDocument.ts` → `formal-pdf.blade.php` (`$renderAsset`, que solo muestra el placeholder cuando el asset resuelto es `null`).
+
+Hay DOS funciones que arman listas de luminarias con la misma forma (`DialuxLuminaireListItem` / `DialuxAmbientLuminaireItem`, alias del mismo tipo) pero un comportamiento distinto:
+
+- `buildLuminaireList()` (proyecto completo, alimenta las páginas "Ficha de producto") — SÍ copia `polarDiagramAssetId`/`productPhotoAssetId`/`brandLogoAssetId`/`lineDrawingAssetId` desde el fixture.
+- `buildAmbientLuminaireList()` (por ambiente, alimenta la sub-sección "Lista de luminarias" de cada local vía `$renderAmbientProductCards` en el blade) — **nunca copiaba esos 4 campos**, aunque el tipo los declara como opcionales (por eso TypeScript no lo marcó). Resultado: para CUALQUIER fixture, sin importar si tenía fotometría real enlazada, esa sub-sección mostraba 3 placeholders por producto (logo, foto, diagrama polar — exactamente los 3 `$renderAsset()` que llama `$renderAmbientProductCards`), de forma incondicional.
+
+**Corregido** en `resources/js/pages/dialux/export/document/productPages.ts` — `buildAmbientLuminaireList` ahora copia los mismos 4 campos (y `cct`/`cri`/`description`/`applications`/`ugrTable`/`ugrDiagramValue`, que tampoco copiaba) que `buildLuminaireList`. 2 tests de regresión nuevos (`productPages.test.ts`), sin tests previos que cubrieran este objeto — por eso el bug no se había detectado. 242/242 tests de exportación DIALux siguen pasando.
+
+### Hipótesis abierta, NO confirmada: página "Ficha de producto" (proyecto) específicamente
+
+El pipeline de `buildLuminaireList` (el que sí alimenta "Ficha de producto") está correctamente cableado en el código para cualquier fixture con `productId` enlazado a un producto de catálogo con `report_assets.polar_svg` real (confirmado en BD para TEG18046/id=20). La causa de que el PDF de producción de Pozuzo aún muestre el placeholder ahí (si es que ese caso específico persiste tras este fix — no diferenciado con certeza del bug de arriba en la descripción original del usuario) sigue sin confirmarse en código: la hipótesis más probable es que el fixture colocado en el editor no tenga `productId` enlazado (p. ej. si se creó/editó vía el formulario de "Luminaria Manual", que no referencia un producto de catálogo) — en ese caso, ni el fallback local (`fixture.reportAssets`) ni el fetch en vivo al catálogo (`enrichProducts.ts`) tienen nada que resolver. **No verificable sin acceso a la BD/proyecto real del usuario** — pendiente de confirmación manual (ver en el panel de propiedades de la luminaria si trae un diagrama polar real, o confirmar en `tinker` si el `Fixture` de Baño/Guarderías tiene `product_id` no nulo).
+
+## -17. Ronda 17 — comparación exhaustiva campo por campo (potencia, consumo, estructura del PDF); un campo configurable agregado, una anomalía de datos encontrada
+
+A pedido explícito ("revisa potencias, cálculos mínimos... la comparación es con TODO"), se comparó cada fila de la tabla "Resultados" de ambos PDFs (no solo E/Emin/Emax/Uo/g2, ya cubiertos en la Ronda 16), con hallazgos concretos:
+
+### Potencia específica de conexión — parecía divergir mucho, no es un bug
+
+`Plano útil` (8.41 vs 12.41 W/m² en Guarderías; 14.29 vs 10.41 en Baño) diverge porque depende de la **zona marginal** declarada (que difiere entre proyectos, ver abajo) — el área útil sobre la que se divide la potencia cambia. La prueba de que el CÁLCULO de potencia en sí está bien: la potencia específica sobre **área total** (que no depende de zona marginal) da **casi idéntica** en los dos casos — 5.64 vs 5.62 W/m² (Guarderías) y 6.76 vs 6.76 W/m² EXACTO (Baño). Sin hallazgo que corregir en código.
+
+### Consumo (kWh/a) — metodologías distintas, no comparables directo; se agregó un campo real
+
+Verificado con matemática inversa: nuestro "Consumo" usa exactamente **8 h/día × 365 días** fijo (`P × 8 × 365 ÷ 1000`, confirmado exacto en ambos ambientes). El de DIALux evo implica 3.65 h/día y 5.28 h/día — no son números redondos porque usa una **evaluación energética horaria** (autonomía de luz diurna, orientación real, atenuación por escena — documentado en su propio glosario, desarrollado con el Fraunhofer Institute). Implementar ese modelo completo está fuera de alcance de esta ronda (requeriría datos de cielo/orientación/horario que hoy son solo metadata sin consumidor, ver `ProjectSiteSettings`).
+
+**Se agregó, sí, una mejora real y acotada**: `ProjectSiteSettings.dailyOperatingHours` (antes: `8` fijo en el blade, sin forma de cambiarlo) — ahora es un campo editable en el panel "Terreno · Mantenimiento" del editor, con el mismo patrón que `maintenanceFactor` (override real → default 8h si no se declara). El pie de página del PDF ahora refleja el valor real usado ("Consumo estimado para una jornada referencial de N h/día") en vez de un texto fijo que podía mentir si el número cambiaba. No hace que el consumo sea comparable 1:1 contra DIALux evo (sigue siendo un promedio simple, no una simulación horaria), pero al menos dejó de estar oculto/hardcodeado — el usuario puede alinear el supuesto de horas si quiere acercar el número a un caso de referencia. 2 tests de regresión nuevos.
+
+### Estructura del PDF por ambiente — es la misma, con una fila de MÁS de nuestro lado
+
+Confirmado campo por campo: Plano útil (E, Uo, 2 potencias específicas), Evaluación del deslumbramiento, Valores de consumo, Área (potencia específica) — misma estructura en los dos sistemas. La única diferencia: nuestro PDF tiene una fila "Reproducción cromática (Ra)" que el reporte base de DIALux evo NO incluye en esta plantilla — es la fila agregada en la Ronda 12 de este mismo plan. No es una carencia, es un dato de más.
+
+### Zona marginal — anomalía real encontrada en los datos del proyecto (no en el código)
+
+Se verificó la fórmula EN 12464-1:2021 ya implementada (`getRoomMarginalZone`, `p = 0.2 × 5^log10(d)`) contra las dimensiones reales declaradas de cada ambiente:
+
+| Ambiente | Fórmula aplicada a SUS dimensiones reales | Valor que el proyecto real declara | evo declara |
+|---|---:|---:|---:|
+| Guarderías (2.1×2.21 m) | **0.348 m** (usa dimensión mayor, ratio 1.05 ∈[0.5,2]) | 0.194 m ⚠️ | 0.350 m |
+| Baño (2.209×0.950 m) | **0.193 m** (usa dimensión menor, ratio 2.33 fuera de [0.5,2]) | 0.197 m ✓ | 0.125 m |
+
+**Hallazgo**: para Baño, el valor guardado (0.197) coincide con lo que la fórmula actual predice para SUS propias dimensiones (0.193) — consistente. Para Guarderías, el valor guardado (0.194) NO coincide con lo que la fórmula predice para sus dimensiones reales (0.348) — de hecho 0.194 es casi idéntico a lo que la fórmula daría para las dimensiones de Baño (0.193), sugiriendo que ese campo quedó con un valor "pegado" de un cálculo anterior (antes de que el recinto tuviera su tamaño final, o de una fase anterior del proyecto) en vez de recalcularse. Es un campo editable (`room.marginalZone`, panel de propiedades → "Zona marginal"), así que una vez fijado a mano queda desacoplado del auto-cálculo.
+
+**No se corrigió en código** — no hay nada que arreglar en la fórmula (Baño la valida correctamente); es un dato específico de ESE recinto en el proyecto real del usuario. **Acción recomendada, no aplicada todavía**: en el editor, revisar/re-escribir el campo "Zona marginal" de Guarderías (probar `0.35`, el valor que declara DIALux evo, para comparación directa, o dejar que se recalcule solo si se limpia el campo). Esto además solo afecta Emin/Emax/Uo/g2 (qué puntos de la grilla entran al promedio), no E media — coherente con que Guarderías ya tiene 99% de similitud en E media pese a esta discrepancia.
+
+### Sobre la meta de "99% en todo"
+
+No se prometió ni se persigue como piso absoluto — sigue vigente el principio de §1 (ni DIALux evo/Relux/AGi32 coinciden al 100% entre sí). Lo que SÍ se hizo: cada campo con divergencia grande se investigó individualmente, y en cada caso se llegó a una explicación verificable (zona marginal, metodología de consumo) en vez de una similitud "por bulto". El residual real y no explicado que queda es el de E media en Baño (86.6%, Ronda 16) — coherente con el límite ya conocido de `first-bounce` en salas angostas, cuyo único camino de mejora genuino sigue siendo el de las Rondas 6/13/14 (más casos con el oráculo Radiance para caracterizar cuándo conviene cada modo de interreflexión), no un ajuste de un campo.
+
+**Verificado**: 237 tests PHP + 850 tests Vitest pasan (+2 nuevos), sin regresiones.
+
+## -16. Ronda 16 — con reflectancia asignada en el proyecto real, la similitud sube de ~73% a ~93% (verificado en producción)
+
+Siguiente paso concreto que quedó pendiente desde la Ronda 11 ("asignar reflectancia 70/50/20 en el editor y volver a medir"). El usuario asignó la reflectancia en el proyecto real "Pozuzo" (confirmado en el PDF: `Grado de reflexión (Techo/Paredes/Suelo) 70%/50%/20%` en ambos ambientes) y volvió a exportar. Comparación campo por campo contra `MODULO I_Informe.pdf` (DIALux evo real), con la GF19140 original (no el sustituto RC18820 — ver decisión abajo):
+
+| Campo | Guarderías (Pozuzo) | Caseta de control (evo) | Similitud | Baño (Pozuzo) | SS.HH (evo) | Similitud |
+|---|---:|---:|---:|---:|---:|---:|
+| Área | 4.61 m² | 4.63 m² | 99.6% | 2.07 m² | 2.07 m² | 100% |
+| E media | 205.12 lx | 203 lx | **99.0%** | 124.67 lx | 144 lx | **86.6%** |
+| Emin | 151.83 lx | 162 lx | 93.7% | 97.97 lx | 112 lx | 87.5% |
+| Emax | 248.49 lx | 231 lx | 92.4% | 146.28 lx | 164 lx | 89.2% |
+| Uo (g1) | 0.740 | 0.80 | 92.5% | 0.786 | 0.78 | 99.2% |
+| g2 | 0.611 | 0.70 | 87.3% | 0.670 | 0.68 | 98.5% |
+| UGR | 25.7 (manual) | 26 | — (manual) | 23 (manual) | 23 | — (manual) |
+
+**Antes de esta ronda** (Ronda 11, sin reflectancia): Guarderías 73.6%, Baño 72.2% de similitud en E media. **Ahora**: 99.0% y 86.6%. Confirma con datos de producción reales (no un fixture de laboratorio) que la reflectancia era, en efecto, la causa dominante — exactamente el diagnóstico de la Ronda 11.
+
+El residual de Baño (13.4% de error en E media) está por encima del rango típico de `first-bounce` (~5-12%, ver §1/§3) pero no es alarmante — sigue siendo consistente con la limitación ya documentada de la aproximación de un solo rebote frente a DIALux evo, sin evidencia de un bug nuevo.
+
+### Decisión: se descarta RC18820 como sustituto, se mantiene GF19140 (Lambertiana)
+
+El usuario probó el sustituto real RC18820 (Ronda 15) en el proyecto real y lo revirtió: es un artefacto lineal de ~1.2 m (óptica de pasillo genuina, no una aproximación) — físicamente demasiado grande para un ambiente de control pequeño, y en la práctica dio una E media más baja que la aproximación Lambertiana de GF19140. Coherente con lo ya anticipado en la Ronda 15 (RC18820 comparte la misma limitación de "óptica de pasillo en cuarto no-pasillo" que tenía GF19140 originalmente) y con la investigación numérica de esa misma ronda (89-127 lx según reflectancia, nunca cerca de 205 lx). **Decisión correcta, con base física, no solo preferencia**: la Lambertiana genérica de GF19140, con reflectancia real asignada, terminó rindiendo mejor (99.0% de similitud) que cualquiera de las alternativas reales probadas — un caso concreto de que "más real" no siempre es "más preciso para este caso" cuando la forma del haz no calza con la geometría del ambiente.
+
+**Verificado**: comparación hecha directamente sobre el PDF exportado de producción (`pozuzo dialux sistema.pdf`, 2026-08-10), no un fixture de benchmark — esta es la medición más honesta posible del estado real del sistema hoy.
+
 ## -15. Ronda 15 — GF19140: se rechazó "ajustar candela a mano" y se buscó un sustituto real en su lugar
 
 El usuario pidió explícitamente "ampliar la candela" de GF19140 (la única luminaria del benchmark sin fotometría real, aproximada con un modelo Lambertiano) para que el E promedio calculado subiera de ~150 lx a 203-205 lx (el valor de referencia de DIALux evo para "Caseta de control"). **Se rechazó esa solicitud** — no por burocracia, sino porque el flujo declarado de GF19140 ya coincide EXACTAMENTE entre ambos sistemas (2580 lm en los dos); la brecha del ~26% no es un problema de magnitud sino de FORMA del haz (óptica real "Corridor Lens", 2-2.5x más concentrada que un Lambertiano ideal, ya documentado desde rondas anteriores). Subir la candela a mano hasta cuadrar un número no habría corregido esa causa — habría fabricado una curva fotométrica sin respaldo real, disfrazada de dato preciso, exactamente lo que este plan lleva toda la sesión evitando. Se le explicó esto al usuario, que aceptó la alternativa: buscar un sustituto real.

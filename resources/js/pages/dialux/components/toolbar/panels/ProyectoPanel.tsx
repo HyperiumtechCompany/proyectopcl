@@ -141,6 +141,21 @@ function TerrenoSections() {
                 <p className="mt-1.5 text-[9.5px] leading-snug text-slate-400 dark:text-gray-500">
                     Solo documental — no cambia cómo se calcula el MF de arriba.
                 </p>
+                <label className={`mt-2 ${fieldLabelClass}`}>Horas de operación / día (Consumo)</label>
+                <input
+                    type="number"
+                    min={0}
+                    max={24}
+                    step={0.5}
+                    value={site?.dailyOperatingHours ?? 8}
+                    onChange={(e) => update({ dailyOperatingHours: parseOptionalNumberInput(e.target.value) })}
+                    className={fieldInputClass}
+                />
+                <p className="mt-1.5 text-[9.5px] leading-snug text-slate-500 dark:text-gray-500">
+                    Afecta el "Consumo (kWh/a)" del PDF (Consumo = P × horas × 365 ÷ 1000). Default 8. Sigue siendo un
+                    promedio simple — no reproduce la evaluación energética horaria de DIALux evo (autonomía de luz
+                    diurna, orientación, atenuación por escena).
+                </p>
             </PanelCard>
 
             <PanelCard title="Terreno · Orientación">

@@ -212,6 +212,12 @@ export function buildAmbientDetails(
                     snapshot.project.siteSettings?.maintenanceFactor ??
                     projectPhotometricDefaults.maintenanceFactor ??
                     DEFAULT_MAINTENANCE_FACTOR,
+                // Mismo criterio que `maintenanceFactor` arriba — override real
+                // desde el panel "Terreno" (`ProjectSiteSettings.dailyOperatingHours`),
+                // con 8 h/día como default (el valor que estaba fijo antes de
+                // que este campo existiera, ver plan §-17).
+                dailyOperatingHours:
+                    snapshot.project.siteSettings?.dailyOperatingHours ?? 8,
                 usefulPlaneHeight: Number(
                     ambient.metrics.usefulPlaneHeight.toFixed(3),
                 ),

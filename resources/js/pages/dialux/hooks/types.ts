@@ -1155,6 +1155,17 @@ export interface ProjectSiteSettings {
     maintenanceFactor?: number;
     /** Solo documental — no cambia cómo se calcula `maintenanceFactor`. */
     maintenanceMethod?: 'din_5035' | 'cie_97_2005' | 'iesna' | 'jieg_001';
+    /**
+     * Horas de operación diarias asumidas para "Consumo (kWh/a)" en el PDF
+     * (`Consumo = Ptotal × horas × 365 / 1000`). Afecta el cálculo real de
+     * ese campo. Default 8 (mismo valor que estaba fijo antes de este
+     * campo). NO reemplaza la evaluación energética horaria de DIALux evo
+     * (considera autonomía de luz diurna, orientación real, atenuación por
+     * escena) — sigue siendo un promedio simple, solo que ahora ajustable
+     * en vez de hardcodeado, para poder alinear el supuesto con el de un
+     * informe de referencia al comparar.
+     */
+    dailyOperatingHours?: number;
     /** Metadata sin consumidor de cálculo hoy (ver comentario de la interfaz). */
     latitude?: number;
     longitude?: number;
