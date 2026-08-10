@@ -70,6 +70,26 @@ describe('buildLightingLegendRows — luminarias', () => {
         expect(fixtureRows[0]!.quantity).toBe(1);
     });
 
+    /**
+     * `technicalFields` se lee POR ÍNDICE en la leyenda (columnas
+     * POTENCIA/FLUJO/MONTAJE de `buildDxfMultiSheetDocument.ts`) — un
+     * `.filter()` que quitara la potencia ausente corría el flujo a la
+     * posición 0 y lo mostraba en la columna de potencia.
+     */
+    it('una luminaria sin potencia declarada mantiene el flujo y el montaje en su posición fija', () => {
+        const sinPotencia: Fixture = {
+            id: 'f-sin-potencia', name: 'Luminaria sin potencia', x: 0, y: 0, z: 2.8,
+            lumens: 1200, efficiency: 0.7, fixtureType: 'recessed', lightColor: '#ffffff',
+        };
+        const rows = buildLightingLegendRows(entities({ fixtures: [sinPotencia] }));
+
+        const fixtureRow = rows.find((row) => row.kind === 'fixture')!;
+        expect(fixtureRow.technicalFields).toHaveLength(3);
+        expect(fixtureRow.technicalFields[0]).toBe('');
+        expect(fixtureRow.technicalFields[1]).toBe('1200lm');
+        expect(fixtureRow.technicalFields[2]).toContain('Empotrado');
+    });
+
     it('luminarias de emergencia quedan en filas propias, separadas de las luminarias normales', () => {
         const rows = buildLightingLegendRows(entities({
             fixtures: [
@@ -116,6 +136,22 @@ describe('buildLightingLegendRows — cableado', () => {
         expect([...bySection.values()].sort()).toEqual([1, 2]);
         expect(cableRows.some((row) => row.description.includes('AWG 14'))).toBe(true);
         expect(cableRows.some((row) => row.description.includes('AWG 12'))).toBe(true);
+    });
+
+    /**
+     * AC1009/R12 (`ascii()` en `emitters/primitives.ts`) convierte cualquier
+     * carácter no-ASCII a "?" — el separador "·" y el superíndice de "mm²"
+     * se veían literalmente como "?" en AutoCAD real.
+     */
+    it('la descripción del cableado no usa caracteres no-ASCII (separador ni superíndice)', () => {
+        const conductors: Conductor[] = [
+            { id: 'c1', sourceId: 'a', targetId: 'b', wireCount: 2, routeType: 'wall_ceiling', tubeSize: 20, conductorType: 'Cu LSOH', sectionMm2: 2.5, waypoints: [] },
+        ];
+        const rows = buildLightingLegendRows(entities({ conductors }));
+
+        const description = rows.find((row) => row.kind === 'cable')!.description;
+        expect(description).toBe('Cu LSOH, 2.5 mm2 (AWG 14)');
+        expect(/^[\x20-\x7E]*$/.test(description)).toBe(true);
     });
 });
 

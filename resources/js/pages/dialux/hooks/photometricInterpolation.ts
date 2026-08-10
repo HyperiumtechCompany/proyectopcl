@@ -105,8 +105,15 @@ export function candelaFromPhotometricWeb(
         hiIdx = loIdx;
     }
 
+    // `matrix[loIdx]`/`matrix[hiIdx]` pueden faltar en fotometrías legacy
+    // donde `c_angles` no quedó 1 a 1 con `candela` (LDT simétrico que
+    // declara más planos C de los que publica, importado antes del fix del
+    // parser) — sin este doble fallback a `matrix[0]`, un plano faltante en
+    // AMBOS índices deja `values` en `undefined` dentro de `interpolate1D`
+    // (crash, no una interpolación degradada). `dialux:repair-photometry`
+    // corrige el dato en la base; esto solo evita el crash mientras tanto.
     const loVal = interpolate1D(matrix[loIdx] ?? matrix[0], gammaAngles, clampedGamma);
-    const hiVal = interpolate1D(matrix[hiIdx] ?? matrix[loIdx], gammaAngles, clampedGamma);
+    const hiVal = interpolate1D(matrix[hiIdx] ?? matrix[loIdx] ?? matrix[0], gammaAngles, clampedGamma);
 
     if (hiIdx === loIdx) {
         return loVal;

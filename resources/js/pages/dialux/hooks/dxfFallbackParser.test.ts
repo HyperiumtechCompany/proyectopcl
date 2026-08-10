@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectDxfUnitFromHeader } from './dxfFallbackParser';
+import { detectDxfUnitFromHeader, parseDxfTextFallback } from './dxfFallbackParser';
 
 /** Construye un DXF mínimo válido con un $INSUNITS declarado en la sección HEADER. */
 function buildDxfHeader(insunitsCode: number): string {
@@ -51,5 +51,70 @@ describe('dxfFallbackParser — detección de escala real del CAD', () => {
 
     it('devuelve null si $INSUNITS declara una unidad no métrica soportada (ej. pulgadas=1)', () => {
         expect(detectDxfUnitFromHeader(buildDxfHeader(1))).toBeNull();
+    });
+});
+
+/** Construye un DXF mínimo con una sola entidad en ENTITIES, dada como pares código/valor ya en líneas. */
+function buildDxfWithEntity(entityLines: string[]): string {
+    return ['0', 'SECTION', '2', 'ENTITIES', ...entityLines, '0', 'ENDSEC', '0', 'EOF'].join('\n');
+}
+
+describe('dxfFallbackParser — MTEXT: limpieza de códigos de formato', () => {
+    /**
+     * Bug real reproducido en un DXF exportado: un plano base importado por
+     * un usuario traía un MTEXT con código de fuente (`\F...;`) seguido de
+     * un salto de párrafo (`\P`) — sin limpiar, ese código quedaba como
+     * texto literal (`\F Tssej_ New Roman|0|0|c|0|p|0|`) dibujado encima
+     * del plano. Mismo caso cubierto en `dialux-core/src/dxf_parser.rs`
+     * (`clean_mtext_tests`) para el parser WASM equivalente.
+     */
+    it('limpia el código de fuente y convierte el salto de párrafo en espacio', () => {
+        const dxf = buildDxfWithEntity([
+            '0', 'MTEXT',
+            '8', '0',
+            '10', '0',
+            '20', '0',
+            '40', '2.5',
+            '1', String.raw`\FArial|b0|i0|c0|p34;\PN.P.T.= +0.15`,
+        ]);
+
+        const parsed = parseDxfTextFallback(dxf);
+
+        expect(parsed.entities).toHaveLength(1);
+        const entity = parsed.entities![0];
+        expect(entity.type).toBe('text');
+        expect((entity as { text: string }).text).toBe('N.P.T.= +0.15');
+    });
+
+    it('concatena los chunks de continuación (código 3) con el código 1 final, en orden', () => {
+        const dxf = buildDxfWithEntity([
+            '0', 'MTEXT',
+            '8', '0',
+            '10', '0',
+            '20', '0',
+            '40', '2.5',
+            '3', 'ABC',
+            '3', 'DEF',
+            '1', 'GHI',
+        ]);
+
+        const parsed = parseDxfTextFallback(dxf);
+
+        expect((parsed.entities![0] as { text: string }).text).toBe('ABCDEFGHI');
+    });
+
+    it('deja el texto plano (TEXT, sin códigos MTEXT) sin tocar', () => {
+        const dxf = buildDxfWithEntity([
+            '0', 'TEXT',
+            '8', '0',
+            '10', '0',
+            '20', '0',
+            '40', '2.5',
+            '1', 'Recinto',
+        ]);
+
+        const parsed = parseDxfTextFallback(dxf);
+
+        expect((parsed.entities![0] as { text: string }).text).toBe('Recinto');
     });
 });

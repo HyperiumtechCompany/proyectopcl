@@ -210,3 +210,54 @@ describe('buildDxfMultiSheetDocument — extensión global', () => {
         assertValidDxfStructure(result.dxfText);
     });
 });
+
+describe('buildDxfMultiSheetDocument — plano CAD base: no duplicar la reconstrucción propia', () => {
+    /**
+     * Bug real reportado por un usuario en un DXF exportado abierto en
+     * AutoCAD: cuando el nivel tiene un plano CAD base importado
+     * (`entry.level.basePlan.entities`), el exportador dibujaba ENCIMA la
+     * reconstrucción propia de paredes/recintos (trazado a mano en el
+     * editor, nunca pixel-perfecto contra el CAD real) — líneas dobles y
+     * desalineadas. El usuario confirmó el criterio: el plano base pasa sin
+     * alterarse; el sistema solo agrega la capa eléctrica (más el nombre de
+     * recinto, que no existe en el CAD original).
+     */
+    function buildPackageWithBasePlan(hasBasePlan: boolean) {
+        const scene = buildDxfLevelScene({ id: 'n0', name: 'Aula 1', floorIndex: 0 });
+        scene.walls = [{ id: 'w1', vertices: [{ x: 0, y: 0 }, { x: 6, y: 0 }], thickness: 0.2, height: 2.8 }];
+
+        const project: Project = {
+            id: 'p-baseplan', name: 'Proyecto con plano base',
+            created_at: '2026-08-10T10:00:00.000Z', updated_at: '2026-08-10T10:00:00.000Z',
+            scenes: [scene],
+        };
+        const globalBasePlan = hasBasePlan
+            ? {
+                entities: [{ id: 'cad-1', type: 'line' as const, x1: 0, y1: 0, x2: 6, y2: 0, layer: 'MUROS' }],
+                extents: { min_x: 0, min_y: 0, max_x: 6, max_y: 5 },
+            }
+            : null;
+
+        return buildDxfDrawingPackage({ project, activeSceneId: scene.id, globalBasePlan });
+    }
+
+    it('con plano base CAD: omite el polígono de RECINTOS y las PAREDES trazadas a mano, pero conserva el nombre del recinto', () => {
+        const pkg = buildPackageWithBasePlan(true);
+        const result = buildDxfMultiSheetDocument({ package: pkg, exportedAtLabel: '2026-08-10' });
+
+        expect(result.dxfText).not.toContain('8\nPAREDES');
+        expect(result.dxfText).not.toContain('8\nRECINTOS');
+        expect(result.dxfText).toContain('8\nTEXTO_RECINTOS');
+        expect(result.dxfText).toContain('Ambiente Aula 1');
+        expect(result.dxfText).toContain('8\nDXF_BASE'); // el plano CAD real sí se dibuja
+    });
+
+    it('sin plano base CAD: dibuja la reconstrucción propia (paredes y recintos) como antes', () => {
+        const pkg = buildPackageWithBasePlan(false);
+        const result = buildDxfMultiSheetDocument({ package: pkg, exportedAtLabel: '2026-08-10' });
+
+        expect(result.dxfText).toContain('8\nPAREDES');
+        expect(result.dxfText).toContain('8\nRECINTOS');
+        expect(result.dxfText).toContain('8\nTEXTO_RECINTOS');
+    });
+});

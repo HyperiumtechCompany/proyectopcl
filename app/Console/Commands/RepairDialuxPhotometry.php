@@ -31,7 +31,16 @@ class RepairDialuxPhotometry extends Command
                 && count($web['c_angles'] ?? []) === 1
                 && abs((float) ($web['c_angles'][0] ?? 0)) > 0.01;
 
-            return $legacyOffset || ! is_array($web) || empty($web['reference_lumens']) || ($web['schema_version'] ?? 0) < 2;
+            // Bug del binario Rust (`dialux-photometry`, corregido): para
+            // luminarias simétricas que declaran más planos C de los que
+            // publican, `c_angles` no se truncaba a la cantidad real de
+            // filas de `candela` — el consumidor JS (`candelaFromPhotometricWeb`)
+            // asume `c_angles[i]` <-> `candela[i]` 1 a 1 y crashea al indexar
+            // un plano fuera de rango.
+            $mismatchedPlaneCount = is_array($web)
+                && count($web['c_angles'] ?? []) !== count($web['candela'] ?? []);
+
+            return $legacyOffset || $mismatchedPlaneCount || ! is_array($web) || empty($web['reference_lumens']) || ($web['schema_version'] ?? 0) < 2;
         });
 
         if ($products->isEmpty()) {

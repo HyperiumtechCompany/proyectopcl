@@ -2,8 +2,8 @@ import {
     DEFAULT_LEGEND_COLUMN_HEADER_HEIGHT_MM, DEFAULT_LEGEND_HEADER_HEIGHT_MM, DEFAULT_LEGEND_ROW_HEIGHT_MM,
     DEFAULT_LEGEND_SYMBOL_COLUMN_WIDTH_MM, DEFAULT_LEGEND_TEXT_HEIGHT_MM, LEGEND_CABLE_SWATCH_COLOR_ACI,
 } from '../domain/constants';
-import type { DxfBounds, DxfLegendRow } from '../domain/types';
-import { paperMmToModelM } from '../geometry/sheetScale';
+import type { DxfBounds, DxfLegendColumnDef, DxfLegendRow } from '../domain/types';
+import { modelMToPaperMm, paperMmToModelM } from '../geometry/sheetScale';
 import { renderElectricalDeviceSymbol, renderJunctionBoxSymbol } from '../symbols/outletSymbols';
 import { renderFixtureSymbol, renderLightSwitchSymbol } from '../symbols/lightingSymbols';
 import { dxfLine, dxfPolyLines, dxfText, rectCorners, type DxfLines } from './primitives';
@@ -38,14 +38,28 @@ function renderRowSymbol(out: DxfLines, layer: string, row: DxfLegendRow, x: num
 }
 
 /**
+ * Recorta `text` para que quepa en `widthMm` (mm de papel) a la altura de
+ * texto `textHeightMm` dada, con "..." si no entra — AC1009 TEXT no recorta
+ * solo, así que un nombre de producto largo invadiría la columna fija
+ * siguiente (ninguna otra capa protege contra esto). `0.6` es una relación
+ * ancho/alto conservadora para la fuente por defecto de R12 (`txt.shx`).
+ */
+export function truncateToWidth(text: string, widthMm: number, textHeightMm: number): string {
+    const maxChars = Math.floor(widthMm / (textHeightMm * 0.6));
+    if (maxChars <= 0 || text.length <= maxChars) return text;
+    if (maxChars <= 3) return text.slice(0, maxChars);
+    return `${text.slice(0, maxChars - 3)}...`;
+}
+
+/**
  * Tabla de leyenda genérica (sección 8.3), reutilizada tanto por la leyenda
  * de alumbrado (Fase 6) como por la de tomacorrientes (Fase 7): título,
- * encabezados de columna ("SIMBOLO"/"DESCRIPCION"), filas separadas por
- * líneas horizontales y una columna de símbolo delimitada — mismo espíritu
- * de tabla que una leyenda de plano eléctrico real, con color en cada
- * símbolo en vez de un contorno genérico. Nunca omite filas: si no caben ni
- * en 2 columnas, las dibuja igual y reporta `overflow: true` para que el
- * llamador (Fase 8/9) pueda advertir o ajustar papel/escala.
+ * columna de símbolo (misma primitiva que en planta) + columnas de datos
+ * configurables por `columns` (sección 9.2/10.2 — p.ej. DESCRIPCION,
+ * POTENCIA, FLUJO, MONTAJE, CANT.), filas separadas por líneas horizontales.
+ * Nunca omite filas: si no caben ni en 2 columnas, las dibuja igual y
+ * reporta `overflow: true` para que el llamador (Fase 8/9) pueda advertir o
+ * ajustar papel/escala.
  */
 export function renderLegendTable(
     out: DxfLines,
@@ -54,6 +68,7 @@ export function renderLegendTable(
     scaleDenominator: number,
     title: string,
     rows: DxfLegendRow[],
+    columns: DxfLegendColumnDef[],
 ): DxfLegendRenderResult {
     const areaWidth = legendArea.maxX - legendArea.minX;
     const areaHeight = legendArea.maxY - legendArea.minY;
@@ -70,13 +85,7 @@ export function renderLegendTable(
         return { columnCount: 1, overflow: false };
     }
 
-    // Encabezados de columna, debajo del título.
-    const columnHeaderY = legendArea.maxY - headerHeight;
-    dxfLine(out, layer, legendArea.minX, columnHeaderY, legendArea.maxX, columnHeaderY);
-    dxfText(out, layer, legendArea.minX + textHeight * 0.5, columnHeaderY - columnHeaderHeight * 0.7, textHeight * 0.9, 'SIMBOLO');
-    dxfText(out, layer, legendArea.minX + symbolColumnWidth + textHeight * 0.5, columnHeaderY - columnHeaderHeight * 0.7, textHeight * 0.9, 'DESCRIPCION');
-
-    const rowsTopY = columnHeaderY - columnHeaderHeight;
+    const rowsTopYBase = legendArea.maxY - headerHeight - columnHeaderHeight;
     const availableHeight = areaHeight - headerHeight - columnHeaderHeight;
     const rowsPerColumnFor = (columnCount: 1 | 2) => Math.ceil(rows.length / columnCount);
     const fitsWithColumns = (columnCount: 1 | 2) => rowsPerColumnFor(columnCount) * rowHeight <= availableHeight;
@@ -88,32 +97,64 @@ export function renderLegendTable(
         if (!fitsWithColumns(2)) overflow = true;
     }
 
-    const columnWidth = areaWidth / columnCount;
+    const overflowColumnWidth = areaWidth / columnCount;
     const rowsPerColumn = rowsPerColumnFor(columnCount);
     const symbolSize = Math.min(symbolColumnWidth, rowHeight) * 0.35;
 
+    // Reparto de las columnas de DATOS (sección 9.2/10.2) dentro de cada
+    // columna de overflow: anchos fijos en mm de papel, y la columna 'flex'
+    // (normalmente DESCRIPCION) se queda con el resto.
+    const dataWidthMm = modelMToPaperMm(overflowColumnWidth - symbolColumnWidth, scaleDenominator);
+    const fixedWidthMm = columns.reduce((sum, col) => sum + (col.widthMm === 'flex' ? 0 : col.widthMm), 0);
+    const flexWidthMm = Math.max(0, dataWidthMm - fixedWidthMm);
+    const columnWidthsM = columns.map((col) =>
+        paperMmToModelM(col.widthMm === 'flex' ? flexWidthMm : col.widthMm, scaleDenominator),
+    );
+    const columnWidthsMm = columns.map((col) => (col.widthMm === 'flex' ? flexWidthMm : col.widthMm));
+
     for (let column = 0; column < columnCount; column++) {
-        const columnX = legendArea.minX + column * columnWidth;
-        // Separador vertical entre la columna de símbolo y la de texto.
-        dxfLine(out, layer, columnX + symbolColumnWidth, rowsTopY, columnX + symbolColumnWidth, Math.max(rowsTopY - rowsPerColumn * rowHeight, legendArea.minY));
+        const columnX = legendArea.minX + column * overflowColumnWidth;
+        const columnBottomY = Math.max(rowsTopYBase - rowsPerColumn * rowHeight, legendArea.minY);
+
+        // Encabezados de columna, debajo del título — repetidos en CADA
+        // columna de overflow (antes solo se dibujaban una vez).
+        const headerY = legendArea.maxY - headerHeight;
+        dxfLine(out, layer, columnX, headerY, columnX + overflowColumnWidth, headerY);
+        dxfText(out, layer, columnX + textHeight * 0.5, headerY - columnHeaderHeight * 0.7, textHeight * 0.9, 'SIMBOLO');
+        let headerX = columnX + symbolColumnWidth;
+        for (let c = 0; c < columns.length; c++) {
+            dxfText(out, layer, headerX + textHeight * 0.5, headerY - columnHeaderHeight * 0.7, textHeight * 0.9, columns[c].header);
+            headerX += columnWidthsM[c];
+        }
+
+        // Separadores verticales: símbolo|datos, y entre cada columna de datos.
+        dxfLine(out, layer, columnX + symbolColumnWidth, rowsTopYBase, columnX + symbolColumnWidth, columnBottomY);
+        let sepX = columnX + symbolColumnWidth;
+        for (let c = 0; c < columns.length - 1; c++) {
+            sepX += columnWidthsM[c];
+            dxfLine(out, layer, sepX, rowsTopYBase, sepX, columnBottomY);
+        }
     }
 
     rows.forEach((row, index) => {
         const column = Math.floor(index / rowsPerColumn);
         const rowInColumn = index % rowsPerColumn;
-        const columnX = legendArea.minX + column * columnWidth;
-        const rowTopY = rowsTopY - rowInColumn * rowHeight;
+        const columnX = legendArea.minX + column * overflowColumnWidth;
+        const rowTopY = rowsTopYBase - rowInColumn * rowHeight;
         const symbolCenterY = rowTopY - rowHeight / 2;
 
         renderRowSymbol(out, layer, row, columnX + symbolColumnWidth / 2, symbolCenterY, symbolSize);
 
-        const textX = columnX + symbolColumnWidth + textHeight * 0.5;
         const textY = rowTopY - rowHeight * 0.65;
-        const extra = row.technicalFields.length > 0 ? ` · ${row.technicalFields.join(' · ')}` : '';
-        dxfText(out, layer, textX, textY, textHeight, `${row.code}  ${row.description}${extra}  x${row.quantity}`);
+        let cellX = columnX + symbolColumnWidth;
+        columns.forEach((col, c) => {
+            const value = truncateToWidth(col.extract(row), columnWidthsMm[c], DEFAULT_LEGEND_TEXT_HEIGHT_MM);
+            dxfText(out, layer, cellX + textHeight * 0.5, textY, textHeight, value);
+            cellX += columnWidthsM[c];
+        });
 
         // Separador horizontal debajo de la fila (lectura tipo tabla, como la referencia).
-        dxfLine(out, layer, columnX, rowTopY - rowHeight, columnX + columnWidth, rowTopY - rowHeight);
+        dxfLine(out, layer, columnX, rowTopY - rowHeight, columnX + overflowColumnWidth, rowTopY - rowHeight);
     });
 
     return { columnCount, overflow };

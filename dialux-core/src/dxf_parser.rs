@@ -549,22 +549,82 @@ fn push_polyline_or_classified(
 // LIMPIEZA DE MTEXT (quitar códigos RTF de DXF)
 // ─────────────────────────────────────────────
 
+/// Códigos de formato MTEXT que llevan parámetros terminados en `;`
+/// (fuente, color, altura, ancho, oblicuo, tracking, alineación, apilado).
+/// La versión anterior de esta función solo descartaba la letra del código
+/// (`\F` → 2 caracteres) y dejaba pasar los parámetros como texto literal
+/// (`fuente|b0|i0|c0|p0;`) — exactamente el patrón corrupto
+/// (`\F Tssej_ New Roman|0|0|c|0|p|0|`) que un usuario vio en un DXF
+/// exportado real, porque esos parámetros son ASCII imprimible y no los
+/// filtra ninguna capa posterior.
+const MTEXT_PARAMETERIZED_CODES: [char; 8] = ['F', 'C', 'H', 'W', 'Q', 'T', 'A', 'S'];
+
 fn clean_mtext(raw: &str) -> String {
-    // Elimina códigos como \P (párrafo), \f (fuente), {\...}, etc.
     let mut result = String::with_capacity(raw.len());
     let mut chars = raw.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\\' {
-            match chars.peek() {
-                Some(&'P') | Some(&'n') => { chars.next(); result.push('\n'); }
-                Some(&'\\') => { chars.next(); result.push('\\'); }
-                _ => { chars.next(); } // descartar código
+            match chars.peek().copied() {
+                Some('P') | Some('p') => { chars.next(); result.push(' '); }
+                Some('~') => { chars.next(); result.push(' '); }
+                Some('\\') => { chars.next(); result.push('\\'); }
+                Some('{') => { chars.next(); result.push('{'); }
+                Some('}') => { chars.next(); result.push('}'); }
+                Some(code) if MTEXT_PARAMETERIZED_CODES.contains(&code.to_ascii_uppercase()) => {
+                    chars.next();
+                    // Descartar todo hasta el `;` de cierre (inclusive), o
+                    // hasta el final del string si viene truncado.
+                    for next in chars.by_ref() {
+                        if next == ';' { break; }
+                    }
+                }
+                Some(_) => { chars.next(); } // código de toggle sin parámetros (\L, \O, \K...): descartar
+                None => {}
             }
         } else if c == '{' || c == '}' {
-            // saltar llaves de agrupación RTF
+            // saltar llaves de agrupación RTF sueltas (sin escapar)
         } else {
             result.push(c);
         }
     }
-    result.trim().to_string()
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+mod clean_mtext_tests {
+    use super::*;
+
+    #[test]
+    fn strips_font_change_code_with_parameters_up_to_semicolon() {
+        assert_eq!(clean_mtext(r"\FArial|b0|i0|c0|p34;N.P.T.= +0.15"), "N.P.T.= +0.15");
+    }
+
+    #[test]
+    fn strips_paragraph_break_and_font_code_together() {
+        // Patrón real reportado por un usuario en un DXF exportado.
+        let raw = r"\FArial|b0|i0|c0|p34;\PN.P.T.= +0.15\PN.F.P.= +0.10";
+        assert_eq!(clean_mtext(raw), "N.P.T.= +0.15 N.F.P.= +0.10");
+    }
+
+    #[test]
+    fn keeps_plain_text_without_control_codes_untouched() {
+        assert_eq!(clean_mtext("Recinto"), "Recinto");
+    }
+
+    #[test]
+    fn unescapes_literal_backslash_and_braces() {
+        assert_eq!(clean_mtext(r"A\\B\{C\}D"), "A\\B{C}D");
+    }
+
+    #[test]
+    fn drops_grouping_braces_but_keeps_inner_text() {
+        assert_eq!(clean_mtext("{\\C1;rojo}"), "rojo");
+    }
+
+    #[test]
+    fn does_not_leak_unterminated_parameterized_code() {
+        // Código de fuente truncado (sin `;` de cierre) — no debe dejar
+        // pasar los parámetros como texto.
+        assert_eq!(clean_mtext(r"\FArial|b0|i0"), "");
+    }
 }

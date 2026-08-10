@@ -165,7 +165,7 @@ export async function exportElectricalExcel({ projectName, doc, derived, catalog
             { header: 'Lux requerido', key: 'lux', width: 12, numFmt: '0' },
             { header: 'CU', key: 'cu', width: 7, numFmt: '0.00' },
             { header: 'FM', key: 'fm', width: 7, numFmt: '0.00' },
-            { header: 'Normativa (EM.010)', key: 'normative', width: 30 },
+            { header: 'Normativa (EM.010)', key: 'normative', width: 46 },
             { header: 'Observaciones', key: 'obs', width: 28 },
         ],
         rows: doc.rooms.map((r) => {
@@ -182,7 +182,15 @@ export async function exportElectricalExcel({ projectName, doc, derived, catalog
                 lux: r.requiredLux,
                 cu: r.utilizationFactor,
                 fm: r.maintenanceFactor,
-                normative: r.normative ? `${r.normative.category} — ${r.normative.areaName} (${r.normative.emLux ?? '—'} lx)` : '',
+                // Antes solo incluía Em_lux — UGRL/Uo/Ra quedaban guardados en
+                // `room.normative` pero nunca llegaban a la memoria de cálculo
+                // exportada, la única referencia normativa citable del documento.
+                normative: r.normative
+                    ? `${r.normative.category} — ${r.normative.areaName} (Em ${r.normative.emLux ?? '—'} lx` +
+                      `${r.normative.ugrl != null ? `, UGR≤${r.normative.ugrl}` : ''}` +
+                      `${r.normative.uo != null ? `, Uo≥${r.normative.uo}` : ''}` +
+                      `${r.normative.ra != null ? `, Ra≥${r.normative.ra}` : ''})`
+                    : '',
                 obs: r.observations ?? '',
             };
         }),

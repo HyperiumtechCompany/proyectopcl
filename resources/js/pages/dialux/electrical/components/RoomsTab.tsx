@@ -8,6 +8,7 @@ import { useState } from 'react';
 import type { ElectricalDocumentApi } from '../useElectricalDocument';
 import { importRoomsFromCad, newId, type CadProjectData } from '../useElectricalDocument';
 import type { ElectricalRoom, NormativeRequirementRow, OutletRule } from '../engine/types';
+import { formatNormativeSummary } from '../engine/normativeSummary';
 import NormativePicker from './NormativePicker';
 import { AddButton, DeleteButton, EmptyRow, NumCell, Section, SelectCell, StatusBadge, TableShell, TextCell, fmt } from './primitives';
 
@@ -99,6 +100,7 @@ export default function RoomsTab({ api, cadData, outletRules, normativeRequireme
                 ugrl: row.ugrl,
                 uo: row.uo,
                 ra: row.ra,
+                requirements: row.requirements,
             },
         });
         setPickerRoomId(null);
@@ -193,22 +195,35 @@ export default function RoomsTab({ api, cadData, outletRules, normativeRequireme
                                                 width={54}
                                             />
                                         </td>
-                                        <td className="px-2 py-1">
-                                            <button
-                                                onClick={() => setPickerRoomId(room.id)}
-                                                className="inline-flex items-center gap-1 rounded border border-white/10 px-1.5 py-1 text-[10px] text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-400"
-                                                title={room.normative ? `${room.normative.category} · ${room.normative.areaName}` : 'Asignar normativa EM.010'}>
-                                                <BookOpen className="h-3 w-3" />
-                                                {room.normative ? (
-                                                    <span className="max-w-32 truncate">{room.normative.areaName}</span>
-                                                ) : (
-                                                    'Asignar'
-                                                )}
-                                            </button>
-                                            {room.normative?.emLux != null && room.requiredLux < room.normative.emLux && (
-                                                <span className="pl-1">
+                                        <td className="px-2 py-1" style={{ minWidth: 170 }}>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => setPickerRoomId(room.id)}
+                                                    className="inline-flex items-center gap-1 rounded border border-white/10 px-1.5 py-1 text-[10px] text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-400"
+                                                    title={
+                                                        room.normative
+                                                            ? [
+                                                                  `${room.normative.category} · ${room.normative.areaName}`,
+                                                                  formatNormativeSummary(room.normative),
+                                                                  ...(room.normative.requirements ?? []),
+                                                              ].join('\n')
+                                                            : 'Asignar normativa EM.010'
+                                                    }>
+                                                    <BookOpen className="h-3 w-3" />
+                                                    {room.normative ? (
+                                                        <span className="max-w-32 truncate">{room.normative.areaName}</span>
+                                                    ) : (
+                                                        'Asignar'
+                                                    )}
+                                                </button>
+                                                {room.normative?.emLux != null && room.requiredLux < room.normative.emLux && (
                                                     <StatusBadge status="no_cumple" title="El lux requerido es menor al mínimo normativo" />
-                                                </span>
+                                                )}
+                                            </div>
+                                            {room.normative && (
+                                                <div className="pt-0.5 text-[9px] whitespace-nowrap text-zinc-500">
+                                                    {formatNormativeSummary(room.normative)}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="px-2 py-1 text-right">

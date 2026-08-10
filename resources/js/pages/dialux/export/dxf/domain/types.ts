@@ -223,3 +223,16 @@ export interface DxfLegendRow {
     technicalFields: string[];
     quantity: number;
 }
+
+/**
+ * Definición de una columna de datos de la tabla de leyenda (sección
+ * 9.2/10.2 del plan maestro) — la columna SÍMBOLO no forma parte de este
+ * arreglo, ya está resuelta aparte por `renderRowSymbol`. Exactamente una
+ * columna debe usar `widthMm: 'flex'` (normalmente DESCRIPCIÓN); el resto
+ * usa un ancho fijo en mm de papel.
+ */
+export interface DxfLegendColumnDef {
+    header: string;
+    widthMm: number | 'flex';
+    extract: (row: DxfLegendRow) => string;
+}

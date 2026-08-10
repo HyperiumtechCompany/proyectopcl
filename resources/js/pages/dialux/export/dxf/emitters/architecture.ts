@@ -74,6 +74,22 @@ export function renderRooms(out: DxfLines, rooms: Room[]): void {
     }
 }
 
+/**
+ * Solo los nombres de recinto (capa `TEXTO_RECINTOS`), sin el polígono de
+ * `RECINTOS` — usado cuando el nivel ya tiene un plano CAD base importado
+ * (`renderImportedEntities`): el CAD real trae los muros/recintos reales,
+ * y dibujar además nuestra reconstrucción trazada a mano (nunca
+ * pixel-perfecta) produce líneas dobles/desalineadas. El nombre del
+ * recinto SÍ aporta información que no existe en el CAD original.
+ */
+export function renderRoomLabels(out: DxfLines, rooms: Room[]): void {
+    for (const room of rooms) {
+        if (room.vertices.length < 3) continue;
+        const c = centroid(room.vertices);
+        dxfText(out, 'TEXTO_RECINTOS', c.x, c.y, 0.15, room.name || 'Recinto');
+    }
+}
+
 export function renderWalls(out: DxfLines, walls: Wall[]): void {
     for (const wall of walls) {
         if (wall.vertices.length < 2) continue;
@@ -114,4 +130,35 @@ export function renderCanopies(out: DxfLines, canopies: Canopy[]): void {
     for (const c of canopies) {
         dxfLine(out, 'CANOPIES', c.x1, c.y1, c.x2, c.y2);
     }
+}
+
+/**
+ * Bloque arquitectónico completo de un nivel (`buildDxfMultiSheetDocument.ts`,
+ * dentro de cada `BLOCK` de nivel). Cuando hay un plano CAD base importado,
+ * ese plano YA trae los muros/recintos/ventanas/puertas reales — dibujar
+ * además nuestra reconstrucción trazada a mano (nunca pixel-perfecta contra
+ * el CAD real) produce líneas dobles/desalineadas en el plano de
+ * construcción. El plano base pasa sin alterarse; el nombre de recinto sí
+ * se conserva porque no existe en el CAD original.
+ */
+export function renderLevelArchitectureBlock(
+    out: DxfLines,
+    basePlanEntities: DxfEntity[],
+    rooms: Room[],
+    walls: Wall[],
+    windows: SceneWindow[],
+    doors: Door[],
+    canopies: Canopy[],
+    wallMap: Map<string, Wall>,
+): void {
+    renderImportedEntities(out, basePlanEntities);
+    if (basePlanEntities.length > 0) {
+        renderRoomLabels(out, rooms);
+        return;
+    }
+    renderRooms(out, rooms);
+    renderWalls(out, walls);
+    renderWindows(out, windows, wallMap);
+    renderDoors(out, doors, wallMap);
+    renderCanopies(out, canopies);
 }

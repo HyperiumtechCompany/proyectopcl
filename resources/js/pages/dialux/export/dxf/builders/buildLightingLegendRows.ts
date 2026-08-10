@@ -82,11 +82,16 @@ function buildFixtureRows(fixtures: Fixture[]): DxfLegendRow[] {
             symbolRef: { kind: 'fixture', catalogSymbol: representative.catalogSymbol ?? null },
             code: representative.articleNumber ?? representative.name,
             description,
+            // Posiciones FIJAS [potencia, flujo, montaje] — la leyenda de
+            // alumbrado (`buildDxfMultiSheetDocument.ts`) las lee por índice
+            // para columnas POTENCIA/FLUJO/MONTAJE; un `.filter()` que
+            // quitara la potencia ausente correría el flujo a la posición 0
+            // y lo mostraría en la columna equivocada.
             technicalFields: [
-                representative.power != null ? `${representative.power}W` : null,
+                representative.power != null ? `${representative.power}W` : '',
                 `${representative.lumens}lm`,
                 fixtureMountingLabel(representative),
-            ].filter((field): field is string => field !== null),
+            ],
             quantity: group.length,
         };
     });
@@ -144,11 +149,14 @@ export function buildCableRows(conductors: Conductor[]): DxfLegendRow[] {
     return [...groups.values()].map((group) => {
         const representative = group[0]!;
         const awg = AWG_BY_SECTION_MM2[representative.sectionMm2];
+        // Separador ASCII (AC1009/R12 no soporta Unicode — ver `ascii()` en
+        // `emitters/primitives.ts`, que sin esto convertía "·" y el
+        // superíndice de "mm²" en "?" literales visibles en AutoCAD.
         return {
             kind: 'cable',
             symbolRef: null,
             code: 'C',
-            description: `${representative.conductorType} · ${representative.sectionMm2} mm²${awg ? ` (${awg})` : ''}`,
+            description: `${representative.conductorType}, ${representative.sectionMm2} mm2${awg ? ` (${awg})` : ''}`,
             technicalFields: [`Tubo ${representative.tubeSize}mm`],
             quantity: group.length,
         };

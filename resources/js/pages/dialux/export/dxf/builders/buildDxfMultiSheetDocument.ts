@@ -12,7 +12,7 @@ import { dxfText, p, type DxfLines } from '../emitters/primitives';
 import { renderSheetFrame } from '../emitters/frame';
 import { renderTitleBlock } from '../emitters/titleBlock';
 import { renderLegendTable } from '../emitters/legend';
-import { renderImportedEntities, renderRooms, renderWalls, renderWindows, renderDoors, renderCanopies } from '../emitters/architecture';
+import { renderLevelArchitectureBlock } from '../emitters/architecture';
 import { renderConductorEntities, renderFixtureEntities, renderLightSwitchEntities } from '../emitters/lighting';
 import { renderElectricalDeviceEntities, renderJunctionBoxEntities } from '../emitters/outlets';
 import { buildLevelBlockName, emitLevelBlockDefinition, emitLevelBlockInsert } from '../emitters/levelBlock';
@@ -23,6 +23,7 @@ import { buildLightingEntities, buildOutletEntities } from './buildDisciplineEnt
 import { buildLightingLegendRows } from './buildLightingLegendRows';
 import { buildOutletLegendRows } from './buildOutletLegendRows';
 import { translateElectricalEntities } from './translateElectricalEntities';
+import { LIGHTING_LEGEND_COLUMNS, OUTLET_LEGEND_COLUMNS } from './legendColumns';
 
 /**
  * Composición multinivel (Fase 8): recibe el `DxfDrawingPackage` de la
@@ -313,14 +314,14 @@ export function buildDxfMultiSheetDocument(options: BuildDxfMultiSheetDocumentOp
     p(out, 0, 'SECTION'); p(out, 2, 'BLOCKS');
     const levelsWithSheets = prepared.filter((entry) => entry.includeLighting || entry.includeOutlets);
     for (const entry of levelsWithSheets) {
-        const wallMap = new Map(entry.level.architecture.walls.map((wall) => [wall.id, wall]));
+        const architecture = entry.level.architecture;
+        const wallMap = new Map(architecture.walls.map((wall) => [wall.id, wall]));
         emitLevelBlockDefinition(out, buildLevelBlockName(entry.level.floorIndex), () => {
-            renderImportedEntities(out, entry.level.basePlan.entities);
-            renderRooms(out, entry.level.architecture.rooms);
-            renderWalls(out, entry.level.architecture.walls);
-            renderWindows(out, entry.level.architecture.windows, wallMap);
-            renderDoors(out, entry.level.architecture.doors, wallMap);
-            renderCanopies(out, entry.level.architecture.canopies);
+            renderLevelArchitectureBlock(
+                out, entry.level.basePlan.entities,
+                architecture.rooms, architecture.walls, architecture.windows, architecture.doors, architecture.canopies,
+                wallMap,
+            );
         });
     }
     p(out, 0, 'ENDSEC');
@@ -380,8 +381,9 @@ export function buildDxfMultiSheetDocument(options: BuildDxfMultiSheetDocumentOp
 
         const legendLayer = placement.discipline === 'lighting' ? 'LEYENDA_LUZ' : 'LEYENDA_TOMAS';
         const legendRows = placement.discipline === 'lighting' ? entry.lightingLegendRows : entry.outletLegendRows;
+        const legendColumns = placement.discipline === 'lighting' ? LIGHTING_LEGEND_COLUMNS : OUTLET_LEGEND_COLUMNS;
         const legendTitle = `LEYENDA - ${DISCIPLINE_LABELS[placement.discipline]}`;
-        renderLegendTable(out, legendLayer, sheetGeometry.legendArea, sheetGeometry.scaleDenominator, legendTitle, legendRows);
+        renderLegendTable(out, legendLayer, sheetGeometry.legendArea, sheetGeometry.scaleDenominator, legendTitle, legendRows, legendColumns);
 
         if (legendRows.length === 0 && includeEmptySheets) {
             renderEmptySheetPlaceholder(out, 'REVISION_DXF', sheetGeometry.planArea);

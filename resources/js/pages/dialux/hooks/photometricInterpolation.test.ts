@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { candela } from './photometricInterpolation';
+import { candela, candelaFromPhotometricWeb } from './photometricInterpolation';
 import type { Fixture } from './types';
 
 /**
@@ -76,5 +76,34 @@ describe('candela — fotometría importada editable', () => {
         };
 
         expect(candela(fixture, 0)).toBeCloseTo(3000 / Math.PI, 6);
+    });
+});
+
+describe('candelaFromPhotometricWeb — c_angles y candela con longitudes distintas (fotometría legacy)', () => {
+    /**
+     * Bug real reproducido en producción (crash en runtime, no solo
+     * hipotético): el binario Rust `dialux-photometry` no truncaba
+     * `c_angles` a la cantidad de planos que la luminaria realmente
+     * publica cuando es simétrica y declara más planos C de los que trae
+     * (mismo bug que el parser PHP de respaldo ya tenía corregido, ver
+     * `ProductImportService::parseLdt`). El resultado quedaba guardado en
+     * `photometric_web` con `c_angles.length > candela.length`, y para
+     * cualquier azimut que cayera en un plano C sin fila de `candela` (ni
+     * en `loIdx` ni en `hiIdx`), `interpolate1D` recibía `values`
+     * `undefined` y lanzaba `TypeError: Cannot read properties of
+     * undefined`. El fix real es en el binario Rust (ya corregido) más
+     * `dialux:repair-photometry` para los datos legacy ya guardados; este
+     * test cubre el fallback defensivo mientras esos datos no se reparan.
+     */
+    it('no lanza y cae a un plano existente cuando el azimut cae en un plano C sin fila de candela', () => {
+        const web = {
+            c_angles: [0, 90, 180, 270],
+            gamma_angles: [0, 90],
+            candela: [[100, 50]], // solo 1 fila real; declara 4 planos C
+            provenance: 'manufacturer' as const,
+        };
+
+        expect(() => candelaFromPhotometricWeb(web, 180, 0)).not.toThrow();
+        expect(candelaFromPhotometricWeb(web, 180, 0)).toBe(100);
     });
 });

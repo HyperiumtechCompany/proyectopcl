@@ -120,6 +120,7 @@ export interface RoomNormativeRef {
     ugrl: number | null;
     uo: number | null;
     ra: number | null;
+    requirements: string[] | null; // columna 7 del Anexo EM.010 — antes se perdía al seleccionar
 }
 
 export interface ElectricalRoom {

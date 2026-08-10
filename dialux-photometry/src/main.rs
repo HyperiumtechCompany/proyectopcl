@@ -220,6 +220,24 @@ fn parse_ldt(content: &str) -> ParsedProduct {
         offset += num_g;
     }
 
+    // `product.c_angles` sale de `extract_ldt_angles_and_candela_tokens` con
+    // `num_c` entradas siempre (equidistante o lista explícita), pero una
+    // luminaria simétrica solo publica `plane_count` planos reales (el resto
+    // se completa por reflejo en el consumidor). Sin truncar aquí, PHP
+    // guarda `c_angles.len() != candela.len()` en `photometric_web`, y el
+    // JS consumidor (`candelaFromPhotometricWeb`, que asume `c_angles[i]` ↔
+    // `candela[i]` 1 a 1) indexa `candela[i]` fuera de rango para cualquier
+    // plano C más allá de `plane_count` → `undefined` sin fallback posible
+    // (crash en `interpolate1D`, no una interpolación degradada). Mismo fix
+    // que ya tiene el parser PHP de respaldo (`ProductImportService::parseLdt`).
+    if plane_count < product.c_angles.len() {
+        product.c_angles.truncate(plane_count);
+        product.warnings.push(format!(
+            "LDT: el archivo declara {} planos C pero solo trae {} — esperable para una luminaria simétrica, el resto se completa por reflejo.",
+            num_c, plane_count,
+        ));
+    }
+
     finish_metrics(product)
 }
 
@@ -518,6 +536,36 @@ mod tests {
 
         assert_eq!(parsed.c_angles, vec![0.0]);
         assert_eq!(parsed.candela[0], vec![100.0, 250.0, 300.0, 150.0, 50.0]);
+    }
+
+    /// Una luminaria simétrica puede declarar `Mc=4` planos C en el
+    /// encabezado (y listarlos los 4) pero publicar intensidades para uno
+    /// solo — el resto se completa por reflejo en el consumidor. Sin
+    /// truncar `c_angles` a la cantidad de planos realmente publicados,
+    /// `c_angles.len() != candela.len()` viaja así hasta `photometric_web`,
+    /// y `candelaFromPhotometricWeb()` (JS) indexa `candela[i]` fuera de
+    /// rango para cualquier plano más allá del publicado → `undefined` sin
+    /// fallback posible, crash en `interpolate1D` (bug real reproducido en
+    /// producción, no solo hipotético). Mismo fix que ya tiene el parser PHP
+    /// de respaldo (`ProductImportService::parseLdt`).
+    #[test]
+    fn truncates_c_angles_when_fewer_intensity_planes_are_published_than_declared() {
+        let full = validation_ldt("90", &["0", "90", "180", "270"]);
+        let mut lines: Vec<String> = full.lines().map(String::from).collect();
+        // El archivo termina con 4 planos de 5 valores cada uno (un número
+        // por línea); recortamos los últimos 3 planos y dejamos solo el
+        // primero, simulando una publicación incompleta/simétrica.
+        lines.truncate(lines.len() - 15);
+
+        let parsed = parse_ldt(&lines.join("\n"));
+
+        assert_eq!(parsed.candela.len(), 1);
+        assert_eq!(
+            parsed.c_angles.len(),
+            parsed.candela.len(),
+            "c_angles debe quedar 1 a 1 con candela para que el consumidor JS no indexe fuera de rango"
+        );
+        assert_eq!(parsed.c_angles, vec![0.0]);
     }
 
     /// Fase 16: el número de lámparas vive en la línea 27 (1-indexada), no en

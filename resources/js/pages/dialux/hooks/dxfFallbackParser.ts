@@ -1,4 +1,5 @@
 import type { DxfEntity, DxfExtents } from './useEditorStore';
+import { stripMTextFormatting } from './mtextFormatting';
 
 export interface ParsedDxfPayload {
     error?: string;
@@ -137,6 +138,11 @@ function collectEntityPairs(
 
 function valueFor(entityPairs: DxfPair[], code: number): string | undefined {
     return entityPairs.find((pair) => pair.code === code)?.value;
+}
+
+/** Todos los valores de un código de grupo, en orden — MTEXT reparte el texto largo (>250 caracteres) en varios pares de código 3 antes del código 1 final. */
+function valuesFor(entityPairs: DxfPair[], code: number): string[] {
+    return entityPairs.filter((pair) => pair.code === code).map((pair) => pair.value);
 }
 
 function layerFor(entityPairs: DxfPair[]): string {
@@ -288,12 +294,19 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
             const x = num(valueFor(entityPairs, 10));
             const y = num(valueFor(entityPairs, 20));
             updateBounds(bounds, x, y);
+            // MTEXT reparte el texto en chunks de código 3 (continuación,
+            // >250 caracteres) seguidos del código 1 final, y usa códigos de
+            // formato (\F, \P, \C...) que TEXT nunca tiene — concatenar y
+            // limpiar solo aplica a MTEXT.
+            const rawText = type === 'MTEXT'
+                ? [...valuesFor(entityPairs, 3), valueFor(entityPairs, 1) ?? ''].join('')
+                : valueFor(entityPairs, 1) ?? '';
             entities.push({
                 id: nextId(),
                 type: 'text',
                 x,
                 y,
-                text: valueFor(entityPairs, 1) ?? '',
+                text: type === 'MTEXT' ? stripMTextFormatting(rawText) : rawText,
                 height: num(valueFor(entityPairs, 40), 1),
                 rotation: num(valueFor(entityPairs, 50)),
                 layer: layerFor(entityPairs),
