@@ -1,4 +1,4 @@
-import { Layers, Zap } from 'lucide-react';
+import { Layers, Move, Zap } from 'lucide-react';
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CatalogPanel } from '@/pages/dialux/components/CatalogPanel';
@@ -67,7 +67,33 @@ export function RoomFixtureGridSection({
     const gridAspectRatio = gridBBox.height > 0 ? gridBBox.width / gridBBox.height : 1;
     const suggestedGrid = suggestFixtureGridSize(gridRows, gridCols, gridRoundedQuantity, gridAspectRatio);
     const gridCountMismatch = gridRows * gridCols !== gridRoundedQuantity;
-    const generationGrid = gridCountMismatch ? suggestedGrid : { rows: gridRows, columns: gridCols };
+    // Se usa SIEMPRE la cantidad ingresada por el usuario. La sugerencia es solo visual.
+    const generationGrid = { rows: gridRows, columns: gridCols };
+
+    // Editor de líneas guía: borrador de UI (ver uiSlice.ts), no persiste
+    // nada hasta que se confirma con "Generar". Se re-sincroniza solo cuando
+    // cambia la cantidad de filas/columnas MIENTRAS está abierto, para que la
+    // cantidad de líneas siempre calce con `generationGrid`.
+    const guideEditor = store.ui.fixtureGridGuideEditor;
+    const isGuideEditorOpenHere = guideEditor?.roomId === room.id;
+    React.useEffect(() => {
+        if (!isGuideEditorOpenHere) return;
+        if (guideEditor!.rows === generationGrid.rows && guideEditor!.columns === generationGrid.columns) return;
+        store.openFixtureGridGuideEditor(room.id, generationGrid.rows, generationGrid.columns, calculationVertices);
+        // Solo debe reaccionar a cambios de la cantidad objetivo, no reabrir
+        // en cada render por una nueva identidad de `calculationVertices`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isGuideEditorOpenHere, generationGrid.rows, generationGrid.columns]);
+
+    // Cierra el editor si el usuario cambia de selección (deja de ver este room).
+    React.useEffect(() => {
+        return () => {
+            if (store.ui.fixtureGridGuideEditor?.roomId === room.id) {
+                store.closeFixtureGridGuideEditor();
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.id]);
 
     return (
         <div className="mt-4 border-t border-gray-300 dark:border-gray-800/80 pt-3">
@@ -107,11 +133,40 @@ export function RoomFixtureGridSection({
                             setGridRows(suggestedGrid.rows);
                             setGridCols(suggestedGrid.columns);
                         }}
-                        className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
+                        className="shrink-0 rounded bg-amber-100 dark:bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-600/50"
                     >
                         Usar {suggestedGrid.rows}×{suggestedGrid.columns}
                     </button>
                 </div>
+            )}
+            <button
+                type="button"
+                onClick={() => {
+                    if (isGuideEditorOpenHere) {
+                        store.closeFixtureGridGuideEditor();
+                    } else {
+                        store.openFixtureGridGuideEditor(
+                            room.id,
+                            generationGrid.rows,
+                            generationGrid.columns,
+                            calculationVertices,
+                        );
+                    }
+                }}
+                className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded border py-1.5 text-[10px] font-medium transition-colors ${
+                    isGuideEditorOpenHere
+                        ? 'border-cyan-400 bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:border-cyan-500 dark:bg-cyan-600/20 dark:text-cyan-300 dark:hover:bg-cyan-600/30'
+                        : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-gray-700/50 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700/60'
+                }`}
+                title="Arrastra las líneas en el plano para alinear cada celda con una viga u otra división real, en vez de repartir la grilla pareja"
+            >
+                <Move size={12} />
+                {isGuideEditorOpenHere ? 'Cerrar líneas guía' : 'Editar líneas guía'}
+            </button>
+            {isGuideEditorOpenHere && (
+                <p className="mt-1.5 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
+                    Arrastra las líneas cian en el plano para alinearlas con la viga real. Al generar, cada celda recibe una luminaria centrada en su propio espacio.
+                </p>
             )}
             {showGridFixturePicker && (
                 <Dialog open={showGridFixturePicker} onOpenChange={setShowGridFixturePicker}>
@@ -151,8 +206,21 @@ export function RoomFixtureGridSection({
                         columns: generationGrid.columns,
                         fixtureTemplate: store.ui.fixtureTemplate,
                         ambientVertices: calculationVertices,
+                        // Solo se aplican si el editor de líneas guía está
+                        // abierto para ESTE room con la misma cantidad de
+                        // filas/columnas (el efecto de arriba ya garantiza
+                        // que calcen); si no, undefined = reparto uniforme.
+                        rowGuides:
+                            isGuideEditorOpenHere && guideEditor!.rows === generationGrid.rows
+                                ? guideEditor!.rowGuides
+                                : undefined,
+                        columnGuides:
+                            isGuideEditorOpenHere && guideEditor!.columns === generationGrid.columns
+                                ? guideEditor!.columnGuides
+                                : undefined,
                     });
                     store.endHistoryGesture();
+                    if (isGuideEditorOpenHere) store.closeFixtureGridGuideEditor();
                     if (newIds.length > 0) {
                         store.setSelectedId(null);
                         store.setSelectedFixtureIds(newIds);
@@ -160,7 +228,7 @@ export function RoomFixtureGridSection({
                         alert('No se pudo generar la grilla. El área puede ser muy pequeña.');
                     }
                 }}
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-600/30 transition-colors"
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-100 dark:bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30 transition-colors"
             >
                 Generar en Techo {generationGrid.rows}x{generationGrid.columns}
             </button>

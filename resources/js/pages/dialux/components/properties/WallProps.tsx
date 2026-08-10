@@ -12,6 +12,7 @@ import {
     pointInPolygon,
 } from '@/pages/dialux/hooks/ambientSpaces';
 import type { DerivedAmbientSpace } from '@/pages/dialux/hooks/ambientSpaces';
+import { RoomFixtureGridSection } from './room/RoomFixtureGridSection';
 import {
     polygonBBox,
     suggestFixtureGridSize,
@@ -587,8 +588,8 @@ const WallInteriorLightingSection: React.FC<{
                         />
                     </div>
                     {wallGridBelowNorm && (
-                        <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
-                            <span className="text-[9px] leading-snug text-amber-400">
+                        <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5">
+                            <span className="text-[9px] leading-snug text-amber-700 dark:text-amber-400">
                                 {wallGridRows}×{wallGridCols} ={' '}
                                 {wallGridRows * wallGridCols}, faltan para
                                 llegar a {roundedQty} (normativa)
@@ -599,7 +600,7 @@ const WallInteriorLightingSection: React.FC<{
                                     setWallGridRows(suggestedWallGrid.rows);
                                     setWallGridCols(suggestedWallGrid.columns);
                                 }}
-                                className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
+                                className="shrink-0 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-600/30 px-2 py-1 text-[10px] font-medium dark:text-amber-300 dark:hover:bg-amber-600/50"
                             >
                                 Usar {suggestedWallGrid.rows}×
                                 {suggestedWallGrid.columns}
@@ -609,7 +610,7 @@ const WallInteriorLightingSection: React.FC<{
                     <button
                         type="button"
                         onClick={handleGenerate}
-                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-600/30"
+                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-600/20 py-1.5 text-[10px] font-medium dark:text-emerald-400 transition-colors dark:hover:bg-emerald-600/30"
                     >
                         <Grid size={11} />
                         Generar en Pared {wallGridRows}×{wallGridCols}
@@ -668,60 +669,6 @@ export const WallProps: React.FC<{
         });
     };
 
-    // Estado local para la grilla de techo — independiente de la grilla de
-    // pared (más abajo en el mismo panel) y de la herramienta "fixture-grid"
-    // del canvas, que antes compartían store.ui.fixtureGridRows/Cols.
-    const [ceilingGridRows, setCeilingGridRows] = React.useState(
-        store.ui.fixtureGridRows,
-    );
-    const [ceilingGridCols, setCeilingGridCols] = React.useState(
-        store.ui.fixtureGridCols,
-    );
-    const [showCeilingFixturePicker, setShowCeilingFixturePicker] =
-        React.useState(false);
-    // Ver comentario equivalente en RoomProps.tsx: elegir un modelo aquí solo
-    // debe leer sus lúmenes para el cálculo de la grilla, no dejar la
-    // herramienta activa en "fixture" (efecto secundario de
-    // CatalogPanel.setFixture pensado para el panel Luz de la barra).
-    const toolBeforeCeilingPickerRef = React.useRef(store.ui.activeTool);
-
-    // Sugerencia de grilla de techo: cuántas filas/columnas hacen falta para
-    // llegar a la cantidad mínima que exige la normativa del ambiente. Se
-    // recalcula con los lúmenes del tipo de foco elegido más abajo (no con
-    // los de las luminarias ya colocadas, ni con un valor fijo) para que la
-    // sugerencia refleje la luminaria que realmente se va a instalar.
-    const ceilingInputs = ambientMatch
-        ? buildRoomLightingInputs(ambientMatch.room, ambientMatch.fixtures)
-        : null;
-    const ceilingFixture = store.ui.fixtureTemplate;
-    const ceilingFixtureLumens =
-        ceilingFixture.lumens ?? ceilingInputs?.fixtureLumens ?? 4000;
-    const ceilingRoundedQuantity = ceilingInputs
-        ? calculateRoundedQuantity(
-              calculateExactQuantity(
-                  ceilingInputs.lumensRequired,
-                  ceilingFixtureLumens,
-              ),
-          )
-        : 0;
-    const ceilingBBox = ambientMatch
-        ? polygonBBox(ambientMatch.room.vertices)
-        : null;
-    const ceilingAspectRatio =
-        ceilingBBox && ceilingBBox.height > 0
-            ? ceilingBBox.width / ceilingBBox.height
-            : 1;
-    const suggestedCeilingGrid = ceilingInputs
-        ? suggestFixtureGridSize(
-              ceilingGridRows,
-              ceilingGridCols,
-              ceilingRoundedQuantity,
-              ceilingAspectRatio,
-          )
-        : null;
-    const ceilingGridBelowNorm =
-        !!ceilingInputs &&
-        ceilingGridRows * ceilingGridCols < ceilingRoundedQuantity;
     const outletRoom = ambientMatch?.sourceRoom ?? null;
     const outletUse = ambientOutletConfig?.outletUse ?? 'aula';
     const outletRule = OUTLET_RULES[outletUse];
@@ -958,151 +905,22 @@ export const WallProps: React.FC<{
                             </button>
                         )}
                     </div>
-                    <div className="my-2 space-y-1 border-t border-gray-300 dark:border-gray-800/80 pt-2">
-                        <div className="flex items-center gap-2 text-emerald-500">
-                            <Grid size={12} />
-                            <p className="text-[10px] font-semibold uppercase">
-                                Grilla de focos (techo)
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                toolBeforeCeilingPickerRef.current =
-                                    store.ui.activeTool;
-                                setShowCeilingFixturePicker(true);
-                            }}
-                            className="mt-2 flex w-full items-center gap-2 rounded border border-purple-700/30 bg-purple-950/30 px-2 py-1.5 text-left transition-colors hover:bg-purple-900/30"
-                            title="Elegir el tipo de foco a instalar en esta grilla"
-                        >
-                            <Layers
-                                size={12}
-                                className="shrink-0 text-purple-300"
+                    {(() => {
+                        const ambientConfig = ambientMatch.sourceRoom.ambientConfigs?.[ambientMatch.configKey];
+                        const lux = ambientConfig?.illuminanceLux ?? wall.illuminanceLux ?? ambientMatch.room.illuminanceLux ?? 300;
+                        const ceilingInputs = buildRoomLightingInputs(ambientMatch.room, ambientMatch.fixtures);
+                        return (
+                            <RoomFixtureGridSection
+                                room={ambientMatch.sourceRoom}
+                                calculationVertices={ambientMatch.room.vertices}
+                                lumensRequired={ceilingInputs.lumensRequired}
+                                fixtureLumensFallback={ceilingInputs.fixtureLumens}
+                                fixturesInRoom={ambientMatch.fixtures}
+                                calculationRoomId={ambientMatch.room.id}
+                                targetLux={lux}
                             />
-                            <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[10px] text-purple-200">
-                                    {ceilingFixture.name ?? 'Foco genérico'}
-                                </span>
-                                <span className="block text-[9px] leading-none text-gray-500 dark:text-gray-500">
-                                    {ceilingFixtureLumens.toLocaleString()} lm
-                                </span>
-                            </span>
-                            <span className="shrink-0 text-[9px] text-purple-400">
-                                Cambiar
-                            </span>
-                        </button>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                            <EditField
-                                label="Filas"
-                                value={ceilingGridRows}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={setCeilingGridRows}
-                            />
-                            <EditField
-                                label="Columnas"
-                                value={ceilingGridCols}
-                                min={1}
-                                max={10}
-                                step={1}
-                                onChange={setCeilingGridCols}
-                            />
-                        </div>
-                        {ceilingGridBelowNorm && suggestedCeilingGrid && (
-                            <div className="mt-2 flex items-center justify-between gap-2 rounded bg-amber-950/40 px-2 py-1.5">
-                                <span className="text-[9px] leading-snug text-amber-400">
-                                    {ceilingGridRows}×{ceilingGridCols} ={' '}
-                                    {ceilingGridRows * ceilingGridCols}, faltan
-                                    para llegar a {ceilingRoundedQuantity} con "
-                                    {ceilingFixture.name ?? 'este foco'}" (
-                                    {ceilingFixtureLumens.toLocaleString()} lm)
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setCeilingGridRows(
-                                            suggestedCeilingGrid.rows,
-                                        );
-                                        setCeilingGridCols(
-                                            suggestedCeilingGrid.columns,
-                                        );
-                                    }}
-                                    className="shrink-0 rounded bg-amber-600/30 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-600/50"
-                                >
-                                    Usar {suggestedCeilingGrid.rows}×
-                                    {suggestedCeilingGrid.columns}
-                                </button>
-                            </div>
-                        )}
-                        {showCeilingFixturePicker && (
-                            <Dialog
-                                open={showCeilingFixturePicker}
-                                onOpenChange={setShowCeilingFixturePicker}
-                            >
-                                <DialogContent className="max-w-2xl">
-                                    <DialogHeader>
-                                        <DialogTitle>
-                                            Elegir tipo de foco para la grilla
-                                        </DialogTitle>
-                                        <DialogDescription>
-                                            Se usará para calcular cuántas
-                                            luminarias exige la normativa y para
-                                            generar la grilla.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <CatalogPanel
-                                        filterCategory="luminaires"
-                                        variant="compact-grid"
-                                        fixtureItemsPerPage={15}
-                                        onSelect={() => {
-                                            store.setTool(
-                                                toolBeforeCeilingPickerRef.current,
-                                            );
-                                            setShowCeilingFixturePicker(false);
-                                        }}
-                                    />
-                                </DialogContent>
-                            </Dialog>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                // Reemplaza TODAS las luminarias que ya están físicamente
-                                // en este ambiente (no solo las seleccionadas a mano) para
-                                // que regenerar la grilla nunca deje duplicados superpuestos.
-                                store.beginHistoryGesture();
-                                ambientMatch.fixtures.forEach((f) =>
-                                    store.removeObject(f.id),
-                                );
-
-                                const newIds = store.addFixtureGrid({
-                                    roomId: ambientMatch.sourceRoom.id,
-                                    rows: ceilingGridRows,
-                                    columns: ceilingGridCols,
-                                    fixtureTemplate: store.ui.fixtureTemplate,
-                                    ambientVertices: ambientMatch.room.vertices,
-                                });
-                                store.endHistoryGesture();
-                                if (newIds.length > 0) {
-                                    store.setSelectedId(null);
-                                    store.setSelectedFixtureIds(newIds);
-                                } else {
-                                    alert(
-                                        'No se pudo generar la grilla. Asegúrese de que el ambiente esté cerrado y tenga un área válida.',
-                                    );
-                                }
-                            }}
-                            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600/20 py-1.5 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-600/30"
-                        >
-                            Generar en Techo de Ambiente {ceilingGridRows}x
-                            {ceilingGridCols}
-                        </button>
-                        <p className="mt-1 text-[9px] leading-snug text-gray-500 dark:text-gray-500">
-                            Genera luminarias en el área de techo delimitada por
-                            esta pared.
-                        </p>
-                    </div>
+                        );
+                    })()}
 
                     <div className="my-2 space-y-2 border-t border-gray-300 dark:border-gray-800/80 pt-3">
                         <div className="flex items-center gap-2 text-emerald-400">
@@ -1230,7 +1048,7 @@ export const WallProps: React.FC<{
                             type="button"
                             onClick={regenerateOutlets}
                             disabled={requiredOutlets === 0}
-                            className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             {generatedOutlets.length > 0
                                 ? 'Regenerar tomacorrientes'
@@ -1245,7 +1063,7 @@ export const WallProps: React.FC<{
                                         wall.id,
                                     )
                                 }
-                                className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20"
+                                className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-700 dark:text-red-300 hover:bg-red-500/20"
                             >
                                 <Trash2 size={11} /> Eliminar tomacorrientes del
                                 ambiente

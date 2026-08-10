@@ -1,5 +1,6 @@
 import { CONDUCTOR_SECTION_OPTIONS, type Conductor, type Fixture, type LightSwitch } from '@/pages/dialux/hooks/types';
 import type { DxfDisciplineEntities, DxfLegendRow } from '../domain/types';
+import { buildDeviceRows } from './buildOutletLegendRows';
 
 /**
  * Leyenda de alumbrado (plan maestro, sección 9.2). Se construye SOLO a
@@ -174,6 +175,7 @@ export function buildLightingLegendRows(entities: DxfDisciplineEntities): DxfLeg
         ...buildFixtureRows(entities.fixtures),
         ...buildEmergencyRows(entities.fixtures),
         ...buildSwitchRows(entities.lightSwitches),
+        ...buildDeviceRows(entities.electricalDevices),
         ...buildCableRows(entities.conductors),
     ];
 }

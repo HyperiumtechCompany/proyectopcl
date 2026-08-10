@@ -62,12 +62,10 @@ export type {
     StairConfig,
     StairFlight,
     CorridorConfig,
+    StructuralObstacle,
 } from './types';
 
-import {
-    buildFixtureGridObjects,
-    calculateCenteredOffsetOnWall,
-} from './fixtureGrid';
+import { calculateCenteredOffsetOnWall } from './fixtureGrid';
 import type { NormativeStandard } from './roomLighting';
 import { buildDefaultStairConfig } from './stairNorms';
 import type {
@@ -100,6 +98,7 @@ import type {
     ProjectNormativeConfig,
     Partition,
     CorridorConfig,
+    Vertex,
 } from './types';
 import {
     createScaleConfig,
@@ -184,6 +183,44 @@ interface UIState {
      * releer el plano aunque siga en el mismo piso.
      */
     planReloadTick: number;
+    /**
+     * Editor interactivo de lineas guia para la grilla de luminarias (no
+     * construye ninguna entidad de dominio -- es un borrador de UI que solo
+     * se traduce a `FixtureGridConfig.rowGuides/columnGuides` al confirmar
+     * con el botón "Generar" del panel Luminarias). `null` = cerrado.
+     */
+    fixtureGridGuideEditor: FixtureGridGuideEditorState | null;
+    /**
+     * Modo de la herramienta 'fixture-grid':
+     *   'room' -> clic simple usa el ambiente completo bajo el cursor (clasico).
+     *   'draw' -> dibuja un poligono libre vertice a vertice (como Room/Muro).
+     */
+    fixtureGridAreaMode: 'room' | 'draw';
+    /**
+     * Poligono recien cerrado en modo 'draw', esperando que el usuario
+     * confirme cuantas luminarias proyectar antes de crearlas (ver panel
+     * Luz). No es una entidad de dominio -- se descarta al confirmar o
+     * cancelar, y tambien al cambiar de herramienta.
+     */
+    pendingFixtureGridArea: Vertex[] | null;
+}
+
+export interface FixtureGridGuideEditorState {
+    /** Solo para validar que el room sigue existiendo en la escena activa (no se usa para re-derivar vertices). */
+    roomId: string;
+    rows: number;
+    columns: number;
+    /**
+     * Vertices EXACTOS usados para el calculo (puede ser `room.vertices` o
+     * un ambiente derivado por pared/corredor) -- capturados al abrir el
+     * editor para que la vista previa coincida siempre con lo que el boton
+     * "Generar" va a construir.
+     */
+    vertices: Vertex[];
+    /** Fracciones (0,1) ordenadas, longitud `columns - 1` */
+    columnGuides: number[];
+    /** Fracciones (0,1) ordenadas, longitud `rows - 1` */
+    rowGuides: number[];
 }
 
 // ─── Estado global ────────────────────────────────────────────────────────────
@@ -480,6 +517,9 @@ export const useEditorStore = create<EditorState>()(
             },
             hiddenElectricalIds: [],
             planReloadTick: 0,
+            fixtureGridGuideEditor: null,
+            fixtureGridAreaMode: 'room',
+            pendingFixtureGridArea: null,
         },
 
         // ── Calc & DXF ────────────────────────────────────────────────────────

@@ -154,9 +154,9 @@ export const DoorProps: React.FC<{
         icon={<DoorOpen size={12} className="text-emerald-400" />}
         label="Puerta"
     >
-        <div className="mb-2 flex items-start gap-2 rounded border border-emerald-700/50 bg-emerald-900/20 p-2">
-            <Move size={14} className="mt-0.5 flex-shrink-0 text-emerald-400" />
-            <p className="text-[9px] text-emerald-300">
+        <div className="mb-2 flex items-start gap-2 rounded border border-emerald-300 bg-emerald-50 dark:border-emerald-700/50 dark:bg-emerald-900/20 p-2">
+            <Move size={14} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <p className="text-[9px] text-emerald-700 dark:text-emerald-300">
                 Arrastra la puerta en el 2D para ajustar su posición sobre el
                 muro.
             </p>
@@ -190,7 +190,7 @@ export const DoorProps: React.FC<{
         <button
             type="button"
             onClick={onCenter}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-emerald-700/50 bg-emerald-950/40 py-1.5 text-[10px] text-emerald-200 transition-colors hover:bg-emerald-800/40"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700/50 dark:bg-emerald-950/40 py-1.5 text-[10px] dark:text-emerald-200 transition-colors dark:hover:bg-emerald-800/40"
         >
             <Target size={13} />
             Centrar en Pared
@@ -226,7 +226,7 @@ export const DoorProps: React.FC<{
                             onClick={() => onUpdate({ openingDirection: dir })}
                             className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                                 (door.openingDirection ?? 'inward') === dir
-                                    ? 'bg-emerald-700/60 text-emerald-200 ring-1 ring-emerald-500/40'
+                                    ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300 dark:bg-emerald-700/60 dark:text-emerald-200 dark:ring-emerald-500/40'
                                     : 'bg-gray-200 dark:bg-gray-800/60 text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                             }`}
                         >
@@ -247,7 +247,7 @@ export const DoorProps: React.FC<{
                             onClick={() => onUpdate({ hingeDirection: side })}
                             className={`rounded px-2 py-0.5 text-[9px] transition-colors ${
                                 (door.hingeDirection ?? 'left') === side
-                                    ? 'bg-emerald-700/60 text-emerald-200 ring-1 ring-emerald-500/40'
+                                    ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300 dark:bg-emerald-700/60 dark:text-emerald-200 dark:ring-emerald-500/40'
                                     : 'bg-gray-200 dark:bg-gray-800/60 text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:text-gray-700 dark:text-gray-300'
                             }`}
                         >

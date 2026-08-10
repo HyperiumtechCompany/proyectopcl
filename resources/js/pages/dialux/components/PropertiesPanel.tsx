@@ -15,6 +15,7 @@ import { FixtureProps } from './properties/FixtureProps';
 import { CanopyProps, DoorProps, WindowProps } from './properties/OpeningProps';
 import { PartitionProps } from './properties/PartitionProps';
 import { RoomProps } from './properties/RoomProps';
+import { StructuralObstacleProps } from './properties/StructuralObstacleProps';
 import { WallProps } from './properties/WallProps';
 
 export const PropertiesPanel = React.memo(function PropertiesPanel() {
@@ -85,6 +86,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
     const canopy = scene?.canopies.find((c) => c.id === selectedId);
     const fixture = scene?.fixtures.find((f) => f.id === selectedId);
     const partition = scene?.partitions?.find((p) => p.id === selectedId);
+    const structuralObstacle = scene?.structuralObstacles?.find((o) => o.id === selectedId);
     const lightSwitch = scene?.lightSwitches?.find((s) => s.id === selectedId);
     const conductor = scene?.conductors?.find((c) => c.id === selectedId);
     const electricalDevice = scene?.electricalDevices?.find((d) => d.id === selectedId);
@@ -126,6 +128,15 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
             <PartitionProps
                 partition={partition}
                 onUpdate={(patch) => store.updatePartition(partition.id, patch)}
+            />
+        );
+    }
+
+    if (structuralObstacle) {
+        return (
+            <StructuralObstacleProps
+                obstacle={structuralObstacle}
+                onUpdate={(patch) => store.updateStructuralObstacle(structuralObstacle.id, patch)}
             />
         );
     }

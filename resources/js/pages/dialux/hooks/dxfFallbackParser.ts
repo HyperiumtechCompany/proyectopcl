@@ -161,6 +161,7 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
     };
 
     let inEntitiesSection = false;
+    let inBlocksSection = false;
     let idCounter = 0;
 
     const nextId = () => {
@@ -168,42 +169,63 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
         return `dxf_ts_${idCounter}`;
     };
 
+    const blocks = new Map<string, { name: string; x: number; y: number; entities: any[] }>();
+    let currentBlock: { name: string; x: number; y: number; entities: any[] } | null = null;
+    const rawEntities: any[] = [];
+
     for (let i = 0; i < pairs.length; i += 1) {
         const pair = pairs[i];
         const next = pairs[i + 1];
 
         if (pair.code === 0 && pair.value === 'SECTION' && next?.code === 2) {
-            inEntitiesSection = next.value.toUpperCase() === 'ENTITIES';
+            const sectionName = next.value.toUpperCase();
+            inEntitiesSection = sectionName === 'ENTITIES';
+            inBlocksSection = sectionName === 'BLOCKS';
             continue;
         }
 
         if (pair.code === 0 && pair.value === 'ENDSEC') {
             inEntitiesSection = false;
+            inBlocksSection = false;
             continue;
         }
 
-        if (!inEntitiesSection || pair.code !== 0) continue;
+        if (!inEntitiesSection && !inBlocksSection) continue;
+        if (pair.code !== 0) continue;
 
         const type = pair.value.toUpperCase();
         const [entityPairs, nextIndex] = collectEntityPairs(pairs, i);
         i = nextIndex - 1;
 
+        if (inBlocksSection && type === 'BLOCK') {
+            currentBlock = {
+                name: valueFor(entityPairs, 2) ?? '',
+                x: num(valueFor(entityPairs, 10)),
+                y: num(valueFor(entityPairs, 20)),
+                entities: [],
+            };
+            continue;
+        }
+        if (inBlocksSection && type === 'ENDBLK') {
+            if (currentBlock && currentBlock.name) {
+                blocks.set(currentBlock.name, currentBlock);
+            }
+            currentBlock = null;
+            continue;
+        }
+
+        let parsedEntity: any = null;
+
         if (type === 'LINE') {
-            const x1 = num(valueFor(entityPairs, 10));
-            const y1 = num(valueFor(entityPairs, 20));
-            const x2 = num(valueFor(entityPairs, 11));
-            const y2 = num(valueFor(entityPairs, 21));
-            updateBounds(bounds, x1, y1);
-            updateBounds(bounds, x2, y2);
-            entities.push({
+            parsedEntity = {
                 id: nextId(),
                 type: 'line',
-                x1,
-                y1,
-                x2,
-                y2,
+                x1: num(valueFor(entityPairs, 10)),
+                y1: num(valueFor(entityPairs, 20)),
+                x2: num(valueFor(entityPairs, 11)),
+                y2: num(valueFor(entityPairs, 21)),
                 layer: layerFor(entityPairs),
-            });
+            };
         } else if (type === 'LWPOLYLINE') {
             const vertices: [number, number][] = [];
             let pendingX: number | null = null;
@@ -212,24 +234,19 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
                 if (entityPair.code === 10) {
                     pendingX = num(entityPair.value);
                 } else if (entityPair.code === 20 && pendingX !== null) {
-                    const vertex: [number, number] = [
-                        pendingX,
-                        num(entityPair.value),
-                    ];
-                    vertices.push(vertex);
-                    updateBounds(bounds, vertex[0], vertex[1]);
+                    vertices.push([pendingX, num(entityPair.value)]);
                     pendingX = null;
                 }
             }
 
             if (vertices.length > 0) {
-                entities.push({
+                parsedEntity = {
                     id: nextId(),
                     type: 'polyline',
                     vertices,
                     closed: (num(valueFor(entityPairs, 70)) & 1) === 1,
                     layer: layerFor(entityPairs),
-                });
+                };
             }
         } else if (type === 'POLYLINE') {
             const layer = layerFor(entityPairs);
@@ -245,41 +262,38 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
                 if (pairs[j].value.toUpperCase() !== 'VERTEX') continue;
 
                 const [vertexPairs, vertexEnd] = collectEntityPairs(pairs, j);
-                const vertex: [number, number] = [
+                vertices.push([
                     num(valueFor(vertexPairs, 10)),
                     num(valueFor(vertexPairs, 20)),
-                ];
-                vertices.push(vertex);
-                updateBounds(bounds, vertex[0], vertex[1]);
+                ]);
                 j = vertexEnd - 1;
             }
 
             if (vertices.length > 0) {
-                entities.push({
+                parsedEntity = {
                     id: nextId(),
                     type: 'polyline',
                     vertices,
                     closed,
                     layer,
-                });
+                };
             }
         } else if (type === 'CIRCLE' || type === 'ARC') {
             const cx = num(valueFor(entityPairs, 10));
             const cy = num(valueFor(entityPairs, 20));
             const r = Math.max(0, num(valueFor(entityPairs, 40)));
-            updateCircleBounds(bounds, cx, cy, r);
 
             if (type === 'CIRCLE') {
-                entities.push({
+                parsedEntity = {
                     id: nextId(),
                     type: 'circle',
                     cx,
                     cy,
                     r,
                     layer: layerFor(entityPairs),
-                });
+                };
             } else {
-                entities.push({
+                parsedEntity = {
                     id: nextId(),
                     type: 'arc',
                     cx,
@@ -288,41 +302,142 @@ export function parseDxfTextFallback(text: string): ParsedDxfPayload {
                     start_angle: num(valueFor(entityPairs, 50)),
                     end_angle: num(valueFor(entityPairs, 51)),
                     layer: layerFor(entityPairs),
-                });
+                };
             }
         } else if (type === 'TEXT' || type === 'MTEXT') {
-            const x = num(valueFor(entityPairs, 10));
-            const y = num(valueFor(entityPairs, 20));
-            updateBounds(bounds, x, y);
-            // MTEXT reparte el texto en chunks de código 3 (continuación,
-            // >250 caracteres) seguidos del código 1 final, y usa códigos de
-            // formato (\F, \P, \C...) que TEXT nunca tiene — concatenar y
-            // limpiar solo aplica a MTEXT.
             const rawText = type === 'MTEXT'
                 ? [...valuesFor(entityPairs, 3), valueFor(entityPairs, 1) ?? ''].join('')
                 : valueFor(entityPairs, 1) ?? '';
-            entities.push({
+            parsedEntity = {
                 id: nextId(),
                 type: 'text',
-                x,
-                y,
+                x: num(valueFor(entityPairs, 10)),
+                y: num(valueFor(entityPairs, 20)),
                 text: type === 'MTEXT' ? stripMTextFormatting(rawText) : rawText,
                 height: num(valueFor(entityPairs, 40), 1),
                 rotation: num(valueFor(entityPairs, 50)),
                 layer: layerFor(entityPairs),
-            });
+            };
         } else if (type === 'POINT') {
-            const x = num(valueFor(entityPairs, 10));
-            const y = num(valueFor(entityPairs, 20));
-            updateBounds(bounds, x, y);
-            entities.push({
+            parsedEntity = {
                 id: nextId(),
                 type: 'point',
-                x,
-                y,
+                x: num(valueFor(entityPairs, 10)),
+                y: num(valueFor(entityPairs, 20)),
                 layer: layerFor(entityPairs),
-            });
+            };
+        } else if (type === 'INSERT') {
+            parsedEntity = {
+                id: nextId(),
+                type: 'insert',
+                blockName: valueFor(entityPairs, 2) ?? '',
+                x: num(valueFor(entityPairs, 10)),
+                y: num(valueFor(entityPairs, 20)),
+                scaleX: num(valueFor(entityPairs, 41), 1),
+                scaleY: num(valueFor(entityPairs, 42), 1),
+                rotation: num(valueFor(entityPairs, 50), 0),
+                layer: layerFor(entityPairs),
+            };
         }
+
+        if (parsedEntity) {
+            if (currentBlock) {
+                currentBlock.entities.push(parsedEntity);
+            } else if (inEntitiesSection) {
+                rawEntities.push(parsedEntity);
+            }
+        }
+    }
+
+    // Matrix utilities for recursive insert flattening
+    type Matrix = [number, number, number, number, number, number];
+    const identity: Matrix = [1, 0, 0, 1, 0, 0];
+    const multiply = (m1: Matrix, m2: Matrix): Matrix => [
+        m1[0] * m2[0] + m1[2] * m2[1],
+        m1[1] * m2[0] + m1[3] * m2[1],
+        m1[0] * m2[2] + m1[2] * m2[3],
+        m1[1] * m2[2] + m1[3] * m2[3],
+        m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+        m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+    ];
+    const translate = (tx: number, ty: number): Matrix => [1, 0, 0, 1, tx, ty];
+    const scale = (sx: number, sy: number): Matrix => [sx, 0, 0, sy, 0, 0];
+    const rotate = (deg: number): Matrix => {
+        const rad = (deg * Math.PI) / 180;
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        return [c, s, -s, c, 0, 0];
+    };
+    const applyTransform = (m: Matrix, x: number, y: number) => ({
+        x: m[0] * x + m[2] * y + m[4],
+        y: m[1] * x + m[3] * y + m[5],
+    });
+
+    const explodeEntity = (entity: any, parentMatrix: Matrix, fallbackLayer: string): void => {
+        const layer = entity.layer === '0' ? fallbackLayer : (entity.layer || fallbackLayer);
+
+        if (entity.type === 'insert') {
+            const block = blocks.get(entity.blockName);
+            if (!block) return;
+            const m1 = translate(-block.x, -block.y);
+            const m2 = scale(entity.scaleX, entity.scaleY);
+            const m3 = rotate(entity.rotation);
+            const m4 = translate(entity.x, entity.y);
+            const insertMatrix = multiply(parentMatrix, multiply(m4, multiply(m3, multiply(m2, m1))));
+            for (const child of block.entities) {
+                explodeEntity(child, insertMatrix, layer);
+            }
+            return;
+        }
+
+        const outEntity: any = { ...entity, id: nextId(), layer };
+
+        if (entity.type === 'line') {
+            const p1 = applyTransform(parentMatrix, entity.x1, entity.y1);
+            const p2 = applyTransform(parentMatrix, entity.x2, entity.y2);
+            outEntity.x1 = p1.x; outEntity.y1 = p1.y;
+            outEntity.x2 = p2.x; outEntity.y2 = p2.y;
+            updateBounds(bounds, p1.x, p1.y);
+            updateBounds(bounds, p2.x, p2.y);
+        } else if (entity.type === 'polyline') {
+            outEntity.vertices = entity.vertices.map((v: [number, number]) => {
+                const p = applyTransform(parentMatrix, v[0], v[1]);
+                updateBounds(bounds, p.x, p.y);
+                return [p.x, p.y];
+            });
+        } else if (entity.type === 'circle' || entity.type === 'arc') {
+            const p = applyTransform(parentMatrix, entity.cx, entity.cy);
+            outEntity.cx = p.x;
+            outEntity.cy = p.y;
+            // Scale radius (assuming uniform scale for simplicity)
+            const sx = Math.sqrt(parentMatrix[0] * parentMatrix[0] + parentMatrix[1] * parentMatrix[1]);
+            outEntity.r = entity.r * sx;
+            updateCircleBounds(bounds, outEntity.cx, outEntity.cy, outEntity.r);
+
+            if (entity.type === 'arc') {
+                // Approximate angle rotation (doesn't handle negative scale correctly, but good enough for fallback)
+                const rotDeg = Math.atan2(parentMatrix[1], parentMatrix[0]) * 180 / Math.PI;
+                outEntity.start_angle = entity.start_angle + rotDeg;
+                outEntity.end_angle = entity.end_angle + rotDeg;
+            }
+        } else if (entity.type === 'text' || entity.type === 'point') {
+            const p = applyTransform(parentMatrix, entity.x, entity.y);
+            outEntity.x = p.x;
+            outEntity.y = p.y;
+            updateBounds(bounds, p.x, p.y);
+            if (entity.type === 'text') {
+                const rotDeg = Math.atan2(parentMatrix[1], parentMatrix[0]) * 180 / Math.PI;
+                outEntity.rotation = (entity.rotation || 0) + rotDeg;
+                const sy = Math.sqrt(parentMatrix[2] * parentMatrix[2] + parentMatrix[3] * parentMatrix[3]);
+                outEntity.height = (entity.height || 1) * sy;
+            }
+        }
+
+        entities.push(outEntity);
+    };
+
+    for (const raw of rawEntities) {
+        explodeEntity(raw, identity, '0');
     }
 
     const extents = finalizeBounds(bounds);

@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
+import { calculateCenteredOffsetOnWall, polygonBBox, suggestFixtureGridSize } from '../fixtureGrid';
 import {
     buildFixtureGridObjects,
-    calculateCenteredOffsetOnWall,
-} from '../fixtureGrid';
+    calculateObstacleAwareFixtureGridPositions,
+} from '../fixtureGridObstacles';
 import { buildDefaultStairConfig } from '../stairNorms';
 import { mutateScene, normalizeWallPatch, normalizeWallState } from '../storeHelpers';
 import type {
@@ -18,11 +19,100 @@ import type {
     LightSwitch,
     Partition,
     Room,
+    StructuralObstacle,
     Vertex,
     Wall,
     Window,
 } from '../types';
 import type { EditorSlice } from './sliceTypes';
+
+/**
+ * Recalcula (solo x,y) las grillas de luminarias de los rooms cuyo bbox se
+ * superpone con `obstacleVertices` -- se llama tras crear/editar/borrar un
+ * StructuralObstacle (plan seccion 5: "Reposicionamiento Automatico").
+ * Nunca toca fixtures sueltos (sin gridGroupId): el disparador es
+ * deliberadamente el cambio de OBSTACULO, no cualquier edicion del room --
+ * ampliar esto a `updateRoom` queda fuera de alcance para no alterar el
+ * flujo manual existente de quien reacomoda un room a mano. Tampoco se
+ * dispara durante un arrastre continuo del obstaculo (no hay drag de objeto
+ * completo para StructuralObstacle en esta iteracion): el CSG + polylabel es
+ * demasiado costoso para correr por cada evento de mousemove.
+ *
+ * Agrupa todas las mutaciones en un unico paso de undo via history gesture,
+ * igual que el arrastre de un objeto (ver useCanvasInteraction.ts).
+ */
+function recomputeFixtureGridsNearObstacle(
+    set: Parameters<EditorSlice<SceneObjectsSlice>>[0],
+    get: Parameters<EditorSlice<SceneObjectsSlice>>[1],
+    obstacleVertices: Vertex[],
+): void {
+    if (obstacleVertices.length < 3) return;
+    const scene = get().activeScene();
+    if (!scene) return;
+
+    const obstacleBox = polygonBBox(obstacleVertices);
+    const affectedRooms = scene.rooms.filter((room) => {
+        if (room.vertices.length < 3) return false;
+        const roomBox = polygonBBox(room.vertices);
+        return (
+            roomBox.minX <= obstacleBox.maxX &&
+            roomBox.maxX >= obstacleBox.minX &&
+            roomBox.minY <= obstacleBox.maxY &&
+            roomBox.maxY >= obstacleBox.minY
+        );
+    });
+    if (affectedRooms.length === 0) return;
+
+    get().beginHistoryGesture();
+    try {
+        for (const room of affectedRooms) {
+            const groupIds = new Set(
+                scene.fixtures
+                    .filter((f) => f.roomId === room.id && f.gridGroupId)
+                    .map((f) => f.gridGroupId as string),
+            );
+            for (const groupId of groupIds) {
+                const groupFixtures = scene.fixtures
+                    .filter((f) => f.gridGroupId === groupId && f.roomId === room.id)
+                    // Orden fila-por-fila (y luego x) -- mismo orden en el que
+                    // calculateObstacleAwareFixtureGridPositions emite sus posiciones,
+                    // asi cada fixture conserva su lugar relativo en la grilla.
+                    .sort((a, b) => a.y - b.y || a.x - b.x);
+                if (groupFixtures.length === 0) continue;
+
+                const mountingHeight = groupFixtures[0].z ?? 2.7;
+                const roomBox = polygonBBox(room.vertices);
+                const aspectRatio = roomBox.height > 0 ? roomBox.width / roomBox.height : 1;
+                const { rows, columns } = suggestFixtureGridSize(1, 1, groupFixtures.length, aspectRatio);
+
+                const currentObstacles = get().activeScene()?.structuralObstacles ?? [];
+                const positions = calculateObstacleAwareFixtureGridPositions(
+                    room.vertices,
+                    currentObstacles,
+                    mountingHeight,
+                    rows,
+                    columns,
+                );
+                // Si el redondeo de filas/columnas no reproduce exactamente la
+                // cantidad de fixtures del grupo, se deja el grupo intacto en
+                // vez de truncarlo o perder luminarias.
+                if (positions.length !== groupFixtures.length) continue;
+
+                set((s) =>
+                    mutateScene(s, (sc) => ({
+                        ...sc,
+                        fixtures: sc.fixtures.map((f) => {
+                            const idx = groupFixtures.findIndex((gf) => gf.id === f.id);
+                            return idx === -1 ? f : { ...f, x: positions[idx].x, y: positions[idx].y };
+                        }),
+                    })),
+                );
+            }
+        }
+    } finally {
+        get().endHistoryGesture();
+    }
+}
 
 export interface SceneObjectsSlice {
     addRoom: (room: Omit<Room, 'id'>) => string;
@@ -38,6 +128,8 @@ export interface SceneObjectsSlice {
     addConductor: (conductor: Omit<Conductor, 'id'>) => string;
     addJunctionBox: (box: Omit<JunctionBox, 'id'>) => string;
     addElectricalDevice: (device: Omit<ElectricalDevice, 'id'>) => string;
+    /** Columna/viga/zona restringida. Dispara recalculo de grillas de luminarias afectadas (ver recomputeFixtureGridsNearObstacle). */
+    addStructuralObstacle: (obstacle: Omit<StructuralObstacle, 'id'>) => string;
     /**
      * `ambientId`: distingue el ambiente base del recinto (`undefined`) de
      * cada sub-ambiente delimitado por una pared interna (un `ambientId`
@@ -66,6 +158,8 @@ export interface SceneObjectsSlice {
     updateConductor: (id: string, patch: Partial<Omit<Conductor, 'id'>>) => void;
     updateJunctionBox: (id: string, patch: Partial<Omit<JunctionBox, 'id'>>) => void;
     updateElectricalDevice: (id: string, patch: Partial<Omit<ElectricalDevice, 'id'>>) => void;
+    /** Recalcula grillas afectadas cuando cambian vertices/altura/elevacion (ver recomputeFixtureGridsNearObstacle). */
+    updateStructuralObstacle: (id: string, patch: Partial<Omit<StructuralObstacle, 'id'>>) => void;
     setElectricalDeviceTemplate: (
         type: ElectricalDeviceType,
         label?: string,
@@ -240,6 +334,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
             config,
             vertices,
             uuidv4,
+            scene.structuralObstacles ?? [],
         );
         const ids: string[] = [];
 
@@ -503,6 +598,27 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         return id;
     },
 
+    addStructuralObstacle: (obstacleData) => {
+        const id = uuidv4();
+        // Un unico gesto de historial: crear el obstaculo + reposicionar las
+        // grillas que afecta es UNA sola accion de usuario, no dos.
+        get().beginHistoryGesture();
+        try {
+            set((s) =>
+                !s.project || !s.activeSceneId
+                    ? s
+                    : mutateScene(s, (sc) => ({
+                          ...sc,
+                          structuralObstacles: [...(sc.structuralObstacles ?? []), { id, ...obstacleData }],
+                      })),
+            );
+            recomputeFixtureGridsNearObstacle(set, get, obstacleData.vertices);
+        } finally {
+            get().endHistoryGesture();
+        }
+        return id;
+    },
+
     replaceGeneratedOutletsForRoom: (roomId, deviceData, ambientId) => {
         const ids = deviceData.map(() => uuidv4());
         set((state) => {
@@ -567,12 +683,50 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         });
     },
 
+    updateStructuralObstacle: (id, patch) => {
+        const existing = get().activeScene()?.structuralObstacles?.find((o) => o.id === id);
+        get().beginHistoryGesture();
+        try {
+            set((s) =>
+                mutateScene(s, (sc) => ({
+                    ...sc,
+                    structuralObstacles: (sc.structuralObstacles ?? []).map((o) =>
+                        o.id === id ? { ...o, ...patch } : o,
+                    ),
+                })),
+            );
+            // Recalcula tanto contra la posicion/tamano ANTERIOR (por si el
+            // obstaculo se achico/movio y liberó área que antes bloqueaba una
+            // grilla) como la NUEVA (por si ahora invade una zona que antes
+            // era libre).
+            if (existing) recomputeFixtureGridsNearObstacle(set, get, existing.vertices);
+            if (patch.vertices) recomputeFixtureGridsNearObstacle(set, get, patch.vertices);
+        } finally {
+            get().endHistoryGesture();
+        }
+    },
+
     setElectricalDeviceTemplate: (type, label, properties) =>
         set((s) => ({ ui: { ...s.ui, electricalDeviceTemplate: { type, label, properties } } })),
 
     // ── Remover ───────────────────────────────────────────────────────────
     removeObject: (id) => {
-        set((state) => {
+        const removedObstacle = get().activeScene()?.structuralObstacles?.find((o) => o.id === id);
+        get().beginHistoryGesture();
+        try {
+            removeObjectInternal(set, id);
+            if (removedObstacle) recomputeFixtureGridsNearObstacle(set, get, removedObstacle.vertices);
+        } finally {
+            get().endHistoryGesture();
+        }
+    },
+});
+
+function removeObjectInternal(
+    set: Parameters<EditorSlice<SceneObjectsSlice>>[0],
+    id: string,
+): void {
+    set((state) => {
             if (!state.project || !state.activeSceneId) return state;
             const updated = mutateScene(state, (s) => {
                 // Find what we're deleting for cascade logic
@@ -646,6 +800,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
                     conductors,
                     junctionBoxes: (s.junctionBoxes ?? []).filter((jb) => jb.id !== id),
                     electricalDevices,
+                    structuralObstacles: (s.structuralObstacles ?? []).filter((o) => o.id !== id),
                 };
             });
             return {
@@ -668,6 +823,5 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
                     ? state.dxfEntities.filter((e) => e.id !== id)
                     : null,
             };
-        });
-    },
-});
+    });
+}

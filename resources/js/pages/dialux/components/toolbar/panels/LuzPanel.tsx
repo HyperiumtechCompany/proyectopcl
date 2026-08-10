@@ -1,4 +1,4 @@
-import { Grid, Link2, ToggleLeft, Upload, Zap } from 'lucide-react';
+import { Check, Grid, Link2, Pencil, ToggleLeft, Upload, X, Zap } from 'lucide-react';
 import React, { useState } from 'react';
 import type {
     DrawTool,
@@ -6,6 +6,7 @@ import type {
     ElectricalDeviceType,
     Conductor,
     LightSwitch,
+    Vertex,
 } from '@/pages/dialux/hooks/useEditorStore';
 import { CONDUCTOR_WIRE_OPTIONS } from '@/pages/dialux/hooks/types';
 
@@ -52,6 +53,13 @@ export const LuzPanel: React.FC<{
     gridCols: number;
     onSetRows: (n: number) => void;
     onSetCols: (n: number) => void;
+    /** 'room' = clic simple usa el ambiente completo. 'draw' = poligono libre vertice a vertice. */
+    areaMode: 'room' | 'draw';
+    onSetAreaMode: (mode: 'room' | 'draw') => void;
+    /** Poligono recien cerrado en modo 'draw', esperando confirmar cantidad. */
+    pendingArea: Vertex[] | null;
+    onConfirmPendingArea: () => void;
+    onCancelPendingArea: () => void;
     onOpenImportModal?: () => void;
     onSetElecDevice?: (
         type: ElectricalDeviceType,
@@ -69,6 +77,11 @@ export const LuzPanel: React.FC<{
     gridCols,
     onSetRows,
     onSetCols,
+    areaMode,
+    onSetAreaMode,
+    pendingArea,
+    onConfirmPendingArea,
+    onCancelPendingArea,
     onOpenImportModal,
     onSetElecDevice,
 }) => {
@@ -130,27 +143,56 @@ export const LuzPanel: React.FC<{
 
             {activeSection === 'luminaires' && (
                 <>
-                    {/* <PanelCard title="Herramientas de luz" tone="accent">
-                            <div className="grid grid-cols-2 gap-1">
-                                <PanelToolBtn
-                                    tool="fixture"
-                                    icon={<Zap size={13} />}
-                                    active={activeTool}
-                                    onSet={onSetTool}
-                                    tip="Luminaria (F)"
-                                    sublabel="Colocar unitaria"
-                                />
-                                <PanelToolBtn
-                                    tool="fixture-grid"
-                                    icon={<Grid size={13} />}
-                                    active={activeTool}
-                                    onSet={onSetTool}
-                                    tip="Matriz de luminarias"
-                                    sublabel={`${gridRows} x ${gridCols}`}
-                                />
-                            </div>
-                            {activeTool === 'fixture-grid' && (
-                                <div className="mt-2 grid grid-cols-2 gap-2 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 p-2">
+                    <PanelCard title="Herramientas de luz" tone="accent">
+                        <div className="grid grid-cols-2 gap-1">
+                            <PanelToolBtn
+                                tool="fixture"
+                                icon={<Zap size={13} />}
+                                active={activeTool}
+                                onSet={onSetTool}
+                                tip="Luminaria (F)"
+                                sublabel="Colocar unitaria"
+                            />
+                            <PanelToolBtn
+                                tool="fixture-grid"
+                                icon={<Grid size={13} />}
+                                active={activeTool}
+                                onSet={onSetTool}
+                                tip="Matriz de luminarias"
+                                sublabel={`${gridRows} x ${gridCols}`}
+                            />
+                        </div>
+                        {activeTool === 'fixture-grid' && (
+                            <div className="mt-2 rounded border border-gray-300 dark:border-gray-700/40 bg-gray-200 dark:bg-gray-900/40 p-2">
+                                <div className="grid grid-cols-2 gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => onSetAreaMode('room')}
+                                        className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[9.5px] font-medium transition-colors ${
+                                            areaMode === 'room'
+                                                ? 'bg-cyan-600/25 text-cyan-700 dark:text-cyan-200 ring-1 ring-cyan-500/50'
+                                                : 'bg-gray-300 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-400/40 dark:hover:bg-gray-700/60'
+                                        }`}
+                                        title="Un clic sobre un ambiente usa el ambiente completo"
+                                    >
+                                        Ambiente completo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onSetAreaMode('draw')}
+                                        className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-[9.5px] font-medium transition-colors ${
+                                            areaMode === 'draw'
+                                                ? 'bg-cyan-600/25 text-cyan-700 dark:text-cyan-200 ring-1 ring-cyan-500/50'
+                                                : 'bg-gray-300 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-400/40 dark:hover:bg-gray-700/60'
+                                        }`}
+                                        title="Dibuja un poligono libre en el plano (como Recinto): clic para cada vertice, clic cerca del primero para cerrar"
+                                    >
+                                        <Pencil size={11} />
+                                        Dibujar área
+                                    </button>
+                                </div>
+
+                                <div className="mt-2 grid grid-cols-2 gap-2">
                                     <label className="space-y-1 text-[10px] text-gray-500 dark:text-gray-500">
                                         <span>Filas</span>
                                         <input
@@ -161,7 +203,7 @@ export const LuzPanel: React.FC<{
                                             onChange={(e) =>
                                                 onSetRows(Number(e.target.value))
                                             }
-                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
+                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
                                         />
                                     </label>
                                     <label className="space-y-1 text-[10px] text-gray-500 dark:text-gray-500">
@@ -174,12 +216,46 @@ export const LuzPanel: React.FC<{
                                             onChange={(e) =>
                                                 onSetCols(Number(e.target.value))
                                             }
-                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
-                                    />
-                                </label>
+                                            className="h-7 w-full rounded border border-gray-300 dark:border-gray-700 bg-gray-300 dark:bg-gray-950 px-2 text-[11px] text-gray-800 dark:text-gray-200 outline-none focus:border-cyan-500/50"
+                                        />
+                                    </label>
+                                </div>
+
+                                {areaMode === 'room' ? (
+                                    <p className="mt-2 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
+                                        Clic sobre un ambiente para proyectar la grilla en todo su espacio.
+                                    </p>
+                                ) : pendingArea ? (
+                                    <div className="mt-2 rounded border border-emerald-500/40 bg-emerald-950/20 p-2">
+                                        <p className="text-[9.5px] leading-snug text-emerald-300">
+                                            Área proyectada ({pendingArea.length} vértices). Ajusta Filas/Columnas arriba y confirma.
+                                        </p>
+                                        <div className="mt-2 flex gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={onConfirmPendingArea}
+                                                className="flex flex-1 items-center justify-center gap-1 rounded bg-emerald-600/30 py-1.5 text-[10px] font-medium text-emerald-200 transition-colors hover:bg-emerald-600/50"
+                                            >
+                                                <Check size={12} />
+                                                Confirmar {gridRows}×{gridCols}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={onCancelPendingArea}
+                                                className="flex items-center justify-center gap-1 rounded border border-gray-500/40 px-2.5 py-1.5 text-[10px] text-gray-400 transition-colors hover:bg-gray-700/40"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="mt-2 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
+                                        Dibuja el contorno en el plano: clic por cada vértice, clic cerca del primero para cerrar. Después elegís la cantidad y confirmás.
+                                    </p>
+                                )}
                             </div>
                         )}
-                    </PanelCard> */}
+                    </PanelCard>
 
                     <PanelCard title="Catalogo de luminarias">
                         <button

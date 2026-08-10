@@ -89,6 +89,7 @@ import { IsoluxLayer } from './IsoluxLayer';
 import { OverlayCanopies } from './OverlayCanopies';
 import { OverlayDoors } from './OverlayDoors';
 import { OverlayElectricalDevices } from './OverlayElectricalDevices';
+import { OverlayFixtureGridGuides } from './OverlayFixtureGridGuides';
 import { OverlayFixtures } from './OverlayFixtures';
 import { DynamicInputOverlay } from './DynamicInputOverlay';
 import { OverlayLightSwitches } from './OverlayLightSwitches';
@@ -101,6 +102,7 @@ import {
     OverlayRotateHandle,
     type RotatableTarget,
 } from './OverlayRotateHandle';
+import { OverlayStructuralObstacles } from './OverlayStructuralObstacles';
 import { OverlayWalls } from './OverlayWalls';
 import { OverlayWindows } from './OverlayWindows';
 import { OverlayWires } from './OverlayWires';
@@ -347,6 +349,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
+            fixtureGridAreaMode: ui.fixtureGridAreaMode,
             zoom,
             resolveCadOsnap: CAD_OSNAP_TOOLS.has(ui.activeTool)
                 ? (scenePoint, lastPoint) => {
@@ -399,6 +402,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             doors: scene?.doors ?? [],
             conductors: scene?.conductors ?? [],
             partitions: scene?.partitions ?? [],
+            structuralObstacles: scene?.structuralObstacles ?? [],
             isObjectSelectable: (id) =>
                 scene
                     ? isElectricalItemVisible(
@@ -653,6 +657,23 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 setRoomVertices([]);
                 setRoomPreviewPt(null);
             },
+            onAddStructuralObstacle: (verticesM) => {
+                const obstacleCount = scene?.structuralObstacles?.length ?? 0;
+                const floorHeight = scene?.floorHeight ?? 3.0;
+                const id = store.addStructuralObstacle({
+                    name: `Columna ${obstacleCount + 1}`,
+                    obstacleType: 'column',
+                    vertices: verticesM,
+                    // Piso a techo por defecto (caso mas comun: columna estructural);
+                    // el usuario ajusta elevation/height en el panel de propiedades
+                    // para vigas suspendidas o zonas restringidas puntuales.
+                    height: floorHeight,
+                    elevation: 0,
+                });
+                store.setSelectedId(id);
+                setRoomVertices([]);
+                setRoomPreviewPt(null);
+            },
             onAddWall: (vertices) => {
                 const isEducationWall = ui.activeTool === 'education-wall';
                 const wallType = isEducationWall
@@ -788,6 +809,16 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     store.setSelectedFixtureIds(newIds);
                     store.setTool('select');
                 }
+            },
+            // "Proyectar luminarias en un area especifica" (estilo DIALux evo):
+            // el poligono libre dibujado por el usuario (vertice a vertice,
+            // cierra cerca del primero, igual que Room) NUNCA se persiste como
+            // geometria -- primero queda "pendiente" (ui.pendingFixtureGridArea)
+            // para que el usuario confirme la cantidad de luminarias en el
+            // panel Luz, y solo ENTONCES se usa como `ambientVertices` para
+            // calcular el centro de cada luminaria dentro de ESA area puntual.
+            onCloseFixtureGridArea: (verticesM) => {
+                store.setPendingFixtureGridArea(verticesM);
             },
             onAddLightSwitch: (x, y, wallId) => {
                 const id = store.addLightSwitch({
@@ -953,6 +984,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             setRoomPreviewPt(null);
             setWallPreview(null);
             setCanopyPreview(null);
+            // Area de proyeccion pendiente sin confirmar: se descarta si el
+            // usuario cambia de herramienta antes de decidir la cantidad
+            // (ver panel Luz) -- es un borrador de UI, no debe sobrevivir.
+            if (ui.activeTool !== 'fixture-grid') {
+                store.setPendingFixtureGridArea(null);
+            }
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [ui.activeTool]);
 
@@ -1103,6 +1140,33 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             }
             return Math.max(8, screenDistance(0.15, 0, origin));
         }, [rotateTarget, rotateKind, scene, screenDistance]);
+
+        /**
+         * Guias de alineacion (estilo Figma/DIALux evo) mientras se arrastra UNA
+         * luminaria sola: si su x o y coincide (tras el snap de
+         * useCanvasInteraction.ts) con la de OTRA luminaria de la escena, se
+         * dibuja una linea punteada a lo largo de ese eje compartido. Puramente
+         * derivado de `scene.fixtures` + `ui.selectedId` -- no requiere estado
+         * imperativo nuevo, el snap ya deja las coordenadas exactamente iguales.
+         */
+        const fixtureAlignmentGuides = useMemo(() => {
+            if (!isDragging || !scene || !ui.selectedId) return null;
+            if (ui.selectedFixtureIds.length > 1) return null;
+            const dragged = scene.fixtures.find((f) => f.id === ui.selectedId);
+            if (!dragged) return null;
+
+            const EPS = 0.005;
+            let sameX: number | null = null;
+            let sameY: number | null = null;
+            for (const other of scene.fixtures) {
+                if (other.id === dragged.id) continue;
+                if (sameX === null && Math.abs(other.x - dragged.x) < EPS) sameX = other.x;
+                if (sameY === null && Math.abs(other.y - dragged.y) < EPS) sameY = other.y;
+                if (sameX !== null && sameY !== null) break;
+            }
+            if (sameX === null && sameY === null) return null;
+            return { x: sameX, y: sameY };
+        }, [isDragging, scene, ui.selectedId, ui.selectedFixtureIds]);
 
         const handleRotate = useCallback(
             (id: string, rotationDeg: number) => {
@@ -1527,6 +1591,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                         screenPoint={screenPoint}
                                         screenDistance={screenDistance}
                                     />
+                                    <OverlayStructuralObstacles
+                                        obstacles={ghostScene.structuralObstacles ?? []}
+                                        selectedId={null}
+                                        zoom={zoom}
+                                        onSelect={() => undefined}
+                                        screenPoint={screenPoint}
+                                    />
                                 </g>
                             ))}
 
@@ -1544,6 +1615,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         roomPreviewPoint={roomPreviewPt}
                         wallPreview={wallPreview}
                         canopyPreview={canopyPreview}
+                        pendingFixtureGridArea={ui.pendingFixtureGridArea}
+                        fixtureGridAreaRows={ui.fixtureGridRows}
+                        fixtureGridAreaColumns={ui.fixtureGridCols}
                         screenPoint={screenPoint}
                         measureCadDistanceFromScreen={
                             measureCadDistanceFromScreen
@@ -1566,6 +1640,13 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         onSelect={overlaySelect}
                         screenPoint={screenPoint}
                         screenDistance={screenDistance}
+                    />
+                    <OverlayStructuralObstacles
+                        obstacles={scene?.structuralObstacles ?? []}
+                        selectedId={ui.selectedId}
+                        zoom={zoom}
+                        onSelect={overlaySelect}
+                        screenPoint={screenPoint}
                     />
                     <OverlayWindows
                         windows={scene?.windows ?? []}
@@ -1716,6 +1797,42 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         toLocalPoint={toLocalPoint}
                         onRotate={handleRotate}
                     />
+                    {ui.fixtureGridGuideEditor &&
+                        scene?.rooms.some((r) => r.id === ui.fixtureGridGuideEditor?.roomId) && (
+                            <OverlayFixtureGridGuides
+                                editor={ui.fixtureGridGuideEditor}
+                                screenPoint={screenPoint}
+                                worldPoint={worldPoint}
+                                toLocalPoint={toLocalPoint}
+                                onDragGuide={(axis, index, value) =>
+                                    store.setFixtureGridGuide(axis, index, value)
+                                }
+                            />
+                        )}
+                    {fixtureAlignmentGuides && (
+                        <g className="overlay-fixture-alignment-guides" style={{ pointerEvents: 'none' }}>
+                            {fixtureAlignmentGuides.x !== null && (() => {
+                                const p1 = screenPoint({ x: fixtureAlignmentGuides.x, y: -500 });
+                                const p2 = screenPoint({ x: fixtureAlignmentGuides.x, y: 500 });
+                                return (
+                                    <line
+                                        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                                        stroke="#ec4899" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.9}
+                                    />
+                                );
+                            })()}
+                            {fixtureAlignmentGuides.y !== null && (() => {
+                                const p1 = screenPoint({ x: -500, y: fixtureAlignmentGuides.y });
+                                const p2 = screenPoint({ x: 500, y: fixtureAlignmentGuides.y });
+                                return (
+                                    <line
+                                        x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                                        stroke="#ec4899" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.9}
+                                    />
+                                );
+                            })()}
+                        </g>
+                    )}
                 </svg>
 
                 <DynamicInputOverlay

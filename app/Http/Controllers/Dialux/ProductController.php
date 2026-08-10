@@ -114,7 +114,7 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, int $productId): JsonResponse
     {
         $product = LuminaireProduct::query()
-            ->forUser($request->user()->id)
+            ->availableFor($request->user()->id)
             ->findOrFail($productId);
 
         // El archivo fotométrico original NO se vuelve a subir en este
@@ -135,7 +135,21 @@ class ProductController extends Controller
             $warnings[] = "El nuevo nombre (\"{$newName}\") ya no coincide con el nombre interno del archivo fotométrico almacenado (\"{$internalName}\"). El archivo no se reemplaza al renombrar — si el producto real es otra variante, vuelve a importarlo con el archivo correcto en vez de solo renombrarlo.";
         }
 
-        $product->update($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('product_image')) {
+            $data['product_image_path'] = $this->storeProductMedia($request->file('product_image'), $request->user()->id, 'images');
+        } elseif ($request->boolean('clear_product_image')) {
+            $data['product_image_path'] = null;
+        }
+
+        if ($request->hasFile('brand_logo')) {
+            $data['brand_logo_path'] = $this->storeProductMedia($request->file('brand_logo'), $request->user()->id, 'logos');
+        } elseif ($request->boolean('clear_brand_logo')) {
+            $data['brand_logo_path'] = null;
+        }
+
+        $product->update($data);
 
         return response()->json([
             'product' => $this->formatProduct($product->refresh(), userId: $request->user()->id),

@@ -45,7 +45,7 @@ function renderRowSymbol(out: DxfLines, layer: string, row: DxfLegendRow, x: num
  * ancho/alto conservadora para la fuente por defecto de R12 (`txt.shx`).
  */
 export function truncateToWidth(text: string, widthMm: number, textHeightMm: number): string {
-    const maxChars = Math.floor(widthMm / (textHeightMm * 0.6));
+    const maxChars = Math.floor(widthMm / (textHeightMm * 0.85));
     if (maxChars <= 0 || text.length <= maxChars) return text;
     if (maxChars <= 3) return text.slice(0, maxChars);
     return `${text.slice(0, maxChars - 3)}...`;

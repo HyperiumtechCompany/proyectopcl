@@ -18,6 +18,7 @@ import type {
     LightSwitch,
     Conductor,
     Partition,
+    StructuralObstacle,
     ElectricalDevice,
     ElectricalDeviceType,
 } from './useEditorStore';
@@ -48,6 +49,8 @@ interface InteractionOptions {
     /** Zoom actual del canvas (≥1) para calcular el umbral de cierre adaptativo */
     zoom?: number;
     onAddRoom: (verticesM: CanvasPoint[]) => void;
+    /** Cierra el trazo de un StructuralObstacle (columna/viga/zona restringida) -- mismo mecanismo de dibujo que room/corridor/stair */
+    onAddStructuralObstacle?: (verticesM: CanvasPoint[]) => void;
     onAddWall: (vertices: CanvasPoint[]) => void;
     onAddWindow: (wallId: string, offsetAlongWall: number) => void;
     onAddDoor: (
@@ -61,6 +64,20 @@ interface InteractionOptions {
     onAddCanopy: (x1: number, y1: number, x2: number, y2: number) => void;
     onAddFixture: (xM: number, yM: number) => void;
     onAddFixtureGrid?: (roomId: string) => void;
+    /**
+     * Modo del area de proyeccion de la herramienta 'fixture-grid':
+     *   'room' -> clic simple = usar el ambiente completo bajo el cursor (clasico).
+     *   'draw' -> dibujar un poligono libre vertice a vertice (como Room), cierra
+     *             cerca del primer vertice. NO crea nada al cerrar -- dispara
+     *             `onCloseFixtureGridArea` para pedir la cantidad antes de generar.
+     */
+    fixtureGridAreaMode?: 'room' | 'draw';
+    /**
+     * Poligono de proyeccion cerrado (metros de escena). No dibuja ni persiste
+     * nada por si mismo -- el llamador decide la cantidad y recien ahi crea
+     * las luminarias reales.
+     */
+    onCloseFixtureGridArea?: (verticesM: CanvasPoint[]) => void;
     onCalibrationMeasure: (
         cadDistance: number,
         p1: CanvasPoint,
@@ -130,6 +147,8 @@ interface InteractionOptions {
     /** Cables y tabiques: solo participan del hit-testing de selección */
     conductors?: Conductor[];
     partitions?: Partition[];
+    /** Columnas/vigas: hit-testing de selección + trazo con la herramienta 'structural-obstacle' */
+    structuralObstacles?: StructuralObstacle[];
     /** Notifica el inicio/fin de un arrastre de objeto (para agrupar el historial) */
     onDragGesture?: (phase: 'start' | 'end') => void;
     /** Regla compartida con la leyenda para excluir objetos ocultos de la selección. */
@@ -184,12 +203,15 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         walls,
         zoom = 1,
         onAddRoom,
+        onAddStructuralObstacle,
         onAddWall,
         onAddWindow,
         onAddDoor,
         onAddCanopy,
         onAddFixture,
         onAddFixtureGrid,
+        fixtureGridAreaMode = 'room',
+        onCloseFixtureGridArea,
         onAddLightSwitch,
         onCalibrationMeasure,
         onMeasureDistanceChange,
@@ -221,6 +243,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         electricalDevices = [],
         conductors = [],
         partitions = [],
+        structuralObstacles = [],
         onDragGesture,
         isObjectSelectable,
     } = opts;
@@ -281,7 +304,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         if (
             activeTool !== 'room' &&
             activeTool !== 'corridor' &&
-            activeTool !== 'stair'
+            activeTool !== 'stair' &&
+            activeTool !== 'structural-obstacle' &&
+            activeTool !== 'fixture-grid'
         ) {
             stateRef.current.roomVertices = [];
             stateRef.current.previewPoint = null;
@@ -296,6 +321,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             activeTool !== 'room' &&
             activeTool !== 'corridor' &&
             activeTool !== 'stair' &&
+            activeTool !== 'structural-obstacle' &&
+            activeTool !== 'fixture-grid' &&
             !isWallTool(activeTool) &&
             activeTool !== 'canopy'
         ) {
@@ -419,7 +446,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
     const getPrevPointM = useCallback(
         (tool: string, s: DrawState): CanvasPoint | null => {
             if (
-                (tool === 'room' || tool === 'corridor' || tool === 'stair') &&
+                (tool === 'room' || tool === 'corridor' || tool === 'stair' || tool === 'structural-obstacle' || tool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             )
                 return s.roomVertices[s.roomVertices.length - 1];
@@ -442,7 +469,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         (tool: string, s: DrawState, cx: number, cy: number): number[] => {
             const inferred = getGuideAngles(cx, cy);
             const vertices =
-                tool === 'room' || tool === 'corridor' || tool === 'stair'
+                tool === 'room' || tool === 'corridor' || tool === 'stair' || tool === 'structural-obstacle' || tool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(tool)
                       ? s.wallVertices
@@ -481,7 +508,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
-                activeTool === 'stair'
+                activeTool === 'stair' ||
+                activeTool === 'structural-obstacle' ||
+                (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'draw')
             ) {
                 if (s.roomVertices.length > 2) {
                     const first = sceneToCanvas(
@@ -492,7 +521,13 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         Math.hypot(first.x - cx, first.y - cy) <
                         closeThresholdPx
                     ) {
-                        onAddRoom(s.roomVertices);
+                        if (activeTool === 'structural-obstacle') {
+                            onAddStructuralObstacle?.(s.roomVertices);
+                        } else if (activeTool === 'fixture-grid') {
+                            onCloseFixtureGridArea?.(s.roomVertices);
+                        } else {
+                            onAddRoom(s.roomVertices);
+                        }
                         stateRef.current = {
                             ...s,
                             isDrawing: false,
@@ -549,6 +584,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             canvasToScene,
             onAddRoom,
             onAddWall,
+            fixtureGridAreaMode,
+            onCloseFixtureGridArea,
         ],
     );
 
@@ -590,7 +627,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const activeVerticesCanvas = (
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
-                activeTool === 'stair'
+                activeTool === 'stair' ||
+                activeTool === 'structural-obstacle' ||
+                activeTool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(activeTool)
                       ? s.wallVertices
@@ -602,15 +641,24 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 'switch',
                 'wire',
                 'fixture',
-                'fixture-grid',
                 'select',
                 'pan',
             ];
+            // fixture-grid en modo 'room' es un clic simple sobre el ambiente
+            // completo bajo el cursor (el snap de posicion/angulo no aplica).
+            // En modo 'draw' es un poligono libre vertice a vertice, igual
+            // que room/corridor/stair, y necesita el mismo asistido (antes
+            // quedaba excluido siempre, sin importar el modo).
+            const isFixtureGridRoomMode =
+                activeTool === 'fixture-grid' && fixtureGridAreaMode !== 'draw';
             // Alt mantenido = override temporal que desactiva TODO snap (posición
             // y ángulo), igual que Shift fuerza ortogonal. Es la salida rápida
             // para cuando el asistido "no deja" avanzar hacia donde el usuario
             // realmente apunta — sin necesidad de cambiar de modo angular.
-            const shouldSnap = !noSnapTools.includes(activeTool) && !e.altKey;
+            const shouldSnap =
+                !noSnapTools.includes(activeTool) &&
+                !isFixtureGridRoomMode &&
+                !e.altKey;
 
             const cadOsnapPoint = shouldSnap
                 ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
@@ -652,7 +700,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 return;
             }
 
-            if (activeTool === 'fixture-grid') {
+            if (activeTool === 'fixture-grid' && fixtureGridAreaMode === 'room') {
+                // Modo clasico: un clic toma el room bajo el cursor y proyecta
+                // sobre el room completo.
                 const roomHit = findNearestRoom(cx, cy);
                 if (roomHit && onAddFixtureGrid) {
                     onAddFixtureGrid(roomHit.id);
@@ -918,6 +968,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         canopies,
                         walls,
                         partitions,
+                        structuralObstacles,
                         rooms,
                     },
                     { x: cx, y: cy },
@@ -981,6 +1032,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             findNearestElectricalDevice,
             pickWireNodeCandidate,
             onAddFixture,
+            onAddFixtureGrid,
+            fixtureGridAreaMode,
             onCalibrationMeasure,
             onMeasureDistanceChange,
             onMeasureAreaFinish,
@@ -1064,7 +1117,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const activeVerticesCanvas = (
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
-                activeTool === 'stair'
+                activeTool === 'stair' ||
+                activeTool === 'structural-obstacle' ||
+                activeTool === 'fixture-grid'
                     ? s.roomVertices
                     : isWallTool(activeTool)
                       ? s.wallVertices
@@ -1076,15 +1131,24 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 'switch',
                 'wire',
                 'fixture',
-                'fixture-grid',
                 'select',
                 'pan',
             ];
+            // fixture-grid en modo 'room' es un clic simple sobre el ambiente
+            // completo bajo el cursor (el snap de posicion/angulo no aplica).
+            // En modo 'draw' es un poligono libre vertice a vertice, igual
+            // que room/corridor/stair, y necesita el mismo asistido (antes
+            // quedaba excluido siempre, sin importar el modo).
+            const isFixtureGridRoomMode =
+                activeTool === 'fixture-grid' && fixtureGridAreaMode !== 'draw';
             // Alt mantenido = override temporal que desactiva TODO snap (posición
             // y ángulo), igual que Shift fuerza ortogonal. Es la salida rápida
             // para cuando el asistido "no deja" avanzar hacia donde el usuario
             // realmente apunta — sin necesidad de cambiar de modo angular.
-            const shouldSnap = !noSnapTools.includes(activeTool) && !e.altKey;
+            const shouldSnap =
+                !noSnapTools.includes(activeTool) &&
+                !isFixtureGridRoomMode &&
+                !e.altKey;
 
             const cadOsnapPoint = shouldSnap
                 ? resolveCadOsnap?.(canvasToScene(rawX, rawY), prevPointM)
@@ -1123,7 +1187,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (
                 (activeTool === 'room' ||
                     activeTool === 'corridor' ||
-                    activeTool === 'stair') &&
+                    activeTool === 'stair' ||
+                    activeTool === 'structural-obstacle' ||
+                    activeTool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             ) {
                 s.previewPoint = canvasToScene(cx, cy);
@@ -1219,12 +1285,36 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         const fixture = fixtures.find(
                             (f) => f.id === s.dragObjectId,
                         );
-                        if (fixture)
-                            onMoveFixture(
-                                s.dragObjectId,
-                                fixture.x + dxM,
-                                fixture.y + dyM,
-                            );
+                        if (fixture) {
+                            let targetX = fixture.x + dxM;
+                            let targetY = fixture.y + dyM;
+
+                            // Alineación inteligente (guías tipo Figma/DIALux evo):
+                            // si el centro cae a pocos px en pantalla del eje X o Y
+                            // de OTRA luminaria, se ajusta exactamente a ese eje —
+                            // permite alinear dos luminarias moviendo la segunda
+                            // cerca de la primera, sin coordenadas manuales.
+                            const ALIGN_SNAP_PX = 6;
+                            const draggedCanvas = sceneToCanvas(targetX, targetY);
+                            let bestX: { value: number; distPx: number } | null = null;
+                            let bestY: { value: number; distPx: number } | null = null;
+                            for (const other of fixtures) {
+                                if (other.id === s.dragObjectId) continue;
+                                const otherCanvas = sceneToCanvas(other.x, other.y);
+                                const distXPx = Math.abs(otherCanvas.x - draggedCanvas.x);
+                                if (distXPx <= ALIGN_SNAP_PX && (!bestX || distXPx < bestX.distPx)) {
+                                    bestX = { value: other.x, distPx: distXPx };
+                                }
+                                const distYPx = Math.abs(otherCanvas.y - draggedCanvas.y);
+                                if (distYPx <= ALIGN_SNAP_PX && (!bestY || distYPx < bestY.distPx)) {
+                                    bestY = { value: other.y, distPx: distYPx };
+                                }
+                            }
+                            if (bestX) targetX = bestX.value;
+                            if (bestY) targetY = bestY.value;
+
+                            onMoveFixture(s.dragObjectId, targetX, targetY);
+                        }
                     }
                     s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'room') {
@@ -1542,7 +1632,9 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             if (
                 (activeTool === 'room' ||
                     activeTool === 'corridor' ||
-                    activeTool === 'stair') &&
+                    activeTool === 'stair' ||
+                    activeTool === 'structural-obstacle' ||
+                    activeTool === 'fixture-grid') &&
                 s.roomVertices.length > 0
             ) {
                 s.roomVertices = s.roomVertices.slice(0, -1);

@@ -112,6 +112,28 @@ export function dxfFilledDot(
     p(out, 13, f(cx));     p(out, 23, f(cy + r)); p(out, 33, '0.0');
 }
 
+/**
+ * 3- or 4-point filled polygon (SOLID). Points must be in clockwise or counterclockwise order,
+ * but AC1009 requires the 3rd and 4th points to be swapped for a rectangular solid.
+ * For a 3-point triangle, p3 and p4 are the same.
+ */
+export function dxfSolid(
+    out: DxfLines, layer: string,
+    p1x: number, p1y: number,
+    p2x: number, p2y: number,
+    p3x: number, p3y: number,
+    p4x: number, p4y: number,
+    color?: number,
+): void {
+    p(out, 0, 'SOLID');
+    p(out, 8, layer);
+    if (color !== undefined) p(out, 62, color);
+    p(out, 10, f(p1x)); p(out, 20, f(p1y)); p(out, 30, '0.0');
+    p(out, 11, f(p2x)); p(out, 21, f(p2y)); p(out, 31, '0.0');
+    p(out, 12, f(p3x)); p(out, 22, f(p3y)); p(out, 32, '0.0');
+    p(out, 13, f(p4x)); p(out, 23, f(p4y)); p(out, 33, '0.0');
+}
+
 export function dxfArc(
     out: DxfLines, layer: string,
     cx: number, cy: number, r: number,
@@ -180,4 +202,16 @@ export function drawLocalRectOutline(
     for (let i = 0; i < corners.length; i++) {
         drawLocalLine(out, layer, origin, rotationDeg, corners[i], corners[(i + 1) % corners.length], color);
     }
+}
+
+/** Dibuja un polígono sólido de 3 o 4 puntos en coordenadas locales. */
+export function drawLocalSolid(
+    out: DxfLines, layer: string, origin: Pt, rotationDeg: number,
+    p1: Pt, p2: Pt, p3: Pt, p4: Pt = p3, color?: number,
+): void {
+    const gp1 = localToGlobal(origin, p1, rotationDeg);
+    const gp2 = localToGlobal(origin, p2, rotationDeg);
+    const gp3 = localToGlobal(origin, p3, rotationDeg);
+    const gp4 = localToGlobal(origin, p4, rotationDeg);
+    dxfSolid(out, layer, gp1.x, gp1.y, gp2.x, gp2.y, gp3.x, gp3.y, gp4.x, gp4.y, color);
 }

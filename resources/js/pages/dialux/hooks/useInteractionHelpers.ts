@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { Wall, Fixture, Room, Canopy, Window, Door, LightSwitch, ElectricalDevice } from './useEditorStore';
+import { pointInPolygon, distanceToPolygonEdge, polygonAreaM2 } from '@/pages/dialux/geometry/polygonGeometry';
 
 export interface CanvasPoint { x: number; y: number; }
 interface HelperOptions {
@@ -249,23 +250,41 @@ export function useInteractionHelpers({
         [fixtures, sceneToCanvas],
     );
 
+    /**
+     * Room bajo el cursor: primero prueba contencion punto-en-poligono (un
+     * clic en cualquier parte del interior cuenta), y si el punto cae fuera
+     * de todos, cae a "cerca del borde" dentro de EDGE_SNAP_DIST_PX. Antes
+     * solo comparaba contra los vertices, asi que un clic en medio de un
+     * ambiente grande (lejos de toda esquina) no encontraba nada.
+     */
     const findNearestRoom = useCallback(
         (cx: number, cy: number): { id: string; vertices: { x: number; y: number }[] } | null => {
-            const SNAP_DIST_PX = 15;
-            let closest: { id: string; vertices: { x: number; y: number }[] } | null = null;
-            let minDist = SNAP_DIST_PX * SNAP_DIST_PX;
+            const EDGE_SNAP_DIST_PX = 15;
+            const point = { x: cx, y: cy };
+            let containing: { id: string; vertices: { x: number; y: number }[]; areaM2: number } | null = null;
+            let nearestEdge: { id: string; vertices: { x: number; y: number }[]; dist: number } | null = null;
 
             for (const r of rooms) {
-                for (const v of r.vertices) {
-                    const p = sceneToCanvas(v.x, v.y);
-                    const d2 = (p.x - cx) ** 2 + (p.y - cy) ** 2;
-                    if (d2 < minDist) {
-                        minDist = d2;
-                        closest = { id: r.id, vertices: r.vertices };
+                if (r.vertices.length < 3) continue;
+                const canvasVertices = r.vertices.map((v) => sceneToCanvas(v.x, v.y));
+
+                if (pointInPolygon(point, canvasVertices)) {
+                    const areaM2 = polygonAreaM2(r.vertices);
+                    if (!containing || areaM2 < containing.areaM2) {
+                        containing = { id: r.id, vertices: r.vertices, areaM2 };
                     }
+                    continue;
+                }
+
+                const dist = distanceToPolygonEdge(point, canvasVertices);
+                if (dist <= EDGE_SNAP_DIST_PX && (!nearestEdge || dist < nearestEdge.dist)) {
+                    nearestEdge = { id: r.id, vertices: r.vertices, dist };
                 }
             }
-            return closest;
+
+            if (containing) return { id: containing.id, vertices: containing.vertices };
+            if (nearestEdge) return { id: nearestEdge.id, vertices: nearestEdge.vertices };
+            return null;
         },
         [rooms, sceneToCanvas],
     );

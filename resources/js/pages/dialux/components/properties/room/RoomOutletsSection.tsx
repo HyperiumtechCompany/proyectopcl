@@ -109,7 +109,7 @@ export function RoomOutletsSection({
                 type="button"
                 onClick={regenerateOutlets}
                 disabled={requiredOutlets === 0}
-                className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
                 {generatedOutletsCount > 0 ? 'Regenerar tomacorrientes' : 'Generar tomacorrientes'}
             </button>
@@ -117,7 +117,7 @@ export function RoomOutletsSection({
                 <button
                     type="button"
                     onClick={() => store.removeGeneratedOutletsForRoom(room.id)}
-                    className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-300 hover:bg-red-500/20"
+                    className="flex w-full items-center justify-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-700 dark:text-red-300 hover:bg-red-500/20"
                 >
                     <Trash2 size={11} /> Eliminar tomacorrientes del ambiente
                 </button>

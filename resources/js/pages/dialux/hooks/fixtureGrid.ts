@@ -15,7 +15,7 @@
  *     L=8m, C=4: margen=1m, sep=2m → 1m, 3m, 5m, 7m ✓
  */
 
-import type { Fixture, FixtureGridConfig, Vertex, Wall } from './types';
+import type { Vertex, Wall } from './types';
 
 // ─── Cálculo de bounding box de un polígono ───────────────────────────────────
 
@@ -186,6 +186,93 @@ function clampInsidePolygon(
     return centroid;
 }
 
+// ─── Grilla con lineas guia editables (division no uniforme) ─────────────────
+
+/**
+ * Normaliza un array de guias internas (fracciones 0..1, una por cada
+ * division interna) a un array de fronteras completo
+ * `[0, ...guias ordenadas, 1]` de longitud `dividerCount + 2`.
+ *
+ * Se degrada a division uniforme (misma formula que `calculateFixtureGridPositions`)
+ * si `guides` es undefined, tiene una longitud distinta a `dividerCount`, o
+ * produce fronteras degeneradas (dos guias a menos de 0.1% de distancia tras
+ * ordenar) -- nunca revienta ni genera celdas de ancho ~0 por un arrastre
+ * extremo del usuario.
+ */
+export function normalizeGuideBoundaries(
+    guides: number[] | undefined,
+    dividerCount: number,
+): number[] {
+    const MIN_GAP = 1e-3;
+    const uniform = (): number[] => {
+        const boundaries = [0];
+        for (let i = 1; i <= dividerCount; i++) boundaries.push(i / (dividerCount + 1));
+        boundaries.push(1);
+        return boundaries;
+    };
+    if (!guides || guides.length !== dividerCount) return uniform();
+
+    const sorted = [...guides]
+        .map((g) => Math.min(1 - MIN_GAP, Math.max(MIN_GAP, g)))
+        .sort((a, b) => a - b);
+
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] - sorted[i - 1] < MIN_GAP) return uniform();
+    }
+    return [0, ...sorted, 1];
+}
+
+/**
+ * Version de `calculateFixtureGridPositions` con lineas guia editables: en
+ * vez de dividir el bbox en celdas parejas, usa las fronteras de
+ * `rowGuides`/`columnGuides` (fracciones 0..1) para que el usuario pueda
+ * alinear cada division con una viga u otra referencia real del plano DXF.
+ *
+ * Sin guias (`undefined` en ambos), el resultado equivale a
+ * `calculateFixtureGridPositions` (misma formula matematica, mismo camino de
+ * clamp para recintos no rectangulares; difiere solo en el ultimo bit de
+ * precision de punto flotante por el distinto orden de operaciones).
+ */
+export function calculateGuidedFixtureGridPositions(
+    roomVertices: Vertex[],
+    rows: number,
+    columns: number,
+    rowGuides?: number[],
+    columnGuides?: number[],
+): Vertex[] {
+    const safeRows = Math.max(1, Math.round(rows));
+    const safeCols = Math.max(1, Math.round(columns));
+    const bbox = polygonBBox(roomVertices);
+    const { width: L, height: W } = bbox;
+    if (L <= 0 || W <= 0) return [];
+
+    const colBoundaries = normalizeGuideBoundaries(columnGuides, safeCols - 1);
+    const rowBoundaries = normalizeGuideBoundaries(rowGuides, safeRows - 1);
+
+    const isRectBbox = roomVertices.length <= 4;
+    const bboxCenter = { x: bbox.minX + L / 2, y: bbox.minY + W / 2 };
+    const centroid = isRectBbox ? bboxCenter : polygonCentroid(roomVertices);
+    const shift = { x: centroid.x - bboxCenter.x, y: centroid.y - bboxCenter.y };
+
+    const positions: Vertex[] = [];
+    for (let i = 0; i < safeRows; i++) {
+        const centerFracY = (rowBoundaries[i] + rowBoundaries[i + 1]) / 2;
+        for (let j = 0; j < safeCols; j++) {
+            const centerFracX = (colBoundaries[j] + colBoundaries[j + 1]) / 2;
+            const raw = {
+                x: bbox.minX + centerFracX * L + shift.x,
+                y: bbox.minY + centerFracY * W + shift.y,
+            };
+            positions.push(
+                roomVertices.length > 4
+                    ? clampInsidePolygon(raw, roomVertices, centroid)
+                    : raw,
+            );
+        }
+    }
+    return positions;
+}
+
 // ─── Centrado de objetos sobre paredes ───────────────────────────────────────
 
 /**
@@ -288,47 +375,4 @@ export function estimatePhotometricFixtureQuantity(
 
     const exact = Math.max(lumenFallback, currentCount * targetLux / currentAverageLux);
     return { exact, rounded: Math.ceil(exact) };
-}
-
-// ─── Generación de fixtures de grilla ────────────────────────────────────────
-
-/**
- * Genera un array de objetos Fixture a partir de una configuración de grilla.
- * Los fixtures ya tienen posiciones calculadas; se les debe asignar IDs externos.
- */
-export function buildFixtureGridObjects(
-    config: FixtureGridConfig,
-    roomVertices: Vertex[],
-    generateId: () => string,
-): Omit<Fixture, 'id'>[] {
-    const positions = calculateFixtureGridPositions(
-        roomVertices,
-        config.rows,
-        config.columns,
-    );
-
-    const groupId = generateId(); // ID compartido del grupo de grilla
-    const tmpl    = config.fixtureTemplate;
-    const z       = config.mountingHeight ?? 2.7;
-
-    return positions.map((pos, index) => ({
-        ...tmpl,
-        name: `${tmpl.name ?? `Luminaria G${config.rows}×${config.columns}`} [${index + 1}]`,
-        x: pos.x,
-        y: pos.y,
-        z,
-        lumens:       tmpl.lumens      ?? 4000,
-        power:        tmpl.power,
-        efficiency:   tmpl.efficiency  ?? 0.8,
-        fixtureType:  tmpl.fixtureType ?? 'recessed',
-        fixtureShape: tmpl.fixtureShape ?? 'rectangular',
-        lightColor:   tmpl.lightColor  ?? '#fff5e1',
-        brand:         tmpl.brand,
-        articleNumber: tmpl.articleNumber,
-        productId:     tmpl.productId,
-        catalogSymbol: tmpl.catalogSymbol,
-        emergencyType: tmpl.emergencyType,
-        roomId:       config.roomId ?? undefined,
-        gridGroupId:  groupId,
-    }));
 }

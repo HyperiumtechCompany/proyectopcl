@@ -340,8 +340,10 @@ export function buildDxfMultiSheetDocument(options: BuildDxfMultiSheetDocumentOp
         const translated = translateElectricalEntities(disciplineEntities, totalOffset.x, totalOffset.y);
 
         if (placement.discipline === 'lighting') {
+            const panels = translated.electricalDevices.filter((device) => PANEL_DEVICE_TYPES.has(device.type));
             renderFixtureEntities(out, 'LUMINARIAS', 'TEXTO_LUZ', translated.fixtures);
             renderLightSwitchEntities(out, 'INTERRUPTORES', 'TEXTO_LUZ', translated.lightSwitches);
+            renderElectricalDeviceEntities(out, 'TABLEROS', panels);
             renderConductorEntities(
                 out, 'CABLEADO_LUZ', translated.conductors,
                 translated.fixtures, translated.lightSwitches, translated.electricalDevices, translated.junctionBoxes,

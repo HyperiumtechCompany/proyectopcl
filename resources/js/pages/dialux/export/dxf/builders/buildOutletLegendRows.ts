@@ -75,7 +75,7 @@ function deviceGroupKey(device: ElectricalDevice): string {
     return `${device.type}|${device.mountingHeight}|${effectiveBoxLabel(device)}`;
 }
 
-function buildDeviceRows(devices: ElectricalDevice[]): DxfLegendRow[] {
+export function buildDeviceRows(devices: ElectricalDevice[]): DxfLegendRow[] {
     const groups = groupBy(devices, deviceGroupKey);
 
     return [...groups.values()].map((group) => {

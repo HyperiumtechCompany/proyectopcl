@@ -24,6 +24,7 @@ export type DrawTool =
     | 'evacuation-route'
     | 'antipanic-area'
     | 'partition'
+    | 'structural-obstacle'
     | 'fixture'
     | 'fixture-grid'
     | 'switch'
@@ -271,6 +272,27 @@ export interface StairConfig {
 }
 
 /** Recinto (espacio cerrado con polÃƒÂ­gono arbitrario) */
+/**
+ * Elemento estructural u obstaculo que restringe la instalacion de luminarias
+ * en el plano de montaje del techo (columna, viga, ducto suspendido, zona
+ * restringida). Vive a nivel de Scene (piso), no de Room: una columna puede
+ * atravesar mas de un ambiente en el mismo plano DXF, igual que en DIALux evo.
+ *
+ * `fixtureGrid.ts` / `geometry/ceilingProjection.ts` restan estos poligonos
+ * del area de cada Room antes de repartir la grilla de luminarias.
+ */
+export interface StructuralObstacle {
+    id: string;
+    name: string;
+    obstacleType: 'column' | 'beam' | 'restricted_area';
+    /** Poligono 2D (footprint) en metros, mismo sistema de coordenadas que Room.vertices */
+    vertices: Vertex[];
+    /** Altura del obstaculo en metros, medida desde `elevation` */
+    height: number;
+    /** Elevacion desde el piso del nivel en metros (0 = apoyado en el piso; >0 = viga/ducto suspendido) */
+    elevation: number;
+}
+
 export interface Room {
     id: string;
     name: string;
@@ -559,6 +581,15 @@ export interface Fixture {
     wallId?: string; // opcional: ID de la pared donde estÃƒÂ¡ colocada (para drag/drop)
     roomId?: string; // opcional: ID del recinto al que pertenece
     gridGroupId?: string; // opcional: ID de grupo de grilla para conectar visualmente
+    /**
+     * Filas/columnas con las que se genero (o reorganizo por ultima vez) el
+     * grupo de grilla al que pertenece esta luminaria -- redundante por
+     * fixture (igual que gridGroupId), usado por el asesor de simetria entre
+     * modulos (ver hooks/fixtureGridSymmetry.ts) para saber la forma de cada
+     * grupo sin tener que inferirla de las posiciones.
+     */
+    gridRows?: number;
+    gridColumns?: number;
     cct?: number | null;
     cri?: number | null;
     description?: string | null;
@@ -1012,6 +1043,18 @@ export interface FixtureGridConfig {
     fixtureTemplate: Partial<Fixture>; // template para cada foco
     mountingHeight?: number; // altura de montaje (default 2.7m)
     ambientVertices?: Vertex[]; // vÃƒÂ©rtices del ambiente derivado (si se omite, usa room.vertices)
+    /**
+     * Posicion de las lineas guia internas que dividen el ancho del bbox en
+     * `columns` celdas, como fracciones (0,1) ordenadas ascendente, longitud
+     * `columns - 1`. `undefined` = division uniforme (comportamiento clasico).
+     * Permite alinear las celdas con una viga/proyeccion real del DXF en vez
+     * de forzar una division pareja -- ver editor interactivo en
+     * `OverlayFixtureGridGuides.tsx`. Solo se aplica cuando NO hay
+     * obstaculos relevantes (los StructuralObstacle tienen prioridad).
+     */
+    columnGuides?: number[];
+    /** Igual que `columnGuides`, para el alto del bbox (longitud `rows - 1`). */
+    rowGuides?: number[];
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ CÃƒÂ¡lculos de IluminaciÃƒÂ³n (Lighting Calculations) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1120,6 +1163,8 @@ export interface Scene {
     /** Dispositivos elÃƒÂ©ctricos: medidor, tableros, ATS, cajas de pase */
     electricalDevices?: ElectricalDevice[];
     partitions: Partition[];
+    /** Columnas/vigas que restringen la instalacion de luminarias (ver StructuralObstacle) */
+    structuralObstacles?: StructuralObstacle[];
     /**
      * Visibilidad del piso en el canvas 2D y en el modelo 3D.
      * Default: true. Cuando false, la geometrÃƒÂ­a se oculta sin eliminarla.

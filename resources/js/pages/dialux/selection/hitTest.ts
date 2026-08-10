@@ -37,6 +37,7 @@ import type {
     LightSwitch,
     Partition,
     Room,
+    StructuralObstacle,
     Wall,
     Window,
 } from '@/pages/dialux/hooks/types';
@@ -52,6 +53,7 @@ export type HitKind =
     | 'canopy'
     | 'wall'
     | 'partition'
+    | 'structural-obstacle'
     | 'room';
 
 export interface HitCandidate {
@@ -76,6 +78,7 @@ export interface HitTestScene {
     canopies?: Canopy[];
     walls?: Wall[];
     partitions?: Partition[];
+    structuralObstacles?: StructuralObstacle[];
     rooms?: Room[];
 }
 
@@ -100,6 +103,10 @@ const PRIORITY: Record<HitKind, number> = {
     canopy: 3,
     wall: 4,
     partition: 4,
+    // Un obstaculo estructural es mas especifico que el room que lo contiene
+    // (columna dentro de un recinto): debe ganarle en la misma jugada que
+    // muros/tabiques, no quedar tapado por el punto-en-poligono del room.
+    'structural-obstacle': 4,
     room: 5, // los recintos ('room') se degradan a 6 al construir el candidato
 };
 
@@ -249,6 +256,23 @@ export function hitTestAtPoint(
         if (!isSelectable(p.id, 'partition')) continue;
         const d = distToPolylinePx(canvasPt, p.vertices, sceneToCanvas);
         if (d <= tol) candidates.push({ id: p.id, kind: 'partition', priority: PRIORITY.partition, distPx: d });
+    }
+
+    // Obstaculos estructurales: mismo criterio punto-en-poligono que rooms,
+    // pero con prioridad mas alta (ver comentario en PRIORITY).
+    for (const o of scene.structuralObstacles ?? []) {
+        if (!isSelectable(o.id, 'structural-obstacle')) continue;
+        if (o.vertices.length < 3) continue;
+        const inside = pointInPolygon(scenePt, o.vertices);
+        const edgePx = distToPolylinePx(canvasPt, o.vertices, sceneToCanvas, true);
+        if (!inside && edgePx > tol) continue;
+        candidates.push({
+            id: o.id,
+            kind: 'structural-obstacle',
+            priority: PRIORITY['structural-obstacle'],
+            distPx: inside ? 0 : edgePx,
+            areaM2: polygonAreaM2(o.vertices),
+        });
     }
 
     // Rooms: el puntero dentro del polígono cuenta como acierto (dist 0);

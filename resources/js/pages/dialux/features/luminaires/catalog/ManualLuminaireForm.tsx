@@ -51,6 +51,10 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
     const [manualWidth, setManualWidth] = useState(product?.dimensions?.width?.toString() ?? '');
     const [manualHeight, setManualHeight] = useState(product?.dimensions?.height?.toString() ?? '');
     const [manualRadius, setManualRadius] = useState(product?.dimensions?.radius?.toString() ?? '');
+    const [productImage, setProductImage] = useState<File | null>(null);
+    const [brandLogo, setBrandLogo] = useState<File | null>(null);
+    const [clearProductImage, setClearProductImage] = useState(false);
+    const [clearBrandLogo, setClearBrandLogo] = useState(false);
     const isRoundShape = manualFixtureShape === 'round' || manualFixtureShape === 'cylindrical';
 
     // Al crear (nunca al editar, para no pisar la ficha real de un producto
@@ -122,25 +126,43 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
             const hasDimensions =
                 length !== undefined || width !== undefined || height !== undefined || radius !== undefined;
 
-            const payload = {
-                name: manualName.trim(),
-                manufacturer: manualManufacturer.trim() || undefined,
-                catalog_number: manualCatalogNumber.trim() || undefined,
-                total_lumens: totalLumens,
-                power_watts: manualPowerWatts ? Number.parseFloat(manualPowerWatts) : undefined,
-                cct: manualCct.trim() || undefined,
-                cri_ra: manualCriRa ? Number.parseFloat(manualCriRa) : undefined,
-                fixture_type: manualFixtureType,
-                fixture_shape: manualFixtureShape,
-                dimensions: hasDimensions ? { length, width, height, radius } : undefined,
-            };
+            const formData = new FormData();
+            formData.append('name', manualName.trim());
+            if (manualManufacturer.trim()) formData.append('manufacturer', manualManufacturer.trim());
+            if (manualCatalogNumber.trim()) formData.append('catalog_number', manualCatalogNumber.trim());
+            formData.append('total_lumens', totalLumens.toString());
+            if (manualPowerWatts) formData.append('power_watts', manualPowerWatts);
+            if (manualCct.trim()) formData.append('cct', manualCct.trim());
+            if (manualCriRa) formData.append('cri_ra', manualCriRa);
+            formData.append('fixture_type', manualFixtureType);
+            formData.append('fixture_shape', manualFixtureShape);
+            if (hasDimensions) {
+                if (length !== undefined) formData.append('dimensions[length]', length.toString());
+                if (width !== undefined) formData.append('dimensions[width]', width.toString());
+                if (height !== undefined) formData.append('dimensions[height]', height.toString());
+                if (radius !== undefined) formData.append('dimensions[radius]', radius.toString());
+            }
+
+            if (!isEditing) {
+                if (photometricTable) {
+                    photometricTable.forEach((p, i) => {
+                        formData.append(`photometric_table[${i}][gamma]`, p.gamma.toString());
+                        formData.append(`photometric_table[${i}][candela]`, p.candela.toString());
+                    });
+                } else {
+                    formData.append('beam_angle_50', beamAngle50.toString());
+                }
+            }
+
+            if (productImage) formData.append('product_image', productImage);
+            else if (clearProductImage) formData.append('clear_product_image', '1');
+
+            if (brandLogo) formData.append('brand_logo', brandLogo);
+            else if (clearBrandLogo) formData.append('clear_brand_logo', '1');
+
             const { product: savedProduct, message, warnings } = isEditing
-                ? await updateLuminaire(product.id, payload)
-                : await createManualLuminaire({
-                ...payload,
-                beam_angle_50: photometricTable ? undefined : beamAngle50,
-                photometric_table: photometricTable,
-            });
+                ? await updateLuminaire(product.id, formData)
+                : await createManualLuminaire(formData);
 
             onCreated(savedProduct);
             setManualWarnings(warnings ?? []);
@@ -166,6 +188,10 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
             setManualRadius('');
             setManualUseCustomCurve(false);
             setManualCurvePoints(DEFAULT_PHOTOMETRIC_CURVE_POINTS);
+            setProductImage(null);
+            setBrandLogo(null);
+            setClearProductImage(false);
+            setClearBrandLogo(false);
             setManualMessage(message ?? (isEditing ? 'Luminaria actualizada correctamente.' : 'Luminaria creada correctamente.'));
         } catch (error) {
             setManualError(extractErrorMessage(error, isEditing ? 'No se pudo actualizar la luminaria.' : 'No se pudo crear la luminaria.'));
@@ -177,7 +203,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
     return (
         <form
             onSubmit={submitManualProduct}
-            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-300 dark:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-200 dark:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-900 dark:text-slate-100"
+            className="mb-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-slate-200 sm:p-4 [&_input:not([type='checkbox'])]:h-9 [&_input:not([type='checkbox'])]:rounded-lg [&_input:not([type='checkbox'])]:border-slate-300 [&_input:not([type='checkbox'])]:bg-white [&_input:not([type='checkbox'])]:px-3 [&_input:not([type='checkbox'])]:text-xs [&_input:not([type='checkbox'])]:text-slate-900 dark:[&_input:not([type='checkbox'])]:border-slate-700 dark:[&_input:not([type='checkbox'])]:bg-slate-900 dark:[&_input:not([type='checkbox'])]:text-slate-100"
         >
             <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
                 {isEditing ? 'Editar luminaria' : 'Crear luminaria propia (sin archivo IES/LDT)'}
@@ -313,7 +339,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="0.001"
                         value={manualLength}
                         onChange={(event) => setManualLength(event.target.value)}
                         placeholder="Largo (m)"
@@ -322,7 +348,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="0.001"
                         value={manualWidth}
                         onChange={(event) => setManualWidth(event.target.value)}
                         placeholder="Ancho (m)"
@@ -331,7 +357,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="0.001"
                         value={manualHeight}
                         onChange={(event) => setManualHeight(event.target.value)}
                         placeholder="Alto (m)"
@@ -342,7 +368,7 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="0.001"
                         value={manualRadius}
                         onChange={(event) => setManualRadius(event.target.value)}
                         placeholder="Radio (m) — manda sobre largo/ancho al dibujar"
@@ -350,6 +376,44 @@ export function ManualLuminaireForm({ onCreated, product = null, onCancel }: Man
                     />
                 )}
             </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+                <div>
+                    <label className="text-[9px] font-semibold text-amber-800 dark:text-amber-300 block mb-1">
+                        Imagen del producto
+                    </label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setProductImage(e.target.files?.[0] || null)}
+                        className="block w-full text-[9px] text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-amber-100 file:px-2 file:py-1 file:text-[9px] file:font-semibold file:text-amber-700 hover:file:bg-amber-200 dark:file:bg-amber-900/50 dark:file:text-amber-200"
+                    />
+                    {isEditing && product?.product_image_url && !productImage && (
+                        <label className="mt-1 flex items-center gap-1 text-[8px] text-slate-500">
+                            <input type="checkbox" checked={clearProductImage} onChange={(e) => setClearProductImage(e.target.checked)} className="accent-amber-500" />
+                            Quitar imagen actual
+                        </label>
+                    )}
+                </div>
+                <div>
+                    <label className="text-[9px] font-semibold text-amber-800 dark:text-amber-300 block mb-1">
+                        Logo de la marca
+                    </label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBrandLogo(e.target.files?.[0] || null)}
+                        className="block w-full text-[9px] text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-amber-100 file:px-2 file:py-1 file:text-[9px] file:font-semibold file:text-amber-700 hover:file:bg-amber-200 dark:file:bg-amber-900/50 dark:file:text-amber-200"
+                    />
+                    {isEditing && product?.brand_logo_url && !brandLogo && (
+                        <label className="mt-1 flex items-center gap-1 text-[8px] text-slate-500">
+                            <input type="checkbox" checked={clearBrandLogo} onChange={(e) => setClearBrandLogo(e.target.checked)} className="accent-amber-500" />
+                            Quitar logo actual
+                        </label>
+                    )}
+                </div>
+            </div>
+
             <div className="mt-3 flex gap-2">
                 {isEditing && <button type="button" onClick={onCancel} className="h-10 flex-1 rounded-lg border border-slate-300 px-4 text-xs font-semibold dark:border-slate-700">Cancelar</button>}
                 <button

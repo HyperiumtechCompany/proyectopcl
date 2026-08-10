@@ -58,7 +58,7 @@ class LuminaireProductSeeder extends Seeder
                 'fixture_type' => 'other',
                 'fixture_shape' => 'cylindrical',
                 'is_global' => true,
-                'dimensions' => ['length' => 0.35, 'width' => 0.35, 'height' => 0.25],
+                'dimensions' => ['radius' => 0.175, 'height' => 0.25],
                 'report_data' => [
                     'technical_table' => [
                         ['label' => 'Resistencia Impacto', 'value' => 'IK08'],
@@ -87,7 +87,7 @@ class LuminaireProductSeeder extends Seeder
                 'fixture_type' => 'spot',
                 'fixture_shape' => 'round',
                 'is_global' => true,
-                'dimensions' => ['length' => 0.1, 'width' => 0.1, 'height' => 0.08],
+                'dimensions' => ['radius' => 0.05, 'height' => 0.08],
                 'report_data' => [
                     'technical_table' => [
                         ['label' => 'Ajustabilidad', 'value' => 'Basculante 30°'],

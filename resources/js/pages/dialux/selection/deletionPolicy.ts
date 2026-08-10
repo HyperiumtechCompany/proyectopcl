@@ -30,6 +30,7 @@ export type DeletionTargetKind =
     | 'canopy'
     | 'partition'
     | 'junction-box'
+    | 'structural-obstacle'
     | 'unknown';
 
 export interface DeletionAnalysis {
@@ -124,6 +125,13 @@ export function analyzeDeletion(scene: Scene, id: string): DeletionAnalysis {
     if (part) return direct('partition', 'Tabique');
     const jb = (scene.junctionBoxes ?? []).find((j) => j.id === id);
     if (jb) return direct('junction-box', 'Caja de paso');
+    // Borrado directo: no arrastra "hijos" en el sentido de deletionPolicy
+    // (nada depende geometricamente del obstaculo). El store SI recalcula la
+    // grilla de luminarias del room afectado al eliminarlo (ver
+    // recomputeFixtureGridsNearObstacle en sceneObjectsSlice.ts) -- eso es
+    // responsabilidad del motor de calculo, no una cascada de borrado.
+    const obstacle = (scene.structuralObstacles ?? []).find((o) => o.id === id);
+    if (obstacle) return direct('structural-obstacle', obstacle.name);
 
     return direct('unknown', 'Objeto');
 }

@@ -1,6 +1,6 @@
 import type { ElectricalDeviceType } from '@/pages/dialux/hooks/types';
 import {
-    drawLocalCircle, drawLocalLine, drawLocalRectOutline, drawLocalText,
+    drawLocalCircle, drawLocalLine, drawLocalRectOutline, drawLocalSolid, drawLocalText,
     type DxfLines, type Pt,
 } from '../emitters/primitives';
 
@@ -80,6 +80,48 @@ export function renderWaterHeaterSymbol(out: DxfLines, layer: string, options: D
     drawLocalText(out, layer, origin, rotationDeg, { x: hw * 0.6, y: -0.025 }, 0.07, 'TE');
 }
 
+const DEFAULT_PANEL_WIDTH_M = 0.40;
+const DEFAULT_PANEL_HEIGHT_M = 0.15;
+const PANEL_CIRCLE_RADIUS = 0.025;
+
+/** Tablero General o de Distribución: rectángulo dividido con salidas/círculos en 3 lados. */
+export function renderPanelSymbol(out: DxfLines, layer: string, options: DxfOutletSymbolOptions): void {
+    const origin: Pt = { x: options.x, y: options.y };
+    const rotationDeg = options.rotationDeg ?? 0;
+    const hw = (options.sizeM ?? DEFAULT_PANEL_WIDTH_M) / 2;
+    const hh = (options.sizeM ? options.sizeM * 0.375 : DEFAULT_PANEL_HEIGHT_M) / 2;
+
+    // 1. Rectángulo principal
+    drawLocalRectOutline(out, layer, origin, rotationDeg, hw, hh);
+
+    // 2. Línea Diagonal (Top-Left a Bottom-Right) y Relleno (Triángulo Inferior-Izquierdo, ACI 3 = Verde)
+    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: hh }, { x: hw, y: -hh });
+    drawLocalSolid(out, layer, origin, rotationDeg, { x: -hw, y: hh }, { x: -hw, y: -hh }, { x: hw, y: -hh }, { x: hw, y: -hh }, 3);
+
+    // 3. Círculos de conexión (Salidas)
+    // Top (4 salidas equiespaciadas)
+    for (let i = 1; i <= 4; i++) {
+        const cx = -hw + ((hw * 2) * (i / 5));
+        drawLocalLine(out, layer, origin, rotationDeg, { x: cx, y: hh }, { x: cx, y: hh + 0.03 });
+        drawLocalCircle(out, layer, origin, rotationDeg, { x: cx, y: hh + 0.03 + PANEL_CIRCLE_RADIUS }, PANEL_CIRCLE_RADIUS);
+    }
+    
+    // Izquierda (2 salidas)
+    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: hh * 0.5 }, { x: -hw - 0.03, y: hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - 0.03 - PANEL_CIRCLE_RADIUS, y: hh * 0.5 }, PANEL_CIRCLE_RADIUS);
+    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: -hh * 0.5 }, { x: -hw - 0.03, y: -hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - 0.03 - PANEL_CIRCLE_RADIUS, y: -hh * 0.5 }, PANEL_CIRCLE_RADIUS);
+    
+    // Derecha (2 salidas)
+    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: hh * 0.5 }, { x: hw + 0.03, y: hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + 0.03 + PANEL_CIRCLE_RADIUS, y: hh * 0.5 }, PANEL_CIRCLE_RADIUS);
+    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: -hh * 0.5 }, { x: hw + 0.03, y: -hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + 0.03 + PANEL_CIRCLE_RADIUS, y: -hh * 0.5 }, PANEL_CIRCLE_RADIUS);
+
+    // 4. Etiqueta (TG o TD)
+    drawLocalText(out, layer, origin, rotationDeg, { x: 0, y: hh + 0.15 }, 0.07, options.label ?? '');
+}
+
 /** Tablero/medidor/dispositivo genérico: cuadrado + etiqueta encima. Fallback para cualquier tipo sin forma dedicada. */
 export function renderGenericDeviceBoxSymbol(out: DxfLines, layer: string, options: DxfOutletSymbolOptions): void {
     const origin: Pt = { x: options.x, y: options.y };
@@ -140,6 +182,10 @@ export function renderElectricalDeviceSymbol(out: DxfLines, layer: string, optio
             return;
         case 'water_heater_30l':
             renderWaterHeaterSymbol(out, layer, options);
+            return;
+        case 'main_panel':
+        case 'sub_panel':
+            renderPanelSymbol(out, layer, options);
             return;
         default:
             renderGenericDeviceBoxSymbol(out, layer, options);

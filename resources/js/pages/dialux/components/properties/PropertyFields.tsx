@@ -92,7 +92,7 @@ export const SelectField: React.FC<{
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex min-w-0 flex-1 items-center justify-between gap-1 overflow-hidden rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 hover:bg-slate-100 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:bg-gray-200 dark:bg-gray-800 dark:focus:border-blue-600/50"
+                className="flex min-w-0 flex-1 items-center justify-between gap-1 overflow-hidden rounded border border-slate-300 bg-white px-1.5 py-0.5 text-right text-[11px] text-slate-900 hover:bg-slate-100 focus:border-blue-500 focus:outline-none dark:border-gray-700/50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus:border-blue-600/50"
             >
                 <span className={`truncate ${selected ? '' : 'text-gray-500 dark:text-gray-500'}`}>{selected?.label ?? placeholder}</span>
                 <ChevronDown size={12} className="shrink-0 text-gray-500 dark:text-gray-500" />

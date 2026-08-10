@@ -125,8 +125,17 @@ export async function importPhotometryFile(
 }
 
 export async function createManualLuminaire(
-    payload: ManualLuminairePayload,
+    payload: ManualLuminairePayload | FormData,
 ): Promise<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }> {
+    if (payload instanceof FormData) {
+        const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
+            productRoutes.storeManual.url(),
+            payload,
+            { ...jsonRequestConfig, headers: { ...jsonRequestConfig.headers, 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data;
+    }
+
     const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
         productRoutes.storeManual.url(),
         payload,
@@ -137,8 +146,18 @@ export async function createManualLuminaire(
 
 export async function updateLuminaire(
     productId: number,
-    payload: Omit<ManualLuminairePayload, 'beam_angle_50' | 'photometric_table'>,
+    payload: Omit<ManualLuminairePayload, 'beam_angle_50' | 'photometric_table'> | FormData,
 ): Promise<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }> {
+    if (payload instanceof FormData) {
+        payload.append('_method', 'PATCH');
+        const response = await axios.post<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
+            productRoutes.update(productId).url,
+            payload,
+            { ...jsonRequestConfig, headers: { ...jsonRequestConfig.headers, 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data;
+    }
+
     const response = await axios.patch<{ product: ImportedLuminaireProduct; message?: string; warnings?: string[] }>(
         productRoutes.update(productId).url,
         payload,

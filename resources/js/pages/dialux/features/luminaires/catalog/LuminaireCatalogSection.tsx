@@ -258,29 +258,27 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                                         </span>
                                     )
                                 )}
-                                {product.is_owner && (
-                                    <span
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={(event) => {
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setManualMode(false);
+                                        setImportMode(false);
+                                        setEditingProduct(product);
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
                                             event.stopPropagation();
-                                            setManualMode(false);
-                                            setImportMode(false);
                                             setEditingProduct(product);
-                                        }}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter' || event.key === ' ') {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                setEditingProduct(product);
-                                            }
-                                        }}
-                                        title="Editar esta luminaria"
-                                        className="shrink-0 rounded p-1 text-gray-500 dark:text-gray-500 transition-colors hover:bg-amber-900/40 hover:text-amber-400 focus-visible:outline-2 focus-visible:outline-amber-400"
-                                    >
-                                        <Pencil size={12} />
-                                    </span>
-                                )}
+                                        }
+                                    }}
+                                    title="Editar esta luminaria"
+                                    className="shrink-0 rounded p-1 text-gray-500 dark:text-gray-500 transition-colors hover:bg-amber-900/40 hover:text-amber-400 focus-visible:outline-2 focus-visible:outline-amber-400"
+                                >
+                                    <Pencil size={12} />
+                                </span>
                                 {product.is_owner && (
                                     <span
                                         role="button"
@@ -320,7 +318,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                             className={`group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                                 isActive
                                     ? 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
-                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-slate-300 dark:border-slate-700 dark:hover:bg-slate-200 dark:bg-slate-800/70'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800/70 dark:hover:text-slate-100'
                             }`}
                         >
                             <span className={`shrink-0 ${isActive ? 'text-amber-400' : 'text-gray-500 dark:text-gray-500 group-hover:text-gray-600 dark:text-gray-600 dark:text-gray-400'}`}>
@@ -345,7 +343,7 @@ export function LuminaireCatalogSection({ isCompactFixtureGrid, ...hookOptions }
                         type="button"
                         onClick={() => setFixturePage((page) => Math.max(1, page - 1))}
                         disabled={fixturePage === 1}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-200 dark:bg-slate-800 dark:hover:text-slate-900 dark:text-slate-100"
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
                     >
                         Anterior
                     </button>

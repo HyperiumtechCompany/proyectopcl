@@ -44,6 +44,18 @@ import {
     markDialuxPlanSyncOk,
 } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
 import { detectDxfUnitFromHeader } from '@/pages/dialux/hooks/dxfFallbackParser';
+import { findAmbientSpaceAtPoint } from '@/pages/dialux/hooks/ambientSpaces';
+import { polygonCentroid } from '@/pages/dialux/hooks/fixtureGrid';
+import {
+    calculateObstacleAwareFixtureGridPositions,
+    computeFixtureGroupAreaVertices,
+    sortFixturesRowMajor,
+} from '@/pages/dialux/hooks/fixtureGridObstacles';
+import {
+    checkGroupSymmetry,
+    type SymmetryCheckResult,
+    type SymmetrySuggestion,
+} from '@/pages/dialux/hooks/fixtureGridSymmetry';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
 import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { parseIfcFileForImport, type IfcImportPreview } from '@/pages/dialux/hooks/ifcImport/ifcImportPipeline';
@@ -98,6 +110,113 @@ export const Toolbar: React.FC = () => {
     const projectName = store.project?.name ?? '';
     const projectId = store.project?.id ?? null;
     const activeScene = store.activeScene();
+
+    /** Aviso de simetria entre modulos adyacentes (ver fixtureGridSymmetry.ts) -- borrador de UI puro, no persiste nada. */
+    const [symmetryWarning, setSymmetryWarning] = useState<SymmetryCheckResult | null>(null);
+
+    /**
+     * Confirma el area de proyeccion recien dibujada (herramienta Luminarias,
+     * modo "Dibujar area"): recien AHORA se crean las luminarias reales,
+     * usando el poligono libre que el usuario cerro en el plano como
+     * `ambientVertices` -- nunca antes (el poligono en si no persiste nada).
+     * Al terminar, revisa si el nuevo grupo forma una secuencia asimetrica
+     * con modulos vecinos ya existentes (misma fila/columna, adyacentes).
+     */
+    const handleConfirmFixtureGridArea = useCallback(() => {
+        const vertices = store.ui.pendingFixtureGridArea;
+        if (!vertices || vertices.length < 3) return;
+        const center = polygonCentroid(vertices);
+        const scene = store.activeScene();
+        const ambient = scene ? findAmbientSpaceAtPoint(scene, center) : null;
+        const roomId = ambient?.sourceRoom.id;
+        const newIds = store.addFixtureGrid({
+            roomId,
+            rows: store.ui.fixtureGridRows,
+            columns: store.ui.fixtureGridCols,
+            fixtureTemplate: store.ui.fixtureTemplate,
+            ambientVertices: vertices,
+        });
+        store.setPendingFixtureGridArea(null);
+        if (newIds.length > 0) {
+            store.setSelectedId(null);
+            store.setSelectedFixtureIds(newIds);
+            store.setTool('select');
+
+            const freshScene = store.activeScene();
+            const newGroupId = freshScene?.fixtures.find((f) => newIds.includes(f.id))?.gridGroupId;
+            if (freshScene && newGroupId) {
+                setSymmetryWarning(checkGroupSymmetry(freshScene.fixtures, roomId, newGroupId));
+            }
+        } else {
+            alert('No se pudo generar la grilla. El área proyectada puede ser muy pequeña.');
+        }
+    }, [store]);
+
+    /**
+     * Aplica una correccion de simetria: por cada modulo afectado, recalcula
+     * su grilla dentro del area que hoy ocupa con la nueva forma (rows x
+     * columns) propuesta. Si la nueva forma implica MAS luminarias que las
+     * que el grupo tiene hoy, clona el template del grupo para las nuevas;
+     * si implica MENOS, borra el excedente (siempre el mismo template/
+     * fabricante que ya tenia el grupo, nunca cambia el modelo elegido).
+     * Todo el ajuste (multiples grupos) es un solo paso de undo.
+     */
+    const handleApplySymmetryCorrection = useCallback(
+        (suggestion: SymmetrySuggestion) => {
+            const scene = store.activeScene();
+            if (!scene) return;
+            store.beginHistoryGesture();
+            for (const correction of suggestion.corrections) {
+                const groupFixtures = sortFixturesRowMajor(
+                    scene.fixtures.filter((f) => f.gridGroupId === correction.groupId),
+                );
+                if (groupFixtures.length === 0) continue;
+                const areaVertices = computeFixtureGroupAreaVertices(groupFixtures);
+                const mountingHeight = groupFixtures[0].z ?? groupFixtures[0].mountingHeight ?? 2.7;
+                const positions = calculateObstacleAwareFixtureGridPositions(
+                    areaVertices,
+                    scene.structuralObstacles ?? [],
+                    mountingHeight,
+                    correction.rows,
+                    correction.columns,
+                );
+                const targetCount = correction.rows * correction.columns;
+                if (positions.length !== targetCount) continue;
+
+                const shared = { gridRows: correction.rows, gridColumns: correction.columns };
+                if (targetCount <= groupFixtures.length) {
+                    const keep = groupFixtures.slice(0, targetCount);
+                    const remove = groupFixtures.slice(targetCount);
+                    keep.forEach((f, i) =>
+                        store.updateFixture(f.id, { x: positions[i].x, y: positions[i].y, ...shared }),
+                    );
+                    remove.forEach((f) => store.removeObject(f.id));
+                } else {
+                    groupFixtures.forEach((f, i) =>
+                        store.updateFixture(f.id, { x: positions[i].x, y: positions[i].y, ...shared }),
+                    );
+                    const { id: _templateId, ...templateRest } = groupFixtures[0];
+                    const baseName = templateRest.name.replace(/\s*\[\d+\]\s*$/, '');
+                    for (let i = groupFixtures.length; i < targetCount; i++) {
+                        store.addFixture({
+                            ...templateRest,
+                            ...shared,
+                            name: `${baseName} [${i + 1}]`,
+                            x: positions[i].x,
+                            y: positions[i].y,
+                        });
+                    }
+                }
+            }
+            store.endHistoryGesture();
+            setSymmetryWarning(null);
+        },
+        [store],
+    );
+
+    const handleCancelFixtureGridArea = useCallback(() => {
+        store.setPendingFixtureGridArea(null);
+    }, [store]);
     const setProjectName = useCallback(
         (name: string) => {
             if (!store.project) return;
@@ -632,7 +751,7 @@ export const Toolbar: React.FC = () => {
                     icon={<Building2 size={12} />}
                     anchorRef={refs.construccion}
                     onClose={closePanel}
-                    width="md"
+                    width="lg"
                 >
                     <ConstruccionPanel
                         activeTool={activeTool}
@@ -653,7 +772,7 @@ export const Toolbar: React.FC = () => {
                     icon={<Lightbulb size={13} />}
                     anchorRef={refs.luz}
                     onClose={closePanel}
-                    width="md"
+                    width="lg"
                 >
                     <LuzPanel
                         activeTool={activeTool}
@@ -666,6 +785,11 @@ export const Toolbar: React.FC = () => {
                         gridCols={store.ui.fixtureGridCols}
                         onSetRows={store.setFixtureGridRows}
                         onSetCols={store.setFixtureGridCols}
+                        areaMode={store.ui.fixtureGridAreaMode}
+                        onSetAreaMode={store.setFixtureGridAreaMode}
+                        pendingArea={store.ui.pendingFixtureGridArea}
+                        onConfirmPendingArea={handleConfirmFixtureGridArea}
+                        onCancelPendingArea={handleCancelFixtureGridArea}
                         onOpenImportModal={() =>
                             setIsImportLuminairesModalOpen(true)
                         }
@@ -998,6 +1122,57 @@ export const Toolbar: React.FC = () => {
                 open={isImportLuminairesModalOpen}
                 onOpenChange={setIsImportLuminairesModalOpen}
             />
+
+            {/* ── Asesor de simetría entre módulos de luminarias adyacentes ── */}
+            {symmetryWarning && (
+                <Dialog open onOpenChange={(open) => !open && setSymmetryWarning(null)}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Simetría entre módulos</DialogTitle>
+                            <DialogDescription>
+                                {symmetryWarning.sequence.length} módulos adyacentes con formas distintas:{' '}
+                                {symmetryWarning.sequence.map((m) => `${m.columns}×${m.rows}`).join(' — ')}. Esto
+                                rompe la simetría visual y lumínica del conjunto.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => handleApplySymmetryCorrection(symmetryWarning.mirror)}
+                                className="flex w-full items-center justify-between gap-2 rounded border border-cyan-500/40 bg-cyan-950/20 px-3 py-2 text-left text-[11px] text-cyan-200 transition-colors hover:bg-cyan-900/30"
+                            >
+                                <span>
+                                    <span className="block font-semibold">Simetría espejo (recomendada)</span>
+                                    <span className="block text-[10px] text-cyan-400">{symmetryWarning.mirror.label}</span>
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleApplySymmetryCorrection(symmetryWarning.uniform)}
+                                className="flex w-full items-center justify-between gap-2 rounded border border-gray-500/40 bg-gray-800/30 px-3 py-2 text-left text-[11px] text-gray-200 transition-colors hover:bg-gray-700/40"
+                            >
+                                <span>
+                                    <span className="block font-semibold">Uniformidad absoluta</span>
+                                    <span className="block text-[10px] text-gray-400">{symmetryWarning.uniform.label}</span>
+                                </span>
+                            </button>
+                            {symmetryWarning.suggestProgression && (
+                                <p className="rounded border border-gray-700/40 bg-gray-900/30 px-3 py-2 text-[10px] leading-snug text-gray-500">
+                                    También podrías usar una progresión escalonada (chico → grande → chico) ajustando cada módulo a mano desde su panel "Organización" — no tiene una única solución correcta, así que no se aplica con un clic.
+                                </p>
+                            )}
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setSymmetryWarning(null)}
+                            >
+                                Dejar como está
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </>
     );
 };

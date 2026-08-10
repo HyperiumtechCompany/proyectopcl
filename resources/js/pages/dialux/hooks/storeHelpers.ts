@@ -116,6 +116,11 @@ export function rescaleSceneEntities(scene: Scene, ratio: number): Scene {
             vertices: p.vertices.map((v) => ({ x: v.x * ratio, y: v.y * ratio })),
             // thickness is explicitly in meters, do not scale
         })),
+        structuralObstacles: (scene.structuralObstacles ?? []).map((o) => ({
+            ...o,
+            vertices: o.vertices.map((v) => ({ x: v.x * ratio, y: v.y * ratio })),
+            // height/elevation son verticales, ya en metros reales: no se reescalan con la calibracion 2D
+        })),
     };
 }
 

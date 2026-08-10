@@ -25,13 +25,11 @@ const cadErr = console.error.bind(console, '[mlightcad]');
 
 // â”€â”€â”€ ConfiguraciÃ³n de workers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// dxfParser y dwgParser son workers DISTINTOS: el de DXF parsea texto, el de
-// DWG parsea binario (libredwg). Antes ambos apuntaban al mismo script de
-// DWG, así que el DXF mínimo de bootstrap se parseaba mal (el resultado no
-// traía `tables`) y la etapa de conversión "FONT" fallaba con
-// "Cannot read properties of undefined (reading 'STYLE')".
+// Desde @mlightcad/cad-simple-viewer 1.5.10 ya no existe un worker dedicado
+// para DXF: el converter manager lo maneja de forma nativa en el hilo
+// principal. Solo quedan dos workers configurables: dwgParser (binario,
+// libredwg) y mtextRender (layout/shaping de texto).
 const WORKER_URLS = {
-    dxfParser: '/cad-workers/dxf-parser-worker.js',
     dwgParser: '/cad-workers/libredwg-parser-worker.js',
     mtextRender: '/cad-workers/mtext-renderer-worker.js',
 };
@@ -213,7 +211,13 @@ function getOrCreateDocManager(container?: HTMLElement): AcApDocManager {
             container,
             autoResize: true,
             useMainThreadDraw: false,
-            notLoadDefaultFonts: false,
+            // v1.5.10 renombró `notLoadDefaultFonts` (eliminada) a
+            // `preloadDefaultFonts` con semántica invertida y default `false`
+            // (ahora las fuentes cargan de forma perezosa vía lazyFontLoading).
+            // Se fuerza `true` para preservar la carga eager original: dado el
+            // historial de bugs de fuentes en este proyecto (404 de fonts.json,
+            // texto/cotas no dibujados), la carga perezosa no se ha validado aún.
+            preloadDefaultFonts: true,
             baseUrl: FONTS_BASE_URL,
         }) as AcApDocManager;
     }

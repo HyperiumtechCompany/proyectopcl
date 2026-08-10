@@ -1,3 +1,4 @@
+import { normalizeGuideBoundaries } from '../fixtureGrid';
 import type {
     AngleSnapMode,
     Conductor,
@@ -10,10 +11,17 @@ import type {
     JunctionBox,
     LightSwitch,
     SidebarTab,
+    Vertex,
     Window,
 } from '../types';
+import type { FixtureGridGuideEditorState } from '../useEditorStore';
 import type { EditorSlice } from './sliceTypes';
 import { classifyConductorLayer } from '@/pages/dialux/electrical/electricalLayerVisibility';
+
+/** Fronteras internas (sin 0/1) para una division uniforme -- estado inicial del editor de guias. */
+function uniformGuides(cellCount: number): number[] {
+    return normalizeGuideBoundaries(undefined, Math.max(1, Math.round(cellCount)) - 1).slice(1, -1);
+}
 
 export interface UiSlice {
     setTool: (tool: DrawTool) => void;
@@ -43,6 +51,14 @@ export interface UiSlice {
     setRoomTypeTemplate: (type: 'room' | 'ambient') => void;
     setFixtureGridRows: (rows: number) => void;
     setFixtureGridCols: (cols: number) => void;
+    /** Abre (o reinicia con division uniforme) el editor de lineas guia para este room/rows/columns. */
+    openFixtureGridGuideEditor: (roomId: string, rows: number, columns: number, vertices: Vertex[]) => void;
+    closeFixtureGridGuideEditor: () => void;
+    /** Arrastra una guia individual; se clampa contra sus vecinas para que nunca se crucen. */
+    setFixtureGridGuide: (axis: 'row' | 'column', index: number, value: number) => void;
+    setFixtureGridAreaMode: (mode: 'room' | 'draw') => void;
+    /** Poligono recien cerrado en modo 'draw', esperando confirmacion de cantidad. `null` para cancelar/limpiar. */
+    setPendingFixtureGridArea: (vertices: Vertex[] | null) => void;
 }
 
 const ELECTRICAL_TOOLS = new Set<DrawTool>([
@@ -201,4 +217,50 @@ export const createUiSlice: EditorSlice<UiSlice> = (set, get) => ({
         set((s) => ({
             ui: { ...s.ui, fixtureGridCols: Math.max(1, cols) },
         })),
+    openFixtureGridGuideEditor: (roomId, rows, columns, vertices) =>
+        set((s) => ({
+            ui: {
+                ...s.ui,
+                fixtureGridGuideEditor: {
+                    roomId,
+                    rows: Math.max(1, Math.round(rows)),
+                    columns: Math.max(1, Math.round(columns)),
+                    vertices,
+                    rowGuides: uniformGuides(rows),
+                    columnGuides: uniformGuides(columns),
+                },
+            },
+        })),
+    closeFixtureGridGuideEditor: () =>
+        set((s) => ({ ui: { ...s.ui, fixtureGridGuideEditor: null } })),
+    setFixtureGridGuide: (axis, index, value) =>
+        set((s) => {
+            const editor = s.ui.fixtureGridGuideEditor;
+            if (!editor) return s;
+            const key = axis === 'row' ? 'rowGuides' : 'columnGuides';
+            const guides = [...editor[key]];
+            if (index < 0 || index >= guides.length) return s;
+
+            // Margen minimo (fraccion del bbox) para que dos guias nunca se
+            // crucen ni colapsen una celda a ancho ~0 durante el arrastre.
+            const MIN_GAP = 0.02;
+            const lowerBound = index === 0 ? MIN_GAP : guides[index - 1] + MIN_GAP;
+            const upperBound = index === guides.length - 1 ? 1 - MIN_GAP : guides[index + 1] - MIN_GAP;
+            guides[index] = Math.min(upperBound, Math.max(lowerBound, value));
+
+            const nextEditor: FixtureGridGuideEditorState = { ...editor, [key]: guides };
+            return { ui: { ...s.ui, fixtureGridGuideEditor: nextEditor } };
+        }),
+    setFixtureGridAreaMode: (mode) =>
+        set((s) => ({
+            ui: {
+                ...s.ui,
+                fixtureGridAreaMode: mode,
+                // Cambiar de modo a mitad de un area pendiente sin confirmar
+                // la dejaria huerfana (referida a un modo que ya no aplica).
+                pendingFixtureGridArea: null,
+            },
+        })),
+    setPendingFixtureGridArea: (vertices) =>
+        set((s) => ({ ui: { ...s.ui, pendingFixtureGridArea: vertices } })),
 });

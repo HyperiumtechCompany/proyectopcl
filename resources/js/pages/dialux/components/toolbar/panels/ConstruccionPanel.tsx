@@ -1,5 +1,6 @@
 import {
     AppWindow,
+    Box,
     Building2,
     DoorOpen,
     Layers,
@@ -56,6 +57,12 @@ const SPACE_TOOLS: Array<{
         icon: <Triangle size={13} />,
         tip: 'Escalera (E)',
         sublabel: 'Caja de escalera',
+    },
+    {
+        tool: 'structural-obstacle',
+        icon: <Box size={13} />,
+        tip: 'Columna / obstáculo',
+        sublabel: 'Resta área a la grilla',
     },
 ];
 

@@ -4,6 +4,7 @@
  */
 
 import React, { memo } from 'react';
+import { calculateFixtureGridPositions } from '@/pages/dialux/hooks/fixtureGrid';
 import type { CanvasPoint } from '@/pages/dialux/hooks/useCanvasInteraction';
 import { pointsToSvgString, safeNum } from './canvasUtils';
 
@@ -12,6 +13,11 @@ interface Props {
     roomPreviewPoint: CanvasPoint | null;
     wallPreview: CanvasPoint[] | null;
     canopyPreview: { start: CanvasPoint; end: CanvasPoint } | null;
+    /** Poligono de proyeccion de luminarias ya cerrado, esperando confirmacion (herramienta 'fixture-grid', modo 'draw') */
+    pendingFixtureGridArea?: CanvasPoint[] | null;
+    /** Filas/columnas objetivo, para previsualizar los centros proyectados dentro del area */
+    fixtureGridAreaRows?: number;
+    fixtureGridAreaColumns?: number;
     screenPoint: (p: { x: number; y: number }) => { x: number; y: number };
     measureCadDistanceFromScreen?: (
         p1: CanvasPoint,
@@ -94,6 +100,9 @@ export const OverlayPreviews = memo(function OverlayPreviews({
     roomPreviewPoint,
     wallPreview,
     canopyPreview,
+    pendingFixtureGridArea,
+    fixtureGridAreaRows = 1,
+    fixtureGridAreaColumns = 1,
     screenPoint,
     measureCadDistanceFromScreen,
     angleSnapMode = 'free',
@@ -228,6 +237,32 @@ export const OverlayPreviews = memo(function OverlayPreviews({
                     )}
                 </>
             )}
+
+            {pendingFixtureGridArea && pendingFixtureGridArea.length >= 3 &&
+                (() => {
+                    const screenPoly = pendingFixtureGridArea.map(screenPoint);
+                    const previewCenters = calculateFixtureGridPositions(
+                        pendingFixtureGridArea,
+                        fixtureGridAreaRows,
+                        fixtureGridAreaColumns,
+                    ).map(screenPoint);
+                    return (
+                        <>
+                            <polygon
+                                points={pointsToSvgString(screenPoly)}
+                                fill="#22d3ee" fillOpacity={0.1}
+                                stroke="#22d3ee" strokeWidth={2} strokeDasharray="5 4"
+                            />
+                            {previewCenters.map((p, i) => (
+                                <g key={i}>
+                                    <circle cx={safeNum(p.x)} cy={safeNum(p.y)} r={9} fill="#0891b2" fillOpacity={0.3} stroke="#22d3ee" strokeWidth={1.5} />
+                                    <line x1={safeNum(p.x - 5)} y1={safeNum(p.y)} x2={safeNum(p.x + 5)} y2={safeNum(p.y)} stroke="#22d3ee" strokeWidth={1.5} />
+                                    <line x1={safeNum(p.x)} y1={safeNum(p.y - 5)} x2={safeNum(p.x)} y2={safeNum(p.y + 5)} stroke="#22d3ee" strokeWidth={1.5} />
+                                </g>
+                            ))}
+                        </>
+                    );
+                })()}
         </g>
     );
 });
