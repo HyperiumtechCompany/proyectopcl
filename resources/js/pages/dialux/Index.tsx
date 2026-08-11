@@ -1,7 +1,16 @@
-import { Head, router } from '@inertiajs/react';
-import { Lightbulb, Pencil, Plus, Search, Trash2, Zap } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import {
+    Boxes,
+    Lightbulb,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    Zap,
+} from 'lucide-react';
 import { useState } from 'react';
 import Swal from 'sweetalert2';
+import { index as dialuxV2Index } from '@/actions/App/Http/Controllers/Dialux/V2/ProjectController';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 
@@ -21,7 +30,8 @@ interface PageProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'DIAlux', href: '/dialux' }];
 
-const dialuxProjectUrl = (id?: number) => (id === undefined ? '/dialux' : `/dialux/${id}`);
+const dialuxProjectUrl = (id?: number) =>
+    id === undefined ? '/dialux' : `/dialux/${id}`;
 
 const swalDark = {
     background: '#101218',
@@ -39,7 +49,8 @@ async function promptNombre(initial?: string): Promise<string | undefined> {
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#2563eb',
         ...swalDark,
-        inputValidator: (value) => (value.trim() ? undefined : 'El nombre es obligatorio'),
+        inputValidator: (value) =>
+            value.trim() ? undefined : 'El nombre es obligatorio',
     });
 
     return value ? (value as string).trim() : undefined;
@@ -48,7 +59,9 @@ async function promptNombre(initial?: string): Promise<string | undefined> {
 export default function DialuxIndex({ proyectos }: PageProps) {
     const [search, setSearch] = useState('');
 
-    const filtered = proyectos.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+    const filtered = proyectos.filter((p) =>
+        p.name.toLowerCase().includes(search.toLowerCase()),
+    );
 
     const handleCreate = async () => {
         const name = await promptNombre();
@@ -89,24 +102,38 @@ export default function DialuxIndex({ proyectos }: PageProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="DIAlux" />
 
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 dark:bg-slate-950 px-4 py-6 text-slate-900 dark:text-slate-100 sm:px-6">
-                <div className="mx-auto w-full max-w-8xl">
+            <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-slate-300 px-4 py-6 text-slate-900 sm:px-6 dark:bg-slate-950 dark:text-slate-100">
+                <div className="max-w-8xl mx-auto w-full">
                     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-600 shadow-lg shadow-amber-950/40">
                                 <Lightbulb className="h-5 w-5 text-white" />
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-white">DIAlux</h1>
-                                <p className="text-sm text-zinc-400">Editor lumínico 2D/3D — tus proyectos</p>
+                                <h1 className="text-xl font-bold text-white">
+                                    DIAlux
+                                </h1>
+                                <p className="text-sm text-zinc-400">
+                                    Editor lumínico 2D/3D — tus proyectos
+                                </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleCreate}
-                            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-amber-950/30 transition hover:bg-amber-500 active:scale-[0.97]">
-                            <Plus className="h-4 w-4" />
-                            Nuevo proyecto
-                        </button>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Link
+                                href={dialuxV2Index()}
+                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                            >
+                                <Boxes className="h-4 w-4" />
+                                Abrir DIALux v2
+                            </Link>
+                            <button
+                                onClick={handleCreate}
+                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-amber-950/30 transition hover:bg-amber-500 active:scale-[0.97]"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Nuevo proyecto v1
+                            </button>
+                        </div>
                     </div>
 
                     {proyectos.length > 0 && (
@@ -125,9 +152,17 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                     {proyectos.length === 0 ? (
                         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-[#101218] py-16 text-center">
                             <Lightbulb className="mb-3 h-10 w-10 text-zinc-600" />
-                            <p className="text-sm font-medium text-zinc-300">Aún no tienes proyectos DIAlux</p>
-                            <p className="mt-1 text-xs text-zinc-500">Crea tu primer proyecto para empezar a dibujar y calcular.</p>
-                            <button onClick={handleCreate} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-500">
+                            <p className="text-sm font-medium text-zinc-300">
+                                Aún no tienes proyectos DIAlux
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                                Crea tu primer proyecto para empezar a dibujar y
+                                calcular.
+                            </p>
+                            <button
+                                onClick={handleCreate}
+                                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-500"
+                            >
                                 <Plus className="h-4 w-4" />
                                 Crear proyecto
                             </button>
@@ -137,19 +172,29 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                             {filtered.map((proyecto) => (
                                 <div
                                     key={proyecto.id}
-                                    onClick={() => router.get(dialuxProjectUrl(proyecto.id))}
-                                    className="group relative cursor-pointer rounded-xl border border-white/10 bg-[#101218] p-4 shadow-sm transition-colors hover:border-white/25">
+                                    onClick={() =>
+                                        router.get(
+                                            dialuxProjectUrl(proyecto.id),
+                                        )
+                                    }
+                                    className="group relative cursor-pointer rounded-xl border border-white/10 bg-[#101218] p-4 shadow-sm transition-colors hover:border-white/25"
+                                >
                                     <div className="mb-2 flex items-start justify-between gap-2">
-                                        <h3 className="truncate text-sm font-semibold text-zinc-100">{proyecto.name}</h3>
+                                        <h3 className="truncate text-sm font-semibold text-zinc-100">
+                                            {proyecto.name}
+                                        </h3>
                                         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    router.get(`/dialux/${proyecto.id}/electrico`);
+                                                    router.get(
+                                                        `/dialux/${proyecto.id}/electrico`,
+                                                    );
                                                 }}
                                                 className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-amber-400"
                                                 aria-label="Módulo eléctrico"
-                                                title="Módulo eléctrico (luminarias, tomacorrientes, tableros)">
+                                                title="Módulo eléctrico (luminarias, tomacorrientes, tableros)"
+                                            >
                                                 <Zap size={14} />
                                             </button>
                                             <button
@@ -158,7 +203,8 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                                                     void handleRename(proyecto);
                                                 }}
                                                 className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                                                aria-label="Renombrar proyecto">
+                                                aria-label="Renombrar proyecto"
+                                            >
                                                 <Pencil size={14} />
                                             </button>
                                             <button
@@ -167,7 +213,8 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                                                     void handleDelete(proyecto);
                                                 }}
                                                 className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-rose-400"
-                                                aria-label="Eliminar proyecto">
+                                                aria-label="Eliminar proyecto"
+                                            >
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -180,8 +227,12 @@ export default function DialuxIndex({ proyectos }: PageProps) {
                                     )}
 
                                     <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
-                                        <span className="shrink-0 whitespace-nowrap">Creado {proyecto.created_at}</span>
-                                        <span className="truncate whitespace-nowrap">Actualizado {proyecto.updated_at}</span>
+                                        <span className="shrink-0 whitespace-nowrap">
+                                            Creado {proyecto.created_at}
+                                        </span>
+                                        <span className="truncate whitespace-nowrap">
+                                            Actualizado {proyecto.updated_at}
+                                        </span>
                                     </div>
                                 </div>
                             ))}

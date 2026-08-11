@@ -688,13 +688,17 @@ El store actual ya trabaja con un `Project` que contiene `scenes[]`. La adaptaci
 > cupos adicionales. Las columnas y controladores v1 permanecen disponibles.
 
 ### Fase 4 — Interfaz de Navegación (5-6 días)
-- [ ] Nueva página `dialux/Project.tsx` — dashboard del proyecto con sidebar
-- [ ] Componente `ModuleSidebar.tsx`
-- [ ] Componente `ModuleCard.tsx` con menú contextual
-- [ ] Renombrar/adaptar `Show.tsx` → `Module.tsx` para editor por módulo
-- [ ] Adaptar `useDialuxProjectSync` → `useDialuxModuleSync` (autosave por módulo)
-- [ ] Actualizar breadcrumbs: `DIAlux > Proyecto > Módulo`
-- [ ] Adaptar store Zustand para recibir `moduleId`
+- [x] Nueva página `dialux/v2/Project.tsx` — dashboard del proyecto con sidebar
+- [x] Componente `ModuleSidebar.tsx`
+- [x] Componente `ModuleCard.tsx` con menú contextual
+- [x] Adaptar `Show.tsx` → `dialux/v2/Module.tsx` para editor por módulo
+- [x] Adaptar `useDialuxProjectSync` → `useDialuxModuleSync` (autosave por módulo)
+- [x] Actualizar breadcrumbs: `DIALux v2 > Proyecto > Módulo`
+- [x] Adaptar store Zustand para recibir `moduleId`
+
+> [!NOTE]
+> La interfaz v2 vive en `resources/js/pages/dialux/v2` y `/dialux-v2`.
+> `dialux/Show.tsx`, su autosave y las rutas `/dialux` de v1 no se modifican.
 
 ### Fase 5 — Migración de Proyectos Existentes (2-3 días)
 - [ ] Migración que convierte cada proyecto v1 en proyecto + 1 módulo

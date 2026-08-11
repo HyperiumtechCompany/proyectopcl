@@ -51,25 +51,12 @@ export type DrawTool =
     | 'elec-water-heater';
 
 export type SidebarTab =
-    | 'catalog'
-    | 'objects'
-    | 'properties'
-    | 'results'
-    | 'legend';
+    'catalog' | 'objects' | 'properties' | 'results' | 'legend';
 export type ElectricalLayerGroup =
-    | 'cad'
-    | 'fixtures'
-    | 'wires'
-    | 'switches'
-    | 'outlets'
-    | 'panels';
+    'cad' | 'fixtures' | 'wires' | 'switches' | 'outlets' | 'panels';
 export type IsoluxMode = 'functional' | 'waves' | 'temperature';
 export type AngleSnapMode =
-    | 'smart'
-    | 'free'
-    | 'orthogonal'
-    | 'diagonal'
-    | 'fine';
+    'smart' | 'free' | 'orthogonal' | 'diagonal' | 'fine';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GeometrÃƒÂ­a 2D Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -320,7 +307,13 @@ export interface Room {
      *   'antipanic-area'   → Fase 14: área antipánico (EN 1838 únicamente,
      *                        0.5 lx — RNE A.130 no define esta categoría).
      */
-    roomType?: 'room' | 'ambient' | 'corridor' | 'stair' | 'evacuation-route' | 'antipanic-area';
+    roomType?:
+        | 'room'
+        | 'ambient'
+        | 'corridor'
+        | 'stair'
+        | 'evacuation-route'
+        | 'antipanic-area';
     /** Polígono arbitrario en metros en el plano XY de la escena */
     vertices: Vertex[];
     height: number; // metros
@@ -477,12 +470,7 @@ export interface Door {
      *   'opening'  Ã¢â€ â€™ solo vano (hueco sin panel ni marco)
      */
     doorType?:
-        | 'single'
-        | 'double'
-        | 'sliding'
-        | 'folding'
-        | 'bathroom'
-        | 'opening';
+        'single' | 'double' | 'sliding' | 'folding' | 'bathroom' | 'opening';
     openingDirection?: 'inward' | 'outward';
     /** Lado donde estÃƒÂ¡ la bisagra: 'left' = inicio de la pared, 'right' = fin */
     hingeDirection?: 'left' | 'right';
@@ -572,7 +560,12 @@ export interface Fixture {
     /** radius: solo para fixtureShape 'round'/'cylindrical' — diámetro real
      * del producto. Cuando está presente tiene prioridad sobre length/width
      * al dibujar el símbolo en 2D (ver OverlayFixtures.getScreenHalfDims). */
-    dimensions?: { length: number; width: number; height: number; radius?: number }; // En metros
+    dimensions?: {
+        length: number;
+        width: number;
+        height: number;
+        radius?: number;
+    }; // En metros
     brand?: string;
     articleNumber?: string;
     productId?: number;
@@ -609,7 +602,11 @@ export interface Fixture {
             disclaimer: string;
             shr: number;
             reflectances: { ceiling: number; wall: number; floor: number };
-            entries: Array<{ roomLabel: string; ugrCrosswise: number | null; ugrEndwise: number | null }>;
+            entries: Array<{
+                roomLabel: string;
+                ugrCrosswise: number | null;
+                ugrEndwise: number | null;
+            }>;
         } | null;
     } | null;
     reportAssets?: {
