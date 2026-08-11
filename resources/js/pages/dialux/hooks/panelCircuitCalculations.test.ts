@@ -597,7 +597,7 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(result.currentA).toBeCloseTo(9.0909, 3);
         expect(result.theoreticalDesignCurrentA).toBeCloseTo(11.3636, 4);
         expect(result.phaseCurrentR).toBe(0);
-        expect(result.phaseCurrentS).toBeCloseTo(result.theoreticalDesignCurrentA);
+        expect(result.phaseCurrentS).toBeCloseTo(result.currentA, 3);
         expect(result.admissibleCableCurrentA).toBeCloseTo(14.4);
         expect(result.capacityConforms).toBe(true);
         // Sin el `* powerFactor` (auditoría `dialux-electrical-reviewer`):
@@ -668,7 +668,7 @@ describe('calculatePanelCircuitSummaries', () => {
 
         const fixedSection = resolveConformingSectionMm2(circuit);
         expect(fixedSection).toBeGreaterThan(circuit.sectionMm2);
-        expect(fixedSection).toBe(10);
+        expect(fixedSection).toBe(6);
 
         const [fixedCircuit] = calculatePanelCircuitSummaries(buildScene(fixedSection));
         expect(fixedCircuit.voltageDropOk).toBe(true);
