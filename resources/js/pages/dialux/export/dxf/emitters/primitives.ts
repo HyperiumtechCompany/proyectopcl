@@ -134,6 +134,14 @@ export function dxfSolid(
     p(out, 13, f(p4x)); p(out, 23, f(p4y)); p(out, 33, '0.0');
 }
 
+/** Native POINT entity — válida en R12/AC1009. Visibilidad depende del PDMODE del visor. */
+export function dxfPoint(out: DxfLines, layer: string, x: number, y: number, color?: number): void {
+    p(out, 0, 'POINT');
+    p(out, 8, layer);
+    if (color !== undefined) p(out, 62, color);
+    p(out, 10, f(x)); p(out, 20, f(y)); p(out, 30, '0.0');
+}
+
 export function dxfArc(
     out: DxfLines, layer: string,
     cx: number, cy: number, r: number,

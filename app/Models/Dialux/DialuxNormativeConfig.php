@@ -40,6 +40,7 @@ class DialuxNormativeConfig extends Model
 
     protected $fillable = [
         'dialux_project_id',
+        'dialux_module_id',
         'user_id',
         'country_code',
         'region',
@@ -77,5 +78,10 @@ class DialuxNormativeConfig extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(DialuxModule::class, 'dialux_module_id');
     }
 }

@@ -17,24 +17,24 @@ interface Props {
  * screenDistance() converts these to screen pixels at the current zoom/calibration.
  */
 const PHYS: Record<ElectricalDeviceType, { hw: number; hh: number }> = {
-    meter:             { hw: 0.30, hh: 0.20 },
-    main_panel:        { hw: 0.40, hh: 0.25 },
-    sub_panel:         { hw: 0.35, hh: 0.20 },
-    transfer_switch:   { hw: 0.30, hh: 0.20 },
-    arrival_panel:     { hw: 0.35, hh: 0.20 },
-    junction_box:      { hw: 0.15, hh: 0.15 },
-    earth_pit:         { hw: 0.20, hh: 0.20 },
-    facp:              { hw: 0.35, hh: 0.20 },
-    outlet_floor:      { hw: 0.15, hh: 0.15 },
-    outlet_initial:    { hw: 0.15, hh: 0.15 },
-    outlet_high_180:   { hw: 0.15, hh: 0.15 },
-    outlet_floor_box:  { hw: 0.15, hh: 0.15 },
-    outlet_waterproof: { hw: 0.15, hh: 0.15 },
-    outlet_ceiling:    { hw: 0.15, hh: 0.15 },
-    outlet_rack:       { hw: 0.15, hh: 0.15 },
-    water_heater_30l:  { hw: 0.20, hh: 0.12 },
+    meter:             { hw: 0.15, hh: 0.10 },
+    main_panel:        { hw: 0.30, hh: 0.15 },
+    sub_panel:         { hw: 0.25, hh: 0.15 },
+    transfer_switch:   { hw: 0.20, hh: 0.15 },
+    arrival_panel:     { hw: 0.25, hh: 0.15 },
+    junction_box:      { hw: 0.075, hh: 0.075 },
+    earth_pit:         { hw: 0.15, hh: 0.15 },
+    facp:              { hw: 0.20, hh: 0.15 },
+    outlet_floor:      { hw: 0.075, hh: 0.075 },
+    outlet_initial:    { hw: 0.075, hh: 0.075 },
+    outlet_high_180:   { hw: 0.075, hh: 0.075 },
+    outlet_floor_box:  { hw: 0.075, hh: 0.075 },
+    outlet_waterproof: { hw: 0.075, hh: 0.075 },
+    outlet_ceiling:    { hw: 0.075, hh: 0.075 },
+    outlet_rack:       { hw: 0.075, hh: 0.075 },
+    water_heater_30l:  { hw: 0.15, hh: 0.10 },
 };
-const MIN_PX = 8;
+const MIN_PX = 6;
 
 // ─── Symbol renderers ─────────────────────────────────────────────────────────
 

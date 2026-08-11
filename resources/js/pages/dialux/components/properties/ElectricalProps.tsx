@@ -1,3 +1,4 @@
+import React from 'react';
 import { Move, Trash2, Zap } from 'lucide-react';
 import type {
     Conductor,
@@ -92,24 +93,31 @@ export function ConductorProps({
     circuitCount = 1,
     circuitConductorIds,
     onUpdate,
+    onUpdateIndividual,
     onDelete,
 }: {
     conductor: Conductor;
     circuitCount?: number;
     circuitConductorIds?: string[];
     onUpdate: (patch: Partial<Omit<Conductor, 'id'>>) => void;
+    onUpdateIndividual?: (patch: Partial<Omit<Conductor, 'id'>>) => void;
     onDelete: () => void;
 }) {
+    const [applyToGroup, setApplyToGroup] = React.useState(true);
     const store = useEditorStore();
-    const wireOptions = CONDUCTOR_WIRE_OPTIONS.map(({ value, label }) => ({
-        value,
-        label,
-    }));
-
     // Find connected nodes
     const scene = store.activeScene();
     const sourceNode = scene?.lightSwitches.find(s => s.id === conductor.sourceId) || scene?.fixtures.find(f => f.id === conductor.sourceId) || scene?.electricalDevices?.find(d => d.id === conductor.sourceId);
     const targetNode = scene?.lightSwitches.find(s => s.id === conductor.targetId) || scene?.fixtures.find(f => f.id === conductor.targetId) || scene?.electricalDevices?.find(d => d.id === conductor.targetId);
+
+    const connectsToSwitch = scene?.lightSwitches.some(s => s.id === conductor.sourceId || s.id === conductor.targetId) ?? false;
+
+    const wireOptions = CONDUCTOR_WIRE_OPTIONS
+        .filter(opt => !connectsToSwitch || opt.count <= 3)
+        .map(({ value, label }) => ({
+            value,
+            label,
+        }));
 
     const lengthM = scene
         ? calculateConductorGroupLength(
@@ -142,11 +150,19 @@ export function ConductorProps({
                 }
                 icon={<Zap size={15} />}
             >
-                {circuitCount > 1 && (
-                    <p className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1.5 text-[10px] leading-relaxed text-cyan-700 dark:text-cyan-300">
-                        Los cambios de conductores, ruta, tubo, tipo y sección se
-                        aplicarán a toda esta línea.
-                    </p>
+                {circuitCount > 1 && onUpdateIndividual && (
+                    <div className="flex items-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1.5 text-[10px] text-cyan-700 dark:text-cyan-300">
+                        <input
+                            type="checkbox"
+                            checked={applyToGroup}
+                            onChange={(e) => setApplyToGroup(e.target.checked)}
+                            className="h-3 w-3 cursor-pointer rounded border-cyan-400 bg-transparent"
+                            id="applyGroupToggle"
+                        />
+                        <label htmlFor="applyGroupToggle" className="cursor-pointer leading-tight">
+                            Aplicar edición a toda la línea ({circuitCount} tramos). Desmarca para editar solo este conductor.
+                        </label>
+                    </div>
                 )}
                 <div className="flex flex-col gap-2 text-xs">
                     <SelectField
@@ -157,17 +173,23 @@ export function ConductorProps({
                                 (item) => item.value === val,
                             );
                             if (!option) return;
-                            onUpdate({
+                            const patch = {
                                 wireCount: option.count,
                                 wireLabel: option.value,
-                            });
+                            };
+                            if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                            else onUpdateIndividual(patch);
                         }}
                         options={wireOptions}
                     />
                     <SelectField
                         label="Ruta"
                         value={conductor.routeType}
-                        onChange={(val) => onUpdate({ routeType: val as Conductor['routeType'] })}
+                        onChange={(val) => {
+                            const patch = { routeType: val as Conductor['routeType'] };
+                            if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                            else onUpdateIndividual(patch);
+                        }}
                         options={[
                             { value: 'wall_ceiling', label: 'Pared/Techo' },
                             { value: 'floor', label: 'Piso' },
@@ -180,15 +202,21 @@ export function ConductorProps({
                             min={0}
                             max={20}
                             step={0.05}
-                            onChange={(value) => onUpdate({
-                                routeHeightM: value > 0 ? value : undefined,
-                            })}
+                            onChange={(value) => {
+                                const patch = { routeHeightM: value > 0 ? value : undefined };
+                                if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                                else onUpdateIndividual(patch);
+                            }}
                         />
                     )}
                     {conductor.routeType === 'wall_ceiling' && (
                         <button
                             type="button"
-                            onClick={() => onUpdate({ routeHeightM: undefined })}
+                            onClick={() => {
+                                const patch = { routeHeightM: undefined };
+                                if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                                else onUpdateIndividual(patch);
+                            }}
                             className="w-full rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-left text-[10px] leading-snug text-cyan-700 transition-colors hover:bg-cyan-500/20 dark:text-cyan-300"
                         >
                             {usesAutomaticRouteHeight
@@ -199,7 +227,11 @@ export function ConductorProps({
                     <SelectField
                         label="Tipo"
                         value={conductor.conductorType}
-                        onChange={(val) => onUpdate({ conductorType: val })}
+                        onChange={(val) => {
+                            const patch = { conductorType: val };
+                            if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                            else onUpdateIndividual(patch);
+                        }}
                         options={[
                             { value: 'THW-90', label: 'THW-90' },
                             { value: 'N2XOH', label: 'N2XOH (LSOH)' },
@@ -210,7 +242,11 @@ export function ConductorProps({
                     <SelectField
                         label="Ø Tubo (mm)"
                         value={String(conductor.tubeSize)}
-                        onChange={(val) => onUpdate({ tubeSize: parseInt(val) })}
+                        onChange={(val) => {
+                            const patch = { tubeSize: Number.parseFloat(val) };
+                            if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                            else onUpdateIndividual(patch);
+                        }}
                         options={[
                             { value: '16', label: 'Ø16 mm' },
                             { value: '20', label: 'Ø20 mm' },
@@ -221,7 +257,11 @@ export function ConductorProps({
                     <SelectField
                         label="Sección cable"
                         value={String(conductor.sectionMm2 ?? 2.5)}
-                        onChange={(val) => onUpdate({ sectionMm2: parseFloat(val) })}
+                        onChange={(val) => {
+                            const patch = { sectionMm2: Number.parseFloat(val) };
+                            if (applyToGroup || !onUpdateIndividual) onUpdate(patch);
+                            else onUpdateIndividual(patch);
+                        }}
                         options={CONDUCTOR_SECTION_OPTIONS.map(({ value, label }) => ({ value: String(value), label }))}
                     />
                 </div>

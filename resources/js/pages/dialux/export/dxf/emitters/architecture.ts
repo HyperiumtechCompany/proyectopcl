@@ -1,6 +1,44 @@
 import type { Canopy, Door, DxfEntity, Room, Wall, Window as SceneWindow } from '@/pages/dialux/hooks/types';
 import { centroid, ptAlongPoly } from '../geometry/polylineGeometry';
-import { dxfArc, dxfCircle, dxfLine, dxfPolyLines, dxfText, type DxfLines, type Pt } from './primitives';
+import { dxfArc, dxfCircle, dxfLine, dxfPoint, dxfPolyLines, dxfText, type DxfLines, type Pt } from './primitives';
+
+/**
+ * Puntos de muestreo para aproximar una ELLIPSE del CAD importado como
+ * polilínea. El archivo exportado se declara AC1009 (R12) por compatibilidad
+ * máxima -- ELLIPSE como entidad nativa es de R14/2000 en adelante, así que
+ * se aproxima igual que ya se hace con SPLINE en este mismo archivo, en vez
+ * de emitir una entidad que un lector estrictamente R12 podría rechazar.
+ */
+const ELLIPSE_SAMPLE_STEPS = 48;
+
+/** Ecuación paramétrica DXF de elipse: centro + eje_mayor*cos(t) + eje_menor*sin(t), t en radianes. */
+function sampleEllipsePoints(ent: {
+    cx: number; cy: number; major_x: number; major_y: number;
+    minor_ratio: number; start_param: number; end_param: number;
+}): Pt[] {
+    const majorLen = Math.hypot(ent.major_x, ent.major_y);
+    if (majorLen < 1e-9) return [];
+    const minorLen = majorLen * ent.minor_ratio;
+    const rotation = Math.atan2(ent.major_y, ent.major_x);
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    let start = ent.start_param;
+    let end = ent.end_param;
+    if (end <= start) end += 2 * Math.PI;
+
+    const pts: Pt[] = [];
+    for (let i = 0; i <= ELLIPSE_SAMPLE_STEPS; i++) {
+        const t = start + ((end - start) * i) / ELLIPSE_SAMPLE_STEPS;
+        const lx = majorLen * Math.cos(t);
+        const ly = minorLen * Math.sin(t);
+        pts.push({
+            x: ent.cx + lx * cos - ly * sin,
+            y: ent.cy + lx * sin + ly * cos,
+        });
+    }
+    return pts;
+}
 
 /**
  * Fondo arquitectónico de un nivel (recintos, muros, ventanas, puertas,
@@ -32,7 +70,10 @@ export function renderImportedEntities(out: DxfLines, entities: DxfEntity[]): vo
                     ent.start_angle, ent.end_angle);
                 break;
             case 'text':
-                dxfText(out, 'DXF_BASE', ent.x, ent.y, Math.max(ent.height, 0.05), ent.text);
+                // Capa propia (no 'DXF_BASE'): el texto del plano importado
+                // (incluido el texto de cotas explotadas de DIMENSION) debe
+                // poder ocultarse/congelarse sin perder muros ni hatch.
+                dxfText(out, 'DXF_BASE_TEXTO', ent.x, ent.y, Math.max(ent.height, 0.05), ent.text);
                 break;
             case 'rectangle': {
                 const rad = (ent.rotation * Math.PI) / 180;
@@ -59,28 +100,59 @@ export function renderImportedEntities(out: DxfLines, entities: DxfEntity[]): vo
                         ent.control_points.map(([x, y]) => ({ x, y })), ent.closed);
                 }
                 break;
+            case 'ellipse': {
+                const pts = sampleEllipsePoints(ent);
+                if (pts.length >= 2) dxfPolyLines(out, 'DXF_BASE', pts, false);
+                break;
+            }
+            case 'point':
+                dxfPoint(out, 'DXF_BASE', ent.x, ent.y);
+                break;
+            case 'hatch':
+                // v1: solo el contorno (boundary_paths), sin relleno de
+                // patrón real -- rellenar con SOLID requeriría triangular
+                // un polígono arbitrario, fuera de alcance. El parser Rust
+                // ya descarta en origen los hatches con boundary no-polilínea
+                // (ver dxf_parser.rs), así que lo que llega aquí siempre es
+                // un contorno cerrado válido.
+                //
+                // Capa propia (no 'DXF_BASE'): un hatch de piso/área
+                // sombreada suele solaparse visualmente con texto/cotas
+                // cercanas -- sin capa separada el usuario no puede
+                // congelar/ocultar solo el hatch en AutoCAD sin perder el
+                // resto del plano base (reportado con un DXF real).
+                for (const path of ent.boundary_paths) {
+                    if (path.length >= 2) {
+                        dxfPolyLines(out, 'DXF_BASE_HATCH', path.map(([x, y]) => ({ x, y })), true);
+                    }
+                }
+                break;
             default:
-                break; // hatch / ellipse / point – skip
+                break;
         }
     }
 }
 
+/**
+ * Solo el contorno de recinto/ambiente (capa `RECINTOS`), sin el nombre en
+ * texto -- a pedido explícito del usuario tras ver un export real: el
+ * nombre de recinto/pasadizo no aporta en esta etapa, solo el dibujo y la
+ * simbología (el texto propio del CAD importado, capa `DXF_BASE_TEXTO`, no
+ * se toca -- esto es solo texto que generamos nosotros).
+ */
 export function renderRooms(out: DxfLines, rooms: Room[]): void {
     for (const room of rooms) {
         if (room.vertices.length < 3) continue;
         dxfPolyLines(out, 'RECINTOS', room.vertices, true);
-        const c = centroid(room.vertices);
-        dxfText(out, 'TEXTO_RECINTOS', c.x, c.y, 0.15, room.name || 'Recinto');
     }
 }
 
 /**
  * Solo los nombres de recinto (capa `TEXTO_RECINTOS`), sin el polígono de
- * `RECINTOS` — usado cuando el nivel ya tiene un plano CAD base importado
- * (`renderImportedEntities`): el CAD real trae los muros/recintos reales,
- * y dibujar además nuestra reconstrucción trazada a mano (nunca
- * pixel-perfecta) produce líneas dobles/desalineadas. El nombre del
- * recinto SÍ aporta información que no existe en el CAD original.
+ * `RECINTOS` — sin uso actual (ver `renderLevelArchitectureBlock`: el
+ * contorno de recinto/ambiente SÍ se dibuja incluso con plano CAD base,
+ * porque es una zona de cálculo de DIAlux, no un muro físico duplicado).
+ * Se conserva por si a futuro hace falta un modo "solo etiquetas".
  */
 export function renderRoomLabels(out: DxfLines, rooms: Room[]): void {
     for (const room of rooms) {
@@ -135,11 +207,17 @@ export function renderCanopies(out: DxfLines, canopies: Canopy[]): void {
 /**
  * Bloque arquitectónico completo de un nivel (`buildDxfMultiSheetDocument.ts`,
  * dentro de cada `BLOCK` de nivel). Cuando hay un plano CAD base importado,
- * ese plano YA trae los muros/recintos/ventanas/puertas reales — dibujar
- * además nuestra reconstrucción trazada a mano (nunca pixel-perfecta contra
- * el CAD real) produce líneas dobles/desalineadas en el plano de
- * construcción. El plano base pasa sin alterarse; el nombre de recinto sí
- * se conserva porque no existe en el CAD original.
+ * ese plano YA trae los muros/ventanas/puertas reales — dibujar además
+ * nuestra reconstrucción trazada a mano (nunca pixel-perfecta contra el CAD
+ * real) produce líneas dobles/desalineadas en el plano de construcción, así
+ * que esas SÍ se omiten.
+ *
+ * El contorno de recinto/ambiente (`renderRooms`, capa `RECINTOS`) NO se
+ * omite: un `Room` (incluye `roomType: 'ambient'`) es una zona de cálculo de
+ * DIAlux, no necesariamente coincidente con un muro físico del CAD, así que
+ * es información propia que el plano importado no trae. Confirmado por el
+ * usuario tras un export real donde faltaban "los dibujos del recinto y de
+ * los ambientes".
  */
 export function renderLevelArchitectureBlock(
     out: DxfLines,
@@ -152,11 +230,10 @@ export function renderLevelArchitectureBlock(
     wallMap: Map<string, Wall>,
 ): void {
     renderImportedEntities(out, basePlanEntities);
+    renderRooms(out, rooms);
     if (basePlanEntities.length > 0) {
-        renderRoomLabels(out, rooms);
         return;
     }
-    renderRooms(out, rooms);
     renderWalls(out, walls);
     renderWindows(out, windows, wallMap);
     renderDoors(out, doors, wallMap);

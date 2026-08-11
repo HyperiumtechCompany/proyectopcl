@@ -300,7 +300,7 @@ export async function exportElectricalExcel({ projectName, doc, derived, catalog
             code: res.code,
             type: res.type === 'lighting' ? 'Alumbrado' : res.type === 'outlets' ? 'Tomacorrientes' : 'Especial',
             panel: panelById.get(res.panelId)?.code ?? '—',
-            length: circuitById.get(res.circuitId)?.lengthM ?? 0,
+            length: res.lengthM,
             lums: res.connectedLuminaires,
             outs: res.connectedOutlets,
             power: res.totalPowerW,
@@ -375,7 +375,7 @@ export async function exportElectricalExcel({ projectName, doc, derived, catalog
             return {
                 from: res.fromPanelCode,
                 to: res.toPanelCode,
-                length: feeder?.lengthM ?? 0,
+                length: res.lengthM,
                 demand: res.demandPowerW / 1000,
                 current: res.currentA,
                 design: res.designCurrentA,

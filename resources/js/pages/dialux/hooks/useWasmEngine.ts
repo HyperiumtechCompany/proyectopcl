@@ -6,27 +6,57 @@ import {
 import { useEditorStore } from './useEditorStore';
 import type { DxfEntity, DxfExtents } from './useEditorStore';
 
-interface DialuxWasmModule {
-    default?: () => Promise<unknown> | unknown;
-    init?: () => Promise<unknown> | unknown;
+export interface DialuxWasmModule {
+    default?: (wasmUrl?: URL) => Promise<unknown> | unknown;
+    init?: (wasmUrl?: URL) => Promise<unknown> | unknown;
     parse_dxf_web: (text: string) => string;
 }
 
 let wasmModule: DialuxWasmModule | null = null;
 let wasmLoadFailed = false;
 
-async function loadWasmModule(): Promise<DialuxWasmModule | null> {
+/** Devuelve el modulo WASM ya cargado sin disparar una carga nueva, o null si aun no esta listo. */
+export function peekWasmModule(): DialuxWasmModule | null {
+    return wasmModule;
+}
+
+/**
+ * Carga (una sola vez, cacheada a nivel modulo) el parser DXF rico de
+ * dialux-core. Exportado para que otros consumidores (ej. el exportador DXF,
+ * que necesita el mismo parser para reconstruir el plano base de archivos
+ * .dwg) compartan la MISMA instancia cacheada en vez de duplicar el loader.
+ */
+export async function loadWasmModule(): Promise<DialuxWasmModule | null> {
     if (wasmModule || wasmLoadFailed) return wasmModule;
 
     try {
+        // Cache-busting: `public/dialux-core/pkg/*` no tiene nombres de
+        // archivo con hash de contenido (a diferencia de los assets que
+        // pasan por Vite), así que el navegador puede servir una copia
+        // vieja del .wasm/.js indefinidamente sin que un simple reload lo
+        // note -- ya causó un bug real donde un fix de parseo confirmado y
+        // reconstruido seguía fallando en el navegador con el error viejo.
+        // `v` se calcula una sola vez por sesión de pestaña (este módulo
+        // solo carga el WASM una vez, cacheado en `wasmModule`), así que el
+        // costo es un único fetch fresco por carga de página, no por
+        // llamada.
+        const cacheBust = `v=${Date.now()}`;
+
         // new Function bypasses Vite 7 static import analysis; file is served from public/ at runtime
         const _import = new Function('u', 'return import(u)') as (u: string) => Promise<DialuxWasmModule>;
-        const loadedModule = await _import('/dialux-core/pkg/dialux_core.js');
+        const loadedModule = await _import(`/dialux-core/pkg/dialux_core.js?${cacheBust}`);
+
+        // El `.wasm` se resuelve internamente con `new URL('dialux_core_bg.wasm', import.meta.url)`,
+        // que NO hereda el query string de arriba (la resolución de URLs
+        // relativas descarta la query del base) -- hay que pasar la ruta
+        // ya cache-busteada explícitamente para que el binario en sí
+        // también se refresque, no solo el glue JS.
+        const wasmUrl = new URL(`/dialux-core/pkg/dialux_core_bg.wasm?${cacheBust}`, window.location.origin);
 
         if (typeof loadedModule.default === 'function') {
-            await loadedModule.default();
+            await loadedModule.default(wasmUrl);
         } else if (typeof loadedModule.init === 'function') {
-            await loadedModule.init();
+            await loadedModule.init(wasmUrl);
         } else {
             throw new Error('El modulo WASM no expone default() ni init()');
         }
@@ -164,6 +194,7 @@ export const useWasmEngine = () => {
                         },
                         scaleFactor,
                     ),
+                    data.skipped_entity_types ?? null,
                 );
             } catch (err: unknown) {
                 console.error('Error al parsear el DXF:', err);

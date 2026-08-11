@@ -595,9 +595,9 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(result.installedPowerKw).toBeCloseTo(2);
         expect(result.maximumDemandKw).toBeCloseTo(1.6);
         expect(result.currentA).toBeCloseTo(9.0909, 3);
-        expect(result.theoreticalDesignCurrentA).toBeCloseTo(11.3636, 3);
+        expect(result.theoreticalDesignCurrentA).toBeCloseTo(11.3636, 4);
         expect(result.phaseCurrentR).toBe(0);
-        expect(result.phaseCurrentS).toBeCloseTo(result.currentA);
+        expect(result.phaseCurrentS).toBeCloseTo(result.theoreticalDesignCurrentA);
         expect(result.admissibleCableCurrentA).toBeCloseTo(14.4);
         expect(result.capacityConforms).toBe(true);
         // Sin el `* powerFactor` (auditoría `dialux-electrical-reviewer`):

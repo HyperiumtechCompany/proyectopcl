@@ -714,6 +714,7 @@ export interface Conductor {
         phaseBalance?: 'R' | 'S' | 'T' | 'RST';
         nominalCableCurrentA?: number;
         ambientTemperatureC?: number;
+        copperResistivity?: number;
         groupedCircuitCount?: number;
         groupingFactor?: number;
         temperatureFactor?: number;
@@ -849,7 +850,23 @@ export interface ElectricalDevice {
      * la orientación 3D contra la pared real más cercana.
      */
     ambientId?: string;
-    generatedBy?: 'outlet-rule';
+    generatedBy?: 'outlet-rule' | 'analytic-circuit';
+    /**
+     * ID del `Panel` del Módulo Eléctrico analítico (`electrical/engine/types.ts`)
+     * que este tablero/dispositivo representa en el plano. Puente MANUAL y
+     * puntual (el usuario ubica el símbolo con "Ubicar en plano" desde
+     * `PanelsTab`) -- el módulo analítico no tiene geometría propia, así que
+     * esto NO se auto-genera ni se sincroniza en vivo; ver
+     * `dialux-two-electrical-systems` en memoria del proyecto.
+     */
+    linkedAnalyticPanelId?: string;
+    /**
+     * ID del `Circuit` analítico cuyo conteo de tomacorrientes generó este
+     * dispositivo (junto con `generatedBy: 'analytic-circuit'`). Permite
+     * regenerar/borrar el grupo de forma idempotente, igual que
+     * `generatedBy: 'outlet-rule'` ya hace con `roomId`+`ambientId`.
+     */
+    linkedCircuitId?: string;
     connectedDeviceIds: string[];
     connectedFixtureIds?: string[];
     connectedSwitchIds?: string[];

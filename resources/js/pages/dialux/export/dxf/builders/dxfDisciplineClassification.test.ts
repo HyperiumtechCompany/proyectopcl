@@ -155,6 +155,26 @@ describe('classifyDxfLevelEntities', () => {
         expect(outlets.junctionBoxes.map((b) => b.id)).toContain(box.id);
     });
 
+    it('alimentador tablero→tablero (TG→TD) → conductor "shared", aparece en ambos planos (bug real reportado tras exportar)', () => {
+        const subPanel: ElectricalDevice = {
+            id: 'panel-2', type: 'sub_panel', x: 6, y: 4, label: 'TD-01', mountingHeight: 1.8,
+            connectedDeviceIds: [], properties: {},
+        };
+        const feeder: Conductor = {
+            id: 'cond-feeder', sourceId: PANEL.id, targetId: subPanel.id, wireCount: 4,
+            routeType: 'wall_ceiling', tubeSize: 20, conductorType: 'N2XOH', sectionMm2: 16, waypoints: [],
+        };
+        const { level, classification } = classify({ electricalDevices: [PANEL, subPanel], conductors: [feeder] });
+
+        expect(classification.conductorDiscipline.get('cond-feeder')).toBe('shared');
+        expect(classification.warnings.map((w) => w.code)).not.toContain('conductor-inconclusive-endpoints');
+
+        const lighting = buildLightingEntities(level, classification);
+        const outlets = buildOutletEntities(level, classification);
+        expect(lighting.conductors.map((c) => c.id)).toContain('cond-feeder');
+        expect(outlets.conductors.map((c) => c.id)).toContain('cond-feeder');
+    });
+
     it('dispositivo desconocido (fuera de alumbrado/tomacorrientes) → "unclassified" + warning, no se oculta', () => {
         const unknownDevice: ElectricalDevice = {
             id: 'earth-1', type: 'earth_pit', x: 5, y: 5, label: 'PAT', mountingHeight: 0,

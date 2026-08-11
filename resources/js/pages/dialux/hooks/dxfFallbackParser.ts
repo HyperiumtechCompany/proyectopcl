@@ -8,6 +8,14 @@ export interface ParsedDxfPayload {
     min_y?: number;
     max_x?: number;
     max_y?: number;
+    /**
+     * Conteo por tipo de entidad DXF encontrada pero no soportada (ej.
+     * "DIMENSION (bloque no encontrado)", "Leader") -- solo lo puebla el
+     * parser WASM rico (`dialux-core`); el fallback TS lo deja undefined,
+     * ya que es el parser de último recurso y no vale la pena replicar el
+     * conteo ahí.
+     */
+    skipped_entity_types?: Record<string, number>;
 }
 
 export interface DetectedDxfUnit {

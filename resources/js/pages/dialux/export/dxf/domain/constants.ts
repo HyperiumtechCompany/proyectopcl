@@ -75,6 +75,16 @@ export const LEGEND_CABLE_SWATCH_COLOR_ACI = 1;
 export const MULTISHEET_LAYER_DEFS: ReadonlyArray<{ name: string; color: number }> = [
     { name: '0', color: 7 },
     { name: 'DXF_BASE', color: 8 },
+    /**
+     * Hatch y texto del plano base importado en capas propias, separadas de
+     * `DXF_BASE` (líneas/muros/arcos) -- antes todo el CAD importado
+     * compartía una sola capa, así que un usuario no podía congelar/ocultar
+     * el sombreado que tapaba un texto sin perder también el resto del
+     * fondo. Reportado por un usuario abriendo el DXF real en AutoCAD
+     * (hatch tapando "MEDIDOR DE INSTALACIÓN RETIRO").
+     */
+    { name: 'DXF_BASE_HATCH', color: 8 },
+    { name: 'DXF_BASE_TEXTO', color: 8 },
     { name: 'RECINTOS', color: 4 },
     { name: 'PAREDES', color: 7 },
     { name: 'VENTANAS', color: 5 },

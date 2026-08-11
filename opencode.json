@@ -1,25 +1,26 @@
 {
-    "$schema": "https://opencode.ai/config.json",
-    "mcp": {
-        "laravel-boost": {
-            "type": "local",
-            "enabled": true,
-            "command": [
-                "php",
-                "artisan",
-                "boost:mcp"
-            ]
-        },
-        "herd": {
-            "type": "local",
-            "enabled": true,
-            "command": [
-                "php",
-                "C:/Users/admin/.config/herd/bin/herd-mcp.phar"
-            ],
-            "environment": {
-                "SITE_PATH": "C:\\laragon\\www\\proyectopcl"
-            }
-        }
+  "$schema": "https://opencode.ai/config.json",
+  "snapshot": false,
+  "mcp": {
+    "laravel-boost": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "php",
+        "artisan",
+        "boost:mcp"
+      ]
+    },
+    "herd": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "php",
+        "C:/Users/admin/.config/herd/bin/herd-mcp.phar"
+      ],
+      "environment": {
+        "SITE_PATH": "C:\\laragon\\www\\proyectopcl"
+      }
     }
+  }
 }

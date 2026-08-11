@@ -33,6 +33,7 @@ class DialuxElectricalProject extends Model
 
     protected $fillable = [
         'dialux_project_id',
+        'dialux_module_id',
         'user_id',
         'reference_standard',
         'voltage_v',
@@ -67,5 +68,10 @@ class DialuxElectricalProject extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(DialuxModule::class, 'dialux_module_id');
     }
 }

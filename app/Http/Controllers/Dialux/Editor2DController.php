@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Dialux;
 
-use App\Concerns\AuthorizesDialuxProject;
+use App\Concerns\AuthorizesDialuxModule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dialux\FormalExportRequest;
+use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxProject;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class Editor2DController extends Controller
 {
-    use AuthorizesDialuxProject;
+    use AuthorizesDialuxModule;
 
     private const LANDSCAPE_PAGE_KINDS = ['ambient-list', 'room-ambient-list', 'calculation-object-list'];
 
@@ -64,6 +65,25 @@ class Editor2DController extends Controller
             DialuxProject::findOrFail($request->validated('dialux_project_id'))
         );
 
+        return $this->renderFormalExport($request);
+    }
+
+    /**
+     * Exportación formal aislada para un módulo de DIALux v2.
+     */
+    public function formalExportModule(
+        FormalExportRequest $request,
+        DialuxProject $dialuxProject,
+        DialuxModule $dialuxModule,
+    ): Response {
+        $this->authorizeModule($dialuxProject, $dialuxModule);
+        abort_unless((int) $request->validated('dialux_project_id') === $dialuxProject->id, 422);
+
+        return $this->renderFormalExport($request);
+    }
+
+    private function renderFormalExport(FormalExportRequest $request): Response
+    {
         // Un informe de cientos de paginas con muchos assets embebidos puede
         // tardar; se acota para no dejar un worker colgado indefinidamente
         // (el php.ini de este entorno trae max_execution_time=0/ilimitado).

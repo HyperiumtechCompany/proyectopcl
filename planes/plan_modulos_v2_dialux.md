@@ -654,29 +654,38 @@ El store actual ya trabaja con un `Project` que contiene `scenes[]`. La adaptaci
 ## 12. Roadmap de Implementación
 
 ### Fase 1 — Modelo de Datos (3-4 días)
-- [ ] Crear migración para tabla `dialux_modules`
-- [ ] Crear modelo `DialuxModule` con relaciones
-- [ ] Añadir relación `modules()` a `DialuxProject`
-- [ ] Añadir campos nuevos a `dialux_projects` (description, client, status)
-- [ ] Crear `DialuxProjectFactory` y `DialuxModuleFactory` actualizados
-- [ ] Tests unitarios de relaciones
+- [x] Crear migración para tabla `dialux_modules`
+- [x] Crear modelo `DialuxModule` con relaciones
+- [x] Añadir relación `modules()` a `DialuxProject`
+- [x] Añadir campos nuevos a `dialux_projects` (description, client, status)
+- [x] Crear `DialuxProjectFactory` y `DialuxModuleFactory` actualizados
+- [x] Tests unitarios de relaciones
 
 ### Fase 2 — CRUD de Módulos (3-4 días)
-- [ ] `ModuleController` con index/store/show/update/destroy
-- [ ] `StoreDialuxModuleRequest`, `UpdateDialuxModuleRequest`
-- [ ] Endpoint de duplicación (`POST .../duplicate`)
-- [ ] Endpoint de reordenamiento (`PATCH .../reorder`)
-- [ ] Registrar rutas en `web.php`
-- [ ] Tests de feature para cada endpoint
+- [x] `ModuleController` con index/store/show/update/destroy
+- [x] `StoreDialuxModuleRequest`, `UpdateDialuxModuleRequest`
+- [x] Endpoint de duplicación (`POST .../duplicate`)
+- [x] Endpoint de reordenamiento (`PATCH .../reorder`)
+- [x] Registrar rutas en `web.php`
+- [x] Tests de feature para cada endpoint
+
+> [!NOTE]
+> Durante la transición, estos endpoints viven bajo `/dialux-v2` y usan nombres
+> `dialux-v2.*`. El editor y las rutas `/dialux` de v1 permanecen sin cambios.
 
 ### Fase 3 — Adaptación de Lógica Existente (4-5 días)
-- [ ] Migrar `PlanFileController` para trabajar con `dialux_module_id`
-- [ ] Migrar `NormativeConfigController` para módulo
-- [ ] Migrar `ElectricalProjectController` para módulo
-- [ ] Migrar `Editor2DController` (exportación formal) para módulo
-- [ ] Actualizar trait `AuthorizesDialuxProject` → añadir `AuthorizesDialuxModule`
-- [ ] Actualizar `ProjectQuotaService` (módulos no cuentan como proyectos)
-- [ ] Tests de feature actualizados
+- [x] Migrar `PlanFileController` para trabajar con `dialux_module_id`
+- [x] Migrar `NormativeConfigController` para módulo
+- [x] Migrar `ElectricalProjectController` para módulo
+- [x] Migrar `Editor2DController` (exportación formal) para módulo
+- [x] Actualizar trait `AuthorizesDialuxProject` → añadir `AuthorizesDialuxModule`
+- [x] Actualizar `ProjectQuotaService` (módulos no cuentan como proyectos)
+- [x] Tests de feature actualizados
+
+> [!NOTE]
+> La cuota ya se calculaba contando filas de `dialux_projects`; se conservó esa
+> implementación y se añadió una regresión que crea 25 módulos sin consumir
+> cupos adicionales. Las columnas y controladores v1 permanecen disponibles.
 
 ### Fase 4 — Interfaz de Navegación (5-6 días)
 - [ ] Nueva página `dialux/Project.tsx` — dashboard del proyecto con sidebar

@@ -815,9 +815,9 @@ export const WallProps: React.FC<{
             <EditField
                 label="Espesor (m)"
                 value={wall.thickness}
-                min={0.05}
+                min={0.01}
                 max={1}
-                step={0.05}
+                step={0.01}
                 onChange={(value) => onUpdate({ thickness: value })}
             />
             {/* Tipo de muro: solo lectura (se elige en el Toolbar) */}

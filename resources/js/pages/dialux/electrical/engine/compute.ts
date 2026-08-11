@@ -38,6 +38,7 @@ import type {
     RoomLuminaireResult,
     RoomOutletResult,
     TakeoffItem,
+    CalculatedLengths,
 } from './types';
 
 // ─── Constantes internas ─────────────────────────────────────────────────────
@@ -158,7 +159,11 @@ function resolveObjectConductor(
 
 // ─── Cálculo principal ───────────────────────────────────────────────────────
 
-export function computeElectricalDerived(doc: ElectricalDocument, catalogs: ElectricalCatalogs): ElectricalDerived {
+export function computeElectricalDerived(
+    doc: ElectricalDocument,
+    catalogs: ElectricalCatalogs,
+    calculatedLengths?: CalculatedLengths,
+): ElectricalDerived {
     const settings = doc.settings;
     const voltageV = isPositive(settings.voltageV) ? settings.voltageV : 0;
     const phases: 1 | 3 = settings.phases === 3 ? 3 : 1;
@@ -332,9 +337,28 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
         const currentA = circuitCurrent(demandPowerW, voltageV, phases, powerFactor);
         const designCurrentA = currentA * DESIGN_FACTOR;
 
+        const calcLengths = calculatedLengths?.[circuit.id];
+        const isManualLength = circuit.manualLengthM != null;
+        const lengthM = isManualLength ? circuit.manualLengthM! : (calcLengths?.totalLengthM ?? circuit.lengthM);
+        const calcVertical = calcLengths?.verticalLengthM ?? 0;
+        
+        let calculatedVerticalLengthM = 0;
+        let calculatedHorizontalLengthM = 0;
+
+        if (isManualLength) {
+            calculatedVerticalLengthM = calcVertical;
+            calculatedHorizontalLengthM = Math.max(0, lengthM - calcVertical);
+        } else if (calcLengths) {
+            calculatedVerticalLengthM = calcLengths.verticalLengthM;
+            calculatedHorizontalLengthM = calcLengths.horizontalLengthM;
+        } else {
+            calculatedVerticalLengthM = 0;
+            calculatedHorizontalLengthM = lengthM;
+        }
+
         const selection = selectConductor({
             designCurrentA,
-            lengthM: circuit.lengthM,
+            lengthM,
             voltageV,
             phases,
             minSectionMm2: defaults.min_section_mm2,
@@ -371,6 +395,10 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
             demandPowerW,
             currentA,
             designCurrentA,
+            lengthM,
+            calculatedVerticalLengthM,
+            calculatedHorizontalLengthM,
+            isManualLength,
             sectionMm2: selection.sectionMm2,
             sectionSource: selection.source,
             conductorLabel: conductorLabel(selection.conductor),
@@ -553,9 +581,28 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
         const currentA = circuitCurrent(demandPowerW, feederVoltage, feederPhases, powerFactor);
         const designCurrentA = currentA * DESIGN_FACTOR;
 
+        const calcLengths = calculatedLengths?.[feeder.id];
+        const isManualLength = feeder.manualLengthM != null;
+        const lengthM = isManualLength ? feeder.manualLengthM! : (calcLengths?.totalLengthM ?? feeder.lengthM);
+        const calcVertical = calcLengths?.verticalLengthM ?? 0;
+        
+        let calculatedVerticalLengthM = 0;
+        let calculatedHorizontalLengthM = 0;
+
+        if (isManualLength) {
+            calculatedVerticalLengthM = calcVertical;
+            calculatedHorizontalLengthM = Math.max(0, lengthM - calcVertical);
+        } else if (calcLengths) {
+            calculatedVerticalLengthM = calcLengths.verticalLengthM;
+            calculatedHorizontalLengthM = calcLengths.horizontalLengthM;
+        } else {
+            calculatedVerticalLengthM = 0;
+            calculatedHorizontalLengthM = lengthM;
+        }
+
         const selection = selectConductor({
             designCurrentA,
-            lengthM: feeder.lengthM,
+            lengthM,
             voltageV: feederVoltage,
             phases: feederPhases,
             minSectionMm2: feederDefaults.min_section_mm2,
@@ -584,6 +631,10 @@ export function computeElectricalDerived(doc: ElectricalDocument, catalogs: Elec
             demandPowerW,
             currentA,
             designCurrentA,
+            lengthM,
+            calculatedVerticalLengthM,
+            calculatedHorizontalLengthM,
+            isManualLength,
             sectionMm2: selection.sectionMm2,
             sectionSource: selection.source,
             conductorLabel: conductorLabel(selection.conductor),

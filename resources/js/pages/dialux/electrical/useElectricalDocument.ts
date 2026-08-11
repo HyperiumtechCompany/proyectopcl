@@ -13,9 +13,11 @@ import type {
     ElectricalCatalogs,
     ElectricalDerived,
     ElectricalDocument,
-    ElectricalFloor,
     ElectricalRoom,
+    CalculatedLengths,
 } from './engine/types';
+import type { Scene } from '../hooks/types';
+import { calculateConductorGroupLength } from '../hooks/wireLengthCalculations';
 
 const AUTOSAVE_DEBOUNCE_MS = 2500;
 
@@ -73,15 +75,8 @@ interface CadRoom {
     normativeActivity?: string;
 }
 
-interface CadScene {
-    id: string;
-    name?: string;
-    floorIndex?: number;
-    rooms?: CadRoom[];
-}
-
 export interface CadProjectData {
-    scenes?: CadScene[];
+    scenes?: Scene[];
 }
 
 function polygonArea(vertices: CadVertex[]): number {
@@ -179,7 +174,32 @@ interface UseElectricalDocumentArgs {
     dialuxProjectId: string;
     initialDocument: ElectricalDocument | null;
     catalogs: ElectricalCatalogs;
+    cadData: CadProjectData | null;
 }
+
+export interface MaterializeOutletsArgs {
+    circuitId: string;
+    sourceRoomId: string;
+    quantity: number;
+    outletTypeCode: string;
+    startOffset?: number | null;
+    panelId?: string | null;
+}
+
+export type MaterializeOutletsResult =
+    | { ok: true; message: string; createdCount: number; conductorsCreated: number }
+    | { ok: false; message: string };
+
+export interface PlacePanelArgs {
+    panelId: string;
+    code: string;
+    isRoot: boolean;
+    floorLevel?: number | null;
+}
+
+export type PlacePanelResult =
+    | { ok: true; message: string; created: boolean }
+    | { ok: false; message: string };
 
 export interface ElectricalDocumentApi {
     doc: ElectricalDocument;
@@ -188,9 +208,18 @@ export interface ElectricalDocumentApi {
     /** Mutación inmutable del documento; dispara recompute + autosave. */
     update: (fn: (doc: ElectricalDocument) => ElectricalDocument) => void;
     saveNow: () => Promise<void>;
+    /**
+     * Puente TD/TG (Fase D): pide al backend que dibuje en el plano CAD los
+     * tomacorrientes que este circuito ya tiene calculados -- server-side
+     * porque esta página y el editor de plano no comparten estado en vivo
+     * (ver `ElectricalProjectController::materializeOutlets`).
+     */
+    materializeOutlets: (args: MaterializeOutletsArgs) => Promise<MaterializeOutletsResult>;
+    /** Puente TD/TG (Fase D.1): ubica o renombra el símbolo de un tablero en el plano CAD. */
+    placePanel: (args: PlacePanelArgs) => Promise<PlacePanelResult>;
 }
 
-export function useElectricalDocument({ dialuxProjectId, initialDocument, catalogs }: UseElectricalDocumentArgs): ElectricalDocumentApi {
+export function useElectricalDocument({ dialuxProjectId, initialDocument, catalogs, cadData }: UseElectricalDocumentArgs): ElectricalDocumentApi {
     const [doc, setDoc] = useState<ElectricalDocument>(() => initialDocument ?? buildEmptyDocument());
     const [saveStatus, setSaveStatus] = useState<ElectricalSaveStatus>('idle');
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -198,7 +227,87 @@ export function useElectricalDocument({ dialuxProjectId, initialDocument, catalo
     const latestDocRef = useRef(doc);
     latestDocRef.current = doc;
 
-    const derived = useMemo(() => computeElectricalDerived(doc, catalogs), [doc, catalogs]);
+    const derived = useMemo(() => {
+        const calculatedLengths: CalculatedLengths = {};
+        
+        if (cadData?.scenes && cadData.scenes.length > 0) {
+            for (const scene of cadData.scenes) {
+                const conductors = scene.conductors ?? [];
+                if (conductors.length === 0) continue;
+
+                // Alimentadores
+                for (const feeder of doc.feeders) {
+                    const feederConds = conductors.filter(
+                        (c) =>
+                            (c.sourceId === feeder.fromPanelId && c.targetId === feeder.toPanelId) ||
+                            (c.sourceId === feeder.toPanelId && c.targetId === feeder.fromPanelId)
+                    );
+                    if (feederConds.length > 0) {
+                        const len = calculateConductorGroupLength(scene, feederConds.map(c => c.id));
+                        if (!calculatedLengths[feeder.id]) {
+                            calculatedLengths[feeder.id] = { horizontalLengthM: 0, verticalLengthM: 0, totalLengthM: 0 };
+                        }
+                        calculatedLengths[feeder.id].horizontalLengthM += len.horizontalLengthM;
+                        calculatedLengths[feeder.id].verticalLengthM += len.verticalLengthM;
+                        calculatedLengths[feeder.id].totalLengthM += len.totalLengthM;
+                    }
+                }
+
+                // Circuitos
+                for (const circuit of doc.circuits) {
+                    const circuitNodeIds = new Set<string>();
+                    circuitNodeIds.add(circuit.panelId);
+
+                    for (const rl of doc.roomLuminaires) {
+                        if (rl.circuitId === circuit.id) circuitNodeIds.add(rl.id);
+                    }
+                    for (const ro of doc.roomOutlets) {
+                        if (ro.circuitId === circuit.id) circuitNodeIds.add(ro.id);
+                    }
+
+                    const q = Array.from(circuitNodeIds);
+                    const visitedNodes = new Set(q);
+                    const visitedConductors = new Set<string>();
+
+                    while (q.length > 0) {
+                        const curr = q.shift()!;
+                        for (const c of conductors) {
+                            if (visitedConductors.has(c.id)) continue;
+                            
+                            if (c.sourceId === curr || c.targetId === curr) {
+                                const otherId = c.sourceId === curr ? c.targetId : c.sourceId;
+                                
+                                // Evitar saltar a otros tableros
+                                const isOtherPanel = doc.panels.some(p => p.id === otherId);
+                                if (isOtherPanel && otherId !== circuit.panelId) {
+                                    continue;
+                                }
+
+                                visitedConductors.add(c.id);
+                                if (!visitedNodes.has(otherId)) {
+                                    visitedNodes.add(otherId);
+                                    q.push(otherId);
+                                }
+                            }
+                        }
+                    }
+
+                    if (visitedConductors.size > 0) {
+                        const len = calculateConductorGroupLength(scene, Array.from(visitedConductors));
+                        if (!calculatedLengths[circuit.id]) {
+                            calculatedLengths[circuit.id] = { horizontalLengthM: 0, verticalLengthM: 0, totalLengthM: 0 };
+                        }
+                        calculatedLengths[circuit.id].horizontalLengthM += len.horizontalLengthM;
+                        calculatedLengths[circuit.id].verticalLengthM += len.verticalLengthM;
+                        calculatedLengths[circuit.id].totalLengthM += len.totalLengthM;
+                    }
+                }
+            }
+        }
+        
+        // FIXME: Necesitamos ver cómo obtener las longitudes!
+        return computeElectricalDerived(doc, catalogs, calculatedLengths);
+    }, [doc, catalogs, cadData]);
     const derivedRef = useRef(derived);
     derivedRef.current = derived;
 
@@ -288,5 +397,77 @@ export function useElectricalDocument({ dialuxProjectId, initialDocument, catalo
         await persist(latestDocRef.current);
     }, [persist]);
 
-    return { doc, derived, saveStatus, update, saveNow };
+    const materializeOutlets = useCallback(
+        async (args: MaterializeOutletsArgs): Promise<MaterializeOutletsResult> => {
+            try {
+                const response = await fetch(`/dialux/${dialuxProjectId}/electrico/materializar-tomacorrientes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        circuit_id: args.circuitId,
+                        source_room_id: args.sourceRoomId,
+                        quantity: args.quantity,
+                        outlet_type_code: args.outletTypeCode,
+                        start_offset: args.startOffset ?? null,
+                        panel_id: args.panelId ?? null,
+                    }),
+                });
+                const json: { message?: string; createdCount?: number; conductorsCreated?: number } =
+                    await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    return { ok: false, message: json.message ?? `Error HTTP ${response.status}` };
+                }
+                return {
+                    ok: true,
+                    message: json.message ?? 'Tomacorrientes generados en el plano.',
+                    createdCount: json.createdCount ?? 0,
+                    conductorsCreated: json.conductorsCreated ?? 0,
+                };
+            } catch {
+                return { ok: false, message: 'No se pudo conectar con el servidor.' };
+            }
+        },
+        [dialuxProjectId],
+    );
+
+    const placePanel = useCallback(
+        async (args: PlacePanelArgs): Promise<PlacePanelResult> => {
+            try {
+                const response = await fetch(`/dialux/${dialuxProjectId}/electrico/ubicar-tablero`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-XSRF-TOKEN': readXsrfTokenFromCookie(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        panel_id: args.panelId,
+                        code: args.code,
+                        is_root: args.isRoot,
+                        floor_level: args.floorLevel ?? null,
+                    }),
+                });
+                const json: { message?: string; created?: boolean } = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    return { ok: false, message: json.message ?? `Error HTTP ${response.status}` };
+                }
+                return { ok: true, message: json.message ?? 'Tablero ubicado en el plano.', created: json.created ?? true };
+            } catch {
+                return { ok: false, message: 'No se pudo conectar con el servidor.' };
+            }
+        },
+        [dialuxProjectId],
+    );
+
+    return { doc, derived, saveStatus, update, saveNow, materializeOutlets, placePanel };
 }

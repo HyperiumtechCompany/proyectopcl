@@ -4,11 +4,13 @@ use App\Models\Dialux\DialuxPlan;
 use App\Models\Dialux\DialuxPlanFile;
 use App\Models\Dialux\DialuxProject;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
+    $this->withoutMiddleware(ValidateCsrfToken::class);
     Storage::set('local', Storage::build([
         'driver' => 'local',
         'root' => sys_get_temp_dir().'/dialux-plan-tests-'.Str::uuid(),

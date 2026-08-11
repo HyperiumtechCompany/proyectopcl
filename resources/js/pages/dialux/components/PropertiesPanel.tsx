@@ -113,10 +113,31 @@ export const PropertiesPanel = React.memo(function PropertiesPanel() {
                 circuitConductorIds={circuitConductorIds}
                 onUpdate={(patch) => {
                     store.beginHistoryGesture();
-                    circuitConductorIds.forEach((id) =>
-                        store.updateConductor(id, patch),
-                    );
+                    circuitConductorIds.forEach((id) => {
+                        const targetConductor = scene?.conductors?.find(c => c.id === id);
+                        if (!targetConductor) return;
+
+                        const finalPatch = { ...patch };
+                        
+                        // Inteligencia de grupo: si estamos cambiando la cantidad de conductores,
+                        // solo lo aplicamos a otros tramos que compartían nuestra misma cantidad original.
+                        // (Ej: Si edito la línea principal de 3 a 4, no quiero que mis bajadas a
+                        // interruptor que son de 2 se conviertan en 4).
+                        if ('wireCount' in patch) {
+                            if (targetConductor.wireCount !== conductor.wireCount) {
+                                delete finalPatch.wireCount;
+                                delete finalPatch.wireLabel;
+                            }
+                        }
+
+                        if (Object.keys(finalPatch).length > 0) {
+                            store.updateConductor(id, finalPatch);
+                        }
+                    });
                     store.endHistoryGesture();
+                }}
+                onUpdateIndividual={(patch) => {
+                    store.updateConductor(conductor.id, patch);
                 }}
                 onDelete={() => store.removeObject(conductor.id)}
             />

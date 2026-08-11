@@ -20,6 +20,10 @@ use App\Http\Controllers\Dialux\OutletProductController as DialuxOutletProductCo
 use App\Http\Controllers\Dialux\PlanFileController as DialuxPlanFileController;
 use App\Http\Controllers\Dialux\ProductController as DialuxProductController;
 use App\Http\Controllers\Dialux\ProjectController as DialuxProjectController;
+use App\Http\Controllers\Dialux\V2\ElectricalProjectController as DialuxV2ElectricalProjectController;
+use App\Http\Controllers\Dialux\V2\ModuleController as DialuxV2ModuleController;
+use App\Http\Controllers\Dialux\V2\NormativeConfigController as DialuxV2NormativeConfigController;
+use App\Http\Controllers\Dialux\V2\PlanFileController as DialuxV2PlanFileController;
 use App\Http\Controllers\EttpController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
@@ -115,9 +119,35 @@ Route::middleware(['auth', 'verified'])->prefix('dialux')->name('dialux.')->grou
     Route::get('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'show'])->name('plans.show');
     Route::delete('/{dialuxProject}/plans/{sceneId}', [DialuxPlanFileController::class, 'destroy'])->name('plans.destroy');
     Route::get('/{dialuxProject}/electrico', [DialuxElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
+    Route::post('/{dialuxProject}/electrico/materializar-tomacorrientes', [DialuxElectricalProjectController::class, 'materializeOutlets'])->name('electrical.materialize-outlets');
+    Route::post('/{dialuxProject}/electrico/ubicar-tablero', [DialuxElectricalProjectController::class, 'placePanel'])->name('electrical.place-panel');
     Route::get('/{dialuxProject}', [DialuxProjectController::class, 'show'])->name('show');
     Route::patch('/{dialuxProject}', [DialuxProjectController::class, 'update'])->name('update');
     Route::delete('/{dialuxProject}', [DialuxProjectController::class, 'destroy'])->name('destroy');
+});
+
+// ----------- DIALux v2 (aislado del editor v1 durante la migración)
+Route::middleware(['auth', 'verified'])->prefix('dialux-v2')->name('dialux-v2.')->group(function () {
+    Route::prefix('projects/{dialuxProject}/modules')->name('modules.')->group(function () {
+        Route::get('/', [DialuxV2ModuleController::class, 'index'])->name('index');
+        Route::post('/', [DialuxV2ModuleController::class, 'store'])->name('store');
+        Route::patch('/reorder', [DialuxV2ModuleController::class, 'reorder'])->name('reorder');
+        Route::get('/{dialuxModule}', [DialuxV2ModuleController::class, 'show'])->name('show');
+        Route::patch('/{dialuxModule}', [DialuxV2ModuleController::class, 'update'])->name('update');
+        Route::delete('/{dialuxModule}', [DialuxV2ModuleController::class, 'destroy'])->name('destroy');
+        Route::post('/{dialuxModule}/duplicate', [DialuxV2ModuleController::class, 'duplicate'])->name('duplicate');
+        Route::post('/{dialuxModule}/plans/{sceneId}', [DialuxV2PlanFileController::class, 'store'])->name('plans.store');
+        Route::post('/{dialuxModule}/plans/{sceneId}/link', [DialuxV2PlanFileController::class, 'link'])->name('plans.link');
+        Route::get('/{dialuxModule}/plans/{sceneId}', [DialuxV2PlanFileController::class, 'show'])->name('plans.show');
+        Route::delete('/{dialuxModule}/plans/{sceneId}', [DialuxV2PlanFileController::class, 'destroy'])->name('plans.destroy');
+        Route::get('/{dialuxModule}/normative', [DialuxV2NormativeConfigController::class, 'show'])->name('normative.show');
+        Route::post('/{dialuxModule}/normative', [DialuxV2NormativeConfigController::class, 'store'])->name('normative.store');
+        Route::patch('/{dialuxModule}/normative/compliance', [DialuxV2NormativeConfigController::class, 'updateCompliance'])->name('normative.compliance.update');
+        Route::get('/{dialuxModule}/electrical', [DialuxV2ElectricalProjectController::class, 'show'])->name('electrical.show');
+        Route::post('/{dialuxModule}/electrical', [DialuxV2ElectricalProjectController::class, 'store'])->name('electrical.store');
+        Route::get('/{dialuxModule}/electrico', [DialuxV2ElectricalProjectController::class, 'workspace'])->name('electrical.workspace');
+        Route::post('/{dialuxModule}/formal-export', [DialuxEditor2DController::class, 'formalExportModule'])->name('formal-export');
+    });
 });
 
 // ─── Gestión de Personal / Usuarios ───────────────────────────────────────────

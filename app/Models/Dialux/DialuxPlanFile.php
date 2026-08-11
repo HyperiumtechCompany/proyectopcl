@@ -9,6 +9,7 @@ class DialuxPlanFile extends Model
 {
     protected $fillable = [
         'dialux_project_id',
+        'dialux_module_id',
         'scene_id',
         'dialux_plan_id',
     ];
@@ -16,6 +17,11 @@ class DialuxPlanFile extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(DialuxProject::class, 'dialux_project_id');
+    }
+
+    public function module(): BelongsTo
+    {
+        return $this->belongsTo(DialuxModule::class, 'dialux_module_id');
     }
 
     public function plan(): BelongsTo

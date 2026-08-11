@@ -158,8 +158,19 @@ export function classifyDxfLevelEntities(level: DxfLevelPackage): DxfLevelClassi
                 sceneId: level.sceneId,
                 levelName: level.name,
             });
+        } else if (sourceSpecialty === 'shared' && targetSpecialty === 'shared') {
+            // Alimentador tablero→tablero (ej. TG→TD): ambos extremos son
+            // `main_panel`/`sub_panel`, que ya aparecen en las dos láminas
+            // por diseño (`SHARED_DEVICE_TYPES`). El conductor que los une
+            // es igual de compartido -- no es información "no concluyente",
+            // es concluyentemente 'shared'. Antes de este caso, un cable
+            // TG→TD quedaba `'unclassified'` y desaparecía de ambas láminas
+            // (bug real reportado por el usuario tras exportar).
+            conductorDiscipline.set(conductor.id, 'shared');
         } else {
-            // Ambos extremos existen pero son 'shared'/'unclassified': sin información suficiente.
+            // Al menos un extremo es 'unclassified' (tipo sin especialidad
+            // conocida, ej. `transfer_switch`/`earth_pit`): sin información
+            // suficiente para decidir.
             conductorDiscipline.set(conductor.id, 'unclassified');
             warnings.push({
                 code: 'conductor-inconclusive-endpoints',

@@ -511,12 +511,20 @@ export function CtPanelOutputsDialog({
                                                     <StatusCell ok={circuit.capacityConforms} okText="Conforme" failText="No conforme" />
                                                     <SelectCell
                                                         value={circuit.itm}
-                                                        options={[['1x16 A', '1x16 A'], ['1x20 A', '1x20 A'], ['2x25 A', '2x25 A'], ['3x32 A', '3x32 A']]}
+                                                        options={[
+                                                            ['1x10 A', '1x10 A'], ['1x16 A', '1x16 A'], ['1x20 A', '1x20 A'], ['1x25 A', '1x25 A'], ['1x32 A', '1x32 A'], ['1x40 A', '1x40 A'], ['1x50 A', '1x50 A'], ['1x63 A', '1x63 A'],
+                                                            ['2x10 A', '2x10 A'], ['2x16 A', '2x16 A'], ['2x20 A', '2x20 A'], ['2x25 A', '2x25 A'], ['2x32 A', '2x32 A'], ['2x40 A', '2x40 A'], ['2x50 A', '2x50 A'], ['2x63 A', '2x63 A'],
+                                                            ['3x10 A', '3x10 A'], ['3x16 A', '3x16 A'], ['3x20 A', '3x20 A'], ['3x25 A', '3x25 A'], ['3x32 A', '3x32 A'], ['3x40 A', '3x40 A'], ['3x50 A', '3x50 A'], ['3x63 A', '3x63 A'],
+                                                            ['4x10 A', '4x10 A'], ['4x16 A', '4x16 A'], ['4x20 A', '4x20 A'], ['4x25 A', '4x25 A'], ['4x32 A', '4x32 A'], ['4x40 A', '4x40 A'], ['4x50 A', '4x50 A'], ['4x63 A', '4x63 A'],
+                                                        ]}
                                                         onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { itm: value })}
                                                     />
                                                     <SelectCell
                                                         value={circuit.dif}
-                                                        options={[['2x25 A', '2x25 A'], ['2x40 A', '2x40 A'], ['2x63 A', '2x63 A']]}
+                                                        options={[
+                                                            ['2x25 A', '2x25 A'], ['2x40 A', '2x40 A'], ['2x63 A', '2x63 A'],
+                                                            ['4x25 A', '4x25 A'], ['4x40 A', '4x40 A'], ['4x63 A', '4x63 A'],
+                                                        ]}
                                                         onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { dif: value })}
                                                     />
                                                     <MonoCell value={`${circuit.horizontalLengthM.toFixed(2)} m`} />

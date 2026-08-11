@@ -137,8 +137,6 @@ export const EditorLayout = memo(function EditorLayout() {
         const scenes = project?.scenes ?? [];
         const calculated: ReturnType<typeof calculatePanelCircuitSummaries> = [];
         const validations: ReturnType<typeof validateSceneOutlets> = [];
-        setPanelCircuitSummaries([]);
-        setOutletValidations([]);
         setIsCtCalculating(true);
 
         const calculateNextScene = () => {

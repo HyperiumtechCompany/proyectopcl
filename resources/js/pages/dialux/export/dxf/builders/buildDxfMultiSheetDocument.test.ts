@@ -216,11 +216,13 @@ describe('buildDxfMultiSheetDocument — plano CAD base: no duplicar la reconstr
      * Bug real reportado por un usuario en un DXF exportado abierto en
      * AutoCAD: cuando el nivel tiene un plano CAD base importado
      * (`entry.level.basePlan.entities`), el exportador dibujaba ENCIMA la
-     * reconstrucción propia de paredes/recintos (trazado a mano en el
-     * editor, nunca pixel-perfecto contra el CAD real) — líneas dobles y
-     * desalineadas. El usuario confirmó el criterio: el plano base pasa sin
-     * alterarse; el sistema solo agrega la capa eléctrica (más el nombre de
-     * recinto, que no existe en el CAD original).
+     * reconstrucción propia de paredes (trazado a mano en el editor, nunca
+     * pixel-perfecto contra el CAD real) — líneas dobles y desalineadas.
+     *
+     * El contorno de RECINTOS (recinto/ambiente) SÍ se conserva incluso con
+     * plano base: es una zona de cálculo de DIAlux, no un muro físico
+     * duplicado, y el mismo usuario reportó después que faltaba verla en un
+     * export real ("no veo los dibujos del recinto y de los ambientes").
      */
     function buildPackageWithBasePlan(hasBasePlan: boolean) {
         const scene = buildDxfLevelScene({ id: 'n0', name: 'Aula 1', floorIndex: 0 });
@@ -241,23 +243,27 @@ describe('buildDxfMultiSheetDocument — plano CAD base: no duplicar la reconstr
         return buildDxfDrawingPackage({ project, activeSceneId: scene.id, globalBasePlan });
     }
 
-    it('con plano base CAD: omite el polígono de RECINTOS y las PAREDES trazadas a mano, pero conserva el nombre del recinto', () => {
+    it('con plano base CAD: omite las PAREDES trazadas a mano, pero conserva el contorno del recinto (sin nombre en texto)', () => {
         const pkg = buildPackageWithBasePlan(true);
         const result = buildDxfMultiSheetDocument({ package: pkg, exportedAtLabel: '2026-08-10' });
 
         expect(result.dxfText).not.toContain('8\nPAREDES');
-        expect(result.dxfText).not.toContain('8\nRECINTOS');
-        expect(result.dxfText).toContain('8\nTEXTO_RECINTOS');
-        expect(result.dxfText).toContain('Ambiente Aula 1');
+        expect(result.dxfText).toContain('8\nRECINTOS');
+        // El nombre de recinto/pasadizo en texto se quitó a pedido del
+        // usuario (solo dibujo y simbología, texto propio no es necesario
+        // por ahora) -- el texto del CAD importado (DXF_BASE_TEXTO) no se
+        // toca, pero TEXTO_RECINTOS ya no se emite en absoluto.
+        expect(result.dxfText).not.toContain('8\nTEXTO_RECINTOS');
+        expect(result.dxfText).not.toContain('Ambiente Aula 1');
         expect(result.dxfText).toContain('8\nDXF_BASE'); // el plano CAD real sí se dibuja
     });
 
-    it('sin plano base CAD: dibuja la reconstrucción propia (paredes y recintos) como antes', () => {
+    it('sin plano base CAD: dibuja la reconstrucción propia (paredes y recintos, sin nombre de recinto en texto)', () => {
         const pkg = buildPackageWithBasePlan(false);
         const result = buildDxfMultiSheetDocument({ package: pkg, exportedAtLabel: '2026-08-10' });
 
         expect(result.dxfText).toContain('8\nPAREDES');
         expect(result.dxfText).toContain('8\nRECINTOS');
-        expect(result.dxfText).toContain('8\nTEXTO_RECINTOS');
+        expect(result.dxfText).not.toContain('8\nTEXTO_RECINTOS');
     });
 });

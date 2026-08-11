@@ -1,9 +1,8 @@
-import { AcApDocManager } from '@mlightcad/cad-simple-viewer';
-import { useCallback, useState } from 'react';
-import { parseDxfTextFallback } from '@/pages/dialux/hooks/dxfFallbackParser';
+import { useCallback, useEffect, useState } from 'react';
+import { extractDxfEntitiesFromEngineDocument } from '@/pages/dialux/hooks/engineDxfExtraction';
 import type { DxfEntity } from '@/pages/dialux/hooks/types';
 import { normalizeScaleConfig, useEditorStore } from '@/pages/dialux/hooks/useEditorStore';
-import type { ScaleConfig } from '@/pages/dialux/hooks/useEditorStore';
+import { loadWasmModule, peekWasmModule, type DialuxWasmModule } from '@/pages/dialux/hooks/useWasmEngine';
 import { buildDxfDrawingPackage, type DxfGlobalBasePlan } from './dxf/builders/buildDxfDrawingPackage';
 import {
     buildDxfExportPreview, buildDxfMultiSheetDocument, type DxfExportPreview,
@@ -29,64 +28,11 @@ export interface UseDialuxDxfExportResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Scale DXF entity coordinates from CAD units to metres.
- * Mirrors the private scaleDxfEntities in useWasmEngine.ts.
- */
-function scaleDxfEntities(entities: DxfEntity[], factor: number): DxfEntity[] {
-    if (factor === 1) return entities;
-    return entities.map((ent) => {
-        const s = { ...ent } as Record<string, unknown>;
-        const scl = (k: string) => {
-            if (k in s && typeof s[k] === 'number') s[k] = (s[k] as number) * factor;
-        };
-        const sclArr = (k: string) => {
-            if (k in s && Array.isArray(s[k])) {
-                s[k] = (s[k] as [number, number][]).map(
-                    ([a, b]: [number, number]) => [a * factor, b * factor],
-                );
-            }
-        };
-        ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r',
-            'width', 'height', 'major_x', 'major_y'].forEach(scl);
-        ['vertices', 'control_points'].forEach(sclArr);
-        if ('boundary_paths' in s && Array.isArray(s['boundary_paths'])) {
-            s['boundary_paths'] = (s['boundary_paths'] as [number, number][][]).map(
-                (path) => path.map(([a, b]) => [a * factor, b * factor]),
-            );
-        }
-        return s as unknown as DxfEntity;
-    });
-}
-
-/**
- * Try to extract DXF entities from the mlightcad engine document.
- * Used as a fallback when state.dxfEntities is empty (e.g. DWG files or when
- * the WASM parser was not run).
- *
- * Returns entities already scaled to metres using the provided scaleConfig.
- */
-function fetchEngineEntities(scaleConfig: ScaleConfig): DxfEntity[] {
-    try {
-        const db = AcApDocManager.instance?.curDocument
-            ?.database as unknown as (Record<string, unknown> | undefined);
-
-        if (!db || typeof db['dxfOut'] !== 'function') return [];
-
-        const dxfText = (db['dxfOut'] as () => unknown)() as string;
-        if (typeof dxfText !== 'string' || dxfText.length < 20) return [];
-
-        const parsed = parseDxfTextFallback(dxfText);
-        const entities: DxfEntity[] = Array.isArray(parsed.entities) ? parsed.entities : [];
-        if (entities.length === 0) return [];
-
-        const effectiveScale =
-            (scaleConfig.factor ?? 1) * (scaleConfig.calibrationFactor ?? 1);
-        return scaleDxfEntities(entities, effectiveScale);
-    } catch (e) {
-        console.warn('[DXF Export] No se pudo leer el plano base del engine:', e);
-        return [];
-    }
+/** "DIMENSION (bloque no encontrado)×5, Leader×1" -- para el mensaje del warning. */
+function formatSkippedEntityTypes(skipped: Record<string, number>): string {
+    return Object.entries(skipped)
+        .map(([type, count]) => `${type}×${count}`)
+        .join(', ');
 }
 
 /**
@@ -95,28 +41,52 @@ function fetchEngineEntities(scaleConfig: ScaleConfig): DxfEntity[] {
  * (`state.dxfEntities`, con fallback al engine mlightcad si está vacío) y la
  * política de reparto que el usuario eligió en el panel.
  */
-function buildCurrentDrawingPackage(basePlanPolicy: DxfExportUiOptions['basePlanPolicy']): DxfDrawingPackage | null {
+function buildCurrentDrawingPackage(
+    basePlanPolicy: DxfExportUiOptions['basePlanPolicy'],
+    wasmModule: DialuxWasmModule | null,
+): DxfDrawingPackage | null {
     const state = useEditorStore.getState();
     if (!state.project || !state.activeSceneId) return null;
 
     const activeScene = state.project.scenes.find((scene) => scene.id === state.activeSceneId);
     const scaleConfig = activeScene ? normalizeScaleConfig(activeScene.scaleConfig) : null;
 
-    const rawEntities = state.dxfEntities && state.dxfEntities.length > 0
-        ? state.dxfEntities
-        : (scaleConfig ? fetchEngineEntities(scaleConfig) : []);
+    let rawEntities: DxfEntity[];
+    let skippedEntityTypes: Record<string, number> | null;
+    if (state.dxfEntities && state.dxfEntities.length > 0) {
+        rawEntities = state.dxfEntities;
+        skippedEntityTypes = state.dxfSkippedEntityTypes;
+    } else if (scaleConfig) {
+        const engineResult = extractDxfEntitiesFromEngineDocument(scaleConfig, wasmModule);
+        rawEntities = engineResult.entities;
+        skippedEntityTypes = engineResult.skippedEntityTypes;
+    } else {
+        rawEntities = [];
+        skippedEntityTypes = null;
+    }
 
     const globalBasePlan: DxfGlobalBasePlan | null =
         rawEntities.length > 0 || state.dxfExtents
             ? { entities: rawEntities, extents: state.dxfExtents }
             : null;
 
-    return buildDxfDrawingPackage({
+    const pkg = buildDxfDrawingPackage({
         project: state.project,
         activeSceneId: state.activeSceneId,
         globalBasePlan,
         basePlanPolicy,
     });
+
+    if (skippedEntityTypes) {
+        pkg.warnings.push({
+            code: 'base-plan-entity-unsupported',
+            message: `El plano base importado trae entidades que el exportador aún no soporta y NO se incluyeron: ${formatSkippedEntityTypes(skippedEntityTypes)}.`,
+            sceneId: null,
+            levelName: null,
+        });
+    }
+
+    return pkg;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -127,8 +97,15 @@ export function useDialuxDxfExport(): UseDialuxDxfExportResult {
     const [warnings, setWarnings] = useState<DxfExportWarning[]>([]);
     const [lastError, setLastError] = useState<string | null>(null);
 
+    // Precarga en segundo plano (sin bloquear) el parser WASM rico apenas se
+    // usa el hook, para maximizar la chance de que `buildPreview` (síncrono,
+    // no puede esperar la carga) ya lo encuentre cacheado via `peekWasmModule`.
+    useEffect(() => {
+        void loadWasmModule();
+    }, []);
+
     const buildPreview = useCallback((options: DxfExportUiOptions): DxfExportPreview | null => {
-        const pkg = buildCurrentDrawingPackage(options.basePlanPolicy);
+        const pkg = buildCurrentDrawingPackage(options.basePlanPolicy, peekWasmModule());
         if (!pkg) return null;
 
         return buildDxfExportPreview({
@@ -154,7 +131,11 @@ export function useDialuxDxfExport(): UseDialuxDxfExportResult {
         setWarnings([]);
 
         try {
-            const pkg = buildCurrentDrawingPackage(options.basePlanPolicy);
+            // Export final: sí vale la pena esperar la carga del WASM (si aún
+            // no estaba cacheada) para garantizar el parser rico del plano
+            // base en vez del fallback TS limitado.
+            const wasmModule = await loadWasmModule();
+            const pkg = buildCurrentDrawingPackage(options.basePlanPolicy, wasmModule);
             if (!pkg) throw new Error('No hay un proyecto activo para exportar.');
 
             setExportStep('Generando láminas...');

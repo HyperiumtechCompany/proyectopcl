@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderElectricalDeviceSymbol, renderWaterHeaterSymbol } from './outletSymbols';
+import { renderElectricalDeviceSymbol, renderPanelSymbol, renderWaterHeaterSymbol } from './outletSymbols';
 
 /**
  * Fase 5 del plan maestro DXF: símbolos de tomacorrientes y tableros.
@@ -58,12 +58,53 @@ describe('renderElectricalDeviceSymbol — tomas bajas, altas, techo y piso', ()
 });
 
 describe('renderElectricalDeviceSymbol — tableros/medidores y fallback', () => {
-    it('un tipo de dispositivo sin forma dedicada (tablero) cae al cuadrado genérico, no se oculta', () => {
+    it('main_panel/sub_panel usan el símbolo dedicado de tablero (rectángulo + salidas + relleno), no el cuadrado genérico', () => {
         const out: string[] = [];
         renderElectricalDeviceSymbol(out, 'DISP_ELECTRICOS', { x: 0, y: 0, type: 'main_panel', label: 'TG' });
         const dxf = out.join('\n');
-        expect(countOccurrences(dxf, '0\nLINE')).toBe(4);
+        // 4 (rectángulo) + 1 (diagonal) + 4 (salidas superiores) + 2 (izquierda) + 2 (derecha) = 13
+        expect(countOccurrences(dxf, '0\nLINE')).toBe(13);
+        expect(countOccurrences(dxf, '0\nSOLID')).toBe(1);
+        expect(countOccurrences(dxf, '0\nCIRCLE')).toBe(8); // 4 arriba + 2 izq + 2 der
         expect(dxf).toContain('TG');
+    });
+
+    it('a tamaño de leyenda (sizeM pequeño) los círculos de conexión del tablero NO se solapan entre sí', () => {
+        // Regresión: antes los offsets del símbolo (radio, stubs, etiqueta)
+        // eran metros absolutos fijos que no escalaban con `sizeM`. A
+        // tamaño de planta (sizeM=0.4, el default) se veían bien, pero a
+        // tamaño de celda de leyenda (~0.09-0.25m, ver `legend.ts`) los 8
+        // círculos de conexión se solapaban entre sí formando un cúmulo
+        // ilegible -- reportado por un usuario abriendo el DXF real en
+        // AutoCAD ("se ve como un resorte/bobina", no como un tablero).
+        const out: string[] = [];
+        renderPanelSymbol(out, 'DISP_ELECTRICOS', { x: 0, y: 0, label: 'TG', sizeM: 0.1 });
+        const dxf = out.join('\n');
+
+        const circles = [...dxf.matchAll(
+            /CIRCLE\n8\n[^\n]+\n10\n(-?\d+\.\d+)\n20\n(-?\d+\.\d+)\n30\n[^\n]+\n40\n(-?\d+\.\d+)/g,
+        )].map((m) => ({ x: Number(m[1]), y: Number(m[2]), r: Number(m[3]) }));
+        expect(circles).toHaveLength(8);
+
+        for (let i = 0; i < circles.length; i++) {
+            for (let j = i + 1; j < circles.length; j++) {
+                const dist = Math.hypot(circles[j].x - circles[i].x, circles[j].y - circles[i].y);
+                expect(dist).toBeGreaterThan(circles[i].r + circles[j].r);
+            }
+        }
+    });
+
+    it('a sizeM=0.4 (default de planta) la geometría del tablero es idéntica a la de antes del fix de escala', () => {
+        const out: string[] = [];
+        renderPanelSymbol(out, 'DISP_ELECTRICOS', { x: 0, y: 0, label: 'TG' });
+        const dxf = out.join('\n');
+
+        const circles = [...dxf.matchAll(
+            /CIRCLE\n8\n[^\n]+\n10\n(-?\d+\.\d+)\n20\n(-?\d+\.\d+)\n30\n[^\n]+\n40\n(-?\d+\.\d+)/g,
+        )];
+        expect(circles).toHaveLength(8);
+        expect(Number(circles[0][3])).toBeCloseTo(0.025, 6); // PANEL_CIRCLE_RADIUS original
+        expect(dxf).toContain('40\n0.070000'); // altura de etiqueta original (hw=0.2 × 0.35)
     });
 
     it('un type completamente desconocido también cae al cuadrado genérico, sin lanzar', () => {

@@ -240,6 +240,13 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
     lastCalculationRun: CalculationRun | null;
     dxfEntities: DxfEntity[] | null;
     dxfExtents: DxfExtents | null;
+    /**
+     * Conteo por tipo de entidad DXF del plano base importado que el
+     * parser encontró pero no pudo extraer (ej. "DIMENSION (bloque no
+     * encontrado)"). Se muestra como warning en el panel de exportación
+     * DXF -- `null` si no se parseó nada aún o no hubo entidades omitidas.
+     */
+    dxfSkippedEntityTypes: Record<string, number> | null;
     ui: UIState;
     defaultRoomNormativeStandard: NormativeStandard;
     /** Configuración normativa del proyecto (síncrona con backend) */
@@ -277,7 +284,11 @@ export interface EditorState extends DeletionSlice, HistorySlice, SceneObjectsSl
 
     // --- DXF Entities ---
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => void;
-    setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) => void;
+    setDxfData: (
+        entities: DxfEntity[],
+        extents: DxfExtents | null,
+        skippedEntityTypes?: Record<string, number> | null,
+    ) => void;
     detectScaleFromExtents: (extents: DxfExtents) => ScaleConfig;
     applyCalibration: (
         cadDistance: number,
@@ -447,6 +458,7 @@ export const useEditorStore = create<EditorState>()(
         lastCalculationRun: null,
         dxfEntities: null,
         dxfExtents: null,
+        dxfSkippedEntityTypes: null,
         defaultRoomNormativeStandard: 'en_12464',
         projectNormativeConfig: null,
 

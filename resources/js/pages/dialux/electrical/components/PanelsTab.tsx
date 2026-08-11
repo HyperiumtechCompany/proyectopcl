@@ -4,6 +4,7 @@
  */
 
 import { Network, WandSparkles } from 'lucide-react';
+import { useState } from 'react';
 import type { ElectricalDocumentApi } from '../useElectricalDocument';
 import { newId } from '../useElectricalDocument';
 import type { Feeder, Panel, PanelResult } from '../engine/types';
@@ -15,7 +16,8 @@ interface Props {
 }
 
 export default function PanelsTab({ api }: Props) {
-    const { doc, derived, update } = api;
+    const { doc, derived, update, placePanel } = api;
+    const [placeStatus, setPlaceStatus] = useState<Record<string, { pending: boolean; ok?: boolean; message?: string }>>({});
 
     const resultsById = new Map(derived.panels.map((p) => [p.panelId, p]));
     const feederResults = new Map(derived.feeders.map((f) => [f.feederId, f]));
@@ -80,6 +82,24 @@ export default function PanelsTab({ api }: Props) {
         update((document) => ensureFloorPanelHierarchy(document, newId));
     };
 
+    /**
+     * Puente TD/TG (Fase D.1): ubica (o renombra, si ya existe) el símbolo
+     * de este tablero en el plano CAD, vía el endpoint backend (el Panel
+     * analítico nunca tiene x/y propio -- el usuario lo arrastra a su
+     * posición real después, en el editor de plano).
+     */
+    const handlePlacePanel = async (panel: Panel) => {
+        const floorLevel = panel.floorId ? doc.floors.find((f) => f.id === panel.floorId)?.level : undefined;
+        setPlaceStatus((prev) => ({ ...prev, [panel.id]: { pending: true } }));
+        const result = await placePanel({
+            panelId: panel.id,
+            code: panel.code,
+            isRoot: panel.parentPanelId === null,
+            floorLevel: floorLevel ?? null,
+        });
+        setPlaceStatus((prev) => ({ ...prev, [panel.id]: { pending: false, ok: result.ok, message: result.message } }));
+    };
+
     // Árbol de tableros para la vista jerárquica.
     const renderTree = (parentId: string | null, depth: number): React.ReactNode[] => {
         if (depth > 10) {
@@ -140,7 +160,7 @@ export default function PanelsTab({ api }: Props) {
                     </div>
                 }>
                 <TableShell
-                    minWidth={1150}
+                    minWidth={1300}
                     headers={[
                         'Código',
                         'Nombre',
@@ -153,9 +173,10 @@ export default function PanelsTab({ api }: Props) {
                         'Reserva %',
                         'ITM principal (A)',
                         'Ubicación',
+                        'Plano',
                         '',
                     ]}>
-                    {doc.panels.length === 0 && <EmptyRow colSpan={12} message="Sin tableros. Crea el Tablero General y luego los tableros por piso." />}
+                    {doc.panels.length === 0 && <EmptyRow colSpan={13} message="Sin tableros. Crea el Tablero General y luego los tableros por piso." />}
                     {doc.panels.map((p) => {
                         const res: PanelResult | undefined = resultsById.get(p.id);
                         return (
@@ -195,6 +216,22 @@ export default function PanelsTab({ api }: Props) {
                                 </td>
                                 <td className="px-2 py-1">
                                     <TextCell value={p.location ?? ''} onChange={(v) => updatePanel(p.id, { location: v })} placeholder="Hall piso 1…" />
+                                </td>
+                                <td className="px-2 py-1" style={{ minWidth: 150 }}>
+                                    <button
+                                        type="button"
+                                        disabled={placeStatus[p.id]?.pending}
+                                        onClick={() => void handlePlacePanel(p)}
+                                        title="Ubica (o renombra) el símbolo de este tablero en el plano CAD"
+                                        className="w-full rounded border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        {placeStatus[p.id]?.pending ? 'Ubicando…' : 'Ubicar en plano'}
+                                    </button>
+                                    {placeStatus[p.id] && !placeStatus[p.id].pending && (
+                                        <p className={`mt-1 text-[10px] ${placeStatus[p.id].ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {placeStatus[p.id].message}
+                                        </p>
+                                    )}
                                 </td>
                                 <td className="px-2 py-1 text-right">
                                     <DeleteButton onClick={() => removePanel(p.id)} />
@@ -249,7 +286,17 @@ export default function PanelsTab({ api }: Props) {
                                     <SelectCell value={f.toPanelId} onChange={(v) => updateFeeder(f.id, { toPanelId: v })} options={panelOptions} />
                                 </td>
                                 <td className="px-2 py-1">
-                                    <NumCell value={f.lengthM} onChange={(v) => updateFeeder(f.id, { lengthM: v ?? 0 })} step={1} width={60} />
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1">
+                                            <NumCell value={f.manualLengthM ?? res?.lengthM ?? f.lengthM} onChange={(v) => updateFeeder(f.id, { manualLengthM: v })} step={1} width={60} />
+                                            {f.manualLengthM != null && <span className="text-[10px] text-amber-500" title="Sobrescrito manualmente">M</span>}
+                                        </div>
+                                        {res && (
+                                            <div className="text-[9px] text-zinc-500 whitespace-nowrap" title="H: Horizontal, V: Subida y bajada">
+                                                H: {res.calculatedHorizontalLengthM.toFixed(1)}m · V: {res.calculatedVerticalLengthM.toFixed(1)}m
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-2 py-1 text-right tabular-nums">{res ? fmt(res.demandPowerW / 1000, 2) : '—'}</td>
                                 <td className="px-2 py-1 text-right tabular-nums">{res ? fmt(res.currentA, 2) : '—'}</td>

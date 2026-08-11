@@ -30,7 +30,7 @@ export interface WireLengthWallRow {
 }
 
 function distance(a: Vertex, b: Vertex): number {
-    return Math.hypot(b.x - a.x, b.y - a.y);
+    return Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
 }
 
 function resolveNode(
@@ -97,14 +97,17 @@ function nodeVerticalAllowance(
 ): number {
     const mountingHeight = nodeMountingHeight(node);
 
-    if (conductor.routeType === 'wall_ceiling') {
+    const isCeiling = conductor.routeType === 'wall_ceiling' || conductor.routeType === undefined;
+    const SLACK_ALLOWANCE = 0.05; // 5cm de holgura por caja (curvatura tipo arco y mechas de empalme) a petición del ingeniero
+
+    if (isCeiling) {
         const routeHeight = conductor.routeHeightM !== undefined
             ? Math.max(0, conductor.routeHeightM)
             : roomHeightAt(scene, node);
-        return Math.abs(routeHeight - mountingHeight);
+        return Math.abs(routeHeight - mountingHeight) + SLACK_ALLOWANCE;
     }
 
-    return mountingHeight;
+    return mountingHeight + SLACK_ALLOWANCE;
 }
 
 function conductorLengthComponents(
@@ -163,7 +166,6 @@ export function calculateConductorGroupLength(
     const fixtures = scene.fixtures ?? [];
     const switches = scene.lightSwitches ?? [];
     const devices = scene.electricalDevices ?? [];
-    const countedVerticalNodeIds = new Set<string>();
     let horizontalLengthM = 0;
     let verticalLengthM = 0;
 
@@ -172,15 +174,9 @@ export function calculateConductorGroupLength(
         const target = resolveNode(conductor.targetId, fixtures, switches, devices);
         if (!source || !target) continue;
 
-        horizontalLengthM += conductorPlanLength(conductor, source, target);
-        for (const [nodeId, node] of [
-            [conductor.sourceId, source],
-            [conductor.targetId, target],
-        ] as const) {
-            if (countedVerticalNodeIds.has(nodeId)) continue;
-            countedVerticalNodeIds.add(nodeId);
-            verticalLengthM += nodeVerticalAllowance(scene, node, conductor);
-        }
+        const lengths = conductorLengthComponents(scene, conductor, source, target);
+        horizontalLengthM += lengths.horizontalLengthM;
+        verticalLengthM += lengths.verticalLengthM;
     }
 
     return {
@@ -411,6 +407,7 @@ export interface PanelCircuitSummary {
     fedPanelLabels: string[];
     sectionMm2: number;
     voltageV: number;
+    circuitVoltageV: number;
     phases: 1 | 3;
     currentA: number;
     theoreticalDesignCurrentA: number;
@@ -456,9 +453,9 @@ const DEFAULT_POWER_FACTOR = 0.9;
 const DEFAULT_MAX_VOLTAGE_DROP_PCT = 2.5;
 
 const DEFAULT_CABLE_CAPACITY_A: Array<[number, number]> = [
-    [2.5, 24], [4, 31], [6, 39], [10, 54], [16, 68], [25, 89],
-    [35, 110], [50, 138], [70, 165], [95, 198], [120, 225],
-    [150, 264], [185, 303], [240, 351], [300, 391],
+    [2.5, 27], [4, 34], [6, 44], [10, 62], [16, 85], [25, 107],
+    [35, 135], [50, 160], [70, 203], [95, 242], [120, 279],
+    [150, 318], [185, 361], [240, 406], [300, 462],
 ];
 
 function defaultNominalCableCurrent(sectionMm2: number): number {
@@ -598,7 +595,6 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             const reachedOutlets = new Set<string>();
             const reachedPanelIds = new Set<string>();
             const traversedRoomNames = new Set<string>();
-            const countedVerticalNodeIds = new Set<string>();
             const queue: Array<{ conductor: Conductor; fromNodeId: string }> = [{ conductor: root, fromNodeId: panel.id }];
             let horizontalLengthM = 0;
             let verticalLengthM = 0;
@@ -618,18 +614,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                     target,
                 );
                 horizontalLengthM += lengths.horizontalLengthM;
-                for (const [nodeId, node] of [
-                    [current.conductor.sourceId, source],
-                    [current.conductor.targetId, target],
-                ] as const) {
-                    if (countedVerticalNodeIds.has(nodeId)) continue;
-                    countedVerticalNodeIds.add(nodeId);
-                    verticalLengthM += nodeVerticalAllowance(
-                        scene,
-                        node,
-                        current.conductor,
-                    );
-                }
+                verticalLengthM += lengths.verticalLengthM;
                 ambientNamesAlongConductor(
                     current.conductor,
                     source,
@@ -677,8 +662,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 const downstreamPanel = devices.find((device) => device.id === downstreamPanelId);
                 const declaredLengthM = downstreamPanel?.properties?.lengthM ?? 0;
                 if (declaredLengthM > 0) {
-                    horizontalLengthM = declaredLengthM;
-                    verticalLengthM = 0;
+                    horizontalLengthM = Math.max(0, declaredLengthM - verticalLengthM);
                     lengthOverridden = true;
                 }
             }
@@ -817,9 +801,10 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 0,
                 panel.properties?.designFactor ?? 1.25,
             );
+            const circuitVoltageV = phases === 1 ? 220 : voltageV;
             const currentA = circuitCurrent(
                 maximumDemandKw * 1000,
-                voltageV,
+                circuitVoltageV,
                 phases,
                 powerFactor,
             );
@@ -827,11 +812,11 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             const phaseBalance =
                 phases === 3 ? 'RST' : (root.ct?.phaseBalance ?? 'R');
             const phaseCurrentR =
-                phaseBalance === 'R' || phaseBalance === 'RST' ? currentA : 0;
+                phaseBalance === 'R' || phaseBalance === 'RST' ? theoreticalDesignCurrentA : 0;
             const phaseCurrentS =
-                phaseBalance === 'S' || phaseBalance === 'RST' ? currentA : 0;
+                phaseBalance === 'S' || phaseBalance === 'RST' ? theoreticalDesignCurrentA : 0;
             const phaseCurrentT =
-                phaseBalance === 'T' || phaseBalance === 'RST' ? currentA : 0;
+                phaseBalance === 'T' || phaseBalance === 'RST' ? theoreticalDesignCurrentA : 0;
             const maximumPhaseCurrent = Math.max(
                 phaseCurrentR,
                 phaseCurrentS,
@@ -852,9 +837,11 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             );
             const admissibleCableCurrentA =
                 nominalCableCurrentA * groupingFactor * temperatureFactor;
+            const ambientC = root.ct?.ambientTemperatureC ?? panel.properties?.workingTemperatureC ?? 20;
+            const autoCopperResistivity = (1 / 58) * (1 + 0.00393 * (ambientC - 20));
             const copperResistivity = Math.max(
                 0,
-                panel.properties?.copperResistivity ?? 0.0175,
+                root.ct?.copperResistivity ?? autoCopperResistivity,
             );
             // Aporte propio de ESTE tramo a la caída de tensión (todavía sin
             // sumar lo que ya cayó aguas arriba — eso se resuelve en la
@@ -881,7 +868,8 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                     ? (phases === 1 ? 2 : Math.sqrt(3)) *
                       maximumPhaseCurrent *
                       copperResistivity *
-                      lengthM /
+                      lengthM *
+                      powerFactor /
                       sectionMm2
                     : Number.POSITIVE_INFINITY;
             const maxVoltageDropPct =
@@ -931,6 +919,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 }),
                 sectionMm2,
                 voltageV,
+                circuitVoltageV,
                 phases,
                 currentA,
                 theoreticalDesignCurrentA,
@@ -1084,7 +1073,7 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
             section;
         const voltageDropV = circuitVoltageDropV + circuit.upstreamVoltageDropV;
         const voltageDropPct =
-            (voltageDropV / (circuit.phases === 1 ? 220 : circuit.voltageV)) * 100;
+            (voltageDropV / circuit.circuitVoltageV) * 100;
 
         if (admissibleCableCurrentA > maxPhaseCurrent && voltageDropPct < circuit.maxVoltageDropPct) {
             return section;

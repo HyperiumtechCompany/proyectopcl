@@ -178,3 +178,190 @@ test('the normative requirements endpoint serves the full EM.010 catalog', funct
 
     expect(DialuxNormativeRequirement::query()->whereNull('em_lux')->count())->toBe(7);
 });
+
+// ─── Puente TD/TG (Fase D): materializar tomacorrientes / ubicar tableros ────
+
+test('materialize outlets draws the circuit calculated quantity on the CAD room perimeter, idempotently', function () {
+    $user = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create([
+        'user_id' => $user->id,
+        'data' => [
+            'scenes' => [[
+                'id' => 'scene-1',
+                'name' => 'Piso 1',
+                'floorIndex' => 0,
+                'rooms' => [[
+                    'id' => 'room-cad-1',
+                    'vertices' => [
+                        ['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 10, 'y' => 5], ['x' => 0, 'y' => 5],
+                    ],
+                ]],
+                'electricalDevices' => [],
+                'conductors' => [],
+            ]],
+        ],
+    ]);
+
+    $response = $this->actingAs($user)->postJson(
+        route('dialux.electrical.materialize-outlets', $project),
+        ['circuit_id' => 'circuit-1', 'source_room_id' => 'room-cad-1', 'quantity' => 4, 'outlet_type_code' => 'bajo'],
+    );
+
+    $response->assertOk();
+    $response->assertJsonPath('createdCount', 4);
+
+    $project->refresh();
+    $devices = $project->data['scenes'][0]['electricalDevices'];
+    expect($devices)->toHaveCount(4);
+    foreach ($devices as $device) {
+        expect($device['type'])->toBe('outlet_floor')
+            ->and($device['generatedBy'])->toBe('analytic-circuit')
+            ->and($device['linkedCircuitId'])->toBe('circuit-1')
+            ->and($device['x'])->toBeGreaterThanOrEqual(0)->toBeLessThanOrEqual(10)
+            ->and($device['y'])->toBeGreaterThanOrEqual(0)->toBeLessThanOrEqual(5);
+    }
+
+    // Regenerar con otra cantidad reemplaza SOLO lo que este circuito había generado.
+    $this->actingAs($user)->postJson(
+        route('dialux.electrical.materialize-outlets', $project),
+        ['circuit_id' => 'circuit-1', 'source_room_id' => 'room-cad-1', 'quantity' => 2, 'outlet_type_code' => 'bajo'],
+    )->assertOk()->assertJsonPath('createdCount', 2);
+
+    $project->refresh();
+    expect($project->data['scenes'][0]['electricalDevices'])->toHaveCount(2);
+});
+
+test('materialize outlets links straight conductors to an already-placed panel device', function () {
+    $user = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create([
+        'user_id' => $user->id,
+        'data' => [
+            'scenes' => [[
+                'id' => 'scene-1',
+                'name' => 'Piso 1',
+                'floorIndex' => 0,
+                'rooms' => [[
+                    'id' => 'room-cad-1',
+                    'vertices' => [['x' => 0, 'y' => 0], ['x' => 4, 'y' => 0], ['x' => 4, 'y' => 4], ['x' => 0, 'y' => 4]],
+                ]],
+                'electricalDevices' => [[
+                    'id' => 'panel-device-1',
+                    'type' => 'main_panel',
+                    'x' => 0,
+                    'y' => 0,
+                    'label' => 'TG-01',
+                    'mountingHeight' => 1.8,
+                    'linkedAnalyticPanelId' => 'panel-1',
+                    'connectedDeviceIds' => [],
+                    'properties' => [],
+                ]],
+                'conductors' => [],
+            ]],
+        ],
+    ]);
+
+    $response = $this->actingAs($user)->postJson(
+        route('dialux.electrical.materialize-outlets', $project),
+        [
+            'circuit_id' => 'circuit-1',
+            'source_room_id' => 'room-cad-1',
+            'quantity' => 3,
+            'outlet_type_code' => 'bajo',
+            'panel_id' => 'panel-1',
+        ],
+    );
+
+    $response->assertOk()->assertJsonPath('conductorsCreated', 3);
+
+    $project->refresh();
+    $conductors = $project->data['scenes'][0]['conductors'];
+    expect($conductors)->toHaveCount(3);
+    foreach ($conductors as $conductor) {
+        expect($conductor['sourceId'])->toBe('panel-device-1');
+    }
+});
+
+test('materialize outlets returns 404 when the source room no longer exists on the CAD plan', function () {
+    $user = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create([
+        'user_id' => $user->id,
+        'data' => ['scenes' => [['id' => 'scene-1', 'name' => 'Piso 1', 'floorIndex' => 0, 'rooms' => []]]],
+    ]);
+
+    $this->actingAs($user)->postJson(
+        route('dialux.electrical.materialize-outlets', $project),
+        ['circuit_id' => 'c1', 'source_room_id' => 'missing-room', 'quantity' => 2, 'outlet_type_code' => 'bajo'],
+    )->assertNotFound();
+});
+
+test('materialize outlets is forbidden for another users project', function () {
+    $owner = User::factory()->create(['plan' => 'mensual']);
+    $intruder = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create(['user_id' => $owner->id, 'data' => ['scenes' => []]]);
+
+    $this->actingAs($intruder)->postJson(
+        route('dialux.electrical.materialize-outlets', $project),
+        ['circuit_id' => 'c1', 'source_room_id' => 'r1', 'quantity' => 2, 'outlet_type_code' => 'bajo'],
+    )->assertForbidden();
+});
+
+test('place panel positions a new device at the room bounding box center and is idempotent by panel id', function () {
+    $user = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create([
+        'user_id' => $user->id,
+        'data' => [
+            'scenes' => [[
+                'id' => 'scene-1',
+                'name' => 'Piso 1',
+                'floorIndex' => 0,
+                'rooms' => [[
+                    'id' => 'room-1',
+                    'vertices' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 10, 'y' => 10], ['x' => 0, 'y' => 10]],
+                ]],
+                'electricalDevices' => [],
+            ]],
+        ],
+    ]);
+
+    $response = $this->actingAs($user)->postJson(
+        route('dialux.electrical.place-panel', $project),
+        ['panel_id' => 'panel-1', 'code' => 'TG-01', 'is_root' => true],
+    );
+
+    $response->assertOk()->assertJsonPath('created', true);
+
+    $project->refresh();
+    $devices = $project->data['scenes'][0]['electricalDevices'];
+    expect($devices)->toHaveCount(1)
+        ->and($devices[0]['type'])->toBe('main_panel')
+        ->and($devices[0]['label'])->toBe('TG-01')
+        ->and($devices[0]['linkedAnalyticPanelId'])->toBe('panel-1')
+        // El cast `array` de Eloquent hace json_encode/decode sin
+        // JSON_PRESERVE_ZERO_FRACTION -- un float entero (5.0) vuelve como
+        // int (5) tras el round-trip por BD. Sin impacto real: en JS
+        // (donde vive el consumidor) ambos son el mismo `number`.
+        ->and($devices[0]['x'])->toEqual(5.0)
+        ->and($devices[0]['y'])->toEqual(5.0);
+
+    // Repetir con otro código RENOMBRA el mismo dispositivo, no lo duplica.
+    $this->actingAs($user)->postJson(
+        route('dialux.electrical.place-panel', $project),
+        ['panel_id' => 'panel-1', 'code' => 'TG-01-B', 'is_root' => true],
+    )->assertOk()->assertJsonPath('created', false);
+
+    $project->refresh();
+    $devices = $project->data['scenes'][0]['electricalDevices'];
+    expect($devices)->toHaveCount(1)
+        ->and($devices[0]['label'])->toBe('TG-01-B');
+});
+
+test('place panel is forbidden for another users project', function () {
+    $owner = User::factory()->create(['plan' => 'mensual']);
+    $intruder = User::factory()->create(['plan' => 'mensual']);
+    $project = DialuxProject::factory()->create(['user_id' => $owner->id, 'data' => ['scenes' => []]]);
+
+    $this->actingAs($intruder)->postJson(
+        route('dialux.electrical.place-panel', $project),
+        ['panel_id' => 'panel-1', 'code' => 'TG-01', 'is_root' => true],
+    )->assertForbidden();
+});

@@ -82,7 +82,8 @@ export type DxfExportWarningCode =
     | 'conductor-mixed-disciplines'
     | 'sheet-scale-does-not-fit'
     | 'empty-sheet-skipped'
-    | 'legend-overflow';
+    | 'legend-overflow'
+    | 'base-plan-entity-unsupported';
 
 export interface DxfExportWarning {
     code: DxfExportWarningCode;

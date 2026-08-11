@@ -207,7 +207,9 @@ export interface Circuit {
     code: string; // C-1, C-2, ...
     type: CircuitType;
     description?: string;
+    /** Longitud manual. Si es null/undefined, se usa la longitud automática calculada del plano. Por compatibilidad, mantenemos lengthM. */
     lengthM: number;
+    manualLengthM?: number | null;
     installationType?: string; // empotrado, tubería, bandeja...
     /** null = selección automática por ampacidad + caída de tensión. */
     manualSectionMm2?: number | null;
@@ -238,6 +240,7 @@ export interface Feeder {
     fromPanelId: string;
     toPanelId: string;
     lengthM: number;
+    manualLengthM?: number | null;
     /** null = selección automática (≥ mínimo de feeder). */
     manualSectionMm2?: number | null;
     conduit?: string;
@@ -255,6 +258,14 @@ export interface ElectricalDocument {
     circuits: Circuit[];
     panels: Panel[];
     feeders: Feeder[];
+}
+
+export interface CalculatedLengths {
+    [elementId: string]: {
+        horizontalLengthM: number;
+        verticalLengthM: number;
+        totalLengthM: number;
+    };
 }
 
 // ─── Resultados derivados (calculados, no editables) ─────────────────────────
@@ -314,6 +325,11 @@ export interface CircuitResult {
     demandPowerW: number;
     currentA: number;
     designCurrentA: number; // corriente × 1.25
+    /** Longitud final usada para los cálculos de caída de tensión */
+    lengthM: number;
+    calculatedVerticalLengthM: number;
+    calculatedHorizontalLengthM: number;
+    isManualLength: boolean;
     sectionMm2: number;
     sectionSource: 'auto' | 'manual';
     conductorLabel: string; // "4 mm² Cu THW-90 (ref. AWG 12)"
@@ -358,6 +374,11 @@ export interface FeederResult {
     demandPowerW: number;
     currentA: number;
     designCurrentA: number;
+    /** Longitud final usada para los cálculos de caída de tensión */
+    lengthM: number;
+    calculatedVerticalLengthM: number;
+    calculatedHorizontalLengthM: number;
+    isManualLength: boolean;
     sectionMm2: number;
     sectionSource: 'auto' | 'manual';
     conductorLabel: string;

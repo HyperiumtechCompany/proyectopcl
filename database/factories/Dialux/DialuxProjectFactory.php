@@ -21,6 +21,12 @@ class DialuxProjectFactory extends Factory
         return [
             'user_id' => User::factory(),
             'name' => fake()->sentence(3),
+            'description' => fake()->optional()->sentence(),
+            'client_name' => fake()->optional()->company(),
+            'location' => fake()->optional()->city(),
+            'project_code' => fake()->optional()->bothify('DLX-####'),
+            'status' => 'draft',
+            'consolidated_summary' => null,
             'data' => null,
         ];
     }

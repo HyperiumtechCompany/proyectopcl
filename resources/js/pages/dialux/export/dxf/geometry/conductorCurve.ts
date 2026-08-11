@@ -11,11 +11,17 @@
 
 import type { Pt } from '../emitters/primitives';
 
-/** Half-length (metres) of a wire-count tick mark perpendicular to the wire. */
-export const TICK_HALF = 0.12;
+/**
+ * Half-length (metres) of a wire-count tick mark perpendicular to the wire.
+ * Reducido de 0.12 a pedido del usuario tras ver un export real: a 0.12
+ * (0.24m de largo total) el tick quedaba más grande que el símbolo de
+ * luminaria (`FIXTURE_SYMBOL_SIZE_M` en `emitters/lighting.ts`, 0.15m), y
+ * el propio usuario lo señaló como "no está a escala".
+ */
+export const TICK_HALF = 0.05;
 
 /** Spacing (metres) between adjacent tick marks along the wire. */
-export const TICK_SPACING = 0.055;
+export const TICK_SPACING = 0.025;
 
 /**
  * Compute the quadratic Bezier control point for a conductor segment.

@@ -18,7 +18,11 @@ export interface ScaleDxfSlice {
 
     // --- DXF Entities ---
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => void;
-    setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) => void;
+    setDxfData: (
+        entities: DxfEntity[],
+        extents: DxfExtents | null,
+        skippedEntityTypes?: Record<string, number> | null,
+    ) => void;
     detectScaleFromExtents: (extents: DxfExtents) => ScaleConfig;
     applyCalibration: (
         cadDistance: number,
@@ -86,8 +90,15 @@ export const createScaleDxfSlice: EditorSlice<ScaleDxfSlice> = (set) => ({
     setDxfEntities: (entities: DxfEntity[], extents?: DxfExtents) => {
         set({ dxfEntities: entities, dxfExtents: extents ?? null });
     },
-    setDxfData: (entities: DxfEntity[], extents: DxfExtents | null) =>
-        set({ dxfEntities: entities, dxfExtents: extents }),
+    setDxfData: (entities, extents, skippedEntityTypes) =>
+        set({
+            dxfEntities: entities,
+            dxfExtents: extents,
+            dxfSkippedEntityTypes:
+                skippedEntityTypes && Object.keys(skippedEntityTypes).length > 0
+                    ? skippedEntityTypes
+                    : null,
+        }),
 
     detectScaleFromExtents: (extents) => detectScaleFromExtents(extents),
     applyCalibration: (cadDistance, realDistance) => {

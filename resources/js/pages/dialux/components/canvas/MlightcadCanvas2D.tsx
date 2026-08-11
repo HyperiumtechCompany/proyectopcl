@@ -54,12 +54,13 @@ import {
     markDialuxPlanSyncFailed,
     markDialuxPlanSyncOk,
 } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
+import { extractDxfEntitiesFromEngineDocument } from '@/pages/dialux/hooks/engineDxfExtraction';
 import {
     clampOpeningOffsetToWallSegment,
     wallLength,
 } from '@/pages/dialux/hooks/useInteractionHelpers';
 import { useMlightcadEngine } from '@/pages/dialux/hooks/useMlightcadEngine';
-import { useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
+import { loadWasmModule, useWasmEngine } from '@/pages/dialux/hooks/useWasmEngine';
 import { getPeruWallPreset } from '@/pages/dialux/hooks/wallNorms';
 import {
     applyLegacyLinkUpdate,
@@ -459,11 +460,33 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                                 isOutletDeviceType(device.type),
                         ),
                     );
+                    
+                    const isFixture = (id: string) => scene?.fixtures.some(f => f.id === id);
+                    const isSwitch = (id: string) => scene?.lightSwitches.some(s => s.id === id);
+                    
+                    const connectsToSwitch = isSwitch(sourceId) || isSwitch(targetId);
+                        
+                    let defaultWireCount = ui.wireTemplate.wireCount;
+                    let defaultWireLabel = ui.wireTemplate.wireLabel;
+                    
+                    if (connectsToSwitch) {
+                        // Para interruptores, el default es 2 (con posibilidad de editar a 3 para conmutados)
+                        defaultWireCount = 2;
+                        defaultWireLabel = '2x';
+                    } else {
+                        // Para conexiones principales (Tablero-Luminaria, Luminaria-Luminaria, Tomacorrientes)
+                        // el mínimo siempre es 3.
+                        if (defaultWireCount < 3) {
+                            defaultWireCount = 3;
+                            defaultWireLabel = '3x';
+                        }
+                    }
+
                     store.addConductor({
                         sourceId,
                         targetId,
-                        wireCount: ui.wireTemplate.wireCount,
-                        wireLabel: ui.wireTemplate.wireLabel,
+                        wireCount: defaultWireCount,
+                        wireLabel: defaultWireLabel,
                         routeType: 'wall_ceiling',
                         tubeSize: 20,
                         conductorType: 'THW-90',
@@ -1337,8 +1360,41 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 try {
                     const file = storedDialuxPlanToFile(storedPlan);
                     const opened = await engine.openFile(file);
-                    if (opened && file.name.toLowerCase().endsWith('.dxf')) {
-                        await parseDxf?.(file, effectiveScale);
+                    if (opened) {
+                        if (file.name.toLowerCase().endsWith('.dxf')) {
+                            await parseDxf?.(file, effectiveScale);
+                        } else {
+                            // .dwg (u otro binario que el motor sepa abrir):
+                            // `parseDxf` asume texto (`file.text()`) y
+                            // corrompería un binario. Antes esta rama no
+                            // hacía nada y `state.dxfEntities` quedaba VACÍO
+                            // para siempre en cualquier proyecto con plano
+                            // .dwg -- el motivo más probable detrás de un
+                            // usuario reportando "no veo el plano base, solo
+                            // veo el dibujo" al exportar. Se reusa el
+                            // documento YA parseado por el motor (dxfOut +
+                            // parser rico) para poblar el store igual que el
+                            // camino .dxf, en vez de dejarlo en manos del
+                            // fallback tardío de exportación.
+                            const wasmModule = await loadWasmModule();
+                            const normalizedScale = normalizeScaleConfig(scene?.scaleConfig);
+                            const engineResult = extractDxfEntitiesFromEngineDocument(normalizedScale, wasmModule);
+
+                            if (engineResult.entities.length > 0) {
+                                console.log(
+                                    `[DXF base] "${file.name}": plano base cargado con ${engineResult.entities.length} entidades.`,
+                                );
+                                store.setDxfData(
+                                    engineResult.entities,
+                                    engineResult.extents,
+                                    engineResult.skippedEntityTypes,
+                                );
+                            } else {
+                                console.warn(
+                                    `[DXF base] "${file.name}": no se pudo extraer ninguna entidad del plano base.`,
+                                );
+                            }
+                        }
                     }
                     lastLoadedPlanKeyRef.current = planKey;
                 } catch (error) {

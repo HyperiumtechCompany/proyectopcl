@@ -82,7 +82,18 @@ export function renderWaterHeaterSymbol(out: DxfLines, layer: string, options: D
 
 const DEFAULT_PANEL_WIDTH_M = 0.40;
 const DEFAULT_PANEL_HEIGHT_M = 0.15;
-const PANEL_CIRCLE_RADIUS = 0.025;
+
+// Proporciones relativas a `hw` (medio-ancho), no metros absolutos -- a
+// tamaño de leyenda (Fase 7, `sizeM` calculado para caber en la celda de la
+// tabla, ~0.09-0.25m) los offsets absolutos que este símbolo tenía antes
+// (radio de círculo 0.025m, stubs 0.03m) dejaban de ser pequeños respecto al
+// símbolo y los 8 círculos de conexión se solapaban en un cúmulo ilegible
+// ("como un resorte", reportado por un usuario abriendo el DXF real en
+// AutoCAD). Los ratios de abajo reproducen EXACTO el tamaño original a
+// sizeM=0.4 (hw=0.2): 0.2×0.125=0.025, 0.2×0.15=0.03, 0.2×0.75=0.15.
+const PANEL_CIRCLE_RADIUS_RATIO = 0.125;
+const PANEL_STUB_LENGTH_RATIO = 0.15;
+const PANEL_LABEL_EXTRA_OFFSET_RATIO = 0.75;
 
 /** Tablero General o de Distribución: rectángulo dividido con salidas/círculos en 3 lados. */
 export function renderPanelSymbol(out: DxfLines, layer: string, options: DxfOutletSymbolOptions): void {
@@ -90,6 +101,9 @@ export function renderPanelSymbol(out: DxfLines, layer: string, options: DxfOutl
     const rotationDeg = options.rotationDeg ?? 0;
     const hw = (options.sizeM ?? DEFAULT_PANEL_WIDTH_M) / 2;
     const hh = (options.sizeM ? options.sizeM * 0.375 : DEFAULT_PANEL_HEIGHT_M) / 2;
+    const r = hw * PANEL_CIRCLE_RADIUS_RATIO;
+    const stub = hw * PANEL_STUB_LENGTH_RATIO;
+    const labelExtraOffset = hw * PANEL_LABEL_EXTRA_OFFSET_RATIO;
 
     // 1. Rectángulo principal
     drawLocalRectOutline(out, layer, origin, rotationDeg, hw, hh);
@@ -102,24 +116,24 @@ export function renderPanelSymbol(out: DxfLines, layer: string, options: DxfOutl
     // Top (4 salidas equiespaciadas)
     for (let i = 1; i <= 4; i++) {
         const cx = -hw + ((hw * 2) * (i / 5));
-        drawLocalLine(out, layer, origin, rotationDeg, { x: cx, y: hh }, { x: cx, y: hh + 0.03 });
-        drawLocalCircle(out, layer, origin, rotationDeg, { x: cx, y: hh + 0.03 + PANEL_CIRCLE_RADIUS }, PANEL_CIRCLE_RADIUS);
+        drawLocalLine(out, layer, origin, rotationDeg, { x: cx, y: hh }, { x: cx, y: hh + stub });
+        drawLocalCircle(out, layer, origin, rotationDeg, { x: cx, y: hh + stub + r }, r);
     }
-    
+
     // Izquierda (2 salidas)
-    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: hh * 0.5 }, { x: -hw - 0.03, y: hh * 0.5 });
-    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - 0.03 - PANEL_CIRCLE_RADIUS, y: hh * 0.5 }, PANEL_CIRCLE_RADIUS);
-    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: -hh * 0.5 }, { x: -hw - 0.03, y: -hh * 0.5 });
-    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - 0.03 - PANEL_CIRCLE_RADIUS, y: -hh * 0.5 }, PANEL_CIRCLE_RADIUS);
-    
+    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: hh * 0.5 }, { x: -hw - stub, y: hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - stub - r, y: hh * 0.5 }, r);
+    drawLocalLine(out, layer, origin, rotationDeg, { x: -hw, y: -hh * 0.5 }, { x: -hw - stub, y: -hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: -hw - stub - r, y: -hh * 0.5 }, r);
+
     // Derecha (2 salidas)
-    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: hh * 0.5 }, { x: hw + 0.03, y: hh * 0.5 });
-    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + 0.03 + PANEL_CIRCLE_RADIUS, y: hh * 0.5 }, PANEL_CIRCLE_RADIUS);
-    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: -hh * 0.5 }, { x: hw + 0.03, y: -hh * 0.5 });
-    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + 0.03 + PANEL_CIRCLE_RADIUS, y: -hh * 0.5 }, PANEL_CIRCLE_RADIUS);
+    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: hh * 0.5 }, { x: hw + stub, y: hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + stub + r, y: hh * 0.5 }, r);
+    drawLocalLine(out, layer, origin, rotationDeg, { x: hw, y: -hh * 0.5 }, { x: hw + stub, y: -hh * 0.5 });
+    drawLocalCircle(out, layer, origin, rotationDeg, { x: hw + stub + r, y: -hh * 0.5 }, r);
 
     // 4. Etiqueta (TG o TD)
-    drawLocalText(out, layer, origin, rotationDeg, { x: 0, y: hh + 0.15 }, 0.07, options.label ?? '');
+    drawLocalText(out, layer, origin, rotationDeg, { x: 0, y: hh + labelExtraOffset }, Math.max(hw * 0.35, 0.02), options.label ?? '');
 }
 
 /** Tablero/medidor/dispositivo genérico: cuadrado + etiqueta encima. Fallback para cualquier tipo sin forma dedicada. */

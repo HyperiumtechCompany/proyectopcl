@@ -3040,7 +3040,10 @@ export class House3DBuilder {
         body.position.set(dev.x, dev.mountingHeight ?? 1.2, dev.y);
         if (snapped && minDist < 0.25) {
             body.rotation.y = -wallAngle + degToRad(dev.rotation ?? 0);
-            const offsetDist = wallThickness / 2 + dims.d / 2;
+            // El usuario rota el símbolo en 2D para que apunte hacia el interior del cuarto.
+            // Usamos esa rotación para saber si debemos empujarlo hacia un lado o hacia el otro de la pared.
+            const flip = Math.cos(degToRad(dev.rotation ?? 0)) > 0 ? 1 : -1;
+            const offsetDist = (wallThickness / 2 + dims.d / 2) * flip;
             body.position.x = dev.x - Math.sin(wallAngle) * offsetDist;
             body.position.z = dev.y + Math.cos(wallAngle) * offsetDist;
         } else {
@@ -3203,20 +3206,25 @@ export class House3DBuilder {
         const shape = fixture.fixtureShape ?? 'rectangular';
 
         const makeBody = (name: string, props: FixtureBodyOptions) => {
+            const diamFromRadius = fixture.dimensions?.radius ? fixture.dimensions.radius * 2 : undefined;
             const w =
-                fixture.dimensions?.width ??
-                props.diameter ??
-                props.diameterBottom ??
+                (fixture.dimensions?.width && fixture.dimensions.width > 0 ? fixture.dimensions.width : undefined) ||
+                diamFromRadius ||
+                props.diameter ||
+                props.diameterBottom ||
                 0.2;
             const l =
-                fixture.dimensions?.length ??
-                props.diameter ??
-                props.diameterBottom ??
+                (fixture.dimensions?.length && fixture.dimensions.length > 0 ? fixture.dimensions.length : undefined) ||
+                diamFromRadius ||
+                props.diameter ||
+                props.diameterBottom ||
                 0.2;
-            const h = fixture.dimensions?.height ?? props.height ?? 0.04;
+            const h = (fixture.dimensions?.height && fixture.dimensions.height > 0 ? fixture.dimensions.height : undefined) || props.height || 0.04;
             const d = fixture.dimensions
-                ? Math.max(fixture.dimensions.width, fixture.dimensions.length)
-                : (props.diameter ?? 0.2);
+                ? (fixture.dimensions.width && fixture.dimensions.length && fixture.dimensions.width > 0 && fixture.dimensions.length > 0
+                    ? Math.max(fixture.dimensions.width, fixture.dimensions.length)
+                    : diamFromRadius || 0.2)
+                : (props.diameter || 0.2);
 
             if (shape === 'square') {
                 return MeshBuilder.CreateBox(

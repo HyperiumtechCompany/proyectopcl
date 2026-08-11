@@ -3,6 +3,7 @@
 namespace App\Models\Dialux;
 
 use App\Models\User;
+use Database\Factories\Dialux\DialuxProjectFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,11 +11,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DialuxProject extends Model
 {
+    /** @use HasFactory<DialuxProjectFactory> */
     use HasFactory;
 
     protected $fillable = [
         'user_id',
         'name',
+        'description',
+        'client_name',
+        'location',
+        'project_code',
+        'status',
+        'consolidated_summary',
         'data',
         'is_demo',
         'demo_expires_at',
@@ -24,6 +32,7 @@ class DialuxProject extends Model
     {
         return [
             'data' => 'array',
+            'consolidated_summary' => 'array',
             'is_demo' => 'boolean',
             'demo_expires_at' => 'datetime',
         ];
@@ -42,5 +51,10 @@ class DialuxProject extends Model
     public function plans(): HasMany
     {
         return $this->hasMany(DialuxPlan::class);
+    }
+
+    public function modules(): HasMany
+    {
+        return $this->hasMany(DialuxModule::class)->orderBy('sort_order');
     }
 }

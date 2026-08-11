@@ -12,8 +12,8 @@ interface Props {
 }
 
 /** Radio físico real del símbolo de interruptor (metros), igual criterio que OverlayElectricalDevices */
-const PHYS_RADIUS_M = 0.12;
-const MIN_PX = 7;
+const PHYS_RADIUS_M = 0.06;
+const MIN_PX = 6;
 
 /** Deriva la etiqueta normativa peruana a partir del tipo y del campo label opcional */
 function getSwitchLabel(sw: LightSwitch): string {

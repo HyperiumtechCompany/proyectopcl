@@ -1,11 +1,35 @@
 <?php
 
+use App\Models\Dialux\DialuxModule;
 use App\Models\Dialux\DialuxProject;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
 beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
+});
+
+test('formal export v2 is authorized and scoped to its module', function () {
+    $user = User::factory()->create();
+    $project = DialuxProject::factory()->for($user)->create();
+    $module = DialuxModule::factory()->for($project, 'project')->create();
+
+    $this->actingAs($user)
+        ->postJson(
+            route('dialux-v2.modules.formal-export', [$project, $module]),
+            minimalValidFormalDocumentPayload($project->id),
+        )
+        ->assertSuccessful()
+        ->assertHeader('content-type', 'application/pdf');
+
+    $otherProject = DialuxProject::factory()->for($user)->create();
+
+    $this->actingAs($user)
+        ->postJson(
+            route('dialux-v2.modules.formal-export', [$otherProject, $module]),
+            minimalValidFormalDocumentPayload($otherProject->id),
+        )
+        ->assertNotFound();
 });
 
 /**

@@ -3,6 +3,7 @@
  * conductor sugerido (ampacidad + caída de tensión), protección y estado.
  */
 
+import { useState } from 'react';
 import type { ElectricalDocumentApi } from '../useElectricalDocument';
 import { newId } from '../useElectricalDocument';
 import type { Circuit, CircuitType } from '../engine/types';
@@ -19,7 +20,10 @@ const CIRCUIT_TYPE_OPTIONS: { value: CircuitType; label: string }[] = [
 ];
 
 export default function CircuitsTab({ api }: Props) {
-    const { doc, derived, update } = api;
+    const { doc, derived, update, materializeOutlets } = api;
+    const [materializeStatus, setMaterializeStatus] = useState<
+        Record<string, { pending: boolean; ok?: boolean; message?: string }>
+    >({});
 
     const panelOptions = doc.panels.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` }));
     const resultsById = new Map(derived.circuits.map((c) => [c.circuitId, c]));
@@ -63,6 +67,35 @@ export default function CircuitsTab({ api }: Props) {
 
     const roomName = (roomId: string) => doc.rooms.find((r) => r.id === roomId)?.name ?? '¿?';
     const typeName = (typeId: string) => doc.luminaireTypes.find((t) => t.id === typeId)?.code ?? '¿?';
+
+    /**
+     * Puente TD/TG (Fase D): dibuja en el plano CAD los tomacorrientes que
+     * este grupo ya tiene calculados, vía el endpoint backend (esta página y
+     * el editor de plano no comparten estado en vivo). Requiere que el
+     * ambiente venga del plano (`sourceRoomId`, importado desde "Ambientes")
+     * y que el grupo ya esté asignado a un circuito.
+     */
+    const handleMaterialize = async (roomOutletId: string) => {
+        const ro = doc.roomOutlets.find((x) => x.id === roomOutletId);
+        const res = derived.roomOutlets.find((r) => r.roomOutletId === roomOutletId);
+        const room = ro ? doc.rooms.find((r) => r.id === ro.roomId) : undefined;
+        if (!ro || !ro.circuitId || !room?.sourceRoomId || !res || res.finalQty <= 0) return;
+
+        const circuit = doc.circuits.find((c) => c.id === ro.circuitId);
+
+        setMaterializeStatus((prev) => ({ ...prev, [roomOutletId]: { pending: true } }));
+        const result = await materializeOutlets({
+            circuitId: ro.circuitId,
+            sourceRoomId: room.sourceRoomId,
+            quantity: res.finalQty,
+            outletTypeCode: ro.outletTypeCode,
+            panelId: circuit?.panelId ?? null,
+        });
+        setMaterializeStatus((prev) => ({
+            ...prev,
+            [roomOutletId]: { pending: false, ok: result.ok, message: result.message },
+        }));
+    };
 
     return (
         <div className="space-y-4">
@@ -121,7 +154,17 @@ export default function CircuitsTab({ api }: Props) {
                                     <SelectCell value={c.panelId} onChange={(v) => updateCircuit(c.id, { panelId: v })} options={panelOptions} />
                                 </td>
                                 <td className="px-2 py-1">
-                                    <NumCell value={c.lengthM} onChange={(v) => updateCircuit(c.id, { lengthM: v ?? 0 })} step={1} width={60} />
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1">
+                                            <NumCell value={c.manualLengthM ?? res?.lengthM ?? c.lengthM} onChange={(v) => updateCircuit(c.id, { manualLengthM: v })} step={1} width={60} />
+                                            {c.manualLengthM != null && <span className="text-[10px] text-amber-500" title="Sobrescrito manualmente">M</span>}
+                                        </div>
+                                        {res && (
+                                            <div className="text-[9px] text-zinc-500 whitespace-nowrap" title="H: Horizontal, V: Subida y bajada">
+                                                H: {res.calculatedHorizontalLengthM.toFixed(1)}m · V: {res.calculatedVerticalLengthM.toFixed(1)}m
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-2 py-1 text-center text-[10px] text-zinc-400 whitespace-nowrap">
                                     {res ? `${res.connectedLuminaires} lum · ${res.connectedOutlets} tom` : '—'}
@@ -234,10 +277,13 @@ export default function CircuitsTab({ api }: Props) {
                     </div>
                     <div>
                         <h3 className="mb-2 text-xs font-semibold text-zinc-300">Tomacorrientes</h3>
-                        <TableShell minWidth={380} headers={['Ambiente', 'Tipo', 'Cant.', 'Circuito']}>
-                            {doc.roomOutlets.length === 0 && <EmptyRow colSpan={4} message="Sin grupos de tomacorrientes." />}
+                        <TableShell minWidth={460} headers={['Ambiente', 'Tipo', 'Cant.', 'Circuito', 'Plano']}>
+                            {doc.roomOutlets.length === 0 && <EmptyRow colSpan={5} message="Sin grupos de tomacorrientes." />}
                             {doc.roomOutlets.map((ro) => {
                                 const res = derived.roomOutlets.find((r) => r.roomOutletId === ro.id);
+                                const room = doc.rooms.find((r) => r.id === ro.roomId);
+                                const status = materializeStatus[ro.id];
+                                const canMaterialize = Boolean(ro.circuitId) && Boolean(room?.sourceRoomId) && (res?.finalQty ?? 0) > 0;
                                 return (
                                     <tr key={ro.id} className="hover:bg-white/[0.02]">
                                         <td className="px-2.5 py-1.5">{roomName(ro.roomId)}</td>
@@ -254,6 +300,28 @@ export default function CircuitsTab({ api }: Props) {
                                                 }
                                                 options={circuitOptions('outlets')}
                                             />
+                                        </td>
+                                        <td className="px-2.5 py-1.5">
+                                            <button
+                                                type="button"
+                                                disabled={!canMaterialize || status?.pending}
+                                                onClick={() => void handleMaterialize(ro.id)}
+                                                title={
+                                                    !room?.sourceRoomId
+                                                        ? 'El ambiente debe venir del plano CAD (pestaña Ambientes → Importar)'
+                                                        : !ro.circuitId
+                                                          ? 'Asigna primero un circuito'
+                                                          : 'Genera los tomacorrientes en el plano CAD'
+                                                }
+                                                className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                {status?.pending ? 'Generando…' : 'Generar en el plano'}
+                                            </button>
+                                            {status && !status.pending && (
+                                                <p className={`mt-1 text-[10px] ${status.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {status.message}
+                                                </p>
+                                            )}
                                         </td>
                                     </tr>
                                 );
