@@ -611,9 +611,9 @@ describe('calculatePanelCircuitSummaries', () => {
                 result.lengthM) /
                 4 +
             6.22;
-        expect(result.voltageDropV).toBeCloseTo(7.01153605, 8);
+        expect(result.voltageDropV).toBeCloseTo(6.85322884, 8);
         expect(result.voltageDropPct).toBeCloseTo(
-            (7.01153605 / 220) * 100,
+            (6.85322884 / 220) * 100,
             8,
         );
         expect(result.voltageDropOk).toBe(true);
