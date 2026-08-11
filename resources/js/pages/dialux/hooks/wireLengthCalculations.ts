@@ -812,11 +812,11 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             const phaseBalance =
                 phases === 3 ? 'RST' : (root.ct?.phaseBalance ?? 'R');
             const phaseCurrentR =
-                phaseBalance === 'R' || phaseBalance === 'RST' || phaseBalance === 'RS' || phaseBalance === 'TR' ? currentA : 0;
+                phaseBalance === 'R' || phaseBalance === 'RST' || phaseBalance === 'RS' || phaseBalance === 'TR' ? theoreticalDesignCurrentA : 0;
             const phaseCurrentS =
-                phaseBalance === 'S' || phaseBalance === 'RST' || phaseBalance === 'RS' || phaseBalance === 'ST' ? currentA : 0;
+                phaseBalance === 'S' || phaseBalance === 'RST' || phaseBalance === 'RS' || phaseBalance === 'ST' ? theoreticalDesignCurrentA : 0;
             const phaseCurrentT =
-                phaseBalance === 'T' || phaseBalance === 'RST' || phaseBalance === 'ST' || phaseBalance === 'TR' ? currentA : 0;
+                phaseBalance === 'T' || phaseBalance === 'RST' || phaseBalance === 'ST' || phaseBalance === 'TR' ? theoreticalDesignCurrentA : 0;
             const maximumPhaseCurrent = Math.max(
                 phaseCurrentR,
                 phaseCurrentS,
@@ -868,8 +868,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                     ? (phases === 1 ? 2 : Math.sqrt(3)) *
                       maximumPhaseCurrent *
                       copperResistivity *
-                      lengthM *
-                      powerFactor /
+                      lengthM /
                       sectionMm2
                     : Number.POSITIVE_INFINITY;
             const maxVoltageDropPct =
@@ -1069,8 +1068,7 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
             ((circuit.phases === 1 ? 2 : Math.sqrt(3)) *
                 maxPhaseCurrent *
                 circuit.copperResistivity *
-                circuit.lengthM *
-                circuit.powerFactor) /
+                circuit.lengthM) /
             section;
         const voltageDropV = circuitVoltageDropV + circuit.upstreamVoltageDropV;
         const voltageDropPct =

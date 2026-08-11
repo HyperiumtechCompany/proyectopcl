@@ -597,7 +597,7 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(result.currentA).toBeCloseTo(9.0909, 3);
         expect(result.theoreticalDesignCurrentA).toBeCloseTo(11.3636, 4);
         expect(result.phaseCurrentR).toBe(0);
-        expect(result.phaseCurrentS).toBeCloseTo(result.currentA, 3);
+        expect(result.phaseCurrentS).toBeCloseTo(result.theoreticalDesignCurrentA, 3);
         expect(result.admissibleCableCurrentA).toBeCloseTo(14.4);
         expect(result.capacityConforms).toBe(true);
         // Sin el `* powerFactor` (auditoría `dialux-electrical-reviewer`):
@@ -606,14 +606,14 @@ describe('calculatePanelCircuitSummaries', () => {
         // vez por 0.8 aquí contaba el factor de potencia dos veces.
         const expectedDropV =
             (2 *
-                result.phaseCurrentS *
+                11.3636363636 *
                 0.0175 *
                 result.lengthM) /
                 4 +
             6.22;
-        expect(result.voltageDropV).toBeCloseTo(6.85322884, 8);
+        expect(result.voltageDropV).toBeCloseTo(expectedDropV, 8);
         expect(result.voltageDropPct).toBeCloseTo(
-            (6.85322884 / 220) * 100,
+            (expectedDropV / 220) * 100,
             8,
         );
         expect(result.voltageDropOk).toBe(true);
@@ -668,7 +668,7 @@ describe('calculatePanelCircuitSummaries', () => {
 
         const fixedSection = resolveConformingSectionMm2(circuit);
         expect(fixedSection).toBeGreaterThan(circuit.sectionMm2);
-        expect(fixedSection).toBe(6);
+        expect(fixedSection).toBe(10);
 
         const [fixedCircuit] = calculatePanelCircuitSummaries(buildScene(fixedSection));
         expect(fixedCircuit.voltageDropOk).toBe(true);
