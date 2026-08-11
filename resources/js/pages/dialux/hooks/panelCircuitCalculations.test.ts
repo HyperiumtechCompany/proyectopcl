@@ -607,7 +607,7 @@ describe('calculatePanelCircuitSummaries', () => {
         const expectedDropV =
             (2 *
                 11.3636363636 *
-                0.0175 *
+                (1 / 58) *
                 result.lengthM) /
                 4 +
             6.22;

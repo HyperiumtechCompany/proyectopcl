@@ -1239,6 +1239,8 @@ export interface ProjectSiteSettings {
 
 export interface Project {
     id: string;
+    /** Identificador del módulo contenedor cuando el documento pertenece a DIALux v2. */
+    moduleId?: string;
     name: string;
     created_at: string;
     updated_at: string;
