@@ -1069,7 +1069,8 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
             ((circuit.phases === 1 ? 2 : Math.sqrt(3)) *
                 maxPhaseCurrent *
                 circuit.copperResistivity *
-                circuit.lengthM) /
+                circuit.lengthM *
+                circuit.powerFactor) /
             section;
         const voltageDropV = circuitVoltageDropV + circuit.upstreamVoltageDropV;
         const voltageDropPct =

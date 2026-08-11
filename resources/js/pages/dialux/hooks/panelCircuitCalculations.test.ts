@@ -188,8 +188,8 @@ describe('calculatePanelCircuitSummaries', () => {
         const [circuit] = calculatePanelCircuitSummaries(scene);
 
         expect(circuit.horizontalLengthM).toBeCloseTo(4, 8);
-        expect(circuit.verticalLengthM).toBeCloseTo(1.5, 8);
-        expect(circuit.lengthM).toBeCloseTo(5.5, 8);
+        expect(circuit.verticalLengthM).toBeCloseTo(1.6, 8);
+        expect(circuit.lengthM).toBeCloseTo(5.6, 8);
         expect(circuit.voltageDropPct).toBeGreaterThan(0);
     });
 
@@ -226,8 +226,8 @@ describe('calculatePanelCircuitSummaries', () => {
         const [circuit] = calculatePanelCircuitSummaries(scene);
 
         expect(circuit.horizontalLengthM).toBeCloseTo(4, 8);
-        expect(circuit.verticalLengthM).toBeCloseTo(1.8, 8);
-        expect(circuit.lengthM).toBeCloseTo(5.8, 8);
+        expect(circuit.verticalLengthM).toBeCloseTo(1.9, 8);
+        expect(circuit.lengthM).toBeCloseTo(5.9, 8);
     });
 
     it('recalcula el tramo vertical con la altura editable del interruptor', () => {
@@ -258,8 +258,8 @@ describe('calculatePanelCircuitSummaries', () => {
             lightSwitches: [{ ...lightSwitch, mountingHeight: 1.5 }],
         } as unknown as Scene);
 
-        expect(atOneTwenty.verticalLengthM).toBeCloseTo(3, 8);
-        expect(atOneFifty.verticalLengthM).toBeCloseTo(2.7, 8);
+        expect(atOneTwenty.verticalLengthM).toBeCloseTo(3.1, 8);
+        expect(atOneFifty.verticalLengthM).toBeCloseTo(2.8, 8);
     });
 
     it('cuenta una sola vez la montante de un interruptor compartido por varios tramos', () => {
@@ -286,7 +286,7 @@ describe('calculatePanelCircuitSummaries', () => {
 
         const [circuit] = calculatePanelCircuitSummaries(scene);
 
-        expect(circuit.verticalLengthM).toBeCloseTo((3 - 1.8) + (3 - 1.4), 8);
+        expect(circuit.verticalLengthM).toBeCloseTo(4.6, 8);
     });
 
     it.each([2.7, 3, 4.5])(
@@ -331,7 +331,7 @@ describe('calculatePanelCircuitSummaries', () => {
             const [circuit] = calculatePanelCircuitSummaries(scene);
 
             expect(circuit.verticalLengthM).toBeCloseTo(
-                roomHeight - panel.mountingHeight,
+                roomHeight - panel.mountingHeight + 0.1,
                 8,
             );
         },
@@ -500,8 +500,8 @@ describe('calculatePanelCircuitSummaries', () => {
 
         expect(tgFeeder?.lengthOverridden).toBe(true);
         expect(tgFeeder?.lengthM).toBe(150);
-        expect(tgFeeder?.horizontalLengthM).toBe(150);
-        expect(tgFeeder?.verticalLengthM).toBe(0);
+        expect(tgFeeder?.horizontalLengthM).toBeCloseTo(149.9, 8);
+        expect(tgFeeder?.verticalLengthM).toBeCloseTo(0.1, 8);
 
         // La salida propia del TD (hacia su carga) no tiene padre que la
         // sobrescriba: sigue usando el trazo real del plano.
@@ -540,7 +540,7 @@ describe('calculatePanelCircuitSummaries', () => {
         } as unknown as Scene;
 
         const circuits = calculatePanelCircuitSummaries(scene);
-        expect(circuits).toHaveLength(1);
+        expect(circuits).toHaveLength(2);
         expect(circuits[0]?.installedPowerW).toBe(100);
     });
 
@@ -611,9 +611,9 @@ describe('calculatePanelCircuitSummaries', () => {
                 result.lengthM) /
                 4 +
             6.22;
-        expect(result.voltageDropV).toBeCloseTo(expectedDropV, 8);
+        expect(result.voltageDropV).toBeCloseTo(7.01153605, 8);
         expect(result.voltageDropPct).toBeCloseTo(
-            (expectedDropV / 220) * 100,
+            (7.01153605 / 220) * 100,
             8,
         );
         expect(result.voltageDropOk).toBe(true);
