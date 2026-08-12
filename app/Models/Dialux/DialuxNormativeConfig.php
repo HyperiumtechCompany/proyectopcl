@@ -2,6 +2,7 @@
 
 namespace App\Models\Dialux;
 
+use App\Models\Concerns\InvalidatesDialuxProjectSummary;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,6 +37,8 @@ use Illuminate\Support\Carbon;
  */
 class DialuxNormativeConfig extends Model
 {
+    use InvalidatesDialuxProjectSummary;
+
     protected $table = 'dialux_project_normative_configs';
 
     protected $fillable = [

@@ -57,6 +57,38 @@ describe('calculatePanelCircuitSummaries', () => {
         expect(circuit.voltageDropPct).toBeGreaterThan(0);
     });
 
+    it('reinicia la numeración de circuitos en cada tablero de distribución', () => {
+        const tdA = { id: 'td-a', type: 'sub_panel', label: 'TD-01', x: 0, y: 0 } as ElectricalDevice;
+        const tdB = { id: 'td-b', type: 'sub_panel', label: 'TD-02', x: 0, y: 0 } as ElectricalDevice;
+        const lampA1 = fixture('lamp-a-1', 'room-a', 26);
+        const lampA2 = fixture('lamp-a-2', 'room-a', 26);
+        const lampB1 = fixture('lamp-b-1', 'room-b', 35);
+        const lampB2 = fixture('lamp-b-2', 'room-b', 35);
+        const scene = {
+            fixtures: [lampA1, lampA2, lampB1, lampB2],
+            electricalDevices: [tdA, tdB],
+            conductors: [
+                conductor('wire-a-1', 'td-a', 'lamp-a-1', 2),
+                conductor('wire-a-2', 'td-a', 'lamp-a-2', 3),
+                conductor('wire-b-1', 'td-b', 'lamp-b-1', 2),
+                conductor('wire-b-2', 'td-b', 'lamp-b-2', 3),
+            ],
+            rooms: [
+                { id: 'room-a', name: 'Ambiente A', vertices: [], height: 2.7, color: '#FFFFFF' },
+                { id: 'room-b', name: 'Ambiente B', vertices: [], height: 2.7, color: '#FFFFFF' },
+            ] as Room[],
+            walls: [], lightSwitches: [],
+        } as unknown as Scene;
+
+        const circuits = calculatePanelCircuitSummaries(scene);
+
+        const circuitCodesTdA = circuits.filter((circuit) => circuit.panelId === 'td-a' && !circuit.isPanelSummary).map((circuit) => circuit.code);
+        const circuitCodesTdB = circuits.filter((circuit) => circuit.panelId === 'td-b' && !circuit.isPanelSummary).map((circuit) => circuit.code);
+
+        expect(circuitCodesTdA).toEqual(['C-1', 'C-2']);
+        expect(circuitCodesTdB).toEqual(['C-1', 'C-2']);
+    });
+
     it('cuenta los tomacorrientes cableados como PI tomas, no como alumbrado', () => {
         const panel = { id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0 } as ElectricalDevice;
         const lamp = fixture('lamp-1', 'room-a', 26);

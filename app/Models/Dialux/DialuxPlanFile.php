@@ -2,11 +2,14 @@
 
 namespace App\Models\Dialux;
 
+use App\Models\Concerns\InvalidatesDialuxProjectSummary;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DialuxPlanFile extends Model
 {
+    use InvalidatesDialuxProjectSummary;
+
     protected $fillable = [
         'dialux_project_id',
         'dialux_module_id',

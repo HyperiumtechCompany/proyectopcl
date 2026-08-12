@@ -1,0 +1,115 @@
+mainPanelCount
+distributionPanelCount
+circuits.length
+`${(
+                                circuits
+                                    .filter((circuit) => circuit.panelType === 'main_panel')
+                                    .reduce((total, circuit) => total + circuit.installedPowerW, 0) /
+                                1000
+                            ).toFixed(2)
+selectedRoom.name
+`${selectedRoom.wire.pointCount
+`${selectedRoom.wire.totalLength.toFixed(2)
+circuit.traversedRoomNames.join(' → ') || '—'
+circuit.lightingPowerW.toFixed(0)
+circuit.outletPowerW.toFixed(0)
+circuit.lightingOutletCount.toString()
+circuit.outletOutletCount.toString()
+circuit.circuitLoadType
+circuit.forcePowerW
+circuit.powerFactor
+circuit.installedPowerKw.toFixed(2)
+circuit.demandFactor
+circuit.maximumDemandKw.toFixed(2)
+circuit.phases.toString()
+circuit.theoreticalDesignCurrentA.toFixed(2)
+circuit.currentA.toFixed(2)
+circuit.phaseBalance
+circuit.phaseCurrentR.toFixed(2)
+circuit.phaseCurrentS.toFixed(2)
+circuit.phaseCurrentT.toFixed(2)
+circuit.nominalCableCurrentA.toFixed(2)
+circuit.ambientTemperatureC
+circuit.groupedCircuitCount
+circuit.groupingFactor
+circuit.temperatureFactor
+circuit.admissibleCableCurrentA
+circuit.itm ? parseInt(circuit.itm) : 0
+circuit.dif ? parseInt(circuit.dif) : 0
+circuit.horizontalLengthM?.toFixed(2) ?? '0.00'
+circuit.verticalLengthM?.toFixed(2) ?? '0.00'
+circuit.lengthM?.toFixed(2) ?? '0.00'
+circuit.sectionMm2.toString()
+circuit.voltageDropV?.toFixed(2) ?? '0.00'
+`${circuit.tubeDiameterMm
+circuit.conductorType
+`${circuit.earthSectionMm2
+circuit.traversedRoomNames.join(' → ') || '—'
+circuit.lightingPowerW.toFixed(0)
+circuit.outletPowerW.toFixed(0)
+circuit.lightingOutletCount.toString()
+circuit.outletOutletCount.toString()
+circuit.forcePowerW.toFixed(0)
+circuit.powerFactor
+circuit.installedPowerKw.toFixed(2)
+circuit.demandFactor
+circuit.maximumDemandKw.toFixed(2)
+circuit.phases.toString()
+circuit.theoreticalDesignCurrentA.toFixed(2)
+circuit.currentA.toFixed(2)
+circuit.phaseBalance
+circuit.phaseCurrentR.toFixed(2)
+circuit.phaseCurrentS.toFixed(2)
+circuit.phaseCurrentT.toFixed(2)
+circuit.nominalCableCurrentA.toFixed(2)
+circuit.ambientTemperatureC
+circuit.groupedCircuitCount
+circuit.groupingFactor
+circuit.temperatureFactor
+circuit.admissibleCableCurrentA
+circuit.itm
+circuit.dif
+circuit.horizontalLengthM?.toFixed(2) ?? '0.00'
+circuit.verticalLengthM?.toFixed(2) ?? '0.00'
+circuit.lengthM?.toFixed(2) ?? '0.00'
+circuit.sectionMm2.toString()
+circuit.voltageDropV.toFixed(2)
+`${circuit.tubeDiameterMm
+circuit.conductorType
+`${circuit.earthSectionMm2
+circuit.traversedRoomNames.join(' → ') || '—'
+circuit.lightingPowerW.toFixed(0)
+circuit.outletPowerW.toFixed(0)
+circuit.lightingOutletCount.toString()
+circuit.outletOutletCount.toString()
+circuit.forcePowerW.toFixed(0)
+circuit.powerFactor
+circuit.installedPowerKw.toFixed(2)
+circuit.demandFactor
+circuit.maximumDemandKw.toFixed(2)
+circuit.phases.toString()
+circuit.theoreticalDesignCurrentA.toFixed(2)
+circuit.currentA.toFixed(2)
+circuit.phaseBalance
+circuit.phaseCurrentR.toFixed(2)
+circuit.phaseCurrentS.toFixed(2)
+circuit.phaseCurrentT.toFixed(2)
+circuit.nominalCableCurrentA.toFixed(2)
+circuit.ambientTemperatureC
+circuit.groupedCircuitCount
+circuit.groupingFactor
+circuit.temperatureFactor
+circuit.admissibleCableCurrentA
+circuit.itm
+circuit.dif
+circuit.horizontalLengthM?.toFixed(2) ?? '0.00'
+circuit.verticalLengthM?.toFixed(2) ?? '0.00'
+circuit.lengthM?.toFixed(2) ?? '0.00'
+circuit.sectionMm2.toString()
+circuit.voltageDropV.toFixed(2)
+`${circuit.tubeDiameterMm
+circuit.conductorType
+`${circuit.earthSectionMm2
+Number.isFinite(value) ? value : 0
+value
+optionValue

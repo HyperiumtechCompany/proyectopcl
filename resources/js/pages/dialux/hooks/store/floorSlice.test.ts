@@ -263,4 +263,30 @@ describe('floorSlice.duplicateFloor', () => {
         expect(preset.switchStates[newSwitchId]).toEqual({ on: false, dimmingFactor: 1 });
         expect(preset.switchStates['switch-1']).toBeUndefined();
     });
+
+    it('no duplica el TG de ámbito global y conserva en el TD copiado el vínculo hacia ese TG', () => {
+        const source = buildSourceScene();
+        source.electricalDevices = [
+            {
+                id: 'tg-global', type: 'main_panel', label: 'TG exterior', x: 0, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [],
+                properties: { panelScope: 'project', panelLocation: 'external', panelRole: 'main' },
+            },
+            {
+                id: 'td-piso-1', type: 'sub_panel', label: 'TD-1', x: 2, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [],
+                properties: { panelScope: 'floor', panelRole: 'distribution', upstreamPanelId: 'tg-global' },
+            },
+        ];
+        source.conductors = [];
+        setProjectWithScene(source);
+
+        const newSceneId = useEditorStore.getState().duplicateFloor(source.id, 1, 'Piso 2');
+        const copied = useEditorStore.getState().project!.scenes.find((scene) => scene.id === newSceneId)!;
+
+        expect(copied.electricalDevices?.filter((panel) => panel.type === 'main_panel')).toHaveLength(0);
+        const copiedTd = copied.electricalDevices?.find((panel) => panel.type === 'sub_panel');
+        expect(copiedTd?.id).not.toBe('td-piso-1');
+        expect(copiedTd?.properties?.upstreamPanelId).toBe('tg-global');
+    });
 });

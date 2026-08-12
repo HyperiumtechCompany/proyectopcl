@@ -1,11 +1,36 @@
 import { Link } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
-import { BookOpen, Building2, CloudCogIcon, Droplet, Folder, Inbox, LayoutGrid, Users, Zap, Waves, Lightbulb, PanelsLeftBottomIcon, ChartBar } from 'lucide-react';
-import { NavFooter } from '@/components/nav-footer';
+import {
+    BookOpen,
+    Boxes,
+    Building2,
+    CloudCogIcon,
+    Droplet,
+    Inbox,
+    LayoutGrid,
+    Users,
+    Zap,
+    Waves,
+    Lightbulb,
+    PanelsLeftBottomIcon,
+    ChartBar,
+} from 'lucide-react';
+import { index as dialuxV2Index } from '@/actions/App/Http/Controllers/Dialux/V2/ProjectController';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { NavItem, Auth } from '@/types';
 import AppLogo from './app-logo';
@@ -14,9 +39,11 @@ const ADMIN_ROLES = ['root', 'gerencia', 'administracion'] as const;
 
 export function AppSidebar() {
     const { auth } = usePage<{ auth: Auth }>().props;
-    const { isCurrentUrl } = useCurrentUrl();
+    const { currentUrl, isCurrentUrl } = useCurrentUrl();
     const roles: string[] = auth.roles ?? [];
-    const canManageUsers = roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r));
+    const canManageUsers = roles.some((r) =>
+        (ADMIN_ROLES as readonly string[]).includes(r),
+    );
 
     const mainNavItems: NavItem[] = [
         {
@@ -26,22 +53,22 @@ export function AppSidebar() {
         },
         ...(canManageUsers
             ? [
-                {
-                    title: 'Gestión de Personal',
-                    href: '/users' as const,
-                    icon: Users,
-                },
-                {
-                    title: 'Organizaciones',
-                    href: '/organizations' as const,
-                    icon: Building2,
-                },
-                {
-                    title: 'Solicitudes',
-                    href: '/solicitudes' as const,
-                    icon: Inbox,
-                },
-            ]
+                  {
+                      title: 'Gestión de Personal',
+                      href: '/users' as const,
+                      icon: Users,
+                  },
+                  {
+                      title: 'Organizaciones',
+                      href: '/organizations' as const,
+                      icon: Building2,
+                  },
+                  {
+                      title: 'Solicitudes',
+                      href: '/solicitudes' as const,
+                      icon: Inbox,
+                  },
+              ]
             : []),
         {
             title: 'Caída de Tensión',
@@ -78,9 +105,14 @@ export function AppSidebar() {
             icon: PanelsLeftBottomIcon,
         },
         {
-            title: 'DIAlux',
+            title: 'DIALux V1',
             href: '/dialux',
             icon: Lightbulb,
+        },
+        {
+            title: 'DIALux V2',
+            href: dialuxV2Index(),
+            icon: Boxes,
         },
     ];
 
@@ -91,6 +123,12 @@ export function AppSidebar() {
             icon: ChartBar,
         },
     ];
+
+    const isNavItemActive = (item: NavItem): boolean => {
+        const itemUrl = toUrl(item.href);
+
+        return isCurrentUrl(item.href) || currentUrl.startsWith(`${itemUrl}/`);
+    };
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -112,15 +150,18 @@ export function AppSidebar() {
                 {/* metrado section */}
                 <SidebarGroup className="px-2 py-0">
                     <SidebarGroupLabel asChild>
-                        <Link href="/costos" prefetch>Costos</Link>
+                        <Link href="/costos" prefetch>
+                            Costos
+                        </Link>
                     </SidebarGroupLabel>
                     <SidebarMenu>
                         {metradosNavItems.map((item) => (
                             <SidebarMenuItem key={item.title}>
                                 <SidebarMenuButton
                                     asChild
-                                    isActive={isCurrentUrl(item.href)}
-                                    tooltip={{ children: item.title }}>
+                                    isActive={isNavItemActive(item)}
+                                    tooltip={{ children: item.title }}
+                                >
                                     <Link href={item.href} prefetch>
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
@@ -134,15 +175,18 @@ export function AppSidebar() {
                 {/* Gestion de proyectos */}
                 <SidebarGroup className="px-2 py-0">
                     <SidebarGroupLabel asChild>
-                        <Link href="/gestor-proyectos" prefetch>Gestor Proyectos</Link>
+                        <Link href="/gestor-proyectos" prefetch>
+                            Gestor Proyectos
+                        </Link>
                     </SidebarGroupLabel>
                     <SidebarMenu>
                         {gestorProyectos.map((item) => (
                             <SidebarMenuItem key={item.title}>
                                 <SidebarMenuButton
                                     asChild
-                                    isActive={isCurrentUrl(item.href)}
-                                    tooltip={{ children: item.title }}>
+                                    isActive={isNavItemActive(item)}
+                                    tooltip={{ children: item.title }}
+                                >
                                     <Link href={item.href} prefetch>
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>

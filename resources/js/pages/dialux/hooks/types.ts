@@ -708,7 +708,7 @@ export interface Conductor {
         powerFactor?: number;
         demandFactor?: number;
         system?: 1 | 3;
-        phaseBalance?: 'R' | 'S' | 'T' | 'RST';
+        phaseBalance?: 'R' | 'S' | 'T' | 'RST' | 'RS' | 'ST' | 'TR';
         nominalCableCurrentA?: number;
         ambientTemperatureC?: number;
         copperResistivity?: number;
@@ -791,22 +791,52 @@ export type ElectricalDeviceType =
 
 /** Propiedades tecnicas especificas de cada dispositivo */
 export interface ElectricalDeviceProperties {
+    /** Tablero aguas arriba, incluso si está ubicado en otra escena/piso. */
+    upstreamPanelId?: string;
+    /** Función dentro del árbol eléctrico global. */
+    panelRole?: 'service' | 'main' | 'distribution' | 'sub_distribution';
+    /** Ámbito lógico; un tablero de proyecto no se duplica con un piso. */
+    panelScope?: 'project' | 'module' | 'floor';
+    /** Ubicación funcional, independiente de la escena usada para dibujarlo. */
+    panelLocation?: 'external' | 'internal';
     voltage?: string;
     phases?: string;
     /** Longitud de referencia asignada al tablero, en metros. */
     lengthM?: number;
+    /** Longitud horizontal (opcional) */
+    horizontalLengthM?: number;
+    /** Longitud vertical (opcional) */
+    verticalLengthM?: number;
     designFactor?: number;
     connectionType?: 'delta' | 'star';
     workingTemperatureC?: number;
+    /** Temperatura ambiente para K2; independiente de la temperatura de trabajo usada en ρCuT. */
+    ambientTemperatureC?: number;
     copperResistivity?: number;
     upstreamVoltageDropV?: number;
     defaultPowerFactor?: number;
     defaultDemandFactor?: number;
+    phaseBalance?: 'R' | 'S' | 'T' | 'RST' | 'RS' | 'ST' | 'TR';
+    groupedCircuitCount?: number;
+    groupingFactor?: number;
+    temperatureFactor?: number;
     boxSize?: string;
     boxMaterial?: string;
     circuitCount?: number;
     current?: string;
     breakerType?: string;
+    /** Sección del cable alimentador que llega a este tablero (usado si es un tablero raíz sin padre) */
+    sectionMm2?: number;
+    /** Sección del cable de tierra que llega a este tablero */
+    earthSectionMm2?: number;
+    /** Tipo de conductor del cable alimentador (ej. THW-90, N2X0H) */
+    wireType?: string;
+    /** Diámetro del tubo del alimentador en mm */
+    tubeDiameterMm?: number;
+    /** Interruptor termomagnético del alimentador, según lista del Excel. */
+    itm?: string;
+    /** Interruptor diferencial del alimentador, según lista del Excel. */
+    dif?: string;
     /** Potencia asignada en vatios (solo dispositivos `outlet_*`), usada en Cálculo CT como PI tomas. */
     ratedPowerW?: number;
     /** ID del producto del catálogo de tomacorrientes (`outlet_products`) usado al colocar este dispositivo. */

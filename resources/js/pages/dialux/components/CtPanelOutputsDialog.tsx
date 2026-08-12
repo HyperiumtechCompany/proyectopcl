@@ -1,4 +1,5 @@
-import { Check, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
+import React from 'react';
+import { Check, AlertTriangle, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
     Dialog,
@@ -15,10 +16,29 @@ import {
 } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { CONDUCTOR_SECTION_OPTIONS, type Conductor } from '@/pages/dialux/hooks/types';
 
+const ITM_OPTIONS = [
+    '1x10', '1x16', '1x20', '1x25', '1x32', '1x40', '1x50', '1x63',
+    '2x10', '2x16', '2x20', '2x25', '2x32', '2x40', '2x50', '2x63',
+    '3x10', '3x15', '3x16', '3x20', '3x25', '3x30', '3x32', '3x35', '3x40', '3x50', '3x60', '3x63', '3x70', '3x75', '3x80', '3x100', '3x125', '3x140', '3x150', '3x160', '3x175', '3x180', '3x200', '3x225', '3x250', '3x300', '3x320', '3x400', '3x500', '3x630',
+    '4x16', '4x25', '4x40', '4x63', '4x80', '4x100', '4x125', '4x160', '4x200', '4x250', '4x320', '4x400', '4x500', '4x630',
+].map((value) => [value, value] as [string, string]);
+const DIF_OPTIONS = ['2x25', '2x40', '2x63', '4x25', '4x40', '4x63'].map((value) => [value, value] as [string, string]);
+const EARTH_SECTION_OPTIONS = [2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120].map((value) => [value.toString(), value.toString()] as [string, string]);
+
+function protectionValue(value: string): string {
+    return value.replace(/\s*A$/i, '');
+}
+
 interface SelectedRoomSummary {
     name: string;
     wire: RoomWireSummary;
 }
+
+export type CtCircuitPatch = Partial<NonNullable<Conductor['ct']>> & {
+    conductorType?: string;
+    loadType?: PanelCircuitSummary['circuitLoadType'];
+    designFactor?: number;
+};
 
 interface CtPanelOutputsDialogProps {
     open: boolean;
@@ -30,7 +50,7 @@ interface CtPanelOutputsDialogProps {
     onUpdateCircuit?: (
         levelId: string,
         conductorId: string,
-        patch: Partial<NonNullable<Conductor['ct']>>,
+        patch: CtCircuitPatch,
     ) => void;
     /** Cambia la sección (mm²) del conductor raíz de una salida. */
     onFixSection?: (
@@ -55,7 +75,7 @@ function groupByKey<T>(
         const key = keyFor(item);
         groups.set(key, [...(groups.get(key) ?? []), item]);
     });
-    return [...groups.entries()];
+    return Array.from(groups.entries());
 }
 
 function panelIsConforming(circuits: PanelCircuitSummary[]): boolean {
@@ -281,292 +301,288 @@ export function CtPanelOutputsDialog({
                         </div>
                     )}
 
-                    {levels.map(([levelId, levelCircuits]) => (
-                        <section
-                            key={levelId}
-                            className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setExpandedLevelIds((current) => {
-                                        const next = new Set(current);
-                                        if (next.has(levelId)) next.delete(levelId);
-                                        else next.add(levelId);
-                                        return next;
-                                    })
-                                }
-                                className="flex w-full items-center justify-between gap-3 border-b border-cyan-200 bg-cyan-50 px-3 py-2 text-left dark:border-cyan-900/50 dark:bg-cyan-950/30">
-                                <span>
-                                    <span className="block font-semibold text-cyan-800 dark:text-cyan-200">
-                                        {levelCircuits[0]?.levelName}
-                                    </span>
-                                    <span className="block text-[10px] text-slate-500">
-                                        {levelCircuits.length} salida(s) en este nivel
-                                    </span>
-                                </span>
-                                {expandedLevelIds.has(levelId) ? (
-                                    <ChevronDown size={16} />
-                                ) : (
-                                    <ChevronRight size={16} />
-                                )}
-                            </button>
+                    <section className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+                        <div className="overflow-x-auto [content-visibility:auto]">
+                            <table className="w-full min-w-[3500px] table-auto border-collapse text-left">
+                                <thead className="bg-sky-700 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-sky-900">
+                                    <tr className="divide-x divide-sky-500 border-b border-sky-400 text-center">
+                                        <th rowSpan={2} className="min-w-28 px-3 py-2">Datos del tablero eléctrico</th>
+                                        <th rowSpan={2} className="min-w-20 px-3 py-2">N.º circuito</th>
+                                        <th rowSpan={2} className="min-w-72 px-3 py-2">Descripción del circuito eléctrico</th>
+                                        <th rowSpan={2} className="px-3 py-2">PI (W) alum.</th>
+                                        <th rowSpan={2} className="px-3 py-2">PI (W) tomas</th>
+                                        <th rowSpan={2} className="px-3 py-2">PI (W) fuerza</th>
+                                        <th rowSpan={2} className="px-3 py-2">Factor de potencia</th>
+                                        <th rowSpan={2} className="px-3 py-2">FS tomac</th>
+                                        <th rowSpan={2} className="px-3 py-2">P.I total (kW)</th>
+                                        <th rowSpan={2} className="px-3 py-2">M.D (kW)</th>
+                                        <th rowSpan={2} className="px-3 py-2">Sistema</th>
+                                        <th rowSpan={2} className="px-3 py-2">Id teórica</th>
+                                        <th rowSpan={2} className="px-3 py-2">In total</th>
+                                        <th colSpan={4} className="px-3 py-2">Id total balanceada</th>
+                                        <th rowSpan={2} className="px-3 py-2">Inom cable</th>
+                                        <th rowSpan={2} className="px-3 py-2">T. amb. (°C)</th>
+                                        <th rowSpan={2} className="px-3 py-2">N.º circuitos agrup.</th>
+                                        <th rowSpan={2} className="px-3 py-2">Factor agrup. K1</th>
+                                        <th rowSpan={2} className="px-3 py-2">Factor temp. K2</th>
+                                        <th rowSpan={2} className="px-3 py-2">Iadm cable</th>
+                                        <th rowSpan={2} className="px-3 py-2">Conformidad por capacidad</th>
+                                        <th colSpan={2} className="px-3 py-2">Capacidad de las protecciones eléctricas</th>
+                                        <th rowSpan={2} className="bg-lime-400 px-3 py-2 text-slate-950">Longitud horizontal (m)</th>
+                                        <th rowSpan={2} className="bg-lime-400 px-3 py-2 text-slate-950">Longitud vertical (m)</th>
+                                        <th rowSpan={2} className="bg-lime-400 px-3 py-2 text-slate-950">Longitud total (m)</th>
+                                        <th rowSpan={2} className="px-3 py-2">Sección del conductor</th>
+                                        <th rowSpan={2} className="px-3 py-2">Delta V (V)</th>
+                                        <th rowSpan={2} className="px-3 py-2">Delta V (%)</th>
+                                        <th rowSpan={2} className="px-3 py-2">&lt;4% final / &lt;2.5% aliment.</th>
+                                        <th rowSpan={2} className="px-3 py-2">Diámetro del tubo</th>
+                                        <th rowSpan={2} className="px-3 py-2">Tipo de conductor</th>
+                                        <th rowSpan={2} className="px-3 py-2">Sección conductor a tierra</th>
+                                    </tr>
+                                    <tr className="divide-x divide-sky-500 border-b border-sky-400 text-center">
+                                        <th className="px-3 py-1.5">Balanceo</th>
+                                        <th className="px-3 py-1.5">R</th>
+                                        <th className="px-3 py-1.5">S</th>
+                                        <th className="px-3 py-1.5">T</th>
+                                        <th className="px-3 py-1.5">ITM</th>
+                                        <th className="px-3 py-1.5">DIF</th>
+                                    </tr>
+                                </thead>
+                                
+                                
+                                
+                                <tbody>
+                                    {/* 1. SECCIONES POR PISO (Tableros de Distribución) */}
+                                    {levels.map(([levelId, levelCircuits]) => {
+                                        // Filtramos los que NO son main_panel
+                                        const levelName = levelCircuits[0]?.levelName ?? levelId;
+                                        const distributionCircuits = levelCircuits.filter(c => c.panelType !== 'main_panel');
+                                        if (distributionCircuits.length === 0) return null;
 
-                            {expandedLevelIds.has(levelId) && (
-                            <div className="overflow-x-auto [content-visibility:auto]">
-                                <table className="w-full min-w-[3600px] text-left">
-                                    <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600 dark:bg-slate-950 dark:text-slate-500">
-                                        <tr>
-                                            <th className="px-3 py-2">Jerarquía / tablero</th>
-                                            <th className="px-3 py-2">CT</th>
-                                            <th className="px-3 py-2">Tipo</th>
-                                            <th className="px-3 py-2">Carga atendida</th>
-                                            <th className="px-3 py-2">Ruta por ambientes</th>
-                                            <th className="px-3 py-2">PI alum. (W)</th>
-                                            <th className="px-3 py-2">PI tomas (W)</th>
-                                            <th className="px-3 py-2"># Lumin.</th>
-                                            <th className="px-3 py-2"># Tomas</th>
-                                            <th className="px-3 py-2">Cable rec.</th>
-                                            <th className="px-3 py-2">PI fuerza (W)</th>
-                                            <th className="px-3 py-2">F. potencia</th>
-                                            <th className="px-3 py-2">PI total (kW)</th>
-                                            <th className="px-3 py-2">FS</th>
-                                            <th className="px-3 py-2">MD (kW)</th>
-                                            <th className="px-3 py-2">Sistema</th>
-                                            <th className="px-3 py-2">Id teórica</th>
-                                            <th className="px-3 py-2">In total</th>
-                                            <th className="px-3 py-2">Balanceo</th>
-                                            <th className="px-3 py-2">R (A)</th>
-                                            <th className="px-3 py-2">S (A)</th>
-                                            <th className="px-3 py-2">T (A)</th>
-                                            <th className="px-3 py-2">Inom cable</th>
-                                            <th className="px-3 py-2">T. amb.</th>
-                                            <th className="px-3 py-2">N.º agrup.</th>
-                                            <th className="px-3 py-2">K agrup.</th>
-                                            <th className="px-3 py-2">K2 temp.</th>
-                                            <th className="px-3 py-2">Iadm</th>
-                                            <th className="px-3 py-2">Capacidad</th>
-                                            <th className="px-3 py-2">ITM</th>
-                                            <th className="px-3 py-2">DIF</th>
-                                            <th className="px-3 py-2">L. horizontal</th>
-                                            <th className="px-3 py-2">L. vertical</th>
-                                            <th className="px-3 py-2">L. total</th>
-                                            <th className="px-3 py-2">Sección</th>
-                                            <th className="px-3 py-2">ΔV (V)</th>
-                                            <th className="px-3 py-2">ΔV (%)</th>
-                                            <th className="px-3 py-2">Estado</th>
-                                            <th className="px-3 py-2">Ø tubo</th>
-                                            <th className="px-3 py-2">Conductor</th>
-                                            <th className="px-3 py-2">Tierra</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {groupByKey(
-                                            levelCircuits,
-                                            (circuit) => circuit.panelId,
-                                        ).flatMap(([panelId, panelCircuits]) => {
-                                            const panel = panelCircuits[0]!;
-                                            const panelKey = `${levelId}-${panelId}`;
-                                            const conforming = panelIsConforming(panelCircuits);
+                                        // Agrupar por panelId
+                                        const panelsInLevel = groupByKey(distributionCircuits, c => c.panelId)
+                                            .sort((a, b) => a[1][0]!.panelLabel.localeCompare(b[1][0]!.panelLabel));
 
-                                            return panelCircuits.map((circuit, index) => (
-                                                <tr
-                                                    key={`${panelId}-${circuit.rootConductorId}`}
-                                                    className="border-t border-slate-200 align-top dark:border-slate-800">
-                                                    {index === 0 && (
-                                                        <td
-                                                            rowSpan={panelCircuits.length}
-                                                            className="border-r border-slate-200 px-3 py-3 dark:border-slate-800">
-                                                            <div className="min-w-44 space-y-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                                                                        panel.panelType === 'main_panel'
-                                                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                                                            : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
-                                                                    }`}>
-                                                                        {panel.panelType === 'main_panel' ? 'TG' : 'TD'}
-                                                                    </span>
-                                                                    <span className="font-semibold">{panel.panelLabel}</span>
-                                                                </div>
-                                                                <p className="text-[10px] text-slate-500">
-                                                                    Longitud asignada: <span className="font-mono">{panel.panelLengthM.toFixed(2)} m</span>
-                                                                </p>
-                                                                <p className="text-[10px] text-slate-500">
-                                                                    {panel.voltageV} V · {panel.phases}Φ · {panel.connectionType === 'star' ? 'Estrella' : 'Delta'}
-                                                                </p>
-                                                                <p className="text-[10px] text-slate-500">
-                                                                    fdis {panel.designFactor.toFixed(2)} · ρCuT {panel.copperResistivity.toFixed(4)}
-                                                                </p>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => verifyAndFixPanel(levelId, panelKey, panelCircuits)}
-                                                                    className="inline-flex items-center gap-1.5 rounded border border-cyan-600 px-2 py-1 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50 dark:border-cyan-700 dark:text-cyan-200 dark:hover:bg-cyan-950/50">
-                                                                    <Check size={11} />
-                                                                    {panel.panelType === 'main_panel' ? 'Verificar TG' : 'Verificar TD'}
-                                                                </button>
-                                                                {verifiedPanelKey === panelKey && (
-                                                                    <>
-                                                                        <p className={conforming ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-                                                                            {conforming
-                                                                                ? `${panelCircuits.length} salida(s) conformes${autoFixedCount ? ` (sección aumentada en ${autoFixedCount})` : ''}`
-                                                                                : `Sección aumentada al máximo disponible; aún hay ${panelCircuits.filter((c) => !c.voltageDropOk || !c.capacityConforms).length} salida(s) sin cumplir`}
-                                                                        </p>
-                                                                        {panelCircuits.some((c) => c.normativeViolation) && (
-                                                                            <p className="text-red-600 dark:text-red-400">
-                                                                                {panelCircuits.filter((c) => c.normativeViolation).length} salida(s) mezclan alumbrado y
-                                                                                tomacorriente — la sección no arregla eso, hay que separar el cableado.
-                                                                            </p>
-                                                                        )}
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                    <td className="px-3 py-3 font-mono text-cyan-700 dark:text-cyan-300">
-                                                        {circuit.code}
+                                        return (
+                                            <React.Fragment key={levelId}>
+                                                <tr className="bg-slate-700 text-white">
+                                                        <td colSpan={36} className="px-3 py-1 font-bold">
+                                                        {levelName}
                                                     </td>
-                                                    <td className="px-3 py-3">
-                                                        <CircuitTypeBadge type={circuit.circuitLoadType} />
-                                                    </td>
-                                                    <td className="px-3 py-3">
-                                                        {circuit.fedPanelLabels.length > 0 && (
-                                                            <p className="mb-1 font-semibold text-violet-600 dark:text-violet-300">
-                                                                Alimenta: {circuit.fedPanelLabels.join(', ')}
-                                                            </p>
-                                                        )}
-                                                        {circuit.normativeViolation && (
-                                                            <p className="mb-1 max-w-64 rounded border border-red-300 bg-red-50 px-1.5 py-1 text-[10px] font-semibold leading-relaxed text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-                                                                Mezcla alumbrado y tomacorriente en la misma
-                                                                salida. Sepáralos en circuitos y tuberías
-                                                                distintas (CNE-Utilización / RNE EM.010).
-                                                            </p>
-                                                        )}
-                                                        {circuit.rooms.map((room) => (
-                                                            <p key={room.roomId}>
-                                                                <span className="font-medium">{room.roomName}</span>
-                                                                <span className="text-slate-500"> · {room.detail || 'Sin potencia'}</span>
-                                                            </p>
-                                                        ))}
-                                                        {circuit.rooms.length === 0 && 'Sin cargas finales'}
-                                                    </td>
-                                                    <MonoCell value={circuit.traversedRoomNames.join(' → ') || '—'} />
-                                                    <MonoCell value={circuit.lightingPowerW.toFixed(0)} />
-                                                    <MonoCell value={circuit.outletPowerW.toFixed(0)} />
-                                                    <MonoCell value={circuit.lightingOutletCount.toString()} />
-                                                    <MonoCell value={circuit.outletOutletCount.toString()} />
-                                                    <MonoCell value={circuit.circuitLoadType === 'lighting' ? '2.5mm² (Nro.14)' : circuit.circuitLoadType === 'outlet' ? '4mm² (Nro.12)' : circuit.circuitLoadType === 'feeder' ? 'Alimentador' : 'Mixto'} />
-                                                    <EditNumberCell
-                                                        value={circuit.forcePowerW}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { forcePowerW: value })}
-                                                    />
-                                                    <EditNumberCell
-                                                        value={circuit.powerFactor}
-                                                        step={0.01}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { powerFactor: value })}
-                                                    />
-                                                    <MonoCell value={circuit.installedPowerKw.toFixed(2)} strong />
-                                                    <EditNumberCell
-                                                        value={circuit.demandFactor}
-                                                        step={0.01}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { demandFactor: value })}
-                                                    />
-                                                    <MonoCell value={circuit.maximumDemandKw.toFixed(2)} />
-                                                    <SelectCell
-                                                        value={`${circuit.phases}`}
-                                                        options={[['1', '1'], ['3', '3']]}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { system: Number(value) as 1 | 3 })}
-                                                    />
-                                                    <MonoCell value={`${circuit.theoreticalDesignCurrentA.toFixed(2)} A`} />
-                                                    <MonoCell value={`${circuit.currentA.toFixed(2)} A`} />
-                                                    <SelectCell
-                                                        value={circuit.phaseBalance}
-                                                        options={circuit.phases === 3 ? [['RST', 'RST']] : [['R', 'R'], ['S', 'S'], ['T', 'T']]}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { phaseBalance: value as 'R' | 'S' | 'T' | 'RST' })}
-                                                    />
-                                                    <MonoCell value={circuit.phaseCurrentR.toFixed(2)} />
-                                                    <MonoCell value={circuit.phaseCurrentS.toFixed(2)} />
-                                                    <MonoCell value={circuit.phaseCurrentT.toFixed(2)} />
-                                                    <EditNumberCell
-                                                        value={circuit.nominalCableCurrentA}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { nominalCableCurrentA: value })}
-                                                    />
-                                                    <EditNumberCell
-                                                        value={circuit.ambientTemperatureC}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { ambientTemperatureC: value })}
-                                                    />
-                                                    <EditNumberCell
-                                                        value={circuit.groupedCircuitCount}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { groupedCircuitCount: value })}
-                                                    />
-                                                    <EditNumberCell
-                                                        value={circuit.groupingFactor}
-                                                        step={0.01}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { groupingFactor: value })}
-                                                    />
-                                                    <EditNumberCell
-                                                        value={circuit.temperatureFactor}
-                                                        step={0.01}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { temperatureFactor: value })}
-                                                    />
-                                                    <MonoCell value={`${circuit.admissibleCableCurrentA.toFixed(2)} A`} />
-                                                    <StatusCell ok={circuit.capacityConforms} okText="Conforme" failText="No conforme" />
-                                                    <SelectCell
-                                                        value={circuit.itm}
-                                                        options={[
-                                                            ['1x10 A', '1x10 A'], ['1x16 A', '1x16 A'], ['1x20 A', '1x20 A'], ['1x25 A', '1x25 A'], ['1x32 A', '1x32 A'], ['1x40 A', '1x40 A'], ['1x50 A', '1x50 A'], ['1x63 A', '1x63 A'],
-                                                            ['2x10 A', '2x10 A'], ['2x16 A', '2x16 A'], ['2x20 A', '2x20 A'], ['2x25 A', '2x25 A'], ['2x32 A', '2x32 A'], ['2x40 A', '2x40 A'], ['2x50 A', '2x50 A'], ['2x63 A', '2x63 A'],
-                                                            ['3x10 A', '3x10 A'], ['3x16 A', '3x16 A'], ['3x20 A', '3x20 A'], ['3x25 A', '3x25 A'], ['3x32 A', '3x32 A'], ['3x40 A', '3x40 A'], ['3x50 A', '3x50 A'], ['3x63 A', '3x63 A'],
-                                                            ['4x10 A', '4x10 A'], ['4x16 A', '4x16 A'], ['4x20 A', '4x20 A'], ['4x25 A', '4x25 A'], ['4x32 A', '4x32 A'], ['4x40 A', '4x40 A'], ['4x50 A', '4x50 A'], ['4x63 A', '4x63 A'],
-                                                        ]}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { itm: value })}
-                                                    />
-                                                    <SelectCell
-                                                        value={circuit.dif}
-                                                        options={[
-                                                            ['2x25 A', '2x25 A'], ['2x40 A', '2x40 A'], ['2x63 A', '2x63 A'],
-                                                            ['4x25 A', '4x25 A'], ['4x40 A', '4x40 A'], ['4x63 A', '4x63 A'],
-                                                        ]}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { dif: value })}
-                                                    />
-                                                    <MonoCell value={`${circuit.horizontalLengthM.toFixed(2)} m`} />
-                                                    <MonoCell value={`${circuit.verticalLengthM.toFixed(2)} m`} />
-                                                    <td className="px-3 py-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                                                        {circuit.lengthM.toFixed(2)} m
-                                                        {circuit.lengthOverridden && (
-                                                            <p className="text-[9px] font-normal text-cyan-600 dark:text-cyan-300">
-                                                                Longitud manual del tablero
-                                                            </p>
-                                                        )}
-                                                    </td>
-                                                    <SelectCell
-                                                        value={String(circuit.sectionMm2)}
-                                                        options={CONDUCTOR_SECTION_OPTIONS.map(({ value, label }) => [String(value), label] as [string, string])}
-                                                        onChange={(value) => onFixSection?.(levelId, circuit.rootConductorId, Number.parseFloat(value))}
-                                                    />
-                                                    <MonoCell value={`${circuit.voltageDropV.toFixed(2)} V`} />
-                                                    <td className="px-3 py-3">
-                                                        <p className={circuit.voltageDropOk ? 'font-mono font-semibold text-emerald-600 dark:text-emerald-400' : 'font-mono font-semibold text-red-600 dark:text-red-400'}>
-                                                            {circuit.voltageDropPct.toFixed(2)} %
-                                                        </p>
-                                                        <p className="text-[10px] text-slate-500">
-                                                            Máx. {circuit.maxVoltageDropPct.toFixed(1)} %
-                                                        </p>
-                                                    </td>
-                                                    <StatusCell ok={circuit.voltageDropOk} okText="Cumple" failText="No cumple" />
-                                                    <MonoCell value={`${circuit.tubeDiameterMm} mm`} />
-                                                    <MonoCell value={circuit.conductorType || '—'} />
-                                                    <EditNumberCell
-                                                        value={circuit.earthSectionMm2}
-                                                        onChange={(value) => onUpdateCircuit?.(levelId, circuit.rootConductorId, { earthSectionMm2: value })}
-                                                    />
                                                 </tr>
-                                            ));
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                            )}
-                        </section>
-                    ))}
+                                                {panelsInLevel.flatMap(([, panelCircuits]) => {
+                                                    const summaryCircuit = panelCircuits.find(c => c.isPanelSummary);
+                                                    const normalCircuits = panelCircuits.filter(c => !c.isPanelSummary);
+                                                    
+                                                    const rows: React.ReactNode[] = [];
+                                                    
+                                                    // 1. Filas C normales (Circuitos primero)
+                                                    if (normalCircuits.length > 0) {
+                                                        normalCircuits.forEach((circuit, circuitIndex) => {
+                                                            rows.push(
+                                                                <tr key={`circuit-${circuit.rootConductorId}`} className="border-t border-slate-200 align-top dark:border-slate-800">
+                                                                    {circuitIndex === 0 && (
+                                                                        <td rowSpan={normalCircuits.length} className="border-r border-slate-200 bg-violet-50/80 px-3 py-3 align-middle text-center dark:border-slate-800 dark:bg-violet-950/20">
+                                                                        <div className="flex items-center justify-center gap-2">
+                                                                            <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                                                                                TD
+                                                                            </span>
+                                                                            <span className="font-semibold text-slate-700 dark:text-slate-300">{circuit.panelLabel}</span>
+                                                                        </div>
+                                                                        </td>
+                                                                    )}
+                                                                    <td className="border-r border-slate-200 bg-emerald-50/80 px-3 py-3 font-mono font-bold text-emerald-700 dark:border-slate-800 dark:bg-emerald-950/20 dark:text-emerald-300">
+                                                                        {circuit.code}
+                                                                    </td>
+                                                                    <td className="min-w-72 px-3 py-3">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <CircuitTypeBadge type={circuit.circuitLoadType} />
+                                                                            <SelectCellContent value={circuit.circuitLoadType} options={[['lighting', 'Alumbrado'], ['outlet', 'Tomacorriente'], ['mixed', 'Mixto']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { loadType: value as CtCircuitPatch['loadType'] })} />
+                                                                        </div>
+                                                                        {circuit.fedPanelLabels.length > 0 && <p className="mt-1 font-semibold text-violet-600 dark:text-violet-300">Alimenta: {circuit.fedPanelLabels.join(', ')}</p>}
+                                                                        {circuit.rooms.map((room) => <p key={room.roomId} className="mt-1"><span className="font-medium">{room.roomName}</span><span className="text-slate-500"> · {room.detail || 'Sin potencia'}</span></p>)}
+                                                                        <p className="mt-1 text-[9px] text-slate-500">{circuit.lightingOutletCount} lumin. · {circuit.outletOutletCount} tomas · {circuit.traversedRoomNames.join(' → ') || 'Sin ruta'}</p>
+                                                                    </td>
+                                                                    <MonoCell value={circuit.lightingPowerW.toFixed(0)} />
+                                                                    <MonoCell value={circuit.outletPowerW.toFixed(0)} />
+                                                                    <EditNumberCell value={circuit.forcePowerW} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { forcePowerW: value })} />
+                                                                    <EditNumberCell value={circuit.powerFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { powerFactor: value })} />
+                                                                    <EditNumberCell value={circuit.demandFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { demandFactor: value })} />
+                                                                    <MonoCell value={circuit.installedPowerKw.toFixed(2)} strong />
+                                                                    <MonoCell value={circuit.maximumDemandKw.toFixed(2)} strong />
+                                                                    <SelectCell value={circuit.phases.toString()} options={[['1', '1Φ+N+T'], ['3', '3Φ+N+T']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { system: Number(value) as 1 | 3 })} />
+                                                                    <MonoCell value={circuit.theoreticalDesignCurrentA.toFixed(2)} />
+                                                                    <MonoCell value={circuit.currentA.toFixed(2)} />
+                                                                    <SelectCell value={circuit.phaseBalance} options={[['R', 'R'], ['S', 'S'], ['T', 'T'], ['RS', 'RS'], ['ST', 'ST'], ['TR', 'TR'], ['RST', 'RST']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { phaseBalance: value as PanelCircuitSummary['phaseBalance'] })} />
+                                                                    <MonoCell value={circuit.phaseCurrentR.toFixed(2)} />
+                                                                    <MonoCell value={circuit.phaseCurrentS.toFixed(2)} />
+                                                                    <MonoCell value={circuit.phaseCurrentT.toFixed(2)} />
+                                                                    <MonoCell value={circuit.nominalCableCurrentA.toFixed(2)} />
+                                                                    <EditNumberCell value={circuit.ambientTemperatureC} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { ambientTemperatureC: value })} />
+                                                                    <EditNumberCell value={circuit.groupedCircuitCount} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupedCircuitCount: value })} />
+                                                                    <EditNumberCell value={circuit.groupingFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupingFactor: value })} />
+                                                                    <EditNumberCell value={circuit.temperatureFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { temperatureFactor: value })} />
+                                                                    <MonoCell value={circuit.admissibleCableCurrentA.toFixed(2)} />
+                                                                    <td className="px-3 py-3 text-center">{circuit.capacityConforms ? <Check size={14} className="mx-auto text-emerald-500" /> : <AlertTriangle size={14} className="mx-auto text-amber-500" />}</td>
+                                                                    <SelectCell value={protectionValue(circuit.itm)} options={ITM_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { itm: value })} />
+                                                                    <SelectCell value={protectionValue(circuit.dif)} options={DIF_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { dif: value })} />
+                                                                    <LengthCells circuit={circuit} />
+                                                                    <SelectCell value={circuit.sectionMm2.toString()} options={CONDUCTOR_SECTION_OPTIONS.map(opt => [opt.value.toString(), opt.label])} onChange={(val) => onFixSection?.(circuit.levelId, circuit.rootConductorId, Number(val))} />
+                                                                    <MonoCell value={circuit.voltageDropV?.toFixed(2) ?? '0.00'} />
+                                                                    <td className="px-3 py-3"><span className={circuit.voltageDropOk ? 'text-emerald-600 font-semibold' : 'text-red-600 font-bold'}>{circuit.voltageDropPct?.toFixed(2) ?? '0.00'}%</span></td>
+                                                                    <td className="px-3 py-3">{circuit.voltageDropOk && circuit.capacityConforms ? <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"><Check size={10} /> OK</span> : <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">Revisar</span>}</td>
+                                                                    <MonoCell value={`${circuit.tubeDiameterMm} mm`} />
+                                                                    <SelectCell value={circuit.conductorType} options={[['TW', 'TW'], ['THW', 'THW'], ['NYY', 'NYY'], ['LSOH-80', 'LSOH-80'], ['LSOH-90', 'LSOH-90'], ['N2X0H', 'N2X0H']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { conductorType: value })} />
+                                                                    <SelectCell value={circuit.earthSectionMm2.toString()} options={EARTH_SECTION_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { earthSectionMm2: Number(value) })} />
+                                                                </tr>
+                                                            );
+                                                        });
+                                                    }
+                                                    
+                                                    // 2. Fila resumen del TD (al final)
+                                                    if (summaryCircuit) {
+                                                        const circuit = summaryCircuit;
+                                                        rows.push(
+                                                            <tr key={`td-summary-${circuit.rootConductorId}`} className="border-b-4 border-t-2 border-slate-300 align-top dark:border-slate-700 bg-blue-50/50 font-bold dark:bg-blue-900/20">
+                                                                 <td className="border-r border-slate-200 bg-blue-100 px-3 py-3 text-center dark:border-slate-800 dark:bg-blue-900/30">
+                                                                    <div className="min-w-44 space-y-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                             <span className="font-mono text-xs font-bold text-blue-900 dark:text-blue-100">
+                                                                                 TD
+                                                                            </span>
+                                                                        </div>
+                                                                     </div>
+                                                                 </td>
+                                                                <td className="border-r border-slate-200 bg-emerald-50/80 px-3 py-3 font-mono font-bold text-emerald-700 dark:border-slate-800 dark:bg-emerald-950/20 dark:text-emerald-300">CG1</td>
+                                                                <td className="min-w-72 px-3 py-3">
+                                                                    <p className="font-semibold text-slate-700 dark:text-slate-200">Resumen del tablero {circuit.panelLabel}</p>
+                                                                    <p className="mt-1 text-[9px] text-slate-500">Alimentador · {circuit.traversedRoomNames.join(' → ') || 'Sin ruta'}</p>
+                                                                </td>
+                                                                <MonoCell value={circuit.upstreamVoltageDropV.toFixed(2)} />
+                                                                <MonoCell value={circuit.outletPowerW.toFixed(0)} />
+                                                                <MonoCell value={circuit.forcePowerW.toFixed(0)} />
+                                                                <EditNumberCell value={circuit.powerFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { powerFactor: value })} />
+                                                                <EditNumberCell value={circuit.demandFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { demandFactor: value })} />
+                                                                <MonoCell value={circuit.installedPowerKw.toFixed(2)} strong />
+                                                                <MonoCell value={circuit.maximumDemandKw.toFixed(2)} strong />
+                                                                <SelectCell value={circuit.phases.toString()} options={[['1', '1Φ+N+T'], ['3', '3Φ+N+T']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { system: Number(value) as 1 | 3 })} />
+                                                                <MonoCell value={circuit.theoreticalDesignCurrentA.toFixed(2)} />
+                                                                <MonoCell value={circuit.currentA.toFixed(2)} />
+                                                                <SelectCell value={circuit.phaseBalance} options={[['R', 'R'], ['S', 'S'], ['T', 'T'], ['RS', 'RS'], ['ST', 'ST'], ['TR', 'TR'], ['RST', 'RST']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { phaseBalance: value as PanelCircuitSummary['phaseBalance'] })} />
+                                                                <MonoCell value={circuit.phaseCurrentR.toFixed(2)} />
+                                                                <MonoCell value={circuit.phaseCurrentS.toFixed(2)} />
+                                                                <MonoCell value={circuit.phaseCurrentT.toFixed(2)} />
+                                                                <MonoCell value={circuit.nominalCableCurrentA.toFixed(2)} />
+                                                                <EditNumberCell value={circuit.ambientTemperatureC} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { ambientTemperatureC: value })} />
+                                                                <EditNumberCell value={circuit.groupedCircuitCount} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupedCircuitCount: value })} />
+                                                                <EditNumberCell value={circuit.groupingFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupingFactor: value })} />
+                                                                <EditNumberCell value={circuit.temperatureFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { temperatureFactor: value })} />
+                                                                <MonoCell value={circuit.admissibleCableCurrentA.toFixed(2)} />
+                                                                <td className="px-3 py-3 text-center">{circuit.capacityConforms ? <Check size={14} className="mx-auto text-emerald-500" /> : <AlertTriangle size={14} className="mx-auto text-amber-500" />}</td>
+                                                                <SelectCell value={protectionValue(circuit.itm)} options={ITM_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { itm: value })} />
+                                                                <SelectCell value={protectionValue(circuit.dif)} options={DIF_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { dif: value })} />
+                                                                <LengthCells circuit={circuit} />
+                                                                <SelectCell value={circuit.sectionMm2.toString()} options={CONDUCTOR_SECTION_OPTIONS.map(opt => [opt.value.toString(), opt.label])} onChange={(val) => onFixSection?.(circuit.levelId, circuit.rootConductorId, Number(val))} />
+                                                                <MonoCell value={circuit.voltageDropV.toFixed(2)} />
+                                                                <td className="px-3 py-3"><span className={circuit.voltageDropOk ? 'text-emerald-600 font-semibold' : 'text-red-600 font-bold'}>{circuit.voltageDropPct.toFixed(2)}%</span></td>
+                                                                <td className="px-3 py-3">{circuit.voltageDropOk && circuit.capacityConforms ? <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"><Check size={10} /> OK</span> : <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">Revisar</span>}</td>
+                                                                <MonoCell value={`${circuit.tubeDiameterMm} mm`} />
+                                                                <SelectCell value={circuit.conductorType} options={[['TW', 'TW'], ['THW', 'THW'], ['NYY', 'NYY'], ['LSOH-80', 'LSOH-80'], ['LSOH-90', 'LSOH-90'], ['N2X0H', 'N2X0H']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { conductorType: value })} />
+                                                                <SelectCell value={circuit.earthSectionMm2.toString()} options={EARTH_SECTION_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { earthSectionMm2: Number(value) })} />
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    
+                                                    return rows;
+                                                })}
+                                            </React.Fragment>
+                                        );
+                                    })}
+
+                                    {/* 2. SECCIÓN GLOBAL (Tableros Generales al final) */}
+                                    {circuits.some(c => c.panelType === 'main_panel' && c.isPanelSummary) && (
+                                        <>
+                                            <tr className="bg-slate-800 text-white">
+                                                <td colSpan={36} className="px-3 py-1 font-bold text-center">
+                                                    RESUMEN GENERAL (TG)
+                                                </td>
+                                            </tr>
+                                            {groupByKey(
+                                                circuits.filter(c => c.panelType === 'main_panel'),
+                                                c => c.panelId
+                                            ).flatMap(([, panelCircuits]) => {
+                                                const summaryCircuit = panelCircuits.find(c => c.isPanelSummary);
+                                                
+                                                const rows: React.ReactNode[] = [];
+                                                
+                                                // 2. Fila resumen final del TG (al final)
+                                                if (summaryCircuit) {
+                                                    const circuit = summaryCircuit;
+                                                    rows.push(
+                                                        <tr key={`global-summary-${circuit.rootConductorId}`} className="border-t-4 border-slate-400 align-top dark:border-slate-600 bg-orange-50 font-bold dark:bg-orange-900/30">
+                                                            <td className="border-r border-slate-200 px-3 py-4 dark:border-slate-800">
+                                                                <div className="min-w-44 space-y-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="rounded px-2 py-1 text-[11px] font-bold bg-orange-500 text-white">
+                                                                            RESUMEN {circuit.panelLabel}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-500">Longitud asignada: <span className="font-mono">{circuit.panelLengthM?.toFixed(2)} m</span></p>
+                                                                    <p className="text-[10px] text-slate-500">{circuit.voltageV} V · {circuit.phases}Φ · {circuit.connectionType === 'star' ? 'Estrella' : 'Delta'}</p>
+                                                                    <p className="text-[10px] text-slate-500">fdis {circuit.designFactor?.toFixed(2)} · ρCuT {circuit.copperResistivity?.toFixed(4)}</p>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-3 py-3 font-mono text-cyan-700 dark:text-cyan-300">TTA</td>
+                                                            <td className="min-w-72 px-3 py-3">
+                                                                <p className="font-semibold text-slate-700 dark:text-slate-200">Alimentador General {circuit.panelLabel}</p>
+                                                                <p className="mt-1 text-[9px] text-slate-500">Resumen de todos los TD · {circuit.traversedRoomNames.join(' → ') || 'Sin ruta'}</p>
+                                                            </td>
+                                                            <MonoCell value={circuit.lightingPowerW.toFixed(0)} />
+                                                            <MonoCell value={circuit.outletPowerW.toFixed(0)} />
+                                                            <MonoCell value={circuit.installedPowerKw.toFixed(2)} />
+                                                            <EditNumberCell value={circuit.powerFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { powerFactor: value })} />
+                                                            <EditNumberCell value={circuit.demandFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { demandFactor: value })} />
+                                                            <MonoCell value={circuit.installedPowerKw.toFixed(2)} strong />
+                                                            <MonoCell value={circuit.maximumDemandKw.toFixed(2)} strong />
+                                                            <SelectCell value={circuit.phases.toString()} options={[['1', '1Φ+N+T'], ['3', '3Φ+N+T']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { system: Number(value) as 1 | 3 })} />
+                                                            <MonoCell value={circuit.theoreticalDesignCurrentA.toFixed(2)} />
+                                                            <MonoCell value={circuit.currentA.toFixed(2)} />
+                                                            <SelectCell value={circuit.phaseBalance} options={[['R', 'R'], ['S', 'S'], ['T', 'T'], ['RS', 'RS'], ['ST', 'ST'], ['TR', 'TR'], ['RST', 'RST']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, `synthetic-feeder-${circuit.panelId}`, { phaseBalance: value as PanelCircuitSummary['phaseBalance'] })} />
+                                                            <MonoCell value={circuit.phaseCurrentR.toFixed(2)} />
+                                                            <MonoCell value={circuit.phaseCurrentS.toFixed(2)} />
+                                                            <MonoCell value={circuit.phaseCurrentT.toFixed(2)} />
+                                                            <MonoCell value={circuit.nominalCableCurrentA.toFixed(2)} />
+                                                            <EditNumberCell value={circuit.ambientTemperatureC} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { ambientTemperatureC: value })} />
+                                                            <EditNumberCell value={circuit.groupedCircuitCount} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupedCircuitCount: value })} />
+                                                            <EditNumberCell value={circuit.groupingFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { groupingFactor: value })} />
+                                                            <EditNumberCell value={circuit.temperatureFactor} step={0.01} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { temperatureFactor: value })} />
+                                                            <MonoCell value={circuit.admissibleCableCurrentA.toFixed(2)} />
+                                                            <td className="px-3 py-3 text-center">{circuit.capacityConforms ? <Check size={14} className="mx-auto text-emerald-500" /> : <AlertTriangle size={14} className="mx-auto text-amber-500" />}</td>
+                                                            <SelectCell value={protectionValue(circuit.itm)} options={ITM_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { itm: value })} />
+                                                            <SelectCell value={protectionValue(circuit.dif)} options={DIF_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { dif: value })} />
+                                                            <LengthCells circuit={circuit} />
+                                                            <SelectCell value={circuit.sectionMm2.toString()} options={CONDUCTOR_SECTION_OPTIONS.map(opt => [opt.value.toString(), opt.label])} onChange={(val) => onFixSection?.(circuit.levelId, circuit.rootConductorId, Number(val))} />
+                                                            <MonoCell value={circuit.voltageDropV.toFixed(2)} />
+                                                            <td className="px-3 py-3"><span className={circuit.voltageDropOk ? 'text-emerald-600 font-semibold' : 'text-red-600 font-bold'}>{circuit.voltageDropPct.toFixed(2)}%</span></td>
+                                                            <td className="px-3 py-3">{circuit.voltageDropOk && circuit.capacityConforms ? <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"><Check size={10} /> OK</span> : <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">Revisar</span>}</td>
+                                                            <MonoCell value={`${circuit.tubeDiameterMm} mm`} />
+                                                            <SelectCell value={circuit.conductorType} options={[['TW', 'TW'], ['THW', 'THW'], ['NYY', 'NYY'], ['LSOH-80', 'LSOH-80'], ['LSOH-90', 'LSOH-90'], ['N2X0H', 'N2X0H']]} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { conductorType: value })} />
+                                                            <SelectCell value={circuit.earthSectionMm2.toString()} options={EARTH_SECTION_OPTIONS} onChange={(value) => onUpdateCircuit?.(circuit.levelId, circuit.rootConductorId, { earthSectionMm2: Number(value) })} />
+                                                        </tr>
+                                                    );
+                                                }
+                                                
+                                                return rows;
+                                            })}
+                                        </>
+                                    )}
+                                </tbody>
+
+
+
+                            </table>
+                        </div>
+                    </section>
 
                     {!loading && circuits.length === 0 && (
                         <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
@@ -646,6 +662,40 @@ function EditNumberCell({
                 className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-[11px] text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
         </td>
+    );
+}
+
+function LengthCells({ circuit }: { circuit: PanelCircuitSummary }) {
+    return (
+        <>
+            <MonoCell value={circuit.horizontalLengthM.toFixed(2)} />
+            <MonoCell value={circuit.verticalLengthM.toFixed(2)} />
+            <td className="bg-lime-50 px-3 py-3 font-mono font-semibold text-slate-800 dark:bg-lime-950/20 dark:text-lime-200">
+                {circuit.lengthM.toFixed(2)}
+            </td>
+        </>
+    );
+}
+
+function SelectCellContent({
+    value,
+    options,
+    onChange,
+}: {
+    value: string;
+    options: Array<[string, string]>;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="w-28 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        >
+            {options.map(([optionValue, label]) => (
+                <option key={optionValue} value={optionValue}>{label}</option>
+            ))}
+        </select>
     );
 }
 

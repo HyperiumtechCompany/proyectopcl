@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateConductorGroupLength, calculateConductorLength, calculateWireLengthByWall, resolveConductorRouteHeight, validateSceneOutlets } from './wireLengthCalculations';
+import { calculateConductorGroupLength, calculateConductorLength, calculatePanelCircuitSummaries, calculatePanelTotalCurrentA, calculateProjectPanelCircuitSummaries, calculateWireLengthByWall, defaultNominalCableCurrent, excelCopperResistivity, excelGroupingFactor, excelTemperatureFactor, resolveConductorRouteHeight, validateSceneOutlets } from './wireLengthCalculations';
 import type { ElectricalDevice, Room, Scene } from './types';
 
 function buildScene(partial: Partial<Scene> = {}): Scene {
@@ -29,6 +29,149 @@ function buildScene(partial: Partial<Scene> = {}): Scene {
         ...partial,
     };
 }
+
+describe('fórmulas literales MD_Caida B5:AI21', () => {
+    it('calcula AG5, K1, K2 y N de TD/TG igual que el Excel', () => {
+        expect(excelCopperResistivity(40)).toBeCloseTo(0.01859655172413793, 12);
+        expect([1, 2, 3, 4, 5, 6].map(excelGroupingFactor)).toEqual([1, 0.85, 0.75, 0.7, 0.65, 0.6]);
+        expect([10, 15, 20, 25, 30, 35, 40].map(excelTemperatureFactor)).toEqual([1.07, 1.04, 1, 0.96, 0.93, 0.89, 0.85]);
+        expect(calculatePanelTotalCurrentA(11.0227272727, 0.6818181818, 2.5631313131, 1.25)).toBeCloseTo(8.81818181816, 10);
+        expect(defaultNominalCableCurrent(3, 'LSOH-80')).toBe(24);
+    });
+
+    it('reproduce los valores patrón C1-C4, TD y TG sin cambiar fórmulas ni unidades', () => {
+        const factorDiseno = 1.25;
+        const voltajeTrifasicoV = 380;
+        const resistividad = excelCopperResistivity(40);
+        const circuitos = [
+            { piW: 486, fp: 0.9, fs: 1, sistema: 1 as const, fase: 'R', longitudM: 38.62, seccionMm2: 2.5 },
+            { piW: 108, fp: 0.9, fs: 1, sistema: 1 as const, fase: 'S', longitudM: 3.87, seccionMm2: 2.5 },
+            { piW: 406, fp: 0.9, fs: 1, sistema: 1 as const, fase: 'T', longitudM: 31.33, seccionMm2: 2.5 },
+            { piW: 1260, fp: 0.9, fs: 1, sistema: 1 as const, fase: 'R', longitudM: 40.11, seccionMm2: 4 },
+        ].map((entrada) => {
+            const piTotalKw = entrada.piW / 1000;
+            const maximaDemandaKw = entrada.fs * piTotalKw;
+            const corrienteTotalA = maximaDemandaKw * 1000 / (220 * entrada.fp);
+            const corrienteDisenoA = corrienteTotalA * factorDiseno;
+            return { ...entrada, piTotalKw, maximaDemandaKw, corrienteTotalA, corrienteDisenoA };
+        });
+
+        expect(circuitos.map((c) => c.piTotalKw)).toEqual([0.486, 0.108, 0.406, 1.26]);
+        expect(circuitos.map((c) => c.corrienteDisenoA)).toEqual([
+            3.0681818181818183,
+            0.6818181818181818,
+            2.563131313131313,
+            7.954545454545454,
+        ]);
+
+        const td = {
+            piTotalKw: circuitos.reduce((suma, c) => suma + c.piTotalKw, 0),
+            maximaDemandaKw: circuitos.reduce((suma, c) => suma + c.maximaDemandaKw, 0),
+            corrienteR_A: circuitos.filter((c) => c.fase === 'R').reduce((suma, c) => suma + c.corrienteDisenoA, 0),
+            corrienteS_A: circuitos.filter((c) => c.fase === 'S').reduce((suma, c) => suma + c.corrienteDisenoA, 0),
+            corrienteT_A: circuitos.filter((c) => c.fase === 'T').reduce((suma, c) => suma + c.corrienteDisenoA, 0),
+        };
+        const tgFs = 0.8;
+        const tgR = td.corrienteR_A * tgFs;
+        const tgS = td.corrienteS_A * tgFs;
+        const tgT = td.corrienteT_A * tgFs;
+        const tgDropV = Math.sqrt(3) * Math.max(tgR, tgS, tgT) * resistividad * 200 * 0.85 / 120;
+        const tdDropV = Math.sqrt(3) * Math.max(td.corrienteR_A, td.corrienteS_A, td.corrienteT_A) * resistividad * 200 * 0.8 / 50 + tgDropV;
+
+        expect(td.piTotalKw).toBeCloseTo(2.26, 14);
+        expect(td.maximaDemandaKw).toBeCloseTo(2.26, 14);
+        expect(td.corrienteR_A).toBeCloseTo(11.022727272727273, 14);
+        expect(td.corrienteS_A).toBeCloseTo(0.6818181818181818, 14);
+        expect(td.corrienteT_A).toBeCloseTo(2.563131313131313, 14);
+        expect(calculatePanelTotalCurrentA(td.corrienteR_A, td.corrienteS_A, td.corrienteT_A, factorDiseno)).toBeCloseTo(8.818181818181818, 14);
+        expect(tgR).toBeCloseTo(8.818181818181818, 14);
+        expect(tgS).toBeCloseTo(0.5454545454545454, 14);
+        expect(tgT).toBeCloseTo(2.0505050505050506, 14);
+        expect(calculatePanelTotalCurrentA(tgR, tgS, tgT, factorDiseno)).toBeCloseTo(7.054545454545455, 14);
+        expect(tgDropV).toBeCloseTo(0.4023831389395521, 14);
+        expect(tdDropV).toBeCloseTo(1.5385237665335818, 14);
+
+        const caidasCircuitos = circuitos.map((c) =>
+            2 * c.corrienteDisenoA * resistividad * c.longitudM * c.fp / c.seccionMm2 + tdDropV,
+        );
+        expect(caidasCircuitos[0]).toBeCloseTo(3.125090267474021, 14);
+        expect(caidasCircuitos[1]).toBeCloseTo(1.5738538336182213, 14);
+        expect(caidasCircuitos[2]).toBeCloseTo(2.6137408847153996, 14);
+        expect(caidasCircuitos[3]).toBeCloseTo(4.208534246549256, 14);
+        expect(tgDropV / voltajeTrifasicoV * 100).toBeCloseTo(0.10589029972093476, 14);
+        expect(tdDropV / voltajeTrifasicoV * 100).toBeCloseTo(0.40487467540357414, 14);
+    });
+});
+
+describe('vínculo lógico de tableros entre pisos', () => {
+    it('vincula un TD del piso 2 con el TG del piso 1 sin conductor 2D entre escenas', () => {
+        const piso1 = buildScene({
+            id: 'piso-1',
+            floorIndex: 0,
+            electricalDevices: [{
+                id: 'tg-principal', type: 'main_panel', label: 'TG', x: 0, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [], properties: { sectionMm2: 120, lengthM: 200 },
+            }],
+        });
+        const piso2 = buildScene({
+            id: 'piso-2',
+            floorIndex: 1,
+            electricalDevices: [{
+                id: 'td-piso-2', type: 'sub_panel', label: 'TD-2', x: 0, y: 0,
+                mountingHeight: 1.8, connectedDeviceIds: [], properties: { upstreamPanelId: 'tg-principal', sectionMm2: 50, lengthM: 200 },
+            }],
+        });
+
+        const summaries = calculateProjectPanelCircuitSummaries([piso1, piso2]);
+        const tg = summaries.find((item) => item.panelId === 'tg-principal' && item.isPanelSummary)!;
+        const td = summaries.find((item) => item.panelId === 'td-piso-2' && item.isPanelSummary)!;
+
+        expect(td.upstreamVoltageDropV).toBe(tg.voltageDropV);
+        expect(td.upstreamVoltageDropV).not.toBe(6.22);
+    });
+});
+
+describe('defaultNominalCableCurrent', () => {
+    it.each([
+        ['TW', 2.5, 24],
+        ['THW', 4, 34],
+        ['NYY', 6, 58],
+        ['LSOH-80', 10, 51],
+        ['LSOH-90', 16, 85],
+        ['N2X0H', 400, 680],
+        ['N2X0H', 500, 700],
+    ])('busca %s de %s mm² y devuelve %s A', (conductorType, sectionMm2, expected) => {
+        expect(defaultNominalCableCurrent(sectionMm2 as number, conductorType as string)).toBe(expected);
+    });
+});
+
+describe('calculatePanelCircuitSummaries', () => {
+    it('calcula In total del TD como MAX(R, S, T) dividido entre fdis', () => {
+        expect(calculatePanelTotalCurrentA(11.02, 0.68, 2.56, 1.25)).toBeCloseTo(8.816);
+    });
+
+    it('el TG suma el PI total de todos los TD existentes en el piso', () => {
+        const panel = (id: string, type: 'main_panel' | 'sub_panel', x: number) => ({
+            id, type, x, y: 0, label: id.toUpperCase(), mountingHeight: 1.8,
+            connectedDeviceIds: [], properties: { sectionMm2: 2.5 },
+        });
+        const wire = (id: string, sourceId: string, targetId: string) => ({
+            id, sourceId, targetId, wireCount: 2, routeType: 'floor' as const,
+            tubeSize: 20, conductorType: 'THW', sectionMm2: 2.5, waypoints: [],
+        });
+        const scene = buildScene({
+            electricalDevices: [panel('tg1', 'main_panel', 0), panel('td1', 'sub_panel', 2), panel('td2', 'sub_panel', 12)],
+            fixtures: [
+                { id: 'l1', name: 'L1', x: 4, y: 0, z: 2.7, power: 100, lumens: 1000, efficiency: 0.8, fixtureType: 'recessed', lightColor: '#fff' },
+                { id: 'l2', name: 'L2', x: 14, y: 0, z: 2.7, power: 200, lumens: 1000, efficiency: 0.8, fixtureType: 'recessed', lightColor: '#fff' },
+            ],
+            conductors: [wire('tg1-td1', 'tg1', 'td1'), wire('td1-l1', 'td1', 'l1'), wire('td2-l2', 'td2', 'l2')],
+        });
+
+        const summaries = calculatePanelCircuitSummaries(scene).filter((circuit) => circuit.isPanelSummary);
+        expect(summaries.find((circuit) => circuit.panelId === 'tg1')?.installedPowerKw).toBeCloseTo(0.3);
+    });
+});
 
 describe('calculateWireLengthByWall', () => {
     it('adds the ceiling drop from room height to switch height', () => {
@@ -144,7 +287,7 @@ describe('calculateConductorGroupLength', () => {
             floorHeight: 3,
             lightSwitches: [{ id: 's1', x: 2, y: 0, mountingHeight: 1.4, type: 'single', connectedFixtureIds: [] }],
             fixtures: [{ id: 'l1', name: 'L1', x: 4, y: 0, z: 3, lumens: 1000, efficiency: 0.8, fixtureType: 'recessed', lightColor: '#fff' }],
-            electricalDevices: [{ id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0, mountingHeight: 1.8, properties: {} }],
+            electricalDevices: [{ id: 'td', type: 'sub_panel', label: 'TD', x: 0, y: 0, mountingHeight: 1.8, connectedDeviceIds: [], properties: {} }],
             conductors: [
                 { id: 'c1', sourceId: 'td', targetId: 's1', wireCount: 2, routeType: 'wall_ceiling', tubeSize: 20, conductorType: 'THW-90', sectionMm2: 2.5, waypoints: [] },
                 { id: 'c2', sourceId: 's1', targetId: 'l1', wireCount: 2, routeType: 'wall_ceiling', tubeSize: 20, conductorType: 'THW-90', sectionMm2: 2.5, waypoints: [] },

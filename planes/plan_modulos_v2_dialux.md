@@ -701,17 +701,30 @@ El store actual ya trabaja con un `Project` que contiene `scenes[]`. La adaptaci
 > `dialux/Show.tsx`, su autosave y las rutas `/dialux` de v1 no se modifican.
 
 ### Fase 5 — Migración de Proyectos Existentes (2-3 días)
-- [ ] Migración que convierte cada proyecto v1 en proyecto + 1 módulo
-- [ ] Re-vincular plan_files, plans, normative_configs, electrical_projects
-- [ ] Añadir `dialux_module_id` a tablas dependientes
-- [ ] Script de verificación post-migración
-- [ ] Tests de migración
+- [x] Migración que convierte cada proyecto v1 en proyecto + 1 módulo
+- [x] Re-vincular plan_files, plans, normative_configs, electrical_projects
+- [x] Añadir `dialux_module_id` a tablas dependientes
+- [x] Script de verificación post-migración
+- [x] Tests de migración
+
+> [!NOTE]
+> La migración `2026_08_11_000004` conserva los identificadores y datos de V1,
+> por lo que no corta su operación. Tras desplegar se valida con
+> `php artisan dialux:v2:verify-migration`; el comando retorna código distinto
+> de cero si encuentra proyectos o dependencias sin migrar.
 
 ### Fase 6 — Consolidación y Reporte (3-4 días)
-- [ ] Endpoint `GET /dialux/{project}/summary`
-- [ ] Componente `ProjectSummaryView.tsx` con cards de resumen por módulo
-- [ ] Adaptar exportación formal PDF para multi-módulo
-- [ ] Cache de `consolidated_summary` con invalidación
+- [x] Endpoint `GET /dialux/{project}/summary`
+- [x] Componente `ProjectSummaryView.tsx` con cards de resumen por módulo
+- [x] Adaptar exportación formal PDF para multi-módulo
+- [x] Cache de `consolidated_summary` con invalidación
+
+> [!NOTE]
+> En la interfaz aislada, los endpoints son
+> `GET /dialux-v2/projects/{project}/summary` y
+> `GET /dialux-v2/projects/{project}/formal-export`. El PDF consolidado no
+> modifica la exportación detallada existente de V1 ni la exportación
+> individual por módulo de V2.
 
 ### Fase 7 — Pruebas de Rendimiento (2-3 días)
 - [ ] Test con proyecto de 25 módulos, cada uno con 10+ scenes

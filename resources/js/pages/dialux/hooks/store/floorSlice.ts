@@ -104,6 +104,14 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
             if (!state.project) return state;
             const source = state.project.scenes.find((s) => s.id === sourceSceneId);
             if (!source) return state;
+            const globalPanelIds = new Set(
+                (source.electricalDevices ?? [])
+                    .filter((device) =>
+                        (device.type === 'main_panel' || device.type === 'sub_panel') &&
+                        device.properties?.panelScope === 'project',
+                    )
+                    .map((device) => device.id),
+            );
 
             /**
              * Mapeo old ID → new ID para reasignar referencias cruzadas.
@@ -156,8 +164,12 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
             for (const c of source.canopies) registerId(c.id);
             for (const f of source.fixtures) registerId(f.id);
             for (const s of source.lightSwitches ?? []) registerId(s.id);
-            for (const d of source.electricalDevices ?? []) registerId(d.id);
-            for (const c of source.conductors ?? []) registerId(c.id);
+            for (const d of source.electricalDevices ?? []) {
+                if (!globalPanelIds.has(d.id)) registerId(d.id);
+            }
+            for (const c of source.conductors ?? []) {
+                if (!globalPanelIds.has(c.sourceId) && !globalPanelIds.has(c.targetId)) registerId(c.id);
+            }
             for (const j of source.junctionBoxes ?? []) registerId(j.id);
             for (const p of source.partitions ?? []) registerId(p.id);
 
@@ -194,7 +206,7 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
                     wallId: remapRef(s.wallId),
                     connectedFixtureIds: remapRefList(s.connectedFixtureIds) ?? [],
                 })),
-                electricalDevices: (source.electricalDevices ?? []).map((d) => ({
+                electricalDevices: (source.electricalDevices ?? []).filter((d) => !globalPanelIds.has(d.id)).map((d) => ({
                     ...d,
                     id: remapId(d.id),
                     wallId: remapRef(d.wallId),
@@ -211,7 +223,9 @@ export const createFloorSlice: EditorSlice<FloorSlice> = (set, get) => ({
                     connectedFixtureIds: remapRefList(d.connectedFixtureIds),
                     connectedSwitchIds: remapRefList(d.connectedSwitchIds),
                 })),
-                conductors: (source.conductors ?? []).map((c) => ({
+                conductors: (source.conductors ?? [])
+                    .filter((c) => !globalPanelIds.has(c.sourceId) && !globalPanelIds.has(c.targetId))
+                    .map((c) => ({
                     ...c,
                     id: remapId(c.id),
                     sourceId: remapRef(c.sourceId),

@@ -25,6 +25,7 @@ use App\Http\Controllers\Dialux\V2\ModuleController as DialuxV2ModuleController;
 use App\Http\Controllers\Dialux\V2\NormativeConfigController as DialuxV2NormativeConfigController;
 use App\Http\Controllers\Dialux\V2\PlanFileController as DialuxV2PlanFileController;
 use App\Http\Controllers\Dialux\V2\ProjectController as DialuxV2ProjectController;
+use App\Http\Controllers\Dialux\V2\ProjectSummaryController as DialuxV2ProjectSummaryController;
 use App\Http\Controllers\EttpController;
 use App\Http\Controllers\GestorProyectoController;
 use App\Http\Controllers\GestorProyectoNodoController;
@@ -132,6 +133,8 @@ Route::middleware(['auth', 'verified'])->prefix('dialux-v2')->name('dialux-v2.')
     Route::get('/', [DialuxV2ProjectController::class, 'index'])->name('projects.index');
     Route::post('/', [DialuxV2ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{dialuxProject}', [DialuxV2ProjectController::class, 'show'])->name('projects.show');
+    Route::get('/projects/{dialuxProject}/summary', [DialuxV2ProjectSummaryController::class, 'show'])->name('projects.summary');
+    Route::get('/projects/{dialuxProject}/formal-export', [DialuxV2ProjectSummaryController::class, 'export'])->name('projects.formal-export');
 
     Route::prefix('projects/{dialuxProject}/modules')->name('modules.')->group(function () {
         Route::get('/', [DialuxV2ModuleController::class, 'index'])->name('index');

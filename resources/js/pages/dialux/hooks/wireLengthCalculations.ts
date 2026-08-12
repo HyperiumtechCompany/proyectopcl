@@ -411,7 +411,7 @@ export interface PanelCircuitSummary {
     phases: 1 | 3;
     currentA: number;
     theoreticalDesignCurrentA: number;
-    phaseBalance: 'R' | 'S' | 'T' | 'RST';
+    phaseBalance: 'R' | 'S' | 'T' | 'RST' | 'RS' | 'ST' | 'TR';
     phaseCurrentR: number;
     phaseCurrentS: number;
     phaseCurrentT: number;
@@ -432,6 +432,8 @@ export interface PanelCircuitSummary {
     voltageDropPct: number;
     maxVoltageDropPct: number;
     voltageDropOk: boolean;
+    /** Si es true, esta fila no representa una salida del tablero, sino el resumen/alimentador del tablero en sí */
+    isPanelSummary?: boolean;
 }
 
 /**
@@ -452,16 +454,68 @@ const DEFAULT_VOLTAGE = 220;
 const DEFAULT_POWER_FACTOR = 0.9;
 const DEFAULT_MAX_VOLTAGE_DROP_PCT = 2.5;
 
-const DEFAULT_CABLE_CAPACITY_A: Array<[number, number]> = [
-    [2.5, 27], [4, 34], [6, 44], [10, 62], [16, 85], [25, 107],
-    [35, 135], [50, 160], [70, 203], [95, 242], [120, 279],
-    [150, 318], [185, 361], [240, 406], [300, 462],
-];
+export const CONDUCTOR_CAPACITIES: Record<string, Record<number, number>> = {
+    'TW': { 2.5: 24, 4: 31, 6: 39, 10: 51, 16: 68, 25: 88, 35: 110, 50: 138, 70: 165, 95: 198, 120: 165, 150: 264, 185: 303, 240: 352, 300: 391 },
+    'THW': { 2.5: 27, 4: 34, 6: 44, 10: 62, 16: 85, 25: 107, 35: 135, 50: 160, 70: 203, 95: 242, 120: 279, 150: 318, 185: 361, 240: 406, 300: 462 },
+    'THW-90': { 2.5: 27, 4: 34, 6: 44, 10: 62, 16: 85, 25: 107, 35: 135, 50: 160, 70: 203, 95: 242, 120: 279, 150: 318, 185: 361, 240: 406, 300: 462 },
+    'NYY': { 2.5: 32, 4: 43, 6: 58, 10: 77, 16: 102, 25: 132, 35: 157, 50: 186, 70: 222, 95: 265, 120: 301, 150: 338, 185: 367, 240: 426, 300: 480 },
+    'LSOH-80': { 2.5: 24, 4: 31, 6: 39, 10: 51, 16: 68, 25: 88, 35: 110, 50: 138, 70: 165, 95: 198, 120: 231, 150: 264, 185: 303, 240: 352, 300: 391 },
+    'NH-80': { 2.5: 24, 4: 31, 6: 39, 10: 51, 16: 68, 25: 88, 35: 110, 50: 138, 70: 165, 95: 198, 120: 231, 150: 264, 185: 303, 240: 352, 300: 391 },
+    'LSOH-90': { 2.5: 27, 4: 34, 6: 44, 10: 62, 16: 85, 25: 107, 35: 135, 50: 160, 70: 203, 95: 242, 120: 279, 150: 318, 185: 361, 240: 406, 300: 462 },
+    'N2XOH': { 2.5: 38, 4: 55, 6: 68, 10: 95, 16: 125, 25: 160, 35: 195, 50: 230, 70: 275, 95: 330, 120: 380, 150: 410, 185: 450, 240: 525, 300: 600, 400: 680, 500: 700 },
+    'N2X0H': { 2.5: 38, 4: 55, 6: 68, 10: 95, 16: 125, 25: 160, 35: 195, 50: 230, 70: 275, 95: 330, 120: 380, 150: 410, 185: 450, 240: 525, 300: 600, 400: 680, 500: 700 }
+};
 
-function defaultNominalCableCurrent(sectionMm2: number): number {
-    return DEFAULT_CABLE_CAPACITY_A.find(
-        ([section]) => section >= sectionMm2,
-    )?.[1] ?? 0;
+export function defaultNominalCableCurrent(sectionMm2: number, conductorType: string = 'THW'): number {
+    const capacities = CONDUCTOR_CAPACITIES[conductorType] || CONDUCTOR_CAPACITIES['THW'];
+    const sections = Object.keys(capacities).map(Number).sort((a, b) => a - b);
+    // BUSCARV sin cuarto argumento: coincidencia aproximada sobre tabla
+    // ascendente, equivalente al mayor calibre <= valor buscado.
+    const section = [...sections].reverse().find(s => s <= sectionMm2);
+    if (section === undefined) return 0;
+    return capacities[section] ?? 0;
+}
+
+export function calculatePanelTotalCurrentA(
+    phaseCurrentR: number,
+    phaseCurrentS: number,
+    phaseCurrentT: number,
+    designFactor: number,
+): number {
+    if (designFactor <= 0) return 0;
+
+    return Math.max(phaseCurrentR, phaseCurrentS, phaseCurrentT) / designFactor;
+}
+
+/** Excel V: factor K1 según cantidad de circuitos agrupados (Tabla 5Dc). */
+export function excelGroupingFactor(groupedCircuitCount: number): number {
+    if (groupedCircuitCount <= 1) return 1;
+    if (groupedCircuitCount === 2) return 0.85;
+    if (groupedCircuitCount === 3) return 0.75;
+    if (groupedCircuitCount === 4) return 0.7;
+    if (groupedCircuitCount === 5) return 0.65;
+    if (groupedCircuitCount === 6) return 0.6;
+    return 0;
+}
+
+/** Excel W: factor K2 según temperatura ambiente (Tabla 5A). */
+export function excelTemperatureFactor(ambientTemperatureC: number): number {
+    const factors = new Map([
+        [10, 1.07],
+        [15, 1.04],
+        [20, 1],
+        [25, 0.96],
+        [30, 0.93],
+        [35, 0.89],
+        [40, 0.85],
+    ]);
+
+    return factors.get(ambientTemperatureC) ?? 0;
+}
+
+/** Excel AG5: ρCuT = 1/58 × (1 + 0.00393 × (temperatura - 20)). */
+export function excelCopperResistivity(ambientTemperatureC: number): number {
+    return (1 / 58) * (1 + 0.00393 * (ambientTemperatureC - 20));
 }
 
 function numericProperty(value: string | undefined, fallback: number): number {
@@ -588,8 +642,11 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
         const exits = (conductorsByNode.get(panel.id) ?? []).filter(
             (conductor) => !claimedConductorIds.has(conductor.id),
         );
+        const circuitNumberByPanel = new Map<string, number>();
 
-        return exits.map((root, index) => {
+        return exits.map((root) => {
+            const nextCircuitNumber = (circuitNumberByPanel.get(panel.id) ?? 0) + 1;
+            circuitNumberByPanel.set(panel.id, nextCircuitNumber);
             const visitedConductors = new Set<string>();
             const reachedFixtures = new Set<string>();
             const reachedOutlets = new Set<string>();
@@ -825,20 +882,27 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             const nominalCableCurrentA = Math.max(
                 0,
                 root.ct?.nominalCableCurrentA ??
-                    defaultNominalCableCurrent(sectionMm2),
+                    defaultNominalCableCurrent(sectionMm2, root.conductorType),
+            );
+            const groupedCircuitCount = Math.max(
+                1,
+                root.ct?.groupedCircuitCount ?? 1,
             );
             const groupingFactor = Math.max(
                 0,
-                root.ct?.groupingFactor ?? 1,
+                root.ct?.groupingFactor ?? excelGroupingFactor(groupedCircuitCount),
             );
+            // Excel T: temperatura ambiente solo determina K2.
+            const ambientC = root.ct?.ambientTemperatureC ?? panel.properties?.ambientTemperatureC ?? 20;
             const temperatureFactor = Math.max(
                 0,
-                root.ct?.temperatureFactor ?? 1,
+                root.ct?.temperatureFactor ?? excelTemperatureFactor(ambientC),
             );
             const admissibleCableCurrentA =
                 nominalCableCurrentA * groupingFactor * temperatureFactor;
-            const ambientC = root.ct?.ambientTemperatureC ?? panel.properties?.workingTemperatureC ?? 20;
-            const autoCopperResistivity = (1 / 58) * (1 + 0.00393 * (ambientC - 20));
+            // Excel AG5 usa AD5 (temperatura de trabajo, 40 °C), no T. AMB.
+            const workingTemperatureC = panel.properties?.workingTemperatureC ?? 40;
+            const autoCopperResistivity = excelCopperResistivity(workingTemperatureC);
             const copperResistivity = Math.max(
                 0,
                 root.ct?.copperResistivity ?? autoCopperResistivity,
@@ -890,7 +954,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                     panel.properties?.connectionType ?? 'star',
                 designFactor,
                 copperResistivity,
-                code: `C-${index + 1}`,
+                code: `C-${nextCircuitNumber}`,
                 rootConductorId: root.id,
                 conductorCount: visitedConductors.size,
                 horizontalLengthM,
@@ -930,12 +994,8 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
                 nominalCableCurrentA,
                 ambientTemperatureC:
                     root.ct?.ambientTemperatureC ??
-                    panel.properties?.workingTemperatureC ??
                     20,
-                groupedCircuitCount: Math.max(
-                    1,
-                    root.ct?.groupedCircuitCount ?? 1,
-                ),
+                groupedCircuitCount,
                 groupingFactor,
                 temperatureFactor,
                 admissibleCableCurrentA,
@@ -961,7 +1021,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
     // el mismo punto) que, al llevar 0 A, "cumplen" trivialmente y solo
     // agregan ruido a la tabla. Un circuito en obra (p.ej. hacia un
     // interruptor aún sin luminarias) sí tiene longitud real y se conserva.
-    const aliveCircuits = partialCircuits.filter(
+    const aliveCircuits: PartialPanelCircuit[] = partialCircuits.filter(
         (circuit) =>
             circuit.lengthM > 0 ||
             circuit.installedPowerW > 0 ||
@@ -978,6 +1038,10 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
     // abuelo); un tablero sin padre en el grafo (TG raíz, o un TD usado
     // suelto sin TG) sigue usando su propiedad manual `upstreamVoltageDropV`
     // — igual que antes de este cambio, para no romper proyectos existentes.
+
+    
+    // ─── Generar filas resumen de tableros (Bottom-Up) ───────
+    // Primero, preparamos el árbol topológico para saber en qué orden sumar
     const parentOf = new Map<string, { parentPanelId: string; rootConductorId: string }>();
     feederLinks.forEach((link) => {
         if (!parentOf.has(link.childPanelId)) {
@@ -990,7 +1054,7 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
 
     const topologicalOrder: string[] = [];
     const orderedIds = new Set<string>();
-    const resolvingIds = new Set<string>(); // guarda contra ciclos en datos mal formados
+    const resolvingIds = new Set<string>();
 
     const visitPanelOrder = (panelId: string): void => {
         if (orderedIds.has(panelId) || resolvingIds.has(panelId)) return;
@@ -1003,7 +1067,195 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
     };
     panels.forEach((panel) => visitPanelOrder(panel.id));
 
-    const resolvedDropByConductorId = new Map<string, number>();
+    // Array de summaries para agregar luego
+    const panelSummaryCircuits: PartialPanelCircuit[] = [];
+
+    // Recorremos los paneles de hojas a raíz (reverse topological order)
+    const reversedPanels = [...topologicalOrder].reverse();
+
+    reversedPanels.forEach((panelId) => {
+        const panel = panels.find((p) => p.id === panelId)!;
+        const isMainPanel = panel.type === 'main_panel';
+        
+        // Buscamos los circuitos de este tablero (excluyendo el summary que estamos creando)
+        const childCircuits = aliveCircuits.filter(c => c.panelId === panel.id);
+        
+        // Sumatorias bottom-up
+        let sumInstalledPowerW = 0;
+        let sumMaximumDemandKw = 0;
+        let sumPhaseCurrentR = 0;
+        let sumPhaseCurrentS = 0;
+        let sumPhaseCurrentT = 0;
+
+        // Sumamos de sus hijos directos (circuitos normales o los headers de subtableros que pertenecen a este tablero)
+        // Ojo: un subtablero TD aparece en la lista del panel padre como su circuito alimentador.
+        // Pero espera! En la tabla visual, los TD están en su propia sección.
+        // Si el usuario quiere que el TG sea la sumatoria de todos los TD, necesitamos que TG sume los headers de los TD.
+        // Los headers de los TD son `PanelCircuitSummary` que se generaron antes (por iterar en reverse).
+        
+        if (isMainPanel) {
+            // El TG suma las características de los summaries de los TD
+            const tdSummaries = panelSummaryCircuits.filter(
+                (summary) => summary.panelType === 'sub_panel',
+            );
+            const tgDemandFactor = Math.max(0, panel.properties?.defaultDemandFactor ?? 1);
+            tdSummaries.forEach(td => {
+                sumInstalledPowerW += td.installedPowerW;
+                sumMaximumDemandKw += td.maximumDemandKw * tgDemandFactor;
+                sumPhaseCurrentR += td.phaseCurrentR * tgDemandFactor;
+                sumPhaseCurrentS += td.phaseCurrentS * tgDemandFactor;
+                sumPhaseCurrentT += td.phaseCurrentT * tgDemandFactor;
+            });
+        } else {
+            // Un TD suma de sus propios circuitos finales
+            childCircuits.forEach(c => {
+                sumInstalledPowerW += c.installedPowerW;
+                sumMaximumDemandKw += c.maximumDemandKw;
+                // Excel K(TD): suma directa de la M.D. de sus circuitos.
+                sumPhaseCurrentR += c.phaseCurrentR;
+                sumPhaseCurrentS += c.phaseCurrentS;
+                sumPhaseCurrentT += c.phaseCurrentT;
+            });
+        }
+        
+        // Recalcular la corriente nominal del tablero en base a M.D.? 
+        // El usuario pide que I dependa de MD.
+        const phases = phasesProperty(panel.properties?.phases);
+        const powerFactor = Math.min(1, Math.max(0.01, panel.properties?.defaultPowerFactor ?? DEFAULT_POWER_FACTOR));
+        const voltageV = numericProperty(panel.properties?.voltage, DEFAULT_VOLTAGE);
+        const circuitVoltageV = phases === 1 ? 220 : voltageV;
+        
+        const designFactor = Math.max(0, panel.properties?.designFactor ?? 1.25);
+        const theoreticalDesignCurrentA = circuitCurrent(
+            sumMaximumDemandKw * 1000,
+            circuitVoltageV,
+            phases,
+            powerFactor,
+        ) * designFactor;
+        
+        // O tomamos la R,S,T cruda que es la sumatoria directa, tal como pide el usuario.
+        // En un TD/TG la R, S, T debe ser la sumatoria de las columnas de R, S, T.
+        const maximumPhaseCurrent = Math.max(sumPhaseCurrentR, sumPhaseCurrentS, sumPhaseCurrentT);
+        
+        // Si este tablero es un TD alimentado por un TG, tomamos las características del cable físico de ese alimentador
+        const parentLink = feederLinks.find((link) => link.childPanelId === panel.id);
+        let parentFeeder: PartialPanelCircuit | undefined;
+        
+        if (parentLink) {
+            const parentFeederIndex = aliveCircuits.findIndex((c) => c.rootConductorId === parentLink.rootConductorId);
+            if (parentFeederIndex !== -1) {
+                parentFeeder = aliveCircuits[parentFeederIndex];
+                aliveCircuits.splice(parentFeederIndex, 1);
+            }
+        }
+        
+        const sectionMm2 = parentFeeder?.sectionMm2 ?? Math.max(0, panel.properties?.sectionMm2 ?? 0);
+        const lengthM = parentFeeder?.lengthM ?? Math.max(0, panel.properties?.lengthM ?? 0);
+        const ambientTemperatureC = parentFeeder?.ambientTemperatureC ?? panel.properties?.ambientTemperatureC ?? 20;
+        const workingTemperatureC = panel.properties?.workingTemperatureC ?? 40;
+        const copperResistivity = parentFeeder?.copperResistivity ?? Math.max(0, panel.properties?.copperResistivity ?? excelCopperResistivity(workingTemperatureC));
+        const conductorType = parentFeeder?.conductorType ?? panel.properties?.wireType ?? 'THW';
+        const nominalCableCurrentA = parentFeeder?.nominalCableCurrentA
+            ?? defaultNominalCableCurrent(sectionMm2, conductorType);
+        const groupedCircuitCount = parentFeeder?.groupedCircuitCount ?? panel.properties?.groupedCircuitCount ?? 1;
+        const groupingFactor = parentFeeder?.groupingFactor ?? panel.properties?.groupingFactor ?? excelGroupingFactor(groupedCircuitCount);
+        const temperatureFactor = parentFeeder?.temperatureFactor ?? panel.properties?.temperatureFactor ?? excelTemperatureFactor(ambientTemperatureC);
+        const admissibleCableCurrentA = parentFeeder?.admissibleCableCurrentA
+            ?? nominalCableCurrentA * groupingFactor * temperatureFactor;
+        
+        const circuitOwnDropV = sectionMm2 > 0
+            ? (phases === 1 ? 2 : Math.sqrt(3)) * maximumPhaseCurrent * copperResistivity * lengthM * powerFactor / sectionMm2
+            : 0;
+
+        panelSummaryCircuits.push({
+            ...(parentFeeder ?? {
+                levelId: scene.id,
+                levelName: scene.name,
+                levelIndex: scene.floorIndex ?? 0,
+                rootConductorId: `synthetic-feeder-${panel.id}`,
+                conductorCount: 0,
+                horizontalLengthM: panel.properties?.horizontalLengthM ?? lengthM,
+                verticalLengthM: panel.properties?.verticalLengthM ?? 0,
+                lengthOverridden: !parentFeeder,
+                lightingOutletCount: 0,
+                outletOutletCount: 0,
+                lightingPowerW: 0,
+                outletPowerW: 0,
+                forcePowerW: sumInstalledPowerW,
+                circuitLoadType: 'feeder',
+                normativeViolation: false,
+                rooms: [],
+                traversedRoomNames: [],
+                fedPanelLabels: [panel.label || (isMainPanel ? 'TG' : 'TD')],
+                voltageV,
+                circuitVoltageV,
+                nominalCableCurrentA,
+                ambientTemperatureC,
+                groupedCircuitCount,
+                groupingFactor,
+                temperatureFactor,
+                admissibleCableCurrentA,
+                itm: panel.properties?.itm ?? '1x20',
+                dif: panel.properties?.dif ?? '2x25',
+                conductorType,
+                tubeDiameterMm: panel.properties?.tubeDiameterMm || 20,
+                earthSectionMm2: panel.properties?.earthSectionMm2 || sectionMm2,
+                maxVoltageDropPct: 4,
+            }),
+            panelId: panel.id,
+            panelLabel: panel.label || (isMainPanel ? 'TG' : 'TD'),
+            panelType: panel.type as 'main_panel' | 'sub_panel',
+            panelLengthM: lengthM,
+            connectionType: panel.properties?.connectionType ?? 'star',
+            designFactor,
+            copperResistivity,
+            code: `${panel.label || (isMainPanel ? 'TG' : 'TD')}`,
+            lengthM,
+            sectionMm2,
+            
+            // Los campos sumados:
+            installedPowerW: sumInstalledPowerW,
+            installedPowerKw: sumInstalledPowerW / 1000,
+            demandFactor: Math.max(0, panel.properties?.defaultDemandFactor ?? 1),
+            maximumDemandKw: sumMaximumDemandKw,
+            powerFactor,
+            phases,
+            // Excel N(TD/TG) = MAX(P:R) / factor de diseño.
+            currentA: calculatePanelTotalCurrentA(
+                sumPhaseCurrentR,
+                sumPhaseCurrentS,
+                sumPhaseCurrentT,
+                designFactor,
+            ),
+            theoreticalDesignCurrentA,
+            phaseBalance: phases === 3 ? 'RST' : (panel.properties?.phaseBalance ?? 'R'),
+            phaseCurrentR: sumPhaseCurrentR,
+            phaseCurrentS: sumPhaseCurrentS,
+            phaseCurrentT: sumPhaseCurrentT,
+            
+            capacityConforms: admissibleCableCurrentA > maximumPhaseCurrent,
+            // Excel AF: circuito final <4 %, alimentador TD <2.5 %, TG <1 %.
+            maxVoltageDropPct: isMainPanel ? 1 : 2.5,
+            circuitOwnDropV,
+            isPanelSummary: true,
+        });
+    });
+
+    // Los alimentadores entre tableros no consumen la numeración visible de
+    // circuitos finales. Cada TD comienza siempre en C-1.
+    const visibleCircuitNumberByPanel = new Map<string, number>();
+    aliveCircuits.forEach((circuit) => {
+        const next = (visibleCircuitNumberByPanel.get(circuit.panelId) ?? 0) + 1;
+        visibleCircuitNumberByPanel.set(circuit.panelId, next);
+        circuit.code = `C-${next}`;
+    });
+
+    aliveCircuits.unshift(...panelSummaryCircuits);
+
+    // parentOf, topologicalOrder ya calculados! Borramos eso de abajo.
+
+
+    const resolvedDropByPanelId = new Map<string, number>();
     const circuitsByPanelId = new Map<string, PartialPanelCircuit[]>();
     aliveCircuits.forEach((circuit) => {
         circuitsByPanelId.set(circuit.panelId, [...(circuitsByPanelId.get(circuit.panelId) ?? []), circuit]);
@@ -1012,19 +1264,30 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
     return topologicalOrder.flatMap((panelId) => {
         const panel = panels.find((item) => item.id === panelId);
         const parent = parentOf.get(panelId);
-        const baselineV = parent
-            ? (resolvedDropByConductorId.get(parent.rootConductorId) ?? 0)
+        const panelUpstreamDropV = parent
+            ? (resolvedDropByPanelId.get(parent.parentPanelId) ?? 0)
             : Math.max(
                   0,
                   panel?.properties?.upstreamVoltageDropV ??
                       (panel?.type === 'sub_panel' ? 6.22 : 0),
               );
 
-        return (circuitsByPanelId.get(panelId) ?? []).map((circuit) => {
+        const panelCircuits = circuitsByPanelId.get(panelId) ?? [];
+        const summaryCircuit = panelCircuits.find((circuit) => circuit.isPanelSummary);
+        const panelTotalDropV = summaryCircuit
+            ? summaryCircuit.circuitOwnDropV + panelUpstreamDropV
+            : panelUpstreamDropV;
+        resolvedDropByPanelId.set(panelId, panelTotalDropV);
+
+        return panelCircuits.map((circuit) => {
+            // Excel: AD(TG) no suma aguas arriba; AD(TD) suma E(TD)=AD(TG);
+            // cada circuito C suma AD(TD). Se conserva esa cadena literal.
+            const baselineV = circuit.isPanelSummary
+                ? panelUpstreamDropV
+                : panelTotalDropV;
             const voltageDropV = circuit.circuitOwnDropV + baselineV;
             const voltageDropPct =
                 (voltageDropV / (circuit.phases === 1 ? 220 : circuit.voltageV)) * 100;
-            resolvedDropByConductorId.set(circuit.rootConductorId, voltageDropV);
 
             const { circuitOwnDropV: _circuitOwnDropV, ...rest } = circuit;
             return {
@@ -1036,6 +1299,81 @@ export function calculatePanelCircuitSummaries(scene: Scene): PanelCircuitSummar
             };
         });
     });
+}
+
+/**
+ * Calcula CT para todas las plantas y aplica enlaces lógicos entre un TD y un
+ * TG de otra escena mediante `properties.upstreamPanelId`.
+ */
+export function calculateProjectPanelCircuitSummaries(scenes: Scene[]): PanelCircuitSummary[] {
+    const summaries = scenes.flatMap((scene) => calculatePanelCircuitSummaries(scene));
+    const devices = scenes.flatMap((scene) => scene.electricalDevices ?? []);
+    const linkedTdIdsByTg = new Map<string, string[]>();
+
+    devices.forEach((device) => {
+        if (device.type !== 'sub_panel' || !device.properties?.upstreamPanelId) return;
+        const ids = linkedTdIdsByTg.get(device.properties.upstreamPanelId) ?? [];
+        linkedTdIdsByTg.set(device.properties.upstreamPanelId, [...ids, device.id]);
+    });
+
+    if (linkedTdIdsByTg.size === 0) return summaries;
+
+    const result = summaries.map((summary) => ({ ...summary }));
+    const summaryByPanelId = new Map(
+        result.filter((item) => item.isPanelSummary).map((item) => [item.panelId, item]),
+    );
+
+    linkedTdIdsByTg.forEach((tdIds, tgId) => {
+        const tg = summaryByPanelId.get(tgId);
+        const linkedTds = tdIds
+            .map((tdId) => summaryByPanelId.get(tdId))
+            .filter((item): item is PanelCircuitSummary => item !== undefined);
+        if (!tg || linkedTds.length === 0) return;
+
+        tg.installedPowerW = linkedTds.reduce((sum, td) => sum + td.installedPowerW, 0);
+        tg.installedPowerKw = tg.installedPowerW / 1000;
+        tg.lightingPowerW = linkedTds.reduce((sum, td) => sum + td.lightingPowerW, 0);
+        tg.outletPowerW = linkedTds.reduce((sum, td) => sum + td.outletPowerW, 0);
+        tg.forcePowerW = linkedTds.reduce((sum, td) => sum + td.forcePowerW, 0);
+        tg.maximumDemandKw = linkedTds.reduce((sum, td) => sum + td.maximumDemandKw, 0) * tg.demandFactor;
+        tg.phaseCurrentR = linkedTds.reduce((sum, td) => sum + td.phaseCurrentR, 0) * tg.demandFactor;
+        tg.phaseCurrentS = linkedTds.reduce((sum, td) => sum + td.phaseCurrentS, 0) * tg.demandFactor;
+        tg.phaseCurrentT = linkedTds.reduce((sum, td) => sum + td.phaseCurrentT, 0) * tg.demandFactor;
+        tg.currentA = calculatePanelTotalCurrentA(tg.phaseCurrentR, tg.phaseCurrentS, tg.phaseCurrentT, tg.designFactor);
+        tg.theoreticalDesignCurrentA = circuitCurrent(
+            tg.maximumDemandKw * 1000,
+            tg.circuitVoltageV,
+            tg.phases,
+            tg.powerFactor,
+        ) * tg.designFactor;
+        const tgOwnDropV = tg.sectionMm2 > 0
+            ? (tg.phases === 1 ? 2 : Math.sqrt(3)) * Math.max(tg.phaseCurrentR, tg.phaseCurrentS, tg.phaseCurrentT) * tg.copperResistivity * tg.lengthM * tg.powerFactor / tg.sectionMm2
+            : 0;
+        tg.upstreamVoltageDropV = 0;
+        tg.voltageDropV = tgOwnDropV;
+        tg.voltageDropPct = tgOwnDropV / tg.circuitVoltageV * 100;
+        tg.voltageDropOk = tg.voltageDropPct < tg.maxVoltageDropPct;
+
+        linkedTds.forEach((td) => {
+            const oldTdTotalDropV = td.voltageDropV;
+            const tdOwnDropV = Math.max(0, td.voltageDropV - td.upstreamVoltageDropV);
+            td.upstreamVoltageDropV = tg.voltageDropV;
+            td.voltageDropV = tdOwnDropV + tg.voltageDropV;
+            td.voltageDropPct = td.voltageDropV / td.circuitVoltageV * 100;
+            td.voltageDropOk = td.voltageDropPct < td.maxVoltageDropPct;
+
+            result.forEach((circuit) => {
+                if (circuit.panelId !== td.panelId || circuit.isPanelSummary) return;
+                const ownDropV = Math.max(0, circuit.voltageDropV - oldTdTotalDropV);
+                circuit.upstreamVoltageDropV = td.voltageDropV;
+                circuit.voltageDropV = ownDropV + td.voltageDropV;
+                circuit.voltageDropPct = circuit.voltageDropV / circuit.circuitVoltageV * 100;
+                circuit.voltageDropOk = circuit.voltageDropPct < circuit.maxVoltageDropPct;
+            });
+        });
+    });
+
+    return result.sort((a, b) => a.levelIndex - b.levelIndex);
 }
 
 /**
@@ -1058,7 +1396,7 @@ export function resolveConformingSectionMm2(circuit: PanelCircuitSummary): numbe
         .sort((a, b) => a - b);
 
     for (const section of candidates) {
-        const nominalCableCurrentA = defaultNominalCableCurrent(section);
+        const nominalCableCurrentA = defaultNominalCableCurrent(section, circuit.conductorType);
         const admissibleCableCurrentA =
             nominalCableCurrentA * circuit.groupingFactor * circuit.temperatureFactor;
         // Mismo fix que `circuitOwnDropV` arriba: `maxPhaseCurrent` ya es
@@ -1146,6 +1484,64 @@ export function resolveTreeConformingSections(
         conductorId,
         sectionMm2,
     }));
+}
+
+/** Corrección en cascada sobre el árbol lógico completo, incluidos otros pisos. */
+export function resolveProjectTreeConformingSections(
+    scenes: Scene[],
+): Array<{ levelId: string; conductorId: string; panelId: string; isPanelSummary: boolean; sectionMm2: number }> {
+    const workingScenes = scenes.map((scene) => ({
+        ...scene,
+        conductors: [...(scene.conductors ?? [])],
+        electricalDevices: [...(scene.electricalDevices ?? [])],
+    }));
+    const fixes = new Map<string, { levelId: string; conductorId: string; panelId: string; isPanelSummary: boolean; sectionMm2: number }>();
+    const exhausted = new Set<string>();
+
+    for (let iteration = 0; iteration < 200; iteration += 1) {
+        const circuits = calculateProjectPanelCircuitSummaries(workingScenes);
+        const violator = circuits.find((circuit) =>
+            !circuit.normativeViolation &&
+            !exhausted.has(circuit.rootConductorId) &&
+            (!circuit.voltageDropOk || !circuit.capacityConforms),
+        );
+        if (!violator) break;
+        const nextSection = resolveConformingSectionMm2(violator);
+        if (nextSection <= violator.sectionMm2) {
+            exhausted.add(violator.rootConductorId);
+            continue;
+        }
+
+        const scene = workingScenes.find((item) => item.id === violator.levelId);
+        if (!scene) continue;
+        const conductorIndex = (scene.conductors ?? []).findIndex((item) => item.id === violator.rootConductorId);
+        if (conductorIndex >= 0) {
+            const conductor = scene.conductors![conductorIndex]!;
+            scene.conductors![conductorIndex] = {
+                ...conductor,
+                sectionMm2: nextSection,
+                ct: { ...(conductor.ct ?? {}), nominalCableCurrentA: undefined },
+            };
+        } else if (violator.isPanelSummary) {
+            scene.electricalDevices = (scene.electricalDevices ?? []).map((device) =>
+                device.id === violator.panelId
+                    ? { ...device, properties: { ...(device.properties ?? {}), sectionMm2: nextSection } }
+                    : device,
+            );
+        } else {
+            exhausted.add(violator.rootConductorId);
+            continue;
+        }
+        fixes.set(violator.rootConductorId, {
+            levelId: violator.levelId,
+            conductorId: violator.rootConductorId,
+            panelId: violator.panelId,
+            isPanelSummary: Boolean(violator.isPanelSummary),
+            sectionMm2: nextSection,
+        });
+    }
+
+    return [...fixes.values()];
 }
 
 export interface RoomOutletValidation {

@@ -20,9 +20,9 @@ import { createScaleConfig, useEditorStore, useShow3DView } from '@/pages/dialux
 import { useLightingEngine } from '@/pages/dialux/hooks/useLightingEngine';
 import type { Conductor } from '@/pages/dialux/hooks/types';
 import { getFixturesForRoom } from '@/pages/dialux/hooks/roomLighting';
-import { calculatePanelCircuitSummaries, calculateRoomWireSummary, resolveTreeConformingSections, validateSceneOutlets } from '@/pages/dialux/hooks/wireLengthCalculations';
+import { calculatePanelCircuitSummaries, calculateProjectPanelCircuitSummaries, calculateRoomWireSummary, resolveProjectTreeConformingSections, validateSceneOutlets } from '@/pages/dialux/hooks/wireLengthCalculations';
 import { Editor3DCanvas } from './canvas/Editor3DCanvas';
-import { CtPanelOutputsDialog } from './CtPanelOutputsDialog';
+import { CtPanelOutputsDialog, type CtCircuitPatch } from './CtPanelOutputsDialog';
 import { MlightcadCanvas2D } from './canvas/MlightcadCanvas2D';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { DxfExportDialog } from './DxfExportDialog';
@@ -133,30 +133,14 @@ export const EditorLayout = memo(function EditorLayout() {
         }
 
         let cancelled = false;
-        let sceneIndex = 0;
         const scenes = project?.scenes ?? [];
-        const calculated: ReturnType<typeof calculatePanelCircuitSummaries> = [];
-        const validations: ReturnType<typeof validateSceneOutlets> = [];
         setIsCtCalculating(true);
-
-        const calculateNextScene = () => {
+        const initialFrame = window.requestAnimationFrame(() => {
             if (cancelled) return;
-            const scene = scenes[sceneIndex];
-            if (!scene) {
-                calculated.sort((a, b) => a.levelIndex - b.levelIndex);
-                setPanelCircuitSummaries(calculated);
-                setOutletValidations(validations);
-                setIsCtCalculating(false);
-                return;
-            }
-
-            calculated.push(...calculatePanelCircuitSummaries(scene));
-            validations.push(...validateSceneOutlets(scene));
-            sceneIndex += 1;
-            window.requestAnimationFrame(calculateNextScene);
-        };
-
-        const initialFrame = window.requestAnimationFrame(calculateNextScene);
+            setPanelCircuitSummaries(calculateProjectPanelCircuitSummaries(scenes));
+            setOutletValidations(scenes.flatMap((scene) => validateSceneOutlets(scene)));
+            setIsCtCalculating(false);
+        });
 
         return () => {
             cancelled = true;
@@ -205,9 +189,51 @@ export const EditorLayout = memo(function EditorLayout() {
         (
             levelId: string,
             conductorId: string,
-            patch: Partial<NonNullable<Conductor['ct']>>,
+            patch: CtCircuitPatch,
         ) => {
             if (!project) return;
+            
+            // Interceptar actualizaciones de feeders sintéticos (resúmenes de tableros TD/TG)
+            // para redirigir las ediciones a las propiedades del panel correspondiente.
+            if (conductorId.startsWith('synthetic-feeder-')) {
+                const panelId = conductorId.replace('synthetic-feeder-', '');
+                setProject({
+                    ...project,
+                    scenes: project.scenes.map((scene) =>
+                        scene.id !== levelId
+                            ? scene
+                            : {
+                                ...scene,
+                                electricalDevices: (scene.electricalDevices ?? []).map(
+                                    (device) =>
+                                        device.id === panelId
+                                            ? {
+                                                ...device,
+                                                properties: {
+                                                    ...(device.properties ?? {}),
+                                                    ...(patch.demandFactor !== undefined && { defaultDemandFactor: patch.demandFactor }),
+                                                    ...(patch.powerFactor !== undefined && { defaultPowerFactor: patch.powerFactor }),
+                                                    ...(patch.designFactor !== undefined && { designFactor: patch.designFactor }),
+                                                    ...(patch.ambientTemperatureC !== undefined && { ambientTemperatureC: patch.ambientTemperatureC }),
+                                                    ...(patch.conductorType !== undefined && { wireType: patch.conductorType }),
+                                                    ...(patch.groupedCircuitCount !== undefined && { groupedCircuitCount: patch.groupedCircuitCount }),
+                                                    ...(patch.groupingFactor !== undefined && { groupingFactor: patch.groupingFactor }),
+                                                    ...(patch.temperatureFactor !== undefined && { temperatureFactor: patch.temperatureFactor }),
+                                                    ...(patch.earthSectionMm2 !== undefined && { earthSectionMm2: patch.earthSectionMm2 }),
+                                                    ...(patch.itm !== undefined && { itm: patch.itm }),
+                                                    ...(patch.dif !== undefined && { dif: patch.dif }),
+                                                    ...(patch.system !== undefined && { phases: patch.system.toString() }),
+                                                    ...(patch.phaseBalance !== undefined && { phaseBalance: patch.phaseBalance }),
+                                                },
+                                            }
+                                            : device,
+                                ),
+                            },
+                    ),
+                });
+                return;
+            }
+
             setProject({
                 ...project,
                 scenes: project.scenes.map((scene) =>
@@ -220,6 +246,7 @@ export const EditorLayout = memo(function EditorLayout() {
                                     conductor.id === conductorId
                                         ? {
                                             ...conductor,
+                                            ...(patch.conductorType !== undefined && { conductorType: patch.conductorType }),
                                             ct: {
                                                 ...(conductor.ct ?? {}),
                                                 ...patch,
@@ -237,6 +264,9 @@ export const EditorLayout = memo(function EditorLayout() {
     const updateCtSection = useCallback(
         (levelId: string, conductorId: string, sectionMm2: number) => {
             if (!project) return;
+            const syntheticPanelId = conductorId.startsWith('synthetic-feeder-')
+                ? conductorId.replace('synthetic-feeder-', '')
+                : null;
             setProject({
                 ...project,
                 scenes: project.scenes.map((scene) =>
@@ -244,6 +274,13 @@ export const EditorLayout = memo(function EditorLayout() {
                         ? scene
                         : {
                             ...scene,
+                            electricalDevices: syntheticPanelId
+                                ? (scene.electricalDevices ?? []).map((device) =>
+                                      device.id === syntheticPanelId
+                                          ? { ...device, properties: { ...(device.properties ?? {}), sectionMm2 } }
+                                          : device,
+                                  )
+                                : scene.electricalDevices,
                             conductors: (scene.conductors ?? []).map(
                                 (conductor) =>
                                     conductor.id === conductorId
@@ -275,19 +312,22 @@ export const EditorLayout = memo(function EditorLayout() {
     // alimentador cambia el ΔV heredado de sus hijos.
     const applyTreeCompliance = useCallback(() => {
         if (!project) return;
+        const fixes = resolveProjectTreeConformingSections(project.scenes);
+        const fixById = new Map(fixes.map((fix) => [fix.conductorId, fix]));
         setProject({
             ...project,
             scenes: project.scenes.map((scene) => {
-                const fixes = resolveTreeConformingSections(scene);
-                if (fixes.length === 0) return scene;
-                const fixById = new Map(fixes.map((fix) => [fix.conductorId, fix.sectionMm2]));
                 return {
                     ...scene,
+                    electricalDevices: (scene.electricalDevices ?? []).map((device) => {
+                        const fix = fixes.find((item) => item.levelId === scene.id && item.panelId === device.id && item.isPanelSummary);
+                        return fix ? { ...device, properties: { ...(device.properties ?? {}), sectionMm2: fix.sectionMm2 } } : device;
+                    }),
                     conductors: (scene.conductors ?? []).map((conductor) =>
                         fixById.has(conductor.id)
                             ? {
                                   ...conductor,
-                                  sectionMm2: fixById.get(conductor.id)!,
+                                  sectionMm2: fixById.get(conductor.id)!.sectionMm2,
                                   ct: {
                                       ...(conductor.ct ?? {}),
                                       nominalCableCurrentA: undefined,

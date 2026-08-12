@@ -2,6 +2,7 @@
 
 namespace App\Models\Dialux;
 
+use App\Models\Concerns\InvalidatesDialuxProjectSummary;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class DialuxElectricalProject extends Model
 {
+    use InvalidatesDialuxProjectSummary;
+
     protected $table = 'dialux_electrical_projects';
 
     protected $fillable = [
