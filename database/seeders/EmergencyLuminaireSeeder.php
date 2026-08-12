@@ -32,7 +32,6 @@ class EmergencyLuminaireSeeder extends Seeder
 
     public function __construct()
     {
-        parent::__construct();
         // Detectar si estamos en ambiente de producción o si se fuerza actualización
         $this->forceUpdate = env('SEEDER_FORCE_UPDATE', false);
     }
@@ -40,7 +39,7 @@ class EmergencyLuminaireSeeder extends Seeder
     public function run(): void
     {
         echo "\n🔄 Iniciando importación de luminarias de EMERGENCIA...\n";
-        echo ($this->forceUpdate ? "⚡ MODO: Fuerza actualización (deploy)\n" : "📦 MODO: Solo importar faltantes\n\n");
+        echo $this->forceUpdate ? "⚡ MODO: Fuerza actualización (deploy)\n" : "📦 MODO: Solo importar faltantes\n\n";
 
         // ─── CATEGORÍA 1: SEÑALIZACIÓN DE SALIDA (EXIT Signs) ─────────────────────
 
@@ -54,10 +53,14 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Safety Exit Sign LED',
                 'manufacturer' => 'Philips',
                 'article_number' => 'PHILIPS-EXIT-LED',
-                'fixture_type' => 'exit-sign',
+                'fixture_type' => 'surface',
                 'total_lumens' => 300,      // 2x150
                 'power_watts' => 3.2,       // 2x1.6
                 'is_global' => true,
+                'metadata' => [
+                    'emergency_type' => 'exit-sign',
+                    'recommended_for' => ['evacuation-route'],
+                ],
             ],
         );
 
@@ -71,10 +74,14 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Emergency Exit Sign Compact',
                 'manufacturer' => 'LEDVANCE',
                 'article_number' => 'LEDVANCE-EXIT-SIGN',
-                'fixture_type' => 'exit-sign',
+                'fixture_type' => 'surface',
                 'total_lumens' => 300,
                 'power_watts' => 4,
                 'is_global' => true,
+                'metadata' => [
+                    'emergency_type' => 'exit-sign',
+                    'recommended_for' => ['evacuation-route'],
+                ],
             ],
         );
 
@@ -85,7 +92,6 @@ class EmergencyLuminaireSeeder extends Seeder
         $this->updateEmergencyMetadata(
             articleNumber: 'RC18820',
             updates: [
-                'fixture_type' => 'emergency-broad',
                 'metadata' => [
                     'emergency_type' => 'antipanic-area',
                     'min_iluminance_rne' => 0.5,      // lux — RNE A.130
@@ -107,7 +113,7 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Compact Emergency Light 25W Broad',
                 'manufacturer' => 'Philips',
                 'article_number' => 'PHILIPS-EMERGENCY-BROAD',
-                'fixture_type' => 'emergency-broad',
+                'fixture_type' => 'surface',
                 'total_lumens' => 2300,
                 'power_watts' => 25,
                 'cct' => 4000,
@@ -134,7 +140,7 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Emergency Bulkhead 30W Surface',
                 'manufacturer' => 'LEDVANCE',
                 'article_number' => 'LEDVANCE-EMERGENCY-BULKHEAD-30',
-                'fixture_type' => 'emergency-broad',
+                'fixture_type' => 'surface',
                 'total_lumens' => 2600,
                 'power_watts' => 30,
                 'cct' => 4000,
@@ -162,7 +168,7 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Emergency Floor Strip LED 1.2W',
                 'manufacturer' => 'Legrand',
                 'article_number' => 'LEGRAND-FLOOR-STRIP-LED',
-                'fixture_type' => 'floor-strip',
+                'fixture_type' => 'strip',
                 'total_lumens' => 120,
                 'power_watts' => 1.2,
                 'cct' => 6500,
@@ -186,7 +192,7 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Route Marking LED 1.5W',
                 'manufacturer' => 'Philips',
                 'article_number' => 'PHILIPS-ROUTE-MARKING',
-                'fixture_type' => 'floor-strip',
+                'fixture_type' => 'strip',
                 'total_lumens' => 150,
                 'power_watts' => 1.5,
                 'cct' => 6500,
@@ -212,7 +218,7 @@ class EmergencyLuminaireSeeder extends Seeder
                 'name' => 'Emergency Pendant Suspended 20W',
                 'manufacturer' => 'Zumtobel',
                 'article_number' => 'ZUMTOBEL-EMERGENCY-PENDANT',
-                'fixture_type' => 'emergency-pendant',
+                'fixture_type' => 'pendant',
                 'total_lumens' => 2100,
                 'power_watts' => 20,
                 'cct' => 4000,
@@ -238,22 +244,34 @@ class EmergencyLuminaireSeeder extends Seeder
      * - Si forceUpdate = false (desarrollo): solo importa si no existe
      * - Si forceUpdate = true (deploy): reemplaza/reimporta siempre
      *
-     * @param string $articleNumber Identificador único de artículo
-     * @param string $fileName Nombre del archivo LDT
-     * @param array<string, mixed> $overrides Campos a sobrescribir
+     * @param  string  $articleNumber  Identificador único de artículo
+     * @param  string  $fileName  Nombre del archivo LDT
+     * @param  array<string, mixed>  $overrides  Campos a sobrescribir
      */
     private function importOrUpdate(string $articleNumber, string $fileName, array $overrides): void
     {
+        $filePath = database_path("seeders/fixtures/luminaires-emergency/{$fileName}");
         $existing = LuminaireProduct::withTrashed()
             ->where('article_number', $articleNumber)
             ->first();
 
         // ─── CASO 1: Existe y NO forzamos actualización (desarrollo)
-        if ($existing && !$this->forceUpdate) {
+        if ($existing && ! $this->forceUpdate) {
             if ($existing->trashed()) {
                 $existing->restore();
                 echo "♻️  Restaurada: {$existing->name} (ya existía)\n";
             }
+
+            return;
+        }
+
+        // Nunca retirar un producto vigente si el artefacto que debe
+        // reemplazarlo no viajó con el deploy.
+        if (! file_exists($filePath)) {
+            echo "⚠️  Archivo no encontrado: {$fileName}\n";
+            echo "   Se conserva la luminaria existente sin cambios.\n";
+            echo "   Archivo esperado en: {$filePath}\n\n";
+
             return;
         }
 
@@ -265,18 +283,6 @@ class EmergencyLuminaireSeeder extends Seeder
         }
 
         // ─── CASO 3: Importar (nuevo o fuerza update)
-        $filePath = database_path("seeders/fixtures/luminaires-emergency/{$fileName}");
-
-        if (!file_exists($filePath)) {
-            // Archivo no encontrado — registrar advertencia
-            echo "⚠️  Archivo no encontrado: {$fileName}\n";
-            echo "   Descárgalo desde:\n";
-            echo "   - luminaires.dialux.com (recomendado)\n";
-            echo "   - Sitio oficial del fabricante\n";
-            echo "   Coloca el archivo en: {$filePath}\n\n";
-            return;
-        }
-
         try {
             $uploadedFile = new UploadedFile(
                 path: $filePath,
@@ -286,13 +292,24 @@ class EmergencyLuminaireSeeder extends Seeder
                 test: true
             );
 
-            $importService = new ProductImportService();
-            $product = $importService->import($uploadedFile, overrides: $overrides);
+            $importService = new ProductImportService;
+            $result = $importService->import(
+                file: $uploadedFile,
+                userId: null,
+                overrides: $overrides,
+            );
+            $product = $result['product'];
 
             $status = $this->forceUpdate ? '🔄 Reimportada' : '✅ Importada';
             echo "{$status}: {$product->name} ({$product->article_number})\n";
         } catch (\Exception $e) {
+            if ($existing && $this->forceUpdate && $existing->trashed()) {
+                $existing->restore();
+            }
+
             echo "❌ Error importando {$fileName}: {$e->getMessage()}\n";
+
+            throw $e;
         }
     }
 
@@ -307,8 +324,9 @@ class EmergencyLuminaireSeeder extends Seeder
             ->where('article_number', $articleNumber)
             ->first();
 
-        if (!$product) {
+        if (! $product) {
             echo "⚠️  No encontrada: {$articleNumber}\n";
+
             return;
         }
 
@@ -339,6 +357,7 @@ class EmergencyLuminaireSeeder extends Seeder
         if (str_ends_with($fileName, '.ies')) {
             return 'text/plain';
         }
+
         return 'application/octet-stream';
     }
 }

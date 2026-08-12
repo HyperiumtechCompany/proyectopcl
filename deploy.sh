@@ -1,33 +1,44 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-echo "🚀 Iniciando deploy PCL..."
+echo "[DEPLOY] Iniciando deploy PCL..."
 
 cd /var/www/ingenieros.tech
 
-echo "📥 Actualizando código..."
-git pull origin Emes
+echo "[GIT] Actualizando codigo..."
+git pull --ff-only origin Emes
 
-echo "📦 Instalando dependencias PHP..."
-composer install --no-dev --optimize-autoloader
+echo "[PHP] Instalando dependencias..."
+composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
-echo "🎨 Compilando assets..."
-NODE_OPTIONS="--max-old-space-size=3072" npm ci --legacy-peer-deps
+echo "[CACHE] Limpiando caches anteriores..."
+php artisan optimize:clear
+
+echo "[FRONTEND] Instalando y compilando assets..."
+npm ci --include=dev --legacy-peer-deps --no-audit --no-fund
 npm run build
 
-echo "🗄️ Ejecutando migraciones..."
+test -s public/build/manifest.json
+test -s public/dialux-core/pkg/dialux_core.js
+test -s public/dialux-core/pkg/dialux_core_bg.wasm
+
+echo "[DB] Ejecutando migraciones..."
 php artisan migrate --force
 
-echo "� Importando luminarias de EMERGENCIA..."
+echo "[DB] Sincronizando catalogo fotometrico real..."
+php artisan db:seed --class=RealPhotometryLuminaireSeeder --force
+
+echo "[DB] Importando luminarias de emergencia..."
 SEEDER_FORCE_UPDATE=true php artisan db:seed --class=EmergencyLuminaireSeeder --force
 
-echo "�🔧 Optimizando Laravel..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
+echo "[STORAGE] Verificando enlace publico..."
+php artisan storage:link --force
 
-echo "🔄 Reiniciando workers..."
+echo "[CACHE] Optimizando Laravel..."
+php artisan optimize
+
+echo "[QUEUE] Reiniciando workers..."
+php artisan queue:restart
 sudo supervisorctl restart pcl-worker:*
 
-echo "✅ Deploy completado exitosamente"
+echo "[OK] Deploy completado exitosamente"
