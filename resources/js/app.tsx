@@ -11,6 +11,21 @@ import 'tabulator-tables/dist/css/tabulator.min.css';
 
 patchWebGLPreserveBuffer();
 
+// Si un proxy/CDN conserva HTML anterior durante un deploy y solicita un
+// chunk que ya no existe, Vite emite este evento. Una sola recarga obtiene el
+// manifest nuevo sin dejar el editor 2D/3D en blanco ni crear un bucle.
+window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+
+    const reloadKey = 'pcl:vite-preload-reload-at';
+    const previousReload = Number(sessionStorage.getItem(reloadKey) ?? 0);
+    const now = Date.now();
+    if (now - previousReload < 30_000) return;
+
+    sessionStorage.setItem(reloadKey, String(now));
+    window.location.reload();
+});
+
 // Luckysheet is loaded as a UMD script and expects these globals.
 (window as any).$ = $;
 (window as any).jQuery = $;

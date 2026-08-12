@@ -525,7 +525,9 @@ test('authenticated users can list their imported products', function () {
         ->assertJsonPath('total', 1)
         ->assertJsonPath('products.0.name', 'Panel importado')
         ->assertJsonPath('products.0.product_image_path', 'dialux/product-catalog/user_'.$user->id.'/images/panel.png')
-        ->assertJsonPath('products.0.brand_logo_path', 'dialux/product-catalog/user_'.$user->id.'/logos/logo.png');
+        ->assertJsonPath('products.0.brand_logo_path', 'dialux/product-catalog/user_'.$user->id.'/logos/logo.png')
+        ->assertJsonPath('products.0.product_image_url', null)
+        ->assertJsonPath('products.0.brand_logo_url', null);
 });
 
 test('authenticated users can show enriched products they can access', function () {

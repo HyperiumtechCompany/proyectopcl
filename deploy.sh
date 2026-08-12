@@ -21,6 +21,10 @@ npm run build
 test -s public/build/manifest.json
 test -s public/dialux-core/pkg/dialux_core.js
 test -s public/dialux-core/pkg/dialux_core_bg.wasm
+test -s public/cad-workers/index.js
+test -s public/cad-workers/libredwg-parser-worker.js
+test -s public/cad-workers/mtext-renderer-worker.js
+test -s public/wasm/web-ifc.wasm
 
 echo "[DB] Ejecutando migraciones..."
 php artisan migrate --force
@@ -33,6 +37,7 @@ SEEDER_FORCE_UPDATE=true php artisan db:seed --class=EmergencyLuminaireSeeder --
 
 echo "[STORAGE] Verificando enlace publico..."
 php artisan storage:link --force
+test -L public/storage
 
 echo "[CACHE] Optimizando Laravel..."
 php artisan optimize

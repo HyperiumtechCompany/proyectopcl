@@ -6,6 +6,12 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  build: {
+    // Un deploy no debe borrar los chunks que una pestaña ya abierta todavía
+    // puede solicitar al cambiar entre 2D y 3D. El manifest nuevo se reemplaza
+    // al terminar, mientras los assets con hash anteriores siguen disponibles.
+    emptyOutDir: false,
+  },
   server: {
     host: 'localhost',
     port: 5173,

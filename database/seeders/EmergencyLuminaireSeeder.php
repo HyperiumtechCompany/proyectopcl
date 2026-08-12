@@ -335,8 +335,11 @@ class EmergencyLuminaireSeeder extends Seeder
         }
 
         // Fusionar metadata existente con nuevos campos
-        $existingMetadata = $product->metadata ?? [];
-        $newMetadata = array_merge($existingMetadata, $updates['metadata'] ?? []);
+        $existingMetadata = $this->normalizeMetadata($product->metadata);
+        $newMetadata = array_merge(
+            $existingMetadata,
+            $this->normalizeMetadata($updates['metadata'] ?? []),
+        );
 
         $product->update([
             'fixture_type' => $updates['fixture_type'] ?? $product->fixture_type,
@@ -344,6 +347,25 @@ class EmergencyLuminaireSeeder extends Seeder
         ]);
 
         echo "✅ Actualizada: {$product->name} como apta para emergencia\n";
+    }
+
+    /**
+     * Normaliza valores legacy guardados como JSON o JSON doblemente codificado.
+     *
+     * @return array<string, mixed>
+     */
+    private function normalizeMetadata(mixed $metadata): array
+    {
+        for ($attempt = 0; $attempt < 2 && is_string($metadata); $attempt++) {
+            $decoded = json_decode($metadata, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [];
+            }
+
+            $metadata = $decoded;
+        }
+
+        return is_array($metadata) ? $metadata : [];
     }
 
     /**

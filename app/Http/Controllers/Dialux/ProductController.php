@@ -263,9 +263,13 @@ class ProductController extends Controller
             'source_format' => $product->source_format,
             'source_file_name' => $product->source_file_name,
             'product_image_path' => $product->product_image_path,
-            'product_image_url' => $product->product_image_path ? asset('storage/'.$product->product_image_path) : null,
+            'product_image_url' => $product->product_image_path && Storage::exists($product->product_image_path)
+                ? asset('storage/'.$product->product_image_path)
+                : null,
             'brand_logo_path' => $product->brand_logo_path,
-            'brand_logo_url' => $product->brand_logo_path ? asset('storage/'.$product->brand_logo_path) : null,
+            'brand_logo_url' => $product->brand_logo_path && Storage::exists($product->brand_logo_path)
+                ? asset('storage/'.$product->brand_logo_path)
+                : null,
             'total_lumens' => $product->total_lumens,
             'power_watts' => $product->power_watts,
             'cct' => $product->cct,

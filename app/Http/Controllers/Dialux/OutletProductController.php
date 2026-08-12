@@ -9,6 +9,7 @@ use App\Models\OutletProduct;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class OutletProductController extends Controller
 {
@@ -130,7 +131,9 @@ class OutletProductController extends Controller
             'rated_power_w' => $product->rated_power_w,
             'ip_rating' => $product->ip_rating,
             'product_image_path' => $product->product_image_path,
-            'product_image_url' => $product->product_image_path ? asset('storage/'.$product->product_image_path) : null,
+            'product_image_url' => $product->product_image_path && Storage::exists($product->product_image_path)
+                ? asset('storage/'.$product->product_image_path)
+                : null,
             'is_global' => $product->is_global,
             'is_owner' => $userId !== null && $product->user_id === $userId,
             'created_at' => $product->created_at,
