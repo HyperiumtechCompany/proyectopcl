@@ -347,6 +347,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             undoLastDraftVertex,
             commitDrawVertex,
             getDraftPrevPoint,
+            beginWireFromNode,
         } = useCanvasInteraction({
             activeTool: ui.activeTool,
             angleSnapMode: ui.angleSnapMode,
@@ -436,6 +437,12 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
             onMoveElectricalDevice: (id, x, y, wallId) => {
                 store.updateElectricalDevice(id, { x, y, wallId });
             },
+            onMoveWireCurve: (id, midpoint) => {
+                store.updateConductor(id, {
+                    curveMidpoint: midpoint,
+                    waypoints: [],
+                });
+            },
             onConnectWire: (sourceId, targetId, waypoints) => {
                 // If it already exists, remove it (toggle connection)
                 const existingWire = scene?.conductors?.find(
@@ -447,6 +454,15 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 if (existingWire) {
                     store.removeObject(existingWire.id);
                 } else {
+                    const endpointPosition = (id: string) => {
+                        const node = scene?.fixtures.find((item) => item.id === id)
+                            ?? scene?.lightSwitches.find((item) => item.id === id)
+                            ?? scene?.electricalDevices?.find((item) => item.id === id);
+                        return node ? { x: node.x, y: node.y } : null;
+                    };
+                    const sourcePosition = endpointPosition(sourceId);
+                    const targetPosition = endpointPosition(targetId);
+                    const routedWaypoints = waypoints ?? [];
                     // CNE-Utilización / RNE EM.010: los tomacorrientes van en
                     // circuito propio, con calibre mayor (4 mm² / AWG 12) al
                     // de alumbrado (2.5 mm²) — nunca comparten tubería ni
@@ -491,7 +507,7 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                         tubeSize: 20,
                         conductorType: 'THW-90',
                         sectionMm2: connectsOutlet ? 4 : 2.5,
-                        waypoints: waypoints ?? [],
+                        waypoints: routedWaypoints,
                     });
                 }
 
@@ -684,14 +700,33 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                 const obstacleCount = scene?.structuralObstacles?.length ?? 0;
                 const floorHeight = scene?.floorHeight ?? 3.0;
                 const id = store.addStructuralObstacle({
-                    name: `Columna ${obstacleCount + 1}`,
-                    obstacleType: 'column',
+                    name: `Cubierta ${obstacleCount + 1}`,
+                    obstacleType: 'roof',
                     vertices: verticesM,
                     // Piso a techo por defecto (caso mas comun: columna estructural);
                     // el usuario ajusta elevation/height en el panel de propiedades
                     // para vigas suspendidas o zonas restringidas puntuales.
                     height: floorHeight,
                     elevation: 0,
+                    thickness: 0.15,
+                    roofType: 'flat',
+                    eaveHeight: floorHeight,
+                    ridgeHeight: floorHeight,
+                    slopePercent: 0,
+                    orientationDeg: 0,
+                    material: 'concreto',
+                    interiorReflectance: 0.7,
+                    exteriorReflectance: 0.3,
+                    overhang: 0,
+                    rampType: 'pedestrian',
+                    startLevel: 0,
+                    endLevel: 0.5,
+                    length: 6,
+                    width: 1.2,
+                    hasLandings: false,
+                    calculationSurfaceEnabled: true,
+                    targetLux: 100,
+                    uniformityTarget: 0.4,
                 });
                 store.setSelectedId(id);
                 setRoomVertices([]);
@@ -956,6 +991,9 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                     }));
                     store.updateRoom(id, { vertices: newVertices });
                 }
+            },
+            onUpdateRoomVertices: (id, vertices) => {
+                store.updateRoom(id, { vertices });
             },
             onMoveCanopy: (id, x1, y1, x2, y2) =>
                 store.updateCanopy(id, { x1, y1, x2, y2 }),
@@ -1589,6 +1627,25 @@ export const MlightcadCanvas2D: React.FC<Props> = memo(
                             );
                     }}
                     onDoubleClick={onDoubleClick}
+                    onContextMenu={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+                        const candidates = [
+                            ...(scene?.fixtures ?? []).map((item) => ({ id: item.id, type: 'fixture' as const, x: item.x, y: item.y })),
+                            ...(scene?.lightSwitches ?? []).map((item) => ({ id: item.id, type: 'switch' as const, x: item.x, y: item.y })),
+                            ...(scene?.electricalDevices ?? []).map((item) => ({ id: item.id, type: 'device' as const, x: item.x, y: item.y })),
+                        ].map((item) => {
+                            const screen = screenPoint(item);
+                            return { ...item, distance: Math.hypot(screen.x - point.x, screen.y - point.y) };
+                        }).sort((a, b) => a.distance - b.distance);
+                        const node = candidates[0];
+                        if (!node || node.distance > 28) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        store.setSelectedId(node.id);
+                        store.setTool('wire');
+                        beginWireFromNode(node.id, node.type);
+                    }}
                 >
                     <CanvasSvgDefs />
 

@@ -54,6 +54,9 @@ describe('useEditorStore electrical legend controls', () => {
 const scene = (id: string, rooms: Room[]): Scene => ({
     id,
     name: id,
+    floorIndex: 0,
+    floorElevation: 0,
+    floorHeight: 2.7,
     scaleConfig: createScaleConfig('m', 1, 'Metros (1 = 1m)'),
     rooms,
     walls: [],
@@ -61,6 +64,8 @@ const scene = (id: string, rooms: Room[]): Scene => ({
     doors: [],
     canopies: [],
     fixtures: [],
+    lightSwitches: [],
+    partitions: [],
 });
 
 describe('useEditorStore normative defaults', () => {

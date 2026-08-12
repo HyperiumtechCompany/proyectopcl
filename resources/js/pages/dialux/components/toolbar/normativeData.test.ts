@@ -8,7 +8,7 @@ describe('catálogos normativos del toolbar', () => {
         ['ies_na', 'Estados Unidos'],
         ['rne_peru', 'Perú'],
         ['en_1838', 'Emergencia europea'],
-    ] as const)('%s dispone de áreas para %s', (standard) => {
+    ] as const)('%s dispone de áreas para %s', (standard, _region) => {
         expect(getCategoryOptions(standard).length).toBeGreaterThan(0);
     });
 

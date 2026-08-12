@@ -30,6 +30,7 @@ import type { BreadcrumbItem } from '@/types';
 // Módulo local Sanitarias
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
 import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
+import { ImportarMetradoSanitariasModal, type ImportedMetradoRow } from './metradosanitarias/ImportarMetradoSanitariasModal';
 import { CalcModal } from './metradosanitarias/sanitarias_CalcModal';
 import {
     ALL_COLS,
@@ -895,7 +896,7 @@ export default function SanitariasIndex() {
           const fExpr = (row as any)['_formula_expr'];
           const fOut  = (row as any)['_formula_output'];
           if (fOut === col.key && fExpr) {
-            cell = mkFormula(fExpr, styledNum(toNum(val), st));
+            cell = mkFormula(fExpr, toNum(val));
           } else {
             cell = val !== undefined && val !== null && String(val).trim() !== ''
               ? styledNum(toNum(val), st)

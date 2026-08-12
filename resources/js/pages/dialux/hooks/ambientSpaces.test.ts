@@ -242,6 +242,9 @@ describe('ambientSpaces', () => {
         const scene = {
             id: 'scene-1',
             name: 'Planta',
+            floorIndex: 0,
+            floorElevation: 0,
+            floorHeight: 2.7,
             scaleConfig: {
                 unit: 'm',
                 factor: 1,
@@ -255,6 +258,8 @@ describe('ambientSpaces', () => {
             doors: [],
             canopies: [],
             fixtures: [],
+            lightSwitches: [],
+            partitions: [],
         } satisfies Scene;
 
         const ambients = deriveSceneAmbientSpaces(scene);

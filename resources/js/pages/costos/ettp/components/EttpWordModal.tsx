@@ -316,7 +316,7 @@ const EttpWordModal: React.FC<Props> = ({
             }
 
             if (item._children?.length) {
-                await processHierarchicalItems(docx, item._children, sections);
+                await processHierarchicalItems(docx, item._children, sections, level + 1);
             }
         }
     };

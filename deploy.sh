@@ -18,7 +18,10 @@ npm run build
 echo "🗄️ Ejecutando migraciones..."
 php artisan migrate --force
 
-echo "🔧 Optimizando Laravel..."
+echo "� Importando luminarias de EMERGENCIA..."
+SEEDER_FORCE_UPDATE=true php artisan db:seed --class=EmergencyLuminaireSeeder --force
+
+echo "�🔧 Optimizando Laravel..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache

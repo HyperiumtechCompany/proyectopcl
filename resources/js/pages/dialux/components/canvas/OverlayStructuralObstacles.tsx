@@ -27,6 +27,9 @@ const OBSTACLE_TYPE_LABEL: Record<StructuralObstacle['obstacleType'], string> = 
     column: 'Columna',
     beam: 'Viga',
     restricted_area: 'Zona restringida',
+    roof: 'Cubierta',
+    ceiling: 'Cielorraso',
+    ramp: 'Rampa',
 };
 
 const ObstaclePolygon = memo(function ObstaclePolygon({
@@ -46,24 +49,29 @@ const ObstaclePolygon = memo(function ObstaclePolygon({
     const lineOffset = safeNum(Math.max(9, 12 * zoom));
     const showMetrics = zoom >= 0.5 && area > 0;
     const patId = `hatch-obstacle-${obstacle.id}`;
+    const isConstructionSurface = ['roof', 'ceiling', 'ramp'].includes(obstacle.obstacleType);
+    const baseColor = obstacle.obstacleType === 'ramp' ? '#0f766e' : isConstructionSurface ? '#1d4ed8' : '#44403c';
+    const hatchColor = isConstructionSurface ? '#67e8f9' : '#dc2626';
 
     return (
         <g
-            style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-            onClick={() => onSelect(obstacle.id)}
+            style={{ pointerEvents: isConstructionSurface ? 'none' : 'auto', cursor: 'pointer' }}
+            onClick={isConstructionSurface ? undefined : () => onSelect(obstacle.id)}
         >
             <defs>
                 <pattern id={patId} patternUnits="userSpaceOnUse" width={8} height={8}>
-                    <line x1={0} y1={0} x2={8} y2={8} stroke="#dc2626" strokeWidth={1} strokeOpacity={0.55} />
-                    <line x1={8} y1={0} x2={0} y2={8} stroke="#dc2626" strokeWidth={1} strokeOpacity={0.55} />
+                    <line x1={0} y1={0} x2={8} y2={8} stroke={hatchColor} strokeWidth={1} strokeOpacity={0.55} />
+                    <line x1={8} y1={0} x2={0} y2={8} stroke={hatchColor} strokeWidth={1} strokeOpacity={0.55} />
                 </pattern>
             </defs>
-            <polygon points={pts} fill="#44403c" fillOpacity={0.55} />
-            <polygon points={pts} fill={`url(#${patId})`} fillOpacity={1} />
+            <polygon points={pts} fill={baseColor} fillOpacity={isConstructionSurface ? 0.12 : 0.55} />
+            <polygon points={pts} fill={`url(#${patId})`} fillOpacity={isConstructionSurface ? 0.22 : 1} />
             <polygon
                 points={pts} fill="none"
                 stroke={isSelected ? '#f87171' : '#a8a29e'}
                 strokeWidth={isSelected ? 2.5 : 1.6}
+                style={isConstructionSurface ? { pointerEvents: 'stroke', cursor: 'pointer' } : undefined}
+                onClick={isConstructionSurface ? () => onSelect(obstacle.id) : undefined}
             />
             {isSelected && (
                 <polygon

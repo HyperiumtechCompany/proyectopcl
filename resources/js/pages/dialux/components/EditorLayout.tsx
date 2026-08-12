@@ -13,6 +13,10 @@ import { isCalculationRunStale } from '@/pages/dialux/domain/calculation/stalene
 import type { CalculationRun } from '@/pages/dialux/domain/calculation/types';
 import { useDialuxEmergencyPdfExport, useDialuxPdfExport } from '@/pages/dialux/export';
 import { deriveSceneAmbientSpaces } from '@/pages/dialux/hooks/ambientSpaces';
+import {
+    connectedCircuitConductorIds,
+    panelBoundaryIds,
+} from '@/pages/dialux/hooks/conductorCircuitGroups';
 import { linkDialuxPlanFile, unlinkDialuxPlanFile } from '@/pages/dialux/hooks/dialuxPlanStorage';
 import { useDialuxCalculationWorker } from '@/pages/dialux/hooks/useDialuxCalculationWorker';
 import { markDialuxPlanSyncFailed } from '@/pages/dialux/hooks/useDialuxPlanSyncStatus';
@@ -713,6 +717,20 @@ export const EditorLayout = memo(function EditorLayout() {
                         beginHistoryGesture();
                         selectedFixtureIds.forEach((id) => requestDelete(id));
                         endHistoryGesture();
+                    } else if (
+                        e.shiftKey &&
+                        selectedId &&
+                        activeScene?.conductors?.some((item) => item.id === selectedId)
+                    ) {
+                        const conductorIds = connectedCircuitConductorIds(
+                            activeScene.conductors,
+                            selectedId,
+                            panelBoundaryIds(activeScene.electricalDevices),
+                        );
+                        beginHistoryGesture();
+                        conductorIds.forEach((id) => requestDelete(id));
+                        endHistoryGesture();
+                        setSelectedId(null);
                     } else if (selectedId) {
                         requestDelete(selectedId);
                     }
@@ -731,6 +749,7 @@ export const EditorLayout = memo(function EditorLayout() {
         return () => window.removeEventListener('keydown', handler);
     }, [
         beginHistoryGesture,
+        activeScene,
         endHistoryGesture,
         redo,
         requestDelete,

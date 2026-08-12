@@ -158,6 +158,13 @@ describe('calculateObstacleAwareFixtureGridPositions', () => {
         expectSameFixturePositions(obstacleAware, classic);
     });
 
+    it.each(['roof', 'ceiling', 'ramp'] as const)('%s no desplaza luminarias construidas', (obstacleType) => {
+        const surface = makeColumn({ obstacleType, vertices: room10x10 });
+        const classic = calculateFixtureGridPositions(room10x10, 3, 3);
+        const actual = calculateObstacleAwareFixtureGridPositions(room10x10, [surface], 2.7, 3, 3);
+        expectSameFixturePositions(actual, classic);
+    });
+
     it('las guias se aplican cuando no hay obstaculos relevantes', () => {
         const guided = calculateObstacleAwareFixtureGridPositions(room10x10, [], 2.7, 1, 2, undefined, [0.2]);
         expect(guided[0].x).toBeCloseTo(1, 6);

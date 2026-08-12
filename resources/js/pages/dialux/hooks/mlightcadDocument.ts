@@ -38,7 +38,7 @@ type MutableDocManager = {
 };
 
 export function bootstrapCadDefaults(doc: AcApDocument): AcApDocument {
-    const db = doc.database as BootstrapDatabase | undefined;
+    const db = doc.database as unknown as BootstrapDatabase | undefined;
 
     if (!db) {
         return doc;
@@ -77,7 +77,7 @@ export function ensureWritableBlankDocument(
 
     const nextDoc = bootstrapCadDefaults(new AcApDocument());
     const mutableDocManager = dm as unknown as MutableDocManager;
-    const db = nextDoc.database as BootstrapDatabase | undefined;
+    const db = nextDoc.database as unknown as BootstrapDatabase | undefined;
 
     dm.curView.clear();
     mutableDocManager._context = new AcApContext(dm.curView, nextDoc);
@@ -86,19 +86,19 @@ export function ensureWritableBlankDocument(
         const registeredLayers = new Set<string>();
 
         for (const layer of db?.tables?.layerTable?.newIterator?.() ?? []) {
-            dm.curView.addLayer(layer);
+            dm.curView.addLayer(layer as unknown as Parameters<typeof dm.curView.addLayer>[0]);
             registeredLayers.add(layer.name);
         }
 
         const defaultLayer = db?.tables?.layerTable?.getAt?.('0');
         if (defaultLayer && !registeredLayers.has(defaultLayer.name)) {
-            dm.curView.addLayer(defaultLayer);
+            dm.curView.addLayer(defaultLayer as unknown as Parameters<typeof dm.curView.addLayer>[0]);
         }
     }
 
     if (typeof dm.curView.addLayout === 'function') {
         for (const [, layout] of db?.objects?.layout?.entries?.() ?? []) {
-            dm.curView.addLayout(layout);
+            dm.curView.addLayout(layout as unknown as Parameters<typeof dm.curView.addLayout>[0]);
         }
     }
 

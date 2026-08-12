@@ -26,6 +26,7 @@ import type { BreadcrumbItem } from '@/types';
 
 // Módulo local
 import { injectTemplateIfEmpty } from './lib/metrado_templates';
+import { isLuckysheetReady, safeSetCellValue, safeSetDataVerification } from './lib/luckysheet_runtime';
 import { CalcModal }     from './metradocomunicaciones/comunicaciones_CalcModal';
 import {ALL_COLS, CI, LEAF_STYLE, LEVEL_PALETTE, RESUMEN_BASE_COLS,SAVE_DEBOUNCE, UNITS} from './metradocomunicaciones/comunicaciones_constants';
 import { NumberingModal, buildNumberingUpdates } from './metradocomunicaciones/comunicaciones_NumberingModal';
@@ -269,6 +270,7 @@ function useAutoSave(
 export default function comunicacionesIndex() {
   const { project, metrado, resumen } =
     usePage<ComunicacionesPageProps>().props;
+  const moduleCount = 1;
 
 
   const breadcrumbs: BreadcrumbItem[] = [
@@ -711,7 +713,7 @@ export default function comunicacionesIndex() {
           const fExpr = (row as any)['_formula_expr'];
           const fOut  = (row as any)['_formula_output'];
           if (fOut === col.key && fExpr) {
-            cell = mkFormula(fExpr, styledNum(toNum(val), st));
+            cell = mkFormula(fExpr, toNum(val));
           } else {
             cell = val !== undefined && val !== null && String(val).trim() !== ''
               ? styledNum(toNum(val), st)

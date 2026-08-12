@@ -642,6 +642,7 @@ export function useMlightcadEngine(): UseMlightcadEngineReturn {
             const spCss = { x: screenPoint.x, y: screenPoint.y };
             const before = view.screenToWorld(spCss);
             const currentCenter = view.center;
+            if (!currentCenter) return;
             const nextZoom = Math.min(
                 1000,
                 Math.max(0.01, currentZoom * factor),

@@ -5,6 +5,11 @@ import {
 } from '@/pages/dialux/selection/hitTest';
 import { getCanopyDraftStart } from './cadInteraction';
 import { resolveWireNodePosition } from './wireNodePosition';
+import { defaultWireCurveMidpoint } from './wireCurveGeometry';
+import {
+    insertPolygonEdgeMidpoint,
+    movePolygonVertex,
+} from '@/pages/dialux/geometry/editablePolyline';
 import type {
     AngleSnapMode,
     DrawTool,
@@ -109,6 +114,7 @@ interface InteractionOptions {
     onMoveFixture: (id: string, x: number, y: number) => void;
     onMoveFixtures: (ids: string[], dx: number, dy: number) => void;
     onMoveRoom: (id: string, dx: number, dy: number) => void;
+    onUpdateRoomVertices?: (id: string, vertices: CanvasPoint[]) => void;
     onMoveCanopy: (
         id: string,
         x1: number,
@@ -142,6 +148,7 @@ interface InteractionOptions {
         endpoint: 'source' | 'target',
         newNodeId: string,
     ) => void;
+    onMoveWireCurve?: (conductorId: string, midpoint: CanvasPoint) => void;
     onAddElectricalDevice?: (x: number, y: number, wallId?: string) => void;
     electricalDevices?: ElectricalDevice[];
     /** Cables y tabiques: solo participan del hit-testing de selección */
@@ -185,9 +192,13 @@ interface DrawState {
         | 'switch'
         | 'electrical-device'
         | 'conductor-endpoint'
+        | 'conductor-curve'
+        | 'room-vertex'
         | null;
     /** Extremo del conductor que se está arrastrando (solo cuando dragObjectType === 'conductor-endpoint') */
     dragConductorEndpoint: 'source' | 'target' | null;
+    dragVertexIndex: number | null;
+    dragRoomVertices: CanvasPoint[] | null;
 }
 
 function isWallTool(tool: string): boolean {
@@ -232,6 +243,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveFixture,
         onMoveFixtures,
         onMoveRoom,
+        onUpdateRoomVertices,
         onMoveCanopy,
         onMoveWindow,
         onMoveDoor,
@@ -239,6 +251,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         onMoveElectricalDevice,
         onConnectWire,
         onReconnectWireEndpoint,
+        onMoveWireCurve,
         onAddElectricalDevice,
         electricalDevices = [],
         conductors = [],
@@ -282,6 +295,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         dragObjectId: null,
         dragObjectType: null,
         dragConductorEndpoint: null,
+        dragVertexIndex: null,
+        dragRoomVertices: null,
     });
 
     useEffect(() => {
@@ -624,6 +639,49 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             const rawY = e.clientY - rect.top;
 
             const s = stateRef.current;
+            const eventElement = e.target as SVGElement;
+            const curveHandle = eventElement.closest<SVGElement>('[data-wire-curve-id]');
+            const curveConductorId = curveHandle?.dataset.wireCurveId;
+            if (activeTool === 'select' && curveConductorId) {
+                const conductor = conductors.find((item) => item.id === curveConductorId);
+                if (conductor) {
+                    onSelectObject(curveConductorId);
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(rawX, rawY);
+                    s.dragObjectId = curveConductorId;
+                    s.dragObjectType = 'conductor-curve';
+                    onDragGesture?.('start');
+                    return;
+                }
+            }
+
+            const vertexHandle = eventElement.closest<SVGElement>('[data-room-vertex-id]');
+            const edgeHandle = eventElement.closest<SVGElement>('[data-room-edge-id]');
+            const handledRoomId = vertexHandle?.dataset.roomVertexId ?? edgeHandle?.dataset.roomEdgeId;
+            if (activeTool === 'select' && handledRoomId) {
+                const room = rooms.find((item) => item.id === handledRoomId);
+                const rawIndex = vertexHandle?.dataset.roomVertexIndex ?? edgeHandle?.dataset.roomEdgeIndex;
+                const handleIndex = Number(rawIndex);
+                if (room && Number.isInteger(handleIndex)) {
+                    let vertices = room.vertices.map((vertex) => ({ ...vertex }));
+                    let dragIndex = handleIndex;
+                    if (edgeHandle) {
+                        const inserted = insertPolygonEdgeMidpoint(vertices, handleIndex);
+                        vertices = inserted.vertices;
+                        dragIndex = inserted.insertedIndex;
+                        onUpdateRoomVertices?.(room.id, vertices);
+                    }
+                    onSelectObject(room.id);
+                    s.isDragging = true;
+                    s.dragStartScene = canvasToScene(rawX, rawY);
+                    s.dragObjectId = room.id;
+                    s.dragObjectType = 'room-vertex';
+                    s.dragVertexIndex = dragIndex;
+                    s.dragRoomVertices = vertices;
+                    onDragGesture?.('start');
+                    return;
+                }
+            }
             const activeVerticesCanvas = (
                 activeTool === 'room' ||
                 activeTool === 'corridor' ||
@@ -941,12 +999,84 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         const dTgt2 = tgtCanvas
                             ? (tgtCanvas.x - cx) ** 2 + (tgtCanvas.y - cy) ** 2
                             : Infinity;
+                        if (srcPos && tgtPos) {
+                            const curveMidpoint = selectedConductor.curveMidpoint
+                                ?? defaultWireCurveMidpoint(
+                                    srcPos,
+                                    tgtPos,
+                                    selectedConductor.routeType,
+                                );
+                            const curveCanvas = sceneToCanvas(
+                                curveMidpoint.x,
+                                curveMidpoint.y,
+                            );
+                            const dCurve2 =
+                                (curveCanvas.x - cx) ** 2 +
+                                (curveCanvas.y - cy) ** 2;
+                            if (dCurve2 <= HANDLE_TOL2) {
+                                s.isDragging = true;
+                                s.dragStartScene = canvasToScene(cx, cy);
+                                s.dragObjectId = selectedConductor.id;
+                                s.dragObjectType = 'conductor-curve';
+                                onDragGesture?.('start');
+                                return;
+                            }
+                        }
                         if (dSrc2 <= HANDLE_TOL2 || dTgt2 <= HANDLE_TOL2) {
                             s.isDragging = true;
                             s.dragObjectId = selectedConductor.id;
                             s.dragObjectType = 'conductor-endpoint';
                             s.dragConductorEndpoint =
                                 dSrc2 <= dTgt2 ? 'source' : 'target';
+                            onDragGesture?.('start');
+                            return;
+                        }
+                    }
+
+                    const selectedRoom = rooms.find(
+                        (room) => room.id === opts.selectedId,
+                    );
+                    if (selectedRoom && selectedRoom.vertices.length >= 3) {
+                        const vertexTolerance2 = 11 * 11;
+                        const midpointTolerance2 = 9 * 9;
+                        const screenVertices = selectedRoom.vertices.map((vertex) =>
+                            sceneToCanvas(vertex.x, vertex.y),
+                        );
+                        const vertexIndex = screenVertices.findIndex(
+                            (vertex) =>
+                                (vertex.x - cx) ** 2 + (vertex.y - cy) ** 2 <=
+                                vertexTolerance2,
+                        );
+
+                        let vertices = selectedRoom.vertices.map((vertex) => ({ ...vertex }));
+                        let dragIndex = vertexIndex;
+                        if (dragIndex < 0) {
+                            const edgeIndex = screenVertices.findIndex((vertex, index) => {
+                                const next = screenVertices[(index + 1) % screenVertices.length];
+                                const midpoint = {
+                                    x: (vertex.x + next.x) / 2,
+                                    y: (vertex.y + next.y) / 2,
+                                };
+                                return (
+                                    (midpoint.x - cx) ** 2 + (midpoint.y - cy) ** 2 <=
+                                    midpointTolerance2
+                                );
+                            });
+                            if (edgeIndex >= 0) {
+                                const inserted = insertPolygonEdgeMidpoint(vertices, edgeIndex);
+                                vertices = inserted.vertices;
+                                dragIndex = inserted.insertedIndex;
+                                onUpdateRoomVertices?.(selectedRoom.id, vertices);
+                            }
+                        }
+
+                        if (dragIndex >= 0) {
+                            s.isDragging = true;
+                            s.dragStartScene = canvasToScene(cx, cy);
+                            s.dragObjectId = selectedRoom.id;
+                            s.dragObjectType = 'room-vertex';
+                            s.dragVertexIndex = dragIndex;
+                            s.dragRoomVertices = vertices;
                             onDragGesture?.('start');
                             return;
                         }
@@ -974,7 +1104,10 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                     { x: cx, y: cy },
                     scenePt,
                     (sx, sy) => sceneToCanvas(sx, sy),
-                    { isSelectable: (id) => isObjectSelectable?.(id) ?? true },
+                    {
+                        isSelectable: (id) => isObjectSelectable?.(id) ?? true,
+                        includeEnclosureInterior: e.altKey,
+                    },
                 );
 
                 const winner = e.altKey
@@ -1045,6 +1178,7 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             onAddLightSwitch,
             onAddElectricalDevice,
             onConnectWire,
+            onUpdateRoomVertices,
             onDragGesture,
             fixtures,
             lightSwitches,
@@ -1317,6 +1451,21 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                         }
                     }
                     s.dragStartScene = currentScene;
+                } else if (s.dragObjectType === 'conductor-curve') {
+                    onMoveWireCurve?.(s.dragObjectId, currentScene);
+                    s.dragStartScene = currentScene;
+                } else if (
+                    s.dragObjectType === 'room-vertex' &&
+                    s.dragVertexIndex !== null &&
+                    s.dragRoomVertices
+                ) {
+                    s.dragRoomVertices = movePolygonVertex(
+                        s.dragRoomVertices,
+                        s.dragVertexIndex,
+                        currentScene,
+                    );
+                    onUpdateRoomVertices?.(s.dragObjectId, s.dragRoomVertices);
+                    s.dragStartScene = currentScene;
                 } else if (s.dragObjectType === 'room') {
                     const room = rooms.find((r) => r.id === s.dragObjectId);
                     if (room) onMoveRoom(s.dragObjectId, dxM, dyM);
@@ -1486,11 +1635,13 @@ export function useCanvasInteraction(opts: InteractionOptions) {
             onMoveFixture,
             onMoveFixtures,
             onMoveRoom,
+            onUpdateRoomVertices,
             onMoveCanopy,
             onMoveWindow,
             onMoveDoor,
             onMoveLightSwitch,
             onMoveElectricalDevice,
+            onMoveWireCurve,
             findNearestWall,
             selectedFixtureIds,
             conductors,
@@ -1545,6 +1696,8 @@ export function useCanvasInteraction(opts: InteractionOptions) {
                 s.dragObjectId = null;
                 s.dragObjectType = null;
                 s.dragConductorEndpoint = null;
+                s.dragVertexIndex = null;
+                s.dragRoomVertices = null;
                 onDragGesture?.('end');
                 return;
             }
@@ -1613,6 +1766,11 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         }
     }, [activeTool, onAddWall, onMeasureAreaFinish, onDoubleClick]);
 
+    const beginWireFromNode = useCallback((id: string, type: 'switch' | 'fixture' | 'device') => {
+        stateRef.current.wireStartNode = { id, type };
+        stateRef.current.wireWaypoints = [];
+    }, []);
+
     /**
      * Quita el último vértice colocado de la figura que se está dibujando
      * (recinto/pasadizo/escalera, muro o medición de área), sin cancelar el
@@ -1677,5 +1835,6 @@ export function useCanvasInteraction(opts: InteractionOptions) {
         undoLastDraftVertex,
         commitDrawVertex,
         getDraftPrevPoint,
+        beginWireFromNode,
     };
 }

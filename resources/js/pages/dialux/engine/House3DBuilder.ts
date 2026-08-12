@@ -53,6 +53,7 @@ import type {
     ElectricalDevice,
     ElectricalDeviceType,
     Partition,
+    StructuralObstacle,
     Scene as EditorScene,
     LightingResult,
     IsoluxMode,
@@ -370,10 +371,30 @@ export class House3DBuilder {
             }
         }
 
+        const structuralRoofs = (editorScene.structuralObstacles ?? []).filter(
+            (item) => item.obstacleType === 'roof',
+        );
+        const roomHasStructuralRoof = (room: Room): boolean => {
+            if (room.vertices.length < 3) return false;
+            const center = room.vertices.reduce(
+                (sum, vertex) => ({ x: sum.x + vertex.x, y: sum.y + vertex.y }),
+                { x: 0, y: 0 },
+            );
+            center.x /= room.vertices.length;
+            center.y /= room.vertices.length;
+
+            // Una mera intersección de bounding boxes no significa que el tejado
+            // cubra el recinto. Ese falso positivo ocultaba el techo plano de
+            // habitaciones vecinas y dejaba el modelo 3D visualmente abierto.
+            return structuralRoofs.some(
+                (roof) => roof.vertices.length >= 3 && pointInPolygon(center, roof.vertices),
+            );
+        };
+
         rooms.forEach((r) =>
             this.buildRoom(
                 r,
-                showRoof,
+                showRoof && !roomHasStructuralRoof(r),
                 roomHeights.get(r.id) ?? r.height,
                 editorScene.windows || [],
                 editorScene.doors || [],
@@ -395,6 +416,17 @@ export class House3DBuilder {
         (editorScene.canopies || []).forEach((c) =>
             this.buildCanopy(c, floorNode),
         );
+        (editorScene.structuralObstacles || []).forEach((obstacle) => {
+            if (obstacle.obstacleType !== 'roof' || showRoof) {
+                try {
+                    this.buildStructuralSurface(obstacle, floorNode);
+                } catch (error) {
+                    // Una cubierta mal formada no debe interrumpir el resto de la
+                    // escena (luminarias, conductores, puertas y particiones).
+                    console.warn(`No se pudo construir el obstáculo 3D ${obstacle.id}`, error);
+                }
+            }
+        });
         (editorScene.fixtures || []).forEach((f) =>
             this.buildFixtureLight(
                 f,
@@ -415,6 +447,7 @@ export class House3DBuilder {
             editorScene.electricalDevices || [],
             editorScene.rooms || [],
             editorScene.floorHeight ?? 2.7,
+            editorScene.structuralObstacles || [],
             floorNode,
         );
         (editorScene.doors || []).forEach((d) =>
@@ -545,7 +578,7 @@ export class House3DBuilder {
                 }),
             });
 
-            ctx.lineCap = 'round';
+            (ctx as CanvasRenderingContext2D).lineCap = 'round';
             segments.forEach((segment) => {
                 ctx.beginPath();
                 ctx.strokeStyle = this.waveStrokeColor(
@@ -1820,9 +1853,6 @@ export class House3DBuilder {
 
         try {
             const floorHoles = floorBelow ? this.getRoomStairHoles(room, floorBelow.rooms || []) : [];
-            if (room.roomType === 'corridor') {
-                floorHoles.push(...this.getRoomStairHoles(room, allRooms));
-            }
             const floor = MeshBuilder.CreatePolygon(
                 `floor_${room.id}`,
                 { shape, holes: floorHoles, depth: 0.05, sideOrientation: Mesh.DOUBLESIDE },
@@ -2357,10 +2387,8 @@ export class House3DBuilder {
     ) {
         const meshes: Mesh[] = [];
 
-        const vertices = wall.vertices || [
-            { x: wall.x1!, y: wall.y1! },
-            { x: wall.x2!, y: wall.y2! },
-        ];
+        const vertices = wall.vertices;
+        if (vertices.length < 2) return;
 
         // For each segment in the polyline
         for (let i = 0; i < vertices.length - 1; i++) {
@@ -2646,6 +2674,79 @@ export class House3DBuilder {
     }
 
     // ── Voladizo (Canopy) ─────────────────────────────────────────────────────
+    /** Renderiza cubiertas/cielorrasos y rampas como superficies inclinadas. */
+    buildStructuralSurface(item: StructuralObstacle, floorNode?: TransformNode) {
+        if (item.vertices.length < 3) return;
+        const xs = item.vertices.map((v) => v.x); const zs = item.vertices.map((v) => v.y);
+        const minX = Math.min(...xs); const maxX = Math.max(...xs);
+        const minZ = Math.min(...zs); const maxZ = Math.max(...zs);
+        const width = Math.max(0.05, maxX - minX); const depth = Math.max(0.05, maxZ - minZ);
+        const cx = (minX + maxX) / 2; const cz = (minZ + maxZ) / 2;
+        const thickness = Math.max(0.02, item.thickness ?? 0.15);
+        const meshes: Mesh[] = [];
+        const material = new StandardMaterial(`surface_mat_${item.id}`, this.scene);
+        material.diffuseColor = Color3.FromHexString(item.obstacleType === 'ramp' ? '#0f766e' : item.obstacleType === 'ceiling' ? '#94a3b8' : '#2563eb');
+        const addSlab = (name: string, w: number, d: number, y: number, slope = 0, offset = 0) => {
+            const mesh = MeshBuilder.CreateBox(name, { width: w, depth: d, height: thickness }, this.scene);
+            mesh.position.set(cx + offset, y, cz); mesh.rotation.z = slope;
+            mesh.rotation.y = -((item.orientationDeg ?? 0) * Math.PI / 180);
+            mesh.material = material; mesh.receiveShadows = true; mesh.parent = floorNode ?? null;
+            this.shadowGen?.addShadowCaster(mesh); meshes.push(mesh);
+        };
+        if (item.obstacleType === 'ramp') {
+            const start = item.startLevel ?? item.elevation ?? 0; const end = item.endLevel ?? start;
+            const run = Math.max(0.1, item.length ?? width); const rise = end - start;
+            addSlab(`ramp_${item.id}`, Math.hypot(run, rise), item.width ?? depth, (start + end) / 2, Math.atan2(rise, run));
+        } else if (item.obstacleType === 'roof' || item.obstacleType === 'ceiling') {
+            const eave = item.eaveHeight ?? item.elevation ?? 0;
+            const ridge = item.ridgeHeight ?? (eave + width * Math.abs(item.slopePercent ?? 0) / 200);
+            const type = item.roofType ?? (item.obstacleType === 'ceiling' ? 'full' : 'flat');
+            if (['gable', 'mansard', 'hip', 'butterfly'].includes(type)) {
+                const rise = ridge - eave; const half = width / 2;
+                const angle = Math.atan2(rise, half) * (type === 'butterfly' ? -1 : 1);
+                const span = Math.hypot(half, rise);
+                addSlab(`roof_a_${item.id}`, span, depth, (eave + ridge) / 2, angle, -width / 4);
+                addSlab(`roof_b_${item.id}`, span, depth, (eave + ridge) / 2, -angle, width / 4);
+                // Cierra los testeros entre la altura de pared y la cumbrera;
+                // evita que el tejado parezca suspendido sobre un vacío.
+                if (type === 'gable' || type === 'mansard') {
+                    for (const [index, z] of [minZ, maxZ].entries()) {
+                        const gable = MeshBuilder.CreatePolygon(
+                            `roof_gable_${item.id}_${index}`,
+                            {
+                                shape: [
+                                    new Vector3(-half, 0, 0),
+                                    new Vector3(half, 0, 0),
+                                    new Vector3(0, 0, Math.max(0, rise)),
+                                ],
+                                depth: thickness,
+                                sideOrientation: Mesh.DOUBLESIDE,
+                            },
+                            this.scene,
+                        );
+                        gable.position.set(cx, eave, z + (index === 0 ? -thickness / 2 : thickness / 2));
+                        gable.rotation.x = -Math.PI / 2;
+                        gable.rotation.y = -((item.orientationDeg ?? 0) * Math.PI / 180);
+                        gable.material = this.matWall;
+                        gable.parent = floorNode ?? null;
+                        gable.receiveShadows = true;
+                        this.shadowGen?.addShadowCaster(gable);
+                        meshes.push(gable);
+                    }
+                }
+            } else {
+                const rise = width * (item.slopePercent ?? 0) / 100;
+                addSlab(`roof_${item.id}`, Math.hypot(width, rise), depth, eave + rise / 2, Math.atan2(rise, width));
+            }
+        } else {
+            const height = Math.max(0.02, item.height);
+            const mesh = MeshBuilder.CreateBox(`obstacle_${item.id}`, { width, depth, height }, this.scene);
+            mesh.position.set(cx, item.elevation + height / 2, cz); mesh.material = material;
+            mesh.parent = floorNode ?? null; meshes.push(mesh);
+        }
+        this.meshMap.set(item.id, meshes);
+    }
+
     buildCanopy(
         canopy: Canopy,
         floorNode?: import('@babylonjs/core').TransformNode,
@@ -3068,12 +3169,40 @@ export class House3DBuilder {
         electricalDevices: ElectricalDevice[],
         rooms: Room[],
         floorHeight: number,
+        structuralSurfaces: StructuralObstacle[],
         floorNode: TransformNode,
     ) {
         const FLOOR_Y = 0.05;
 
+        const structuralRouteHeightAt = (x: number, z: number): number | undefined => {
+            const surface = structuralSurfaces.find((candidate) =>
+                (candidate.obstacleType === 'roof' || candidate.obstacleType === 'ceiling')
+                && pointInPolygon({ x, y: z }, candidate.vertices),
+            );
+            if (!surface) return undefined;
+            const eave = surface.eaveHeight ?? surface.elevation ?? floorHeight;
+            if (surface.obstacleType === 'ceiling') return eave;
+
+            const xs = surface.vertices.map((vertex) => vertex.x);
+            const minX = Math.min(...xs); const maxX = Math.max(...xs);
+            const width = Math.max(0.01, maxX - minX); const centerX = (minX + maxX) / 2;
+            const ridge = surface.ridgeHeight ?? (eave + width * Math.abs(surface.slopePercent ?? 0) / 200);
+            const rise = ridge - eave;
+            const type = surface.roofType ?? 'flat';
+            if (['gable', 'mansard', 'hip'].includes(type)) {
+                return eave + Math.max(0, 1 - Math.abs(x - centerX) / (width / 2)) * rise;
+            }
+            if (type === 'butterfly') {
+                return eave + Math.min(1, Math.abs(x - centerX) / (width / 2)) * rise;
+            }
+            if (type === 'shed') {
+                return eave + Math.min(1, Math.max(0, (x - minX) / width)) * rise;
+            }
+            return eave;
+        };
         const ceilingHeightAt = (x: number, z: number): number =>
-            rooms.find((room) => pointInPolygon({ x, y: z }, room.vertices))?.height
+            structuralRouteHeightAt(x, z)
+                ?? rooms.find((room) => pointInPolygon({ x, y: z }, room.vertices))?.height
                 ?? floorHeight;
 
         const resolveNode = (id: string): { x: number; y: number; z: number } | null => {
@@ -3097,8 +3226,7 @@ export class House3DBuilder {
         ): Vector3[] => {
             const autoCeiling = Math.max(
                 ...nodes.map((point) =>
-                    rooms.find((room) => pointInPolygon({ x: point.x, y: point.z }, room.vertices))?.height
-                        ?? floorHeight,
+                    ceilingHeightAt(point.x, point.z),
                 ),
             );
             const routeY = routeType === 'floor'

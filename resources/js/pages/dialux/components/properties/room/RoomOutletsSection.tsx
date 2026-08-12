@@ -32,7 +32,9 @@ export function RoomOutletsSection({
     generatedOutletsCount: number;
 }) {
     const store = useEditorStore();
-    const outletUse = room.outletUse ?? 'aula';
+    const outletUse: OutletUse = room.outletUse && room.outletUse !== 'none'
+        ? room.outletUse
+        : 'aula';
     const outletRule = OUTLET_RULES[outletUse];
     const requiredOutlets = requiredOutletCount(calculationVertices, outletUse);
     const outletDeviceType = room.outletDeviceType ?? (outletUse === 'exterior' ? 'outlet_waterproof' : 'outlet_floor');

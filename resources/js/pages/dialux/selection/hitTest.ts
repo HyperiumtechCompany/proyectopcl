@@ -42,6 +42,11 @@ import type {
     Window,
 } from '@/pages/dialux/hooks/types';
 import { resolveOffsetOnWall } from '@/pages/dialux/hooks/useInteractionHelpers';
+import {
+    defaultWireCurveMidpoint,
+    quadraticControlThroughMidpoint,
+    quadraticPoint,
+} from '@/pages/dialux/hooks/wireCurveGeometry';
 
 export type HitKind =
     | 'fixture'
@@ -91,6 +96,7 @@ export interface HitTestOptions {
     deviceTolerancePx?: number;
     /** Permite excluir objetos ocultos sin quitar los nodos usados para trazar cables. */
     isSelectable?: (id: string, kind: HitKind) => boolean;
+    includeEnclosureInterior?: boolean;
 }
 
 const PRIORITY: Record<HitKind, number> = {
@@ -138,30 +144,22 @@ function conductorPathCanvasPx(
     sceneToCanvas: SceneToCanvas,
 ): { x: number; y: number }[] {
     const nodes = nodesM.map((node) => sceneToCanvas(node.x, node.y));
-    const curveDir = conductor.routeType === 'floor' ? 1 : -1;
     const path: { x: number; y: number }[] = [];
 
     for (let segment = 0; segment < nodes.length - 1; segment++) {
         const a = nodes[segment];
         const b = nodes[segment + 1];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const length = Math.hypot(dx, dy);
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
         if (length < 0.5) continue;
 
-        // Debe coincidir con la curva cuadrática dibujada por OverlayWires.
-        const control = {
-            x: (a.x + b.x) / 2 + (-dy / length) * length * 0.18 * curveDir,
-            y: (a.y + b.y) / 2 + (dx / length) * length * 0.18 * curveDir,
-        };
+        const midpoint = conductor.curveMidpoint && nodes.length === 2
+            ? sceneToCanvas(conductor.curveMidpoint.x, conductor.curveMidpoint.y)
+            : defaultWireCurveMidpoint(a, b, conductor.routeType);
+        const control = quadraticControlThroughMidpoint(a, midpoint, b);
         const samples = Math.max(12, Math.ceil(length / 24));
         for (let step = segment === 0 ? 0 : 1; step <= samples; step++) {
             const t = step / samples;
-            const inverse = 1 - t;
-            path.push({
-                x: inverse * inverse * a.x + 2 * inverse * t * control.x + t * t * b.x,
-                y: inverse * inverse * a.y + 2 * inverse * t * control.y + t * t * b.y,
-            });
+            path.push(quadraticPoint(a, control, b, t));
         }
     }
 
@@ -234,7 +232,7 @@ export function hitTestAtPoint(
         const src = nodeById.get(c.sourceId);
         const dst = nodeById.get(c.targetId);
         if (!src || !dst) continue;
-        const path = conductorPathCanvasPx(c, [src, ...(c.waypoints ?? []), dst], sceneToCanvas);
+        const path = conductorPathCanvasPx(c, [src, dst], sceneToCanvas);
         const d = distToPolylinePx(canvasPt, path, (x, y) => ({ x, y }));
         if (d <= tol) {
             candidates.push({ id: c.id, kind: 'conductor', priority: PRIORITY.conductor, distPx: d });
@@ -282,8 +280,12 @@ export function hitTestAtPoint(
         if (r.vertices.length < 3) continue;
         const inside = pointInPolygon(scenePt, r.vertices);
         const edgePx = distToPolylinePx(canvasPt, r.vertices, sceneToCanvas, true);
-        if (!inside && edgePx > tol) continue;
         const isEnclosure = !r.roomType || r.roomType === 'room';
+        if (isEnclosure) {
+            if (edgePx > tol && !(inside && options.includeEnclosureInterior)) continue;
+        } else if (!inside && edgePx > tol) {
+            continue;
+        }
         candidates.push({
             id: r.id,
             kind: 'room',

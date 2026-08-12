@@ -1443,6 +1443,8 @@ test('formal dialux blade Consumo uses siteSettings.dailyOperatingHours when the
 
     // Consumo = 40 W * 4 h/dia * 365 / 1000 = 58.4 kWh/a (NO el resultado con el default de 8h, que sería 116.8).
     $view->assertSee('58 kWh/a', false);
+    $view->assertSee('m&aacute;x. 500 kWh/a', false);
+    $view->assertSee('Conforme', false);
     $view->assertDontSee('117 kWh/a');
     $view->assertSee('jornada referencial de 4 h', false);
 });

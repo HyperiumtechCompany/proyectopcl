@@ -99,7 +99,7 @@ export const useConsolidadoStore = create<ConsolidadoState>()(
                     // Usar la Seccion VIII (TOTAL) para alinear con el consolidado
                     const totalRow =
                         store.rows.find((r: any) => r.item === 'VIII') ?? store.rows[7];
-                    const total = toNumber(totalRow?.total ?? totalRow?.subtotal ?? totalRow?.parcial, 0);
+                    const total = toNumber(totalRow?.total ?? totalRow?.subtotal, 0);
                     if (total > 0) return total;
                     // Fallback: suma de filas si no existe la seccion VIII
                     return store.rows.reduce((sum: number, row: any) => {

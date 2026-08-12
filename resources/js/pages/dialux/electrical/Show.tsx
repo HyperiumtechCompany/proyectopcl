@@ -55,6 +55,7 @@ export default function ElectricalShow({ project, electrical, catalogs: initialC
         dialuxProjectId: project.id,
         initialDocument: electrical?.data ?? null,
         catalogs,
+        cadData: project.data,
     });
 
     const { doc, derived, saveStatus, update } = api;

@@ -13,6 +13,7 @@ import type {
     ElectricalCatalogs,
     ElectricalDerived,
     ElectricalDocument,
+    ElectricalFloor,
     ElectricalRoom,
     CalculatedLengths,
 } from './engine/types';

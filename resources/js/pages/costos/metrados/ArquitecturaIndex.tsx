@@ -599,7 +599,7 @@ export default function ArquitecturaIndex() {
           const fExpr = (row as any)['_formula_expr'];
           const fOut  = (row as any)['_formula_output'];
           if (fOut === col.key && fExpr) {
-            cell = mkFormula(fExpr, styledNum(toNum(val), st));
+            cell = mkFormula(fExpr, toNum(val));
           } else {
             cell = val !== undefined && val !== null && String(val).trim() !== ''
               ? styledNum(toNum(val), st)

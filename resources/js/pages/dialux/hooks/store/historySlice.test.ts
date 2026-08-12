@@ -87,6 +87,30 @@ describe('historySlice — undo/redo (Fase 3 del plan)', () => {
         expect(restored?.label).toBe('S(a)');
     });
 
+    it('agregar, editar o eliminar una cubierta no mueve luminarias existentes', () => {
+        const roomId = useEditorStore.getState().addRoom({
+            name: 'Ambiente', roomType: 'ambient', height: 2.7, color: '#fff',
+            vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }],
+        } as any);
+        const fixture = { z: 2.4, lumens: 1000, efficiency: 1, fixtureType: 'surface', fixtureShape: 'round', lightColor: '#fff', roomId, gridGroupId: 'grid-1' } as any;
+        useEditorStore.getState().addFixture({ ...fixture, name: 'L1', x: 1.25, y: 2.25 });
+        useEditorStore.getState().addFixture({ ...fixture, name: 'L2', x: 8.75, y: 7.75 });
+        const positions = () => useEditorStore.getState().activeScene()!.fixtures.map(({ x, y }) => ({ x, y }));
+        const before = positions();
+
+        const roofId = useEditorStore.getState().addStructuralObstacle({
+            name: 'Cubierta', obstacleType: 'roof', height: 0.15, elevation: 2.7,
+            vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }],
+        });
+        expect(positions()).toEqual(before);
+
+        useEditorStore.getState().updateStructuralObstacle(roofId, { ridgeHeight: 4, slopePercent: 25 });
+        expect(positions()).toEqual(before);
+
+        useEditorStore.getState().removeObject(roofId);
+        expect(positions()).toEqual(before);
+    });
+
     it('Prueba E: después de deshacer y ejecutar un comando nuevo, la pila de rehacer queda vacía', () => {
         useEditorStore.getState().addFixture({ name: 'A', x: 0, y: 0, z: 2.4, lumens: 1, efficiency: 1, fixtureType: 'surface', fixtureShape: 'round', lightColor: '#fff' } as any);
         useEditorStore.getState().undo();

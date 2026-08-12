@@ -2,6 +2,7 @@
 import { produce } from 'immer';
 import { create } from 'zustand';
 import type { TipoFilaVariable, GGVariableNode } from './ggTypes';
+export type { GGVariableNode } from './ggTypes';
 import { useProjectParamsStore } from './projectParamsStore';
 import { useRemuneracionesStore } from './remuneracionesStore';
 

@@ -254,7 +254,7 @@ export function useSnap(opts: SnapOptions) {
                         considerSegment({ x: x1, y: y1 }, { x: x2, y: y2 });
                     }
 
-                    if (ent.closed && ent.vertices.length > 2) {
+                    if ('closed' in ent && ent.closed && ent.vertices.length > 2) {
                         const [x1, y1] = ent.vertices[ent.vertices.length - 1];
                         const [x2, y2] = ent.vertices[0];
                         considerSegment({ x: x1, y: y1 }, { x: x2, y: y2 });

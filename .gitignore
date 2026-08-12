@@ -39,5 +39,9 @@ yarn-error.log
 /CLAUDE.md
 /dialux-core/target/
 /dialux-photometry/target/
-/public/dialux-core/
+/public/dialux-core/*
+!/public/dialux-core/pkg/
+/public/dialux-core/pkg/*
+!/public/dialux-core/pkg/dialux_core.js
+!/public/dialux-core/pkg/dialux_core_bg.wasm
 /.recovery/

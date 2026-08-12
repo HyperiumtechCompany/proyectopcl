@@ -785,6 +785,10 @@ export const Toolbar: React.FC = () => {
                         gridCols={store.ui.fixtureGridCols}
                         onSetRows={store.setFixtureGridRows}
                         onSetCols={store.setFixtureGridCols}
+                        fixtureRotation={store.ui.fixtureTemplate.rotation ?? 0}
+                        onSetFixtureRotation={(rotation) =>
+                            store.setFixtureTemplate({ rotation })
+                        }
                         areaMode={store.ui.fixtureGridAreaMode}
                         onSetAreaMode={store.setFixtureGridAreaMode}
                         pendingArea={store.ui.pendingFixtureGridArea}

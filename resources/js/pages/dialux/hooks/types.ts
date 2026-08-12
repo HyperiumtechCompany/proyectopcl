@@ -271,13 +271,35 @@ export interface StairConfig {
 export interface StructuralObstacle {
     id: string;
     name: string;
-    obstacleType: 'column' | 'beam' | 'restricted_area';
+    obstacleType: 'column' | 'beam' | 'restricted_area' | 'roof' | 'ceiling' | 'ramp';
     /** Poligono 2D (footprint) en metros, mismo sistema de coordenadas que Room.vertices */
     vertices: Vertex[];
     /** Altura del obstaculo en metros, medida desde `elevation` */
     height: number;
     /** Elevacion desde el piso del nivel en metros (0 = apoyado en el piso; >0 = viga/ducto suspendido) */
     elevation: number;
+    /** Configuración geométrica de cubiertas y cielorrasos. */
+    roofType?: 'flat' | 'shed' | 'gable' | 'mansard' | 'hip' | 'butterfly' | 'full' | 'custom' | 'cove' | 'stepped';
+    eaveHeight?: number;
+    ridgeHeight?: number;
+    slopePercent?: number;
+    orientationDeg?: number;
+    thickness?: number;
+    material?: string;
+    interiorReflectance?: number;
+    exteriorReflectance?: number;
+    overhang?: number;
+    centralOpening?: number;
+    /** Configuración de una superficie inclinada transitable. */
+    rampType?: 'pedestrian' | 'vehicular' | 'transition';
+    startLevel?: number;
+    endLevel?: number;
+    width?: number;
+    length?: number;
+    hasLandings?: boolean;
+    calculationSurfaceEnabled?: boolean;
+    targetLux?: number;
+    uniformityTarget?: number;
 }
 
 export interface Room {
@@ -696,7 +718,9 @@ export interface Conductor {
     wireLabel?: string; // Etiqueta visible: F+N+T, 2F+T, 3F, etc.
     routeType: 'floor' | 'wall_ceiling'; // Empotrado en piso o pared/techo
     /** Altura de la ruta horizontal S.N.P.T. en m. Ausente = techo real del recinto. */
-    routeHeightM?: number;
+      routeHeightM?: number;
+      /** Punto editable situado sobre el centro visual del arco en planta. */
+      curveMidpoint?: { x: number; y: number };
     tubeSize: number; // Diámetro de tubería en mm (20mm default)
     conductorType: string; // Tipo: "Cu LSOH", "N2XOH", etc.
     /** Sección real del cable en mm² (calibre/diámetro del conductor, no del tubo). 2.5mm² default. */

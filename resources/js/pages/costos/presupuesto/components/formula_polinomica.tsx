@@ -130,7 +130,7 @@ function extractInsumos(rows: BudgetFormulaRow[], acuRows: ACURowSummary[]): Ext
         matchedCount++;
 
         for (const tipo of INSUMO_TIPOS) {
-            const comps = (acu as Record<string, ACUComponenteRow[]>)[tipo] ?? [];
+            const comps = (acu as unknown as Record<string, ACUComponenteRow[]>)[tipo] ?? [];
             for (const comp of comps) {
                 const descripcion = String(comp.descripcion ?? '').trim();
                 if (!descripcion) continue;

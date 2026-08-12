@@ -93,6 +93,13 @@ export function calculateObstacleAwareFixtureGridPositions(
 ): Vertex[] {
     const safeRows = Math.max(1, Math.round(rows));
     const safeCols = Math.max(1, Math.round(columns));
+    // Cubiertas, cielorrasos y rampas son superficies constructivas/rutas;
+    // no son huecos prohibidos para la distribución de luminarias.
+    obstacles = obstacles.filter((obstacle) =>
+        obstacle.obstacleType === 'column'
+        || obstacle.obstacleType === 'beam'
+        || obstacle.obstacleType === 'restricted_area',
+    );
 
     if (obstacles.length === 0) {
         return calculateGuidedFixtureGridPositions(roomVertices, safeRows, safeCols, rowGuides, columnGuides);

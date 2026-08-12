@@ -6,6 +6,10 @@ import {
     type ElectricalDevice,
 } from '@/pages/dialux/hooks/types';
 import { safeNum } from './canvasUtils';
+import {
+    defaultWireCurveMidpoint,
+    quadraticControlThroughMidpoint,
+} from '@/pages/dialux/hooks/wireCurveGeometry';
 
 interface Props {
     conductors: Conductor[];
@@ -198,7 +202,6 @@ export const OverlayWires = memo(function OverlayWires({
 
                 const nodes = [
                     screenPoint({ x: sourceNode.x, y: sourceNode.y }),
-                    ...(cond.waypoints || []).map(w => screenPoint(w)),
                     screenPoint({ x: targetNode.x, y: targetNode.y }),
                 ];
                 if (nodes.length < 2) return null;
@@ -210,8 +213,8 @@ export const OverlayWires = memo(function OverlayWires({
                 const wireColor = isSelected ? WIRE_SELECTED : (isDeviceSource ? DEVICE_WIRE_COLOR : WIRE_COLOR);
                 const markerId  = isSelected ? 'arrow-cond-sel' : (isDeviceSource ? 'arrow-device' : 'arrow-cond');
                 const isFloorRoute = cond.routeType === 'floor';
-                const curveDir = isFloorRoute ? 1 : -1;
-                const wireWidth = isSelected ? 2.5 : 1.8;
+                // Grosor en píxeles de pantalla: no desaparece al alejar el zoom.
+                const wireWidth = isSelected ? 3.5 : 2.6;
 
                 const segPaths: string[] = [];
                 const visElems: React.ReactNode[] = [];
@@ -224,8 +227,12 @@ export const OverlayWires = memo(function OverlayWires({
                     const len = Math.hypot(dx, dy);
                     if (len < 0.5) continue;
 
-                    const cpx = (a.x + b.x) / 2 + (-dy / len) * len * 0.18 * curveDir;
-                    const cpy = (a.y + b.y) / 2 + ( dx / len) * len * 0.18 * curveDir;
+                    const midpoint = cond.curveMidpoint && nodes.length === 2
+                        ? screenPoint(cond.curveMidpoint)
+                        : defaultWireCurveMidpoint(a, b, cond.routeType);
+                    const control = quadraticControlThroughMidpoint(a, midpoint, b);
+                    const cpx = control.x;
+                    const cpy = control.y;
                     const segKey = `${cond.id}-s${i}`;
                     const d = `M ${safeNum(a.x)} ${safeNum(a.y)} Q ${safeNum(cpx)} ${safeNum(cpy)} ${safeNum(b.x)} ${safeNum(b.y)}`;
                     segPaths.push(d);
@@ -278,7 +285,7 @@ export const OverlayWires = memo(function OverlayWires({
                                 d={d}
                                 fill="none"
                                 stroke="transparent"
-                                strokeWidth={16}
+                                strokeWidth={22}
                                 style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -290,6 +297,23 @@ export const OverlayWires = memo(function OverlayWires({
                         {/* Handles de extremo (arrastrables desde el SVG raíz) */}
                         {showHandles && (
                             <>
+                                {nodes.length === 2 && (() => {
+                                    const midpoint = cond.curveMidpoint
+                                        ? screenPoint(cond.curveMidpoint)
+                                        : defaultWireCurveMidpoint(nodes[0], nodes[1], cond.routeType);
+                                    return (
+                                        <circle
+                                            data-wire-curve-id={cond.id}
+                                            cx={safeNum(midpoint.x)}
+                                            cy={safeNum(midpoint.y)}
+                                            r={HANDLE_RADIUS + 1}
+                                            fill="#22c55e"
+                                            stroke="#052e16"
+                                            strokeWidth={2}
+                                            style={{ cursor: 'move', pointerEvents: 'all' }}
+                                        />
+                                    );
+                                })()}
                                 <circle
                                     cx={safeNum(endpointScreen.source.x)}
                                     cy={safeNum(endpointScreen.source.y)}

@@ -101,11 +101,22 @@ describe('hitTestAtPoint — Prueba de contenedores anidados', () => {
         expect(ranked[0].id).toBe('ambiente');
     });
 
-    it('fuera del ambiente pero dentro del recinto: solo el recinto es candidato', () => {
+    it('el interior vacío del recinto queda al fondo y no captura el clic normal', () => {
         const pt = { x: 8, y: 8 };
         const ranked = hitTestAtPoint(nestedScene, sceneToCanvas(pt.x, pt.y), pt, sceneToCanvas);
-        expect(ranked).toHaveLength(1);
-        expect(ranked[0].id).toBe('recinto');
+        expect(ranked).toHaveLength(0);
+    });
+
+    it('Alt+clic permite seleccionar deliberadamente el interior del recinto', () => {
+        const pt = { x: 8, y: 8 };
+        const ranked = hitTestAtPoint(
+            nestedScene,
+            sceneToCanvas(pt.x, pt.y),
+            pt,
+            sceneToCanvas,
+            { includeEnclosureInterior: true },
+        );
+        expect(ranked[0]?.id).toBe('recinto');
     });
 });
 

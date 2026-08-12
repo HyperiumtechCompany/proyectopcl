@@ -53,6 +53,8 @@ export const LuzPanel: React.FC<{
     gridCols: number;
     onSetRows: (n: number) => void;
     onSetCols: (n: number) => void;
+    fixtureRotation: number;
+    onSetFixtureRotation: (rotation: number) => void;
     /** 'room' = clic simple usa el ambiente completo. 'draw' = poligono libre vertice a vertice. */
     areaMode: 'room' | 'draw';
     onSetAreaMode: (mode: 'room' | 'draw') => void;
@@ -77,6 +79,8 @@ export const LuzPanel: React.FC<{
     gridCols,
     onSetRows,
     onSetCols,
+    fixtureRotation,
+    onSetFixtureRotation,
     areaMode,
     onSetAreaMode,
     pendingArea,
@@ -220,6 +224,20 @@ export const LuzPanel: React.FC<{
                                         />
                                     </label>
                                 </div>
+                                <label className="mt-2 block space-y-1 text-[10px] text-gray-500">
+                                    <span>Ángulo de luminarias (°)</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={359}
+                                        step={1}
+                                        value={fixtureRotation}
+                                        onChange={(event) =>
+                                            onSetFixtureRotation(((Number(event.target.value) % 360) + 360) % 360)
+                                        }
+                                        className="h-7 w-full rounded border border-gray-300 bg-gray-300 px-2 text-[11px] text-gray-800 outline-none focus:border-cyan-500/50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200"
+                                    />
+                                </label>
 
                                 {areaMode === 'room' ? (
                                     <p className="mt-2 text-[9px] leading-snug text-cyan-700 dark:text-cyan-500">
@@ -270,9 +288,11 @@ export const LuzPanel: React.FC<{
 
                         <CatalogPanel
                             filterCategory="luminaires"
-
                             variant="compact-grid"
                             fixtureItemsPerPage={15}
+                            onSelect={() => {
+                                if (activeTool === 'fixture-grid') onSetTool('fixture-grid');
+                            }}
                         />
                     </PanelCard>
                 </>

@@ -26,6 +26,12 @@ import type {
 } from '../types';
 import type { EditorSlice } from './sliceTypes';
 
+function blocksFixtureGrid(obstacle: Pick<StructuralObstacle, 'obstacleType'>): boolean {
+    return obstacle.obstacleType === 'column'
+        || obstacle.obstacleType === 'beam'
+        || obstacle.obstacleType === 'restricted_area';
+}
+
 /**
  * Recalcula (solo x,y) las grillas de luminarias de los rooms cuyo bbox se
  * superpone con `obstacleVertices` -- se llama tras crear/editar/borrar un
@@ -612,7 +618,9 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
                           structuralObstacles: [...(sc.structuralObstacles ?? []), { id, ...obstacleData }],
                       })),
             );
-            recomputeFixtureGridsNearObstacle(set, get, obstacleData.vertices);
+            if (blocksFixtureGrid(obstacleData)) {
+                recomputeFixtureGridsNearObstacle(set, get, obstacleData.vertices);
+            }
         } finally {
             get().endHistoryGesture();
         }
@@ -685,6 +693,7 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
 
     updateStructuralObstacle: (id, patch) => {
         const existing = get().activeScene()?.structuralObstacles?.find((o) => o.id === id);
+        const updated = existing ? { ...existing, ...patch } : null;
         get().beginHistoryGesture();
         try {
             set((s) =>
@@ -699,8 +708,12 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
             // obstaculo se achico/movio y liberó área que antes bloqueaba una
             // grilla) como la NUEVA (por si ahora invade una zona que antes
             // era libre).
-            if (existing) recomputeFixtureGridsNearObstacle(set, get, existing.vertices);
-            if (patch.vertices) recomputeFixtureGridsNearObstacle(set, get, patch.vertices);
+            if (existing && blocksFixtureGrid(existing)) {
+                recomputeFixtureGridsNearObstacle(set, get, existing.vertices);
+            }
+            if (updated && blocksFixtureGrid(updated)) {
+                recomputeFixtureGridsNearObstacle(set, get, updated.vertices);
+            }
         } finally {
             get().endHistoryGesture();
         }
@@ -715,7 +728,9 @@ export const createSceneObjectsSlice: EditorSlice<SceneObjectsSlice> = (set, get
         get().beginHistoryGesture();
         try {
             removeObjectInternal(set, id);
-            if (removedObstacle) recomputeFixtureGridsNearObstacle(set, get, removedObstacle.vertices);
+            if (removedObstacle && blocksFixtureGrid(removedObstacle)) {
+                recomputeFixtureGridsNearObstacle(set, get, removedObstacle.vertices);
+            }
         } finally {
             get().endHistoryGesture();
         }

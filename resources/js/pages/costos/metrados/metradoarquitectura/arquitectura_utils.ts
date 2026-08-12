@@ -573,15 +573,12 @@ export function rowsToSheet(
                 });
 
                 if (formula) {
-                    const cell = mkFormula(formula, Number(store));
+                    const cell: Record<string, any> = mkFormula(formula, Number(store));
                     if (st.bg) {
                         cell.bg = st.bg;
                         cell.fc = st.fc;
                     }
-                    cell.bl =
-                        col.key === 'descripcion' || col.key === 'partida'
-                            ? st.bl
-                            : 0;
+                    cell.bl = 0;
                     cell.fs = 10;
                     cells.push({ r: rIdx, c: ci, v: cell });
                     return;

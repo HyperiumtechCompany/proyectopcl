@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import { addProjectHeaderAndFooter } from './excel-export-utils';
 
 interface AguaData {
-    tables: {};
+    tables?: Record<string, unknown>;
     demandaDiaria?: any;
     cisterna?: any;
     tanque?: any;
@@ -11,7 +11,8 @@ interface AguaData {
     bombeoTanqueElevado?: any;
     tuberiasRD?: any;
     redesInteriores?: any;
-    redderiego?: any;
+    redRiego?: any;
+    [key: string]: any;
 }
 
 const COLORS = {

@@ -670,7 +670,10 @@ export const WallProps: React.FC<{
     };
 
     const outletRoom = ambientMatch?.sourceRoom ?? null;
-    const outletUse = ambientOutletConfig?.outletUse ?? 'aula';
+    const configuredOutletUse = ambientOutletConfig?.outletUse;
+    const outletUse: OutletUse = configuredOutletUse && configuredOutletUse !== 'none'
+        ? configuredOutletUse
+        : 'aula';
     const outletRule = OUTLET_RULES[outletUse];
     const outletDeviceType =
         ambientOutletConfig?.outletDeviceType ??

@@ -120,14 +120,8 @@ class RealPhotometryLuminaireSeeder extends Seeder
             ->where('article_number', $articleNumber)
             ->first();
 
-        if ($existing !== null) {
-            $this->command?->info("LuminaireProduct '{$articleNumber}' ya existe (id={$existing->id}) — no se reimporta.");
-
-            return;
-        }
-
         $path = __DIR__."/fixtures/luminaires/{$fileName}";
-        if (!is_file($path)) {
+        if (! is_file($path)) {
             $this->command?->warn("Archivo fotométrico no encontrado: {$path} — se omite '{$articleNumber}'.");
 
             return;
@@ -136,10 +130,25 @@ class RealPhotometryLuminaireSeeder extends Seeder
         $file = new UploadedFile($path, $fileName, null, null, true);
         $result = app(ProductImportService::class)->import($file, null, $overrides);
 
+        // Si producción ya conserva este artículo, actualizamos esa misma fila
+        // para mantener su id y las referencias de proyectos existentes.
+        if ($existing !== null) {
+            $imported = $result['product'];
+            $attributes = $imported->getAttributes();
+            unset($attributes['id'], $attributes['created_at'], $attributes['updated_at'], $attributes['deleted_at']);
+
+            $existing->forceFill($attributes);
+            $existing->deleted_at = null;
+            $existing->save();
+            $imported->forceDelete();
+            $result['product'] = $existing->refresh();
+        }
+
         foreach ($result['warnings'] as $warning) {
             $this->command?->warn("[{$articleNumber}] {$warning}");
         }
 
-        $this->command?->info("LuminaireProduct '{$articleNumber}' importado (id={$result['product']->id}) desde fotometría real de fabricante.");
+        $action = $existing === null ? 'importado' : 'actualizado';
+        $this->command?->info("LuminaireProduct '{$articleNumber}' {$action} (id={$result['product']->id}) desde fotometría real de fabricante.");
     }
 }

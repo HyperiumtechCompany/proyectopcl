@@ -523,6 +523,14 @@
                 ($detail['totalPowerWatts'] ?? null) !== null
                     ? ((float) $detail['totalPowerWatts'] * $dailyOperatingHours * 365) / 1000
                     : null;
+            // Replica numéricamente el lux normativo y cambia únicamente la
+            // unidad de la referencia anual a kWh/a.
+            $consumptionLimit = ($detail['targetLux'] ?? null) !== null
+                ? (float) $detail['targetLux']
+                : null;
+            $consumptionConforms = $consumption !== null
+                && $consumptionLimit !== null
+                && $consumption <= $consumptionLimit;
 
             // Estado real por métrica (RequirementEvaluation), no un check decorativo fijo.
             $evaluationsByMetric = collect($detail['requirementEvaluations'] ?? [])
@@ -650,8 +658,14 @@
                     <td class="result-number">' .
                 $formatNumber($consumption, 0, ' kWh/a') .
                 '</td>
-                    <td class="result-number">-</td>
-                    <td class="result-check"></td>
+                    <td class="result-number">' .
+                ($consumptionLimit !== null ? 'm&aacute;x. ' . $formatNumber($consumptionLimit, 0, ' kWh/a') : '-') .
+                '</td>
+                    <td class="result-check">' .
+                ($consumption !== null && $consumptionLimit !== null
+                    ? '<span class="verification-status status-' . ($consumptionConforms ? 'pass' : 'fail') . '">' . ($consumptionConforms ? 'Conforme' : 'No conforme') . '</span>'
+                    : '<span class="verification-status status-not-evaluated">No evaluado</span>') .
+                '</td>
                     <td></td>
                 </tr>
                 <tr>

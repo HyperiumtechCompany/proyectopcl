@@ -61,8 +61,8 @@ const SPACE_TOOLS: Array<{
     {
         tool: 'structural-obstacle',
         icon: <Box size={13} />,
-        tip: 'Columna / obstáculo',
-        sublabel: 'Resta área a la grilla',
+        tip: 'Estructura / techo / rampa',
+        sublabel: 'Dibuja contorno y selecciona el tipo',
     },
 ];
 

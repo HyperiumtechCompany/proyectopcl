@@ -63,8 +63,7 @@ const RoomPolygon = memo(function RoomPolygon({
     const showMetrics = zoom >= 0.4 && area > 0;
     return (
         <g
-            style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-            onClick={() => onSelect(room.id)}
+            style={{ pointerEvents: 'none' }}
         >
             <polygon points={pts} fill="#1e3a5f" fillOpacity={0.22} />
             {isSelected && (
@@ -79,6 +78,8 @@ const RoomPolygon = memo(function RoomPolygon({
                 stroke={isSelected ? '#60a5fa' : '#3b82f6'}
                 strokeWidth={isSelected ? 3 : 2}
                 strokeLinejoin="miter"
+                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                onClick={() => onSelect(room.id)}
             />
             <text
                 x={safeNum(ctr.x)} y={safeNum(showMetrics ? ctr.y - lineOffset / 2 : ctr.y)}
@@ -504,6 +505,45 @@ export const OverlayRooms = memo(function OverlayRooms({
             {pasadizos.map(renderOne)}
             {escaleras.map(renderOne)}
             {emergencias.map(renderOne)}
+            {rooms.filter((room) => room.id === selectedId).map((room) => {
+                const vertices = room.vertices.map(screenPoint);
+                return (
+                    <g key={`edit-${room.id}`} className="room-polyline-handles">
+                        {vertices.map((vertex, index) => {
+                            const next = vertices[(index + 1) % vertices.length];
+                            return (
+                                <g key={`${room.id}-vertex-${index}`}>
+                                    <rect
+                                        data-room-edge-id={room.id}
+                                        data-room-edge-index={index}
+                                        x={safeNum((vertex.x + next.x) / 2 - 3.5)}
+                                        y={safeNum((vertex.y + next.y) / 2 - 3.5)}
+                                        width={7}
+                                        height={7}
+                                        rx={1}
+                                        fill="#22d3ee"
+                                        stroke="#083344"
+                                        strokeWidth={1.5}
+                                        opacity={0.9}
+                                        style={{ cursor: 'copy', pointerEvents: 'all' }}
+                                    />
+                                    <circle
+                                        data-room-vertex-id={room.id}
+                                        data-room-vertex-index={index}
+                                        cx={safeNum(vertex.x)}
+                                        cy={safeNum(vertex.y)}
+                                        r={5}
+                                        fill="#22c55e"
+                                        stroke="#052e16"
+                                        strokeWidth={2}
+                                        style={{ cursor: 'move', pointerEvents: 'all' }}
+                                    />
+                                </g>
+                            );
+                        })}
+                    </g>
+                );
+            })}
         </g>
     );
 });
